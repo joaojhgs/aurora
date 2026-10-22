@@ -1,0 +1,8 @@
+{
+  "bytes": 279,
+  "copyOnly": true,
+  "custody": "Notebook result persisted and fsynced before relay; remote receipt in same output",
+  "localPath": "/home/developer/projects/aurora/thesis/phone-notebook/20261020/evidence/launch-last-finite-pilot-v342/result.json",
+  "remotePath": "/home/developer/projects/aurora/thesis/phone-notebook/20261020/evidence/launch-last-finite-pilot-v342.json",
+  "sha256": "d30dc4424d377072b33379c33912b2cf51d11dab8698edf7570d373ce683dceb"
+}

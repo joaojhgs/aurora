@@ -1,0 +1,21 @@
+{
+  "at": "2026-10-16T04:36:19.590891+00:00",
+  "source": ".git/aurora-handoff-import-20261006/mesh-route-telemetry-prep-v868",
+  "files": [
+    {
+      "path": "REPORT.md",
+      "bytes": 4195,
+      "sha256": "977b7a16e3f462cea8e7357c7f3e8926c10bec92a03381f66f35b5e0afd46d5a"
+    },
+    {
+      "path": "mesh_route_observer.py",
+      "bytes": 9275,
+      "sha256": "2c23fd2bc69b00b746c2c5dc28c1d2b77428016314045363dceea5fe9ee5cdbb"
+    }
+  ],
+  "review": "thesis/validation/mesh-route-observer-source-review-v872.md",
+  "reviewSHA256": "1e09c8db74b68d7ffcd021b52d31b8827b8a53515cee3ac4457560130f399022",
+  "scope": "limited selected-nominated-pair snapshots only; bounded sink and runtime source/version admission are separate integration, no continuous pair stability",
+  "runtimeExecuted": false,
+  "measuredCases": 0
+}

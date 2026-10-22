@@ -1,0 +1,12 @@
+{
+  "controlDeadline": "2026-10-22T01:23:13.765966+00:00",
+  "explicitNewline": true,
+  "host": "ssh:ssh-sem-notebook-personal",
+  "incarnation": "328cd72f-c7ea-49ff-a2db-b9275b085037",
+  "remoteResult": "/home/developer/projects/aurora/thesis/phone-notebook/20261020/evidence/notebook-git-tree-20261022T011313.json",
+  "rootAdmissionMessage": "root-msg-e9e166d77c50-exact-delta-readonly",
+  "script": "scripts/notebook_git_objects_v25.py",
+  "scriptSha256": "49cb25b219f0b53f7fffa453b797532100da2b308b32b52c6349bfecfd761264",
+  "singleSend": true,
+  "terminal": "term_a2ed5feb-7c92-48e4-bd88-d1b0e6737989"
+}

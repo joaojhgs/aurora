@@ -1,0 +1,82 @@
+{
+  "at": "2026-10-14T21:52:54.699755+00:00",
+  "host": "personal.skyron-server",
+  "launch": {
+    "kind": "actual_existing_failed_case_output_continuation",
+    "at": "2026-10-14T21:51:41.805255+00:00",
+    "host": "personal.skyron-server",
+    "pid": 2790442,
+    "backendPid": 2786324,
+    "parentFullFlowAttemptIndex": 4,
+    "fullFlowAttemptAdded": false,
+    "newSTTRequests": 0,
+    "newLLMRequests": 0,
+    "maximumAPIRequests": 3,
+    "bundleSHA256": "3162cd3fd96da56da5bdd03cbea737263e46cdfcb91e1229c4376965c14f4561",
+    "parentCaseResultSHA256": "4e4039299d80b455a4533e5478df274517a5bf99b9d63e950e8b26e07225961b",
+    "parentFailurePreserved": true,
+    "measurementStarted": false
+  },
+  "pidPresent": false,
+  "backendPidPresent": true,
+  "resultBytes": 1780,
+  "result": {
+    "backend_config_sha256": "3a5a17bf1ffb310146131400ea7fce9f9d6a0fc049405c8252391a37d8baaad4",
+    "clock_domain": "browser.performance",
+    "continuous_e2e_latency_available": false,
+    "failure_code": "parent_task_incorrect",
+    "input_audio_sha256": "2f6361506708d0a3065a339d168c9db5412e343683dd9b4080471d8948bf82ae",
+    "measured_sample": false,
+    "outcome": "downstream_completed_parent_task_failed",
+    "output_audio_sha256": "e2f5f8ab8b178e876f318bb17f2b23a9e5890887350efa486cf41a619487a578",
+    "output_bytes": 0,
+    "parent_case_result_sha256": "4e4039299d80b455a4533e5478df274517a5bf99b9d63e950e8b26e07225961b",
+    "physical_audibility": false,
+    "physical_microphone": false,
+    "playback": {
+      "channels": 1,
+      "context_state": "running",
+      "duration_seconds": 2.2755555555555556,
+      "frames": 100352,
+      "sample_rate": 44100,
+      "software_ended": true
+    },
+    "production_react_ui": false,
+    "schema_version": "aurora.production_full_voice_pilot_result.v1",
+    "session_id": "db19f4c9-227f-447b-92a0-b2813fa0ac45",
+    "source_sample_rate": 22050,
+    "stages": [
+      {
+        "clock_domain": "browser.performance",
+        "ended_ms": 277.7999999523163,
+        "outcome": "completed",
+        "stage": "existing_case_history_read",
+        "started_ms": 259.1999999284744
+      },
+      {
+        "clock_domain": "browser.performance",
+        "ended_ms": 1887.7999999523163,
+        "outcome": "completed",
+        "stage": "tts_synthesize_existing_case",
+        "started_ms": 278
+      },
+      {
+        "clock_domain": "browser.performance",
+        "ended_ms": 4325.899999976158,
+        "outcome": "completed",
+        "stage": "browser_software_playback_existing_case",
+        "started_ms": 1911.7999999523163
+      },
+      {
+        "clock_domain": "browser.performance",
+        "ended_ms": 4363.299999952316,
+        "outcome": "completed",
+        "stage": "existing_case_history_readback",
+        "started_ms": 4325.899999976158
+      }
+    ],
+    "tts_input_sha256": "465bd1ada367541314a5157fd69754a42fbaa4df927028a1c8a2e1e546d98857",
+    "workload_manifest_sha256": "0335716ce5d0bb172a4cbe675b4752f0ab1fd661db179a1793b2c3a1a6f30dfe"
+  },
+  "resultSHA256": "6c289b4665718f679dc57ed45e74525d2a30a95b5d623f318debba2101e3b43c"
+}

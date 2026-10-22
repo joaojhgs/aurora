@@ -1,0 +1,10 @@
+{
+  "message": "msg_e776b0453ad2",
+  "at": "2026-10-15T03:04:20Z",
+  "actualOriginalNativeGoalStatus": "blocked",
+  "authorityResolved": true,
+  "manualAuthorizedPrepProceeding": true,
+  "exactSupportedResumeRequested": "/goal resume",
+  "sameThread": "01a112a5-d6bb-74e2-bf7c-ace73cb513b5",
+  "newGoalsOrHiddenStateEdits": false
+}

@@ -1,0 +1,29 @@
+[
+  {
+    "label": "same providerless history LOAD/UI case; correctedmountpredicate",
+    "exit_code": 0,
+    "argv": [
+      "flock",
+      "--nonblock",
+      "/tmp/aurora-global-build.lock",
+      "timeout",
+      "--signal=INT",
+      "--kill-after=10s",
+      "120s",
+      "pnpm",
+      "--filter",
+      "@aurora/ui",
+      "exec",
+      "vitest",
+      "run",
+      "--environment",
+      "jsdom",
+      "tests/native-assistant-view.test.tsx",
+      "-t",
+      "keeps a provisional native turn mounted when a later event assigns the real conversation",
+      "--reporter=json",
+      "--outputFile=/home/developer/projects/aurora/.git/aurora-handoff-import-20261006/mesh-history-source-v280c/vitest.json"
+    ],
+    "elapsed_seconds": 9.133242869051173
+  }
+]

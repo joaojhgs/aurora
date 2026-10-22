@@ -1,0 +1,30 @@
+{
+  "at": "2026-10-22T07:45:14.275315+00:00",
+  "maximumPopen": 1,
+  "providerManifestSha256": "9451a61d6cdb08c1684a62d4484a80cd4b78d0774263346a5d6f230a5efa3da9",
+  "campaignManifestSha256": "316d4cc09adc44d0104dca8ac1f2a966347588ffef37bc2fa809ec14fd5efff8",
+  "newOrcaWorker": false,
+  "host": "personal.skyron-server",
+  "controller": {
+    "pid": 2555838,
+    "startTicks": 41063526,
+    "state": "S"
+  },
+  "nativeMeasurementAdmitted": false,
+  "deadline": "2026-10-22T20:04:51.316179+00:00",
+  "localProducerArmed": true,
+  "controllerState": {
+    "pid": 2555838,
+    "startTicks": 41063526,
+    "state": "S"
+  },
+  "runtime": {
+    "at": "2026-10-22T07:45:14.916785+00:00",
+    "controllerPid": 2555838,
+    "host": "personal.skyron-server",
+    "manifestSha256": "9451a61d6cdb08c1684a62d4484a80cd4b78d0774263346a5d6f230a5efa3da9",
+    "measurementStartedByController": false,
+    "receiverPid": 2555839,
+    "receiverStartTicks": 41063588
+  }
+}

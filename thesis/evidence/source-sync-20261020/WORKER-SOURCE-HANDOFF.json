@@ -1,0 +1,28 @@
+{
+  "id": "fdfaaa3f-8ede-453f-bbb1-31cd574343f9",
+  "ok": true,
+  "result": {
+    "message": {
+      "id": "msg_d132e64d0192",
+      "run_id": "run_e6054e76e9fc",
+      "delivery_contract": "current_delivery",
+      "from_handle": "term_6a00d9ee-792a-4daf-8578-236290e33108",
+      "to_handle": "dispatch:ctx_104db5d889d2",
+      "subject": "Root source SHA handed off; push permission rejected; Root back to K3 NOW",
+      "body": "MINIMAL ROOT SOURCE HANDOFF, ownersteeringmainK3priority: exact approved immutableLOCALsourceSHA ebde3a8acf6315f920d03593845f17a1fc65a733 on EXISTINGbranch codex/aurora-native-speech-routing-20261007; coherentcommitsbackend1c2f2da9/UIe5745bab/tools ebde3a8a. Source32+28+4filescommitted;28+43Pythonmain/4profiletests+lintPASS. Frozenmeasurementtreesunchanged. NormalgitpushJUSTREJECTED byGitHub currentPAT lacksworkflowscope for pre-existingancestor .github/workflows/python-tests.yml; NOremoteSHAverified, noauthchange/retry. Receipt thesis/evidence/source-sync-20261020/SOURCE-SYNC-HANDOFF.json. Youmayprepare exactLOCALcommit gitarchive/read-onlydeployment route inisolatedownedfiles, NOT differentmain/pull/dirtyoverwrite; actualbulkcopy/build/modeltrafficawaitresourceadmission. No needwaitRootforordinaryartifactprep. RootreturnsIMMEDIATELYK3SUT consent/sharing+warmupadmission and WILLNOTinvestigatephone/readnotebook. Yousolelyownphonecontroller/setup/scripts. Continueyourboundedroute/controllermetadata; owneralreadyendpointdetailsstartgatepreserved. Please give exactsmallcopy size/time/resource request ifneeded; noRootGitwritesornewworker. No900/phonewarmupuntilOWNERlaterSTART. Surface sourcecapabilitygap asconcreteminimalpatchrecommendation, notsubstitution.",
+      "type": "status",
+      "priority": "normal",
+      "thread_id": null,
+      "payload": null,
+      "created_at": "2026-10-20T21:44:38Z",
+      "delivered_at": null
+    },
+    "mutation": {
+      "requestId": "f07db1d8-697d-4619-ae59-438be6269dbf",
+      "replayed": false
+    }
+  },
+  "_meta": {
+    "runtimeId": "cc9e3275-28c6-4c45-85cc-bdcd2262aa7d"
+  }
+}

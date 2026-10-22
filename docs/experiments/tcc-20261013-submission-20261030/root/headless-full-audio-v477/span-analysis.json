@@ -1,0 +1,100 @@
+{
+  "eventCount": 20,
+  "matchedProviderSpans": [
+    {
+      "spanId": "7c0667c9881a4d5da69ff6cc81165016",
+      "parentSpanId": null,
+      "handler": "stt.model_invoke",
+      "stage": "stt",
+      "correlationId": "wav-flow-564fc2196d6e4d91a3c77ef08c7dcc16",
+      "selectedProvider": null,
+      "receiverPid": 2896043,
+      "clockDomain": "python_process_monotonic",
+      "durationMs": 3374.39999,
+      "outcome": "completed"
+    },
+    {
+      "spanId": "4467073fd2c3493f8b95aa5d153f08cd",
+      "parentSpanId": null,
+      "handler": "Transcription.Transcribe",
+      "stage": "stt",
+      "correlationId": "wav-flow-564fc2196d6e4d91a3c77ef08c7dcc16",
+      "selectedProvider": null,
+      "receiverPid": 2896043,
+      "clockDomain": "python_process_monotonic",
+      "durationMs": 3383.44838,
+      "outcome": "completed"
+    },
+    {
+      "spanId": "5ee107c7226f4ab1ad0ec3a18ad2f501",
+      "parentSpanId": null,
+      "handler": "OrchestratorService._persist_chat_message",
+      "stage": "history",
+      "correlationId": "wav-flow-564fc2196d6e4d91a3c77ef08c7dcc16",
+      "selectedProvider": null,
+      "receiverPid": 2896043,
+      "clockDomain": "python_process_monotonic",
+      "durationMs": 144.200985,
+      "outcome": "completed"
+    },
+    {
+      "spanId": "1f146af502e84988a647b75878bd9a8d",
+      "parentSpanId": null,
+      "handler": "resolved_chat_model.astream",
+      "stage": "llm",
+      "correlationId": "wav-flow-564fc2196d6e4d91a3c77ef08c7dcc16",
+      "selectedProvider": "app.services.orchestrator.chat_llama_cpp.ChatLlamaCpp",
+      "receiverPid": 2896043,
+      "clockDomain": "python_process_monotonic",
+      "durationMs": 1425.107026,
+      "outcome": "completed"
+    },
+    {
+      "spanId": "f203db4f815a44c5bcb2acc0050ea6da",
+      "parentSpanId": null,
+      "handler": "OrchestratorService._persist_chat_message",
+      "stage": "history",
+      "correlationId": "wav-flow-564fc2196d6e4d91a3c77ef08c7dcc16",
+      "selectedProvider": null,
+      "receiverPid": 2896043,
+      "clockDomain": "python_process_monotonic",
+      "durationMs": 202.255406,
+      "outcome": "completed"
+    },
+    {
+      "spanId": "1cf96eef5e46439b88031db0936d3565",
+      "parentSpanId": null,
+      "handler": "tts.model_invoke",
+      "stage": "tts",
+      "correlationId": "wav-flow-564fc2196d6e4d91a3c77ef08c7dcc16",
+      "selectedProvider": null,
+      "receiverPid": 2896043,
+      "clockDomain": "python_process_monotonic",
+      "durationMs": 2216.70957,
+      "outcome": "completed"
+    },
+    {
+      "spanId": "cdf65108e9ef472ea44c55c71203273d",
+      "parentSpanId": null,
+      "handler": "TTS.Synthesize",
+      "stage": "tts",
+      "correlationId": "wav-flow-564fc2196d6e4d91a3c77ef08c7dcc16",
+      "selectedProvider": null,
+      "receiverPid": 2896043,
+      "clockDomain": "python_process_monotonic",
+      "durationMs": 2219.179543,
+      "outcome": "completed"
+    }
+  ],
+  "latencyDefinition": "Monotonic caller interval from available-file submission start through output WAV validation; excludes input recording duration, setup and shutdown. Not a sensor end-of-speech timestamp.",
+  "unexposedMetrics": {
+    "queue": null,
+    "firstToken": null,
+    "firstAudio": null,
+    "physicalPlayback": null,
+    "networkBytes": null,
+    "protocolOverhead": null,
+    "reason": "Not exposed as independent boundaries by this finite pilot; no clock/overlap inference."
+  },
+  "parentSpanLimitation": "Existing private observer emits null parents; common correlation and actual sequential caller chain retained, no parent links invented."
+}

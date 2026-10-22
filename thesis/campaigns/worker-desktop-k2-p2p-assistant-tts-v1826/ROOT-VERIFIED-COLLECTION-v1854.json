@@ -1,0 +1,98 @@
+{
+  "at": "2026-10-20T17:25:52.743050+00:00",
+  "localObservationAt": "2026-10-20T17:24:52Z",
+  "classification": "verified_wait",
+  "nativeGoalThread": "01a112a5-d6bb-74e2-bf7c-ace73cb513b5",
+  "nativeGoalStatus": "active",
+  "fullAggregatePreserved": true,
+  "observation": {
+    "progress": {
+      "attempted": 294,
+      "last_attempt_file": "attempts/attempt-0294-measured.jsonl",
+      "last_attempt_status": "completed_correct",
+      "measured_attempted": 279,
+      "planned_measured": 900,
+      "planned_warmups": 15,
+      "status": "running",
+      "unattempted_measured": 621,
+      "warmups_attempted": 15
+    },
+    "outcomes": {
+      "completed_correct": 277,
+      "failed": 2
+    },
+    "processes": [
+      {
+        "pid": 2830732,
+        "startTicks": 129050331,
+        "identityMatches": true
+      },
+      {
+        "pid": 2830763,
+        "startTicks": 129050436,
+        "identityMatches": true
+      },
+      {
+        "pid": 2831081,
+        "startTicks": 129052325,
+        "identityMatches": true
+      }
+    ],
+    "custodyAt": "2026-10-20T17:24:21.877013+00:00",
+    "copiedCases": 292,
+    "copiedAudio": 290,
+    "copyErrors": [],
+    "diskFree": 4431073280
+  },
+  "sourceAndProviderUnchanged": true,
+  "newTestsOrRuns": false,
+  "retainedFailureEvidence": "thesis/campaigns/worker-desktop-k2-p2p-assistant-tts-v1826/ROOT-PREACCEPT-OUTCOMES-v1847.json",
+  "independentMonitorEvidence": {
+    "path": "thesis/campaigns/worker-desktop-k2-p2p-assistant-tts-v1826/MONITOR-PREACCEPT-OUTCOMES-20261020T1700Z.json",
+    "bytes": 2058,
+    "sha256": "e4b34a43c7651f376815d18a0416715d767c5b18e4a0b745b1638bc48b57acd6"
+  },
+  "ledgerAnnotation": {
+    "path": "thesis/campaigns/worker-desktop-k2-p2p-assistant-tts-v1826/ULTRAGOAL-PREACCEPT-OUTCOMES-v1849.json",
+    "accepted": true,
+    "planSummary": {
+      "total": 13,
+      "pending": 11,
+      "inProgress": 1,
+      "complete": 1,
+      "failed": 0,
+      "reviewBlocked": 0,
+      "historicalReviewBlocked": 0,
+      "needsUserDecision": 0,
+      "superseded": 0,
+      "steeringBlocked": 0,
+      "aggregateComplete": false,
+      "artifactComplete": false,
+      "activeGoalId": "G001-per-278-ui-state-real-time-plan-p1-t"
+    }
+  },
+  "eventWaitReceipts": [
+    ".git/aurora-handoff-import-20261006/root-event-wait-v1852-01.json",
+    ".git/aurora-handoff-import-20261006/root-event-wait-v1852-02.json",
+    ".git/aurora-handoff-import-20261006/root-event-wait-v1852-03.json",
+    ".git/aurora-handoff-import-20261006/root-event-wait-v1852-04.json",
+    ".git/aurora-handoff-import-20261006/root-event-wait-v1853-01.json",
+    ".git/aurora-handoff-import-20261006/root-event-wait-v1853-02.json",
+    ".git/aurora-handoff-import-20261006/root-event-wait-v1853-03.json",
+    ".git/aurora-handoff-import-20261006/root-event-wait-v1853-04.json",
+    ".git/aurora-handoff-import-20261006/root-event-wait-v1853-05.json",
+    ".git/aurora-handoff-import-20261006/root-event-wait-v1853-06.json"
+  ],
+  "supervisionCadence": {
+    "boundedMailboxWaitMs": 50000,
+    "localProcessAndCustodyCheckApproxSeconds": 300,
+    "processEveryWholeDeliveryBeforeExactAck": true,
+    "ackMayDeliverNewMessages": true,
+    "immediateTerminalOrErrorHandling": true,
+    "avoid": "minute-by-minute LLM restatements; no new watchdogs/workers/tests/source changes/gates"
+  },
+  "nextGate": "Same frozen K2 900 natural terminal boundary then requester/provider EOF custody and saved-data native/resource/correctness summaries. No replacement of failed measured attempts; K1 191 and wider matrix OPEN.",
+  "lastReadMonitorHeartbeat": "msg_b928e1a5c540",
+  "newFailuresSincePriorCheckpoint": 0,
+  "sourceOrSettingsChangesMade": false
+}

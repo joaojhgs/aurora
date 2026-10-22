@@ -1,0 +1,1148 @@
+{
+  "at": "2026-10-21T02:10:54.036887+00:00",
+  "observationStartedAt": "2026-10-21T02:10:53.982169+00:00",
+  "observationEndedAt": "2026-10-21T02:10:54.036887+00:00",
+  "source": "fresh primary case files, custody CURRENT and /proc; no previous receipt reused; combined condition counts add immutable sealed parent276, no raw-row rewrite",
+  "primaryCasesDirectory": "/home/developer/projects/aurora/.git/aurora-handoff-import-20261006/distributed-k3-mesh-cell-v2043/campaign/attempts",
+  "primaryProgressPath": "/home/developer/projects/aurora/.git/aurora-handoff-import-20261006/distributed-k3-mesh-cell-v2043/campaign/progress.json",
+  "custodyCurrentPath": "/home/developer/projects/aurora/thesis/campaigns/worker-desktop-k3-p2p-full-audio-v2043/CURRENT.json",
+  "status": "completed_with_failures_or_incorrect",
+  "actors": {
+    "3207537": "absent",
+    "3207665": "absent",
+    "3207538": "absent"
+  },
+  "custody": {
+    "sequence": 131,
+    "cases": 642,
+    "audio": 532,
+    "files": 1980,
+    "audioReferences": 532
+  },
+  "freeBytes": 3989807104,
+  "measuredNonCorrect": [
+    {
+      "phase_index": 7,
+      "status": "failed",
+      "failure": {
+        "code": "preaccept_capability_changed",
+        "stage": "stt"
+      },
+      "timeout": false,
+      "partial_quality_incorrect": false
+    },
+    {
+      "phase_index": 12,
+      "status": "failed",
+      "failure": {
+        "code": "preaccept_capability_changed",
+        "stage": "tts"
+      },
+      "timeout": false,
+      "partial_quality_incorrect": false
+    },
+    {
+      "phase_index": 33,
+      "status": "failed",
+      "failure": {
+        "code": "preaccept_capability_changed",
+        "stage": "stt"
+      },
+      "timeout": false,
+      "partial_quality_incorrect": false
+    },
+    {
+      "phase_index": 43,
+      "status": "failed",
+      "failure": {
+        "code": "preaccept_capability_changed",
+        "stage": "stt"
+      },
+      "timeout": false,
+      "partial_quality_incorrect": false
+    },
+    {
+      "phase_index": 53,
+      "status": "failed",
+      "failure": {
+        "code": "preaccept_capability_changed",
+        "stage": "stt"
+      },
+      "timeout": false,
+      "partial_quality_incorrect": false
+    },
+    {
+      "phase_index": 81,
+      "status": "failed",
+      "failure": {
+        "code": "preaccept_capability_changed",
+        "stage": "stt"
+      },
+      "timeout": false,
+      "partial_quality_incorrect": false
+    },
+    {
+      "phase_index": 85,
+      "status": "failed",
+      "failure": {
+        "code": "preaccept_capability_changed",
+        "stage": "stt"
+      },
+      "timeout": false,
+      "partial_quality_incorrect": false
+    },
+    {
+      "phase_index": 92,
+      "status": "failed",
+      "failure": {
+        "code": "preaccept_capability_changed",
+        "stage": "stt"
+      },
+      "timeout": false,
+      "partial_quality_incorrect": false
+    },
+    {
+      "phase_index": 96,
+      "status": "failed",
+      "failure": {
+        "code": "preaccept_capability_changed",
+        "stage": "stt"
+      },
+      "timeout": false,
+      "partial_quality_incorrect": false
+    },
+    {
+      "phase_index": 111,
+      "status": "failed",
+      "failure": {
+        "code": "preaccept_capability_changed",
+        "stage": "stt"
+      },
+      "timeout": false,
+      "partial_quality_incorrect": false
+    },
+    {
+      "phase_index": 115,
+      "status": "failed",
+      "failure": {
+        "code": "preaccept_capability_changed",
+        "stage": "stt"
+      },
+      "timeout": false,
+      "partial_quality_incorrect": false
+    },
+    {
+      "phase_index": 127,
+      "status": "failed",
+      "failure": {
+        "code": "preaccept_capability_changed",
+        "stage": "stt"
+      },
+      "timeout": false,
+      "partial_quality_incorrect": false
+    },
+    {
+      "phase_index": 131,
+      "status": "failed",
+      "failure": {
+        "code": "preaccept_capability_changed",
+        "stage": "stt"
+      },
+      "timeout": false,
+      "partial_quality_incorrect": false
+    },
+    {
+      "phase_index": 154,
+      "status": "failed",
+      "failure": {
+        "code": "preaccept_capability_changed",
+        "stage": "stt"
+      },
+      "timeout": false,
+      "partial_quality_incorrect": false
+    },
+    {
+      "phase_index": 158,
+      "status": "failed",
+      "failure": {
+        "code": "preaccept_capability_changed",
+        "stage": "stt"
+      },
+      "timeout": false,
+      "partial_quality_incorrect": false
+    },
+    {
+      "phase_index": 185,
+      "status": "failed",
+      "failure": {
+        "code": "preaccept_capability_changed",
+        "stage": "stt"
+      },
+      "timeout": false,
+      "partial_quality_incorrect": false
+    },
+    {
+      "phase_index": 193,
+      "status": "failed",
+      "failure": {
+        "code": "preaccept_capability_changed",
+        "stage": "stt"
+      },
+      "timeout": false,
+      "partial_quality_incorrect": false
+    },
+    {
+      "phase_index": 198,
+      "status": "failed",
+      "failure": {
+        "code": "preaccept_capability_changed",
+        "stage": "stt"
+      },
+      "timeout": false,
+      "partial_quality_incorrect": false
+    },
+    {
+      "phase_index": 209,
+      "status": "failed",
+      "failure": {
+        "code": "preaccept_capability_changed",
+        "stage": "stt"
+      },
+      "timeout": false,
+      "partial_quality_incorrect": false
+    },
+    {
+      "phase_index": 216,
+      "status": "failed",
+      "failure": {
+        "code": "preaccept_capability_changed",
+        "stage": "stt"
+      },
+      "timeout": false,
+      "partial_quality_incorrect": false
+    },
+    {
+      "phase_index": 220,
+      "status": "failed",
+      "failure": {
+        "code": "preaccept_capability_changed",
+        "stage": "stt"
+      },
+      "timeout": false,
+      "partial_quality_incorrect": false
+    },
+    {
+      "phase_index": 226,
+      "status": "failed",
+      "failure": {
+        "code": "preaccept_capability_changed",
+        "stage": "stt"
+      },
+      "timeout": false,
+      "partial_quality_incorrect": false
+    },
+    {
+      "phase_index": 228,
+      "status": "failed",
+      "failure": {
+        "code": "preaccept_capability_changed",
+        "stage": "stt"
+      },
+      "timeout": false,
+      "partial_quality_incorrect": false
+    },
+    {
+      "phase_index": 239,
+      "status": "failed",
+      "failure": {
+        "code": "preaccept_capability_changed",
+        "stage": "stt"
+      },
+      "timeout": false,
+      "partial_quality_incorrect": false
+    },
+    {
+      "phase_index": 243,
+      "status": "failed",
+      "failure": {
+        "code": "preaccept_capability_changed",
+        "stage": "stt"
+      },
+      "timeout": false,
+      "partial_quality_incorrect": false
+    },
+    {
+      "phase_index": 256,
+      "status": "failed",
+      "failure": {
+        "code": "preaccept_capability_changed",
+        "stage": "stt"
+      },
+      "timeout": false,
+      "partial_quality_incorrect": false
+    },
+    {
+      "phase_index": 260,
+      "status": "failed",
+      "failure": {
+        "code": "preaccept_capability_changed",
+        "stage": "stt"
+      },
+      "timeout": false,
+      "partial_quality_incorrect": false
+    },
+    {
+      "phase_index": 272,
+      "status": "failed",
+      "failure": {
+        "code": "preaccept_capability_changed",
+        "stage": "stt"
+      },
+      "timeout": false,
+      "partial_quality_incorrect": false
+    },
+    {
+      "phase_index": 283,
+      "status": "failed",
+      "failure": {
+        "code": "preaccept_capability_changed",
+        "stage": "tts"
+      },
+      "timeout": false,
+      "partial_quality_incorrect": false
+    },
+    {
+      "phase_index": 292,
+      "status": "failed",
+      "failure": {
+        "code": "preaccept_capability_changed",
+        "stage": "stt"
+      },
+      "timeout": false,
+      "partial_quality_incorrect": false
+    },
+    {
+      "phase_index": 303,
+      "status": "failed",
+      "failure": {
+        "code": "preaccept_capability_changed",
+        "stage": "tts"
+      },
+      "timeout": false,
+      "partial_quality_incorrect": false
+    },
+    {
+      "phase_index": 307,
+      "status": "failed",
+      "failure": {
+        "code": "preaccept_capability_changed",
+        "stage": "stt"
+      },
+      "timeout": false,
+      "partial_quality_incorrect": false
+    },
+    {
+      "phase_index": 311,
+      "status": "failed",
+      "failure": {
+        "code": "preaccept_capability_changed",
+        "stage": "stt"
+      },
+      "timeout": false,
+      "partial_quality_incorrect": false
+    },
+    {
+      "phase_index": 323,
+      "status": "failed",
+      "failure": {
+        "code": "preaccept_capability_changed",
+        "stage": "stt"
+      },
+      "timeout": false,
+      "partial_quality_incorrect": false
+    },
+    {
+      "phase_index": 327,
+      "status": "failed",
+      "failure": {
+        "code": "preaccept_capability_changed",
+        "stage": "stt"
+      },
+      "timeout": false,
+      "partial_quality_incorrect": false
+    },
+    {
+      "phase_index": 344,
+      "status": "failed",
+      "failure": {
+        "code": "preaccept_capability_changed",
+        "stage": "stt"
+      },
+      "timeout": false,
+      "partial_quality_incorrect": false
+    },
+    {
+      "phase_index": 374,
+      "status": "failed",
+      "failure": {
+        "code": "preaccept_capability_changed",
+        "stage": "stt"
+      },
+      "timeout": false,
+      "partial_quality_incorrect": false
+    },
+    {
+      "phase_index": 381,
+      "status": "failed",
+      "failure": {
+        "code": "preaccept_capability_changed",
+        "stage": "stt"
+      },
+      "timeout": false,
+      "partial_quality_incorrect": false
+    },
+    {
+      "phase_index": 390,
+      "status": "failed",
+      "failure": {
+        "code": "preaccept_capability_changed",
+        "stage": "stt"
+      },
+      "timeout": false,
+      "partial_quality_incorrect": false
+    },
+    {
+      "phase_index": 394,
+      "status": "failed",
+      "failure": {
+        "code": "preaccept_capability_changed",
+        "stage": "stt"
+      },
+      "timeout": false,
+      "partial_quality_incorrect": false
+    },
+    {
+      "phase_index": 432,
+      "status": "failed",
+      "failure": {
+        "code": "preaccept_capability_changed",
+        "stage": "stt"
+      },
+      "timeout": false,
+      "partial_quality_incorrect": false
+    },
+    {
+      "phase_index": 436,
+      "status": "failed",
+      "failure": {
+        "code": "preaccept_capability_changed",
+        "stage": "stt"
+      },
+      "timeout": false,
+      "partial_quality_incorrect": false
+    },
+    {
+      "phase_index": 451,
+      "status": "failed",
+      "failure": {
+        "code": "preaccept_capability_changed",
+        "stage": "stt"
+      },
+      "timeout": false,
+      "partial_quality_incorrect": false
+    },
+    {
+      "phase_index": 455,
+      "status": "failed",
+      "failure": {
+        "code": "preaccept_capability_changed",
+        "stage": "stt"
+      },
+      "timeout": false,
+      "partial_quality_incorrect": false
+    },
+    {
+      "phase_index": 473,
+      "status": "failed",
+      "failure": {
+        "code": "preaccept_capability_changed",
+        "stage": "stt"
+      },
+      "timeout": false,
+      "partial_quality_incorrect": false
+    },
+    {
+      "phase_index": 488,
+      "status": "failed",
+      "failure": {
+        "code": "preaccept_capability_changed",
+        "stage": "stt"
+      },
+      "timeout": false,
+      "partial_quality_incorrect": false
+    },
+    {
+      "phase_index": 523,
+      "status": "failed",
+      "failure": {
+        "code": "preaccept_capability_changed",
+        "stage": "stt"
+      },
+      "timeout": false,
+      "partial_quality_incorrect": false
+    },
+    {
+      "phase_index": 548,
+      "status": "failed",
+      "failure": {
+        "code": "preaccept_capability_changed",
+        "stage": "stt"
+      },
+      "timeout": false,
+      "partial_quality_incorrect": false
+    },
+    {
+      "phase_index": 552,
+      "status": "failed",
+      "failure": {
+        "code": "preaccept_capability_changed",
+        "stage": "stt"
+      },
+      "timeout": false,
+      "partial_quality_incorrect": false
+    },
+    {
+      "phase_index": 562,
+      "status": "failed",
+      "failure": {
+        "code": "preaccept_capability_changed",
+        "stage": "stt"
+      },
+      "timeout": false,
+      "partial_quality_incorrect": false
+    },
+    {
+      "phase_index": 568,
+      "status": "failed",
+      "failure": {
+        "code": "assistant_reply_predicate_failed",
+        "stage": "assistant"
+      },
+      "timeout": false,
+      "partial_quality_incorrect": true
+    },
+    {
+      "phase_index": 569,
+      "status": "failed",
+      "failure": {
+        "code": "assistant_reply_predicate_failed",
+        "stage": "assistant"
+      },
+      "timeout": false,
+      "partial_quality_incorrect": true
+    },
+    {
+      "phase_index": 570,
+      "status": "failed",
+      "failure": {
+        "code": "assistant_reply_predicate_failed",
+        "stage": "assistant"
+      },
+      "timeout": false,
+      "partial_quality_incorrect": true
+    },
+    {
+      "phase_index": 571,
+      "status": "failed",
+      "failure": {
+        "code": "assistant_reply_predicate_failed",
+        "stage": "assistant"
+      },
+      "timeout": false,
+      "partial_quality_incorrect": true
+    },
+    {
+      "phase_index": 572,
+      "status": "failed",
+      "failure": {
+        "code": "assistant_reply_predicate_failed",
+        "stage": "assistant"
+      },
+      "timeout": false,
+      "partial_quality_incorrect": true
+    },
+    {
+      "phase_index": 573,
+      "status": "failed",
+      "failure": {
+        "code": "assistant_reply_predicate_failed",
+        "stage": "assistant"
+      },
+      "timeout": false,
+      "partial_quality_incorrect": true
+    },
+    {
+      "phase_index": 574,
+      "status": "failed",
+      "failure": {
+        "code": "assistant_reply_predicate_failed",
+        "stage": "assistant"
+      },
+      "timeout": false,
+      "partial_quality_incorrect": true
+    },
+    {
+      "phase_index": 575,
+      "status": "failed",
+      "failure": {
+        "code": "assistant_reply_predicate_failed",
+        "stage": "assistant"
+      },
+      "timeout": false,
+      "partial_quality_incorrect": true
+    },
+    {
+      "phase_index": 576,
+      "status": "failed",
+      "failure": {
+        "code": "assistant_reply_predicate_failed",
+        "stage": "assistant"
+      },
+      "timeout": false,
+      "partial_quality_incorrect": true
+    },
+    {
+      "phase_index": 577,
+      "status": "failed",
+      "failure": {
+        "code": "assistant_reply_predicate_failed",
+        "stage": "assistant"
+      },
+      "timeout": false,
+      "partial_quality_incorrect": true
+    },
+    {
+      "phase_index": 578,
+      "status": "failed",
+      "failure": {
+        "code": "assistant_reply_predicate_failed",
+        "stage": "assistant"
+      },
+      "timeout": false,
+      "partial_quality_incorrect": true
+    },
+    {
+      "phase_index": 579,
+      "status": "failed",
+      "failure": {
+        "code": "assistant_reply_predicate_failed",
+        "stage": "assistant"
+      },
+      "timeout": false,
+      "partial_quality_incorrect": true
+    },
+    {
+      "phase_index": 580,
+      "status": "failed",
+      "failure": {
+        "code": "assistant_reply_predicate_failed",
+        "stage": "assistant"
+      },
+      "timeout": false,
+      "partial_quality_incorrect": true
+    },
+    {
+      "phase_index": 581,
+      "status": "failed",
+      "failure": {
+        "code": "assistant_reply_predicate_failed",
+        "stage": "assistant"
+      },
+      "timeout": false,
+      "partial_quality_incorrect": true
+    },
+    {
+      "phase_index": 582,
+      "status": "failed",
+      "failure": {
+        "code": "assistant_reply_predicate_failed",
+        "stage": "assistant"
+      },
+      "timeout": false,
+      "partial_quality_incorrect": true
+    },
+    {
+      "phase_index": 583,
+      "status": "failed",
+      "failure": {
+        "code": "assistant_reply_predicate_failed",
+        "stage": "assistant"
+      },
+      "timeout": false,
+      "partial_quality_incorrect": true
+    },
+    {
+      "phase_index": 584,
+      "status": "failed",
+      "failure": {
+        "code": "assistant_reply_predicate_failed",
+        "stage": "assistant"
+      },
+      "timeout": false,
+      "partial_quality_incorrect": true
+    },
+    {
+      "phase_index": 585,
+      "status": "failed",
+      "failure": {
+        "code": "assistant_reply_predicate_failed",
+        "stage": "assistant"
+      },
+      "timeout": false,
+      "partial_quality_incorrect": true
+    },
+    {
+      "phase_index": 586,
+      "status": "failed",
+      "failure": {
+        "code": "assistant_reply_predicate_failed",
+        "stage": "assistant"
+      },
+      "timeout": false,
+      "partial_quality_incorrect": true
+    },
+    {
+      "phase_index": 587,
+      "status": "failed",
+      "failure": {
+        "code": "assistant_reply_predicate_failed",
+        "stage": "assistant"
+      },
+      "timeout": false,
+      "partial_quality_incorrect": true
+    },
+    {
+      "phase_index": 588,
+      "status": "failed",
+      "failure": {
+        "code": "assistant_reply_predicate_failed",
+        "stage": "assistant"
+      },
+      "timeout": false,
+      "partial_quality_incorrect": true
+    },
+    {
+      "phase_index": 589,
+      "status": "failed",
+      "failure": {
+        "code": "assistant_reply_predicate_failed",
+        "stage": "assistant"
+      },
+      "timeout": false,
+      "partial_quality_incorrect": true
+    },
+    {
+      "phase_index": 590,
+      "status": "failed",
+      "failure": {
+        "code": "assistant_reply_predicate_failed",
+        "stage": "assistant"
+      },
+      "timeout": false,
+      "partial_quality_incorrect": true
+    },
+    {
+      "phase_index": 591,
+      "status": "failed",
+      "failure": {
+        "code": "assistant_reply_predicate_failed",
+        "stage": "assistant"
+      },
+      "timeout": false,
+      "partial_quality_incorrect": true
+    },
+    {
+      "phase_index": 592,
+      "status": "failed",
+      "failure": {
+        "code": "assistant_reply_predicate_failed",
+        "stage": "assistant"
+      },
+      "timeout": false,
+      "partial_quality_incorrect": true
+    },
+    {
+      "phase_index": 593,
+      "status": "failed",
+      "failure": {
+        "code": "assistant_reply_predicate_failed",
+        "stage": "assistant"
+      },
+      "timeout": false,
+      "partial_quality_incorrect": true
+    },
+    {
+      "phase_index": 594,
+      "status": "failed",
+      "failure": {
+        "code": "assistant_reply_predicate_failed",
+        "stage": "assistant"
+      },
+      "timeout": false,
+      "partial_quality_incorrect": true
+    },
+    {
+      "phase_index": 595,
+      "status": "failed",
+      "failure": {
+        "code": "preaccept_capability_changed",
+        "stage": "stt"
+      },
+      "timeout": false,
+      "partial_quality_incorrect": false
+    },
+    {
+      "phase_index": 596,
+      "status": "failed",
+      "failure": {
+        "code": "assistant_reply_predicate_failed",
+        "stage": "assistant"
+      },
+      "timeout": false,
+      "partial_quality_incorrect": true
+    },
+    {
+      "phase_index": 597,
+      "status": "failed",
+      "failure": {
+        "code": "assistant_reply_predicate_failed",
+        "stage": "assistant"
+      },
+      "timeout": false,
+      "partial_quality_incorrect": true
+    },
+    {
+      "phase_index": 598,
+      "status": "failed",
+      "failure": {
+        "code": "assistant_reply_predicate_failed",
+        "stage": "assistant"
+      },
+      "timeout": false,
+      "partial_quality_incorrect": true
+    },
+    {
+      "phase_index": 599,
+      "status": "failed",
+      "failure": {
+        "code": "assistant_reply_predicate_failed",
+        "stage": "assistant"
+      },
+      "timeout": false,
+      "partial_quality_incorrect": true
+    },
+    {
+      "phase_index": 600,
+      "status": "failed",
+      "failure": {
+        "code": "assistant_reply_predicate_failed",
+        "stage": "assistant"
+      },
+      "timeout": false,
+      "partial_quality_incorrect": true
+    },
+    {
+      "phase_index": 601,
+      "status": "failed",
+      "failure": {
+        "code": "assistant_reply_predicate_failed",
+        "stage": "assistant"
+      },
+      "timeout": false,
+      "partial_quality_incorrect": true
+    },
+    {
+      "phase_index": 602,
+      "status": "failed",
+      "failure": {
+        "code": "assistant_reply_predicate_failed",
+        "stage": "assistant"
+      },
+      "timeout": false,
+      "partial_quality_incorrect": true
+    },
+    {
+      "phase_index": 603,
+      "status": "failed",
+      "failure": {
+        "code": "assistant_reply_predicate_failed",
+        "stage": "assistant"
+      },
+      "timeout": false,
+      "partial_quality_incorrect": true
+    },
+    {
+      "phase_index": 604,
+      "status": "failed",
+      "failure": {
+        "code": "assistant_reply_predicate_failed",
+        "stage": "assistant"
+      },
+      "timeout": false,
+      "partial_quality_incorrect": true
+    },
+    {
+      "phase_index": 605,
+      "status": "failed",
+      "failure": {
+        "code": "assistant_reply_predicate_failed",
+        "stage": "assistant"
+      },
+      "timeout": false,
+      "partial_quality_incorrect": true
+    },
+    {
+      "phase_index": 606,
+      "status": "failed",
+      "failure": {
+        "code": "assistant_reply_predicate_failed",
+        "stage": "assistant"
+      },
+      "timeout": false,
+      "partial_quality_incorrect": true
+    },
+    {
+      "phase_index": 607,
+      "status": "failed",
+      "failure": {
+        "code": "assistant_reply_predicate_failed",
+        "stage": "assistant"
+      },
+      "timeout": false,
+      "partial_quality_incorrect": true
+    },
+    {
+      "phase_index": 608,
+      "status": "failed",
+      "failure": {
+        "code": "assistant_reply_predicate_failed",
+        "stage": "assistant"
+      },
+      "timeout": false,
+      "partial_quality_incorrect": true
+    },
+    {
+      "phase_index": 609,
+      "status": "failed",
+      "failure": {
+        "code": "assistant_reply_predicate_failed",
+        "stage": "assistant"
+      },
+      "timeout": false,
+      "partial_quality_incorrect": true
+    },
+    {
+      "phase_index": 610,
+      "status": "failed",
+      "failure": {
+        "code": "assistant_reply_predicate_failed",
+        "stage": "assistant"
+      },
+      "timeout": false,
+      "partial_quality_incorrect": true
+    },
+    {
+      "phase_index": 611,
+      "status": "failed",
+      "failure": {
+        "code": "assistant_reply_predicate_failed",
+        "stage": "assistant"
+      },
+      "timeout": false,
+      "partial_quality_incorrect": true
+    },
+    {
+      "phase_index": 612,
+      "status": "failed",
+      "failure": {
+        "code": "assistant_reply_predicate_failed",
+        "stage": "assistant"
+      },
+      "timeout": false,
+      "partial_quality_incorrect": true
+    },
+    {
+      "phase_index": 613,
+      "status": "failed",
+      "failure": {
+        "code": "assistant_reply_predicate_failed",
+        "stage": "assistant"
+      },
+      "timeout": false,
+      "partial_quality_incorrect": true
+    },
+    {
+      "phase_index": 614,
+      "status": "failed",
+      "failure": {
+        "code": "assistant_reply_predicate_failed",
+        "stage": "assistant"
+      },
+      "timeout": false,
+      "partial_quality_incorrect": true
+    },
+    {
+      "phase_index": 615,
+      "status": "failed",
+      "failure": {
+        "code": "assistant_reply_predicate_failed",
+        "stage": "assistant"
+      },
+      "timeout": false,
+      "partial_quality_incorrect": true
+    },
+    {
+      "phase_index": 616,
+      "status": "failed",
+      "failure": {
+        "code": "preaccept_capability_changed",
+        "stage": "stt"
+      },
+      "timeout": false,
+      "partial_quality_incorrect": false
+    },
+    {
+      "phase_index": 617,
+      "status": "failed",
+      "failure": {
+        "code": "assistant_reply_predicate_failed",
+        "stage": "assistant"
+      },
+      "timeout": false,
+      "partial_quality_incorrect": true
+    },
+    {
+      "phase_index": 618,
+      "status": "failed",
+      "failure": {
+        "code": "assistant_reply_predicate_failed",
+        "stage": "assistant"
+      },
+      "timeout": false,
+      "partial_quality_incorrect": true
+    },
+    {
+      "phase_index": 619,
+      "status": "failed",
+      "failure": {
+        "code": "assistant_reply_predicate_failed",
+        "stage": "assistant"
+      },
+      "timeout": false,
+      "partial_quality_incorrect": true
+    },
+    {
+      "phase_index": 620,
+      "status": "failed",
+      "failure": {
+        "code": "assistant_reply_predicate_failed",
+        "stage": "assistant"
+      },
+      "timeout": false,
+      "partial_quality_incorrect": true
+    },
+    {
+      "phase_index": 621,
+      "status": "failed",
+      "failure": {
+        "code": "assistant_reply_predicate_failed",
+        "stage": "assistant"
+      },
+      "timeout": false,
+      "partial_quality_incorrect": true
+    },
+    {
+      "phase_index": 622,
+      "status": "failed",
+      "failure": {
+        "code": "assistant_reply_predicate_failed",
+        "stage": "assistant"
+      },
+      "timeout": false,
+      "partial_quality_incorrect": true
+    },
+    {
+      "phase_index": 623,
+      "status": "failed",
+      "failure": {
+        "code": "assistant_reply_predicate_failed",
+        "stage": "assistant"
+      },
+      "timeout": false,
+      "partial_quality_incorrect": true
+    },
+    {
+      "phase_index": 624,
+      "status": "failed",
+      "failure": {
+        "code": "assistant_reply_predicate_failed",
+        "stage": "assistant"
+      },
+      "timeout": false,
+      "partial_quality_incorrect": true
+    }
+  ],
+  "priorCheckpointMeasuredCount": 624,
+  "newMeasuredAttempts": 0,
+  "classification": "requires_same_actor_reconciliation",
+  "nextRoutineCheckUtc": "2026-10-21T02:15:54.036887+00:00",
+  "nativeGoalThreadId": "01a112a5-d6bb-74e2-bf7c-ace73cb513b5",
+  "phoneTaskSeparate": true,
+  "sutCalls": 0,
+  "terminalSummary": {
+    "status": "completed_with_failures_or_incorrect",
+    "stop_reason": "measured_target_complete",
+    "shutdown_completed": true
+  },
+  "epochMeasured": {
+    "attempted": 624,
+    "correct": 517,
+    "incorrect": 0,
+    "failed": 107,
+    "timeouts": 0,
+    "remaining": 0,
+    "planned": 624
+  },
+  "measured": {
+    "attempted": 900,
+    "correct": 773,
+    "incorrect": 0,
+    "failed": 127,
+    "timeouts": 1,
+    "remaining": 0,
+    "planned": 900
+  },
+  "warmupsThisEpoch": {
+    "attempted": 18,
+    "correct": 15,
+    "failed": 3
+  },
+  "priorMeasured": {
+    "attempted": 276,
+    "correct": 256,
+    "failed": 20,
+    "timeouts": 1,
+    "sealedReceipt": "thesis/campaigns/worker-desktop-k3-p2p-full-audio-v1988/PARTIAL-CONDITION-SEAL-v2042.json"
+  },
+  "admission": {
+    "at": "2026-10-21T00:05:13.146985+00:00",
+    "status": "K3_15_ORDINARY_WARMUPS_REMOTE_NATIVE_GPU_ROUTE_PROOF_PUBLISHED",
+    "proofSha256": "d4f66435ec3492ed20ae2a2d6eef81601153ec373442a4edab62c6d141097b32",
+    "excludedWarmups": 18,
+    "remoteModelJoins": 45,
+    "warmupP95MsType7": 13013.3967715,
+    "measured624ForecastSecondsWith20PercentPlus300": 10044.4315024992,
+    "actualGpuLayers": 25,
+    "actualTotalGpuLayers": 25
+  }
+}

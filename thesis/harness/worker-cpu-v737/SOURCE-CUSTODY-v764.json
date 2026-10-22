@@ -1,0 +1,51 @@
+{
+  "schema": "aurora.thesis.worker-cpu-finalizer-source-custody.v764",
+  "at": "2026-10-16T00:24:45.044553+00:00",
+  "status": "SOL_SOURCE_APPROVED_ACTUAL_FINALIZATION_FUTURE",
+  "source": {
+    "path": "thesis/harness/worker-cpu-v737/post_terminal.py",
+    "bytes": 43031,
+    "sha256": "1b9ef010c8c83dfab6f3a77f1da85a2238ec6a7d04c72465cd8ea91bb32c2150"
+  },
+  "originDraft": {
+    "path": ".git/aurora-handoff-import-20261006/worker-cpu-finalize-prep-v762/post_terminal.py",
+    "bytes": 37179,
+    "sha256": "118632498333c3aadd422321366356b68e13a5df44c16e947a1d120ba1b2968c"
+  },
+  "initialReview": {
+    "path": "thesis/validation/cpu-finalizer-source-review-v763.md",
+    "bytes": 3318,
+    "sha256": "b34b4df209824d1f64702d03fc77f3257a2f94176d9f9ad2790caed134bf2caa"
+  },
+  "closureReview": {
+    "path": "thesis/validation/cpu-finalizer-source-review-v764.md",
+    "bytes": 2195,
+    "sha256": "4a68ca25d3f61ea97f63053e55cfb3126b62fdb97e2eea8dd122e067d15c90f5"
+  },
+  "defaultRefusal": {
+    "path": "thesis/validation/cpu-finalizer-default-guard-v763.json",
+    "bytes": 973,
+    "sha256": "963b341414f22907e6df83cc2bc16faebf94e4acc89f5a416e30ad5650b976e0"
+  },
+  "defaultRefusalQualification": "Receipt source hash precedes below-guard manifest-key/native-parser fixes. Admission prefix unchanged and reviewed; unchanged default test not repeated.",
+  "nativeParserMainCheck": {
+    "path": "thesis/validation/cpu-finalizer-parser-main-v764.json",
+    "bytes": 1429,
+    "sha256": "4e738d8504720c3d45128e25f7b538acda5851571b8824e3503e0fe493b7b5a9"
+  },
+  "integrationChanges": [
+    "explicit manual finalization opt-in; live-owner guard before terminal reads",
+    "strict actual input WAV hash",
+    "preexisting report-only destination allowed, exclusive new files",
+    "cached archive SHA reused",
+    "manifest exportSHA256 key consistent",
+    "CPU observer decimal-string ns parsed in same clock",
+    "unique actual correlation-to-attempt mapping; native case label stays null/missing count explicit",
+    "import/format/exception style only otherwise"
+  ],
+  "actualFinalizationExecuted": false,
+  "archiveAuditExecuted": false,
+  "newMeasuredRequests": 0,
+  "modelsOrServicesLoaded": false,
+  "futureGate": "Root verifies existing V737 natural terminal and exact owner absence; explicit flag+frozen/globalCPUlock/storage guards then ONE new CPU archive audit and custody; all old desktop/V491 audits remain closed."
+}

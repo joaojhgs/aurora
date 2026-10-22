@@ -1,0 +1,7 @@
+# Native normal Assistant UI main flow V1060
+
+**Status: Partial feature.** This one main-flow check launched at13:32:38UTC using the same current-source executable and model settings as the passing SDK file-audio readiness. The real native window showed healthy/connected service state, configured default model and “Starting Aurora on this computer”. The normal prompt stayed disabled for45seconds. The check ended at13:33:41UTC before sending a prompt: **0UI sends,0file-audio invocations,0measured cases**. Reply/render/reload/history assertions were not reached.
+
+[Terminal](TERMINAL.json), [saved window](saved-window.json), [summary](summary.json) and [custody manifest](MANIFEST.json) retain the actual result; screenshot and detailed protocol/app logs remain in the original private namespace. Saved13:34:16UTC observation proves the test owner absent after its own supervised cleanup. No old session or worker was stopped.
+
+This is an unresolved normal-UI readiness boundary, with product versus harness/profile cause not yet determined. It does not establish model quality failure or app crash, and does not invalidate the [separate actual native SDK file-audio pass](../native-desktop-file-audio-readiness-v1049/REPORT.md). Existing Sol performs one bounded read-only trace of the source that disables `canSend` and reflects local-sidecar readiness. No identical retry, new model, new worker, full CPU/local/HTTP repeat or general distributed gate is requested.

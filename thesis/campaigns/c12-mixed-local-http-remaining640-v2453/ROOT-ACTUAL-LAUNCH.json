@@ -1,0 +1,26 @@
+{
+  "at": "2026-10-22T11:09:23.090042+00:00",
+  "maximumPopen": 1,
+  "newOrcaWorker": false,
+  "python": "/home/developer/projects/aurora/.venv/bin/python",
+  "controller": "/home/developer/projects/aurora/thesis/harness/c12-mixed-local-http-remaining640-v2453/requester_controller.py",
+  "manifestSha256": "3bfca19d2dd0a9eec3981eae256168a5badd9ac2bb58a270ff8a55df1d986cce",
+  "maximumNewPrimary": 655,
+  "maximumNewCompanion": 655,
+  "globalMeasuredIndices": [
+    261,
+    900
+  ],
+  "originalCollectionDeadlineUtc": "2026-10-22T19:14:51.316179+00:00",
+  "actualAt": "2026-10-22T11:09:23.095416+00:00",
+  "pid": 461044,
+  "startTicks": 144582368,
+  "state": "R",
+  "providerController": {
+    "pid": 2866664,
+    "startTicks": 42281259,
+    "state": "R"
+  },
+  "providerReceiver": 2866665,
+  "warmupStartedProofPending": true
+}

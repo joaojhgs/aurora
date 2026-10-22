@@ -1,0 +1,57 @@
+{
+  "id": "c39481c1-135b-4e9d-bdbc-dc5c92607838",
+  "ok": true,
+  "result": {
+    "worktree": {
+      "id": "03d8a475-d62e-43b3-8885-e382b313ab1b::/home/developer/projects/aurora",
+      "identity": {
+        "key": "wt2:ssh%3Assh-sem-notebook-personal:f28747dd-dac1-4dbb-8292-5c5ecc330589",
+        "executionHostId": "ssh:ssh-sem-notebook-personal",
+        "instanceId": "f28747dd-dac1-4dbb-8292-5c5ecc330589"
+      },
+      "instanceId": "f28747dd-dac1-4dbb-8292-5c5ecc330589",
+      "repoId": "03d8a475-d62e-43b3-8885-e382b313ab1b",
+      "hostId": "ssh:ssh-sem-notebook-personal",
+      "path": "/home/developer/projects/aurora",
+      "head": "df23fd6e1f80e87dc45b6221bed87c00b4187e66",
+      "branch": "refs/heads/feat/ui-multi-platform-integration",
+      "isBare": false,
+      "isMainWorktree": true,
+      "displayName": "feat/ui-multi-platform-integration",
+      "displayNameMode": "automatic",
+      "comment": "",
+      "linkedIssue": null,
+      "linkedPR": null,
+      "linkedLinearIssue": null,
+      "linkedLinearIssueWorkspaceId": null,
+      "linkedLinearIssueOrganizationUrlKey": null,
+      "linkedGitLabMR": null,
+      "linkedGitLabIssue": null,
+      "linkedBitbucketPR": null,
+      "linkedAzureDevOpsPR": null,
+      "linkedGiteaPR": null,
+      "linkedWorkItem": null,
+      "linkedTaskSourceContext": null,
+      "isArchived": false,
+      "isUnread": false,
+      "isPinned": false,
+      "sortOrder": 1788202957511,
+      "lastActivityAt": 1787267273714,
+      "workspaceStatus": "in-progress",
+      "parentWorktreeId": null,
+      "childWorktreeIds": [],
+      "lineage": null,
+      "git": {
+        "path": "/home/developer/projects/aurora",
+        "head": "df23fd6e1f80e87dc45b6221bed87c00b4187e66",
+        "branch": "refs/heads/feat/ui-multi-platform-integration",
+        "isBare": false,
+        "isMainWorktree": true
+      },
+      "linkedItems": []
+    }
+  },
+  "_meta": {
+    "runtimeId": "cc9e3275-28c6-4c45-85cc-bdcd2262aa7d"
+  }
+}

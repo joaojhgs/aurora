@@ -1,0 +1,18 @@
+{
+  "id": "3933aa2e-309a-41c4-87fe-3c50c93a6eb9",
+  "ok": true,
+  "result": {
+    "run": {
+      "id": "run_e6054e76e9fc",
+      "objective": "Coordinate the existing Aurora aggregate native goal 01a112a5-d6bb-74e2-bf7c-ace73cb513b5: parallel bounded unfinished goal lanes, Luna implementation, Sol review/monitor, one serial validation owner, shared resource reservations, main flows only, preserve current session/repository and all local work.",
+      "coordinator_handle": "term_6a00d9ee-792a-4daf-8578-236290e33108",
+      "consumer_generation": 1,
+      "legacy": 0,
+      "created_at": "2026-10-10T03:57:20Z",
+      "updated_at": "2026-10-10T03:57:20Z"
+    }
+  },
+  "_meta": {
+    "runtimeId": "cc9e3275-28c6-4c45-85cc-bdcd2262aa7d"
+  }
+}

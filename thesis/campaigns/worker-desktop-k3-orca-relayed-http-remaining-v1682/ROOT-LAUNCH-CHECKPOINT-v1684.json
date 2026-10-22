@@ -1,0 +1,145 @@
+{
+  "at": "2026-10-20T00:44:45.721962+00:00",
+  "rootNativeGoal": "01a112a5-d6bb-74e2-bf7c-ace73cb513b5",
+  "nativeStatus": "active",
+  "monitorNativeStatus": "active",
+  "launch": {
+    "at": "2026-10-20T00:44:09.909447+00:00",
+    "conditionTargetMeasured": 900,
+    "controllerPid": 2202799,
+    "controllerStartTicks": 123551050,
+    "credentialsCopied": false,
+    "excludedWarmups": 15,
+    "frozenManifestSha256": "32c5ac87c8cd765f0117a0312b6941c8f69c7731dfe66987826311e74e34b506",
+    "globalBuildLock": "Same locked descriptor handed to controller; parent closed its copy without unlocking",
+    "newMeasuredObserved": 0,
+    "plannedMeasured": 160,
+    "priorAttemptedMeasured": 740,
+    "priorCorrect": 725,
+    "priorFailed": 15,
+    "providerManifestSha256": "61fe867af6495a6e130c1148b73b97ac3ca14755dbcba9a034a155d04fa2d62e",
+    "providerReceiverPid": 2991345,
+    "providerRestarted": false,
+    "requiredNativeJoins": 45,
+    "startupIsNotAcceptance": true,
+    "status": "REMAINING160_CONTROLLER_LAUNCHED_NEW_WARMUP_GATE_PENDING"
+  },
+  "operatorLaunch": {
+    "requesterCopier": {
+      "at": "2026-10-20T00:44:09.924185+00:00",
+      "modelCalls": 0,
+      "pid": 2202800,
+      "role": "Original Root collection utility; not an agent",
+      "sourceSha256": "a9937af5374b252f29e27f109f080524927bfe8264f3e46a455c1785e80d00b1",
+      "startTicks": 123551051
+    },
+    "warmupFinalizer": {
+      "at": "2026-10-20T00:44:09.934838+00:00",
+      "modelCalls": 0,
+      "pid": 2202801,
+      "role": "Original Root collection utility; not an agent",
+      "sourceSha256": "1fc64d25eb0f5d0e97f4c7caaf259e4567ca869ab55d2063bc7da307b27bbb56",
+      "startTicks": 123551052
+    }
+  },
+  "localProcesses": [
+    {
+      "role": "controller",
+      "pid": 2202799,
+      "startTicks": 123551050,
+      "alive": true
+    },
+    {
+      "role": "requesterCopier",
+      "pid": 2202800,
+      "startTicks": 123551051,
+      "alive": true
+    },
+    {
+      "role": "warmupFinalizer",
+      "pid": 2202801,
+      "startTicks": 123551052,
+      "alive": true
+    }
+  ],
+  "providerReadmission": {
+    "at": "2026-10-20T00:43:43.145050+00:00",
+    "host": "personal.skyron-server",
+    "providerRoot": "/home/developer/projects/aurora/.git/aurora-handoff-import-20261006/distributed-k3-http-provider-v1680",
+    "manifestSha256": "61fe867af6495a6e130c1148b73b97ac3ca14755dbcba9a034a155d04fa2d62e",
+    "configSha256": "aa03866778b9a57e71a47bcab1a87dcd9adfadad2ec0974c127b98f80b40fba6",
+    "providerLaunch": {
+      "at": "2026-10-20T00:42:15.704866+00:00",
+      "host": "personal.skyron-server",
+      "freshProviderRoot": "/home/developer/projects/aurora/.git/aurora-handoff-import-20261006/distributed-k3-http-provider-v1680",
+      "manifestSha256": "61fe867af6495a6e130c1148b73b97ac3ca14755dbcba9a034a155d04fa2d62e",
+      "controllerPid": 2991328,
+      "controllerStartTicks": 21245666,
+      "copierPid": 2991329,
+      "copierStartTicks": 21245666,
+      "newOuterCapSeconds": 10800,
+      "notAfterUtcConservative": "2026-10-20T03:42:15.698294+00:00",
+      "retiredOriginalProviderVerified": true,
+      "sameApprovedPrivateGatewayBinding": true,
+      "configSha256": "aa03866778b9a57e71a47bcab1a87dcd9adfadad2ec0974c127b98f80b40fba6",
+      "remainingConditionIndices": [
+        741,
+        900
+      ],
+      "plannedMeasured": 160,
+      "targetTotal": 900,
+      "priorAttempts740Preserved": true,
+      "nativeModelAdmission": "PENDING ordinarywarmups/proof, no measured traffic",
+      "modelRequestsIssuedByLauncher": 0,
+      "newOrcaWorker": false,
+      "credentialsCopied": false,
+      "existingApiKeyInjectedInMemory": true,
+      "preflightTerminalAlwaysPersisted": true,
+      "copySourceSha256": "8da18b99499ce9dceacde63f4f6855a66eb4f21bf2623f0ff08454a90ee22786"
+    },
+    "status": "FRESH_PROVIDER_PID_MANIFEST_CONFIG_RESOURCE_CHECK_PASSED",
+    "nativeModelAdmission": "PENDING15ordinarywarmups45nativejoins",
+    "newModelRequests": 0,
+    "providerRestarted": false,
+    "credentialsCopied": false,
+    "notAfterUtcConservative": "2026-10-20T03:42:15.698294+00:00",
+    "processes": [
+      {
+        "pid": 2991328,
+        "startTicks": 21245666,
+        "state": "S",
+        "alive": true
+      },
+      {
+        "pid": 2991345,
+        "startTicks": 21245707,
+        "state": "S",
+        "alive": true
+      },
+      {
+        "pid": 2991329,
+        "startTicks": 21245666,
+        "state": "S",
+        "alive": true
+      }
+    ],
+    "readiness": {
+      "identity_sha256": "4fbc84a834a04d8d66d88181848fef499ea886cc1ad47083203d5f7c74d2516e",
+      "manifest_sha256": "61fe867af6495a6e130c1148b73b97ac3ca14755dbcba9a034a155d04fa2d62e",
+      "receiver_pid": 2991345,
+      "status": "tcp_listener_ready"
+    },
+    "freeBytes": 147645837312,
+    "memAvailableBytes": 24564875264,
+    "stagedCollector": {
+      "path": "/home/developer/projects/aurora/.git/aurora-handoff-import-20261006/k3-collector-v1682.py",
+      "bytes": 7451,
+      "sha256": "dde2165bb6beb8a475084f879548e28800f201a15f46aef0d3aab219e32b8365"
+    }
+  },
+  "actualWarmupsObserved": 0,
+  "actualMeasuredObserved": 0,
+  "status": "ACTUALLY_LAUNCHED_ORDINARY_WARMUP_AND_NATIVE_PROOF_PENDING",
+  "noNewForwardWorkerOrCredentialChange": true,
+  "personalControlReservation": "Exclusive original Root warmupFinalizer2202801 for one saved-native-proof read; no competing sends"
+}

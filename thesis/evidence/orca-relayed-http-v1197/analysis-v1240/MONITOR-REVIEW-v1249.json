@@ -1,0 +1,33 @@
+{
+  "observedAt": "2026-10-17T20:57:12.189207+00:00",
+  "run": "run_e6054e76e9fc",
+  "task": "task_d7ea336050cf",
+  "dispatch": "ctx_37b4d0a3c14f",
+  "amends": ".omx/evidence/orca-monitor-20261010/K1-SAVED-ANALYSIS-METHODOLOGY-REVIEW-20261017T205608.json",
+  "rootExplanation": "msg_5bd305b2e013",
+  "verdict": "BOUNDED_REVIEW_COMPLETE_NO_MATERIAL_STATISTICAL_OR_CORRELATION_DEFECT",
+  "versionResolution": {
+    "savedExecutedSource": "thesis/evidence/orca-relayed-http-v1197/analysis-v1240/analysis-source.py",
+    "savedSourceSha256": "12036a7eeb51b5954a0061872222f029925d024158c9bd36b3e337d8191eadc5",
+    "matchesV1240Summary": true,
+    "currentSource": "thesis/analysis/k1_saved_case_history.py",
+    "currentSha256": "e8e531b95dedac0296b6dcb24cab44d5461f6cf9e44d4291cdde962a4ad1d2c3",
+    "exactDiffScope": "write_once delegates to new temp+fsync+checksum+atomicrename+directoryfsync write_bytes_once; main routes exact input snapshot through same publication helper. No statistical/join/denominator change.",
+    "statisticalFunctionASTUnchanged": true,
+    "reviewedCurrentPublicationDiff": true
+  },
+  "initialVersionMismatchClassification": "Reconciled to explicit historical executed version versus newer atomic-publication helper, not a data or source custody defect; prior provisional mismatch resolved.",
+  "dataEvidenceUnchanged": {
+    "measured": 36,
+    "warmupsExcluded": 15,
+    "requesterNativeSTTandLLMCoverage": 36,
+    "providerTTSMatched": 24,
+    "providerMissingOlderCustodyPrefix": 12,
+    "historyInvocationPopulation": 72,
+    "historyExactlyOnePerCasePopulation": 0,
+    "type7HelperSha256": "b8fc433bae6e941bd8829df1fa65a5df42af94f2a45d1f3e7174aca8767a7932",
+    "newSutRequestsOrTests": 0
+  },
+  "limits": "Saved checkpoint only, not900seal. Later provider join coverage/final counts must follow actual raw custody. p99 already exported by frozen runner for correct flows; link final field, no new workload needed. Queue/TTFT/first-audio/playback/relay-only metrics remain unknown.",
+  "nextAction": "Close this bounded review; continue healthy frozen collection with no extra gate/replay/review matrix. Root alone owns source/publication and optional canonical-copy of monitor receipts."
+}

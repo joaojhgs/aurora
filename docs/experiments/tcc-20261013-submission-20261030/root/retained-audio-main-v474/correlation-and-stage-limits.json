@@ -1,0 +1,24 @@
+{
+  "browserResponseCorrelationId": "5d1e095f7bbac70bbdd6bfbe7fca78bc",
+  "serverCorrelationMatches": true,
+  "actualPythonPID": 2887832,
+  "serverClockDomain": "python_process_monotonic",
+  "serverSpans": {
+    "TTS.Synthesize": {
+      "spanId": "f2d942ce8f3540cab699f4c1feb03dc6",
+      "durationMs": 6716.926428,
+      "completed": true,
+      "selectedProvider": null
+    },
+    "tts.model_invoke": {
+      "spanId": "2f22b389c05c445cb5ab01d907bf4184",
+      "durationMs": 6669.907545,
+      "completed": true,
+      "selectedProvider": null
+    }
+  },
+  "provider": null,
+  "providerUnknownReason": "Existing private observer did not populate selected_provider. Fixture configuration declares piper; null does not identify the actual engine.",
+  "notAP90OrMeasuredCondition": true,
+  "noPureTransportOrQueueAttribution": true
+}

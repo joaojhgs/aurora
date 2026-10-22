@@ -1,0 +1,51 @@
+{
+  "id": "8b1b3bbf-93bd-48f2-a5c6-ed20abc32aef",
+  "ok": true,
+  "result": {
+    "terminal": {
+      "handle": "term_d5651d8d-58e2-4b38-85e2-51c668cc933c",
+      "status": "running",
+      "tail": [
+        "",
+        "",
+        "",
+        "",
+        "",
+        "",
+        "",
+        "",
+        "",
+        "",
+        "",
+        "",
+        "",
+        "",
+        "",
+        "",
+        "",
+        "",
+        "",
+        "",
+        "",
+        "",
+        "",
+        "",
+        "",
+        "",
+        "",
+        "",
+        ""
+      ],
+      "truncated": false,
+      "limited": false,
+      "oldestCursor": "178125",
+      "nextCursor": "178461",
+      "latestCursor": "178461",
+      "returnedLineCount": 29,
+      "source": "stream"
+    }
+  },
+  "_meta": {
+    "runtimeId": "cc9e3275-28c6-4c45-85cc-bdcd2262aa7d"
+  }
+}

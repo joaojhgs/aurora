@@ -1,0 +1,51 @@
+{
+  "schemaVersion": 1,
+  "stage": "T1-corrected-python-unit-baseline",
+  "objective": "tcc:20261013:submission-20261030",
+  "sourceCommit": "5782746afba213f6b36907db2f09f0017625e218",
+  "sourceStatusBefore": "?? docs/experiments/\n",
+  "dirtyDiffSha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+  "planSha256": "8bb017f59eeb4acb874ad812cdd740dbe6ace015e9794602961b43bd7749b785",
+  "ownerApproval": "2026-10-13 existing Root authorization lifts execution HELD for full Aurora tests, benchmarks, builds and necessary test deployments",
+  "command": [
+    "flock",
+    "--nonblock",
+    "/tmp/aurora-global-build.lock",
+    "timeout",
+    "--signal=TERM",
+    "--kill-after=10s",
+    "900s",
+    "uv",
+    "run",
+    "--no-sync",
+    "pytest",
+    "tests/unit",
+    "-q",
+    "--junitxml=/home/developer/projects/aurora/.git/aurora-handoff-import-20261006/t1-unit-v235/junit.xml",
+    "--durations=15",
+    "--basetemp=/home/developer/projects/aurora/.git/aurora-handoff-import-20261006/t1-unit-v235/test-tmp",
+    "-o",
+    "cache_dir=/home/developer/projects/aurora/.git/aurora-handoff-import-20261006/t1-unit-v235/pytest-cache"
+  ],
+  "deadlineSeconds": 900,
+  "globalBuildLock": "/tmp/aurora-global-build.lock",
+  "serialOwner": "existing Aurora Root",
+  "startedAt": "2026-10-13T23:54:58.921893+00:00",
+  "startedMonotonicNs": 714159513432102,
+  "host": {
+    "pseudonym": "coding-worker",
+    "machine": "aarch64",
+    "logicalCpus": 2,
+    "loadAvg": [
+      3.9765625,
+      3.0947265625,
+      2.82177734375
+    ],
+    "freeArtifactBytes": 5749362688
+  },
+  "isolatedConfigSha256": "313a47491db2e61c5a67ee351ca3230f53eaee16ace1b3b0631d4a1e7266bbd8",
+  "scope": "Full unit baseline after reviewed three-file correction; not mobile, live mesh, full integration or performance acceptance",
+  "benchmarkRequests": 0,
+  "passingScopesRerunAsFiller": false,
+  "publicExportPolicy": "Complete test logs/JUnit copied byte-for-byte; private configuration backups, environment and their hashes withheld. Source data are unit-test fixtures, not private assistant history or benchmark requests."
+}

@@ -1,0 +1,45 @@
+{
+  "at": "2026-10-22T15:06:15.580966+00:00",
+  "classification": "MAIN_RESOURCE_GUARD_TERMINAL_PARTIAL_FINALIZING",
+  "terminalAt": "2026-10-22T14:45:10.631582+00:00",
+  "reason": "worker_free_disk_floor",
+  "requesterAbsent": true,
+  "requesterIdentity": {
+    "pid": 462924,
+    "startTicks": 144596371
+  },
+  "providerOriginalActorsAbsent": [
+    {
+      "originalPresent": false,
+      "pid": 2866664
+    },
+    {
+      "originalPresent": false,
+      "pid": 2866665
+    }
+  ],
+  "providerRuntimeRetired": true,
+  "currentEpochMeasuredCorrectPerStream": 289,
+  "priorRetainedMeasuredCorrectPerStream": 260,
+  "conditionMeasuredCorrectPerStream": 549,
+  "failedPerStream": 0,
+  "timeoutsPerStream": 0,
+  "unstartedPerStream": 351,
+  "currentEpochExcludedWarmupsPerStream": 15,
+  "pairedCapsulesWithCompleteCustody": 304,
+  "requesterTerminal": "REQUESTER-TERMINAL.json",
+  "lastProgressRunningFlagHistorical": true,
+  "providerEofCustody": "terminal-v2455/CUSTODY.json",
+  "fourRawPrefixEofProof": "terminal-v2455/RAW-PREFIX-PLUS-EOF-VERIFIED.json",
+  "eofArchiveBytes": 66222,
+  "eofArchiveSha256": "9774e3537a376093e674fa3e3401532cdae47b75f80b0538acb4ce01fe9e6b39",
+  "signalsSentByFinalizer": 0,
+  "newInference": 0,
+  "epochAllocationReleasePendingSavedAnalysis": true,
+  "conditionMeasuredTargetComplete": false,
+  "fullGoalComplete": false,
+  "freeBytes": 2143580160,
+  "floorBytes": 2147483648,
+  "existingCleanupDecision": "Pending exact935297024B unused-webpack candidate; no new question/deletion",
+  "nextAction": "Saved-data analysis only, using RAM computation and bounded compressed physical thesis output; scoped release after verified populations/stage joins. No restart or measured replay;351remaining stays open. Existing Notebook lane remains independent under granted guards/window."
+}

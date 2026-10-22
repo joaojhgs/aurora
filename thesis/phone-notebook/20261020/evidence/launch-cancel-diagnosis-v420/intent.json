@@ -1,0 +1,13 @@
+{
+  "controlDeadline": "2026-10-22T14:22:00Z",
+  "host": "ssh:ssh-sem-notebook-personal",
+  "incarnation": "328cd72f-c7ea-49ff-a2db-b9275b085037",
+  "remoteResult": "/home/developer/projects/aurora/thesis/phone-notebook/20261020/evidence/launch-cancel-diagnosis-v420.json",
+  "rootAdmissionMessage": "Bounded public cancellation diagnosis on own already-ended session, no new generation/security change",
+  "script": "scripts/launch_cancel_diagnosis_v420.py",
+  "scriptSha256": "24d0978ab4c94188ba2801e40629b5ddc6e77a1c32c18936cf1cda4bd3a514b5",
+  "singleSend": true,
+  "supportedEnter": true,
+  "terminal": "term_a2ed5feb-7c92-48e4-bd88-d1b0e6737989",
+  "textTrailingNewline": false
+}

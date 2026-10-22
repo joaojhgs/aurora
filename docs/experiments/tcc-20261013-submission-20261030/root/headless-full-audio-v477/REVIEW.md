@@ -1,0 +1,9 @@
+# V477 bounded counter-read setup delta review
+
+2026-10-15 UTC. **APPROVE exact private setup delta.** Controller SHA256 `01ee1d68d535b0b1606897e0df4184dd6e11833aeaaf167236fb56551dbc5c08`; bootstrap `2a9533857a76349d9f7566373ba870fd5f448a92a0d31ff44a9fb1b46fec8e44`. Direct comparison with V476 confirms only fresh V477 output/bootstrap paths and guarded periodic GPU-counter reads. No imports/tests/runtime/models/browser/build/network/device/Orca operations, canonical/index/goals/vault writes or agents; this private report is the sole owned write.
+
+The periodic sampler now catches OSError per counter, emits null for the unavailable observation and retains bounded deduplicated path/error-class/errno records in resource rows and the normal terminal receipt. It does not convert an unavailable busy counter to zero, retry a model or bypass the strict initial hardware identity admission. Thus the demonstrated noncritical gpu_busy_percent EBUSY no longer aborts the pilot's owner controller. Existing locks, resource floors,240-second outer/180-second flow bounds and owned finally cleanup remain unchanged.
+
+Pilot is byte-identical at `8a2c2d1d709c252e29c2f53781e2873bccc0b981526aed2e620ac5458f0efc24`; bindings likewise `4a5e406a1a801b84615a695ae03ecd5a13a81db4eb055946524ce0b350d706f3`. Their prior source scope/correctness/no-substitution/privacy limits remain; no full-flow re-review or new test/probe is requested. Root's actual V476 zero-output setup failure, absent PIDs and lock retirement are preserved historical execution evidence, not a successful audio attempt.
+
+No remaining material blocker in this exact delta. Root alone owns the single actual prerecorded pipeline execution, actual complete records and safe evidence projection. No runtime/model/offload/task/playback/full-voice or barrier acceptance is inferred from source approval. Stop.

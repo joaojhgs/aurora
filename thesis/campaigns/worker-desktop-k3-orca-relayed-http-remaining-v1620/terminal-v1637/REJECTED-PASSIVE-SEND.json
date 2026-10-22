@@ -1,0 +1,11 @@
+{
+  "id": "f2f7472f-e005-46ec-9eb9-715187e69291",
+  "ok": false,
+  "error": {
+    "code": "terminal_not_writable",
+    "message": "terminal_not_writable"
+  },
+  "_meta": {
+    "runtimeId": "cc9e3275-28c6-4c45-85cc-bdcd2262aa7d"
+  }
+}

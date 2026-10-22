@@ -1,0 +1,37 @@
+{
+  "at": "2026-10-16T12:09:29.218258+00:00",
+  "pid": 3702334,
+  "startTicks": "93102963",
+  "status": "FRONTEND_RECEIVED_ALL_FILES_VERIFIED_NOT_NATIVE_RUNTIME",
+  "totalBytes": 2210497,
+  "acknowledgedBytes": 2210497,
+  "terminal": "term_00a86bfb-1ede-4fbf-8b5e-72e2a2629f62",
+  "incarnation": "9d7a67b9-7786-4073-8c58-b9c260aa643f",
+  "cursor": "186944",
+  "newWorkerSessionProjectNetworkListenerOrCredentials": false,
+  "pending": null,
+  "earlyFinalReceipt": {
+    "status": "FRONTEND_RECEIVED_ALL_FILES_VERIFIED_NOT_NATIVE_RUNTIME",
+    "at": "2026-10-16T12:12:48.329286+00:00",
+    "host": "personal.skyron-server",
+    "artifact": "/tmp/aurora-root-c06-current-source-v1019/input/FRONTEND-DIST-v1025.tar.gz",
+    "bytes": 2210497,
+    "sha256": "f36b9750913a232486db7bf3c68a8f145f3640bc4e360513ec044c7ff0392d17",
+    "files": 77,
+    "directory": "/tmp/aurora-root-c06-current-source-v1019/frontend-build-v1025",
+    "existingPlainTerminalOnly": true,
+    "modelOrNativeAppLaunched": false
+  },
+  "receiverReceipt": {
+    "status": "FRONTEND_RECEIVED_ALL_FILES_VERIFIED_NOT_NATIVE_RUNTIME",
+    "at": "2026-10-16T12:12:48.329286+00:00",
+    "host": "personal.skyron-server",
+    "artifact": "/tmp/aurora-root-c06-current-source-v1019/input/FRONTEND-DIST-v1025.tar.gz",
+    "bytes": 2210497,
+    "sha256": "f36b9750913a232486db7bf3c68a8f145f3640bc4e360513ec044c7ff0392d17",
+    "files": 77,
+    "directory": "/tmp/aurora-root-c06-current-source-v1019/frontend-build-v1025",
+    "existingPlainTerminalOnly": true,
+    "modelOrNativeAppLaunched": false
+  }
+}

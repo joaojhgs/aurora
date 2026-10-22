@@ -1,0 +1,12 @@
+{
+  "controlDeadline": "2026-10-20T22:02:00Z",
+  "explicitNewline": true,
+  "host": "ssh:ssh-sem-notebook-personal",
+  "incarnation": "633939eb-60f4-4bc0-9a0c-5941dc6db36a",
+  "remoteResult": "/home/developer/projects/aurora/thesis/phone-notebook/20261020/evidence/adb-controller-diagnostic-2141.json",
+  "rootAdmissionMessage": "msg_0ca602dd7a47",
+  "script": "scripts/adb_controller_diagnostic.py",
+  "scriptSha256": "c5fd040dcf2ab82d50ad849bccf7e74baec408e918e8de7dbdd4cfd6f77e194c",
+  "singleSend": true,
+  "terminal": "term_f40f2bd6-0f71-4484-8347-ac221cf6ce9b"
+}

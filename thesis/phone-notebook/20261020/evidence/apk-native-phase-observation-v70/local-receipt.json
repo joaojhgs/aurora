@@ -1,0 +1,8 @@
+{
+  "bytes": 5907,
+  "copyOnly": true,
+  "custody": "Notebook result persisted and fsynced before relay; remote receipt in same output",
+  "localPath": "/home/developer/projects/aurora/thesis/phone-notebook/20261020/evidence/apk-native-phase-observation-v70/result.json",
+  "remotePath": "/home/developer/projects/aurora/thesis/phone-notebook/20261020/evidence/apk-native-phase-observation-v70.json",
+  "sha256": "91982ca45ee468ecce59fc13aea173f4c7082559fd2ebf9d195cf91f9942d08f"
+}

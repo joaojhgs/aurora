@@ -1,0 +1,31 @@
+{
+  "verifiedAt": "2026-10-15T04:52:50.966715+00:00",
+  "sourceFullRead": true,
+  "copies": [
+    {
+      "source": "/home/developer/.hermes/profiles/personal/cache/scratch/tcc-notebook-inventory-msg_e0d21e60cef3.json",
+      "copy": "docs/experiments/tcc-20261013-submission-20261030/monitor/personal-notebook-admission-20261015T0440/personal-inventory-primary.json",
+      "sha256": "c4eb6e4e5dc1049a5103c0e62d863ab794578c2dd3e396f4956f91f558f28c35",
+      "bytes": 3078
+    },
+    {
+      "source": "/home/developer/.hermes/profiles/coordinator/plugin-data/tcc/personal-notebook-inventory-msg_e0d21e60cef3.json",
+      "copy": "docs/experiments/tcc-20261013-submission-20261030/monitor/personal-notebook-admission-20261015T0440/coordinator-inventory-receipt.json",
+      "sha256": "cd2df42bff1f42f16254807a140c453a621906f75c7355967956d44dbdc1a57f",
+      "bytes": 3569
+    }
+  ],
+  "personalReadbackReceipt": "c94f60cc-663d-46b8-8f42-d226016a6da2",
+  "registeredPlacementVerified": true,
+  "host": "ssh:ssh-sem-notebook-personal",
+  "workspace": "03d8a475-d62e-43b3-8885-e382b313ab1b::/home/developer/projects/aurora",
+  "placementsObservedAt": 1792039565683,
+  "terminalInventoryObservedAt": 1792039558967,
+  "registeredTerminalAndIncarnation": null,
+  "missingTerminalDoesNotProveExit": true,
+  "countryHardwareModelResourceReservationAdmission": false,
+  "historicalResourcesObservedAt": 1791992550051,
+  "noBenchmarkOrReceiverLaunched": true,
+  "noNewSessionsWorkersGrantsCompanyAccess": true,
+  "phase2MeasuredAllowed": false
+}

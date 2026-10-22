@@ -1,0 +1,22 @@
+{
+  "plan_path": "/home/developer/Documents/Obsidian Vault Origin/5-full-notes/faculdade/tcc/future-work-test-requirements.md",
+  "sha256": "b7efb40b33ae4ea952569706c97bb1dbe7583351e009d882213afed409f4a189",
+  "checks": {
+    "original_t0_t13_retained": true,
+    "active_ios_row_removed": true,
+    "900_per_condition": true,
+    "sampling_pending_removed": true,
+    "cumulative_all_three": true,
+    "cpu_entire_unchanged": true,
+    "separate_gpu": true,
+    "two_phase_barrier": true,
+    "no_cross_phase1": true,
+    "natural_mixed_load_phase2": true,
+    "gpu_unverified": true
+  },
+  "coverage_templates": 30,
+  "node_pairs_readiness": 20,
+  "actual_verified_new_launches": 0,
+  "gpu_backend": "unverified",
+  "dual_barrier_ready": false
+}

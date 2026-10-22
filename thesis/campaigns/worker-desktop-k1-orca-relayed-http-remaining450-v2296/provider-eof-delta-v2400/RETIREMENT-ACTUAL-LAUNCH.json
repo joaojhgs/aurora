@@ -1,0 +1,9 @@
+{
+  "at": "2026-10-22T05:40:35.725002+00:00",
+  "pid": 180937,
+  "startTicks": 142609619,
+  "operation": "k1-http-current-provider-retirement-v2400",
+  "intent": "thesis/campaigns/worker-desktop-k1-orca-relayed-http-remaining450-v2296/provider-eof-delta-v2400/RETIREMENT-OPERATOR-INTENT.json",
+  "log": "thesis/campaigns/worker-desktop-k1-orca-relayed-http-remaining450-v2296/provider-eof-delta-v2400/RETIREMENT-OPERATOR.log",
+  "state": "REQUEST_ISSUED_NOT_RETIREMENT_PROOF"
+}

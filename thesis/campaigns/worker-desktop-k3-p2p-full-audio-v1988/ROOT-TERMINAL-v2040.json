@@ -1,0 +1,273 @@
+{
+  "at": "2026-10-20T23:52:57.644930+00:00",
+  "observationStartedAt": "2026-10-20T23:52:57.618703+00:00",
+  "observationEndedAt": "2026-10-20T23:52:57.644930+00:00",
+  "source": "fresh primary case files, custody CURRENT and /proc; no previous receipt reused",
+  "primaryCasesDirectory": "/home/developer/projects/aurora/.git/aurora-handoff-import-20261006/distributed-k3-mesh-cell-v1988/campaign/attempts",
+  "primaryProgressPath": "/home/developer/projects/aurora/.git/aurora-handoff-import-20261006/distributed-k3-mesh-cell-v1988/campaign/progress.json",
+  "custodyCurrentPath": "/home/developer/projects/aurora/thesis/campaigns/worker-desktop-k3-p2p-full-audio-v1988/CURRENT.json",
+  "status": "stopped_system_failure",
+  "actors": {
+    "3154212": "absent",
+    "3154248": "absent",
+    "3154213": "absent"
+  },
+  "measured": {
+    "attempted": 276,
+    "correct": 256,
+    "incorrect": 0,
+    "failed": 20,
+    "timeouts": 1,
+    "remaining": 624
+  },
+  "custody": {
+    "sequence": 64,
+    "cases": 293,
+    "audio": 271,
+    "files": 960
+  },
+  "freeBytes": 4123308032,
+  "measuredNonCorrect": [
+    {
+      "phase_index": 15,
+      "status": "failed",
+      "failure": {
+        "code": "preaccept_capability_changed",
+        "stage": "stt"
+      },
+      "timeout": false,
+      "partial_quality_incorrect": false
+    },
+    {
+      "phase_index": 24,
+      "status": "failed",
+      "failure": {
+        "code": "preaccept_capability_changed",
+        "stage": "stt"
+      },
+      "timeout": false,
+      "partial_quality_incorrect": false
+    },
+    {
+      "phase_index": 28,
+      "status": "failed",
+      "failure": {
+        "code": "preaccept_capability_changed",
+        "stage": "stt"
+      },
+      "timeout": false,
+      "partial_quality_incorrect": false
+    },
+    {
+      "phase_index": 54,
+      "status": "failed",
+      "failure": {
+        "code": "preaccept_capability_changed",
+        "stage": "stt"
+      },
+      "timeout": false,
+      "partial_quality_incorrect": false
+    },
+    {
+      "phase_index": 66,
+      "status": "failed",
+      "failure": {
+        "code": "preaccept_capability_changed",
+        "stage": "stt"
+      },
+      "timeout": false,
+      "partial_quality_incorrect": false
+    },
+    {
+      "phase_index": 70,
+      "status": "failed",
+      "failure": {
+        "code": "preaccept_capability_changed",
+        "stage": "stt"
+      },
+      "timeout": false,
+      "partial_quality_incorrect": false
+    },
+    {
+      "phase_index": 82,
+      "status": "failed",
+      "failure": {
+        "code": "preaccept_capability_changed",
+        "stage": "stt"
+      },
+      "timeout": false,
+      "partial_quality_incorrect": false
+    },
+    {
+      "phase_index": 140,
+      "status": "failed",
+      "failure": {
+        "code": "preaccept_capability_changed",
+        "stage": "stt"
+      },
+      "timeout": false,
+      "partial_quality_incorrect": false
+    },
+    {
+      "phase_index": 144,
+      "status": "failed",
+      "failure": {
+        "code": "preaccept_capability_changed",
+        "stage": "stt"
+      },
+      "timeout": false,
+      "partial_quality_incorrect": false
+    },
+    {
+      "phase_index": 159,
+      "status": "failed",
+      "failure": {
+        "code": "preaccept_capability_changed",
+        "stage": "tts"
+      },
+      "timeout": false,
+      "partial_quality_incorrect": false
+    },
+    {
+      "phase_index": 176,
+      "status": "failed",
+      "failure": {
+        "code": "preaccept_capability_changed",
+        "stage": "stt"
+      },
+      "timeout": false,
+      "partial_quality_incorrect": false
+    },
+    {
+      "phase_index": 188,
+      "status": "failed",
+      "failure": {
+        "code": "preaccept_capability_changed",
+        "stage": "stt"
+      },
+      "timeout": false,
+      "partial_quality_incorrect": false
+    },
+    {
+      "phase_index": 200,
+      "status": "failed",
+      "failure": {
+        "code": "preaccept_capability_changed",
+        "stage": "stt"
+      },
+      "timeout": false,
+      "partial_quality_incorrect": false
+    },
+    {
+      "phase_index": 204,
+      "status": "failed",
+      "failure": {
+        "code": "preaccept_capability_changed",
+        "stage": "stt"
+      },
+      "timeout": false,
+      "partial_quality_incorrect": false
+    },
+    {
+      "phase_index": 213,
+      "status": "failed",
+      "failure": {
+        "code": "preaccept_capability_changed",
+        "stage": "stt"
+      },
+      "timeout": false,
+      "partial_quality_incorrect": false
+    },
+    {
+      "phase_index": 232,
+      "status": "failed",
+      "failure": {
+        "code": "preaccept_capability_changed",
+        "stage": "tts"
+      },
+      "timeout": false,
+      "partial_quality_incorrect": false
+    },
+    {
+      "phase_index": 252,
+      "status": "failed",
+      "failure": {
+        "code": "preaccept_capability_changed",
+        "stage": "stt"
+      },
+      "timeout": false,
+      "partial_quality_incorrect": false
+    },
+    {
+      "phase_index": 270,
+      "status": "failed",
+      "failure": {
+        "code": "preaccept_capability_changed",
+        "stage": "stt"
+      },
+      "timeout": false,
+      "partial_quality_incorrect": false
+    },
+    {
+      "phase_index": 274,
+      "status": "failed",
+      "failure": {
+        "code": "preaccept_capability_changed",
+        "stage": "stt"
+      },
+      "timeout": false,
+      "partial_quality_incorrect": false
+    },
+    {
+      "phase_index": 276,
+      "status": "failed",
+      "failure": {
+        "code": "mesh_request_timeout_ambiguous",
+        "stage": "stt"
+      },
+      "timeout": true,
+      "partial_quality_incorrect": false
+    }
+  ],
+  "priorCheckpointMeasuredCount": 261,
+  "newMeasuredAttempts": 15,
+  "classification": "requires_same_actor_reconciliation",
+  "nextRoutineCheckUtc": "2026-10-20T23:57:57.644930+00:00",
+  "nativeGoalThreadId": "01a112a5-d6bb-74e2-bf7c-ace73cb513b5",
+  "phoneTaskSeparate": true,
+  "sutCalls": 0,
+  "terminalSummary": {
+    "status": "stopped_system_failure",
+    "stop_reason": "mesh_request_timeout_ambiguous",
+    "shutdown_completed": true
+  },
+  "providerReconciliation": "thesis/campaigns/worker-desktop-k3-p2p-full-audio-v1988/provider-reconciliation-v2039/RESULT.json",
+  "providerActors": {
+    "controller": {
+      "pid": 251472,
+      "state": "S",
+      "startTicks": 29038396,
+      "sameStart": true
+    },
+    "receiver": {
+      "pid": 251473,
+      "state": "S",
+      "startTicks": 29038457,
+      "sameStart": true
+    }
+  },
+  "providerStatus": {
+    "at": "2026-10-20T23:52:29.208818+00:00",
+    "pid": 251473,
+    "host": "personal.skyron-server",
+    "phase": "normal_services_live",
+    "ownRuntimeRetired": false
+  },
+  "providerNativeSttDurationMs": 3406.206201,
+  "providerNativeSttOutcome": "completed",
+  "cause": "UNKNOWN: receiver completed native STT; requester did not observe a response before180s",
+  "providerRestarted": false,
+  "originalProviderReservationPreserved": true,
+  "nextAction": "Inspect saved requester route transition; revalidate the same approved pair/route before finite continuation of only624unattempted indices.",
+  "physicalAudioFiles": 271
+}

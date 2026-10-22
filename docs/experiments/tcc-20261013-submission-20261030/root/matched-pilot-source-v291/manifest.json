@@ -1,0 +1,25 @@
+{
+  "files_sha256": {
+    "matched-pilot-source-v289-sol-review.md": "a64c3c68c0e4140ab73c20bc53a92406db3e234e53cf72c74e83d1706a0d1f7c",
+    "matched-pilot-source-v291-sol-review.md": "75bf897692027701c615161c62178a30992c71bf29ce686b3bb302fe95de73fa",
+    "matched-pilot-source-v291b-sol-review.md": "7e5e8c474282cf091099cbf939d21bf358b8f84edceb99586a119b333349f39c",
+    "matched-pilot-integration-v291/integration.json": "532cfb4f0cff51d897d43b01d661fe357cf81398cbdc11860a2886f01348c878",
+    "matched-pilot-integration-v291/syntax.json": "72cf81ad7c1a09e5357d9f6b9c56e88a0aa69ab9d3fa8b383d4bc8fad745508c",
+    "matched-pilot-integration-v291/ruff.log": "8832e4ccbafc42d530ed24a8805b5b0631bf920cb6ee7d4f4e0adc295c4db53c",
+    "matched-pilot-integration-v291/ruff-final.log": "82b3e6a6c090a57601d22943bd23fca9218d1031dbe5a7b754092f9a156b4f18",
+    "matched-assistant-pilot-v286-candidate/REPORT.md": "2df65a029d514dcb832ef554ea4469440dcfa9a21f75396fbdf0994dd2b9a527",
+    "matched-assistant-pilot-v288-candidate/REPORT.md": "50c2549803ede03b53432b4518fc6b6f3305866cfebc58b10cc2ce1c50b05c3d",
+    "matched-assistant-pilot-v290-candidate/REPORT.md": "6bdf49c8876fa48b1d5fe16898a297a899e3cd02136f21e4600efb1c7bac6ad7",
+    "matched-assistant-pilot-v291-candidate/correction.json": "63c86722fbb04f1d746ff4199f725c751fe3e6e59e71c24431109ca765095b49",
+    "matched-mesh-pilot-v286-candidate/report.md": "335d485cdbdd41530291eaac1bee9189da7273efe118657b0ab679d07b70443a",
+    "matched-mesh-pilot-v290-candidate/REPORT.txt": "75af9c34d02e7a15f83e38780f59c7d14c792f3b226841fe3d6652bd13fdc266",
+    "source/scripts/experiments/assistant_local_api_pilot.py": "de351707df153a38c0b8d0fb5a2df411895c5e63868b32ae1f3ab5864552c93c",
+    "source/scripts/experiments/assistant_matched_input_hook.py": "1e342abe17092ac6b237564f51c31344e60f84fde8c1d1636b8876bd33a1f622",
+    "source/apps/aurora-web/app/browser-shell-runtime.tsx": "826371f243f68d8b5948ffc0cd0c02cd3a01b2b1f92265835728a2d9905e5fe0",
+    "source/tests/e2e/hosted_peer/hosted-peer-live-shell.spec.ts": "2c09714c11cd41a49aeed06f36635df2b54307a9e380e6a9ece9f1be87fce388",
+    "source/scripts/hosted_peer_e2e.sh": "887c545c60010c9ec3540fb59290ab72ba9a4bb3021e87e54a94d7b14497b78e"
+  },
+  "source_checks": "passed",
+  "independent_source_review": "approved",
+  "measurement_outcome": "not_claimed_by_source_gate"
+}

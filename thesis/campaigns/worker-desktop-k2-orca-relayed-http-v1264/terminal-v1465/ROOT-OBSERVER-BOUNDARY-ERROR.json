@@ -1,0 +1,8 @@
+{
+  "recordedAt": "2026-10-18T06:53:40.266759+00:00",
+  "scope": "Read-only Root observer, not the SUT",
+  "exitCode": 1,
+  "error": "KeyError: 'last_attempt_status'",
+  "reason": "Final progress schema omits running-only last_attempt_status.",
+  "reconciliation": "Read actual terminal progress and control launch: 900 measured, natural finish 06:48:13.987269 UTC, controller exit1, original controller/backend/copier groups empty. No restart/replay."
+}

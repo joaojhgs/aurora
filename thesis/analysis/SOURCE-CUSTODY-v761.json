@@ -1,0 +1,46 @@
+{
+  "schema": "aurora.thesis.segmented-analysis-source-custody.v761",
+  "at": "2026-10-16T00:09:37.063226+00:00",
+  "status": "SOL_SOURCE_APPROVED_ACTUAL_JOIN_NOT_EXECUTED",
+  "source": {
+    "path": "thesis/analysis/join_local_segments.py",
+    "bytes": 24712,
+    "sha256": "6d5304090d091467f409ee0b1ab51e3baac53e8df0fbbe2ef452b4897d780272"
+  },
+  "originDraft": {
+    "path": ".git/aurora-handoff-import-20261006/segmented-analysis-v760/analyze_join.py",
+    "bytes": 21649,
+    "sha256": "71e1f881bc6bdc80a74d777b81ce73b7ae9c72766ae9f5bb1721bcd013748a2f"
+  },
+  "integrationChanges": [
+    "actual .jsonl attempt member suffix",
+    "exact correlation match; present request/session IDs matched, actual nullable STT/TTS IDs retained/counted, strict LLM IDs",
+    "separate audited warmup denominator objects",
+    "import ordering/format only"
+  ],
+  "initialReview": {
+    "path": "thesis/validation/segmented-join-source-review-v760.md",
+    "bytes": 3333,
+    "sha256": "7285d4a94bf9a85975cb208429032ff2606dd6ae6038d4d18d580588a805aeed"
+  },
+  "closureReview": {
+    "path": "thesis/validation/segmented-join-source-review-v761.md",
+    "bytes": 2201,
+    "sha256": "886e192fdd1465ea98f33b5561a8eaca32569f862aaf498e97f1de2a682415e4"
+  },
+  "initialSyntheticCheck": {
+    "path": "thesis/validation/segmented-join-main-v760.json",
+    "bytes": 1523,
+    "sha256": "e64072e727f2e4e5283ac2b5f6c0c939a5ee1a136a4a520210dc7f5126ff06ce"
+  },
+  "currentSyntheticCheck": {
+    "path": "thesis/validation/segmented-join-main-v761.json",
+    "bytes": 1802,
+    "sha256": "92fb6659994cb90fca30cf621bd71dfe582a1a7c2fbc1000b01e0da26b39266a"
+  },
+  "newMeasuredRequests": 0,
+  "modelsOrServicesLoaded": false,
+  "actualSegmentDataJoinExecuted": false,
+  "archiveOutcomeAuditReplayed": false,
+  "futureGate": "V745 actual complete626 terminal/owned retirement/ONE audit/verified saved custody, then one compatible saved-data join retaining all274 original attempts+both warmup sets; no rerun or incompatible pooling."
+}

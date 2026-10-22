@@ -1,0 +1,106 @@
+{
+  "host": "personal.skyron-server",
+  "at": "2026-10-22T06:45:16.886282+00:00",
+  "oldActorsAbsent": true,
+  "signalsSent": 0,
+  "nativeOpen": 0,
+  "pilotLocalOutcome": "completed_correct",
+  "workerOutcomeVerified": "completed_correct",
+  "archive": "/home/developer/projects/aurora/thesis/campaigns/c12-mixed-local-http-readiness-v2414/provider/terminal-v2417/provider-raw-v2414.tar.gz",
+  "bytes": 99697,
+  "sha256": "febeb16355fff56082f1336d08736fd791fbecc0dc2977dc9ce8f8cb7225159e",
+  "files": {
+    "terminal.json": {
+      "bytes": 437,
+      "sha256": "0c5423cff972e6f8cb3332f5d278c175054394ba8a59c7ae2317c5929aa3676e"
+    },
+    "runtime-versions.json": {
+      "bytes": 211,
+      "sha256": "6672562080293beb259f52c30ff9bd8a7f0d788a4687be5f03be1ac54289e518"
+    },
+    "assistant-identity.json": {
+      "bytes": 1418,
+      "sha256": "567eb853f9eae215100bc029e43e1fde1d54c1bae3be30f05f80806f91e601e7"
+    },
+    "STATUS.json": {
+      "bytes": 161096,
+      "sha256": "57f13404c81d1325a4bad9b81134b8ccebdf5ca482e66ed7e74247787a8667dc"
+    },
+    "receiver-identity.json": {
+      "bytes": 1373,
+      "sha256": "0aef37c7629255e558a64383d98545cf81894efe06dec29652cbde58a061363c"
+    },
+    "stt-identity.json": {
+      "bytes": 1400,
+      "sha256": "263098845b44d94e5dd6bd5d37a14be82700fb73b57fb75374766e0c4f2f5aac"
+    },
+    "LOCAL-DRIVER-ARMED.json": {
+      "bytes": 111,
+      "sha256": "fc022d4d1a6deceebfe6d3cdfd07384c19726f5a4c98dc48a915b182194245d7"
+    },
+    "provider-manifest.json": {
+      "bytes": 9408,
+      "sha256": "1c45cd0fe50628da36e00f74e62039a06f16b1f42cf3828d0c5c90887f12a6c1"
+    },
+    "controller-launch.json": {
+      "bytes": 302,
+      "sha256": "ad62bbb793a05caf7fbaccb01d3e2c7f706b9cb4e527f92ec469f743121c5507"
+    },
+    "voice-stages.jsonl": {
+      "bytes": 33328,
+      "sha256": "8d52bea94f7b143c7dce52ed294158acadbeb59d0ac8c3d9637121ce2abbb694"
+    },
+    "voice-stages.status.json": {
+      "bytes": 134,
+      "sha256": "8a1732e9ed40cef1a10127cd4d01d27e8947bccc9982a885caaef64c6d24c75d"
+    },
+    "AUDIO-desktop-local.wav": {
+      "bytes": 31276,
+      "sha256": "f9591cabbe8d7b0e66ed821c850cbab6a059726a57582bafea9a3a5a5f57fa0f"
+    },
+    "ACTUAL-REMOTE-STT-TRIGGER.json": {
+      "bytes": 920,
+      "sha256": "7cb002e5ba75660de4a934bd877f408d3e4adb3888f0e76a53fdf0e869770378"
+    },
+    "binding-guard-diagnostic.jsonl": {
+      "bytes": 0,
+      "sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+    },
+    "RESULT-desktop-local.json": {
+      "bytes": 3861,
+      "sha256": "a0f6bea1561d90565168b6047849669604219d5cdd7c4ba12c70869451bd0bcb"
+    },
+    "actual-provider-bindings.jsonl": {
+      "bytes": 3699,
+      "sha256": "919e3a2444ae07fc0012b1b2bd3e617dafac36a1bb47f13a066bd328d9a8ded8"
+    },
+    "ROOT-LAUNCH-INTENT.json": {
+      "bytes": 156,
+      "sha256": "7a34a2c1601cd5eeb42f3f1f0c60ade08d9f11cdb84a581fd530029d9ee044a3"
+    },
+    "PILOT-TRIGGER.json": {
+      "bytes": 268,
+      "sha256": "4989ad0f5be49658d8ee912427c3a34d907d2966f426b8b0333b5f0beef5e286"
+    },
+    "ROOT-LAUNCH.json": {
+      "bytes": 475,
+      "sha256": "01f67f3c2e141b4d04e9d48ff14b7d1a4f44898bc59f32e47cc2892a49d34781"
+    },
+    "resources.jsonl": {
+      "bytes": 1392335,
+      "sha256": "c439dd332774abc74a89f1a2e63629e7adaab97f9ae37fcef6e1366573523b48"
+    },
+    "READINESS-MANIFEST.json": {
+      "bytes": 3436,
+      "sha256": "c0fc1aa69bd6abfdfeb5709d39cb07625d65389887c4b1026defe8f490d45565"
+    },
+    "ACTUAL-FILES.json": {
+      "bytes": 1932,
+      "sha256": "6d66df0c3b9505c9e70cee90d08704b7ee40bbf57c44ae4b2758e92126f8d70a"
+    }
+  },
+  "allRawPreserved": true,
+  "clockExtended": false,
+  "measured": 0,
+  "cohortAllocation": "finite readiness retired; fullgoal remains active"
+}

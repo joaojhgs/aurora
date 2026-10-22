@@ -1,0 +1,82 @@
+{
+  "at": "2026-10-22T11:41:10.949659+00:00",
+  "requester": {
+    "pid": 462924,
+    "startTicks": 144596371,
+    "state": "S"
+  },
+  "current": {
+    "at": "2026-10-22T11:40:30.258768+00:00",
+    "companion": {
+      "measured": {
+        "attempted": 26,
+        "correct": 26,
+        "failed": 0,
+        "harnessErrorsIncludedInFailed": 0,
+        "incorrectIncludedInFailed": 0,
+        "offered": 26,
+        "planned": 640,
+        "timeouts": 0,
+        "unstarted": 614
+      },
+      "warmup": {
+        "attempted": 15,
+        "correct": 15,
+        "failed": 0,
+        "harnessErrorsIncludedInFailed": 0,
+        "incorrectIncludedInFailed": 0,
+        "offered": 15,
+        "planned": 15,
+        "timeouts": 0,
+        "unstarted": 0
+      }
+    },
+    "completePairedCapsules": 41,
+    "elapsedSeconds": 1720.019543413,
+    "lastIndex": 26,
+    "lastNativeParent": "73ddc9b24817fd10e4fbb20d9884bab2",
+    "lastOrdinal": 41,
+    "manifestSha256": "3bfca19d2dd0a9eec3981eae256168a5badd9ac2bb58a270ff8a55df1d986cce",
+    "phase": "measured",
+    "pid": 462924,
+    "primary": {
+      "measured": {
+        "attempted": 26,
+        "correct": 26,
+        "failed": 0,
+        "harnessErrorsIncludedInFailed": 0,
+        "incorrectIncludedInFailed": 0,
+        "offered": 26,
+        "planned": 640,
+        "timeouts": 0,
+        "unstarted": 614
+      },
+      "warmup": {
+        "attempted": 15,
+        "correct": 15,
+        "failed": 0,
+        "harnessErrorsIncludedInFailed": 0,
+        "incorrectIncludedInFailed": 0,
+        "offered": 15,
+        "planned": 15,
+        "timeouts": 0,
+        "unstarted": 0
+      }
+    },
+    "status": "running"
+  },
+  "priorRetainedMeasuredPerStream": 260,
+  "combinedMeasuredCorrectPerStream": {
+    "primary": 286,
+    "companion": 286
+  },
+  "terminalPresent": false,
+  "currentRecoveryErrorPresent": false,
+  "freeBytes": 2376871936,
+  "sourceSettingsTargetsClocksChanged": false,
+  "nextMaximumObservationUtc": "2026-10-22T11:46:10.949659+00:00",
+  "nextP2PSourcePreparation": "NEXT-P2P-LIFECYCLE-PREPARATION-v2457.json",
+  "phoneRootOperations": 0,
+  "newWorkerReviewOrSutRuntime": 0,
+  "turnClassification": "progress: completed bounded next-condition startup/manifest/custody source and live refusal guard while main advanced"
+}

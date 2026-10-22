@@ -1,0 +1,20 @@
+{
+  "at": "2026-10-17T23:35:38.240752+00:00",
+  "records": [
+    {
+      "source": ".git/aurora-handoff-import-20261006/distributed-k2-orca-relayed-launch-v1264/requester-launch.json",
+      "destination": "thesis/campaigns/worker-desktop-k2-orca-relayed-http-v1264/ACTUAL-REQUESTER-LAUNCH-v1388.json",
+      "bytes": 466,
+      "sha256": "026e09462a75a639bdb16bea941db17989b0b6a0e4a7ebe99cc630b1883e3523"
+    },
+    {
+      "source": ".git/aurora-handoff-import-20261006/distributed-k2-orca-relayed-launch-v1264/operator-launch.json",
+      "destination": "thesis/campaigns/worker-desktop-k2-orca-relayed-http-v1264/ACTUAL-OPERATOR-LAUNCH-v1388.json",
+      "bytes": 889,
+      "sha256": "7e13e72621629e1039ce776a154d82d80470ebe922f0f239bcdad376af71e18c"
+    }
+  ],
+  "warmupCompletionClaim": false,
+  "measurementCompletionClaim": false,
+  "newProviderOrWorker": false
+}

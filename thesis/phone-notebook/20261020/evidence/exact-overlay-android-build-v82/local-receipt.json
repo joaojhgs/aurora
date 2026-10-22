@@ -1,0 +1,8 @@
+{
+  "bytes": 262,
+  "copyOnly": true,
+  "custody": "Notebook result persisted and fsynced before relay; remote receipt in same output",
+  "localPath": "/home/developer/projects/aurora/thesis/phone-notebook/20261020/evidence/exact-overlay-android-build-v82/result.json",
+  "remotePath": "/home/developer/projects/aurora/thesis/phone-notebook/20261020/evidence/exact-overlay-android-build-v82.json",
+  "sha256": "303282df99990d6bdd8615208832dfb5eeb13b4c7fb99cac01b5391a862194bd"
+}

@@ -1,0 +1,57 @@
+{
+  "private_report_sha256": "09cd263b111b7ae2472ec5dd7d12c2b5bf46d6e2088fc64f5347c544b2519927",
+  "safe_rows": [
+    {
+      "condition": "browser-webrtc-mesh",
+      "workload": "orbit-exact-v1",
+      "attempt": 1,
+      "warmupCount": 0,
+      "outcome": "completed_exact",
+      "requestId": "82ea12c7-983d-4802-9b1f-ef4f4965e553",
+      "sessionId": "a3c09e61-c9d9-4d0e-a742-6261e4b6d575",
+      "correlationId": "82ea12c7-983d-4802-9b1f-ef4f4965e553",
+      "messageId": "82ea12c7-983d-4802-9b1f-ef4f4965e553",
+      "modelLabel": "Qwen3.5-0.8B-Q4_0.gguf",
+      "exactResponse": true,
+      "completionCount": 1,
+      "completionKind": "fallback",
+      "updateKind": "fallback",
+      "updateKinds": [
+        "connecting",
+        "fallback"
+      ],
+      "requesterDispatchToTypedCompletionMs": 49846,
+      "errorCode": null,
+      "errorDetailCode": null,
+      "errorStatus": null,
+      "errorMessageHash": null
+    },
+    {
+      "condition": "browser-webrtc-mesh",
+      "workload": "orbit-exact-v1",
+      "attempt": 2,
+      "warmupCount": 0,
+      "outcome": "typed_error",
+      "requestId": null,
+      "sessionId": null,
+      "correlationId": null,
+      "messageId": null,
+      "modelLabel": null,
+      "exactResponse": false,
+      "completionCount": 0,
+      "completionKind": null,
+      "updateKind": "fallback",
+      "updateKinds": [
+        "fallback"
+      ],
+      "requesterDispatchToTypedCompletionMs": 214,
+      "errorCode": "unavailable_service",
+      "errorDetailCode": null,
+      "errorStatus": null,
+      "errorMessageHash": "74fcc54c21a3eed87816237a83ab9412292d23089dde4601bf24d79409d724ef"
+    }
+  ],
+  "errors": [
+    "Error: expect(received).toBe(expected) // Object.is equality\n\nExpected: \"completed_exact\"\nReceived: \"typed_error\"\n\n  103 |       body: JSON.stringify(safeRow),\n  104 |     })\n> 105 |     expect(row.outcome).toBe('completed_exact')\n      |                         ^\n  106 |     expect(row.requestId).toBeTruthy()\n  107 |     expect(row.sessionId).toBeTruthy()\n  108 |     expect(row.correlationId).toBe(row.requestId)\n    at /home/developer/projects/aurora/tests/e2e/hosted_peer/hosted-peer-live-shell.spec.ts:105:25"
+  ]
+}

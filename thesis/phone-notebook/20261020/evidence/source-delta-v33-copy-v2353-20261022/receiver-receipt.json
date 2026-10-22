@@ -1,0 +1,38 @@
+{
+  "bytes": 3913736,
+  "elapsedSeconds": 70.80041577600059,
+  "files": [
+    {
+      "bytes": 219794,
+      "name": "ORIGINAL-FIXED-INPUT.wav",
+      "path": "/home/developer/projects/aurora/thesis/phone-notebook/20261020/deployment/ebde3a8acf6315f920d03593845f17a1fc65a733/source-delta-v33-copy-v2353-20261022/ORIGINAL-FIXED-INPUT.wav",
+      "sha256": "da0ecc4ad0885746ab6e716585473917ab2b543a505bf0db09ebacfaa7943cbb"
+    },
+    {
+      "bytes": 3575664,
+      "name": "SOURCE-DELTA.tar.xz",
+      "path": "/home/developer/projects/aurora/thesis/phone-notebook/20261020/deployment/ebde3a8acf6315f920d03593845f17a1fc65a733/source-delta-v33-copy-v2353-20261022/SOURCE-DELTA.tar.xz",
+      "sha256": "b3fbbc88962f4882710a92a7d49b70ab14a31edc63b39526867ba6d7e7f1f966"
+    },
+    {
+      "bytes": 114458,
+      "name": "SOURCE-FILE-INVENTORY.json.gz",
+      "path": "/home/developer/projects/aurora/thesis/phone-notebook/20261020/deployment/ebde3a8acf6315f920d03593845f17a1fc65a733/source-delta-v33-copy-v2353-20261022/SOURCE-FILE-INVENTORY.json.gz",
+      "sha256": "8939411a36fc6d6b09b48099ad388a70e09c24269996609669e4fbb6e0342bd6"
+    },
+    {
+      "bytes": 3820,
+      "name": "SOURCE-REUSE-INDEX.json",
+      "path": "/home/developer/projects/aurora/thesis/phone-notebook/20261020/deployment/ebde3a8acf6315f920d03593845f17a1fc65a733/source-delta-v33-copy-v2353-20261022/SOURCE-REUSE-INDEX.json",
+      "sha256": "214813fc362db20f409b532d934de268ca60d54de0b44f729985f70f193601e8"
+    }
+  ],
+  "finishedAt": "2026-10-22T01:39:31.816741+00:00",
+  "frames": 43,
+  "gitWrites": false,
+  "modelCalls": 0,
+  "nextGate": "Validate tar members, git PAX commit and decompressed inventory before extraction",
+  "remoteSha": null,
+  "sourceSha": "ebde3a8acf6315f920d03593845f17a1fc65a733",
+  "status": "SOURCE_FILES_RECEIVED_HASH_VERIFIED"
+}

@@ -1,0 +1,29 @@
+{
+  "schema": "aurora.thesis.owner-matrix-extraction-custody.v756",
+  "at": "2026-10-15T23:50:13.116303+00:00",
+  "origin": {
+    "path": ".git/aurora-handoff-import-20261006/authorized-matrix-extract-v755/REPORT.md",
+    "bytes": 9832,
+    "sha256": "5ad353c549821639e3af32e3b6867834ad745baf63d35bc6dd52e2ac56cef74c"
+  },
+  "canonical": {
+    "path": "thesis/matrix/owner-dimensions-v755.md",
+    "bytes": 9832,
+    "sha256": "5ad353c549821639e3af32e3b6867834ad745baf63d35bc6dd52e2ac56cef74c"
+  },
+  "authority": {
+    "path": "thesis/methodology/owner-requirements-20261015-b78c0c8e.md",
+    "bytes": 408357,
+    "sha256": "b78c0c8e614746d9f778d3fc28b41ef2869ea9fead7bf15cec6e57050d1decb4"
+  },
+  "soleMethodologyWriter": "Original Orca monitor term_2eab47ed-ab9b-4e35-bd9b-fc068c60e3fc",
+  "rootRole": "Integrates a factual extraction; does not add or amend methodology cells",
+  "completeExecutableRegistry": false,
+  "newMeasuredRequests": 0,
+  "unresolved": [
+    "concrete eligible device identities/physical relationship",
+    "actual approved Aurora endpoints, peer grants and selected routes",
+    "per-surface installed build/runtime/model capability",
+    "cell applicability and admitted resources"
+  ]
+}

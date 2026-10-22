@@ -1,0 +1,69 @@
+{
+  "at": "2026-10-20T11:23:58.873025+00:00",
+  "classification": "SAVED_DATA_ONLY_NEW_ISOLATED_FAILURE_WITH_TWO_FOLLOWING_CORRECT_DISTINCT_CASES",
+  "cases": [
+    {
+      "case": "thesis/campaigns/worker-desktop-k1-p2p-tts-remaining880-v1719/attempts/attempt-0533-measured.jsonl",
+      "sha256": "158ee231fa4754a86cf413dcef312a6acfb9a24aac087a821fcb63e5cea3278d",
+      "bytes": 3959,
+      "globalIndex": 538,
+      "status": "failed",
+      "failure": {
+        "code": "remote_mesh_preaccept_capability_changed",
+        "stage": "tts"
+      },
+      "consecutivePreacceptRejections": 1,
+      "timeout": false,
+      "flowDurationMs": 58075.795876,
+      "correctness": {
+        "assistant_reply_matches_expected_words": true,
+        "transcript_matches_reference_words": true
+      },
+      "audio": null,
+      "audioSha256": null
+    },
+    {
+      "case": "thesis/campaigns/worker-desktop-k1-p2p-tts-remaining880-v1719/attempts/attempt-0534-measured.jsonl",
+      "sha256": "776030175728a44dcd98eea7775c9739f7592690cb9d7dccbb52ce6efeb5315c",
+      "bytes": 4917,
+      "globalIndex": 539,
+      "status": "completed_correct",
+      "failure": null,
+      "consecutivePreacceptRejections": 0,
+      "timeout": false,
+      "flowDurationMs": 42228.275527,
+      "correctness": {
+        "all_expected": true,
+        "assistant_reply_matches_expected_words": true,
+        "transcript_matches_reference_words": true
+      },
+      "audio": "thesis/campaigns/worker-desktop-k1-p2p-tts-remaining880-v1719/audio/4494c9a7d33006ce5825612e3683c6f3fa7dd3e15e6c999adf16288e88772ca1.wav",
+      "audioSha256": "4494c9a7d33006ce5825612e3683c6f3fa7dd3e15e6c999adf16288e88772ca1",
+      "audioBytes": 29228
+    },
+    {
+      "case": "thesis/campaigns/worker-desktop-k1-p2p-tts-remaining880-v1719/attempts/attempt-0535-measured.jsonl",
+      "sha256": "8c73411c85c92f8dcb06518981b3e8ef680f77011faad4945bf179d83feece53",
+      "bytes": 4918,
+      "globalIndex": 540,
+      "status": "completed_correct",
+      "failure": null,
+      "consecutivePreacceptRejections": 0,
+      "timeout": false,
+      "flowDurationMs": 44450.360516,
+      "correctness": {
+        "all_expected": true,
+        "assistant_reply_matches_expected_words": true,
+        "transcript_matches_reference_words": true
+      },
+      "audio": "thesis/campaigns/worker-desktop-k1-p2p-tts-remaining880-v1719/audio/327d847ec5409c10ad5c3c4467ff04e031bf713677fbdeeb829055d1c5c77b30.wav",
+      "audioSha256": "327d847ec5409c10ad5c3c4467ff04e031bf713677fbdeeb829055d1c5c77b30",
+      "audioBytes": 30764
+    }
+  ],
+  "policy": "Existing classified measured pre-accept rejection advances next distinct index, no retry; three consecutive qualifying rejections hard-stop. No policy/source change.",
+  "exactRemoteRejectionCause": "UNKNOWN",
+  "rawQueryResultRetained": false,
+  "newRequestsOrTests": 0,
+  "newReviewGate": false
+}

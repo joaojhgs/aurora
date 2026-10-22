@@ -1,0 +1,19 @@
+{
+  "agent": "codex",
+  "effort": "xhigh only if supported",
+  "notExecuted": true,
+  "preferredModel": "available Codex Sol, actual opaque ID pending authorized catalog",
+  "requestId": "15142b33-da95-45c7-b9fd-6303d9cb3d61",
+  "requiredAdmission": [
+    "current host/runtime/agent availability",
+    "actual supported Sol model catalog and effective preference",
+    "fresh reachable account quota, no unknown capacity assumption",
+    "resource/copy budget and exact shared-workspace ownership"
+  ],
+  "run": "run_e6054e76e9fc",
+  "supportedManagerCommand": "orca manager worker-start --lease <existing authorized lease JSON> --request-id 15142b33-da95-45c7-b9fd-6303d9cb3d61 --run run_e6054e76e9fc --task task_c626834bf1c6 --workspace-id 314e7b89-8f19-4535-9443-22b342aedff7::/home/developer/projects/aurora --agent codex --model <verified available Sol ID> --effort <verified supported effort> --work-class edit --timeout-ms 60000 --json",
+  "task": "task_c626834bf1c6",
+  "unknownLaunchMustBeReconciledNotRetried": true,
+  "workClass": "edit",
+  "workspaceId": "314e7b89-8f19-4535-9443-22b342aedff7::/home/developer/projects/aurora"
+}

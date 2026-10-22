@@ -1,0 +1,8 @@
+{
+  "bytes": 232,
+  "copyOnly": true,
+  "custody": "Notebook result persisted and fsynced before relay; remote receipt in same output",
+  "localPath": "/home/developer/projects/aurora/thesis/phone-notebook/20261020/evidence/pinned-app-dependencies-20261022T0335/result.json",
+  "remotePath": "/home/developer/projects/aurora/thesis/phone-notebook/20261020/evidence/pinned-app-dependencies-20261022T0335.json",
+  "sha256": "7652b0c1bee1025d19ae4efded2f0cc2baf14635d69e904f41302b65ec60e49c"
+}

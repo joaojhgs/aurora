@@ -1,0 +1,521 @@
+--- v1948/runner.py
++++ v1973/runner.py
+@@ -21,6 +21,7 @@
+ 
+ os.umask(0o077)
+ sys.path.insert(0, str(Path(__file__).resolve().parent))
++from receiver_proof import WARMUP_POLICY, qualified_warmup_records, known_preaccept_failure, warmup_qualification_receipt
+ from mesh_stage_adapter import AdmittedMeshPeer
+ from k3_composition import K3CaseError, run_k3_case
+ 
+@@ -58,6 +59,17 @@
+         and all(type(value[key]) is int for key in integers)
+         and all(type(value[key]) in (int, float) and math.isfinite(value[key]) for key in decimals)
+     )
++
++
++def _bounded_next_phase(summary: dict[str, Any], qualified: int):
++    """One deterministic phase transition; failed requests are never retried."""
++    if summary["measured_requests"] >= MEASURED_COUNT:
++        return None, "measured_target_complete"
++    if qualified < WARMUP_COUNT:
++        if summary["warmup_requests"] >= WARMUP_POLICY["maximum_distinct_attempts"]:
++            return None, "warmup_distinct_attempt_budget_exhausted"
++        return ("warmup", summary["warmup_requests"] + 1), None
++    return ("measured", summary["measured_requests"] + 1), None
+ 
+ 
+ def _normal_words(value: str) -> str:
+@@ -183,7 +195,8 @@
+     binding_path = stage_output.with_name("actual-provider-bindings.jsonl")
+     if binding_path.exists() and binding_path.read_bytes().strip():
+         raise CampaignFailure("warmup_gate", "unexpected_requester_model_constructor_or_call", stop=True)
+-    for ordinal in range(1, WARMUP_COUNT + 1):
++    for qualified in qualified_warmup_records(attempts_dir)["selected"]:
++        ordinal = qualified["ordinal"]
+         attempt = json.loads((attempts_dir / f"attempt-{ordinal:04d}-warmup.jsonl").read_text())
+         if (attempt.get("harness_case_id") != f"{case_prefix}-{ordinal:04d}"
+                 or attempt.get("phase") != "warmup" or attempt.get("status") != "completed_correct"
+@@ -201,6 +214,8 @@
+                                  cohort_hash: str,
+                                  config: dict[str, Any], condition_deadline: float) -> dict[str, Any]:
+     """Require independent receiver spans for both remote K3 stages before measured 1."""
++    if cohort_manifest.get("warmupReadinessPolicy") != WARMUP_POLICY:
++        raise CampaignFailure("warmup_gate", "warmup_policy_not_frozen", stop=True)
+     expected = cohort_manifest.get("remoteReceivers")
+     proof_path_raw = os.environ.get("AURORA_K3_REMOTE_WARMUP_PROOF", "")
+     if not isinstance(expected, dict) or set(expected) != {"stt", "assistant", "tts"} or not proof_path_raw:
+@@ -258,6 +273,8 @@
+             or proof.get("proof_generator_sha256") != cohort_manifest.get("implementation", {}).get("receiverProofSha256")
+             or proof.get("receivers") != expected):
+         raise CampaignFailure("warmup_gate", "remote_stage_proof_binding_mismatch", stop=True)
++    if proof.get("warmup_qualification") != warmup_qualification_receipt(qualified_warmup_records(attempts_dir)):
++        raise CampaignFailure("warmup_gate", "warmup_attempt_denominator_or_selection_mismatch", stop=True)
+     route_gate = proof.get("mesh_route_observation_gate")
+     if (not isinstance(route_gate, dict) or route_gate.get("status") != "passed"
+             or route_gate.get("route_rows") != WARMUP_COUNT * 3
+@@ -270,7 +287,8 @@
+         raise CampaignFailure("warmup_gate", "remote_stage_proof_call_count_mismatch", stop=True)
+ 
+     expected_calls: dict[tuple[str, str], dict[str, Any]] = {}
+-    for ordinal in range(1, WARMUP_COUNT + 1):
++    for qualified in qualified_warmup_records(attempts_dir)["selected"]:
++        ordinal = qualified["ordinal"]
+         case_id = f"audio-campaign-v1910-{ordinal:04d}"
+         try:
+             attempt = json.loads((attempts_dir / f"attempt-{ordinal:04d}-warmup.jsonl").read_text())
+@@ -609,7 +627,8 @@
+             "started_monotonic_ns": None, "ended_monotonic_ns": None, "duration_ms": None},
+         "planned_warmups": WARMUP_COUNT,
+         "planned_measured": MEASURED_COUNT,
+-        "failure_policy": {"known_structured_preaccept_capability_changed": "count_failed_then_next_distinct_measured_index", "consecutive_rejection_hard_stop": 3, "retry_or_fallback": False, "warmup_failure": "hard_stop", "all_other_system_failures": "hard_stop"},
++        "failure_policy": {"known_structured_preaccept_capability_changed": "count_failed_then_next_distinct_measured_index", "consecutive_rejection_hard_stop": 3, "retry_or_fallback": False, "warmup_failure": "only_explicit_preaccept_count_failed_then_next_distinct_attempt_max30",
++            "all_other_warmup_failure": "hard_stop", "all_other_system_failures": "hard_stop"},
+         "request_cap_seconds": REQUEST_CAP_SECONDS,
+         "condition_cap_seconds": CONDITION_CAP_SECONDS,
+         "input": wav_facts,
+@@ -652,6 +671,8 @@
+     completed_latency: list[float] = []
+     observed_measured_latency: list[float] = []
+     shutdown_ok = False
++    warmups_correct = 0
++    summary["measured_failed"] = 0
+     try:
+         await supervisor.initialize()
+         await supervisor._subscribe_registered_contracts()
+@@ -755,7 +776,11 @@
+         summary["setup_ended_monotonic_ns"] = condition_started_ns
+         summary["setup_completed"] = True
+         status = "running"
+-        total = WARMUP_COUNT + MEASURED_COUNT
++        total = WARMUP_POLICY["maximum_distinct_attempts"] + MEASURED_COUNT
++        warmups_correct = 0
++        summary["measured_failed"] = 0
++        summary["warmup_readiness_policy"] = WARMUP_POLICY
++        summary["maximum_warmup_attempts"] = WARMUP_POLICY["maximum_distinct_attempts"]
+         consecutive_preaccept_rejections = 0
+ 
+         for ordinal in range(1, total + 1):
+@@ -774,8 +799,16 @@
+                 stop_reason = "runtime_config_changed"
+                 status = "stopped_system_failure"
+                 break
+-            phase = "warmup" if ordinal <= WARMUP_COUNT else "measured"
+-            attempt_index = ordinal if phase == "warmup" else ordinal - WARMUP_COUNT
++            next_phase, phase_stop = _bounded_next_phase(summary, warmups_correct)
++            if next_phase is None:
++                stop_reason = phase_stop
++                if phase_stop == "measured_target_complete":
++                    status = ("completed_all_correct" if summary["correct"] == MEASURED_COUNT and summary["measured_failed"] == 0
++                              else "completed_with_failures_or_incorrect")
++                else:
++                    status = "stopped_system_failure"
++                break
++            phase, attempt_index = next_phase
+             attempt_started_ns = time.monotonic_ns()
+             attempt_deadline = min(time.monotonic() + REQUEST_CAP_SECONDS, condition_deadline)
+             correlation_id = f"audio-campaign-{uuid.uuid4().hex}"
+@@ -826,7 +859,7 @@
+                     if row["partial_quality_incorrect"]:
+                         row["partial_failure_class"] = "quality_predicate_failed_before_full_flow_completion"
+                     raise CampaignFailure(
+-                        exc.stage, exc.category, stop=exc.stop_campaign or phase == "warmup"
++                        exc.stage, exc.category, stop=exc.stop_campaign or (phase == "warmup" and (exc.category != "preaccept_capability_changed" or row.get("partial_quality_incorrect", False)))
+                     ) from None
+                 row["stages"] = k3_record["stages"]
+                 row["correctness"] = k3_record["correctness"]
+@@ -903,15 +936,21 @@
+                 row["status"] = "system_failure"
+                 row["failure"] = {"stage": "provider_bindings", "code": "effective_bindings_changed"}
+                 abort_after_row = True
+-            if phase == "measured":
+-                if row.get("failure", {}).get("code") == "preaccept_capability_changed":
+-                    consecutive_preaccept_rejections += 1
+-                else:
+-                    consecutive_preaccept_rejections = 0
+-                row["consecutive_preaccept_rejections"] = consecutive_preaccept_rejections
+-                if consecutive_preaccept_rejections >= 3:
++            if row.get("failure", {}).get("code") == "preaccept_capability_changed":
++                consecutive_preaccept_rejections += 1
++            else:
++                consecutive_preaccept_rejections = 0
++            row["consecutive_preaccept_rejections"] = consecutive_preaccept_rejections
++            if consecutive_preaccept_rejections >= 3:
++                abort_after_row = True
++                stop_reason = "three_consecutive_preaccept_capability_rejections"
++            if phase == "warmup":
++                if row["status"] == "completed_correct":
++                    warmups_correct += 1
++                elif not known_preaccept_failure(row):
+                     abort_after_row = True
+-                    stop_reason = "three_consecutive_preaccept_capability_rejections"
++                    stop_reason = row.get("failure", {}).get("code", "warmup_quality_or_system_failure")
++            summary["warmup_completed_correct"] = warmups_correct
+             row_name = f"attempt-{ordinal:04d}-{phase}.jsonl"
+             _write_once(attempts_dir / row_name, (json.dumps(row, sort_keys=True, ensure_ascii=False) + "\n").encode())
+             if row["status"] in ("completed_correct", "completed_incorrect"):
+@@ -922,6 +961,8 @@
+                     summary["correct"] += 1
+             else:
+                 summary["failed"] += 1
++                if phase == "measured":
++                    summary["measured_failed"] += 1
+                 failure_code = str(row.get("failure", {}).get("code", "")).lower()
+                 if "timeout" in failure_code or "deadline" in failure_code:
+                     summary["timeouts"] += 1
+@@ -947,8 +988,8 @@
+                 abort_after_row = True
+             _atomic_progress(progress_path, {
+                 "status": "running", "attempted": ordinal,
+-                "warmups_attempted": min(ordinal, WARMUP_COUNT),
+-                "measured_attempted": max(0, ordinal - WARMUP_COUNT),
++                "warmups_attempted": summary["warmup_requests"],
++                "measured_attempted": summary["measured_requests"],
+                 "planned_warmups": WARMUP_COUNT, "planned_measured": MEASURED_COUNT,
+                 "unattempted_measured": summary["unattempted_measured"],
+                 "last_attempt_file": f"attempts/{row_name}",
+@@ -958,7 +999,7 @@
+                 stop_reason = stop_reason or row.get("failure", {}).get("code", "system_failure")
+                 status = "stopped_system_failure"
+                 break
+-            if ordinal == WARMUP_COUNT:
++            if phase == "warmup" and warmups_correct == WARMUP_COUNT:
+                 try:
+                     summary["warmup_instrumentation_gate"] = await _remote_k3_warmup_gate(
+                         attempts_dir, Path(os.environ["AURORA_VOICE_STAGE_OUTPUT"]).resolve(),
+@@ -971,7 +1012,7 @@
+                     status = "stopped_system_failure"
+                     _atomic_progress(progress_path, {
+                         "status": status, "attempted": ordinal,
+-                        "warmups_attempted": WARMUP_COUNT, "measured_attempted": 0,
++                        "warmups_attempted": summary["warmup_requests"], "measured_attempted": 0,
+                         "planned_warmups": WARMUP_COUNT, "planned_measured": MEASURED_COUNT,
+                         "unattempted_measured": MEASURED_COUNT,
+                         "last_attempt_file": f"attempts/{row_name}",
+@@ -985,7 +1026,7 @@
+         else:
+             status = (
+                 "completed_all_correct"
+-                if summary["correct"] == MEASURED_COUNT and summary["failed"] == 0
++                if summary["correct"] == MEASURED_COUNT and summary["measured_failed"] == 0
+                 else "completed_with_failures_or_incorrect"
+             )
+         if status == "running":
+@@ -1049,6 +1090,8 @@
+             "measured_attempted": sum(1 for item in attempts_summary if item["phase"] == "measured"),
+             "measured_correct": len(correct_latency),
+             "warmup_planned_excluded": WARMUP_COUNT,
++            "warmup_maximum_distinct_attempts_excluded": WARMUP_POLICY["maximum_distinct_attempts"],
++            "warmup_completed_correct_excluded": warmups_correct,
+             "warmup_attempted_excluded": sum(1 for item in attempts_summary if item["phase"] == "warmup"),
+             "measured_incorrect_completed": sum(
+                 1 for item in attempts_summary
+@@ -1095,9 +1138,13 @@
+             "measured": phase_denominator("measured", MEASURED_COUNT),
+             "all": {},
+         }
++        summary["phase_denominators"]["warmup_excluded"].update(
++            target_completed_correct=WARMUP_COUNT, maximum_distinct_attempts=30,
++            remaining_correct_to_target=max(0, WARMUP_COUNT-warmups_correct))
+         all_rows = attempts_summary
+         summary["phase_denominators"]["all"] = {
+-            "planned": WARMUP_COUNT + MEASURED_COUNT,
++            "planned": None, "minimum_if_no_warmup_failures": WARMUP_COUNT + MEASURED_COUNT,
++            "maximum_distinct_attempts": 30 + MEASURED_COUNT,
+             "attempted": len(all_rows),
+             "completed_correct": sum(1 for item in all_rows if item["status"] == "completed_correct"),
+             "completed_incorrect": sum(1 for item in all_rows if item["status"] == "completed_incorrect"),
+@@ -1105,7 +1152,8 @@
+                 1 for item in all_rows if item["status"] not in ("completed_correct", "completed_incorrect")
+             ),
+             "timeouts": sum(1 for item in all_rows if item.get("timeout", False)),
+-            "unattempted": max(0, WARMUP_COUNT + MEASURED_COUNT - len(all_rows)),
++            "unattempted": summary["unattempted_measured"],
++            "unattempted_scope": "measured_only; additional_warmups_are_readiness_not_fixed_population",
+         }
+         summary["finished_monotonic_ns"] = time.monotonic_ns()
+         _atomic_progress(progress_path, {
+@@ -1160,7 +1208,8 @@
+                             "unattempted": MEASURED_COUNT,
+                         },
+                         "all": {
+-                            "planned": WARMUP_COUNT + MEASURED_COUNT, "attempted": 0,
++                            "planned": None, "minimum_if_no_warmup_failures": WARMUP_COUNT + MEASURED_COUNT,
++            "maximum_distinct_attempts": 30 + MEASURED_COUNT, "attempted": 0,
+                             "completed_correct": 0, "completed_incorrect": 0,
+                             "failed_or_interrupted": 0, "timeouts": 0,
+                             "unattempted": WARMUP_COUNT + MEASURED_COUNT,
+--- v1948/receiver_proof.py
++++ v1973/receiver_proof.py
+@@ -13,6 +13,92 @@
+ MAX_ID = re.compile(r"^[A-Za-z0-9._:-]{1,160}$")
+ HEX = re.compile(r"^[0-9a-f]{64}$")
+ 
++WARMUP_POLICY = {
++    "qualification": "first_15_completed_correct_full_audio_flows",
++    "target_correct": 15,
++    "maximum_distinct_attempts": 30,
++    "maximum_consecutive_preaccept_rejections": 3,
++    "continuable_failure": "preaccept_capability_changed",
++    "failed_attempt_retry": False,
++    "measured_attempts": 900,
++    "measured_retry": False,
++    "all_warmup_attempts_and_failures_retained": True,
++}
++
++
++def known_preaccept_failure(row: dict[str, Any]) -> bool:
++    """Recognize an explicit non-executed rejection, never a quality failure."""
++    failure = row.get("failure", {})
++    stage = failure.get("stage")
++    response = row.get("stages", {}).get(stage, {}).get("preaccept_response", {})
++    return bool(
++        row.get("status") == "failed"
++        and failure.get("code") == "preaccept_capability_changed"
++        and stage in {"stt", "assistant", "tts"}
++        and row.get("timeout") is not True
++        and row.get("partial_quality_incorrect") is not True
++        and response.get("accepted") is False
++        and response.get("reason_code") == "capability_changed"
++        and response.get("correlation_id") == row.get("correlation", {}).get("correlation_id")
++    )
++
++
++def qualified_warmup_records(attempts_dir: Path, *, require_complete: bool = True) -> dict[str, Any]:
++    """Select the prefrozen first 15 successes and retain every failed attempt.
++
++    Physical ordinals, case IDs, correlations and source bytes are never changed.
++    The only continuable failure is a structured preaccept rejection. The next
++    iteration is a distinct request; no failed request is resubmitted.
++    """
++    records: list[dict[str, Any]] = []
++    selected: list[dict[str, Any]] = []
++    rejected: list[dict[str, Any]] = []
++    consecutive = 0
++    for path in sorted(attempts_dir.glob("attempt-*-warmup.jsonl")):
++        match = re.fullmatch(r"attempt-([0-9]{4})-warmup\.jsonl", path.name)
++        if match is None:
++            raise ValueError("warmup_filename_invalid")
++        raw = _read(path, 2 * 1024 * 1024)
++        row = json.loads(raw)
++        ordinal = int(match.group(1))
++        if (ordinal != len(records) + 1 or row.get("ordinal") != ordinal
++                or row.get("phase_index") != ordinal or row.get("phase") != "warmup"
++                or row.get("harness_case_id") != f"audio-campaign-v1910-{ordinal:04d}"
++                or len(records) >= 30 or len(selected) >= 15):
++            raise ValueError("warmup_order_or_frozen_budget_invalid")
++        item = {"ordinal": ordinal, "path": path, "row": row, "sha256": _sha(raw)}
++        records.append(item)
++        if row.get("status") == "completed_correct":
++            if (row.get("correctness", {}).get("all_expected") is not True
++                    or any(row.get("stages", {}).get(stage, {}).get("status") != "completed"
++                           for stage in ("stt", "assistant", "tts"))
++                    or not isinstance(row.get("output_audio"), dict)):
++                raise ValueError("warmup_correctness_or_audio_missing")
++            selected.append(item)
++            consecutive = 0
++        elif known_preaccept_failure(row):
++            rejected.append(item)
++            consecutive += 1
++            if consecutive >= 3:
++                raise ValueError("three_consecutive_preaccept_capability_rejections")
++        else:
++            raise ValueError("non_preaccept_warmup_failure_preserved_hard_stop")
++    if require_complete and len(selected) != 15:
++        raise ValueError("fifteen_correct_remote_audio_flows_required")
++    return {"all": records, "selected": selected, "rejected": rejected,
++            "attempted": len(records), "correct": len(selected), "failed": len(rejected),
++            "qualified_ordinals": [item["ordinal"] for item in selected]}
++
++
++def warmup_qualification_receipt(selection: dict[str, Any]) -> dict[str, Any]:
++    return {"policy": WARMUP_POLICY,
++            "attempted_excluded": selection["attempted"],
++            "completed_correct_excluded": selection["correct"],
++            "failed_preaccept_excluded": selection["failed"],
++            "qualified_ordinals": selection["qualified_ordinals"],
++            "failed_ordinals": [item["ordinal"] for item in selection["rejected"]],
++            "all_raw_case_sha256": {item["path"].name: item["sha256"] for item in selection["all"]}}
++
+ def _read(path: Path, cap: int) -> bytes:
+     if path.is_symlink() or not path.is_file() or path.stat().st_size > cap:
+         raise ValueError("input_missing_symlinked_or_oversized")
+@@ -37,9 +123,9 @@
+             route_rows, route_bytes = _rows(rows_path, 64 * 1024 * 1024)
+             if (isinstance(status, dict) and status.get("state") == "accepting"
+                     and status.get("complete") is False
+-                    and status.get("accepted_rows") == 45
+-                    and status.get("written_rows") == 45
+-                    and len(route_rows) == 45):
++                    and 45 <= status.get("accepted_rows", -1) <= 90
++                    and status.get("written_rows") == status.get("accepted_rows")
++                    and len(route_rows) == status.get("written_rows")):
+                 return route_rows, route_bytes, status_bytes, status
+         except (OSError, ValueError, json.JSONDecodeError):
+             pass
+@@ -105,16 +191,28 @@
+         raise ValueError("frozen_manifest_hash_mismatch")
+     cohort = json.loads(cohort_bytes)
+     frozen_implementation = cohort.get("implementation", {})
++    if cohort.get("warmupReadinessPolicy") != WARMUP_POLICY:
++        raise ValueError("warmup_readiness_policy_not_frozen")
++    qualification = qualified_warmup_records(attempts_dir)
++    all_correlations = {item["row"]["correlation"]["correlation_id"] for item in qualification["all"]}
++    selected_correlations = {item["row"]["correlation"]["correlation_id"] for item in qualification["selected"]}
++    if (any(row.get("correlation_id") not in all_correlations for row in route_rows)
++            or any(row.get("correlation_id") not in all_correlations for row in mesh_calls)):
++        raise ValueError("unattributed_warmup_route_or_call_row")
++    selected_route_count = sum(row.get("correlation_id") in selected_correlations for row in route_rows)
++    selected_mesh_call_count = sum(row.get("correlation_id") in selected_correlations for row in mesh_calls)
++    if selected_route_count != 45 or selected_mesh_call_count != 90:
++        raise ValueError("qualified_warmup_route_call_count_invalid")
+     if (cohort.get("remoteReceivers") != expected_receivers
+             or expected_receivers.get("stt", {}).get("peer_id_sha256") != cohort.get("meshSttPeerIdSha256")
+             or expected_receivers.get("assistant", {}).get("peer_id_sha256") != cohort.get("meshAssistantPeerIdSha256")
+             or expected_receivers.get("tts", {}).get("peer_id_sha256") != cohort.get("meshTtsPeerIdSha256")
+             or cohort.get("meshAuthorityBinding") != "existing_authorized_peer_session"):
+         raise ValueError("frozen_mesh_receiver_binding_mismatch")
+-    if (len(route_rows) != 45
++    if (not 45 <= len(route_rows) <= 90
+             or route_status.get("schema") != "aurora.mesh_route_observation_sink.v1"
+             or route_status.get("state") != "accepting" or route_status.get("complete") is not False
+-            or route_status.get("accepted_rows") != 45 or route_status.get("written_rows") != 45
++            or route_status.get("accepted_rows") != len(route_rows) or route_status.get("written_rows") != len(route_rows)
+             or any(route_status.get(key) != 0 for key in ("dropped_rows", "oversize_rows", "quota_rows", "invalid_rows"))
+             or route_status.get("writer_error_class") is not None
+             or route_runtime.get("schema") != "aurora.mesh_route_runtime_install.v1"
+@@ -174,7 +272,8 @@
+     used_piper_ends: set[int] = set()
+     seen_server: set[tuple[str, str]] = set()
+     pids: dict[str, int] = {}
+-    for ordinal in range(1, 16):
++    for qualified in qualification["selected"]:
++        ordinal = qualified["ordinal"]
+         case_id = f"audio-campaign-v1910-{ordinal:04d}"
+         attempt = json.loads(_read(attempts_dir / f"attempt-{ordinal:04d}-warmup.jsonl", 2 * 1024 * 1024))
+         local_id = attempt.get("correlation", {}).get("correlation_id")
+@@ -361,14 +460,16 @@
+             seen_server.add((stage, server_id))
+             pids[stage] = pid
+     if (len(calls) != 45 or len(used_piper_starts) != 15 or len(used_piper_ends) != 15
+-            or len(routes) != 45 or len(mesh_calls_by_key) != 45
++            or sum(corr in selected_correlations for _, corr in routes) != 45
++            or sum(corr in selected_correlations for _, corr in mesh_calls_by_key) != 45
+             or any(len(rows) != 2 for rows in mesh_calls_by_key.values())):
+         raise ValueError("remote_stage_denominator_mismatch")
+     return {
+         "schema": "aurora.distributed_k3_mesh_remote_stages_warmup.v1",
+         "proof_generator_sha256": _sha(Path(__file__).read_bytes()),
+         "candidate_manifest_sha256": candidate_sha, "cohort_manifest_sha256": cohort_sha,
+-        "receivers": expected_receivers, "calls": calls,
++        "receivers": expected_receivers, "warmup_qualification": warmup_qualification_receipt(qualification),
++        "calls": calls,
+         "native_id_semantics": {
+             "assistant": "V430 resolved_chat_model.astream carries span_id; operation_id and attempt_id are null by source contract",
+             "tts": "native operation_id and attempt_id required",
+@@ -377,7 +478,7 @@
+         "evidence_sha256": {"stages": _sha(span_bytes), "bindings": _sha(binding_bytes),
+                             "mesh_calls": _sha(mesh_call_bytes), "route_runtime_pins": _sha(route_runtime_bytes)},
+         "mesh_route_observation_gate": {
+-            "status": "passed", "route_rows": len(route_rows), "mesh_call_rows": len(mesh_calls),
++            "status": "passed", "route_rows": selected_route_count, "retained_route_rows": len(route_rows), "mesh_call_rows": selected_mesh_call_count, "retained_mesh_call_rows": len(mesh_calls),
+             "route_observations_sha256": _sha(route_bytes),
+             "route_sink_status_sha256": _sha(route_status_bytes),
+             "continuous_route_stability_claimed": False,
+--- v1948/route_observation_sink.py
++++ v1973/route_observation_sink.py
+@@ -11,7 +11,7 @@
+ 
+ _STOP = object()
+ _MAX_ROW_BYTES = 32 * 1024
+-_MAX_ROWS = 2_761  # 45 warmup + 2,700 measured calls + bounded 16-row setup slack
++_MAX_ROWS = 2_806  # <=90 warmup + 2,700 measured calls + bounded 16-row setup slack
+ _MAX_TOTAL_BYTES = 64 * 1024 * 1024
+ _QUEUE_SIZE = 256
+ _SAFE_ROUTE_STATUSES = frozenset({
+--- v1948/controller.py
++++ v1973/controller.py
+@@ -120,6 +120,9 @@
+         raise ValueError("frozen_manifest_hash_mismatch")
+     candidate = json.loads(candidate_path.read_bytes())
+     cohort = json.loads(cohort_path.read_bytes())
++    outer_cap = min(OUTER_CAP, float(cohort["cumulativeConditionBudget"]["newOuterCapSeconds"]))
++    if not 0 < outer_cap <= OUTER_CAP:
++        raise ValueError("outer_cap_invalid")
+     if (cohort.get("implementation", {}).get("runnerSha256") != runner_sha
+             or cohort.get("implementation", {}).get("controllerSha256") != control_sha
+             or cohort.get("implementation", {}).get("adapterSha256") != adapter_sha
+@@ -276,7 +279,8 @@
+         "assistant_peer_id_sha256": hashlib.sha256(assistant_peer.encode()).hexdigest(),
+         "tts_peer_id_sha256": hashlib.sha256(tts_peer.encode()).hexdigest(),
+         "source_inventory_sha256": digest(inventory_path),
+-        "planned_warmups": 15,
++        "planned_warmups": 15, "maximum_distinct_warmup_attempts": 30,
++        "actual_outer_cap_seconds": outer_cap,
+         "planned_measured": 900,
+         "request_cap_seconds": 180,
+         "condition_cap_seconds": 57_600,
+@@ -305,7 +309,7 @@
+         launch["child_pid"] = child.pid
+         try:
+             _write_json(launch_path, launch, exclusive=True)
+-            while child.poll() is None and time.monotonic() - started < OUTER_CAP:
++            while child.poll() is None and time.monotonic() - started < outer_cap:
+                 sample = {"monotonic_ns": time.monotonic_ns(), "mem_available": mem_available(),
+                           "campaign_volume_free": shutil.disk_usage(output.parent).free,
+                           "child_pid": child.pid}
+--- v1948/freeze-template.json
++++ v1973/freeze-template.json
+@@ -19,19 +19,20 @@
+     "adapterSha256": "6e09f9d66a9178ff184f93395cd81b6bfe3828895a90003057eeeae6c1a0a719",
+     "bindingsSha256": "79558452e6f61268ad246476ca848e060b8ea808e15091bc53a3c4e0e28b1647",
+     "bootstrapSha256": "df9957c1880d45b5a1d059d7743b51a2d7fe34b3f5331e1331633eee5e8f45bc",
+-    "controllerSha256": "603cb2a5779ad154ab4e6113e3bd856438a494f1d33f0dede0a5d592cefe1983",
++    "controllerSha256": "66e6d8de5855337bfcaf44fbb657834018acab522590880114c1a77e9d875fcb",
+     "k3CompositionSha256": "09399c07cfc44cfbaaac969af5c928e9ae57fab2d6848f76f29950e7fdc314bf",
+     "observerSha256": "784cc4bffc0d6824bbe378d17a7f632d587ca0a315896b048b2ebef727082df5",
+-    "receiverProofSha256": "c0ee53af8d090fef3c7562f51b18b6228a45d7a08563ccf49c38e4605b4cb0d4",
++    "receiverProofSha256": "e79c973003ac9be1e8579e0ebf3316c2c7a58a646f18fc98e01155807c3963a8",
+     "resourceSamplerSha256": "8f62ec378e74036d4539d9159e3caf29b8fd7a9115de1ab0f482dfd58b6e1857",
+     "routeObserverSha256": "db390cdc4e05718e111037b3118573aab5ee9215c57b8e4398767a8b07e6ce7a",
+     "routeRuntimePinsSha256": "5d79681b500485fd7c4c9e3d562a39af957b261f0f75452d25ad9fcc59dbc1db",
+-    "routeSinkSha256": "08e6683e1f17e9e36d19c017ae7e108934c2abd8b52d655d6acb2b443dc8341a",
+-    "runnerSha256": "ea21fc0df74aa7a45d93242b878db87f350e62c799a4380c42815723afb56056",
++    "routeSinkSha256": "d02cbff12f4bf88923cbbc8e6e990b1b140833b276fb112ca521dc21b40d1773",
++    "runnerSha256": "8d4b2a1876ed1591436dfcf7f3b1823b42130fd1b384052dbd69c99999d63a7d",
+     "telemetrySha256": "8129ffe7591a47a0107ede53b101aead9fc1f58b92f0c0c4203176cc7608325d"
+   },
+   "measurementPlan": {
+     "conditionOverallCapSeconds": 57600,
++    "maximumDistinctWarmupAttempts": 30,
+     "plannedMeasuredPerCondition": 900,
+     "plannedWarmups": 15,
+     "requestCapSeconds": 180
+@@ -51,7 +52,8 @@
+     "exactStructuredAcceptedFalseCapabilityChanged": "record_failed_then_next_distinct_measured_index",
+     "otherAmbiguousOrSystemFailure": "hard_stop",
+     "retryOrFallback": false,
+-    "warmupAnyFailure": "hard_stop"
++    "warmupAnyFailure": "all_except_explicit_preaccept_capability_changed_hard_stop",
++    "warmupKnownPreaccept": "preserved_failed_excluded_attempt_then_next_distinct_ordinal;first15correct_within30;three_consecutive_hard_stop"
+   },
+   "remoteAssistantConfigBinding": {
+     "automatic_tts_readback": false,
+@@ -97,5 +99,16 @@
+     "stt": "Personal CPU faster-whisper base",
+     "tts": "Personal CPU Piper"
+   },
+-  "status": "PROSPECTIVE_SOURCE_ONLY_NO_RUNTIME_ADMISSION"
++  "status": "PROSPECTIVE_SOURCE_ONLY_NO_RUNTIME_ADMISSION",
++  "warmupReadinessPolicy": {
++    "all_warmup_attempts_and_failures_retained": true,
++    "continuable_failure": "preaccept_capability_changed",
++    "failed_attempt_retry": false,
++    "maximum_consecutive_preaccept_rejections": 3,
++    "maximum_distinct_attempts": 30,
++    "measured_attempts": 900,
++    "measured_retry": false,
++    "qualification": "first_15_completed_correct_full_audio_flows",
++    "target_correct": 15
++  }
+ }

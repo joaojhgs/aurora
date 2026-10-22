@@ -1,0 +1,21 @@
+# Monitor intervention — commit boundary and finite projection correction
+
+2026-10-14 21:05 UTC. Original Run run_e6054e76e9fc / monitor Task task_d7ea336050cf / Dispatch ctx_37b4d0a3c14f.
+
+Root live screen 0e5671cf-a983-47bf-9e86-ac4872444102 showed a corrected erroneous whole-GPU seal claim, a rejected private documentation projection, and a local correlation commit. The corrected whole individual GPU voice/surface seal=false and phase2 measured=false are required; typed local/API acceptance cannot close either gate.
+
+Read-only git inspection confirms commit cbac78fe3fb2b73100bfaa9dc198fb6bff689840, authored/committed 2026-10-14 21:02:28 UTC, on the existing codex/aurora-native-speech-routing-20261007 branch. Exact git name-only output confirms it changes only app/services/orchestrator/graph.py, app/services/tts/service.py, and tests/unit/tts/test_assistant_correlation_main_flow.py (135 insertions, three deletions). Its message records one connected LocalBus/BaseService main-flow check passing in 42.67 seconds, targeted Ruff/format checks and prior source review. It expressly distinguishes software completion from acoustic output/full voice acceptance. This is an internal connected contract check, not a real-audio end-to-end baseline. No replay was requested.
+
+The owner instruction available to this monitor retains no commits/push/submission. Monitor message msg_1890ee538f75 therefore reminded Root to make no further commits absent newer owner authority, requested the exact scope/authority receipt if such instruction exists, and instructed preservation of existing history without undo/rewrite. No git mutation or competing writer was performed.
+
+The same message asks Root to inspect the exact private projection rejection once and make one bounded compatible correction rather than starting a new test matrix or rerunning accepted typed samples. This is a specific observed technical failure, not hypothetical risk. The single production voice admission remains next after required safe projection. No session interruption or lifecycle adoption was requested.
+
+The response/acknowledgement and exact projection-error receipt are pending. The native monitor goal remains ACTIVE, and no ten-minute execution stall is inferred. Latest full fleet inventory at 20:43 UTC remains one live original Orca monitor, 53 confirmed exits and 75 unverifiable records; next scheduled fleet inventory is 21:13 UTC.
+
+## Actual finite projection correction observed at 21:07 UTC
+
+The monitor fully read the existing source-review report .git/aurora-handoff-import-20261006/desktop-gpu-public-projection-v426-sol-review.md, SHA-256 5991308ba9421f915ee699deef9ff2637ba0d16a9b96cea764856cc461f8790d. Its concrete findings were a Path iteration error, an optional operation_id incorrectly required as a string, and an incorrect requirement/emission of the full individual GPU seal. Root owns those exact corrections. The report explicitly accepts the connected LocalBus check only as controlled software correlation and requests no further test matrix.
+
+Actual first invocation receipt desktop-gpu-public-projection-v426/actual-invocation-v426.json (SHA-256 2bb505d1a5e9cfcfacd920aa37e8cb8fc00e2320149c0f787c48f2c235564afa) retains exit 2/ValueError. Actual second invocation receipt actual-invocation-v426-b.json (SHA-256 c6549e9173ee00aae8ec77eaf37ece04ef70c73e5213accde669bf182a3946ab) records source SHA-256 2ffd860917473af2d0b0ad04ddcd795517e32c21a07971509dfc11b145935505, exit 0 and prepared_private_projection. This proves a finite correction advanced, without rerunning inference; final artifact review/publication is still separate. Root live screen 8c58f509-feff-49d2-852e-5b0be53868cf reports a voice-capability admission and explicitly no voice measurements started. Commit-boundary acknowledgement remains pending.
+
+A read-only git status snapshot preserves the existing branch and unrelated dirty files, including leader-owned ORCA-COORDINATION.md and ledger.jsonl, source/test edits and retained Next outputs. The monitor neither alters nor interprets those dirty files as permissions. Root remains sole execution integrator/reservation owner. Canonical plan remains the full 1,408-line owner-authoritative document with Root hash acknowledgement msg_9d4027b78ecc.

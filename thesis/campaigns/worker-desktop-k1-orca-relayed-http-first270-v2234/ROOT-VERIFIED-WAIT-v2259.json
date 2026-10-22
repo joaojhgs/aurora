@@ -1,0 +1,55 @@
+{
+  "at": "2026-10-21T18:01:37.357168+00:00",
+  "classification": "verified_wait",
+  "previousGoalTurn": "progress: postterminaltoolsimplemented, currentcollectionadvanced, conditionalremainingadmissionframe+fullmirrorclosed",
+  "status": "SAME_FROZEN_V2234_MEASURED_COLLECTION_RUNNING",
+  "actors": [
+    {
+      "pid": 3751414,
+      "state": "S",
+      "startTicks": 137933512,
+      "matches": true
+    },
+    {
+      "pid": 3751426,
+      "state": "S",
+      "startTicks": 137933748,
+      "matches": true
+    },
+    {
+      "pid": 3751415,
+      "state": "S",
+      "startTicks": 137933513,
+      "matches": true
+    }
+  ],
+  "newMeasured": {
+    "attempted": 78,
+    "correct": 78,
+    "failed": 0,
+    "planned": 270
+  },
+  "conditionCountsOnly": {
+    "attempted": 258,
+    "correct": 257,
+    "failed": 1,
+    "unattempted": 642,
+    "target": 900
+  },
+  "custody": {
+    "sequence": 81,
+    "cases": 93,
+    "WAV": 93,
+    "errors": [],
+    "receiptHashVerified": true,
+    "receipt": "thesis/campaigns/worker-desktop-k1-orca-relayed-http-first270-v2234/receipts/000081.json"
+  },
+  "terminal": false,
+  "nextReadOnlyCheckAt": "2026-10-21T18:06:37.357168+00:00",
+  "noNewImplementationTestsReviewSourceChangesOrSUTTraffic": true,
+  "nativeGoalStatus": "active",
+  "sameOriginalGoal": "01a112a5-d6bb-74e2-bf7c-ace73cb513b5",
+  "nativeGoalCompletionClaimed": false,
+  "nextAction": "Same frozencollection verifiedwait untilnext5min oractualterminal/error; thenonlypreparedguardedfinish2254afterall3Wactorsretired",
+  "phoneNotGate": true
+}

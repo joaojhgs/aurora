@@ -1,0 +1,61 @@
+{
+  "group_count": 1,
+  "groups": [
+    {
+      "censored_outcomes_retained": {
+        "cancelled": 0,
+        "infeasible": 0,
+        "timeout": 0
+      },
+      "correct_success_latency_ms": {
+        "p50": 31349.793776,
+        "p90": 34907.351855400004,
+        "p95": 36138.7699817
+      },
+      "correct_success_latency_n": 100,
+      "correct_success_rate": 1.0,
+      "counts": {
+        "cancelled": 0,
+        "correct_success": 100,
+        "failure": 0,
+        "incorrect_answer": 0,
+        "infeasible": 0,
+        "timeout": 0
+      },
+      "exclusion_reasons_predeclared": {},
+      "group": {
+        "config_sha256": "a37171537010adfd26f61ca206b9eebcba098d5d3ba57d36553fdc312620a25e",
+        "host_id_pseudonym": "59423f10232a812f",
+        "model_id": "qwen3.5-0.8b-q4_0-gguf",
+        "model_sha256": "57d1997790d1744fba5b40a7317df71ea5e2acee28c47e78f0cce39c0703f8cf",
+        "route": "python_gateway_api",
+        "session_id": "pilot-run-136f4ea4df05467fac180db5b8fff336",
+        "source_commit": "5782746afba213f6b36907db2f09f0017625e218",
+        "surface": "python-production-local",
+        "workload_id": "public-exact-answer-orbit-v1",
+        "workload_sha256": "0f3b83f8fbf0e55e7b7faf8a75e99f42fdad42128b908e7f7c18cd4d8faeed86"
+      },
+      "n_eligible": 100,
+      "n_excluded": 0,
+      "n_raw_records": 105,
+      "n_success": 100,
+      "n_success_denominator": 100,
+      "n_total": 100,
+      "n_warmup": 5,
+      "quantile_method": "type7_linear_interpolation",
+      "schema_version": "aurora.assistant.measurement_summary.v1",
+      "warmup_counts": {
+        "cancelled": 0,
+        "correct_success": 5,
+        "excluded": 0,
+        "failure": 0,
+        "incorrect_answer": 0,
+        "infeasible": 0,
+        "timeout": 0
+      }
+    }
+  ],
+  "quantile_method": "type7_linear_interpolation",
+  "schema_version": "aurora.assistant.measurement_summary.v1",
+  "source_jsonl_sha256": "a12550cadac115b1110e0ca0239bfb54ebdf8f7dcc4b8eaa2af1b876bfd5cf68"
+}

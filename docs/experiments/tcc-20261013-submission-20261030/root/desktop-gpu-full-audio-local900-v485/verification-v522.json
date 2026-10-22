@@ -1,0 +1,529 @@
+{
+  "archive": {
+    "bytes": 32688561,
+    "manifestSHA256": "692c497da33ffa4e329cbddc1cd6116bc9aaebcd54ce071c0bf0ad1038bc56be",
+    "membersIncludingManifest": 1870,
+    "payloadMembers": 1869,
+    "sha256": "93c3afe2161b031d00b0be53ee9a76c8267369e9fa89d9cbe98cad67eee7d6dc"
+  },
+  "attempts": {
+    "correct": 878,
+    "failedOrInterrupted": 0,
+    "incorrect": 22,
+    "measured": 900,
+    "timeouts": 0,
+    "total": 915,
+    "warmupsExcluded": 15
+  },
+  "audio": {
+    "inputBytes": 153644,
+    "inputSHA256": "139fa0c34b6d18600ad9608fd2d11c9389cae2f5f548ce0f4f23b735b176f0b3",
+    "verifiedOutputReferences": 915,
+    "wavDecodingRepeated": false
+  },
+  "collectorOmissions": [
+    {
+      "bytes": 9502,
+      "path": "frozen/harnessFiles/controller.py",
+      "reason": "V481 controller contains fixture literals; retained only as frozen path/size/SHA metadata",
+      "sha256": "975c64f83237ff2639a5d943f8af61b863533161b394ab5065dfb5aa66ef2bb0",
+      "sourcePath": "/home/developer/projects/aurora/.git/aurora-audio-candidate-v481/controller.py"
+    },
+    {
+      "bytes": 11118,
+      "path": "campaign-v485/controller.py",
+      "reason": "V485 controller embeds private fixture literals; runtime/launch.json newHarnessSHA256 verified it, so only path/size/SHA are retained",
+      "sha256": "f3257b00d1d35674168431fe12f231c753c3d49b6c2d70171380c340236711e1",
+      "sourcePath": "/home/developer/projects/aurora/.git/aurora-audio-campaign-v485/controller.py"
+    },
+    {
+      "bytes": 188,
+      "path": "campaign-v485/runtime/absent.env",
+      "reason": "config or environment file excluded by policy",
+      "sha256": "7a4f349aa0c4163646f6b530c263d7d341c92bd944728af0d341562242f99f9d"
+    },
+    {
+      "bytes": 1260673,
+      "path": "campaign-v485/runtime/backend.private.log",
+      "reason": "raw backend log excluded by policy",
+      "sha256": "e708adcb3406eb6237ae865c4875cbe47329941293d4c5344d1b1f203a45c19e"
+    },
+    {
+      "bytes": 15486,
+      "path": "campaign-v485/runtime/config.json",
+      "reason": "config or environment file excluded by policy",
+      "sha256": "b9c33626c7db6aaeb04f70b3be05818be888e7a54e6547a86bbd540c7349c011"
+    }
+  ],
+  "frozenSourceAliases": [
+    {
+      "bytes": 26579,
+      "path": "frozen/sourceFiles/app/messaging/local_bus.py",
+      "sha256": "b80a4a54859f142f12c52bab640d5b7c2fe4fd6f66bcd831bc83cb6909ec3b6f",
+      "sourceResolution": {
+        "canonicalLinkTarget": "/tmp/aurora-root-voice-primary-v426/source-v436/app/messaging",
+        "kind": "explicit-frozen-source-symlink",
+        "linkPath": "/home/developer/projects/aurora/.git/aurora-audio-candidate-v481/source/app/messaging",
+        "linkText": "/tmp/aurora-root-voice-primary-v426/source-v436/app/messaging",
+        "resolvedPath": "/tmp/aurora-root-voice-primary-v426/source-v436/app/messaging/local_bus.py",
+        "sourcePath": "/home/developer/projects/aurora/.git/aurora-audio-candidate-v481/source/app/messaging/local_bus.py"
+      }
+    },
+    {
+      "bytes": 29489,
+      "path": "frozen/sourceFiles/app/services/orchestrator/agents/chatbot.py",
+      "sha256": "4e6d2b21a2eb672a47128340700a6d5f09adeabbab99980b6ba5d4e4e9e692ee",
+      "sourceResolution": {
+        "canonicalLinkTarget": "/tmp/aurora-root-voice-primary-v426/source-v436/app/services/orchestrator",
+        "kind": "explicit-frozen-source-symlink",
+        "linkPath": "/home/developer/projects/aurora/.git/aurora-audio-candidate-v481/source/app/services/orchestrator",
+        "linkText": "/tmp/aurora-root-voice-primary-v426/source-v436/app/services/orchestrator",
+        "resolvedPath": "/tmp/aurora-root-voice-primary-v426/source-v436/app/services/orchestrator/agents/chatbot.py",
+        "sourcePath": "/home/developer/projects/aurora/.git/aurora-audio-candidate-v481/source/app/services/orchestrator/agents/chatbot.py"
+      }
+    },
+    {
+      "bytes": 40161,
+      "path": "frozen/sourceFiles/app/services/orchestrator/chat_llama_cpp.py",
+      "sha256": "bbb7a3d247af8b53f55ee0b15be81db520f02ab1a53a6aff49c1d2e523f0b55e",
+      "sourceResolution": {
+        "canonicalLinkTarget": "/tmp/aurora-root-voice-primary-v426/source-v436/app/services/orchestrator",
+        "kind": "explicit-frozen-source-symlink",
+        "linkPath": "/home/developer/projects/aurora/.git/aurora-audio-candidate-v481/source/app/services/orchestrator",
+        "linkText": "/tmp/aurora-root-voice-primary-v426/source-v436/app/services/orchestrator",
+        "resolvedPath": "/tmp/aurora-root-voice-primary-v426/source-v436/app/services/orchestrator/chat_llama_cpp.py",
+        "sourcePath": "/home/developer/projects/aurora/.git/aurora-audio-candidate-v481/source/app/services/orchestrator/chat_llama_cpp.py"
+      }
+    },
+    {
+      "bytes": 170198,
+      "path": "frozen/sourceFiles/app/services/orchestrator/service.py",
+      "sha256": "0b77092091946b94130945b3bfb670a922a209b846d5ffe30e23f75b52f982f3",
+      "sourceResolution": {
+        "canonicalLinkTarget": "/tmp/aurora-root-voice-primary-v426/source-v436/app/services/orchestrator",
+        "kind": "explicit-frozen-source-symlink",
+        "linkPath": "/home/developer/projects/aurora/.git/aurora-audio-candidate-v481/source/app/services/orchestrator",
+        "linkText": "/tmp/aurora-root-voice-primary-v426/source-v436/app/services/orchestrator",
+        "resolvedPath": "/tmp/aurora-root-voice-primary-v426/source-v436/app/services/orchestrator/service.py",
+        "sourcePath": "/home/developer/projects/aurora/.git/aurora-audio-candidate-v481/source/app/services/orchestrator/service.py"
+      }
+    },
+    {
+      "bytes": 112263,
+      "path": "frozen/sourceFiles/app/services/stt_transcription/service.py",
+      "sha256": "4723b798b2643cee262e3d1d0ad28114305c3e83c8ef5bae5becd790aac5f888",
+      "sourceResolution": {
+        "canonicalLinkTarget": "/tmp/aurora-root-voice-primary-v426/source-v436/app/services/stt_transcription",
+        "kind": "explicit-frozen-source-symlink",
+        "linkPath": "/home/developer/projects/aurora/.git/aurora-audio-candidate-v481/source/app/services/stt_transcription",
+        "linkText": "/tmp/aurora-root-voice-primary-v426/source-v436/app/services/stt_transcription",
+        "resolvedPath": "/tmp/aurora-root-voice-primary-v426/source-v436/app/services/stt_transcription/service.py",
+        "sourcePath": "/home/developer/projects/aurora/.git/aurora-audio-candidate-v481/source/app/services/stt_transcription/service.py"
+      }
+    },
+    {
+      "bytes": 14398,
+      "path": "frozen/sourceFiles/app/services/tts/providers/piper.py",
+      "sha256": "b5c1cd3110b7405cf0990ad27c7d038a252b31af3d01191d415e3b76fd1ed7ac",
+      "sourceResolution": {
+        "canonicalLinkTarget": "/tmp/aurora-root-voice-primary-v426/source-v436/app/services/tts",
+        "kind": "explicit-frozen-source-symlink",
+        "linkPath": "/home/developer/projects/aurora/.git/aurora-audio-candidate-v481/source/app/services/tts",
+        "linkText": "/tmp/aurora-root-voice-primary-v426/source-v436/app/services/tts",
+        "resolvedPath": "/tmp/aurora-root-voice-primary-v426/source-v436/app/services/tts/providers/piper.py",
+        "sourcePath": "/home/developer/projects/aurora/.git/aurora-audio-candidate-v481/source/app/services/tts/providers/piper.py"
+      }
+    },
+    {
+      "bytes": 227431,
+      "path": "frozen/sourceFiles/app/services/tts/service.py",
+      "sha256": "6e4386aaf219ca5f5488ed007c03519be64f8de56aa2cc17956b5140218f234e",
+      "sourceResolution": {
+        "canonicalLinkTarget": "/tmp/aurora-root-voice-primary-v426/source-v436/app/services/tts",
+        "kind": "explicit-frozen-source-symlink",
+        "linkPath": "/home/developer/projects/aurora/.git/aurora-audio-candidate-v481/source/app/services/tts",
+        "linkText": "/tmp/aurora-root-voice-primary-v426/source-v436/app/services/tts",
+        "resolvedPath": "/tmp/aurora-root-voice-primary-v426/source-v436/app/services/tts/service.py",
+        "sourcePath": "/home/developer/projects/aurora/.git/aurora-audio-candidate-v481/source/app/services/tts/service.py"
+      }
+    }
+  ],
+  "incorrectOutcomes": {
+    "falseCheckCounts": {
+      "all_expected": 22,
+      "assistant_reply_matches_expected_words": 22
+    },
+    "responseGroups": [
+      {
+        "attempts": [
+          {
+            "failedStage": "assistant",
+            "falseChecks": [
+              "all_expected",
+              "assistant_reply_matches_expected_words"
+            ],
+            "idMatches": {
+              "correlation_id_matches": true,
+              "request_id_matches": true,
+              "session_id_matches": true
+            },
+            "ordinal": 894
+          },
+          {
+            "failedStage": "assistant",
+            "falseChecks": [
+              "all_expected",
+              "assistant_reply_matches_expected_words"
+            ],
+            "idMatches": {
+              "correlation_id_matches": true,
+              "request_id_matches": true,
+              "session_id_matches": true
+            },
+            "ordinal": 895
+          },
+          {
+            "failedStage": "assistant",
+            "falseChecks": [
+              "all_expected",
+              "assistant_reply_matches_expected_words"
+            ],
+            "idMatches": {
+              "correlation_id_matches": true,
+              "request_id_matches": true,
+              "session_id_matches": true
+            },
+            "ordinal": 896
+          },
+          {
+            "failedStage": "assistant",
+            "falseChecks": [
+              "all_expected",
+              "assistant_reply_matches_expected_words"
+            ],
+            "idMatches": {
+              "correlation_id_matches": true,
+              "request_id_matches": true,
+              "session_id_matches": true
+            },
+            "ordinal": 897
+          },
+          {
+            "failedStage": "assistant",
+            "falseChecks": [
+              "all_expected",
+              "assistant_reply_matches_expected_words"
+            ],
+            "idMatches": {
+              "correlation_id_matches": true,
+              "request_id_matches": true,
+              "session_id_matches": true
+            },
+            "ordinal": 898
+          },
+          {
+            "failedStage": "assistant",
+            "falseChecks": [
+              "all_expected",
+              "assistant_reply_matches_expected_words"
+            ],
+            "idMatches": {
+              "correlation_id_matches": true,
+              "request_id_matches": true,
+              "session_id_matches": true
+            },
+            "ordinal": 899
+          },
+          {
+            "failedStage": "assistant",
+            "falseChecks": [
+              "all_expected",
+              "assistant_reply_matches_expected_words"
+            ],
+            "idMatches": {
+              "correlation_id_matches": true,
+              "request_id_matches": true,
+              "session_id_matches": true
+            },
+            "ordinal": 900
+          },
+          {
+            "failedStage": "assistant",
+            "falseChecks": [
+              "all_expected",
+              "assistant_reply_matches_expected_words"
+            ],
+            "idMatches": {
+              "correlation_id_matches": true,
+              "request_id_matches": true,
+              "session_id_matches": true
+            },
+            "ordinal": 901
+          },
+          {
+            "failedStage": "assistant",
+            "falseChecks": [
+              "all_expected",
+              "assistant_reply_matches_expected_words"
+            ],
+            "idMatches": {
+              "correlation_id_matches": true,
+              "request_id_matches": true,
+              "session_id_matches": true
+            },
+            "ordinal": 902
+          },
+          {
+            "failedStage": "assistant",
+            "falseChecks": [
+              "all_expected",
+              "assistant_reply_matches_expected_words"
+            ],
+            "idMatches": {
+              "correlation_id_matches": true,
+              "request_id_matches": true,
+              "session_id_matches": true
+            },
+            "ordinal": 903
+          },
+          {
+            "failedStage": "assistant",
+            "falseChecks": [
+              "all_expected",
+              "assistant_reply_matches_expected_words"
+            ],
+            "idMatches": {
+              "correlation_id_matches": true,
+              "request_id_matches": true,
+              "session_id_matches": true
+            },
+            "ordinal": 904
+          },
+          {
+            "failedStage": "assistant",
+            "falseChecks": [
+              "all_expected",
+              "assistant_reply_matches_expected_words"
+            ],
+            "idMatches": {
+              "correlation_id_matches": true,
+              "request_id_matches": true,
+              "session_id_matches": true
+            },
+            "ordinal": 905
+          },
+          {
+            "failedStage": "assistant",
+            "falseChecks": [
+              "all_expected",
+              "assistant_reply_matches_expected_words"
+            ],
+            "idMatches": {
+              "correlation_id_matches": true,
+              "request_id_matches": true,
+              "session_id_matches": true
+            },
+            "ordinal": 906
+          },
+          {
+            "failedStage": "assistant",
+            "falseChecks": [
+              "all_expected",
+              "assistant_reply_matches_expected_words"
+            ],
+            "idMatches": {
+              "correlation_id_matches": true,
+              "request_id_matches": true,
+              "session_id_matches": true
+            },
+            "ordinal": 907
+          },
+          {
+            "failedStage": "assistant",
+            "falseChecks": [
+              "all_expected",
+              "assistant_reply_matches_expected_words"
+            ],
+            "idMatches": {
+              "correlation_id_matches": true,
+              "request_id_matches": true,
+              "session_id_matches": true
+            },
+            "ordinal": 908
+          },
+          {
+            "failedStage": "assistant",
+            "falseChecks": [
+              "all_expected",
+              "assistant_reply_matches_expected_words"
+            ],
+            "idMatches": {
+              "correlation_id_matches": true,
+              "request_id_matches": true,
+              "session_id_matches": true
+            },
+            "ordinal": 909
+          },
+          {
+            "failedStage": "assistant",
+            "falseChecks": [
+              "all_expected",
+              "assistant_reply_matches_expected_words"
+            ],
+            "idMatches": {
+              "correlation_id_matches": true,
+              "request_id_matches": true,
+              "session_id_matches": true
+            },
+            "ordinal": 910
+          },
+          {
+            "failedStage": "assistant",
+            "falseChecks": [
+              "all_expected",
+              "assistant_reply_matches_expected_words"
+            ],
+            "idMatches": {
+              "correlation_id_matches": true,
+              "request_id_matches": true,
+              "session_id_matches": true
+            },
+            "ordinal": 911
+          },
+          {
+            "failedStage": "assistant",
+            "falseChecks": [
+              "all_expected",
+              "assistant_reply_matches_expected_words"
+            ],
+            "idMatches": {
+              "correlation_id_matches": true,
+              "request_id_matches": true,
+              "session_id_matches": true
+            },
+            "ordinal": 912
+          },
+          {
+            "failedStage": "assistant",
+            "falseChecks": [
+              "all_expected",
+              "assistant_reply_matches_expected_words"
+            ],
+            "idMatches": {
+              "correlation_id_matches": true,
+              "request_id_matches": true,
+              "session_id_matches": true
+            },
+            "ordinal": 913
+          },
+          {
+            "failedStage": "assistant",
+            "falseChecks": [
+              "all_expected",
+              "assistant_reply_matches_expected_words"
+            ],
+            "idMatches": {
+              "correlation_id_matches": true,
+              "request_id_matches": true,
+              "session_id_matches": true
+            },
+            "ordinal": 914
+          },
+          {
+            "failedStage": "assistant",
+            "falseChecks": [
+              "all_expected",
+              "assistant_reply_matches_expected_words"
+            ],
+            "idMatches": {
+              "correlation_id_matches": true,
+              "request_id_matches": true,
+              "session_id_matches": true
+            },
+            "ordinal": 915
+          }
+        ],
+        "count": 22,
+        "ordinals": [
+          894,
+          895,
+          896,
+          897,
+          898,
+          899,
+          900,
+          901,
+          902,
+          903,
+          904,
+          905,
+          906,
+          907,
+          908,
+          909,
+          910,
+          911,
+          912,
+          913,
+          914,
+          915
+        ],
+        "response": "The capital of France is Paris.",
+        "responseSHA256": "a1b7eb2ee7a6aded8dda4e6cf30826f5afffb28a5597ee9389e91eb326d4e319"
+      }
+    ]
+  },
+  "latencyMs": {
+    "measuredAllIncludingIncorrect": {
+      "denominator": 900,
+      "type7": {
+        "p90": 11970.216910000001,
+        "p95": 12421.6015565
+      }
+    },
+    "stagePercentilesAreIndependent": true,
+    "stages": {
+      "assistant": {
+        "type7Ms": {
+          "p50": 5771.723762,
+          "p90": 6675.6627693,
+          "p95": 7359.605242949999
+        },
+        "validMeasuredCount": 900
+      },
+      "stt": {
+        "type7Ms": {
+          "p50": 3303.817886,
+          "p90": 3584.3178006000003,
+          "p95": 3818.8079916999995
+        },
+        "validMeasuredCount": 900
+      },
+      "tts": {
+        "type7Ms": {
+          "p50": 1487.372331,
+          "p90": 1802.2723147000002,
+          "p95": 2098.0693770499993
+        },
+        "validMeasuredCount": 900
+      }
+    },
+    "successfulCorrect": {
+      "denominator": 878,
+      "type7": {
+        "p90": 11970.336658,
+        "p95": 12422.218393500001
+      }
+    }
+  },
+  "schema": "aurora.desktop_audio_seal_verification.v1",
+  "sourceHashValidation": "collector_only",
+  "unknowns": [
+    "queue",
+    "first_token",
+    "first_audio",
+    "playback",
+    "physical_audibility"
+  ],
+  "verifiedAt": "2026-10-15T06:56:46.642350+00:00"
+}

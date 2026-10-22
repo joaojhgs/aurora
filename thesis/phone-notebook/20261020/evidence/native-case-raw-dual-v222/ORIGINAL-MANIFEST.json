@@ -1,0 +1,106 @@
+{
+  "files": [
+    {
+      "path": "phone-file-audio-v196/status.json",
+      "bytes": 2097,
+      "sha256": "fa3ff57935f8e99e320a0cef005d84a6356c60c4798cb4d38311e457b3ee7154"
+    },
+    {
+      "path": "phone-file-audio-v196/native.json",
+      "bytes": 703,
+      "sha256": "c64480fcd9353c42edd99dbfe4e365ef814e5a3681979d5ebd4795c373f61c5f"
+    },
+    {
+      "path": "phone-file-audio-v196/probe.log",
+      "bytes": 283,
+      "sha256": "1778fb97134e86350453b445e629871fd88169b6cfc7ac532e5d3e6e28fdc7a7"
+    },
+    {
+      "path": "phone-file-audio-v201/status.json",
+      "bytes": 2219,
+      "sha256": "255d52416d4bc47bb429db97753ff1753b88b36e7b220b27541a56055d78288c"
+    },
+    {
+      "path": "phone-file-audio-v201/native.json",
+      "bytes": 595,
+      "sha256": "d52fe0708d2c8c9e732a207065fb56b58f0e18c10e09c73d2cac01fce185e2c1"
+    },
+    {
+      "path": "phone-file-audio-v201/probe.log",
+      "bytes": 230,
+      "sha256": "a8ee0922e37ef165afc560bcd3b0af697ab8d7c01ffae2c00c19c7761504747b"
+    },
+    {
+      "path": "phone-file-audio-v207/status.json",
+      "bytes": 2221,
+      "sha256": "4458e336e6fe02c1a2e3a28fc02ef09af848ad466ee27a73c8ff1d1cb7d0bc93"
+    },
+    {
+      "path": "phone-file-audio-v207/native.json",
+      "bytes": 4722,
+      "sha256": "4104573edf7fb58aeeecf7e079a368df1bc5a7d3ec457010a4f2e4cbc0951ce0"
+    },
+    {
+      "path": "phone-file-audio-v207/probe.log",
+      "bytes": 196,
+      "sha256": "e338509dad123d143837491045e4f825cc49a481b7abff57e096ab082d7302d2"
+    },
+    {
+      "path": "phone-file-audio-v211/status.json",
+      "bytes": 2151,
+      "sha256": "7f32ef6d7b7c0c3aa299cfd9c40965ae1555969f053f4c5d160fa46497e450a6"
+    },
+    {
+      "path": "phone-file-audio-v211/native.json",
+      "bytes": 8182,
+      "sha256": "3607be6176079da133893988ba2620858de3932a311e59aa1e419716c255adb5"
+    },
+    {
+      "path": "phone-file-audio-v211/probe.log",
+      "bytes": 163,
+      "sha256": "bf84bacbc13b0f57233db87ec8ba5e9c10c48254c176012e0edc9bcae7e43021"
+    },
+    {
+      "path": "phone-file-audio-v213/status.json",
+      "bytes": 2158,
+      "sha256": "0d487231a06c92e9da674160e97af76c3d501433dfaa48eb209e7ba18d852077"
+    },
+    {
+      "path": "phone-file-audio-v213/native.json",
+      "bytes": 9231,
+      "sha256": "7c973be3b65419d897bf5e51eee06b9271effe2e8d845db9892414eccc1fa5a8"
+    },
+    {
+      "path": "phone-file-audio-v213/probe.log",
+      "bytes": 171,
+      "sha256": "9ce9426dd65a2d53aff5fa67f818aa892abe28357128f8874f13166f935d9774"
+    },
+    {
+      "path": "phone-file-audio-v213/input.json",
+      "bytes": 595,
+      "sha256": "c0e8a1a318fcc411eeb148d001e86ed354be15a0f4f5f9489551df367cca0525"
+    },
+    {
+      "path": "phone-file-audio-v213/input.pcm",
+      "bytes": 159456,
+      "sha256": "1d5147ec00b8582ffeeb2d6a196cfab6e713cc33c9beea9212e7bc91eeed8fbf"
+    },
+    {
+      "path": "phone-file-audio-v213/pipeline-raw.json",
+      "bytes": 87243,
+      "sha256": "b2f9e150020cc5ff3a9d78478bed149a75a42ed446fdb352bba067674ae70c0f"
+    },
+    {
+      "path": "phone-file-audio-v213/output.wav",
+      "bytes": 31788,
+      "sha256": "a75537d2acdf8eae8c743f90b3b7e3363f5c8ad71336d5d893c564f288ad27d7"
+    },
+    {
+      "path": "phone-file-audio-v213/native-output.pcm",
+      "bytes": 31744,
+      "sha256": "b37c5746b9ef407aa25af333e86a39808130e01103d5e5bf92431e09312b036a"
+    }
+  ],
+  "fixedPublicAudioOnly": true,
+  "modelBinaryTransfer": false
+}

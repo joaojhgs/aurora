@@ -1,0 +1,24 @@
+{
+  "activeSourceChanged": false,
+  "actualEOFExecution": "NOT_EXECUTED; original requester live",
+  "at": "2026-10-22T08:27:35.600225+00:00",
+  "controllerAndGeneratedSealCompile": true,
+  "liveCollectGuard": {
+    "at": "2026-10-22T08:27:35.600177+00:00",
+    "eligibleForOneProviderObservation": false,
+    "inference": 0,
+    "remoteOperations": 0,
+    "requesterTerminalPresent": false,
+    "status": "DEFERRED_ACTIVE_CAMPAIGN_NO_REMOTE_OPERATION",
+    "worker": {
+      "observedStartTicks": 143363140,
+      "originalPresent": true,
+      "pid": 281887,
+      "state": "S"
+    }
+  },
+  "newInferenceOrWorkers": 0,
+  "python": "3.11.17",
+  "source": "/home/developer/projects/aurora/thesis/harness/c12_terminal_custody_v2436.py",
+  "sourceSha256": "00c34f6b28df737e82a217c4deda4e4a2001b77cbc43233ea0683bda4bab5cc7"
+}

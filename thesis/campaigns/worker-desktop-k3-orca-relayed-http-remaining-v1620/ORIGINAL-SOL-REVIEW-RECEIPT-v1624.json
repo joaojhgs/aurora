@@ -1,0 +1,69 @@
+{
+  "schema": "aurora.monitor.prefix-guard-custody-correction-closure.v1",
+  "at": "2026-10-18T22:35:59.620133+00:00",
+  "rootRequest": "msg_e002d84d3fb8",
+  "verdict": "CLOSED_NO_BLOCKING_FINDING_IN_ACTUAL_CORRECTION_DELTA",
+  "scope": "Only actual two prefix guards, safe preflight error fields, terminal-summary copier exit, namespace/count/window and exact startup charge. No previous model/algorithm/collector/OSlease/result reviews or new test cases.",
+  "guardCorrection": {
+    "oldFrozenV1610Preserved": "369f518fb7a67f3e5df44a6bd5039ef5fc3f64efddb91946f1c0623f11e3bc2b",
+    "oldGuardFailureSavedRegressionRead": true,
+    "newSavedFullGuardPassRead": true,
+    "savedRegressionSha256": "a5ad3509456cbfc3e858c5e6f2c438ac0aec35e4c2612bf4907d8829c5e78103",
+    "newActualSourceInspected": "positivecount; prior+new<=900; first=prior+1; last=prior+new; all other lineage bindings preserved",
+    "noAdditionalPredicateRunsByMonitor": true,
+    "previousAdmissionVerdictSupersession": "V1610 finding ce8bb1c3 remains preserved; this closes only the corrected new version."
+  },
+  "counts": {
+    "prior": 716,
+    "correct": 714,
+    "failed": 2,
+    "newPlanned": 96,
+    "indices": [
+      717,
+      812
+    ],
+    "stillRequired": 88,
+    "remainingRange": [
+      813,
+      900
+    ],
+    "fullConditionTarget": 900,
+    "excludedWarmups": 15,
+    "nativeGateJoins": 45,
+    "priorMeasuredRetry": false
+  },
+  "custodyFix": {
+    "actualTerminalSummaryFallback": "failed_preflight_or_setup supplies status and actual denominators when no progress file exists",
+    "exitConsumerInspected": "Existing follow loop exits for any status outside running/awaiting_progress, then bounded controller-starttick grace and final checkpoint. Thus new fallback reaches terminal branch.",
+    "notGeneratedBindingsDiagnostics": "Pending when absent and no prior prefix, not counted as native proof; existing actual native admission unchanged",
+    "safeErrorFields": "CampaignFailure stage/code only; no freeform error text or request/credential dump",
+    "oldCopierRetirement": "Root reported exact own file-copy utility retired after SUT terminal; no monitor stop or provider/worker action"
+  },
+  "accounting": {
+    "V1610ObservedSetupChargeSeconds": 15.223255,
+    "priorAllInclusiveSeconds": 23594.129217333004,
+    "remainingOf57600Seconds": 34005.870782667,
+    "providerDeadlineUtcUnchanged": "2026-10-19T00:08:53.328388Z",
+    "prefix96ConservativeForecastSeconds": 4872.375288192,
+    "postwarmupLifetimeRecheckStillRequired": true
+  },
+  "pins": {
+    "sourceFilesChecked": 13,
+    "operatorSourcesAndCopiesChecked": 10,
+    "errors": [],
+    "draftOperatorPinsMatch": true,
+    "draftSha256": "f822386e88af69b7bdff2b17157d9dbe3cbd4294b427e95db69854b004bc3e2a",
+    "operatorManifestSha256": "ede6f9806572826c3e76066cf59c15cc87e9fcc947998f85e15c772d369c2bd2",
+    "scienceSha256": "f683a1c7e330076240bbb1d495b8f5b8af3d03cc70bb5a931980ebb142a4a7a7",
+    "qualifiedCollectorNamespaceOnly": true,
+    "collectorSha256": "bf2a99c301486765249e654c5af647b97c0e2bd5ea84c53a0cac300d5c870bb9"
+  },
+  "actualRuntimeLaunchOrWarmupAdmissionVerified": false,
+  "RootNext": "Reconcile actual unique v1622 staging/resources, enforce fixed lifetime/authenticated route/source pins and one launch intent; ordinary first warmup with actual15/45 gate before measurement. No more source/review/test matrix.",
+  "monitorNewNetworkModelOrBenchmarkCalls": 0,
+  "monitorPersonalCommands": 0,
+  "nativeMonitorStatus": "active",
+  "run": "run_e6054e76e9fc",
+  "task": "task_d7ea336050cf",
+  "dispatch": "ctx_37b4d0a3c14f"
+}

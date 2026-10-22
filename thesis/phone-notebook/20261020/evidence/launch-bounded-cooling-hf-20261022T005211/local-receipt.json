@@ -1,0 +1,8 @@
+{
+  "bytes": 654,
+  "copyOnly": true,
+  "custody": "Notebook result persisted and fsynced before relay; remote receipt in same output",
+  "localPath": "/home/developer/projects/aurora/thesis/phone-notebook/20261020/evidence/launch-bounded-cooling-hf-20261022T005211/result.json",
+  "remotePath": "/home/developer/projects/aurora/thesis/phone-notebook/20261020/evidence/launch-bounded-cooling-hf-20261022T005211.json",
+  "sha256": "936e6d7d51dc51912a2cc8be7e4cf61bbbad0c2ef6eb4418cdaaa8d8c477721d"
+}

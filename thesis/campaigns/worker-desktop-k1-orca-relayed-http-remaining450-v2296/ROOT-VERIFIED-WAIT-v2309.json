@@ -1,0 +1,70 @@
+{
+  "at": "2026-10-21T22:19:53.171020+00:00",
+  "classification": "VERIFIED_WAIT",
+  "manifestSha256": "9adbf9ba3a7ec0948a087edad3655cf94ee344b3a2371a78d15f188f44150d42",
+  "actors": [
+    {
+      "pid": 3965950,
+      "expectedStartTicks": 139740362,
+      "state": "S",
+      "startTicks": 139740362,
+      "matches": true
+    },
+    {
+      "pid": 3965978,
+      "expectedStartTicks": 139740616,
+      "state": "S",
+      "startTicks": 139740616,
+      "matches": true
+    },
+    {
+      "pid": 3965951,
+      "expectedStartTicks": 139740363,
+      "state": "S",
+      "startTicks": 139740363,
+      "matches": true
+    }
+  ],
+  "epochMeasured": {
+    "attempted": 26,
+    "correct": 26,
+    "failed": 0,
+    "incorrect": 0,
+    "timeouts": 0,
+    "planned": 450
+  },
+  "conditionCountsOnly": {
+    "attempted": 476,
+    "correct": 475,
+    "failed": 1,
+    "incorrect": 0,
+    "unattempted": 424,
+    "planned": 900
+  },
+  "copier": {
+    "receipt": "thesis/campaigns/worker-desktop-k1-orca-relayed-http-remaining450-v2296/receipts/000038.json",
+    "sha256": "acd55d21ae30190041ba634b0c4ae846e1e92983e2118e305246e8951c789fb7",
+    "cases": 41,
+    "WAV": 41,
+    "errors": [],
+    "freeBytes": 3398098944
+  },
+  "terminalSummaryPresent": false,
+  "observationOnly": true,
+  "newSutCalls": 0,
+  "processSignals": 0,
+  "measurementInputsNotModifiedByThisObserver": true,
+  "version": "V2309",
+  "previousGoalTurn": "VERIFIED_WAIT: exact existing process identities confirmed live while outcomes progressed",
+  "nativeGoalThread": "01a112a5-d6bb-74e2-bf7c-ace73cb513b5",
+  "nativeGoalStatus": "active",
+  "nativeGoalBudget": null,
+  "nextBoundedCheckUtc": "2026-10-21T22:24:53.171020+00:00",
+  "earlierFor": "actualfailure/terminal/resourceguard; samehandles only and no restart from observation timeout",
+  "normalNextAction": "Continue unchanged frozen450; finalizer2303 ONLY after actualsummary and original3Wactors naturalretirement",
+  "phoneExclusivelyDelegated": true,
+  "coordination": "Existing phone worker confirms NO lifecycle reopen needed for direct owner ordinary work; settledDispatch fence preserved. Its exact HOSTADBauthorityquestion is relayed through originalmonitor only, owneranswerpending, no Rootphone/notebookreads or sharedSUTpause.",
+  "coordinationReceipt": "thesis/evidence/orca-coordination-20261021-phone-setup-resume-v2308/OWNER-CONTROLLER-BOUNDARY-MAIL-v2309.json",
+  "newWorkers": 0,
+  "newReviewLoops": 0
+}

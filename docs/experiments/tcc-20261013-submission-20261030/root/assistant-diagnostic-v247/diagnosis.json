@@ -1,0 +1,11 @@
+{
+  "response_exact": false,
+  "history_persisted": true,
+  "response_metadata_error": false,
+  "scope": "single real public-task diagnostic; no comparison/acceptance",
+  "private_reply_sha256": "8063ded20b225e0c6d93693f14ea1bb66b8add70dd3da553cfccf30091348acb",
+  "private_capture_file_sha256": "5c218d33e1dd596cdd2b49b41d2fe6de3e3a58cbdf0befdcdcdc835367a939dc",
+  "private_reply_retained": true,
+  "public_raw_reply_exported": false,
+  "grounded_failure": "Empty leading thought markup remains on otherwise expected answer, is persisted and carried to UI unchanged. Existing source trace found no normalizer. Original raw predicate remains failed; production final reply cleanup is next."
+}

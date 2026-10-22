@@ -1,0 +1,12 @@
+{
+  "controlDeadline": "2026-10-22T05:00:00Z",
+  "explicitNewline": true,
+  "host": "ssh:ssh-sem-notebook-personal",
+  "incarnation": "328cd72f-c7ea-49ff-a2db-b9275b085037",
+  "remoteResult": "/home/developer/projects/aurora/thesis/phone-notebook/20261020/evidence/export-build-custody-v98-part0.json",
+  "rootAdmissionMessage": "owner-build-raw-dual-custody-v97-size-failure-ended-no-new-build",
+  "script": "scripts/export_build_custody_v98.py",
+  "scriptSha256": "c41530ebb418a8bbf94dfec7184135a549e9efa6161bf438f548c6b6af48e88d",
+  "singleSend": true,
+  "terminal": "term_a2ed5feb-7c92-48e4-bd88-d1b0e6737989"
+}

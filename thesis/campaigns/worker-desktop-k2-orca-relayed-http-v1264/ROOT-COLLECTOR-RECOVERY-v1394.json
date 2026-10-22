@@ -1,0 +1,69 @@
+{
+  "at": "2026-10-17T23:44:42.653356+00:00",
+  "status": "same15_warmup_proof_published_after_saved_data_selection_repair",
+  "ordinaryCorrectWarmups": 15,
+  "nativeCalls": 30,
+  "actualOffloadedLayers": 25,
+  "proofSha256": "ec1fb64b2f0a6e06bf64ab7def3b7ddf907b84cb061a101e612a1d01581afe9d",
+  "nativeStageCounts": [
+    {
+      "stage": "history",
+      "handler": "OrchestratorService._persist_chat_message",
+      "event": "span_start",
+      "count": 30
+    },
+    {
+      "stage": "history",
+      "handler": "OrchestratorService._persist_chat_message",
+      "event": "span_end",
+      "count": 30
+    },
+    {
+      "stage": "llm",
+      "handler": "resolved_chat_model.astream",
+      "event": "span_start",
+      "count": 15
+    },
+    {
+      "stage": "llm",
+      "handler": "resolved_chat_model.astream",
+      "event": "span_end",
+      "count": 15
+    },
+    {
+      "stage": "tts",
+      "handler": "TTS.Synthesize",
+      "event": "span_start",
+      "count": 15
+    },
+    {
+      "stage": "tts",
+      "handler": "tts.model_invoke",
+      "event": "span_start",
+      "count": 15
+    },
+    {
+      "stage": "tts",
+      "handler": "tts.model_invoke",
+      "event": "span_end",
+      "count": 15
+    },
+    {
+      "stage": "tts",
+      "handler": "TTS.Synthesize",
+      "event": "span_end",
+      "count": 15
+    }
+  ],
+  "nativeSourceChanged": false,
+  "scientificRunnerChanged": false,
+  "newModelCallsByRecovery": 0,
+  "failedCollectorPreserved": ".git/aurora-handoff-import-20261006/distributed-k2-orca-relayed-launch-v1264/finalize-failure.json",
+  "acceptedOriginalCollectionRequest": "9db9ae9b-a810-49ce-b8b3-a52290230153",
+  "selectionRepair": "Model-only proof input; preserve both actual TTS service and model spans in complete raw history",
+  "ordinaryWarmupP95MsType7": 31194.8273048,
+  "forecastSecondsWith20PercentMarginPlus300": 33990.413489184,
+  "providerRemainingSecondsAtProofPublicationReceipt": 36833.462397,
+  "providerDeadline": "2026-10-18T09:58:36.115743+00:00",
+  "packet": "thesis/campaigns/worker-desktop-k2-orca-relayed-http-v1264/ORDINARY-WARMUP-RECEIVER-PACKET-v1394.json"
+}

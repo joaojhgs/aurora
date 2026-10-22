@@ -1,0 +1,13 @@
+{
+  "at": "2026-10-22T11:01:35.115905+00:00",
+  "priorSealOperation": "c12-terminal-seal-v2450",
+  "actualObservedOutcome": "Traceback AssertionError at source line37, raw EOF tail >4MiB; before seal directory/archive creation",
+  "originalActorsPassedAbsentChecksBeforeTailAssertion": true,
+  "newCollector": "thesis/harness/c12_terminal_delta_custody_v2451.py",
+  "newSourceSha256": "db303c8c8881239e063fd070eb604e1c1ec5d39fbb5cb12a05d2336023f82f8b",
+  "boundedTailCapPerStreamBytes": 16777216,
+  "notInferenceRetry": true,
+  "originalRawRetained": true,
+  "newOperation": "c12-terminal-seal-v2451",
+  "originalAllocationClocksUnchanged": true
+}

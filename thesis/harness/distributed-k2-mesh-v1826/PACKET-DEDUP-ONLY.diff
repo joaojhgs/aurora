@@ -1,0 +1,30 @@
+--- reviewed-finalizer1826
++++ same-proof-deduplicated-payload1829
+@@ -83,11 +83,15 @@
+ a=ADMISSION;a['requesterInputs']=str(inp);a['output']=str(out)
+ ap=inp/'admission.json';ap.write_text(json.dumps(a))
+ runpy.run_path(str(c))['collect'](ap)
+-files={}
++files={};source_retained={}
++required={'remote-warmup-proof.json','actual-new-process-gpu.json','voice-stages.jsonl','actual-provider-bindings.jsonl','assistant-identity.json','tts-identity.json'}
+ for p in out.rglob('*'):
+  if p.is_file():
+-  raw=p.read_bytes();files[str(p.relative_to(out))]={'data':base64.b64encode(raw).decode(),'bytes':len(raw),'sha256':hashlib.sha256(raw).hexdigest()}
+-v={'files':files,'memAvailableBytes':next(int(x.split()[1])*1024 for x in Path('/proc/meminfo').read_text().splitlines()if x.startswith('MemAvailable:'))}
++  raw=p.read_bytes();name=str(p.relative_to(out));record={'source':str(p),'bytes':len(raw),'sha256':hashlib.sha256(raw).hexdigest()}
++  if name not in required:source_retained[name]=record;continue
++  files[name]={'data':base64.b64encode(raw).decode(),'bytes':len(raw),'sha256':record['sha256']}
++assert set(files)==required,'six_complete_native_proof_files_required'
++v={'files':files,'sourceRetainedFiles':source_retained,'memAvailableBytes':next(int(x.split()[1])*1024 for x in Path('/proc/meminfo').read_text().splitlines()if x.startswith('MemAvailable:'))}
+ compressed=base64.b64encode(zlib.compress(json.dumps(v).encode())).decode()
+ assert len(compressed)<96*1024,'bounded_return_packet_cap'
+ v={'host':socket.gethostname(),'status':'K2_SAVED_WARMUP_PROOF_COLLECTED','bundleZlibBase64':compressed,'sutCalls':0}
+@@ -120,7 +124,7 @@
+         raw = base64.b64decode(item['data']); assert len(raw) == item['bytes'] and sha(raw) == item['sha256']
+         target = custody / p; target.parent.mkdir(exist_ok=True, parents=True); write(target, raw)
+         copied[n] = {'bytes': len(raw), 'sha256': sha(raw)}
+-    save(custody / 'CUSTODY.json', {'at': now().isoformat(), 'files': copied, 'sutCalls': 0})
++    save(custody / 'CUSTODY.json', {'at': now().isoformat(), 'files': copied, 'sourceRetainedFiles': result.get('sourceRetainedFiles', {}), 'custodyScope': 'Six new native proof/GPU/identity data files copied here. Duplicate requester inputs already on worker; complete provider prefixes/reports physically retained under Personal repo thesis.', 'sutCalls': 0})
+     proofraw = (custody / 'remote-warmup-proof.json').read_bytes(); proof = json.loads(proofraw)
+     assert proof['cohort_manifest_sha256'] == sha(mraw) and proof['receivers'] == m['remoteReceivers']
+     gpu = json.loads((custody / 'actual-new-process-gpu.json').read_bytes())

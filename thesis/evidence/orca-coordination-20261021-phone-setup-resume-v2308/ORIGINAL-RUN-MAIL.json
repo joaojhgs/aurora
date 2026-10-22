@@ -1,0 +1,83 @@
+{
+  "id": "remote-cli-1792620703454",
+  "ok": true,
+  "result": {
+    "runId": "run_e6054e76e9fc",
+    "deliveryId": "delivery_f43ba2c27906",
+    "messages": [
+      {
+        "id": "msg_3ebbf6b7e5f3",
+        "run_id": "run_e6054e76e9fc",
+        "delivery_contract": "current_delivery",
+        "from_handle": "term_2eab47ed-ab9b-4e35-bd9b-fc068c60e3fc",
+        "to_handle": "run:run_e6054e76e9fc",
+        "subject": "V2296 measurement verified: native15 passed and first451 correct",
+        "body": "V2296 remaining-450 measurement is actually running on the original W\u2192Personal D K1 Orca-relayed HTTP condition: the fresh 15 excluded full-audio warmups passed 45 native joins with zero gaps and the finite capacity gate passed. Global 451 is completed_correct in 50,832.801262 ms, case SHA256 1bc9c08c7ebdd40ff89185dfed3f260e812421de283c6ac45f3fbd852d4bebb1 and valid non-silent WAV SHA256 ae3a557525055e3e930e9e0091aa52cd032c20865b5dc047f385efa08426878f; the 22:00:27 UTC snapshot has five new measured cases/audio physically copied, zero custody errors, and all three actual W controller/backend/copier identities match (3965950/139740362, 3965978/139740616, 3965951/139740363). Frozen manifest 9adbf9ba3a7ec0948a087edad3655cf94ee344b3a2371a78d15f188f44150d42 and the new first-case/native-input receipt checks are closed; continue the same live run without duplicate admission/reviews, preserve the old failure and separate epoch latencies, and keep full-condition/full-matrix status open.",
+        "type": "status",
+        "priority": "normal",
+        "thread_id": null,
+        "payload": "{\"taskId\":\"task_d7ea336050cf\",\"dispatchId\":\"ctx_37b4d0a3c14f\",\"reportPath\":\".omx/evidence/orca-monitor-20261010/HTTP-V2296-FIRST451-MEASURED-VERIFIED-20261021T2202Z.json\"}",
+        "created_at": "2026-10-21T22:02:17Z",
+        "delivered_at": null
+      },
+      {
+        "id": "msg_c67d36b35b2c",
+        "run_id": "run_e6054e76e9fc",
+        "delivery_contract": "current_delivery",
+        "from_handle": "term_1f27be31-0284-4366-bb91-30fe538cd30e",
+        "to_handle": "run:run_e6054e76e9fc",
+        "subject": "Owner resumed existing phone/notebook lane for USB setup",
+        "body": "Direct owner instruction resumes this existing setup terminal and owned thesis/phone-notebook/20261020 folder, preserving the settled failed attempt and old receipts. I am checking USB reachability independently; no Root phone checks or current HTTP campaign pause is requested. At 2026-10-21T22:07 UTC the prior Personal notebook terminal retains its exact incarnation but is disconnected and unwritable, so its old preview is not current USB evidence. I will use supported host/device discovery for the approved Personal notebook only. Please record the supported continuation/reopen provenance if required; I will not reuse the settled Dispatch for heartbeats or a second worker_done or launch a duplicate worker. Existing owner setup/readiness and bounded pilot authorization applies now, while heavy shared resources and full900 collection remain separately gated.",
+        "type": "status",
+        "priority": "normal",
+        "thread_id": null,
+        "payload": null,
+        "created_at": "2026-10-21T22:07:52Z",
+        "delivered_at": null
+      },
+      {
+        "id": "msg_3503972b3847",
+        "run_id": "run_e6054e76e9fc",
+        "delivery_contract": "current_delivery",
+        "from_handle": "term_1f27be31-0284-4366-bb91-30fe538cd30e",
+        "to_handle": "run:run_e6054e76e9fc",
+        "subject": "USB resume checkpoint: notebook transport offline, old Dispatch fenced",
+        "body": "Supported check confirms the old Dispatch is consumer_fenced because it settled; I will not retry its mailbox or send a second completion. Ordinary owner-requested work continues on this existing terminal while coordinator continuation provenance is arranged, without new agents or Git writes. Personal notebook old terminal is disconnected/unwritable, its scoped terminal list is empty and approved device inventory is empty; USB serial/authorization cannot yet be observed. The CLI has no advertised host reconnect verb and host list is explicitly forbidden from this SSH worker. I am attempting the supported existing Personal Aurora workspace plain-terminal path only, with no Work host/account, no credential or network change and no old wireless connect attempt.",
+        "type": "status",
+        "priority": "normal",
+        "thread_id": null,
+        "payload": null,
+        "created_at": "2026-10-21T22:08:58Z",
+        "delivered_at": null
+      },
+      {
+        "id": "msg_2d651d243a64",
+        "run_id": "run_e6054e76e9fc",
+        "delivery_contract": "current_delivery",
+        "from_handle": "term_1f27be31-0284-4366-bb91-30fe538cd30e",
+        "to_handle": "run:run_e6054e76e9fc",
+        "subject": "Personal notebook access restored through supported plain terminal",
+        "body": "Supported terminal create in the existing approved Personal Aurora workspace succeeded using its default shell, restoring access without a coding agent, new Run, worktree or project. Exact new plain-control handle term_a2ed5feb-7c92-48e4-bd88-d1b0e6737989 incarnation 328cd72f-c7ea-49ff-a2db-b9275b085037 on ssh:ssh-sem-notebook-personal is exclusively used by this resumed phone lane. The explicit shell override was rejected before mutation and is preserved; the default-shell create has one accepted receipt and is not being replayed. Fresh USB-only discovery is running now with selected bounded getprops/app metadata if authorized; no wireless connect, app install/launch or model calls. Owner-resumed setup control is bounded through22:22 UTC for this read branch, with current HTTP campaign untouched.",
+        "type": "status",
+        "priority": "normal",
+        "thread_id": null,
+        "payload": null,
+        "created_at": "2026-10-21T22:10:41Z",
+        "delivered_at": null
+      }
+    ],
+    "count": 4,
+    "replayed": false,
+    "acknowledged": null,
+    "timedOut": false,
+    "cancelled": false,
+    "connectionLost": false,
+    "mutation": {
+      "requestId": "bc2cf90c-96c3-49f9-adb7-b1ccaea5c696",
+      "replayed": false
+    }
+  },
+  "_meta": {
+    "runtimeId": "cc9e3275-28c6-4c45-85cc-bdcd2262aa7d"
+  }
+}

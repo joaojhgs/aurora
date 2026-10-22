@@ -1,0 +1,38 @@
+{
+  "id": "remote-cli-1792631443330",
+  "ok": true,
+  "result": {
+    "runId": "run_e6054e76e9fc",
+    "deliveryId": "delivery_90d12b88b80f",
+    "messages": [
+      {
+        "id": "msg_23e06bb481a9",
+        "run_id": "run_e6054e76e9fc",
+        "delivery_contract": "current_delivery",
+        "from_handle": "term_1f27be31-0284-4366-bb91-30fe538cd30e",
+        "to_handle": "run:run_e6054e76e9fc",
+        "subject": "Actual public downloads progress; current USB absent/build thermal gate",
+        "body": "Real Personal notebook direct HF transfer receipt01:05:51: Qwen73,859,072B+Whisper73,924,608B partial, exactconfigSHApassed; no worker/desktop modeltransfer. Official originalPiper commit bae641dcb5a608cff81ccaf7ff018baaca1a33e1 and llama0.3.19sdist SHA6816e4a0... resolved exactly, same bounded queue. Latest hardware k10temp/Tctl92.375C corroboratesACPI; data-only95C/nice10 gate permits capped1MiBps while build/inference85C stays. Current USB knownserial device not found, devices/mdns empty; no unauthorized dialog observed. Minimal physical action if owner phone remains intended attached: restore/reconnect existing authorized USB/controller exposure; no permission/key/daemon/security changes by lane. Source receiver ready and renewal request f29918a89743 awaits concrete resource decision, no maincampaign end/owner permission loop; REPORT.md/SETUP-STATUS-20261022.json now reflect actual progress and remaining native gaps.",
+        "type": "status",
+        "priority": "normal",
+        "thread_id": null,
+        "payload": null,
+        "created_at": "2026-10-22T01:09:46Z",
+        "delivered_at": null
+      }
+    ],
+    "count": 1,
+    "replayed": false,
+    "acknowledged": "delivery_fdcfc151f6aa",
+    "timedOut": false,
+    "cancelled": false,
+    "connectionLost": false,
+    "mutation": {
+      "requestId": "1bacff95-7713-4df5-81be-1f5c3dbc6365",
+      "replayed": false
+    }
+  },
+  "_meta": {
+    "runtimeId": "cc9e3275-28c6-4c45-85cc-bdcd2262aa7d"
+  }
+}

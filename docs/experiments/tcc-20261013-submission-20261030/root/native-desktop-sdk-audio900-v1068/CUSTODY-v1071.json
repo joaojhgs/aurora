@@ -1,0 +1,42 @@
+{
+  "at": "2026-10-16T14:06:51.213187+00:00",
+  "files": [
+    {
+      "path": "FROZEN-MANIFEST.json",
+      "bytes": 5762,
+      "sha256": "88dabaffe8d5a9622753a7441a366ba0abf913fbd5d64282801170f4eaaa7cda"
+    },
+    {
+      "path": "WARMUP-GATE.json",
+      "bytes": 1086,
+      "sha256": "2a86670efeb822ab89b8031b15f29e0f7fb7688df03fb3e303961dfb8fa42e12"
+    },
+    {
+      "path": "COHORT-ADMISSION.json",
+      "bytes": 2283,
+      "sha256": "5b6f01b575ac344c370666fa69c337be3bdfd6cbf7b9d833d0778396bb10f020"
+    },
+    {
+      "path": "LAUNCH.json",
+      "bytes": 762,
+      "sha256": "c6056215d81cca6d85973b41fe662dbaa8314c7abe9807d69eb807141ddb0ae0"
+    },
+    {
+      "path": "controller-frozen-v1067.py",
+      "bytes": 65197,
+      "sha256": "5b0d4d58e53aa06d712f54782391872a8a403f81ed7108d51c21afb19d5b292c"
+    },
+    {
+      "path": "SOURCE-REVIEW.md",
+      "bytes": 2409,
+      "sha256": "0cbdd95e345de40226c4fa13debd19cc7dc8537d96b04c62e12a9321351784cc"
+    },
+    {
+      "path": "RUNNING-v1070.json",
+      "bytes": 1362,
+      "sha256": "6645c0a564714763e6cb8ef642e84580d5a6a21e3020976f90c9bb71d85836f0"
+    }
+  ],
+  "scope": "Copies of already observed active run admission, source, warmup gate and progress; no new model request or audit.",
+  "rawSourceRetained": "/tmp/aurora-root-c06-app900-v1058/.artifacts/c06-app900-v1058"
+}

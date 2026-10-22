@@ -1,0 +1,76 @@
+{
+  "hostId": "personal-desktop",
+  "androidSurfaceId": "waydroid-x86_64",
+  "sampleType": "one install/cold-start readiness, not performance population",
+  "appDataPreserved": true,
+  "steps": [
+    {
+      "name": "install_preserve_data",
+      "capSeconds": 90,
+      "startedAt": "2026-10-14T23:08:58.025566+00:00",
+      "exitCode": 0,
+      "stdout": "Performing Streamed Install\nSuccess\n",
+      "stderr": "",
+      "finishedAt": "2026-10-14T23:08:59.082990+00:00",
+      "command": [
+        "adb",
+        "-s",
+        "<approved-waydroid>",
+        "install",
+        "-r",
+        "-t",
+        "<verified-apk>"
+      ]
+    },
+    {
+      "name": "launch_existing_activity",
+      "capSeconds": 25,
+      "startedAt": "2026-10-14T23:08:59.083018+00:00",
+      "exitCode": 0,
+      "stdout": "Starting: Intent { cmp=dev.aurora.desktop/.MainActivity }\nStatus: ok\nLaunchState: COLD\nActivity: dev.aurora.desktop/.MainActivity\nTotalTime: 1633\nWaitTime: 1653\nComplete\n",
+      "stderr": "",
+      "finishedAt": "2026-10-14T23:09:00.772365+00:00",
+      "command": [
+        "adb",
+        "-s",
+        "<approved-waydroid>",
+        "shell",
+        "am",
+        "start",
+        "-W",
+        "-n",
+        "dev.aurora.desktop/.MainActivity"
+      ]
+    },
+    {
+      "name": "app_pid",
+      "capSeconds": 10,
+      "startedAt": "2026-10-14T23:09:00.772407+00:00",
+      "exitCode": 0,
+      "stdout": "109913\n",
+      "stderr": "",
+      "finishedAt": "2026-10-14T23:09:00.802456+00:00",
+      "command": [
+        "adb",
+        "-s",
+        "<approved-waydroid>",
+        "shell",
+        "pidof",
+        "dev.aurora.desktop"
+      ]
+    }
+  ],
+  "deploymentControllerFinishedAt": "2026-10-14T23:09:00.802477+00:00",
+  "controllerAbsentAt": "2026-10-14T23:09:29.545952+00:00",
+  "startupUIOutcome": "executed_fail_blank_content",
+  "mainVoiceOutcome": "not_run",
+  "voiceAttemptsAdded": 0,
+  "measuredVoiceRequests": 0,
+  "globalPriorTinyExcludedFlows": 6,
+  "p90": null,
+  "p95": null,
+  "quantileReason": "no measured voice population; cold-start n=1 is descriptive only",
+  "hostedSpeechConsumerMain": "held by full individual baseline barrier",
+  "fullIndividualGpuSealed": false,
+  "phase2MeasuredAllowed": false
+}

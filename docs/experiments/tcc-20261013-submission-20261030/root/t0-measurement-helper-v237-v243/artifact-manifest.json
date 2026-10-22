@@ -1,0 +1,76 @@
+{
+  "files": [
+    {
+      "path": "README.md",
+      "sha256": "ed0b93a1d12b12f5c951ecc015ff11d4467cb7cecab8f43daa06598eb2d9b294"
+    },
+    {
+      "path": "independent-sol-source-review.md",
+      "sha256": "e21fee403883cdbe5db334c3f260826dc1e78773b8b2d8fcd40e400e421afb31"
+    },
+    {
+      "path": "measurement-check-v238/junit.xml",
+      "sha256": "76017797cbe4e500ac98a05377c7d4604379adef1b326b9842ea38a85b496814"
+    },
+    {
+      "path": "measurement-check-v238/manifest.json",
+      "sha256": "9ded19578e07176e701a6ff2c2046c6df4f8c1204fe8ebeedb53527ef695ec98"
+    },
+    {
+      "path": "measurement-check-v238/result.json",
+      "sha256": "3936baf6de53744ae1caae61ff974836164cbae97edaa6c1ce8cf00901660e37"
+    },
+    {
+      "path": "measurement-check-v238/stderr.log",
+      "sha256": "6609f44399eec912fbcf675d5abe5bed8fa0e47300c5be9ed51dcdbbf8e2014b"
+    },
+    {
+      "path": "measurement-check-v238/stdout.log",
+      "sha256": "93ea72da6331ea0a65d14f2d77e618598e20fc733eb8431b93f557385ee7f307"
+    },
+    {
+      "path": "measurement-check-v239/junit.xml",
+      "sha256": "f1806b7c25746d5b9e87bb8b5e40f000bd32f285bc39351edfd53e9e8e454ee2"
+    },
+    {
+      "path": "measurement-check-v239/manifest.json",
+      "sha256": "8abf1281cc9ad9df0c0ac1bc8eb5582b592880446604b0940b5aa25c1ed81497"
+    },
+    {
+      "path": "measurement-check-v239/result.json",
+      "sha256": "0faf35b8a8f252ca10987b176eb04cdf31967e476213731f02b63b91c2c79b4c"
+    },
+    {
+      "path": "measurement-check-v239/stderr.log",
+      "sha256": "6609f44399eec912fbcf675d5abe5bed8fa0e47300c5be9ed51dcdbbf8e2014b"
+    },
+    {
+      "path": "measurement-check-v239/stdout.log",
+      "sha256": "e85f394948299722fac36382aca546361fa14fbae9c4cbab6d00106e124dfab0"
+    },
+    {
+      "path": "measurement-check-v243/junit.xml",
+      "sha256": "122368e06b5bd56bb5a4ae21951eb18fd976f0b91ec07ab5c6268397d2ff2c53"
+    },
+    {
+      "path": "measurement-check-v243/manifest.json",
+      "sha256": "19b835b6541890941d6bdda772847c476514528e0326076773c9f29d9324ddac"
+    },
+    {
+      "path": "measurement-check-v243/result.json",
+      "sha256": "4db6b0e8dc39d0deb873a48e3ea3a981122b69503616163f49d7f9eea4bb88b7"
+    },
+    {
+      "path": "measurement-check-v243/stderr.log",
+      "sha256": "6609f44399eec912fbcf675d5abe5bed8fa0e47300c5be9ed51dcdbbf8e2014b"
+    },
+    {
+      "path": "measurement-check-v243/stdout.log",
+      "sha256": "9f8a19ce297fae1b46394bf9d5b713f7cbebbeb884160d74938e5cdecfe71898"
+    },
+    {
+      "path": "summary.json",
+      "sha256": "27e042868d86c6c8f2a332160e01687650389b0d679610dd241d39d2edc32324"
+    }
+  ]
+}

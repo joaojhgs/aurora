@@ -1,0 +1,100 @@
+{
+  "observed_at": "2026-10-14T14:59:17.299526+00:00",
+  "cell": "07-mesh",
+  "terminal": {
+    "status": "completed",
+    "child_exit_code": 0,
+    "exit_code": 0,
+    "started_at": "2026-10-14T13:54:05.253329+00:00",
+    "finished_at": "2026-10-14T14:58:49.571579+00:00",
+    "elapsed_seconds": 3884.3179996180115,
+    "receipt_validation": {
+      "validated": true,
+      "failure_classes": [],
+      "expected_requests": 105,
+      "expected_provider_captures": 105,
+      "capture_join": "ordered_serial_count",
+      "raw_artifacts_retained": true
+    },
+    "detached_group_cleanup": [
+      {
+        "group_owned": true,
+        "leader_verified": true,
+        "reaped": true
+      },
+      {
+        "group_owned": true,
+        "leader_verified": true,
+        "reaped": true
+      },
+      {
+        "group_owned": true,
+        "leader_verified": true,
+        "reaped": true
+      },
+      {
+        "group_owned": true,
+        "leader_verified": true,
+        "reaped": true
+      },
+      {
+        "group_owned": true,
+        "leader_verified": true,
+        "reaped": true
+      }
+    ]
+  },
+  "attachment_count": 105,
+  "attachment_names_unique": true,
+  "measured_count": 100,
+  "warmup_count": 5,
+  "measured_outcomes": {
+    "completed_exact": 100
+  },
+  "warmup_outcomes": {
+    "completed_exact": 5
+  },
+  "all_exact_response_true": true,
+  "all_completion_counts_one": true,
+  "completion_kind_counts": {
+    "fallback": 83,
+    "completed": 22
+  },
+  "all_identifiers_nonempty": true,
+  "unique_request_ids": true,
+  "unique_message_ids": true,
+  "unique_correlation_ids": true,
+  "all_durations_within_180s": true,
+  "warmups_excluded": true,
+  "measured_not_excluded": true,
+  "capture_count": 105,
+  "all_captured": true,
+  "all_three_hashes_match": true,
+  "capture_ordinal_complete": true,
+  "capture_request_ordinal_complete": {
+    "provided_count": 0,
+    "expected_join": "ordered_serial_count"
+  },
+  "quantile_method": "Hyndman-Fan Type 7",
+  "population": "success-only single loaded-host session; 5 warmups excluded; readiness waiting excluded; no pooled/causal claim",
+  "derived_ms": {
+    "p50": 34441,
+    "p90": 40997.4,
+    "p95": 42202.45,
+    "p99": 45849.16000000002
+  },
+  "playwright_report_sha256": "f8e992195c83eac29181ded15a0bedd9c9833801cae2ab07689f4404121830f1",
+  "cell_result_sha256": "94a6b7419dd7af17f90b1832a0181f9db1363e765c35d702d6513f0692607f42",
+  "provider_capture_sha256": "94826b93435f5c1fa5866d1496481e8036e941c3cab98c0e940ccae7defc0c3e",
+  "next_cell_baseline_resources_exists": true,
+  "campaign_result_exists": false,
+  "independent_review": "pending",
+  "completed_measured_campaign": 700,
+  "reviewed_measured_campaign": 600,
+  "owner_cleanup_event": {
+    "started": "2026-10-14T14:07:55.821659Z",
+    "finished": "2026-10-14T14:07:57.603871Z",
+    "receipt": "docs/experiments/tcc-20261013-submission-20261030/root/build-cleanup-v386/deletion-manifest.json",
+    "scope": "Loaded-host filesystem event during cell; no quiet-host or causal comparison claim"
+  }
+}

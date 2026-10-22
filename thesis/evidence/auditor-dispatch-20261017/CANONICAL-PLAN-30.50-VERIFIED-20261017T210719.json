@@ -1,0 +1,80 @@
+{
+  "observedAt": "2026-10-17T21:07:19.183171+00:00",
+  "run": "run_e6054e76e9fc",
+  "task": "task_d7ea336050cf",
+  "dispatch": "ctx_37b4d0a3c14f",
+  "RootAcknowledgement": "msg_2bdf1dc2dbf9",
+  "canonicalPath": "thesis/methodology/owner-requirements-20261017-aed7aef2.md",
+  "bytes": 510384,
+  "sha256": "aed7aef27d72b639c3af844145ec6028fa7357a233ba3c8a443ae44653f4b299",
+  "wholeFileEqualToOwnerAuthoritativePlan": true,
+  "newSection": "30.50",
+  "canonicalCustodyReceipt": "thesis/methodology/CUSTODY-v1252.json",
+  "auditorAdmissionFiles": [
+    {
+      "path": "thesis/evidence/auditor-dispatch-20261017/ADMISSION-RECEIPT-v1248.json",
+      "bytes": 2745
+    },
+    {
+      "path": "thesis/evidence/auditor-dispatch-20261017/LAUNCH-STATE-v1253.json",
+      "bytes": 12457
+    },
+    {
+      "path": "thesis/evidence/auditor-dispatch-20261017/LAUNCH-STATE.json",
+      "bytes": 11897
+    },
+    {
+      "path": "thesis/evidence/auditor-dispatch-20261017/LOCAL-RESOURCE-READ.json",
+      "bytes": 437
+    },
+    {
+      "path": "thesis/evidence/auditor-dispatch-20261017/PREPARED-WORKER-REQUEST-v1253.json",
+      "bytes": 1142
+    },
+    {
+      "path": "thesis/evidence/auditor-dispatch-20261017/TASK-CREATE.json",
+      "bytes": 10168
+    },
+    {
+      "path": "thesis/evidence/auditor-dispatch-20261017/TASK-SPEC.txt",
+      "bytes": 9045,
+      "sha256": "30c3e188384e7cd1d26fddb8fc9788f979e5b9e36a3cbe62dce294cdd2eeaa63"
+    },
+    {
+      "path": "thesis/evidence/auditor-dispatch-20261017/v1243-live-manager-placements.json",
+      "bytes": 187
+    },
+    {
+      "path": "thesis/evidence/auditor-dispatch-20261017/v1243-live-manager-resources.json",
+      "bytes": 187
+    },
+    {
+      "path": "thesis/evidence/auditor-dispatch-20261017/v1243-live-manager-usage.json",
+      "bytes": 187
+    },
+    {
+      "path": "thesis/evidence/auditor-dispatch-20261017/v1243-live-runtime.json",
+      "bytes": 7037
+    },
+    {
+      "path": "thesis/evidence/auditor-dispatch-20261017/v1243-original-run.json",
+      "bytes": 187
+    },
+    {
+      "path": "thesis/evidence/auditor-dispatch-20261017/v1244-host-usage.json",
+      "bytes": 249
+    },
+    {
+      "path": "thesis/evidence/auditor-dispatch-20261017/v1244-root-fence.json",
+      "bytes": 1400
+    },
+    {
+      "path": "thesis/evidence/auditor-dispatch-20261017/v1245-original-run-public.json",
+      "bytes": 746
+    }
+  ],
+  "separateAuditorTask": "task_c626834bf1c6",
+  "auditorLaunchStateAsOfRoot210603": "Ready; no worker-start attempted, no dispatch/terminal/incarnation",
+  "monitorOwnership": "Original monitor Task/Dispatch and sole methodology writer unchanged; monitor has NOT adopted auditor Task or claimed thesis/audit/20261017-data-and-results",
+  "hostBlocker": "Current default CLI account usage refuses SSH locally; Root has no verified external Coding/owning-host recipient and reports asking owner. No additional account/host/manager probes authorized until changed capability; current900 remains live independently."
+}

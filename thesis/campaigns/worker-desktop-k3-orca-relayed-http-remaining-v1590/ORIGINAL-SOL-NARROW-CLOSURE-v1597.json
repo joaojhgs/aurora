@@ -1,0 +1,15 @@
+{
+  "id": "msg_812251d0c2f1",
+  "run_id": "run_e6054e76e9fc",
+  "delivery_contract": "current_delivery",
+  "from_handle": "term_2eab47ed-ab9b-4e35-bd9b-fc068c60e3fc",
+  "to_handle": "run:run_e6054e76e9fc",
+  "subject": "V1590 r2/r5 narrow observability closure; no added gate",
+  "body": "One requested V1590r2/r5 observability delta CLOSED: .omx/evidence/orca-monitor-20261010/V1590-FAILURE-OBSERVABILITY-NARROW-CLOSURE-20261018T1811.json 2546B SHAba9b938ae50a8d4849b19a397085415311e2587cf50c883858668e0d827c1ef7. Actual13sourcepins+10operatorcopies match; request_gateway_stage AST equal after removing only3failure-diagnostic awaits and handler binding, _exchange/binding unchanged. Saved nested-type/errno check hash verified, no text/URL/header/body/key fields. No retry, deadline/classification/predicate/model/science/count changes; successpath no diagnosticwrite. Namespace-only collector not requalified. Correct old62.831509676charge:23578.905962333/57600,184global717-900 only, old716=714correct2fail preserved. No blocking finding in THIS delta; not route-remedy/full-runtime acceptance. Root alone reconcile exact pendingv1591 staging/provider/resource receipts/reservation, then next essential STT may be firstordinaryexcludedwarmup; actualnewexception drives remedy on failure, no blind15loop, no GET200-as-remedy. If success ordinary15/45gate before measurement. Monitor0Personalcommands/0networkmodelrequests/0sourceedits; no extra review/test matrix.",
+  "type": "status",
+  "priority": "normal",
+  "thread_id": null,
+  "payload": "{\"taskId\":\"task_d7ea336050cf\",\"dispatchId\":\"ctx_37b4d0a3c14f\"}",
+  "created_at": "2026-10-18T18:11:15Z",
+  "delivered_at": null
+}

@@ -1,0 +1,194 @@
+{
+  "at": "2026-10-22T06:46:13.573458+00:00",
+  "bundleBytes": 118100,
+  "bundleSha256": "c32973f60b09a65d332faf852ec66abc53bf9efc3ce0de46c84c4837f5a662c5",
+  "files": [
+    {
+      "path": "android-apk-build-v119/status.json",
+      "bytes": 1511,
+      "sha256": "30c3e128cb65f3480a75bbb7c39bb26ea55ad1cc7a44e1fde56c921fdb96d8fc",
+      "notebookOriginalBytes": 1511,
+      "notebookOriginalSha256": "30c3e128cb65f3480a75bbb7c39bb26ea55ad1cc7a44e1fde56c921fdb96d8fc",
+      "secretAssignmentLinesOmitted": 0
+    },
+    {
+      "path": "android-apk-build-v119/build.log",
+      "bytes": 24230,
+      "sha256": "0f9d9337995ce05c22542fb701f35ac2412fc4c1e7e7616edb132b06209afcbc",
+      "notebookOriginalBytes": 24192,
+      "notebookOriginalSha256": "5092a52cd1dd0405739eaee1b6587f4ded8b915bfd9cae2a65cf4f7b31b52b43",
+      "secretAssignmentLinesOmitted": 1
+    },
+    {
+      "path": "android-apk-build-v126/status.json",
+      "bytes": 1513,
+      "sha256": "2f4b3da990a98033169341a17ffc105f9a33f7e1cd0fb77946999c9621db0e6a",
+      "notebookOriginalBytes": 1513,
+      "notebookOriginalSha256": "2f4b3da990a98033169341a17ffc105f9a33f7e1cd0fb77946999c9621db0e6a",
+      "secretAssignmentLinesOmitted": 0
+    },
+    {
+      "path": "android-apk-build-v126/build.log",
+      "bytes": 157480,
+      "sha256": "6c6c49e8c9fed930fe7d332051453a4609f2f039f4fcd56c8c3aa64b27023c62",
+      "notebookOriginalBytes": 157396,
+      "notebookOriginalSha256": "bfc6ecb793041d02824f3751a607fd04f189cbd78ece47f5ef208574bcd122b6",
+      "secretAssignmentLinesOmitted": 2
+    },
+    {
+      "path": "android-apk-build-v137/status.json",
+      "bytes": 1526,
+      "sha256": "b9d380cbfb58dfe414eed293be0fed2504de44c051967addfb27e2c1d0749665",
+      "notebookOriginalBytes": 1526,
+      "notebookOriginalSha256": "b9d380cbfb58dfe414eed293be0fed2504de44c051967addfb27e2c1d0749665",
+      "secretAssignmentLinesOmitted": 0
+    },
+    {
+      "path": "android-apk-build-v137/build.log",
+      "bytes": 145604,
+      "sha256": "c644cdb34d95376a91d3bca1d6f7976f01f825b72588aee871a0dbd82845e425",
+      "notebookOriginalBytes": 145520,
+      "notebookOriginalSha256": "ca3d5231cbac9beb961cb2563a2a7a4616297314aab75b564432ef583ee50c9a",
+      "secretAssignmentLinesOmitted": 2
+    },
+    {
+      "path": "android-apk-build-v137/build-provenance.json",
+      "bytes": 4114,
+      "sha256": "ecdfd8e9f91171b732244153f362f7f6791784113a87b7311c4d342064f7913d",
+      "notebookOriginalBytes": 4114,
+      "notebookOriginalSha256": "ecdfd8e9f91171b732244153f362f7f6791784113a87b7311c4d342064f7913d",
+      "secretAssignmentLinesOmitted": 0
+    },
+    {
+      "path": "android-apk-build-v137/source-overlay-receipt.json",
+      "bytes": 1282,
+      "sha256": "704974f1edbe955f515f323dd3704e507841575791b9a8881dd32d5ede613504",
+      "notebookOriginalBytes": 1282,
+      "notebookOriginalSha256": "704974f1edbe955f515f323dd3704e507841575791b9a8881dd32d5ede613504",
+      "secretAssignmentLinesOmitted": 0
+    },
+    {
+      "path": "android-apk-build-v137/RECEIPT-ALIAS-RECOVERY.json",
+      "bytes": 381,
+      "sha256": "66709ea31c485ae2f60d964b0dbcbfa6c68baceccd0768c5e6d383826821e0ae",
+      "notebookOriginalBytes": 381,
+      "notebookOriginalSha256": "66709ea31c485ae2f60d964b0dbcbfa6c68baceccd0768c5e6d383826821e0ae",
+      "secretAssignmentLinesOmitted": 0
+    },
+    {
+      "path": "android-apk-build-v166/status.json",
+      "bytes": 1463,
+      "sha256": "44f4261a7a42ea7985946399de1ef497d3c751e74268e4b94db51a61c70da5cb",
+      "notebookOriginalBytes": 1463,
+      "notebookOriginalSha256": "44f4261a7a42ea7985946399de1ef497d3c751e74268e4b94db51a61c70da5cb",
+      "secretAssignmentLinesOmitted": 0
+    },
+    {
+      "path": "android-apk-build-v166/policy-tests.log",
+      "bytes": 7430,
+      "sha256": "c0b1eececa31fc528436c305bd83ea0363f5cc0d75f50c9e61b6548eb92a5950",
+      "notebookOriginalBytes": 7430,
+      "notebookOriginalSha256": "c0b1eececa31fc528436c305bd83ea0363f5cc0d75f50c9e61b6548eb92a5950",
+      "secretAssignmentLinesOmitted": 0
+    },
+    {
+      "path": "android-apk-build-v170/status.json",
+      "bytes": 2306,
+      "sha256": "e64f80a4b8a343f66cdb90028d3ce88ad1145a64533568b8d0858091d0fa917e",
+      "notebookOriginalBytes": 2306,
+      "notebookOriginalSha256": "e64f80a4b8a343f66cdb90028d3ce88ad1145a64533568b8d0858091d0fa917e",
+      "secretAssignmentLinesOmitted": 0
+    },
+    {
+      "path": "android-apk-build-v170/build.log",
+      "bytes": 136644,
+      "sha256": "70f0740fe7831df710ae17fb8bd9965588fdeaca9d5bd3b0acc6b12ed5f44d0e",
+      "notebookOriginalBytes": 136560,
+      "notebookOriginalSha256": "c881d355abf831cde5460827d1128664e6dc0bf04fdedd36e39184b604155d74",
+      "secretAssignmentLinesOmitted": 2
+    },
+    {
+      "path": "android-apk-build-v170/policy-tests.log",
+      "bytes": 1901,
+      "sha256": "ec4888600742fb1c59ef10a582bf814e1dc54c5bfb91768b0ca5838de22acabf",
+      "notebookOriginalBytes": 1901,
+      "notebookOriginalSha256": "ec4888600742fb1c59ef10a582bf814e1dc54c5bfb91768b0ca5838de22acabf",
+      "secretAssignmentLinesOmitted": 0
+    },
+    {
+      "path": "android-apk-build-v170/build-provenance.json",
+      "bytes": 4114,
+      "sha256": "192bbfff397090582a113e122dda09744d44a62eedf5e1287d2a10ed36761192",
+      "notebookOriginalBytes": 4114,
+      "notebookOriginalSha256": "192bbfff397090582a113e122dda09744d44a62eedf5e1287d2a10ed36761192",
+      "secretAssignmentLinesOmitted": 0
+    },
+    {
+      "path": "android-apk-build-v170/source-overlay-receipt.json",
+      "bytes": 1329,
+      "sha256": "742bd9c1f3b014b7a6e19f890e4423032ff753258f07836322841aaceb9ea412",
+      "notebookOriginalBytes": 1329,
+      "notebookOriginalSha256": "742bd9c1f3b014b7a6e19f890e4423032ff753258f07836322841aaceb9ea412",
+      "secretAssignmentLinesOmitted": 0
+    },
+    {
+      "path": "android-apk-build-v186/status.json",
+      "bytes": 2342,
+      "sha256": "2a77aac2e49c63bcc6084de65b89b1c44899141187275f8de39bf0714f7a0230",
+      "notebookOriginalBytes": 2342,
+      "notebookOriginalSha256": "2a77aac2e49c63bcc6084de65b89b1c44899141187275f8de39bf0714f7a0230",
+      "secretAssignmentLinesOmitted": 0
+    },
+    {
+      "path": "android-apk-build-v186/build.log",
+      "bytes": 131942,
+      "sha256": "c62e53727a8d0d44fc01dc78df47bf511eae32ab20b9ef627120bd51fb06a210",
+      "notebookOriginalBytes": 131858,
+      "notebookOriginalSha256": "553f1a48972d1338094aef4024bbc54af93715050314b805bd711a531526ed65",
+      "secretAssignmentLinesOmitted": 2
+    },
+    {
+      "path": "android-apk-build-v186/file-audio-tests.log",
+      "bytes": 8976,
+      "sha256": "2fe7e3dd63094da38ae0b36e23d66cbe4668ad365d5974b685607e792b6b3964",
+      "notebookOriginalBytes": 8976,
+      "notebookOriginalSha256": "2fe7e3dd63094da38ae0b36e23d66cbe4668ad365d5974b685607e792b6b3964",
+      "secretAssignmentLinesOmitted": 0
+    },
+    {
+      "path": "android-apk-build-v186/build-provenance.json",
+      "bytes": 4114,
+      "sha256": "990a6fe72bed3b153c0a5d8d6c0e66ebd10229f0df019fc291cec37d67288f75",
+      "notebookOriginalBytes": 4114,
+      "notebookOriginalSha256": "990a6fe72bed3b153c0a5d8d6c0e66ebd10229f0df019fc291cec37d67288f75",
+      "secretAssignmentLinesOmitted": 0
+    },
+    {
+      "path": "android-apk-build-v186/source-overlay-receipt.json",
+      "bytes": 2876,
+      "sha256": "e2a3c72c9ec38861ba933c2129890fb79cf770468663befd6271296735f1f3e2",
+      "notebookOriginalBytes": 2876,
+      "notebookOriginalSha256": "e2a3c72c9ec38861ba933c2129890fb79cf770468663befd6271296735f1f3e2",
+      "secretAssignmentLinesOmitted": 0
+    },
+    {
+      "path": "android-apk-build-v199/status.json",
+      "bytes": 1872,
+      "sha256": "77b5ce68fbc8c8d8b201e3340fb2eb2e667c4a7bc836696c1aa579d74116d3fa",
+      "notebookOriginalBytes": 1872,
+      "notebookOriginalSha256": "77b5ce68fbc8c8d8b201e3340fb2eb2e667c4a7bc836696c1aa579d74116d3fa",
+      "secretAssignmentLinesOmitted": 0
+    },
+    {
+      "path": "android-apk-build-v199/build.log",
+      "bytes": 131942,
+      "sha256": "cd23f07a2ef083733b29943243588211aadeac298df007ebd5d5de8021d9bfd8",
+      "notebookOriginalBytes": 131858,
+      "notebookOriginalSha256": "8a21bc01e7effe9240d44eb8674cd6c0e31e3520a8157c4e723d9e0e468a36aa",
+      "secretAssignmentLinesOmitted": 2
+    }
+  ],
+  "copyOnly": true,
+  "originalsPreserved": true,
+  "noApkOrModelTransfer": true
+}

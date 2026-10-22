@@ -1,0 +1,16 @@
+{
+  "at": "2026-10-20T01:39:11.564749+00:00",
+  "sourceWriter": "Original monitor, sole owner-authoritative plan writer",
+  "copyWriter": "Original Root only",
+  "source": ".omx/evidence/orca-monitor-20261010/PLAN-AFTER-NOTEBOOK-RUNTIME-20261020T013418Z.md",
+  "destination": "thesis/methodology/owner-requirements-20261020-c942818b.md",
+  "bytes": 615259,
+  "sha256": "c942818b00182ae80b434db69f02ab71623d2236bac80a59d484cf7ea1a00115",
+  "priorCanonical": "thesis/methodology/owner-requirements-20261018-cff17279.md",
+  "priorPrefixBytes": 609706,
+  "priorPrefixSha256": "cff1727938cd30e143359935568871b3298df56569962e05ce7111b775b3c9fd",
+  "priorPrefixExact": true,
+  "newAppendBytes": 5553,
+  "modelBuildTestTraffic": 0,
+  "currentK3FrozenRunUnchanged": true
+}

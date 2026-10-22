@@ -1,0 +1,11 @@
+--- qualified-controller
++++ same-controller-stricter-outer-cap
+@@ -31,7 +31,7 @@
+ CANDIDATE_SHA = "ce75b965ee5879ebece6ea7dfe133441547d20ccf89ecd5d66ea510bd9645e60"
+ WAV = ROOT / "candidate-input.wav"
+ WAV_SHA = "da0ecc4ad0885746ab6e716585473917ab2b543a505bf0db09ebacfaa7943cbb"
+-OUTER_CAP = 57_840
++OUTER_CAP = 55_200
+ RAM_FLOOR = 2_500_000_000
+ DISK_FLOOR = 500_000_000
+ 

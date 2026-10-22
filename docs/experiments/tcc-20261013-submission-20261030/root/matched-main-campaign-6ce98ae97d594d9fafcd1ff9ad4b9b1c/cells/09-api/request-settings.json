@@ -1,0 +1,38 @@
+{
+  "config_sha256": "a37171537010adfd26f61ca206b9eebcba098d5d3ba57d36553fdc312620a25e",
+  "deadline_ms": 180000,
+  "generation_settings": {
+    "chat_format": "chatml-function-calling",
+    "max_tokens": 128,
+    "min_p": 0.0,
+    "n_batch": 64,
+    "n_ctx": 4096,
+    "n_gpu_layers": 0,
+    "n_threads": 2,
+    "repeat_penalty": 1.0,
+    "seed": 42,
+    "temperature": 0.0,
+    "top_k": 1,
+    "top_p": 1.0
+  },
+  "measured_requests_per_route": 100,
+  "measurement_tier": "main",
+  "metric_definition": "reply latency; exact answer and persisted history gate correctness, DB readback time excluded",
+  "model_id": "qwen3.5-0.8b-q4_0-gguf",
+  "model_sha256": "57d1997790d1744fba5b40a7317df71ea5e2acee28c47e78f0cce39c0703f8cf",
+  "provider_input_capture": {
+    "context_verified": true,
+    "sha256": "fadc779e24b0adc04de7db6bc23581a321c8d7ee7636e6318ccb2adb1e5301af"
+  },
+  "routes": [
+    "python_gateway_api"
+  ],
+  "run_mode": "local_api_pilot",
+  "schema_version": "aurora.assistant.local_api_pilot_manifest.v1",
+  "scope_limit": "one fresh same-host authenticated localhost Gateway API condition; not mesh/mobile/voice acceptance",
+  "session_cap_seconds": 6000,
+  "source_commit": "5782746afba213f6b36907db2f09f0017625e218",
+  "source_manifest_sha256": "b227f0ae06dc8d87f4c9a09f6410a3db634b09466a06aaf03121155245cc7194",
+  "warmups_per_run": 5,
+  "workload_id": "public-exact-answer-orbit-v1"
+}

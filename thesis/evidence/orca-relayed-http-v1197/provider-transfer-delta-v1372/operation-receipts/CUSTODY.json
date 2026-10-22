@@ -1,0 +1,30 @@
+{
+  "copyOnly": true,
+  "newMeasurements": 0,
+  "records": [
+    {
+      "source": ".git/aurora-handoff-import-20261006/v1371-provider-delta-export-RESULT.json",
+      "destination": "thesis/evidence/orca-relayed-http-v1197/provider-transfer-delta-v1372/operation-receipts/v1371-provider-delta-export-RESULT.json",
+      "bytes": 31543,
+      "sha256": "5d2bf1136a0a480495555049764cb2855d2fa4ea5e16c6ea0299dea8e6f13af4"
+    },
+    {
+      "source": ".git/aurora-handoff-import-20261006/v1375-reconcile-same-export-output.json",
+      "destination": "thesis/evidence/orca-relayed-http-v1197/provider-transfer-delta-v1372/operation-receipts/v1375-reconcile-same-export-output.json",
+      "bytes": 47046,
+      "sha256": "f7b235c196537c47c24d7a15f205f49521d7b821ce966d4d66418989ee185b2e"
+    },
+    {
+      "path": "thesis/harness/provider_export_delta_v1370.py",
+      "bytes": 6893,
+      "sha256": "d3abc9d55e226fa38e0b22a8e831bbcedf6f778102ae43cb795d956fb6b12de5",
+      "physicallyRetained": true
+    },
+    {
+      "path": "thesis/harness/transfer_provider_delta_v1372.py",
+      "bytes": 7875,
+      "sha256": "789007a00e375b3401f77dffe49952b7031a9e71e7c7832ca6bd11a17d95c991",
+      "physicallyRetained": true
+    }
+  ]
+}

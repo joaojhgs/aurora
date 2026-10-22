@@ -1,0 +1,3967 @@
+{
+  "files": [
+    {
+      "path": "thesis/harness/analyze_k2_mesh_saved_v1904.py",
+      "bytes": 22722,
+      "sha256": "aefa658239e4e8fab1e4690a6e6156448314f60e4d5c377defe7b0cf49748ed4"
+    },
+    {
+      "path": "thesis/harness/android_control_context_inventory_v1745.py",
+      "bytes": 1352,
+      "sha256": "56164be6330b6d50a3836262c6eb2bf3f223fb27ead279a8be3eabec6517b521"
+    },
+    {
+      "path": "thesis/harness/approved_node_network_metadata_v1743.py",
+      "bytes": 2183,
+      "sha256": "4503092279866e8f00c7b0cab975b15208dd9687d5772d56950dd69dfb342d99"
+    },
+    {
+      "path": "thesis/harness/browser-ui-v704/README.md",
+      "bytes": 4062,
+      "sha256": "b107f59fcf1bba2944f109ba7833cf9938f3041c3f544ba31f4cc23de5890cc2"
+    },
+    {
+      "path": "thesis/harness/browser-ui-v704/SOURCE-CUSTODY-v774.json",
+      "bytes": 1166,
+      "sha256": "a23a5d8dfc389ef58b20d2b8a9097bc10cca6c31007d7e1928796be318e943ea"
+    },
+    {
+      "path": "thesis/harness/browser-ui-v704/SOURCE-CUSTODY-v791.json",
+      "bytes": 906,
+      "sha256": "6cdabfd1a34d981c68670ad0cf215501c2011ed48987d28b2721d453db7812e0"
+    },
+    {
+      "path": "thesis/harness/browser-ui-v704/controller.py",
+      "bytes": 37040,
+      "sha256": "68096214890bbab8353ba6b1a13743789e54212996cc26fae685cb03fe489f99"
+    },
+    {
+      "path": "thesis/harness/browser-ui-v704/stage_freeze.py",
+      "bytes": 25308,
+      "sha256": "c721c0af05acead41ee7d55f0782ca05dcae899b218dfaa4f49b3380bf4c7fb5"
+    },
+    {
+      "path": "thesis/harness/browser-ui-v794/README.md",
+      "bytes": 3284,
+      "sha256": "f09f1d73afcd186f6062a264a99239a7b6818b8ff3596fc90dcf2204f228d1d5"
+    },
+    {
+      "path": "thesis/harness/browser-ui-v794/SOURCE-CUSTODY-v795.json",
+      "bytes": 2951,
+      "sha256": "8a008e04f63b6c39fe3f0f3c5e038a5f297b5c8f46beb61ce315778256ecdcac"
+    },
+    {
+      "path": "thesis/harness/browser-ui-v794/bootstrap.py",
+      "bytes": 2219,
+      "sha256": "9920c1d8ddc358d7e28a19b4c2ace882552f5a1ac39a14e933467521017dbec9"
+    },
+    {
+      "path": "thesis/harness/browser-ui-v794/controller.py",
+      "bytes": 37040,
+      "sha256": "11a0f3aa4df927af88e2b94fb879dfe4ca70d5d90dfd33b4c73618536ba22676"
+    },
+    {
+      "path": "thesis/harness/browser-ui-v794/expected-provider-identity.json",
+      "bytes": 735,
+      "sha256": "6a73785e32a79c0d82296e7f05e2f9a44d2a727bfc73cb99f15ddbcde5d34f77"
+    },
+    {
+      "path": "thesis/harness/browser-ui-v794/gate.py",
+      "bytes": 6853,
+      "sha256": "5647de41533d0b3a198b0ba95eca88717c364a995c2df5985164a08de52f945e"
+    },
+    {
+      "path": "thesis/harness/browser-ui-v794/hook/aurora_voice_telemetry_v430.py",
+      "bytes": 15228,
+      "sha256": "9c6eccc91edb5136c95982b6b04fd770ee78ca365558fe347a25908f5818bc6d"
+    },
+    {
+      "path": "thesis/harness/browser-ui-v794/hook/bindings.py",
+      "bytes": 3596,
+      "sha256": "d4a2ee4b9419b3be9713c55c5ffbdb3cdf29847f7a4be44e22ae64458d2471e0"
+    },
+    {
+      "path": "thesis/harness/browser-ui-v794/hook/observer.py",
+      "bytes": 12656,
+      "sha256": "ce614d6e00bfd425a966eb3165f8b75e3269b956ef288c15f0cf31fd96e4e51a"
+    },
+    {
+      "path": "thesis/harness/browser-ui-v794/stage_freeze.py",
+      "bytes": 25321,
+      "sha256": "d26ade387f73f4a6ad1d8bfa84bec9ff70f07da256ac8d92348d254aa1b1efd3"
+    },
+    {
+      "path": "thesis/harness/browser-ui-v794/voice-flow.mjs",
+      "bytes": 53962,
+      "sha256": "aafc4b2471d01160bf86f43d1d23fd56c488e1ae37c32a3a5d9a66f2de1c2741"
+    },
+    {
+      "path": "thesis/harness/browser-ui-v799-finalization-v896/PREP.md",
+      "bytes": 3444,
+      "sha256": "cec6e01ca66da78cb0265543c7525920b4dd7e5671efc72cc1067a39f6bf56e0"
+    },
+    {
+      "path": "thesis/harness/browser-ui-v799-finalization-v896/SOURCE-CUSTODY-v898.json",
+      "bytes": 839,
+      "sha256": "d0923e6be4b22c470be067c010dcbd83618c0dfcb08b715fca05dcb6c9d73373"
+    },
+    {
+      "path": "thesis/harness/browser-ui-v799-finalization-v896/post_terminal.py",
+      "bytes": 29427,
+      "sha256": "a0cfe99fc2d1348ba078b1d11adbdad081921accb3ce8ee094873203ae54f6c9"
+    },
+    {
+      "path": "thesis/harness/browser-ui-v799/README.md",
+      "bytes": 1391,
+      "sha256": "640f959e057b504b8ee4c9b3e19f6baf539e1af45a81adbcbaa84ca01fd3cf99"
+    },
+    {
+      "path": "thesis/harness/browser-ui-v799/SOURCE-CUSTODY-v800.json",
+      "bytes": 2972,
+      "sha256": "73525b817ba7577338da67096879d8185b46395b9f30ada6208b889cf866428f"
+    },
+    {
+      "path": "thesis/harness/browser-ui-v799/bootstrap.py",
+      "bytes": 2219,
+      "sha256": "9920c1d8ddc358d7e28a19b4c2ace882552f5a1ac39a14e933467521017dbec9"
+    },
+    {
+      "path": "thesis/harness/browser-ui-v799/controller.py",
+      "bytes": 37040,
+      "sha256": "1170789696133d0e368d795de92cc712f7efcd55a771dd8f10c8707eb47f8f5c"
+    },
+    {
+      "path": "thesis/harness/browser-ui-v799/expected-provider-identity.json",
+      "bytes": 735,
+      "sha256": "6a73785e32a79c0d82296e7f05e2f9a44d2a727bfc73cb99f15ddbcde5d34f77"
+    },
+    {
+      "path": "thesis/harness/browser-ui-v799/gate.py",
+      "bytes": 6853,
+      "sha256": "3b312ade1a59a7bf2721853bc2be928d830b60b019f35a049d06009a6c4c0a8e"
+    },
+    {
+      "path": "thesis/harness/browser-ui-v799/hook/aurora_voice_telemetry_v430.py",
+      "bytes": 15228,
+      "sha256": "a829eafcc0a83db772cb7b56d5ab6b722771d4e55c3aa757b535ae41e1d879f4"
+    },
+    {
+      "path": "thesis/harness/browser-ui-v799/hook/bindings.py",
+      "bytes": 3596,
+      "sha256": "d4a2ee4b9419b3be9713c55c5ffbdb3cdf29847f7a4be44e22ae64458d2471e0"
+    },
+    {
+      "path": "thesis/harness/browser-ui-v799/hook/observer.py",
+      "bytes": 12656,
+      "sha256": "ce614d6e00bfd425a966eb3165f8b75e3269b956ef288c15f0cf31fd96e4e51a"
+    },
+    {
+      "path": "thesis/harness/browser-ui-v799/stage_freeze.py",
+      "bytes": 25357,
+      "sha256": "2c96c04c939ca8c79dcb37efe2a866f81355fe74679988a827842c7a02bd5302"
+    },
+    {
+      "path": "thesis/harness/browser-ui-v799/voice-flow.mjs",
+      "bytes": 60055,
+      "sha256": "9e49a58c59ce044ea71024c4230fafa271aed28dc38f930ba98bc683dba63a15"
+    },
+    {
+      "path": "thesis/harness/checkpoint_existing_k1_wait_v1755.py",
+      "bytes": 8272,
+      "sha256": "a6a65f3e61b0a663d04e865511f343b4665b9ef595bd44b59b5a46981c9fca28"
+    },
+    {
+      "path": "thesis/harness/checkpoint_existing_k1_wait_v1760.py",
+      "bytes": 8971,
+      "sha256": "318ff8aa16b6f7620a565863d9b48506a907f61cc86fd6ef0105e78d9a91e221"
+    },
+    {
+      "path": "thesis/harness/checkpoint_k3_v1481.py",
+      "bytes": 5446,
+      "sha256": "5704809f692d408cc4f7fc3024f7513d767a55a679ceee9552782a0ea3c7906c"
+    },
+    {
+      "path": "thesis/harness/copy_frozen_assets_v1212.py",
+      "bytes": 5139,
+      "sha256": "080026eb288e13d5d69008e37c9105d114f5747873dac98d20bd4eaee49c2bbe"
+    },
+    {
+      "path": "thesis/harness/custody_k1_mesh_requester_v1698.py",
+      "bytes": 16971,
+      "sha256": "091216b81701191b0a4a2d4874a8c1e30ef3dc0672eb553d9074863a58df7b9c"
+    },
+    {
+      "path": "thesis/harness/custody_k1_mesh_requester_v1700.py",
+      "bytes": 17442,
+      "sha256": "05925e9cae8707a2604386cbdd2b194a017ffd0acd460ed6d004eddc22c30416"
+    },
+    {
+      "path": "thesis/harness/custody_k1_mesh_requester_v1702.py",
+      "bytes": 17442,
+      "sha256": "250e2dbfa198dd9216aead9d017d5c79e8287dc3ea7fcb4889aa7f96e628ee17"
+    },
+    {
+      "path": "thesis/harness/custody_k1_mesh_requester_v1711.py",
+      "bytes": 17350,
+      "sha256": "c9c2ed26ada872717d1ad793325f9f39e639ab055496099ecc8792a455fd56a8"
+    },
+    {
+      "path": "thesis/harness/custody_k1_mesh_requester_v1719.py",
+      "bytes": 17363,
+      "sha256": "ce6b06927bcf6f15e2ef43a5a0a54a29e4de43ef73797a37700b52797d97a6bf"
+    },
+    {
+      "path": "thesis/harness/custody_k1_mesh_requester_v1779.py",
+      "bytes": 17363,
+      "sha256": "228f26dde815cb3bc1502868f906ac5ba04c06a329b4ba0d275744c1aa6cea67"
+    },
+    {
+      "path": "thesis/harness/custody_k2_mesh_requester_v1748.py",
+      "bytes": 17478,
+      "sha256": "648c97916910c6152a0b07ef7a4a30d73163f470b9238147dff1f2b78c3da164"
+    },
+    {
+      "path": "thesis/harness/custody_k2_mesh_requester_v1796.py",
+      "bytes": 17478,
+      "sha256": "b56b7e7aec5cb21282a736651c67ac79f1bc95ebf753cec17b0a80be97376e90"
+    },
+    {
+      "path": "thesis/harness/custody_k2_mesh_requester_v1807.py",
+      "bytes": 17478,
+      "sha256": "aacd233d6e16df31b861fcb6e9a6fd7ce3a16905b0ac55bccc5dee5b0695e47f"
+    },
+    {
+      "path": "thesis/harness/custody_k2_mesh_requester_v1813.py",
+      "bytes": 17478,
+      "sha256": "6b62c0c5a43a63e648de5529d3c34500f0e29293f95b8bdc090a78bb1a24e864"
+    },
+    {
+      "path": "thesis/harness/custody_k2_mesh_requester_v1818.py",
+      "bytes": 17478,
+      "sha256": "591126b2e52b6810e6729541f8e0092ede6e059f4421fcd646616ffe0024ac65"
+    },
+    {
+      "path": "thesis/harness/custody_k2_mesh_requester_v1826.py",
+      "bytes": 17478,
+      "sha256": "f81d316dd460e2ba6ef01322378a9e2da79e0550b1ada8c18e296ec30c173355"
+    },
+    {
+      "path": "thesis/harness/custody_k2_provider_v1364.py",
+      "bytes": 8416,
+      "sha256": "1e7881f6d294a5a8ce00f29738a21236e18439a68965cf5107d520809f4c9a4c"
+    },
+    {
+      "path": "thesis/harness/custody_k2_requester_v1364.py",
+      "bytes": 11961,
+      "sha256": "b739deee7a6e3c358e3fe67c48eb90029181b2306614786f9b1f79da7312545f"
+    },
+    {
+      "path": "thesis/harness/custody_k3_mesh_requester_v1915.py",
+      "bytes": 17475,
+      "sha256": "732f132094c244ec569d417591bd278a8d9b25161d792762ca99124f73ab9f4a"
+    },
+    {
+      "path": "thesis/harness/custody_k3_mesh_requester_v1920.py",
+      "bytes": 17475,
+      "sha256": "09f8d5527f9f3b8a26f63a21f93c4e9ec7545759c7bcd6ae3ad827b2e8b656af"
+    },
+    {
+      "path": "thesis/harness/custody_k3_mesh_requester_v1924.py",
+      "bytes": 17475,
+      "sha256": "e63c62eec36cb6ab2aa6536f8f79d96acdb58664aad41f93543d79c00e5cccc5"
+    },
+    {
+      "path": "thesis/harness/custody_k3_provider_v1478.py",
+      "bytes": 8544,
+      "sha256": "a95b54ac5a72cb3210ce6db5e0579dbf18ed5fc246f6ecc0a6771870b80fd1d7"
+    },
+    {
+      "path": "thesis/harness/custody_k3_provider_v1670.py",
+      "bytes": 8628,
+      "sha256": "6c712086b1a637a27d8bb27f785075895d0b2e9d75ab38981910d562506af013"
+    },
+    {
+      "path": "thesis/harness/custody_k3_provider_v1674.py",
+      "bytes": 9459,
+      "sha256": "3eb3204f1c107bb1b3492c1c47d0ea82b8819c3be3a796ac6d90aab264bb1f61"
+    },
+    {
+      "path": "thesis/harness/custody_k3_requester_v1479.py",
+      "bytes": 12004,
+      "sha256": "1254544e43412d870ba1e87fa07036b75597ece709334de745ff71bb69515e80"
+    },
+    {
+      "path": "thesis/harness/custody_k3_requester_v1481.py",
+      "bytes": 12004,
+      "sha256": "ca30271c6d722ddd997b95deb6968d673eeaaf326651a4c89f64762fa2282676"
+    },
+    {
+      "path": "thesis/harness/custody_k3_requester_v1513.py",
+      "bytes": 15847,
+      "sha256": "c11a7c4d0d8133603e52a0658eba797747cbb5ac99b87dd9f7248cf57ea0279a"
+    },
+    {
+      "path": "thesis/harness/custody_k3_requester_v1562.py",
+      "bytes": 15847,
+      "sha256": "d9091db5e107a475c8a6aae88c7938fd471b166adf56589ff7fdeded1dc178b4"
+    },
+    {
+      "path": "thesis/harness/custody_k3_requester_v1573.py",
+      "bytes": 15847,
+      "sha256": "a42eed236d9f97333db9f258a268557c87c49ee4e167efcfe0182d878b5c279a"
+    },
+    {
+      "path": "thesis/harness/custody_k3_requester_v1590.py",
+      "bytes": 15878,
+      "sha256": "ab3ad5c1ee41296ec6fbaa4b8ef985d21ba94c21baa906a8b3aa09f75b9dcca3"
+    },
+    {
+      "path": "thesis/harness/custody_k3_requester_v1610.py",
+      "bytes": 15878,
+      "sha256": "dedbe862381bf80e70ac03d41662c48ccd9ab02a5e3e7a84220644537998ed5b"
+    },
+    {
+      "path": "thesis/harness/custody_k3_requester_v1620.py",
+      "bytes": 16844,
+      "sha256": "46839c178f665c052b7836bcc955ffe35a2255160947b810e80cccc794d4b710"
+    },
+    {
+      "path": "thesis/harness/custody_k3_requester_v1682.py",
+      "bytes": 16844,
+      "sha256": "a9937af5374b252f29e27f109f080524927bfe8264f3e46a455c1785e80d00b1"
+    },
+    {
+      "path": "thesis/harness/custody_v1197.py",
+      "bytes": 10725,
+      "sha256": "1a72257b97be43d80361794b0d5bc23e28faef3b8e411d2fb94a176f873d93bf"
+    },
+    {
+      "path": "thesis/harness/desktop-app-file-audio-v955/CURRENT-REVISION-v982.md",
+      "bytes": 1400,
+      "sha256": "3884b23859f1be53ab26aec9f4fd1d0d665c962efd3b79ece526615969141073"
+    },
+    {
+      "path": "thesis/harness/desktop-app-file-audio-v955/CUSTODY-v958.json",
+      "bytes": 885,
+      "sha256": "6cba2d2d4d6b90440f69f368b5d5e0a7b7eea7e868dbac321f53ac039114a0ab"
+    },
+    {
+      "path": "thesis/harness/desktop-app-file-audio-v955/DESKTOP-READINESS-v964.md",
+      "bytes": 2209,
+      "sha256": "73f10b3d90e8659a3d5d6fd895f19573684c124b18fe23c524af0553a4a56ab8"
+    },
+    {
+      "path": "thesis/harness/desktop-app-file-audio-v955/INTEGRATION-v961.md",
+      "bytes": 1802,
+      "sha256": "98f9f2953412d1d3fe74213462e1296c6f5862e9594f93cf85bb841cf6dba1d8"
+    },
+    {
+      "path": "thesis/harness/desktop-app-file-audio-v955/README.md",
+      "bytes": 2643,
+      "sha256": "e04e8fb45df2d3e182eabb2d419f69e9693550613bd710dde4c69b14d9d528ee"
+    },
+    {
+      "path": "thesis/harness/desktop-app-file-audio-v955/desktop-file-audio-e2e.ts",
+      "bytes": 11119,
+      "sha256": "48b6fc597996536ead4439bca2024a3b3a4f5c6d1ad4c64f8a5d68f84a05c522"
+    },
+    {
+      "path": "thesis/harness/desktop-app-file-audio-v955/tauri-app.patch",
+      "bytes": 975,
+      "sha256": "63e0c9a95eba0c6b53225770c0e43ed53b3d625458da50b3372402784062bf60"
+    },
+    {
+      "path": "thesis/harness/desktop-local-v745/post_terminal.py",
+      "bytes": 17823,
+      "sha256": "e8cd114aaac7521d6332d9d67c126a99efcb50023e2579d3498eb576060178b8"
+    },
+    {
+      "path": "thesis/harness/distributed-k1-http-remaining360-v1600/aurora_voice_telemetry_v430.py",
+      "bytes": 11584,
+      "sha256": "8129ffe7591a47a0107ede53b101aead9fc1f58b92f0c0c4203176cc7608325d"
+    },
+    {
+      "path": "thesis/harness/distributed-k1-http-remaining360-v1600/bindings.py",
+      "bytes": 3230,
+      "sha256": "52182f956b34788ecbfbbb241c8243ff88baebe2874e3605791793777ed0dc91"
+    },
+    {
+      "path": "thesis/harness/distributed-k1-http-remaining360-v1600/bootstrap.py",
+      "bytes": 1950,
+      "sha256": "05303915a1617a3fbc163017902fa084e687257d7b0af9bc692877d08a6a3b7e"
+    },
+    {
+      "path": "thesis/harness/distributed-k1-http-remaining360-v1600/candidate-manifest.json",
+      "bytes": 220,
+      "sha256": "ce75b965ee5879ebece6ea7dfe133441547d20ccf89ecd5d66ea510bd9645e60"
+    },
+    {
+      "path": "thesis/harness/distributed-k1-http-remaining360-v1600/controller.py",
+      "bytes": 18158,
+      "sha256": "b4c0d83357fd8ef8c02cc9770d033ff2faf212f30d78aa6f3db8f48dc4950544"
+    },
+    {
+      "path": "thesis/harness/distributed-k1-http-remaining360-v1600/observer.py",
+      "bytes": 11873,
+      "sha256": "784cc4bffc0d6824bbe378d17a7f632d587ca0a315896b048b2ebef727082df5"
+    },
+    {
+      "path": "thesis/harness/distributed-k1-http-remaining360-v1600/receiver_proof.py",
+      "bytes": 11030,
+      "sha256": "c119c60af14f4498c9789cca011983c2bb783f85a7f1958d1243cc739c5f1df4"
+    },
+    {
+      "path": "thesis/harness/distributed-k1-http-remaining360-v1600/resource_sample.py",
+      "bytes": 7475,
+      "sha256": "8f62ec378e74036d4539d9159e3caf29b8fd7a9115de1ab0f482dfd58b6e1857"
+    },
+    {
+      "path": "thesis/harness/distributed-k1-http-remaining360-v1600/runner.py",
+      "bytes": 66655,
+      "sha256": "b8a6f4e93da8fd72afa873f1e4f0ca0b4c8372c5459cbfa31b970cfe043f69f3"
+    },
+    {
+      "path": "thesis/harness/distributed-k1-http-remaining360-v1600/source-inventory.json",
+      "bytes": 58216,
+      "sha256": "96ec8e3e14233520d4cd469c4177264a193d05cf26b4b512d91d98f16bbb7dee"
+    },
+    {
+      "path": "thesis/harness/distributed-k1-http-remaining360-v1600/tts_http_adapter.py",
+      "bytes": 6700,
+      "sha256": "87c1d1b6a3e959034a03709f052500d1f9f71902a76def9a366f8f3593f848e9"
+    },
+    {
+      "path": "thesis/harness/distributed-k1-http-v802/README.md",
+      "bytes": 3132,
+      "sha256": "0e68725363cfcd20ff1ed68e9c08896abccd23a46529b2a63641d0d7fa246ddf"
+    },
+    {
+      "path": "thesis/harness/distributed-k1-http-v802/REPORT.md",
+      "bytes": 3366,
+      "sha256": "e7f4561d04dfd40037913abc617011bb60fd12cd1b55c66fa2da47a2d9b4b621"
+    },
+    {
+      "path": "thesis/harness/distributed-k1-http-v802/SOURCE-CUSTODY-v805.json",
+      "bytes": 1482,
+      "sha256": "c67477342c12d7f30f8c8b8f5b21163046355027545f2f3952aeb4fd1aac3b97"
+    },
+    {
+      "path": "thesis/harness/distributed-k1-http-v802/SOURCE-CUSTODY-v812.json",
+      "bytes": 2974,
+      "sha256": "3d2854d636da0feb1a2d20889a9c682b277e2266f5e7e0be62252bb11495abaa"
+    },
+    {
+      "path": "thesis/harness/distributed-k1-http-v802/aurora_voice_telemetry_v430.py",
+      "bytes": 11584,
+      "sha256": "8129ffe7591a47a0107ede53b101aead9fc1f58b92f0c0c4203176cc7608325d"
+    },
+    {
+      "path": "thesis/harness/distributed-k1-http-v802/bindings.py",
+      "bytes": 3230,
+      "sha256": "52182f956b34788ecbfbbb241c8243ff88baebe2874e3605791793777ed0dc91"
+    },
+    {
+      "path": "thesis/harness/distributed-k1-http-v802/bootstrap.py",
+      "bytes": 1950,
+      "sha256": "05303915a1617a3fbc163017902fa084e687257d7b0af9bc692877d08a6a3b7e"
+    },
+    {
+      "path": "thesis/harness/distributed-k1-http-v802/candidate-manifest.json",
+      "bytes": 220,
+      "sha256": "ce75b965ee5879ebece6ea7dfe133441547d20ccf89ecd5d66ea510bd9645e60"
+    },
+    {
+      "path": "thesis/harness/distributed-k1-http-v802/controller.py",
+      "bytes": 15348,
+      "sha256": "66a81f0f32d142a037fc090ba9c201d7600d38e7fd668de7bf4bcdc8e1911a3a"
+    },
+    {
+      "path": "thesis/harness/distributed-k1-http-v802/freeze-template.json",
+      "bytes": 1640,
+      "sha256": "619715a16280466ba21c71f66416f0a6c4779fa9c13eb3b100b74588d8df2fb0"
+    },
+    {
+      "path": "thesis/harness/distributed-k1-http-v802/observer.py",
+      "bytes": 11873,
+      "sha256": "784cc4bffc0d6824bbe378d17a7f632d587ca0a315896b048b2ebef727082df5"
+    },
+    {
+      "path": "thesis/harness/distributed-k1-http-v802/receiver_proof.py",
+      "bytes": 11029,
+      "sha256": "aed9bd0f6109f8ab97c8b4eba8c3809bf1d865c9cba05999b52769f2862d857d"
+    },
+    {
+      "path": "thesis/harness/distributed-k1-http-v802/runner.py",
+      "bytes": 64870,
+      "sha256": "45d2c3f4df7353c2fc162c6986d125096b64216a76575a8a1d5bae4e5c154b0f"
+    },
+    {
+      "path": "thesis/harness/distributed-k1-http-v802/tts_http_adapter.py",
+      "bytes": 4791,
+      "sha256": "81a44fb0180fe540c087ba1f81410e07f51f6c6d96eee2eeffb49f471da2e49c"
+    },
+    {
+      "path": "thesis/harness/distributed-k1-http-v822/README.md",
+      "bytes": 2299,
+      "sha256": "b0547ab37a2cbd5324277c39fcef7dc4dd94e56497e2789fab575402ffd6499d"
+    },
+    {
+      "path": "thesis/harness/distributed-k1-http-v822/SOURCE-CUSTODY-v824.json",
+      "bytes": 3882,
+      "sha256": "014591eb43dc94846c5e1de6eeceb2dec09ba05592cd7fe9893cc84927fc7efc"
+    },
+    {
+      "path": "thesis/harness/distributed-k1-http-v822/SOURCE-INVENTORY.json",
+      "bytes": 2748,
+      "sha256": "88fa31a2c3f9dbad59298005bfe816d550d6f162bd067e758d475213bd17b864"
+    },
+    {
+      "path": "thesis/harness/distributed-k1-http-v822/provider/bootstrap.py",
+      "bytes": 1673,
+      "sha256": "bf0da2f51e174193ceca7636ddfa1d602e56027afca339d23cb9366f96916926"
+    },
+    {
+      "path": "thesis/harness/distributed-k1-http-v822/provider/controller.py",
+      "bytes": 24773,
+      "sha256": "27a09e195d1a82f6dde770f60b15bcdcbf93f3743bf661c012405ae22eece5de"
+    },
+    {
+      "path": "thesis/harness/distributed-k1-http-v822/provider/hook/aurora_voice_telemetry_v430.py",
+      "bytes": 11584,
+      "sha256": "8129ffe7591a47a0107ede53b101aead9fc1f58b92f0c0c4203176cc7608325d"
+    },
+    {
+      "path": "thesis/harness/distributed-k1-http-v822/provider/hook/bindings.py",
+      "bytes": 3230,
+      "sha256": "52182f956b34788ecbfbbb241c8243ff88baebe2874e3605791793777ed0dc91"
+    },
+    {
+      "path": "thesis/harness/distributed-k1-http-v822/provider/hook/observer.py",
+      "bytes": 11873,
+      "sha256": "784cc4bffc0d6824bbe378d17a7f632d587ca0a315896b048b2ebef727082df5"
+    },
+    {
+      "path": "thesis/harness/distributed-k1-http-v822/provider/resource_sample.py",
+      "bytes": 7475,
+      "sha256": "8f62ec378e74036d4539d9159e3caf29b8fd7a9115de1ab0f482dfd58b6e1857"
+    },
+    {
+      "path": "thesis/harness/distributed-k1-http-v822/requester/aurora_voice_telemetry_v430.py",
+      "bytes": 11584,
+      "sha256": "8129ffe7591a47a0107ede53b101aead9fc1f58b92f0c0c4203176cc7608325d"
+    },
+    {
+      "path": "thesis/harness/distributed-k1-http-v822/requester/bindings.py",
+      "bytes": 3230,
+      "sha256": "52182f956b34788ecbfbbb241c8243ff88baebe2874e3605791793777ed0dc91"
+    },
+    {
+      "path": "thesis/harness/distributed-k1-http-v822/requester/bootstrap.py",
+      "bytes": 1950,
+      "sha256": "05303915a1617a3fbc163017902fa084e687257d7b0af9bc692877d08a6a3b7e"
+    },
+    {
+      "path": "thesis/harness/distributed-k1-http-v822/requester/candidate-manifest.json",
+      "bytes": 220,
+      "sha256": "ce75b965ee5879ebece6ea7dfe133441547d20ccf89ecd5d66ea510bd9645e60"
+    },
+    {
+      "path": "thesis/harness/distributed-k1-http-v822/requester/controller.py",
+      "bytes": 15673,
+      "sha256": "ada49340e64d3f9069c88b4329389d907c6a484291451297ff67658726a2ffc8"
+    },
+    {
+      "path": "thesis/harness/distributed-k1-http-v822/requester/freeze-template.json",
+      "bytes": 1737,
+      "sha256": "5e7e3498a4f4da22356e3e9772a9855879f011991cf2a8baa50e6c5aef599c79"
+    },
+    {
+      "path": "thesis/harness/distributed-k1-http-v822/requester/observer.py",
+      "bytes": 11873,
+      "sha256": "784cc4bffc0d6824bbe378d17a7f632d587ca0a315896b048b2ebef727082df5"
+    },
+    {
+      "path": "thesis/harness/distributed-k1-http-v822/requester/receiver_proof.py",
+      "bytes": 11029,
+      "sha256": "aed9bd0f6109f8ab97c8b4eba8c3809bf1d865c9cba05999b52769f2862d857d"
+    },
+    {
+      "path": "thesis/harness/distributed-k1-http-v822/requester/resource_sample.py",
+      "bytes": 7475,
+      "sha256": "8f62ec378e74036d4539d9159e3caf29b8fd7a9115de1ab0f482dfd58b6e1857"
+    },
+    {
+      "path": "thesis/harness/distributed-k1-http-v822/requester/runner.py",
+      "bytes": 64870,
+      "sha256": "45d2c3f4df7353c2fc162c6986d125096b64216a76575a8a1d5bae4e5c154b0f"
+    },
+    {
+      "path": "thesis/harness/distributed-k1-http-v822/requester/tts_http_adapter.py",
+      "bytes": 4870,
+      "sha256": "29ad1e394257720eb1cad16f67a20f7e637f3fe354bbe16c462723853e5ee9a5"
+    },
+    {
+      "path": "thesis/harness/distributed-k1-mesh-remaining191-v1779/CONTINUATION-PREPARATION.json",
+      "bytes": 1366,
+      "sha256": "81901a475490db547ccb996ea04f55e1dd19d0dd3d60b53b6ead8fd00b05bf87"
+    },
+    {
+      "path": "thesis/harness/distributed-k1-mesh-remaining191-v1779/NATIVE-GOAL-CHECKPOINT.json",
+      "bytes": 497,
+      "sha256": "5d7ab7303404374d183d029007770917e71a6ac4263838b82e092d06f312edd4"
+    },
+    {
+      "path": "thesis/harness/distributed-k1-mesh-remaining191-v1779/OPERATIONS-DELTA.diff",
+      "bytes": 7765,
+      "sha256": "0ce6bba15d84cbb092b086f17388569da8f9599fa61a8b64da0f58692a414d8f"
+    },
+    {
+      "path": "thesis/harness/distributed-k1-mesh-remaining191-v1779/OPERATIONS-SOURCE-RECEIPT.json",
+      "bytes": 1094,
+      "sha256": "5f77117d3984db1892bed600245c957caae92c003c9165f4a60597a794fbc230"
+    },
+    {
+      "path": "thesis/harness/distributed-k1-mesh-remaining191-v1779/REMAINING191.diff",
+      "bytes": 6876,
+      "sha256": "6b079b538e56e887d7c462ee7fc67905fa6bbfaf947be478570a4fe858047ccd"
+    },
+    {
+      "path": "thesis/harness/distributed-k1-mesh-remaining191-v1779/SOURCE-ONLY-CHANGE-RECEIPT.json",
+      "bytes": 3205,
+      "sha256": "938168e6d4ec72d65d67eb5090fdc593c4646d2c232a7cda7df3283ef49686f7"
+    },
+    {
+      "path": "thesis/harness/distributed-k1-mesh-remaining191-v1779/ULTRAGOAL-CHECKPOINT-v1779.json",
+      "bytes": 29424,
+      "sha256": "1e50cdf6c4275f4c6b953630d2f28c7c6375472905c6eb0be4a5a6344d276b2b"
+    },
+    {
+      "path": "thesis/harness/distributed-k1-mesh-remaining191-v1779/requester/aurora_voice_telemetry_v430.py",
+      "bytes": 11584,
+      "sha256": "8129ffe7591a47a0107ede53b101aead9fc1f58b92f0c0c4203176cc7608325d"
+    },
+    {
+      "path": "thesis/harness/distributed-k1-mesh-remaining191-v1779/requester/bindings.py",
+      "bytes": 5492,
+      "sha256": "79558452e6f61268ad246476ca848e060b8ea808e15091bc53a3c4e0e28b1647"
+    },
+    {
+      "path": "thesis/harness/distributed-k1-mesh-remaining191-v1779/requester/bootstrap.py",
+      "bytes": 12833,
+      "sha256": "cb40f036566274ae4eff290a78a6124e4d9270189a0d31d3cce06fe9092e2537"
+    },
+    {
+      "path": "thesis/harness/distributed-k1-mesh-remaining191-v1779/requester/candidate-manifest.json",
+      "bytes": 220,
+      "sha256": "ce75b965ee5879ebece6ea7dfe133441547d20ccf89ecd5d66ea510bd9645e60"
+    },
+    {
+      "path": "thesis/harness/distributed-k1-mesh-remaining191-v1779/requester/controller.py",
+      "bytes": 19652,
+      "sha256": "bd92aebebff2d7467966413bf2e67f62a934f7923008f9999c8493880cdd8b8d"
+    },
+    {
+      "path": "thesis/harness/distributed-k1-mesh-remaining191-v1779/requester/freeze-template.json",
+      "bytes": 2437,
+      "sha256": "e836beddf93c066101c39bc9abfdfaad4989093d818be8c2ba4f90a1933e4cad"
+    },
+    {
+      "path": "thesis/harness/distributed-k1-mesh-remaining191-v1779/requester/mesh_route_observer.py",
+      "bytes": 9275,
+      "sha256": "2c23fd2bc69b00b746c2c5dc28c1d2b77428016314045363dceea5fe9ee5cdbb"
+    },
+    {
+      "path": "thesis/harness/distributed-k1-mesh-remaining191-v1779/requester/observer.py",
+      "bytes": 11873,
+      "sha256": "784cc4bffc0d6824bbe378d17a7f632d587ca0a315896b048b2ebef727082df5"
+    },
+    {
+      "path": "thesis/harness/distributed-k1-mesh-remaining191-v1779/requester/receiver_proof.py",
+      "bytes": 24715,
+      "sha256": "c5a7ddbb04d7ce76dc7162d59d2f9d65442b30e044f5db3f63589ea782c05275"
+    },
+    {
+      "path": "thesis/harness/distributed-k1-mesh-remaining191-v1779/requester/resource_sample.py",
+      "bytes": 7475,
+      "sha256": "8f62ec378e74036d4539d9159e3caf29b8fd7a9115de1ab0f482dfd58b6e1857"
+    },
+    {
+      "path": "thesis/harness/distributed-k1-mesh-remaining191-v1779/requester/route_observation_sink.py",
+      "bytes": 11536,
+      "sha256": "2b235781c15410e6dbfc8829971a34e8334714cdf015053edfd127756325cfb8"
+    },
+    {
+      "path": "thesis/harness/distributed-k1-mesh-remaining191-v1779/requester/route_runtime_pins.json",
+      "bytes": 2350,
+      "sha256": "db270c9c6373b24e669bdf2b002da5fadb3e3841ee1ecc6ad8dec5a7ad26daf8"
+    },
+    {
+      "path": "thesis/harness/distributed-k1-mesh-remaining191-v1779/requester/runner.py",
+      "bytes": 72789,
+      "sha256": "938cc82848c628ededb64cf53fbaddba8a2166b1076f97b1e408aff5066428d8"
+    },
+    {
+      "path": "thesis/harness/distributed-k1-mesh-remaining191-v1779/requester/tts_mesh_adapter.py",
+      "bytes": 4976,
+      "sha256": "be34f6c73d2901c64f3273bdac73102e306bc3151f610adb2fd65f916195a5ec"
+    },
+    {
+      "path": "thesis/harness/distributed-k1-mesh-remaining191-v1779/review/OPERATIONS-REVIEW-RECEIPT.json",
+      "bytes": 569,
+      "sha256": "7252b6f5acfb4f0e5e7f771f7747905cf373420a98a2ef0f54a32c74815f4d25"
+    },
+    {
+      "path": "thesis/harness/distributed-k1-mesh-remaining191-v1779/review/P2P-K1-V1779-OPERATIONS-BOUNDED-REVIEW-20261020T140713Z.md",
+      "bytes": 4990,
+      "sha256": "fe93bb96a364a7de97ee519968e04e18703b6144bc2512da6b7404290dfd2687"
+    },
+    {
+      "path": "thesis/harness/distributed-k1-mesh-remaining191-v1779/review/P2P-K1-V1779-REMAINING191-MECHANICAL-REVIEW-20261020T135734Z.md",
+      "bytes": 3900,
+      "sha256": "98fd13b928716648776f197c901b7026b229685cf54493b3b7d4fb7752c8c005"
+    },
+    {
+      "path": "thesis/harness/distributed-k1-mesh-remaining191-v1779/review/REVIEW-RECEIPT.json",
+      "bytes": 672,
+      "sha256": "043b7acf1f27326ee3ae4c55c2ab751278f5dea0f14f68e21efd6fdf9f1e0633"
+    },
+    {
+      "path": "thesis/harness/distributed-k1-mesh-remaining880-v1719/REMAINING880.diff",
+      "bytes": 10329,
+      "sha256": "63f613bba39ca2f9f9c13fa73451122a85445666f18fcc4b27deaa0efd86b03f"
+    },
+    {
+      "path": "thesis/harness/distributed-k1-mesh-remaining880-v1719/SMOKE-RESULT.json",
+      "bytes": 887,
+      "sha256": "7968d6c78fe5b9593a708a5205ae81ba1b6bbec6d5e783c25258eaac846b42e7"
+    },
+    {
+      "path": "thesis/harness/distributed-k1-mesh-remaining880-v1719/SOURCE-ONLY-CHANGE-RECEIPT.json",
+      "bytes": 1082,
+      "sha256": "173830788111279f605f6cb444f18a445e77784c528aea741365d11f0a69a4b6"
+    },
+    {
+      "path": "thesis/harness/distributed-k1-mesh-remaining880-v1719/requester/aurora_voice_telemetry_v430.py",
+      "bytes": 11584,
+      "sha256": "8129ffe7591a47a0107ede53b101aead9fc1f58b92f0c0c4203176cc7608325d"
+    },
+    {
+      "path": "thesis/harness/distributed-k1-mesh-remaining880-v1719/requester/bindings.py",
+      "bytes": 5492,
+      "sha256": "79558452e6f61268ad246476ca848e060b8ea808e15091bc53a3c4e0e28b1647"
+    },
+    {
+      "path": "thesis/harness/distributed-k1-mesh-remaining880-v1719/requester/bootstrap.py",
+      "bytes": 12833,
+      "sha256": "cb40f036566274ae4eff290a78a6124e4d9270189a0d31d3cce06fe9092e2537"
+    },
+    {
+      "path": "thesis/harness/distributed-k1-mesh-remaining880-v1719/requester/candidate-manifest.json",
+      "bytes": 220,
+      "sha256": "ce75b965ee5879ebece6ea7dfe133441547d20ccf89ecd5d66ea510bd9645e60"
+    },
+    {
+      "path": "thesis/harness/distributed-k1-mesh-remaining880-v1719/requester/controller.py",
+      "bytes": 19652,
+      "sha256": "2a782c273a283ed45b266ad854bf36a6e5ab1ccfcdd9a8c0be9e0ae1762de530"
+    },
+    {
+      "path": "thesis/harness/distributed-k1-mesh-remaining880-v1719/requester/freeze-template.json",
+      "bytes": 2437,
+      "sha256": "e836beddf93c066101c39bc9abfdfaad4989093d818be8c2ba4f90a1933e4cad"
+    },
+    {
+      "path": "thesis/harness/distributed-k1-mesh-remaining880-v1719/requester/mesh_route_observer.py",
+      "bytes": 9275,
+      "sha256": "2c23fd2bc69b00b746c2c5dc28c1d2b77428016314045363dceea5fe9ee5cdbb"
+    },
+    {
+      "path": "thesis/harness/distributed-k1-mesh-remaining880-v1719/requester/observer.py",
+      "bytes": 11873,
+      "sha256": "784cc4bffc0d6824bbe378d17a7f632d587ca0a315896b048b2ebef727082df5"
+    },
+    {
+      "path": "thesis/harness/distributed-k1-mesh-remaining880-v1719/requester/receiver_proof.py",
+      "bytes": 24715,
+      "sha256": "4357fb4809eb3c5d6042eb5ceb215b4662b2cd449c79c0fe9b2322cf892c1c4d"
+    },
+    {
+      "path": "thesis/harness/distributed-k1-mesh-remaining880-v1719/requester/resource_sample.py",
+      "bytes": 7475,
+      "sha256": "8f62ec378e74036d4539d9159e3caf29b8fd7a9115de1ab0f482dfd58b6e1857"
+    },
+    {
+      "path": "thesis/harness/distributed-k1-mesh-remaining880-v1719/requester/route_observation_sink.py",
+      "bytes": 11536,
+      "sha256": "2b235781c15410e6dbfc8829971a34e8334714cdf015053edfd127756325cfb8"
+    },
+    {
+      "path": "thesis/harness/distributed-k1-mesh-remaining880-v1719/requester/route_runtime_pins.json",
+      "bytes": 2350,
+      "sha256": "db270c9c6373b24e669bdf2b002da5fadb3e3841ee1ecc6ad8dec5a7ad26daf8"
+    },
+    {
+      "path": "thesis/harness/distributed-k1-mesh-remaining880-v1719/requester/runner.py",
+      "bytes": 72783,
+      "sha256": "c55f5f394a22b2cf64a76e7819d31c3a731ae97000236b4ab3f03434291050b1"
+    },
+    {
+      "path": "thesis/harness/distributed-k1-mesh-remaining880-v1719/requester/tts_mesh_adapter.py",
+      "bytes": 4976,
+      "sha256": "be34f6c73d2901c64f3273bdac73102e306bc3151f610adb2fd65f916195a5ec"
+    },
+    {
+      "path": "thesis/harness/distributed-k1-mesh-remaining880-v1719/smoke_adapter.py",
+      "bytes": 2708,
+      "sha256": "0711ceb3cf2321c4413de0ee7afe5eb6d28780e2161d9fcefa639ba82e6b2386"
+    },
+    {
+      "path": "thesis/harness/distributed-k1-mesh-v1695/SOURCE-DELTA.diff",
+      "bytes": 5471,
+      "sha256": "4745711782ff24c23f11ed313cf1b2a3f3c2ad6425f11e97ffefd5ef9f6e5a21"
+    },
+    {
+      "path": "thesis/harness/distributed-k1-mesh-v1695/requester/aurora_voice_telemetry_v430.py",
+      "bytes": 11584,
+      "sha256": "8129ffe7591a47a0107ede53b101aead9fc1f58b92f0c0c4203176cc7608325d"
+    },
+    {
+      "path": "thesis/harness/distributed-k1-mesh-v1695/requester/bindings.py",
+      "bytes": 5492,
+      "sha256": "79558452e6f61268ad246476ca848e060b8ea808e15091bc53a3c4e0e28b1647"
+    },
+    {
+      "path": "thesis/harness/distributed-k1-mesh-v1695/requester/bootstrap.py",
+      "bytes": 12833,
+      "sha256": "cb40f036566274ae4eff290a78a6124e4d9270189a0d31d3cce06fe9092e2537"
+    },
+    {
+      "path": "thesis/harness/distributed-k1-mesh-v1695/requester/candidate-manifest.json",
+      "bytes": 220,
+      "sha256": "ce75b965ee5879ebece6ea7dfe133441547d20ccf89ecd5d66ea510bd9645e60"
+    },
+    {
+      "path": "thesis/harness/distributed-k1-mesh-v1695/requester/controller.py",
+      "bytes": 19301,
+      "sha256": "5e9511c26c82189573f300bf00a74ed6127308fb78cbdf1d57576c62926a5758"
+    },
+    {
+      "path": "thesis/harness/distributed-k1-mesh-v1695/requester/freeze-template.json",
+      "bytes": 2437,
+      "sha256": "0870998d1936b3c3b014d6f22b7fb4e6784b88ce64489a69f0e6508048ef3e8a"
+    },
+    {
+      "path": "thesis/harness/distributed-k1-mesh-v1695/requester/mesh_route_observer.py",
+      "bytes": 9275,
+      "sha256": "2c23fd2bc69b00b746c2c5dc28c1d2b77428016314045363dceea5fe9ee5cdbb"
+    },
+    {
+      "path": "thesis/harness/distributed-k1-mesh-v1695/requester/observer.py",
+      "bytes": 11873,
+      "sha256": "784cc4bffc0d6824bbe378d17a7f632d587ca0a315896b048b2ebef727082df5"
+    },
+    {
+      "path": "thesis/harness/distributed-k1-mesh-v1695/requester/receiver_proof.py",
+      "bytes": 24714,
+      "sha256": "7fa0d9c99273ee53c253e464a86b786d476ecfd302a36e8b07b80a891c505683"
+    },
+    {
+      "path": "thesis/harness/distributed-k1-mesh-v1695/requester/resource_sample.py",
+      "bytes": 7475,
+      "sha256": "8f62ec378e74036d4539d9159e3caf29b8fd7a9115de1ab0f482dfd58b6e1857"
+    },
+    {
+      "path": "thesis/harness/distributed-k1-mesh-v1695/requester/route_observation_sink.py",
+      "bytes": 11536,
+      "sha256": "2b235781c15410e6dbfc8829971a34e8334714cdf015053edfd127756325cfb8"
+    },
+    {
+      "path": "thesis/harness/distributed-k1-mesh-v1695/requester/route_runtime_pins.json",
+      "bytes": 2142,
+      "sha256": "529eb82badbb088b8e34e5a11c9a1c9fa7189134a20106d6fdadf5d99e1aabed"
+    },
+    {
+      "path": "thesis/harness/distributed-k1-mesh-v1695/requester/runner.py",
+      "bytes": 71214,
+      "sha256": "46a7ac77f6425bb5fca796b30c3d60b288658d331496295d3a5c019cf00b6c98"
+    },
+    {
+      "path": "thesis/harness/distributed-k1-mesh-v1695/requester/tts_mesh_adapter.py",
+      "bytes": 4307,
+      "sha256": "1db8cb386a37c680bec6e03135ee007f6b76a850a85c4e1eedda6562c0895ceb"
+    },
+    {
+      "path": "thesis/harness/distributed-k1-mesh-v1698/requester/aurora_voice_telemetry_v430.py",
+      "bytes": 11584,
+      "sha256": "8129ffe7591a47a0107ede53b101aead9fc1f58b92f0c0c4203176cc7608325d"
+    },
+    {
+      "path": "thesis/harness/distributed-k1-mesh-v1698/requester/bindings.py",
+      "bytes": 5492,
+      "sha256": "79558452e6f61268ad246476ca848e060b8ea808e15091bc53a3c4e0e28b1647"
+    },
+    {
+      "path": "thesis/harness/distributed-k1-mesh-v1698/requester/bootstrap.py",
+      "bytes": 12833,
+      "sha256": "cb40f036566274ae4eff290a78a6124e4d9270189a0d31d3cce06fe9092e2537"
+    },
+    {
+      "path": "thesis/harness/distributed-k1-mesh-v1698/requester/candidate-manifest.json",
+      "bytes": 220,
+      "sha256": "ce75b965ee5879ebece6ea7dfe133441547d20ccf89ecd5d66ea510bd9645e60"
+    },
+    {
+      "path": "thesis/harness/distributed-k1-mesh-v1698/requester/controller.py",
+      "bytes": 19329,
+      "sha256": "fd65974a0b348924e0552d9fa1e001846141355205fdb108c112a60eba150b0b"
+    },
+    {
+      "path": "thesis/harness/distributed-k1-mesh-v1698/requester/freeze-template.json",
+      "bytes": 2437,
+      "sha256": "0870998d1936b3c3b014d6f22b7fb4e6784b88ce64489a69f0e6508048ef3e8a"
+    },
+    {
+      "path": "thesis/harness/distributed-k1-mesh-v1698/requester/mesh_route_observer.py",
+      "bytes": 9275,
+      "sha256": "2c23fd2bc69b00b746c2c5dc28c1d2b77428016314045363dceea5fe9ee5cdbb"
+    },
+    {
+      "path": "thesis/harness/distributed-k1-mesh-v1698/requester/observer.py",
+      "bytes": 11873,
+      "sha256": "784cc4bffc0d6824bbe378d17a7f632d587ca0a315896b048b2ebef727082df5"
+    },
+    {
+      "path": "thesis/harness/distributed-k1-mesh-v1698/requester/receiver_proof.py",
+      "bytes": 24714,
+      "sha256": "7fa0d9c99273ee53c253e464a86b786d476ecfd302a36e8b07b80a891c505683"
+    },
+    {
+      "path": "thesis/harness/distributed-k1-mesh-v1698/requester/resource_sample.py",
+      "bytes": 7475,
+      "sha256": "8f62ec378e74036d4539d9159e3caf29b8fd7a9115de1ab0f482dfd58b6e1857"
+    },
+    {
+      "path": "thesis/harness/distributed-k1-mesh-v1698/requester/route_observation_sink.py",
+      "bytes": 11536,
+      "sha256": "2b235781c15410e6dbfc8829971a34e8334714cdf015053edfd127756325cfb8"
+    },
+    {
+      "path": "thesis/harness/distributed-k1-mesh-v1698/requester/route_runtime_pins.json",
+      "bytes": 2142,
+      "sha256": "529eb82badbb088b8e34e5a11c9a1c9fa7189134a20106d6fdadf5d99e1aabed"
+    },
+    {
+      "path": "thesis/harness/distributed-k1-mesh-v1698/requester/runner.py",
+      "bytes": 71214,
+      "sha256": "46a7ac77f6425bb5fca796b30c3d60b288658d331496295d3a5c019cf00b6c98"
+    },
+    {
+      "path": "thesis/harness/distributed-k1-mesh-v1698/requester/tts_mesh_adapter.py",
+      "bytes": 4307,
+      "sha256": "1db8cb386a37c680bec6e03135ee007f6b76a850a85c4e1eedda6562c0895ceb"
+    },
+    {
+      "path": "thesis/harness/distributed-k1-mesh-v1700/requester/aurora_voice_telemetry_v430.py",
+      "bytes": 11584,
+      "sha256": "8129ffe7591a47a0107ede53b101aead9fc1f58b92f0c0c4203176cc7608325d"
+    },
+    {
+      "path": "thesis/harness/distributed-k1-mesh-v1700/requester/bindings.py",
+      "bytes": 5492,
+      "sha256": "79558452e6f61268ad246476ca848e060b8ea808e15091bc53a3c4e0e28b1647"
+    },
+    {
+      "path": "thesis/harness/distributed-k1-mesh-v1700/requester/bootstrap.py",
+      "bytes": 12833,
+      "sha256": "cb40f036566274ae4eff290a78a6124e4d9270189a0d31d3cce06fe9092e2537"
+    },
+    {
+      "path": "thesis/harness/distributed-k1-mesh-v1700/requester/candidate-manifest.json",
+      "bytes": 220,
+      "sha256": "ce75b965ee5879ebece6ea7dfe133441547d20ccf89ecd5d66ea510bd9645e60"
+    },
+    {
+      "path": "thesis/harness/distributed-k1-mesh-v1700/requester/controller.py",
+      "bytes": 19329,
+      "sha256": "fd65974a0b348924e0552d9fa1e001846141355205fdb108c112a60eba150b0b"
+    },
+    {
+      "path": "thesis/harness/distributed-k1-mesh-v1700/requester/freeze-template.json",
+      "bytes": 2437,
+      "sha256": "0870998d1936b3c3b014d6f22b7fb4e6784b88ce64489a69f0e6508048ef3e8a"
+    },
+    {
+      "path": "thesis/harness/distributed-k1-mesh-v1700/requester/mesh_route_observer.py",
+      "bytes": 9275,
+      "sha256": "2c23fd2bc69b00b746c2c5dc28c1d2b77428016314045363dceea5fe9ee5cdbb"
+    },
+    {
+      "path": "thesis/harness/distributed-k1-mesh-v1700/requester/observer.py",
+      "bytes": 11873,
+      "sha256": "784cc4bffc0d6824bbe378d17a7f632d587ca0a315896b048b2ebef727082df5"
+    },
+    {
+      "path": "thesis/harness/distributed-k1-mesh-v1700/requester/receiver_proof.py",
+      "bytes": 24714,
+      "sha256": "7fa0d9c99273ee53c253e464a86b786d476ecfd302a36e8b07b80a891c505683"
+    },
+    {
+      "path": "thesis/harness/distributed-k1-mesh-v1700/requester/resource_sample.py",
+      "bytes": 7475,
+      "sha256": "8f62ec378e74036d4539d9159e3caf29b8fd7a9115de1ab0f482dfd58b6e1857"
+    },
+    {
+      "path": "thesis/harness/distributed-k1-mesh-v1700/requester/route_observation_sink.py",
+      "bytes": 11536,
+      "sha256": "2b235781c15410e6dbfc8829971a34e8334714cdf015053edfd127756325cfb8"
+    },
+    {
+      "path": "thesis/harness/distributed-k1-mesh-v1700/requester/route_runtime_pins.json",
+      "bytes": 2350,
+      "sha256": "db270c9c6373b24e669bdf2b002da5fadb3e3841ee1ecc6ad8dec5a7ad26daf8"
+    },
+    {
+      "path": "thesis/harness/distributed-k1-mesh-v1700/requester/runner.py",
+      "bytes": 71214,
+      "sha256": "46a7ac77f6425bb5fca796b30c3d60b288658d331496295d3a5c019cf00b6c98"
+    },
+    {
+      "path": "thesis/harness/distributed-k1-mesh-v1700/requester/tts_mesh_adapter.py",
+      "bytes": 4307,
+      "sha256": "1db8cb386a37c680bec6e03135ee007f6b76a850a85c4e1eedda6562c0895ceb"
+    },
+    {
+      "path": "thesis/harness/distributed-k1-mesh-v1702/requester/aurora_voice_telemetry_v430.py",
+      "bytes": 11584,
+      "sha256": "8129ffe7591a47a0107ede53b101aead9fc1f58b92f0c0c4203176cc7608325d"
+    },
+    {
+      "path": "thesis/harness/distributed-k1-mesh-v1702/requester/bindings.py",
+      "bytes": 5492,
+      "sha256": "79558452e6f61268ad246476ca848e060b8ea808e15091bc53a3c4e0e28b1647"
+    },
+    {
+      "path": "thesis/harness/distributed-k1-mesh-v1702/requester/bootstrap.py",
+      "bytes": 12833,
+      "sha256": "cb40f036566274ae4eff290a78a6124e4d9270189a0d31d3cce06fe9092e2537"
+    },
+    {
+      "path": "thesis/harness/distributed-k1-mesh-v1702/requester/candidate-manifest.json",
+      "bytes": 220,
+      "sha256": "ce75b965ee5879ebece6ea7dfe133441547d20ccf89ecd5d66ea510bd9645e60"
+    },
+    {
+      "path": "thesis/harness/distributed-k1-mesh-v1702/requester/controller.py",
+      "bytes": 19329,
+      "sha256": "fd65974a0b348924e0552d9fa1e001846141355205fdb108c112a60eba150b0b"
+    },
+    {
+      "path": "thesis/harness/distributed-k1-mesh-v1702/requester/freeze-template.json",
+      "bytes": 2437,
+      "sha256": "0870998d1936b3c3b014d6f22b7fb4e6784b88ce64489a69f0e6508048ef3e8a"
+    },
+    {
+      "path": "thesis/harness/distributed-k1-mesh-v1702/requester/mesh_route_observer.py",
+      "bytes": 9275,
+      "sha256": "2c23fd2bc69b00b746c2c5dc28c1d2b77428016314045363dceea5fe9ee5cdbb"
+    },
+    {
+      "path": "thesis/harness/distributed-k1-mesh-v1702/requester/observer.py",
+      "bytes": 11873,
+      "sha256": "784cc4bffc0d6824bbe378d17a7f632d587ca0a315896b048b2ebef727082df5"
+    },
+    {
+      "path": "thesis/harness/distributed-k1-mesh-v1702/requester/receiver_proof.py",
+      "bytes": 24714,
+      "sha256": "7fa0d9c99273ee53c253e464a86b786d476ecfd302a36e8b07b80a891c505683"
+    },
+    {
+      "path": "thesis/harness/distributed-k1-mesh-v1702/requester/resource_sample.py",
+      "bytes": 7475,
+      "sha256": "8f62ec378e74036d4539d9159e3caf29b8fd7a9115de1ab0f482dfd58b6e1857"
+    },
+    {
+      "path": "thesis/harness/distributed-k1-mesh-v1702/requester/route_observation_sink.py",
+      "bytes": 11536,
+      "sha256": "2b235781c15410e6dbfc8829971a34e8334714cdf015053edfd127756325cfb8"
+    },
+    {
+      "path": "thesis/harness/distributed-k1-mesh-v1702/requester/route_runtime_pins.json",
+      "bytes": 2350,
+      "sha256": "db270c9c6373b24e669bdf2b002da5fadb3e3841ee1ecc6ad8dec5a7ad26daf8"
+    },
+    {
+      "path": "thesis/harness/distributed-k1-mesh-v1702/requester/runner.py",
+      "bytes": 71285,
+      "sha256": "2e146450394d8cf630912b5d5829ba908b5ea5ffcba43dd42ac2a3b76d013e8a"
+    },
+    {
+      "path": "thesis/harness/distributed-k1-mesh-v1702/requester/tts_mesh_adapter.py",
+      "bytes": 4307,
+      "sha256": "1db8cb386a37c680bec6e03135ee007f6b76a850a85c4e1eedda6562c0895ceb"
+    },
+    {
+      "path": "thesis/harness/distributed-k1-mesh-v1711/requester/aurora_voice_telemetry_v430.py",
+      "bytes": 11584,
+      "sha256": "8129ffe7591a47a0107ede53b101aead9fc1f58b92f0c0c4203176cc7608325d"
+    },
+    {
+      "path": "thesis/harness/distributed-k1-mesh-v1711/requester/bindings.py",
+      "bytes": 5492,
+      "sha256": "79558452e6f61268ad246476ca848e060b8ea808e15091bc53a3c4e0e28b1647"
+    },
+    {
+      "path": "thesis/harness/distributed-k1-mesh-v1711/requester/bootstrap.py",
+      "bytes": 12833,
+      "sha256": "cb40f036566274ae4eff290a78a6124e4d9270189a0d31d3cce06fe9092e2537"
+    },
+    {
+      "path": "thesis/harness/distributed-k1-mesh-v1711/requester/candidate-manifest.json",
+      "bytes": 220,
+      "sha256": "ce75b965ee5879ebece6ea7dfe133441547d20ccf89ecd5d66ea510bd9645e60"
+    },
+    {
+      "path": "thesis/harness/distributed-k1-mesh-v1711/requester/controller.py",
+      "bytes": 19326,
+      "sha256": "45b4c82bcd19a664e11c2fff8a41c0b06f0d09aad7d919e9094a34bbf5f8f490"
+    },
+    {
+      "path": "thesis/harness/distributed-k1-mesh-v1711/requester/freeze-template.json",
+      "bytes": 2437,
+      "sha256": "e836beddf93c066101c39bc9abfdfaad4989093d818be8c2ba4f90a1933e4cad"
+    },
+    {
+      "path": "thesis/harness/distributed-k1-mesh-v1711/requester/mesh_route_observer.py",
+      "bytes": 9275,
+      "sha256": "2c23fd2bc69b00b746c2c5dc28c1d2b77428016314045363dceea5fe9ee5cdbb"
+    },
+    {
+      "path": "thesis/harness/distributed-k1-mesh-v1711/requester/observer.py",
+      "bytes": 11873,
+      "sha256": "784cc4bffc0d6824bbe378d17a7f632d587ca0a315896b048b2ebef727082df5"
+    },
+    {
+      "path": "thesis/harness/distributed-k1-mesh-v1711/requester/receiver_proof.py",
+      "bytes": 24715,
+      "sha256": "041189a204888480ec76420d58bb0469c067bdc5a4339db12f4cfac52e9be982"
+    },
+    {
+      "path": "thesis/harness/distributed-k1-mesh-v1711/requester/resource_sample.py",
+      "bytes": 7475,
+      "sha256": "8f62ec378e74036d4539d9159e3caf29b8fd7a9115de1ab0f482dfd58b6e1857"
+    },
+    {
+      "path": "thesis/harness/distributed-k1-mesh-v1711/requester/route_observation_sink.py",
+      "bytes": 11536,
+      "sha256": "2b235781c15410e6dbfc8829971a34e8334714cdf015053edfd127756325cfb8"
+    },
+    {
+      "path": "thesis/harness/distributed-k1-mesh-v1711/requester/route_runtime_pins.json",
+      "bytes": 2350,
+      "sha256": "db270c9c6373b24e669bdf2b002da5fadb3e3841ee1ecc6ad8dec5a7ad26daf8"
+    },
+    {
+      "path": "thesis/harness/distributed-k1-mesh-v1711/requester/runner.py",
+      "bytes": 71286,
+      "sha256": "6c5445ab92f32d9de18295048dc5efd319921c1ab421e0fb2b0803e44042983f"
+    },
+    {
+      "path": "thesis/harness/distributed-k1-mesh-v1711/requester/tts_mesh_adapter.py",
+      "bytes": 4307,
+      "sha256": "1db8cb386a37c680bec6e03135ee007f6b76a850a85c4e1eedda6562c0895ceb"
+    },
+    {
+      "path": "thesis/harness/distributed-k1-mesh-v869/README.md",
+      "bytes": 5755,
+      "sha256": "8e50aae1678a12bf5d7df74433981b5de89a9f946055ecee5a5f67e179b85e97"
+    },
+    {
+      "path": "thesis/harness/distributed-k1-mesh-v869/REPORT.md",
+      "bytes": 2406,
+      "sha256": "45711a7e7a4a81f3f4fd1ab390a829d6a9637e0c7d5d83f8beea752a2f902f75"
+    },
+    {
+      "path": "thesis/harness/distributed-k1-mesh-v869/SOURCE-CUSTODY-v875.json",
+      "bytes": 2870,
+      "sha256": "183acc9e55c9bc663edbc187859fc51d5903ff2e92079cdb5caa5ce129bf31e3"
+    },
+    {
+      "path": "thesis/harness/distributed-k1-mesh-v869/requester/aurora_voice_telemetry_v430.py",
+      "bytes": 11584,
+      "sha256": "8129ffe7591a47a0107ede53b101aead9fc1f58b92f0c0c4203176cc7608325d"
+    },
+    {
+      "path": "thesis/harness/distributed-k1-mesh-v869/requester/bindings.py",
+      "bytes": 5492,
+      "sha256": "79558452e6f61268ad246476ca848e060b8ea808e15091bc53a3c4e0e28b1647"
+    },
+    {
+      "path": "thesis/harness/distributed-k1-mesh-v869/requester/bootstrap.py",
+      "bytes": 1950,
+      "sha256": "5f3f18d935466b3ea670af4caff79a801ea1c7a3c6471b4644b8864ad0c7b883"
+    },
+    {
+      "path": "thesis/harness/distributed-k1-mesh-v869/requester/candidate-manifest.json",
+      "bytes": 220,
+      "sha256": "ce75b965ee5879ebece6ea7dfe133441547d20ccf89ecd5d66ea510bd9645e60"
+    },
+    {
+      "path": "thesis/harness/distributed-k1-mesh-v869/requester/controller.py",
+      "bytes": 16146,
+      "sha256": "809bedd7aec6636b4382ab944b3bf65c0da57361d1a1252dd21884963c884a4f"
+    },
+    {
+      "path": "thesis/harness/distributed-k1-mesh-v869/requester/freeze-template.json",
+      "bytes": 2153,
+      "sha256": "2c5d5c35d034de813890d2637b067adff17ae541b072c3ee07c680407b4be1ee"
+    },
+    {
+      "path": "thesis/harness/distributed-k1-mesh-v869/requester/observer.py",
+      "bytes": 11873,
+      "sha256": "784cc4bffc0d6824bbe378d17a7f632d587ca0a315896b048b2ebef727082df5"
+    },
+    {
+      "path": "thesis/harness/distributed-k1-mesh-v869/requester/receiver_proof.py",
+      "bytes": 13293,
+      "sha256": "04c5f9f781bbf53b0db9103372cb27cd1b5c68c3b0c3973cf98f3fda97e6affb"
+    },
+    {
+      "path": "thesis/harness/distributed-k1-mesh-v869/requester/resource_sample.py",
+      "bytes": 7475,
+      "sha256": "8f62ec378e74036d4539d9159e3caf29b8fd7a9115de1ab0f482dfd58b6e1857"
+    },
+    {
+      "path": "thesis/harness/distributed-k1-mesh-v869/requester/runner.py",
+      "bytes": 65661,
+      "sha256": "46d77b55dfb0687a249845c70f14201be19bd4b859a2855477b613539691518a"
+    },
+    {
+      "path": "thesis/harness/distributed-k1-mesh-v869/requester/tts_mesh_adapter.py",
+      "bytes": 4307,
+      "sha256": "1db8cb386a37c680bec6e03135ee007f6b76a850a85c4e1eedda6562c0895ceb"
+    },
+    {
+      "path": "thesis/harness/distributed-k1-mesh-v890/README.md",
+      "bytes": 7909,
+      "sha256": "ab88986b5524595179614ca04069216ef55f31b7e8ba303ad614eca2062c539c"
+    },
+    {
+      "path": "thesis/harness/distributed-k1-mesh-v890/REPORT.md",
+      "bytes": 3159,
+      "sha256": "0e20eb55de57bdd4c21a5b0d4446290488f319a59b9ece28639ed52351e74ccf"
+    },
+    {
+      "path": "thesis/harness/distributed-k1-mesh-v890/SOURCE-CUSTODY-v898.json",
+      "bytes": 3293,
+      "sha256": "66fee749bcf956fbb025c99ee5cbfdb0f3828493a420287a6fce168e07557965"
+    },
+    {
+      "path": "thesis/harness/distributed-k1-mesh-v890/requester/aurora_voice_telemetry_v430.py",
+      "bytes": 11584,
+      "sha256": "8129ffe7591a47a0107ede53b101aead9fc1f58b92f0c0c4203176cc7608325d"
+    },
+    {
+      "path": "thesis/harness/distributed-k1-mesh-v890/requester/bindings.py",
+      "bytes": 5492,
+      "sha256": "79558452e6f61268ad246476ca848e060b8ea808e15091bc53a3c4e0e28b1647"
+    },
+    {
+      "path": "thesis/harness/distributed-k1-mesh-v890/requester/bootstrap.py",
+      "bytes": 12833,
+      "sha256": "cb40f036566274ae4eff290a78a6124e4d9270189a0d31d3cce06fe9092e2537"
+    },
+    {
+      "path": "thesis/harness/distributed-k1-mesh-v890/requester/candidate-manifest.json",
+      "bytes": 220,
+      "sha256": "ce75b965ee5879ebece6ea7dfe133441547d20ccf89ecd5d66ea510bd9645e60"
+    },
+    {
+      "path": "thesis/harness/distributed-k1-mesh-v890/requester/controller.py",
+      "bytes": 18484,
+      "sha256": "54c79dff9eabedb28370c9801dd7150d209d130886338e9bf578ac2628d51044"
+    },
+    {
+      "path": "thesis/harness/distributed-k1-mesh-v890/requester/freeze-template.json",
+      "bytes": 2437,
+      "sha256": "0870998d1936b3c3b014d6f22b7fb4e6784b88ce64489a69f0e6508048ef3e8a"
+    },
+    {
+      "path": "thesis/harness/distributed-k1-mesh-v890/requester/mesh_route_observer.py",
+      "bytes": 9275,
+      "sha256": "2c23fd2bc69b00b746c2c5dc28c1d2b77428016314045363dceea5fe9ee5cdbb"
+    },
+    {
+      "path": "thesis/harness/distributed-k1-mesh-v890/requester/observer.py",
+      "bytes": 11873,
+      "sha256": "784cc4bffc0d6824bbe378d17a7f632d587ca0a315896b048b2ebef727082df5"
+    },
+    {
+      "path": "thesis/harness/distributed-k1-mesh-v890/requester/receiver_proof.py",
+      "bytes": 24714,
+      "sha256": "7fa0d9c99273ee53c253e464a86b786d476ecfd302a36e8b07b80a891c505683"
+    },
+    {
+      "path": "thesis/harness/distributed-k1-mesh-v890/requester/resource_sample.py",
+      "bytes": 7475,
+      "sha256": "8f62ec378e74036d4539d9159e3caf29b8fd7a9115de1ab0f482dfd58b6e1857"
+    },
+    {
+      "path": "thesis/harness/distributed-k1-mesh-v890/requester/route_observation_sink.py",
+      "bytes": 11536,
+      "sha256": "2b235781c15410e6dbfc8829971a34e8334714cdf015053edfd127756325cfb8"
+    },
+    {
+      "path": "thesis/harness/distributed-k1-mesh-v890/requester/route_runtime_pins.json",
+      "bytes": 2142,
+      "sha256": "529eb82badbb088b8e34e5a11c9a1c9fa7189134a20106d6fdadf5d99e1aabed"
+    },
+    {
+      "path": "thesis/harness/distributed-k1-mesh-v890/requester/runner.py",
+      "bytes": 68564,
+      "sha256": "7cae2d9aa8b2bb36775ed6f6ec2131a8caa819dd2c0fd1531972308a0c629125"
+    },
+    {
+      "path": "thesis/harness/distributed-k1-mesh-v890/requester/tts_mesh_adapter.py",
+      "bytes": 4307,
+      "sha256": "1db8cb386a37c680bec6e03135ee007f6b76a850a85c4e1eedda6562c0895ceb"
+    },
+    {
+      "path": "thesis/harness/distributed-k2-composition-v839/README.md",
+      "bytes": 2428,
+      "sha256": "cadc4489d7d95c5727dbfa558e9dc53d1860ee65d81fefb9f06a979b30de42c5"
+    },
+    {
+      "path": "thesis/harness/distributed-k2-composition-v839/REPORT.md",
+      "bytes": 5247,
+      "sha256": "a78e98a3b9efb2b3b9e19fb3da5297832595aebd501286a8ce43ba8aeeebf2d9"
+    },
+    {
+      "path": "thesis/harness/distributed-k2-composition-v839/SOURCE-CUSTODY-v844.json",
+      "bytes": 1069,
+      "sha256": "0a565f9d94fd99e4a90f1bb995ec2b2f011b85eef1180c57d0102959334dbeb2"
+    },
+    {
+      "path": "thesis/harness/distributed-k2-composition-v839/k2_composition.py",
+      "bytes": 14287,
+      "sha256": "08be1fa730d6e49ccf4bd491539b4b8edb5b3476eb7f8f7db9656db5e7b3a053"
+    },
+    {
+      "path": "thesis/harness/distributed-k2-composition-v839/stage_adapter.py",
+      "bytes": 8801,
+      "sha256": "204ea4d6b48571ab7ba0add0310a3dadd87b5e1e2afdc172634185755c9bb02c"
+    },
+    {
+      "path": "thesis/harness/distributed-k2-http-v852/README.md",
+      "bytes": 5049,
+      "sha256": "b54e4885f8a9200fb118716f62ff65fa08f1be074848941f81768b9ce6f554e1"
+    },
+    {
+      "path": "thesis/harness/distributed-k2-http-v852/REPORT.md",
+      "bytes": 2114,
+      "sha256": "623072d75f7aba873e9491eb737692f0a73d15a15fd6860dc3f570ef15dcf3de"
+    },
+    {
+      "path": "thesis/harness/distributed-k2-http-v852/SOURCE-CUSTODY-v859.json",
+      "bytes": 2668,
+      "sha256": "65a9eacb0aaaeed04a44eaae6638e63dd0d8a33fd3482c1e3f852d08d2a3d78b"
+    },
+    {
+      "path": "thesis/harness/distributed-k2-http-v852/aurora_voice_telemetry_v430.py",
+      "bytes": 11584,
+      "sha256": "8129ffe7591a47a0107ede53b101aead9fc1f58b92f0c0c4203176cc7608325d"
+    },
+    {
+      "path": "thesis/harness/distributed-k2-http-v852/bindings.py",
+      "bytes": 3230,
+      "sha256": "52182f956b34788ecbfbbb241c8243ff88baebe2874e3605791793777ed0dc91"
+    },
+    {
+      "path": "thesis/harness/distributed-k2-http-v852/bootstrap.py",
+      "bytes": 1950,
+      "sha256": "6a8d7827bc9f0939e63e4f911868a178f5ba4c73bcf3aa878d50cd74895ed531"
+    },
+    {
+      "path": "thesis/harness/distributed-k2-http-v852/candidate-manifest.json",
+      "bytes": 220,
+      "sha256": "ce75b965ee5879ebece6ea7dfe133441547d20ccf89ecd5d66ea510bd9645e60"
+    },
+    {
+      "path": "thesis/harness/distributed-k2-http-v852/controller.py",
+      "bytes": 16504,
+      "sha256": "809bec19682eb717f016d2b9f62453b38945201c561f7d4f4ac72e242024050e"
+    },
+    {
+      "path": "thesis/harness/distributed-k2-http-v852/k2_composition.py",
+      "bytes": 14287,
+      "sha256": "08be1fa730d6e49ccf4bd491539b4b8edb5b3476eb7f8f7db9656db5e7b3a053"
+    },
+    {
+      "path": "thesis/harness/distributed-k2-http-v852/observer.py",
+      "bytes": 11873,
+      "sha256": "784cc4bffc0d6824bbe378d17a7f632d587ca0a315896b048b2ebef727082df5"
+    },
+    {
+      "path": "thesis/harness/distributed-k2-http-v852/receiver_proof.py",
+      "bytes": 13549,
+      "sha256": "06c1bb4aeae3ba8f2de7441bd09ccfc39d426615defd5b8a38b807117df4d791"
+    },
+    {
+      "path": "thesis/harness/distributed-k2-http-v852/resource_sample.py",
+      "bytes": 7475,
+      "sha256": "8f62ec378e74036d4539d9159e3caf29b8fd7a9115de1ab0f482dfd58b6e1857"
+    },
+    {
+      "path": "thesis/harness/distributed-k2-http-v852/runner.py",
+      "bytes": 59239,
+      "sha256": "1f869903b4a2c5167707891bd1d32294329c5673b7386c60b4f13400c4efba06"
+    },
+    {
+      "path": "thesis/harness/distributed-k2-http-v852/source-inventory.json",
+      "bytes": 58216,
+      "sha256": "96ec8e3e14233520d4cd469c4177264a193d05cf26b4b512d91d98f16bbb7dee"
+    },
+    {
+      "path": "thesis/harness/distributed-k2-http-v852/stage_adapter.py",
+      "bytes": 8801,
+      "sha256": "204ea4d6b48571ab7ba0add0310a3dadd87b5e1e2afdc172634185755c9bb02c"
+    },
+    {
+      "path": "thesis/harness/distributed-k2-mesh-v1731/INPUT-STAGING-v859.json",
+      "bytes": 418,
+      "sha256": "5a27492cb75f88a3459671231f7ef45bb99f9d8703aa25654174c75e58e16f68"
+    },
+    {
+      "path": "thesis/harness/distributed-k2-mesh-v1731/README.md",
+      "bytes": 5054,
+      "sha256": "214d3c8355799e52ab8f6e1a577f1e0b2e3bbdaa65a2fdb034883ee878347004"
+    },
+    {
+      "path": "thesis/harness/distributed-k2-mesh-v1731/REPORT.md",
+      "bytes": 2532,
+      "sha256": "bdb1165229b0514501e0536fee2e0ace9db66e92ac5ccfe1387b0be97429d94b"
+    },
+    {
+      "path": "thesis/harness/distributed-k2-mesh-v1731/SETUP-TIMING-ONLY.diff",
+      "bytes": 9441,
+      "sha256": "646c12ed81de712773d439e52a59bac6a304ef4a2dd1417323ffa14805d71e7e"
+    },
+    {
+      "path": "thesis/harness/distributed-k2-mesh-v1731/SMOKE-RESULT.json",
+      "bytes": 532,
+      "sha256": "438bfd87b70058c5366b6c2db2f9e211449776957d3dee50a28239e60507210c"
+    },
+    {
+      "path": "thesis/harness/distributed-k2-mesh-v1731/SOURCE-CUSTODY-v907.json",
+      "bytes": 3654,
+      "sha256": "bcc4d6b24ada7b7f2a759bd4bb7d4725b0704cd384d7ea7dee4409c661933d39"
+    },
+    {
+      "path": "thesis/harness/distributed-k2-mesh-v1731/SOURCE-QUALIFICATION-RECEIPT.json",
+      "bytes": 5673,
+      "sha256": "0d4d419f06f32ecb3af7d16e10cb33790e4a30c19a74aa8e632d4c012ba23213"
+    },
+    {
+      "path": "thesis/harness/distributed-k2-mesh-v1731/SOURCE-QUALIFICATION.diff",
+      "bytes": 19046,
+      "sha256": "daf984ae7428334e18cbbab7e961125a09d5273018a068c6f8e26e45173b5ef7"
+    },
+    {
+      "path": "thesis/harness/distributed-k2-mesh-v1731/aurora_voice_telemetry_v430.py",
+      "bytes": 11584,
+      "sha256": "8129ffe7591a47a0107ede53b101aead9fc1f58b92f0c0c4203176cc7608325d"
+    },
+    {
+      "path": "thesis/harness/distributed-k2-mesh-v1731/bindings.py",
+      "bytes": 5492,
+      "sha256": "79558452e6f61268ad246476ca848e060b8ea808e15091bc53a3c4e0e28b1647"
+    },
+    {
+      "path": "thesis/harness/distributed-k2-mesh-v1731/bootstrap.py",
+      "bytes": 12953,
+      "sha256": "b88a8a1aa6769bffc214329cdc219f6effc369b172cd777b3959c69a084866ec"
+    },
+    {
+      "path": "thesis/harness/distributed-k2-mesh-v1731/candidate-manifest.json",
+      "bytes": 220,
+      "sha256": "ce75b965ee5879ebece6ea7dfe133441547d20ccf89ecd5d66ea510bd9645e60"
+    },
+    {
+      "path": "thesis/harness/distributed-k2-mesh-v1731/controller.py",
+      "bytes": 19790,
+      "sha256": "573ee21e7e8043c9f76061688f411147d3a1be88ed681bd1024f4ca3126a6b9a"
+    },
+    {
+      "path": "thesis/harness/distributed-k2-mesh-v1731/freeze-template.json",
+      "bytes": 4072,
+      "sha256": "cc4fd22e9b497268aecadea0cb486f72a45d95005bf5bb2f01230a8ef5f4667f"
+    },
+    {
+      "path": "thesis/harness/distributed-k2-mesh-v1731/k2_composition.py",
+      "bytes": 14605,
+      "sha256": "c9cbca5cc9f54f21a722fb2a5f9deed4325cce8e644a2af1f993f60f5b1bd883"
+    },
+    {
+      "path": "thesis/harness/distributed-k2-mesh-v1731/mesh_route_observer.py",
+      "bytes": 9586,
+      "sha256": "db390cdc4e05718e111037b3118573aab5ee9215c57b8e4398767a8b07e6ce7a"
+    },
+    {
+      "path": "thesis/harness/distributed-k2-mesh-v1731/mesh_stage_adapter.py",
+      "bytes": 10765,
+      "sha256": "b4fb5cd37c3ba0718f46193c0537c1ca049356ef0d856abc5c3cc88f6c78a181"
+    },
+    {
+      "path": "thesis/harness/distributed-k2-mesh-v1731/observer.py",
+      "bytes": 11873,
+      "sha256": "784cc4bffc0d6824bbe378d17a7f632d587ca0a315896b048b2ebef727082df5"
+    },
+    {
+      "path": "thesis/harness/distributed-k2-mesh-v1731/receiver_proof.py",
+      "bytes": 25849,
+      "sha256": "4aea2ab1d0687ca8fdae48486dad0dd532967ee1428bc624f525cb8e43344dbb"
+    },
+    {
+      "path": "thesis/harness/distributed-k2-mesh-v1731/resource_sample.py",
+      "bytes": 7475,
+      "sha256": "8f62ec378e74036d4539d9159e3caf29b8fd7a9115de1ab0f482dfd58b6e1857"
+    },
+    {
+      "path": "thesis/harness/distributed-k2-mesh-v1731/review/COPY-RECEIPT.json",
+      "bytes": 1480,
+      "sha256": "03d988023de01dfb82e61725a3f910ff3f598dc104b56bde68971e34ed9bd99e"
+    },
+    {
+      "path": "thesis/harness/distributed-k2-mesh-v1731/review/P2P-K2-V1731-BOUNDED-SOURCE-REVIEW-20261020T0525.md",
+      "bytes": 5257,
+      "sha256": "180543b21c82b3ee3ca0d661e45c02307f243f44eb386e7c96e24f88fe32035f"
+    },
+    {
+      "path": "thesis/harness/distributed-k2-mesh-v1731/review/P2P-K2-V1731-SETUP-TIMING-ADDENDUM-20261020T0528.md",
+      "bytes": 2517,
+      "sha256": "8953ed1e55e6dad43072448d07b6348b506a7ea6013a1bcef75e7d6881bea035"
+    },
+    {
+      "path": "thesis/harness/distributed-k2-mesh-v1731/review/P2P-K2-V1731-TIMING-DELTA-CLOSURE-20261020T0554.md",
+      "bytes": 3685,
+      "sha256": "d19d059f55e9205a72e45eb76b54a21c114c59f62df3c48d891b5cbd272f2580"
+    },
+    {
+      "path": "thesis/harness/distributed-k2-mesh-v1731/review/P2P-K2-V1731-TIMING-DELTA-CLOSURE-RECEIPT-20261020T0554.json",
+      "bytes": 590,
+      "sha256": "5487a2c95b056c5d3525626a4cdad642dcf15027650c2cc70725713bd192a22b"
+    },
+    {
+      "path": "thesis/harness/distributed-k2-mesh-v1731/review/P2P-K2-V1733-PROVIDER-DELTA-REVIEW-20261020T0559.md",
+      "bytes": 3949,
+      "sha256": "57e00d5169d0955eef0ff937ccacbf560b392488bc9d483d7aeebe34db90bcd8"
+    },
+    {
+      "path": "thesis/harness/distributed-k2-mesh-v1731/review/P2P-K2-V1735-COLLECTOR-BOUNDED-REVIEW-20261020T0602.md",
+      "bytes": 3759,
+      "sha256": "3d340bfebb42eaa064d3f3d0f72a6bdb1344f34d57a3f4ea3966e77dea0a7412"
+    },
+    {
+      "path": "thesis/harness/distributed-k2-mesh-v1731/route_observation_sink.py",
+      "bytes": 11641,
+      "sha256": "e85cbd14637af7f9939b07163ee2571ee561c98b52adf179bc72a7e01589ad8f"
+    },
+    {
+      "path": "thesis/harness/distributed-k2-mesh-v1731/route_runtime_pins.json",
+      "bytes": 2350,
+      "sha256": "db270c9c6373b24e669bdf2b002da5fadb3e3841ee1ecc6ad8dec5a7ad26daf8"
+    },
+    {
+      "path": "thesis/harness/distributed-k2-mesh-v1731/runner.py",
+      "bytes": 69328,
+      "sha256": "8347fc103a11ca6c9d0c3686b442bd2e4236a4122c668a42bcc10944b7408285"
+    },
+    {
+      "path": "thesis/harness/distributed-k2-mesh-v1731/smoke_classifier.py",
+      "bytes": 3351,
+      "sha256": "7449ad2ddc6a863cb60595dd4542f96dd6f973aa02e0d0733a889f981998dd62"
+    },
+    {
+      "path": "thesis/harness/distributed-k2-mesh-v1731/source-before-setup-timing/runner.py",
+      "bytes": 67311,
+      "sha256": "d031a116f02a17ef0a60a9b62f4729119dfa2f0466d4cd5f5bd6822e3f9dccd9"
+    },
+    {
+      "path": "thesis/harness/distributed-k2-mesh-v1731/source-inventory.json",
+      "bytes": 67817,
+      "sha256": "a38421a03ffafb73a4c469aa7c82fb299210eedd6fe97809beb3c508782883d4"
+    },
+    {
+      "path": "thesis/harness/distributed-k2-mesh-v1807/CAP-ONLY.diff",
+      "bytes": 375,
+      "sha256": "8f8ba490d7b44e9c35bd3fda74ff87f42d43fabfec6f6bbd61dae5d9a0374365"
+    },
+    {
+      "path": "thesis/harness/distributed-k2-mesh-v1807/INPUT-STAGING-v859.json",
+      "bytes": 418,
+      "sha256": "5a27492cb75f88a3459671231f7ef45bb99f9d8703aa25654174c75e58e16f68"
+    },
+    {
+      "path": "thesis/harness/distributed-k2-mesh-v1807/README.md",
+      "bytes": 5054,
+      "sha256": "214d3c8355799e52ab8f6e1a577f1e0b2e3bbdaa65a2fdb034883ee878347004"
+    },
+    {
+      "path": "thesis/harness/distributed-k2-mesh-v1807/REPORT.md",
+      "bytes": 2532,
+      "sha256": "bdb1165229b0514501e0536fee2e0ace9db66e92ac5ccfe1387b0be97429d94b"
+    },
+    {
+      "path": "thesis/harness/distributed-k2-mesh-v1807/SETUP-TIMING-ONLY.diff",
+      "bytes": 9441,
+      "sha256": "646c12ed81de712773d439e52a59bac6a304ef4a2dd1417323ffa14805d71e7e"
+    },
+    {
+      "path": "thesis/harness/distributed-k2-mesh-v1807/SMOKE-RESULT.json",
+      "bytes": 532,
+      "sha256": "438bfd87b70058c5366b6c2db2f9e211449776957d3dee50a28239e60507210c"
+    },
+    {
+      "path": "thesis/harness/distributed-k2-mesh-v1807/SOURCE-CUSTODY-v907.json",
+      "bytes": 3654,
+      "sha256": "bcc4d6b24ada7b7f2a759bd4bb7d4725b0704cd384d7ea7dee4409c661933d39"
+    },
+    {
+      "path": "thesis/harness/distributed-k2-mesh-v1807/SOURCE-QUALIFICATION-RECEIPT.json",
+      "bytes": 5673,
+      "sha256": "0d4d419f06f32ecb3af7d16e10cb33790e4a30c19a74aa8e632d4c012ba23213"
+    },
+    {
+      "path": "thesis/harness/distributed-k2-mesh-v1807/SOURCE-QUALIFICATION.diff",
+      "bytes": 19046,
+      "sha256": "daf984ae7428334e18cbbab7e961125a09d5273018a068c6f8e26e45173b5ef7"
+    },
+    {
+      "path": "thesis/harness/distributed-k2-mesh-v1807/aurora_voice_telemetry_v430.py",
+      "bytes": 11584,
+      "sha256": "8129ffe7591a47a0107ede53b101aead9fc1f58b92f0c0c4203176cc7608325d"
+    },
+    {
+      "path": "thesis/harness/distributed-k2-mesh-v1807/bindings.py",
+      "bytes": 5492,
+      "sha256": "79558452e6f61268ad246476ca848e060b8ea808e15091bc53a3c4e0e28b1647"
+    },
+    {
+      "path": "thesis/harness/distributed-k2-mesh-v1807/bootstrap.py",
+      "bytes": 12953,
+      "sha256": "b88a8a1aa6769bffc214329cdc219f6effc369b172cd777b3959c69a084866ec"
+    },
+    {
+      "path": "thesis/harness/distributed-k2-mesh-v1807/candidate-manifest.json",
+      "bytes": 220,
+      "sha256": "ce75b965ee5879ebece6ea7dfe133441547d20ccf89ecd5d66ea510bd9645e60"
+    },
+    {
+      "path": "thesis/harness/distributed-k2-mesh-v1807/controller.py",
+      "bytes": 19790,
+      "sha256": "2048aab74eca7153b9bf7abfb0ea80842d319186f87409634edf2d8d4e504ed1"
+    },
+    {
+      "path": "thesis/harness/distributed-k2-mesh-v1807/freeze-template.json",
+      "bytes": 4072,
+      "sha256": "04bd6e7cbd412a1cf8722ccc936687e090e01ce265208ab7a412fda19f0693e5"
+    },
+    {
+      "path": "thesis/harness/distributed-k2-mesh-v1807/k2_composition.py",
+      "bytes": 14605,
+      "sha256": "c9cbca5cc9f54f21a722fb2a5f9deed4325cce8e644a2af1f993f60f5b1bd883"
+    },
+    {
+      "path": "thesis/harness/distributed-k2-mesh-v1807/mesh_route_observer.py",
+      "bytes": 9586,
+      "sha256": "db390cdc4e05718e111037b3118573aab5ee9215c57b8e4398767a8b07e6ce7a"
+    },
+    {
+      "path": "thesis/harness/distributed-k2-mesh-v1807/mesh_stage_adapter.py",
+      "bytes": 10765,
+      "sha256": "b4fb5cd37c3ba0718f46193c0537c1ca049356ef0d856abc5c3cc88f6c78a181"
+    },
+    {
+      "path": "thesis/harness/distributed-k2-mesh-v1807/observer.py",
+      "bytes": 11873,
+      "sha256": "784cc4bffc0d6824bbe378d17a7f632d587ca0a315896b048b2ebef727082df5"
+    },
+    {
+      "path": "thesis/harness/distributed-k2-mesh-v1807/receiver_proof.py",
+      "bytes": 25849,
+      "sha256": "4aea2ab1d0687ca8fdae48486dad0dd532967ee1428bc624f525cb8e43344dbb"
+    },
+    {
+      "path": "thesis/harness/distributed-k2-mesh-v1807/resource_sample.py",
+      "bytes": 7475,
+      "sha256": "8f62ec378e74036d4539d9159e3caf29b8fd7a9115de1ab0f482dfd58b6e1857"
+    },
+    {
+      "path": "thesis/harness/distributed-k2-mesh-v1807/review/COPY-RECEIPT.json",
+      "bytes": 1480,
+      "sha256": "03d988023de01dfb82e61725a3f910ff3f598dc104b56bde68971e34ed9bd99e"
+    },
+    {
+      "path": "thesis/harness/distributed-k2-mesh-v1807/review/P2P-K2-V1731-BOUNDED-SOURCE-REVIEW-20261020T0525.md",
+      "bytes": 5257,
+      "sha256": "180543b21c82b3ee3ca0d661e45c02307f243f44eb386e7c96e24f88fe32035f"
+    },
+    {
+      "path": "thesis/harness/distributed-k2-mesh-v1807/review/P2P-K2-V1731-SETUP-TIMING-ADDENDUM-20261020T0528.md",
+      "bytes": 2517,
+      "sha256": "8953ed1e55e6dad43072448d07b6348b506a7ea6013a1bcef75e7d6881bea035"
+    },
+    {
+      "path": "thesis/harness/distributed-k2-mesh-v1807/review/P2P-K2-V1731-TIMING-DELTA-CLOSURE-20261020T0554.md",
+      "bytes": 3685,
+      "sha256": "d19d059f55e9205a72e45eb76b54a21c114c59f62df3c48d891b5cbd272f2580"
+    },
+    {
+      "path": "thesis/harness/distributed-k2-mesh-v1807/review/P2P-K2-V1731-TIMING-DELTA-CLOSURE-RECEIPT-20261020T0554.json",
+      "bytes": 590,
+      "sha256": "5487a2c95b056c5d3525626a4cdad642dcf15027650c2cc70725713bd192a22b"
+    },
+    {
+      "path": "thesis/harness/distributed-k2-mesh-v1807/review/P2P-K2-V1733-PROVIDER-DELTA-REVIEW-20261020T0559.md",
+      "bytes": 3949,
+      "sha256": "57e00d5169d0955eef0ff937ccacbf560b392488bc9d483d7aeebe34db90bcd8"
+    },
+    {
+      "path": "thesis/harness/distributed-k2-mesh-v1807/review/P2P-K2-V1735-COLLECTOR-BOUNDED-REVIEW-20261020T0602.md",
+      "bytes": 3759,
+      "sha256": "3d340bfebb42eaa064d3f3d0f72a6bdb1344f34d57a3f4ea3966e77dea0a7412"
+    },
+    {
+      "path": "thesis/harness/distributed-k2-mesh-v1807/route_observation_sink.py",
+      "bytes": 11641,
+      "sha256": "e85cbd14637af7f9939b07163ee2571ee561c98b52adf179bc72a7e01589ad8f"
+    },
+    {
+      "path": "thesis/harness/distributed-k2-mesh-v1807/route_runtime_pins.json",
+      "bytes": 2350,
+      "sha256": "db270c9c6373b24e669bdf2b002da5fadb3e3841ee1ecc6ad8dec5a7ad26daf8"
+    },
+    {
+      "path": "thesis/harness/distributed-k2-mesh-v1807/runner.py",
+      "bytes": 69328,
+      "sha256": "8347fc103a11ca6c9d0c3686b442bd2e4236a4122c668a42bcc10944b7408285"
+    },
+    {
+      "path": "thesis/harness/distributed-k2-mesh-v1807/smoke_classifier.py",
+      "bytes": 3351,
+      "sha256": "7449ad2ddc6a863cb60595dd4542f96dd6f973aa02e0d0733a889f981998dd62"
+    },
+    {
+      "path": "thesis/harness/distributed-k2-mesh-v1807/source-before-setup-timing/runner.py",
+      "bytes": 67311,
+      "sha256": "d031a116f02a17ef0a60a9b62f4729119dfa2f0466d4cd5f5bd6822e3f9dccd9"
+    },
+    {
+      "path": "thesis/harness/distributed-k2-mesh-v1807/source-inventory.json",
+      "bytes": 67817,
+      "sha256": "a38421a03ffafb73a4c469aa7c82fb299210eedd6fe97809beb3c508782883d4"
+    },
+    {
+      "path": "thesis/harness/distributed-k2-mesh-v1813/CAP-ONLY.diff",
+      "bytes": 375,
+      "sha256": "8f8ba490d7b44e9c35bd3fda74ff87f42d43fabfec6f6bbd61dae5d9a0374365"
+    },
+    {
+      "path": "thesis/harness/distributed-k2-mesh-v1813/INPUT-STAGING-v859.json",
+      "bytes": 418,
+      "sha256": "5a27492cb75f88a3459671231f7ef45bb99f9d8703aa25654174c75e58e16f68"
+    },
+    {
+      "path": "thesis/harness/distributed-k2-mesh-v1813/README.md",
+      "bytes": 5054,
+      "sha256": "214d3c8355799e52ab8f6e1a577f1e0b2e3bbdaa65a2fdb034883ee878347004"
+    },
+    {
+      "path": "thesis/harness/distributed-k2-mesh-v1813/REPORT.md",
+      "bytes": 2532,
+      "sha256": "bdb1165229b0514501e0536fee2e0ace9db66e92ac5ccfe1387b0be97429d94b"
+    },
+    {
+      "path": "thesis/harness/distributed-k2-mesh-v1813/SETUP-TIMING-ONLY.diff",
+      "bytes": 9441,
+      "sha256": "646c12ed81de712773d439e52a59bac6a304ef4a2dd1417323ffa14805d71e7e"
+    },
+    {
+      "path": "thesis/harness/distributed-k2-mesh-v1813/SMOKE-RESULT.json",
+      "bytes": 532,
+      "sha256": "438bfd87b70058c5366b6c2db2f9e211449776957d3dee50a28239e60507210c"
+    },
+    {
+      "path": "thesis/harness/distributed-k2-mesh-v1813/SOURCE-CUSTODY-v907.json",
+      "bytes": 3654,
+      "sha256": "bcc4d6b24ada7b7f2a759bd4bb7d4725b0704cd384d7ea7dee4409c661933d39"
+    },
+    {
+      "path": "thesis/harness/distributed-k2-mesh-v1813/SOURCE-QUALIFICATION-RECEIPT.json",
+      "bytes": 5673,
+      "sha256": "0d4d419f06f32ecb3af7d16e10cb33790e4a30c19a74aa8e632d4c012ba23213"
+    },
+    {
+      "path": "thesis/harness/distributed-k2-mesh-v1813/SOURCE-QUALIFICATION.diff",
+      "bytes": 19046,
+      "sha256": "daf984ae7428334e18cbbab7e961125a09d5273018a068c6f8e26e45173b5ef7"
+    },
+    {
+      "path": "thesis/harness/distributed-k2-mesh-v1813/aurora_voice_telemetry_v430.py",
+      "bytes": 11584,
+      "sha256": "8129ffe7591a47a0107ede53b101aead9fc1f58b92f0c0c4203176cc7608325d"
+    },
+    {
+      "path": "thesis/harness/distributed-k2-mesh-v1813/bindings.py",
+      "bytes": 5492,
+      "sha256": "79558452e6f61268ad246476ca848e060b8ea808e15091bc53a3c4e0e28b1647"
+    },
+    {
+      "path": "thesis/harness/distributed-k2-mesh-v1813/bootstrap.py",
+      "bytes": 12953,
+      "sha256": "b88a8a1aa6769bffc214329cdc219f6effc369b172cd777b3959c69a084866ec"
+    },
+    {
+      "path": "thesis/harness/distributed-k2-mesh-v1813/candidate-manifest.json",
+      "bytes": 220,
+      "sha256": "ce75b965ee5879ebece6ea7dfe133441547d20ccf89ecd5d66ea510bd9645e60"
+    },
+    {
+      "path": "thesis/harness/distributed-k2-mesh-v1813/controller.py",
+      "bytes": 19790,
+      "sha256": "08c2fa71027389a6b5db5824d5b7ca765b16f11d5746f8499c8e4617a3a06d8a"
+    },
+    {
+      "path": "thesis/harness/distributed-k2-mesh-v1813/freeze-template.json",
+      "bytes": 4072,
+      "sha256": "dd8d33ef18b03ee799a456dfa94d0584c94ab35d5d37d17bd62968e98898be35"
+    },
+    {
+      "path": "thesis/harness/distributed-k2-mesh-v1813/k2_composition.py",
+      "bytes": 14605,
+      "sha256": "c9cbca5cc9f54f21a722fb2a5f9deed4325cce8e644a2af1f993f60f5b1bd883"
+    },
+    {
+      "path": "thesis/harness/distributed-k2-mesh-v1813/mesh_route_observer.py",
+      "bytes": 9586,
+      "sha256": "db390cdc4e05718e111037b3118573aab5ee9215c57b8e4398767a8b07e6ce7a"
+    },
+    {
+      "path": "thesis/harness/distributed-k2-mesh-v1813/mesh_stage_adapter.py",
+      "bytes": 10765,
+      "sha256": "b4fb5cd37c3ba0718f46193c0537c1ca049356ef0d856abc5c3cc88f6c78a181"
+    },
+    {
+      "path": "thesis/harness/distributed-k2-mesh-v1813/observer.py",
+      "bytes": 11873,
+      "sha256": "784cc4bffc0d6824bbe378d17a7f632d587ca0a315896b048b2ebef727082df5"
+    },
+    {
+      "path": "thesis/harness/distributed-k2-mesh-v1813/receiver_proof.py",
+      "bytes": 25849,
+      "sha256": "4aea2ab1d0687ca8fdae48486dad0dd532967ee1428bc624f525cb8e43344dbb"
+    },
+    {
+      "path": "thesis/harness/distributed-k2-mesh-v1813/resource_sample.py",
+      "bytes": 7475,
+      "sha256": "8f62ec378e74036d4539d9159e3caf29b8fd7a9115de1ab0f482dfd58b6e1857"
+    },
+    {
+      "path": "thesis/harness/distributed-k2-mesh-v1813/review/COPY-RECEIPT.json",
+      "bytes": 1480,
+      "sha256": "03d988023de01dfb82e61725a3f910ff3f598dc104b56bde68971e34ed9bd99e"
+    },
+    {
+      "path": "thesis/harness/distributed-k2-mesh-v1813/review/P2P-K2-V1731-BOUNDED-SOURCE-REVIEW-20261020T0525.md",
+      "bytes": 5257,
+      "sha256": "180543b21c82b3ee3ca0d661e45c02307f243f44eb386e7c96e24f88fe32035f"
+    },
+    {
+      "path": "thesis/harness/distributed-k2-mesh-v1813/review/P2P-K2-V1731-SETUP-TIMING-ADDENDUM-20261020T0528.md",
+      "bytes": 2517,
+      "sha256": "8953ed1e55e6dad43072448d07b6348b506a7ea6013a1bcef75e7d6881bea035"
+    },
+    {
+      "path": "thesis/harness/distributed-k2-mesh-v1813/review/P2P-K2-V1731-TIMING-DELTA-CLOSURE-20261020T0554.md",
+      "bytes": 3685,
+      "sha256": "d19d059f55e9205a72e45eb76b54a21c114c59f62df3c48d891b5cbd272f2580"
+    },
+    {
+      "path": "thesis/harness/distributed-k2-mesh-v1813/review/P2P-K2-V1731-TIMING-DELTA-CLOSURE-RECEIPT-20261020T0554.json",
+      "bytes": 590,
+      "sha256": "5487a2c95b056c5d3525626a4cdad642dcf15027650c2cc70725713bd192a22b"
+    },
+    {
+      "path": "thesis/harness/distributed-k2-mesh-v1813/review/P2P-K2-V1733-PROVIDER-DELTA-REVIEW-20261020T0559.md",
+      "bytes": 3949,
+      "sha256": "57e00d5169d0955eef0ff937ccacbf560b392488bc9d483d7aeebe34db90bcd8"
+    },
+    {
+      "path": "thesis/harness/distributed-k2-mesh-v1813/review/P2P-K2-V1735-COLLECTOR-BOUNDED-REVIEW-20261020T0602.md",
+      "bytes": 3759,
+      "sha256": "3d340bfebb42eaa064d3f3d0f72a6bdb1344f34d57a3f4ea3966e77dea0a7412"
+    },
+    {
+      "path": "thesis/harness/distributed-k2-mesh-v1813/route_observation_sink.py",
+      "bytes": 11641,
+      "sha256": "e85cbd14637af7f9939b07163ee2571ee561c98b52adf179bc72a7e01589ad8f"
+    },
+    {
+      "path": "thesis/harness/distributed-k2-mesh-v1813/route_runtime_pins.json",
+      "bytes": 2350,
+      "sha256": "db270c9c6373b24e669bdf2b002da5fadb3e3841ee1ecc6ad8dec5a7ad26daf8"
+    },
+    {
+      "path": "thesis/harness/distributed-k2-mesh-v1813/runner.py",
+      "bytes": 69328,
+      "sha256": "8347fc103a11ca6c9d0c3686b442bd2e4236a4122c668a42bcc10944b7408285"
+    },
+    {
+      "path": "thesis/harness/distributed-k2-mesh-v1813/smoke_classifier.py",
+      "bytes": 3351,
+      "sha256": "7449ad2ddc6a863cb60595dd4542f96dd6f973aa02e0d0733a889f981998dd62"
+    },
+    {
+      "path": "thesis/harness/distributed-k2-mesh-v1813/source-before-setup-timing/runner.py",
+      "bytes": 67311,
+      "sha256": "d031a116f02a17ef0a60a9b62f4729119dfa2f0466d4cd5f5bd6822e3f9dccd9"
+    },
+    {
+      "path": "thesis/harness/distributed-k2-mesh-v1813/source-inventory.json",
+      "bytes": 67817,
+      "sha256": "a38421a03ffafb73a4c469aa7c82fb299210eedd6fe97809beb3c508782883d4"
+    },
+    {
+      "path": "thesis/harness/distributed-k2-mesh-v1826/ACTUAL-PACKET-SIZE-v1830.json",
+      "bytes": 359,
+      "sha256": "c2b9fc4d973f548cac79b60742c7f863817c412388fab889ff40d27532060b1c"
+    },
+    {
+      "path": "thesis/harness/distributed-k2-mesh-v1826/CAP-ONLY.diff",
+      "bytes": 375,
+      "sha256": "8f8ba490d7b44e9c35bd3fda74ff87f42d43fabfec6f6bbd61dae5d9a0374365"
+    },
+    {
+      "path": "thesis/harness/distributed-k2-mesh-v1826/COLLECTOR-HASH-ONLY.diff",
+      "bytes": 359,
+      "sha256": "cdcb3043175955008d7d55c79a50a460bb3f668f1964a47d4737ac379620cae9"
+    },
+    {
+      "path": "thesis/harness/distributed-k2-mesh-v1826/INPUT-STAGING-v859.json",
+      "bytes": 418,
+      "sha256": "5a27492cb75f88a3459671231f7ef45bb99f9d8703aa25654174c75e58e16f68"
+    },
+    {
+      "path": "thesis/harness/distributed-k2-mesh-v1826/PACKET-DEDUP-ONLY.diff",
+      "bytes": 2652,
+      "sha256": "5be0bf6070eaafddfa2a1271f4a85935681167b5c6a19c4cac0bd81428c3c445"
+    },
+    {
+      "path": "thesis/harness/distributed-k2-mesh-v1826/README.md",
+      "bytes": 5054,
+      "sha256": "214d3c8355799e52ab8f6e1a577f1e0b2e3bbdaa65a2fdb034883ee878347004"
+    },
+    {
+      "path": "thesis/harness/distributed-k2-mesh-v1826/REPORT.md",
+      "bytes": 2532,
+      "sha256": "bdb1165229b0514501e0536fee2e0ace9db66e92ac5ccfe1387b0be97429d94b"
+    },
+    {
+      "path": "thesis/harness/distributed-k2-mesh-v1826/SAVED-QUALIFICATION-AND-SOURCE-RECEIPT.json",
+      "bytes": 926,
+      "sha256": "0210d800a13e84cc3199fe0b84b5be32acd216e9b9077db08283370caeb28d75"
+    },
+    {
+      "path": "thesis/harness/distributed-k2-mesh-v1826/SETUP-TIMING-ONLY.diff",
+      "bytes": 9441,
+      "sha256": "646c12ed81de712773d439e52a59bac6a304ef4a2dd1417323ffa14805d71e7e"
+    },
+    {
+      "path": "thesis/harness/distributed-k2-mesh-v1826/SMOKE-RESULT.json",
+      "bytes": 532,
+      "sha256": "438bfd87b70058c5366b6c2db2f9e211449776957d3dee50a28239e60507210c"
+    },
+    {
+      "path": "thesis/harness/distributed-k2-mesh-v1826/SOURCE-CUSTODY-v907.json",
+      "bytes": 3654,
+      "sha256": "bcc4d6b24ada7b7f2a759bd4bb7d4725b0704cd384d7ea7dee4409c661933d39"
+    },
+    {
+      "path": "thesis/harness/distributed-k2-mesh-v1826/SOURCE-QUALIFICATION-RECEIPT.json",
+      "bytes": 5673,
+      "sha256": "0d4d419f06f32ecb3af7d16e10cb33790e4a30c19a74aa8e632d4c012ba23213"
+    },
+    {
+      "path": "thesis/harness/distributed-k2-mesh-v1826/SOURCE-QUALIFICATION.diff",
+      "bytes": 19046,
+      "sha256": "daf984ae7428334e18cbbab7e961125a09d5273018a068c6f8e26e45173b5ef7"
+    },
+    {
+      "path": "thesis/harness/distributed-k2-mesh-v1826/aurora_voice_telemetry_v430.py",
+      "bytes": 11584,
+      "sha256": "8129ffe7591a47a0107ede53b101aead9fc1f58b92f0c0c4203176cc7608325d"
+    },
+    {
+      "path": "thesis/harness/distributed-k2-mesh-v1826/bindings.py",
+      "bytes": 5492,
+      "sha256": "79558452e6f61268ad246476ca848e060b8ea808e15091bc53a3c4e0e28b1647"
+    },
+    {
+      "path": "thesis/harness/distributed-k2-mesh-v1826/bootstrap.py",
+      "bytes": 12953,
+      "sha256": "b88a8a1aa6769bffc214329cdc219f6effc369b172cd777b3959c69a084866ec"
+    },
+    {
+      "path": "thesis/harness/distributed-k2-mesh-v1826/candidate-manifest.json",
+      "bytes": 220,
+      "sha256": "ce75b965ee5879ebece6ea7dfe133441547d20ccf89ecd5d66ea510bd9645e60"
+    },
+    {
+      "path": "thesis/harness/distributed-k2-mesh-v1826/controller.py",
+      "bytes": 19790,
+      "sha256": "58107ce4f66316091bc6af1534f2ca9104831a5b1bde0cd9e586a20139da21de"
+    },
+    {
+      "path": "thesis/harness/distributed-k2-mesh-v1826/freeze-template.json",
+      "bytes": 4072,
+      "sha256": "afa323b9b12d4619f1bc69cd31494852d7fbb2740a1fcfdcb622d6fb780b4278"
+    },
+    {
+      "path": "thesis/harness/distributed-k2-mesh-v1826/k2_composition.py",
+      "bytes": 14605,
+      "sha256": "c9cbca5cc9f54f21a722fb2a5f9deed4325cce8e644a2af1f993f60f5b1bd883"
+    },
+    {
+      "path": "thesis/harness/distributed-k2-mesh-v1826/mesh_route_observer.py",
+      "bytes": 9586,
+      "sha256": "db390cdc4e05718e111037b3118573aab5ee9215c57b8e4398767a8b07e6ce7a"
+    },
+    {
+      "path": "thesis/harness/distributed-k2-mesh-v1826/mesh_stage_adapter.py",
+      "bytes": 10765,
+      "sha256": "b4fb5cd37c3ba0718f46193c0537c1ca049356ef0d856abc5c3cc88f6c78a181"
+    },
+    {
+      "path": "thesis/harness/distributed-k2-mesh-v1826/observer.py",
+      "bytes": 11873,
+      "sha256": "784cc4bffc0d6824bbe378d17a7f632d587ca0a315896b048b2ebef727082df5"
+    },
+    {
+      "path": "thesis/harness/distributed-k2-mesh-v1826/receiver_proof.py",
+      "bytes": 25942,
+      "sha256": "3bb4af79cf2579023c0f1ff2025f69367717d49db7d09831c682c1bf52fc441f"
+    },
+    {
+      "path": "thesis/harness/distributed-k2-mesh-v1826/resource_sample.py",
+      "bytes": 7475,
+      "sha256": "8f62ec378e74036d4539d9159e3caf29b8fd7a9115de1ab0f482dfd58b6e1857"
+    },
+    {
+      "path": "thesis/harness/distributed-k2-mesh-v1826/review/COPY-RECEIPT.json",
+      "bytes": 1480,
+      "sha256": "03d988023de01dfb82e61725a3f910ff3f598dc104b56bde68971e34ed9bd99e"
+    },
+    {
+      "path": "thesis/harness/distributed-k2-mesh-v1826/review/P2P-K2-V1731-BOUNDED-SOURCE-REVIEW-20261020T0525.md",
+      "bytes": 5257,
+      "sha256": "180543b21c82b3ee3ca0d661e45c02307f243f44eb386e7c96e24f88fe32035f"
+    },
+    {
+      "path": "thesis/harness/distributed-k2-mesh-v1826/review/P2P-K2-V1731-SETUP-TIMING-ADDENDUM-20261020T0528.md",
+      "bytes": 2517,
+      "sha256": "8953ed1e55e6dad43072448d07b6348b506a7ea6013a1bcef75e7d6881bea035"
+    },
+    {
+      "path": "thesis/harness/distributed-k2-mesh-v1826/review/P2P-K2-V1731-TIMING-DELTA-CLOSURE-20261020T0554.md",
+      "bytes": 3685,
+      "sha256": "d19d059f55e9205a72e45eb76b54a21c114c59f62df3c48d891b5cbd272f2580"
+    },
+    {
+      "path": "thesis/harness/distributed-k2-mesh-v1826/review/P2P-K2-V1731-TIMING-DELTA-CLOSURE-RECEIPT-20261020T0554.json",
+      "bytes": 590,
+      "sha256": "5487a2c95b056c5d3525626a4cdad642dcf15027650c2cc70725713bd192a22b"
+    },
+    {
+      "path": "thesis/harness/distributed-k2-mesh-v1826/review/P2P-K2-V1733-PROVIDER-DELTA-REVIEW-20261020T0559.md",
+      "bytes": 3949,
+      "sha256": "57e00d5169d0955eef0ff937ccacbf560b392488bc9d483d7aeebe34db90bcd8"
+    },
+    {
+      "path": "thesis/harness/distributed-k2-mesh-v1826/review/P2P-K2-V1735-COLLECTOR-BOUNDED-REVIEW-20261020T0602.md",
+      "bytes": 3759,
+      "sha256": "3d340bfebb42eaa064d3f3d0f72a6bdb1344f34d57a3f4ea3966e77dea0a7412"
+    },
+    {
+      "path": "thesis/harness/distributed-k2-mesh-v1826/review/P2P-K2-V1822-V1826-HANDLER-FILTER-AND-HASH-PLUMBING-REVIEW-CLOSED-20261020T1549Z.md",
+      "bytes": 6292,
+      "sha256": "92457b18c225fec51a38d57549fd3433babda2ebe6aca4ddf9d4ec00f16c591b"
+    },
+    {
+      "path": "thesis/harness/distributed-k2-mesh-v1826/review/P2P-K2-V1829-PACKET-DEDUP-CUSTODY-REVIEW-CLOSED-20261020T1559Z.json",
+      "bytes": 3716,
+      "sha256": "5a5bb7ad4fc4060b7c330f85b169c60ea929c3f7783376be79b20a0d57dcda0e"
+    },
+    {
+      "path": "thesis/harness/distributed-k2-mesh-v1826/route_observation_sink.py",
+      "bytes": 11641,
+      "sha256": "e85cbd14637af7f9939b07163ee2571ee561c98b52adf179bc72a7e01589ad8f"
+    },
+    {
+      "path": "thesis/harness/distributed-k2-mesh-v1826/route_runtime_pins.json",
+      "bytes": 2350,
+      "sha256": "db270c9c6373b24e669bdf2b002da5fadb3e3841ee1ecc6ad8dec5a7ad26daf8"
+    },
+    {
+      "path": "thesis/harness/distributed-k2-mesh-v1826/runner.py",
+      "bytes": 69328,
+      "sha256": "8347fc103a11ca6c9d0c3686b442bd2e4236a4122c668a42bcc10944b7408285"
+    },
+    {
+      "path": "thesis/harness/distributed-k2-mesh-v1826/smoke_classifier.py",
+      "bytes": 3351,
+      "sha256": "7449ad2ddc6a863cb60595dd4542f96dd6f973aa02e0d0733a889f981998dd62"
+    },
+    {
+      "path": "thesis/harness/distributed-k2-mesh-v1826/source-before-setup-timing/runner.py",
+      "bytes": 67311,
+      "sha256": "d031a116f02a17ef0a60a9b62f4729119dfa2f0466d4cd5f5bd6822e3f9dccd9"
+    },
+    {
+      "path": "thesis/harness/distributed-k2-mesh-v1826/source-inventory.json",
+      "bytes": 67817,
+      "sha256": "a38421a03ffafb73a4c469aa7c82fb299210eedd6fe97809beb3c508782883d4"
+    },
+    {
+      "path": "thesis/harness/distributed-k2-mesh-v905/INPUT-STAGING-v859.json",
+      "bytes": 418,
+      "sha256": "5a27492cb75f88a3459671231f7ef45bb99f9d8703aa25654174c75e58e16f68"
+    },
+    {
+      "path": "thesis/harness/distributed-k2-mesh-v905/README.md",
+      "bytes": 5552,
+      "sha256": "949519de44aa4929f80175cea287c51dc40b8652a4b4235e34168acce4909b42"
+    },
+    {
+      "path": "thesis/harness/distributed-k2-mesh-v905/REPORT.md",
+      "bytes": 2532,
+      "sha256": "bdb1165229b0514501e0536fee2e0ace9db66e92ac5ccfe1387b0be97429d94b"
+    },
+    {
+      "path": "thesis/harness/distributed-k2-mesh-v905/SOURCE-CUSTODY-v907.json",
+      "bytes": 3654,
+      "sha256": "bcc4d6b24ada7b7f2a759bd4bb7d4725b0704cd384d7ea7dee4409c661933d39"
+    },
+    {
+      "path": "thesis/harness/distributed-k2-mesh-v905/aurora_voice_telemetry_v430.py",
+      "bytes": 11584,
+      "sha256": "8129ffe7591a47a0107ede53b101aead9fc1f58b92f0c0c4203176cc7608325d"
+    },
+    {
+      "path": "thesis/harness/distributed-k2-mesh-v905/bindings.py",
+      "bytes": 5492,
+      "sha256": "79558452e6f61268ad246476ca848e060b8ea808e15091bc53a3c4e0e28b1647"
+    },
+    {
+      "path": "thesis/harness/distributed-k2-mesh-v905/bootstrap.py",
+      "bytes": 12953,
+      "sha256": "b88a8a1aa6769bffc214329cdc219f6effc369b172cd777b3959c69a084866ec"
+    },
+    {
+      "path": "thesis/harness/distributed-k2-mesh-v905/candidate-manifest.json",
+      "bytes": 220,
+      "sha256": "ce75b965ee5879ebece6ea7dfe133441547d20ccf89ecd5d66ea510bd9645e60"
+    },
+    {
+      "path": "thesis/harness/distributed-k2-mesh-v905/controller.py",
+      "bytes": 19031,
+      "sha256": "39e6b6c7a9b95c57cda54cd673622a202379483920d63a20088c6c3809853024"
+    },
+    {
+      "path": "thesis/harness/distributed-k2-mesh-v905/freeze-template.json",
+      "bytes": 3097,
+      "sha256": "198336ccc3dcea3a9fbbca0612a2b78afff41a29c6581e1131fe420674ca2147"
+    },
+    {
+      "path": "thesis/harness/distributed-k2-mesh-v905/k2_composition.py",
+      "bytes": 14335,
+      "sha256": "d61de004741b6ffe13424dd67705a296b7f1cb32547f4c4f0443c7fc8f7b09a3"
+    },
+    {
+      "path": "thesis/harness/distributed-k2-mesh-v905/mesh_route_observer.py",
+      "bytes": 9586,
+      "sha256": "db390cdc4e05718e111037b3118573aab5ee9215c57b8e4398767a8b07e6ce7a"
+    },
+    {
+      "path": "thesis/harness/distributed-k2-mesh-v905/mesh_stage_adapter.py",
+      "bytes": 9818,
+      "sha256": "89c9dabcadede2d1376434b81011527b916efb31a46e7bc5d92453832117c902"
+    },
+    {
+      "path": "thesis/harness/distributed-k2-mesh-v905/observer.py",
+      "bytes": 11873,
+      "sha256": "784cc4bffc0d6824bbe378d17a7f632d587ca0a315896b048b2ebef727082df5"
+    },
+    {
+      "path": "thesis/harness/distributed-k2-mesh-v905/receiver_proof.py",
+      "bytes": 25848,
+      "sha256": "51219585bd3cc2c11a2e49c7ecaaecde3c55c30669e40a179e21094b3b81cd83"
+    },
+    {
+      "path": "thesis/harness/distributed-k2-mesh-v905/resource_sample.py",
+      "bytes": 7475,
+      "sha256": "8f62ec378e74036d4539d9159e3caf29b8fd7a9115de1ab0f482dfd58b6e1857"
+    },
+    {
+      "path": "thesis/harness/distributed-k2-mesh-v905/route_observation_sink.py",
+      "bytes": 11641,
+      "sha256": "e85cbd14637af7f9939b07163ee2571ee561c98b52adf179bc72a7e01589ad8f"
+    },
+    {
+      "path": "thesis/harness/distributed-k2-mesh-v905/route_runtime_pins.json",
+      "bytes": 237,
+      "sha256": "43ebd778b21fa5b484f36071798a6b7b5ec4b3fa34f21057a56640813e60a76f"
+    },
+    {
+      "path": "thesis/harness/distributed-k2-mesh-v905/runner.py",
+      "bytes": 63122,
+      "sha256": "362ce8f30f60c49cfd0c4ad64525091ecd29b16819a2fa5813cf7826cc7a2fac"
+    },
+    {
+      "path": "thesis/harness/distributed-k2-mesh-v905/source-inventory.json",
+      "bytes": 58216,
+      "sha256": "96ec8e3e14233520d4cd469c4177264a193d05cf26b4b512d91d98f16bbb7dee"
+    },
+    {
+      "path": "thesis/harness/distributed-k2-operations-v1748/CUSTODY-ONLY.diff",
+      "bytes": 6905,
+      "sha256": "9dcf412a9d09edeb0bb914dd35c089760af47b88dc2cda4ea0adfc01ec64d078"
+    },
+    {
+      "path": "thesis/harness/distributed-k2-operations-v1748/README.md",
+      "bytes": 2181,
+      "sha256": "394e9a5b8a4bedb7246a8394c20f9f2f9f9cbf3607ef0ee61affe435d95404aa"
+    },
+    {
+      "path": "thesis/harness/distributed-k2-operations-v1748/SOURCE-RECEIPT.json",
+      "bytes": 5226,
+      "sha256": "a0bcd26af7906ca1508c78a55e568ee5c5f850161579545dd61d6448e5510b52"
+    },
+    {
+      "path": "thesis/harness/distributed-k2-operations-v1748/review/COPY-RECEIPT.json",
+      "bytes": 828,
+      "sha256": "b1d8aa22b59bc322268bd162892015a6b21734803e4fce6edf9a7531552026b9"
+    },
+    {
+      "path": "thesis/harness/distributed-k2-operations-v1748/review/P2P-K2-V1748-COPIER-ARTIFACT-MAP-REVIEW-20261020T0802.md",
+      "bytes": 5217,
+      "sha256": "db8f8887b83dbb8aff4bef88b04294a64f55f4e5002c0e326aca5952d4ef6d5c"
+    },
+    {
+      "path": "thesis/harness/distributed-k2-operations-v1748/review/P2P-K2-V1786-V1787-OPERATION-GLUE-BOUNDED-REVIEW-20261020T1443Z.md",
+      "bytes": 6067,
+      "sha256": "96878552532a2e3c83f8df2f5e4731a286f07e90d2b628e0d94a82875d388545"
+    },
+    {
+      "path": "thesis/harness/distributed-k2k3-http-v819/README.md",
+      "bytes": 2399,
+      "sha256": "6ccec2034da7cf800799e6b50b4227567d9f767b85850da5875dee168c6fa547"
+    },
+    {
+      "path": "thesis/harness/distributed-k2k3-http-v819/REPORT.md",
+      "bytes": 2469,
+      "sha256": "865744ca359cf3fab3add116609ba74216dba1adfde97f01836e0b6749fad783"
+    },
+    {
+      "path": "thesis/harness/distributed-k2k3-http-v819/SOURCE-CUSTODY-v830.json",
+      "bytes": 666,
+      "sha256": "1ee20bd40632d615bf5a9fdc4ad5cc8352656ece1d42c4cbd55fe63c49c8c04f"
+    },
+    {
+      "path": "thesis/harness/distributed-k2k3-http-v819/stage_adapter.py",
+      "bytes": 8801,
+      "sha256": "204ea4d6b48571ab7ba0add0310a3dadd87b5e1e2afdc172634185755c9bb02c"
+    },
+    {
+      "path": "thesis/harness/distributed-k2k3-mesh-v878/REPORT.md",
+      "bytes": 5487,
+      "sha256": "aee8796174e70be49839e23b415c43980c8e344b7a37f641fb9f44bdefaacc35"
+    },
+    {
+      "path": "thesis/harness/distributed-k2k3-mesh-v878/SOURCE-CUSTODY-v880.json",
+      "bytes": 819,
+      "sha256": "e596c5ede99765f19da2e3fc190c4543a3861eef72a2e72e2a67c08b6c73b9a0"
+    },
+    {
+      "path": "thesis/harness/distributed-k2k3-mesh-v878/mesh_stage_adapter.py",
+      "bytes": 9458,
+      "sha256": "ec25e4e6db568241d0af03f88573a37d3a0775d4e52bf703bfa0bb5a039e38a9"
+    },
+    {
+      "path": "thesis/harness/distributed-k3-http-remaining-v1513/aurora_voice_telemetry_v430.py",
+      "bytes": 11584,
+      "sha256": "8129ffe7591a47a0107ede53b101aead9fc1f58b92f0c0c4203176cc7608325d"
+    },
+    {
+      "path": "thesis/harness/distributed-k3-http-remaining-v1513/bindings.py",
+      "bytes": 3230,
+      "sha256": "52182f956b34788ecbfbbb241c8243ff88baebe2874e3605791793777ed0dc91"
+    },
+    {
+      "path": "thesis/harness/distributed-k3-http-remaining-v1513/bootstrap.py",
+      "bytes": 1950,
+      "sha256": "6dddcd75348326ed65f6efaf05abdc40dcc503d512dd0a20b6335cbb277f5d50"
+    },
+    {
+      "path": "thesis/harness/distributed-k3-http-remaining-v1513/candidate-manifest.json",
+      "bytes": 220,
+      "sha256": "ce75b965ee5879ebece6ea7dfe133441547d20ccf89ecd5d66ea510bd9645e60"
+    },
+    {
+      "path": "thesis/harness/distributed-k3-http-remaining-v1513/controller.py",
+      "bytes": 18976,
+      "sha256": "d7471a65b4eb834a187d51e4b52b0874dc1afe61e8490720694ebeed20cd977c"
+    },
+    {
+      "path": "thesis/harness/distributed-k3-http-remaining-v1513/k3_composition.py",
+      "bytes": 13333,
+      "sha256": "a62e5a036eb127657e1f81c503c08a272a7ef603c53c5e03991c17f4daa1a9e6"
+    },
+    {
+      "path": "thesis/harness/distributed-k3-http-remaining-v1513/observer.py",
+      "bytes": 11873,
+      "sha256": "784cc4bffc0d6824bbe378d17a7f632d587ca0a315896b048b2ebef727082df5"
+    },
+    {
+      "path": "thesis/harness/distributed-k3-http-remaining-v1513/receiver_proof.py",
+      "bytes": 15751,
+      "sha256": "40ac64685ffb078b9d9aa983916d20df9c218badc40ae46b29c7398e4a0d259f"
+    },
+    {
+      "path": "thesis/harness/distributed-k3-http-remaining-v1513/resource_sample.py",
+      "bytes": 7475,
+      "sha256": "8f62ec378e74036d4539d9159e3caf29b8fd7a9115de1ab0f482dfd58b6e1857"
+    },
+    {
+      "path": "thesis/harness/distributed-k3-http-remaining-v1513/runner.py",
+      "bytes": 54907,
+      "sha256": "a1d39df18f20a37cd97e94eeba858ebee6b1874b4be00b235fb31b7db0e48954"
+    },
+    {
+      "path": "thesis/harness/distributed-k3-http-remaining-v1513/source-inventory.json",
+      "bytes": 58216,
+      "sha256": "96ec8e3e14233520d4cd469c4177264a193d05cf26b4b512d91d98f16bbb7dee"
+    },
+    {
+      "path": "thesis/harness/distributed-k3-http-remaining-v1513/stage_adapter.py",
+      "bytes": 8801,
+      "sha256": "204ea4d6b48571ab7ba0add0310a3dadd87b5e1e2afdc172634185755c9bb02c"
+    },
+    {
+      "path": "thesis/harness/distributed-k3-http-remaining-v1562/aurora_voice_telemetry_v430.py",
+      "bytes": 11584,
+      "sha256": "8129ffe7591a47a0107ede53b101aead9fc1f58b92f0c0c4203176cc7608325d"
+    },
+    {
+      "path": "thesis/harness/distributed-k3-http-remaining-v1562/bindings.py",
+      "bytes": 3230,
+      "sha256": "52182f956b34788ecbfbbb241c8243ff88baebe2874e3605791793777ed0dc91"
+    },
+    {
+      "path": "thesis/harness/distributed-k3-http-remaining-v1562/bootstrap.py",
+      "bytes": 1950,
+      "sha256": "6dddcd75348326ed65f6efaf05abdc40dcc503d512dd0a20b6335cbb277f5d50"
+    },
+    {
+      "path": "thesis/harness/distributed-k3-http-remaining-v1562/candidate-manifest.json",
+      "bytes": 220,
+      "sha256": "ce75b965ee5879ebece6ea7dfe133441547d20ccf89ecd5d66ea510bd9645e60"
+    },
+    {
+      "path": "thesis/harness/distributed-k3-http-remaining-v1562/controller.py",
+      "bytes": 19509,
+      "sha256": "2be61b0212d90bce02d1023773aee0c0ff839442346b3be37df54817d4e82368"
+    },
+    {
+      "path": "thesis/harness/distributed-k3-http-remaining-v1562/k3_composition.py",
+      "bytes": 13333,
+      "sha256": "a62e5a036eb127657e1f81c503c08a272a7ef603c53c5e03991c17f4daa1a9e6"
+    },
+    {
+      "path": "thesis/harness/distributed-k3-http-remaining-v1562/observer.py",
+      "bytes": 11873,
+      "sha256": "784cc4bffc0d6824bbe378d17a7f632d587ca0a315896b048b2ebef727082df5"
+    },
+    {
+      "path": "thesis/harness/distributed-k3-http-remaining-v1562/receiver_proof.py",
+      "bytes": 15751,
+      "sha256": "7f835922ac407f8e39363967192968f309b5dd6d873052aa736de47e5eaca8c2"
+    },
+    {
+      "path": "thesis/harness/distributed-k3-http-remaining-v1562/resource_sample.py",
+      "bytes": 7475,
+      "sha256": "8f62ec378e74036d4539d9159e3caf29b8fd7a9115de1ab0f482dfd58b6e1857"
+    },
+    {
+      "path": "thesis/harness/distributed-k3-http-remaining-v1562/runner.py",
+      "bytes": 54907,
+      "sha256": "d3eb071de81a3efc16a755c32ede746debd57479884910ef0e87aa61bf07582b"
+    },
+    {
+      "path": "thesis/harness/distributed-k3-http-remaining-v1562/source-inventory.json",
+      "bytes": 58216,
+      "sha256": "96ec8e3e14233520d4cd469c4177264a193d05cf26b4b512d91d98f16bbb7dee"
+    },
+    {
+      "path": "thesis/harness/distributed-k3-http-remaining-v1562/stage_adapter.py",
+      "bytes": 8801,
+      "sha256": "204ea4d6b48571ab7ba0add0310a3dadd87b5e1e2afdc172634185755c9bb02c"
+    },
+    {
+      "path": "thesis/harness/distributed-k3-http-remaining-v1573/aurora_voice_telemetry_v430.py",
+      "bytes": 11584,
+      "sha256": "8129ffe7591a47a0107ede53b101aead9fc1f58b92f0c0c4203176cc7608325d"
+    },
+    {
+      "path": "thesis/harness/distributed-k3-http-remaining-v1573/bindings.py",
+      "bytes": 3230,
+      "sha256": "52182f956b34788ecbfbbb241c8243ff88baebe2874e3605791793777ed0dc91"
+    },
+    {
+      "path": "thesis/harness/distributed-k3-http-remaining-v1573/bootstrap.py",
+      "bytes": 1950,
+      "sha256": "6dddcd75348326ed65f6efaf05abdc40dcc503d512dd0a20b6335cbb277f5d50"
+    },
+    {
+      "path": "thesis/harness/distributed-k3-http-remaining-v1573/candidate-manifest.json",
+      "bytes": 220,
+      "sha256": "ce75b965ee5879ebece6ea7dfe133441547d20ccf89ecd5d66ea510bd9645e60"
+    },
+    {
+      "path": "thesis/harness/distributed-k3-http-remaining-v1573/controller.py",
+      "bytes": 19509,
+      "sha256": "6ac8bb2628b7c8011ad696bfd2162a87de00e15be6819b9c312bdea25925fdeb"
+    },
+    {
+      "path": "thesis/harness/distributed-k3-http-remaining-v1573/k3_composition.py",
+      "bytes": 13333,
+      "sha256": "a62e5a036eb127657e1f81c503c08a272a7ef603c53c5e03991c17f4daa1a9e6"
+    },
+    {
+      "path": "thesis/harness/distributed-k3-http-remaining-v1573/observer.py",
+      "bytes": 11873,
+      "sha256": "784cc4bffc0d6824bbe378d17a7f632d587ca0a315896b048b2ebef727082df5"
+    },
+    {
+      "path": "thesis/harness/distributed-k3-http-remaining-v1573/receiver_proof.py",
+      "bytes": 15751,
+      "sha256": "6556a3cc79a8c732f5b0100165981856e0b0053f68c47a4bc8ea308d866d95cf"
+    },
+    {
+      "path": "thesis/harness/distributed-k3-http-remaining-v1573/resource_sample.py",
+      "bytes": 7475,
+      "sha256": "8f62ec378e74036d4539d9159e3caf29b8fd7a9115de1ab0f482dfd58b6e1857"
+    },
+    {
+      "path": "thesis/harness/distributed-k3-http-remaining-v1573/runner.py",
+      "bytes": 54907,
+      "sha256": "540dbe7a84a93a614047f55d35ab9bcc312964d09bdbb5d36631e306ab9d50c9"
+    },
+    {
+      "path": "thesis/harness/distributed-k3-http-remaining-v1573/source-inventory.json",
+      "bytes": 58216,
+      "sha256": "96ec8e3e14233520d4cd469c4177264a193d05cf26b4b512d91d98f16bbb7dee"
+    },
+    {
+      "path": "thesis/harness/distributed-k3-http-remaining-v1573/stage_adapter.py",
+      "bytes": 8801,
+      "sha256": "204ea4d6b48571ab7ba0add0310a3dadd87b5e1e2afdc172634185755c9bb02c"
+    },
+    {
+      "path": "thesis/harness/distributed-k3-http-remaining-v1590/aurora_voice_telemetry_v430.py",
+      "bytes": 11584,
+      "sha256": "8129ffe7591a47a0107ede53b101aead9fc1f58b92f0c0c4203176cc7608325d"
+    },
+    {
+      "path": "thesis/harness/distributed-k3-http-remaining-v1590/bindings.py",
+      "bytes": 3230,
+      "sha256": "52182f956b34788ecbfbbb241c8243ff88baebe2874e3605791793777ed0dc91"
+    },
+    {
+      "path": "thesis/harness/distributed-k3-http-remaining-v1590/bootstrap.py",
+      "bytes": 1950,
+      "sha256": "6dddcd75348326ed65f6efaf05abdc40dcc503d512dd0a20b6335cbb277f5d50"
+    },
+    {
+      "path": "thesis/harness/distributed-k3-http-remaining-v1590/candidate-manifest.json",
+      "bytes": 220,
+      "sha256": "ce75b965ee5879ebece6ea7dfe133441547d20ccf89ecd5d66ea510bd9645e60"
+    },
+    {
+      "path": "thesis/harness/distributed-k3-http-remaining-v1590/controller.py",
+      "bytes": 19512,
+      "sha256": "8af9d3879b19d2b6c9b733a9d3687c8af31232bf90ec91fa8ccbfc2aee614841"
+    },
+    {
+      "path": "thesis/harness/distributed-k3-http-remaining-v1590/k3_composition.py",
+      "bytes": 13333,
+      "sha256": "a62e5a036eb127657e1f81c503c08a272a7ef603c53c5e03991c17f4daa1a9e6"
+    },
+    {
+      "path": "thesis/harness/distributed-k3-http-remaining-v1590/observer.py",
+      "bytes": 11873,
+      "sha256": "784cc4bffc0d6824bbe378d17a7f632d587ca0a315896b048b2ebef727082df5"
+    },
+    {
+      "path": "thesis/harness/distributed-k3-http-remaining-v1590/receiver_proof.py",
+      "bytes": 15751,
+      "sha256": "55542219b2d6ae56598e3df8ef190766f353fd68ab0e2f23a856085dcd5ca37f"
+    },
+    {
+      "path": "thesis/harness/distributed-k3-http-remaining-v1590/resource_sample.py",
+      "bytes": 7475,
+      "sha256": "8f62ec378e74036d4539d9159e3caf29b8fd7a9115de1ab0f482dfd58b6e1857"
+    },
+    {
+      "path": "thesis/harness/distributed-k3-http-remaining-v1590/runner.py",
+      "bytes": 54907,
+      "sha256": "e95c9d7af67b1348ec4d65aeaa6ec9ebe3257f53d9c6bf3bbf980e4a358e2074"
+    },
+    {
+      "path": "thesis/harness/distributed-k3-http-remaining-v1590/source-inventory.json",
+      "bytes": 58216,
+      "sha256": "96ec8e3e14233520d4cd469c4177264a193d05cf26b4b512d91d98f16bbb7dee"
+    },
+    {
+      "path": "thesis/harness/distributed-k3-http-remaining-v1590/stage_adapter.py",
+      "bytes": 10811,
+      "sha256": "eb4538e453b3f0f4d1eac9bd1437d222d9333d68d7a0280f68cc5682d052e5c3"
+    },
+    {
+      "path": "thesis/harness/distributed-k3-http-remaining-v1610/aurora_voice_telemetry_v430.py",
+      "bytes": 11584,
+      "sha256": "8129ffe7591a47a0107ede53b101aead9fc1f58b92f0c0c4203176cc7608325d"
+    },
+    {
+      "path": "thesis/harness/distributed-k3-http-remaining-v1610/bindings.py",
+      "bytes": 3230,
+      "sha256": "52182f956b34788ecbfbbb241c8243ff88baebe2874e3605791793777ed0dc91"
+    },
+    {
+      "path": "thesis/harness/distributed-k3-http-remaining-v1610/bootstrap.py",
+      "bytes": 1950,
+      "sha256": "6dddcd75348326ed65f6efaf05abdc40dcc503d512dd0a20b6335cbb277f5d50"
+    },
+    {
+      "path": "thesis/harness/distributed-k3-http-remaining-v1610/candidate-manifest.json",
+      "bytes": 220,
+      "sha256": "ce75b965ee5879ebece6ea7dfe133441547d20ccf89ecd5d66ea510bd9645e60"
+    },
+    {
+      "path": "thesis/harness/distributed-k3-http-remaining-v1610/controller.py",
+      "bytes": 19512,
+      "sha256": "e905b02cb8c57f408052a6af45f853396ae37ff92dcc85d8c94b070160e0554c"
+    },
+    {
+      "path": "thesis/harness/distributed-k3-http-remaining-v1610/k3_composition.py",
+      "bytes": 13333,
+      "sha256": "a62e5a036eb127657e1f81c503c08a272a7ef603c53c5e03991c17f4daa1a9e6"
+    },
+    {
+      "path": "thesis/harness/distributed-k3-http-remaining-v1610/observer.py",
+      "bytes": 11873,
+      "sha256": "784cc4bffc0d6824bbe378d17a7f632d587ca0a315896b048b2ebef727082df5"
+    },
+    {
+      "path": "thesis/harness/distributed-k3-http-remaining-v1610/receiver_proof.py",
+      "bytes": 15751,
+      "sha256": "6f0dfdd656c507266a2505a03b81c3b10a858e0cd9f5b04e71d9aba19d7c2b77"
+    },
+    {
+      "path": "thesis/harness/distributed-k3-http-remaining-v1610/resource_sample.py",
+      "bytes": 7475,
+      "sha256": "8f62ec378e74036d4539d9159e3caf29b8fd7a9115de1ab0f482dfd58b6e1857"
+    },
+    {
+      "path": "thesis/harness/distributed-k3-http-remaining-v1610/runner.py",
+      "bytes": 54907,
+      "sha256": "08a4618e9a1ebcfb7150a5f1d0c0300fdbe8f76d77c1d01be03f5091e5b9ae21"
+    },
+    {
+      "path": "thesis/harness/distributed-k3-http-remaining-v1610/source-inventory.json",
+      "bytes": 58216,
+      "sha256": "96ec8e3e14233520d4cd469c4177264a193d05cf26b4b512d91d98f16bbb7dee"
+    },
+    {
+      "path": "thesis/harness/distributed-k3-http-remaining-v1610/stage_adapter.py",
+      "bytes": 10811,
+      "sha256": "eb4538e453b3f0f4d1eac9bd1437d222d9333d68d7a0280f68cc5682d052e5c3"
+    },
+    {
+      "path": "thesis/harness/distributed-k3-http-remaining-v1620/aurora_voice_telemetry_v430.py",
+      "bytes": 11584,
+      "sha256": "8129ffe7591a47a0107ede53b101aead9fc1f58b92f0c0c4203176cc7608325d"
+    },
+    {
+      "path": "thesis/harness/distributed-k3-http-remaining-v1620/bindings.py",
+      "bytes": 3230,
+      "sha256": "52182f956b34788ecbfbbb241c8243ff88baebe2874e3605791793777ed0dc91"
+    },
+    {
+      "path": "thesis/harness/distributed-k3-http-remaining-v1620/bootstrap.py",
+      "bytes": 1950,
+      "sha256": "6dddcd75348326ed65f6efaf05abdc40dcc503d512dd0a20b6335cbb277f5d50"
+    },
+    {
+      "path": "thesis/harness/distributed-k3-http-remaining-v1620/candidate-manifest.json",
+      "bytes": 220,
+      "sha256": "ce75b965ee5879ebece6ea7dfe133441547d20ccf89ecd5d66ea510bd9645e60"
+    },
+    {
+      "path": "thesis/harness/distributed-k3-http-remaining-v1620/controller.py",
+      "bytes": 19509,
+      "sha256": "e3a909c69f21eaefa240ca876ac44e758ca8e60cfc8a47f769e4390cf46446ce"
+    },
+    {
+      "path": "thesis/harness/distributed-k3-http-remaining-v1620/k3_composition.py",
+      "bytes": 13333,
+      "sha256": "a62e5a036eb127657e1f81c503c08a272a7ef603c53c5e03991c17f4daa1a9e6"
+    },
+    {
+      "path": "thesis/harness/distributed-k3-http-remaining-v1620/observer.py",
+      "bytes": 11873,
+      "sha256": "784cc4bffc0d6824bbe378d17a7f632d587ca0a315896b048b2ebef727082df5"
+    },
+    {
+      "path": "thesis/harness/distributed-k3-http-remaining-v1620/receiver_proof.py",
+      "bytes": 15751,
+      "sha256": "be81af7dd90812509f217f62281c51ae6bee7eb4c4f10fb02c73056e4e274470"
+    },
+    {
+      "path": "thesis/harness/distributed-k3-http-remaining-v1620/resource_sample.py",
+      "bytes": 7475,
+      "sha256": "8f62ec378e74036d4539d9159e3caf29b8fd7a9115de1ab0f482dfd58b6e1857"
+    },
+    {
+      "path": "thesis/harness/distributed-k3-http-remaining-v1620/runner.py",
+      "bytes": 55135,
+      "sha256": "ce56c2c1588e8bbd77bce823987447c444553fe78a2be8e7d9467c466970f680"
+    },
+    {
+      "path": "thesis/harness/distributed-k3-http-remaining-v1620/source-inventory.json",
+      "bytes": 58216,
+      "sha256": "96ec8e3e14233520d4cd469c4177264a193d05cf26b4b512d91d98f16bbb7dee"
+    },
+    {
+      "path": "thesis/harness/distributed-k3-http-remaining-v1620/stage_adapter.py",
+      "bytes": 10811,
+      "sha256": "eb4538e453b3f0f4d1eac9bd1437d222d9333d68d7a0280f68cc5682d052e5c3"
+    },
+    {
+      "path": "thesis/harness/distributed-k3-http-remaining-v1682/aurora_voice_telemetry_v430.py",
+      "bytes": 11584,
+      "sha256": "8129ffe7591a47a0107ede53b101aead9fc1f58b92f0c0c4203176cc7608325d"
+    },
+    {
+      "path": "thesis/harness/distributed-k3-http-remaining-v1682/bindings.py",
+      "bytes": 3230,
+      "sha256": "52182f956b34788ecbfbbb241c8243ff88baebe2874e3605791793777ed0dc91"
+    },
+    {
+      "path": "thesis/harness/distributed-k3-http-remaining-v1682/bootstrap.py",
+      "bytes": 1950,
+      "sha256": "6dddcd75348326ed65f6efaf05abdc40dcc503d512dd0a20b6335cbb277f5d50"
+    },
+    {
+      "path": "thesis/harness/distributed-k3-http-remaining-v1682/candidate-manifest.json",
+      "bytes": 220,
+      "sha256": "ce75b965ee5879ebece6ea7dfe133441547d20ccf89ecd5d66ea510bd9645e60"
+    },
+    {
+      "path": "thesis/harness/distributed-k3-http-remaining-v1682/controller.py",
+      "bytes": 19512,
+      "sha256": "9c06e8fc9cbbfff3dabdd3f4fea752ca3adaa43a35f63d5aa78f629d999cbc1d"
+    },
+    {
+      "path": "thesis/harness/distributed-k3-http-remaining-v1682/k3_composition.py",
+      "bytes": 13333,
+      "sha256": "a62e5a036eb127657e1f81c503c08a272a7ef603c53c5e03991c17f4daa1a9e6"
+    },
+    {
+      "path": "thesis/harness/distributed-k3-http-remaining-v1682/observer.py",
+      "bytes": 11873,
+      "sha256": "784cc4bffc0d6824bbe378d17a7f632d587ca0a315896b048b2ebef727082df5"
+    },
+    {
+      "path": "thesis/harness/distributed-k3-http-remaining-v1682/receiver_proof.py",
+      "bytes": 15751,
+      "sha256": "c4f08615b9e37943a94024c5500ecfc171893562e42afc0437d3e549dfbdbf67"
+    },
+    {
+      "path": "thesis/harness/distributed-k3-http-remaining-v1682/resource_sample.py",
+      "bytes": 7475,
+      "sha256": "8f62ec378e74036d4539d9159e3caf29b8fd7a9115de1ab0f482dfd58b6e1857"
+    },
+    {
+      "path": "thesis/harness/distributed-k3-http-remaining-v1682/runner.py",
+      "bytes": 55137,
+      "sha256": "71b863b3245ecc76ac31fe59124647b6f5d8a03bc8b3abb74f58b5c0513a38d5"
+    },
+    {
+      "path": "thesis/harness/distributed-k3-http-remaining-v1682/source-inventory.json",
+      "bytes": 58216,
+      "sha256": "96ec8e3e14233520d4cd469c4177264a193d05cf26b4b512d91d98f16bbb7dee"
+    },
+    {
+      "path": "thesis/harness/distributed-k3-http-remaining-v1682/stage_adapter.py",
+      "bytes": 10811,
+      "sha256": "eb4538e453b3f0f4d1eac9bd1437d222d9333d68d7a0280f68cc5682d052e5c3"
+    },
+    {
+      "path": "thesis/harness/distributed-k3-http-v857/README.md",
+      "bytes": 3832,
+      "sha256": "18ec2097647e3fc66be01ffc17907cfae05e7f2b4ad368bd30c0dba76896a75a"
+    },
+    {
+      "path": "thesis/harness/distributed-k3-http-v857/REPORT.md",
+      "bytes": 2394,
+      "sha256": "5545daba7eff76b090ba0fe39f584f05c23f88e196e3cde2eab16b587578080b"
+    },
+    {
+      "path": "thesis/harness/distributed-k3-http-v857/SOURCE-CUSTODY-v859.json",
+      "bytes": 2668,
+      "sha256": "e11ea0173c038f52b79af9c37efc9174e00ceb107fef84b3c0e86c780335e405"
+    },
+    {
+      "path": "thesis/harness/distributed-k3-http-v857/aurora_voice_telemetry_v430.py",
+      "bytes": 11584,
+      "sha256": "8129ffe7591a47a0107ede53b101aead9fc1f58b92f0c0c4203176cc7608325d"
+    },
+    {
+      "path": "thesis/harness/distributed-k3-http-v857/bindings.py",
+      "bytes": 3230,
+      "sha256": "52182f956b34788ecbfbbb241c8243ff88baebe2874e3605791793777ed0dc91"
+    },
+    {
+      "path": "thesis/harness/distributed-k3-http-v857/bootstrap.py",
+      "bytes": 1950,
+      "sha256": "6dddcd75348326ed65f6efaf05abdc40dcc503d512dd0a20b6335cbb277f5d50"
+    },
+    {
+      "path": "thesis/harness/distributed-k3-http-v857/candidate-manifest.json",
+      "bytes": 220,
+      "sha256": "ce75b965ee5879ebece6ea7dfe133441547d20ccf89ecd5d66ea510bd9645e60"
+    },
+    {
+      "path": "thesis/harness/distributed-k3-http-v857/controller.py",
+      "bytes": 17372,
+      "sha256": "ea542c7b4f2c1355d6f06000fe6424ad6099778e91466f82becc38af2e64a0fd"
+    },
+    {
+      "path": "thesis/harness/distributed-k3-http-v857/k3_composition.py",
+      "bytes": 13333,
+      "sha256": "a62e5a036eb127657e1f81c503c08a272a7ef603c53c5e03991c17f4daa1a9e6"
+    },
+    {
+      "path": "thesis/harness/distributed-k3-http-v857/observer.py",
+      "bytes": 11873,
+      "sha256": "784cc4bffc0d6824bbe378d17a7f632d587ca0a315896b048b2ebef727082df5"
+    },
+    {
+      "path": "thesis/harness/distributed-k3-http-v857/receiver_proof.py",
+      "bytes": 15750,
+      "sha256": "25ce34e728c55ecf62cca5db20cb1d0ef8bfa92676966e49ce8ce7aad0295c42"
+    },
+    {
+      "path": "thesis/harness/distributed-k3-http-v857/resource_sample.py",
+      "bytes": 7475,
+      "sha256": "8f62ec378e74036d4539d9159e3caf29b8fd7a9115de1ab0f482dfd58b6e1857"
+    },
+    {
+      "path": "thesis/harness/distributed-k3-http-v857/runner.py",
+      "bytes": 53444,
+      "sha256": "6b534605a668a424f6ab1e9164e3ddada57eeadd989b95cd706208199efcfa40"
+    },
+    {
+      "path": "thesis/harness/distributed-k3-http-v857/source-inventory.json",
+      "bytes": 58216,
+      "sha256": "96ec8e3e14233520d4cd469c4177264a193d05cf26b4b512d91d98f16bbb7dee"
+    },
+    {
+      "path": "thesis/harness/distributed-k3-http-v857/stage_adapter.py",
+      "bytes": 8801,
+      "sha256": "204ea4d6b48571ab7ba0add0310a3dadd87b5e1e2afdc172634185755c9bb02c"
+    },
+    {
+      "path": "thesis/harness/distributed-k3-mesh-v1910/CUMULATIVE-STT-DELTA.diff",
+      "bytes": 60643,
+      "sha256": "b1254a52ec9efbfbd08dd708171592c13407ca8de051451ec80da4e0ccc995a2"
+    },
+    {
+      "path": "thesis/harness/distributed-k3-mesh-v1910/SOURCE-RECEIPT.json",
+      "bytes": 3076,
+      "sha256": "fcf00853a2405b5f21a3e3747b3766ce8df78a71d285a3a1b821bef5688a7114"
+    },
+    {
+      "path": "thesis/harness/distributed-k3-mesh-v1910/aurora_voice_telemetry_v430.py",
+      "bytes": 11584,
+      "sha256": "8129ffe7591a47a0107ede53b101aead9fc1f58b92f0c0c4203176cc7608325d"
+    },
+    {
+      "path": "thesis/harness/distributed-k3-mesh-v1910/bindings.py",
+      "bytes": 5492,
+      "sha256": "79558452e6f61268ad246476ca848e060b8ea808e15091bc53a3c4e0e28b1647"
+    },
+    {
+      "path": "thesis/harness/distributed-k3-mesh-v1910/bootstrap.py",
+      "bytes": 13055,
+      "sha256": "df9957c1880d45b5a1d059d7743b51a2d7fe34b3f5331e1331633eee5e8f45bc"
+    },
+    {
+      "path": "thesis/harness/distributed-k3-mesh-v1910/candidate-manifest.json",
+      "bytes": 220,
+      "sha256": "ce75b965ee5879ebece6ea7dfe133441547d20ccf89ecd5d66ea510bd9645e60"
+    },
+    {
+      "path": "thesis/harness/distributed-k3-mesh-v1910/controller.py",
+      "bytes": 19790,
+      "sha256": "bcd0bed98adbcb7d5579b43f963e74801d82e92210876ea28da809abcfd9f4da"
+    },
+    {
+      "path": "thesis/harness/distributed-k3-mesh-v1910/freeze-template.json",
+      "bytes": 4294,
+      "sha256": "7b2e18e591657084090ac3a67539a06d644538552f0a9239a9ff6122cfd80793"
+    },
+    {
+      "path": "thesis/harness/distributed-k3-mesh-v1910/k3_composition.py",
+      "bytes": 13755,
+      "sha256": "09399c07cfc44cfbaaac969af5c928e9ae57fab2d6848f76f29950e7fdc314bf"
+    },
+    {
+      "path": "thesis/harness/distributed-k3-mesh-v1910/mesh_route_observer.py",
+      "bytes": 9586,
+      "sha256": "db390cdc4e05718e111037b3118573aab5ee9215c57b8e4398767a8b07e6ce7a"
+    },
+    {
+      "path": "thesis/harness/distributed-k3-mesh-v1910/mesh_stage_adapter.py",
+      "bytes": 10765,
+      "sha256": "6e09f9d66a9178ff184f93395cd81b6bfe3828895a90003057eeeae6c1a0a719"
+    },
+    {
+      "path": "thesis/harness/distributed-k3-mesh-v1910/observer.py",
+      "bytes": 11873,
+      "sha256": "784cc4bffc0d6824bbe378d17a7f632d587ca0a315896b048b2ebef727082df5"
+    },
+    {
+      "path": "thesis/harness/distributed-k3-mesh-v1910/receiver_proof.py",
+      "bytes": 27636,
+      "sha256": "c0ee53af8d090fef3c7562f51b18b6228a45d7a08563ccf49c38e4605b4cb0d4"
+    },
+    {
+      "path": "thesis/harness/distributed-k3-mesh-v1910/resource_sample.py",
+      "bytes": 7475,
+      "sha256": "8f62ec378e74036d4539d9159e3caf29b8fd7a9115de1ab0f482dfd58b6e1857"
+    },
+    {
+      "path": "thesis/harness/distributed-k3-mesh-v1910/review/CUSTODY.json",
+      "bytes": 600,
+      "sha256": "5c30a51eb87bd03f65c79c14f52ddf3f806e5dcce21027b849b2a4d97cccf622"
+    },
+    {
+      "path": "thesis/harness/distributed-k3-mesh-v1910/review/K3-V1910-CUMULATIVE-STT-DELTA-REVIEW-CLOSED-20261020T2056Z.md",
+      "bytes": 7911,
+      "sha256": "9756ecd80bdccb542e48e4ad3d7a08dfadd7160892453d7e5d8d612fe3297a30"
+    },
+    {
+      "path": "thesis/harness/distributed-k3-mesh-v1910/review/K3-V1911-PROVIDER-IDENTITY-DELTA-REVIEW-CLOSED-20261020T2057Z.md",
+      "bytes": 2532,
+      "sha256": "9968bda7b28097ce5d37ddabe613a8f0c6143a0588de65e97fea9becd2379979"
+    },
+    {
+      "path": "thesis/harness/distributed-k3-mesh-v1910/route_observation_sink.py",
+      "bytes": 11641,
+      "sha256": "e85cbd14637af7f9939b07163ee2571ee561c98b52adf179bc72a7e01589ad8f"
+    },
+    {
+      "path": "thesis/harness/distributed-k3-mesh-v1910/route_runtime_pins.json",
+      "bytes": 2346,
+      "sha256": "5d79681b500485fd7c4c9e3d562a39af957b261f0f75452d25ad9fcc59dbc1db"
+    },
+    {
+      "path": "thesis/harness/distributed-k3-mesh-v1910/runner.py",
+      "bytes": 66885,
+      "sha256": "ea21fc0df74aa7a45d93242b878db87f350e62c799a4380c42815723afb56056"
+    },
+    {
+      "path": "thesis/harness/distributed-k3-mesh-v1910/source-inventory.json",
+      "bytes": 67817,
+      "sha256": "8b29dc63d9f1f2b4fb15cfc2bd62959c6efb411c7faab1b5f5de2c47f2393fe0"
+    },
+    {
+      "path": "thesis/harness/distributed-k3-mesh-v1919/CONTROLLER-THREE-STAGE-BINDING.diff",
+      "bytes": 2774,
+      "sha256": "133fba62676b862cfc9ae93600fbad188ba066636092375d8873b029a39dc131"
+    },
+    {
+      "path": "thesis/harness/distributed-k3-mesh-v1919/SOURCE-RECEIPT.json",
+      "bytes": 585,
+      "sha256": "5ad6dc7c99625ba9f1ac26ad29a8d3317c614bd4fa2453e3ad52726c40c0e99b"
+    },
+    {
+      "path": "thesis/harness/distributed-k3-mesh-v1919/aurora_voice_telemetry_v430.py",
+      "bytes": 11584,
+      "sha256": "8129ffe7591a47a0107ede53b101aead9fc1f58b92f0c0c4203176cc7608325d"
+    },
+    {
+      "path": "thesis/harness/distributed-k3-mesh-v1919/bindings.py",
+      "bytes": 5492,
+      "sha256": "79558452e6f61268ad246476ca848e060b8ea808e15091bc53a3c4e0e28b1647"
+    },
+    {
+      "path": "thesis/harness/distributed-k3-mesh-v1919/bootstrap.py",
+      "bytes": 13055,
+      "sha256": "df9957c1880d45b5a1d059d7743b51a2d7fe34b3f5331e1331633eee5e8f45bc"
+    },
+    {
+      "path": "thesis/harness/distributed-k3-mesh-v1919/candidate-manifest.json",
+      "bytes": 220,
+      "sha256": "ce75b965ee5879ebece6ea7dfe133441547d20ccf89ecd5d66ea510bd9645e60"
+    },
+    {
+      "path": "thesis/harness/distributed-k3-mesh-v1919/controller.py",
+      "bytes": 20150,
+      "sha256": "603cb2a5779ad154ab4e6113e3bd856438a494f1d33f0dede0a5d592cefe1983"
+    },
+    {
+      "path": "thesis/harness/distributed-k3-mesh-v1919/freeze-template.json",
+      "bytes": 4294,
+      "sha256": "906c66c2dd71bd6e6b498ac86a0f4e2d47ce92c2ccb6a60b3aaf576fd21dc4a7"
+    },
+    {
+      "path": "thesis/harness/distributed-k3-mesh-v1919/k3_composition.py",
+      "bytes": 13755,
+      "sha256": "09399c07cfc44cfbaaac969af5c928e9ae57fab2d6848f76f29950e7fdc314bf"
+    },
+    {
+      "path": "thesis/harness/distributed-k3-mesh-v1919/mesh_route_observer.py",
+      "bytes": 9586,
+      "sha256": "db390cdc4e05718e111037b3118573aab5ee9215c57b8e4398767a8b07e6ce7a"
+    },
+    {
+      "path": "thesis/harness/distributed-k3-mesh-v1919/mesh_stage_adapter.py",
+      "bytes": 10765,
+      "sha256": "6e09f9d66a9178ff184f93395cd81b6bfe3828895a90003057eeeae6c1a0a719"
+    },
+    {
+      "path": "thesis/harness/distributed-k3-mesh-v1919/observer.py",
+      "bytes": 11873,
+      "sha256": "784cc4bffc0d6824bbe378d17a7f632d587ca0a315896b048b2ebef727082df5"
+    },
+    {
+      "path": "thesis/harness/distributed-k3-mesh-v1919/receiver_proof.py",
+      "bytes": 27636,
+      "sha256": "c0ee53af8d090fef3c7562f51b18b6228a45d7a08563ccf49c38e4605b4cb0d4"
+    },
+    {
+      "path": "thesis/harness/distributed-k3-mesh-v1919/resource_sample.py",
+      "bytes": 7475,
+      "sha256": "8f62ec378e74036d4539d9159e3caf29b8fd7a9115de1ab0f482dfd58b6e1857"
+    },
+    {
+      "path": "thesis/harness/distributed-k3-mesh-v1919/route_observation_sink.py",
+      "bytes": 11641,
+      "sha256": "e85cbd14637af7f9939b07163ee2571ee561c98b52adf179bc72a7e01589ad8f"
+    },
+    {
+      "path": "thesis/harness/distributed-k3-mesh-v1919/route_runtime_pins.json",
+      "bytes": 2346,
+      "sha256": "5d79681b500485fd7c4c9e3d562a39af957b261f0f75452d25ad9fcc59dbc1db"
+    },
+    {
+      "path": "thesis/harness/distributed-k3-mesh-v1919/runner.py",
+      "bytes": 66885,
+      "sha256": "ea21fc0df74aa7a45d93242b878db87f350e62c799a4380c42815723afb56056"
+    },
+    {
+      "path": "thesis/harness/distributed-k3-mesh-v1919/source-inventory.json",
+      "bytes": 67817,
+      "sha256": "8b29dc63d9f1f2b4fb15cfc2bd62959c6efb411c7faab1b5f5de2c47f2393fe0"
+    },
+    {
+      "path": "thesis/harness/distributed-k3-mesh-v911/README.md",
+      "bytes": 3080,
+      "sha256": "1d4d355c8046d8c6d97a6370f79766d2fca88daa06ab67a37153cf6fa40c8bcc"
+    },
+    {
+      "path": "thesis/harness/distributed-k3-mesh-v911/REPORT.md",
+      "bytes": 2099,
+      "sha256": "46dce2a37ceda8a0577706afefac64f695ee08aa807ddf571046a6bbbeb5df6c"
+    },
+    {
+      "path": "thesis/harness/distributed-k3-mesh-v911/SOURCE-CUSTODY-v918.json",
+      "bytes": 3506,
+      "sha256": "f8f9d97f0498544fb412d9c6b120730a0f26c165bfec5c65e18432db092e8957"
+    },
+    {
+      "path": "thesis/harness/distributed-k3-mesh-v911/aurora_voice_telemetry_v430.py",
+      "bytes": 11584,
+      "sha256": "8129ffe7591a47a0107ede53b101aead9fc1f58b92f0c0c4203176cc7608325d"
+    },
+    {
+      "path": "thesis/harness/distributed-k3-mesh-v911/bindings.py",
+      "bytes": 5492,
+      "sha256": "79558452e6f61268ad246476ca848e060b8ea808e15091bc53a3c4e0e28b1647"
+    },
+    {
+      "path": "thesis/harness/distributed-k3-mesh-v911/bootstrap.py",
+      "bytes": 13055,
+      "sha256": "12e06236b2b0dcab5ce0e546f6da6bbdd73f5767747ef6abda45dce134e6118f"
+    },
+    {
+      "path": "thesis/harness/distributed-k3-mesh-v911/candidate-manifest.json",
+      "bytes": 220,
+      "sha256": "ce75b965ee5879ebece6ea7dfe133441547d20ccf89ecd5d66ea510bd9645e60"
+    },
+    {
+      "path": "thesis/harness/distributed-k3-mesh-v911/controller.py",
+      "bytes": 19568,
+      "sha256": "e53c2bcbc208563fc4f0983f08d0c785a7178ad49940fb4b954ef314891b55eb"
+    },
+    {
+      "path": "thesis/harness/distributed-k3-mesh-v911/freeze-template.json",
+      "bytes": 2899,
+      "sha256": "d946fc0995fc690633f6d4155298d62e61ecd47862db86faf9d96982cdd6d676"
+    },
+    {
+      "path": "thesis/harness/distributed-k3-mesh-v911/k3_composition.py",
+      "bytes": 13381,
+      "sha256": "8160f73b9cca2557f62418cbb7d6055cc12db2542b45a09cde18f90834224c05"
+    },
+    {
+      "path": "thesis/harness/distributed-k3-mesh-v911/mesh_route_observer.py",
+      "bytes": 9590,
+      "sha256": "19391b55bfb8a6fadb0637fcdce12363b7f33d63a1ab0cc43540348046a6386f"
+    },
+    {
+      "path": "thesis/harness/distributed-k3-mesh-v911/mesh_stage_adapter.py",
+      "bytes": 9818,
+      "sha256": "89c9dabcadede2d1376434b81011527b916efb31a46e7bc5d92453832117c902"
+    },
+    {
+      "path": "thesis/harness/distributed-k3-mesh-v911/observer.py",
+      "bytes": 11873,
+      "sha256": "784cc4bffc0d6824bbe378d17a7f632d587ca0a315896b048b2ebef727082df5"
+    },
+    {
+      "path": "thesis/harness/distributed-k3-mesh-v911/receiver_proof.py",
+      "bytes": 27639,
+      "sha256": "99dd072d63910e1bc82c7ef30652531c45fa4e5ec27cf09044fff5f02d3ff626"
+    },
+    {
+      "path": "thesis/harness/distributed-k3-mesh-v911/resource_sample.py",
+      "bytes": 7475,
+      "sha256": "8f62ec378e74036d4539d9159e3caf29b8fd7a9115de1ab0f482dfd58b6e1857"
+    },
+    {
+      "path": "thesis/harness/distributed-k3-mesh-v911/route_observation_sink.py",
+      "bytes": 11707,
+      "sha256": "d2c9a9c7a759c58a9a73d1f4308a1439560c53fd23595efcdd61cf3ea112d70c"
+    },
+    {
+      "path": "thesis/harness/distributed-k3-mesh-v911/route_runtime_pins.json",
+      "bytes": 237,
+      "sha256": "43ebd778b21fa5b484f36071798a6b7b5ec4b3fa34f21057a56640813e60a76f"
+    },
+    {
+      "path": "thesis/harness/distributed-k3-mesh-v911/runner.py",
+      "bytes": 55537,
+      "sha256": "b52416c0edda26b445db1abcf0c8a1cc1c7a994e098ec12db6bcc914e3d31698"
+    },
+    {
+      "path": "thesis/harness/distributed-k3-mesh-v911/source-inventory.json",
+      "bytes": 58216,
+      "sha256": "96ec8e3e14233520d4cd469c4177264a193d05cf26b4b512d91d98f16bbb7dee"
+    },
+    {
+      "path": "thesis/harness/k1_mesh_provider_v1691.py",
+      "bytes": 11619,
+      "sha256": "4edf658ec0474025a959250987037dd6efc7661e08faa57e74ffbaed5352611d"
+    },
+    {
+      "path": "thesis/harness/k1_mesh_provider_v1696.py",
+      "bytes": 11618,
+      "sha256": "3a073a8504adffbb97241be560722cdc1f0728ca16183aa36a868d9b5d61f3c4"
+    },
+    {
+      "path": "thesis/harness/k1_mesh_provider_v1710.py",
+      "bytes": 12458,
+      "sha256": "7e924a34e2c4b2b75f0d8dab29deb81be9b5d113e42b2035a5b4df37bd2f9ed5"
+    },
+    {
+      "path": "thesis/harness/k1_mesh_remaining_root_v1719.py",
+      "bytes": 12145,
+      "sha256": "1deeaf67a2ab2d6d7a9a0c1ebc34963c81de286f098d725e9908c0e677bb53bd"
+    },
+    {
+      "path": "thesis/harness/k1_mesh_remaining_root_v1779.py",
+      "bytes": 11384,
+      "sha256": "dc2ab6d3dea6de9282b12f9733c4ec0cac48f16f47eb5fb6c18131826486ed57"
+    },
+    {
+      "path": "thesis/harness/k1_mesh_requester_launch_v1695.py",
+      "bytes": 9220,
+      "sha256": "8b612b9a611a8860ffe8ed12e5eb671081e7b72455a4eb50f579798d16ef6d04"
+    },
+    {
+      "path": "thesis/harness/k1_mesh_requester_launch_v1698.py",
+      "bytes": 9220,
+      "sha256": "8f077d799591b488184a26f24bb1a2eb0f8fdfd47c9b268818b362a4130e587e"
+    },
+    {
+      "path": "thesis/harness/k1_mesh_requester_launch_v1700.py",
+      "bytes": 9220,
+      "sha256": "f0d2c750a0c96c734f1a449c4cbde1455d1b91823ce3e1190682f3037a706242"
+    },
+    {
+      "path": "thesis/harness/k1_mesh_requester_launch_v1702.py",
+      "bytes": 9224,
+      "sha256": "89b9f014a2a6216a555fe21b212c481bb17e1d6969cf64779cf2131c84e73a35"
+    },
+    {
+      "path": "thesis/harness/k1_mesh_requester_launch_v1711.py",
+      "bytes": 9721,
+      "sha256": "c6a4c29c7011d057eaba4b34937508f27520cf84c8617bffdb7a01cdaa42d556"
+    },
+    {
+      "path": "thesis/harness/k1_mesh_saved_identity_proof_v1714.py",
+      "bytes": 5909,
+      "sha256": "b1435c3a9c8025c7d30d27b477613f5791734bea2ea31c1b012ae88fe06d8f50"
+    },
+    {
+      "path": "thesis/harness/k1_mesh_warmup_finalize_v1711.py",
+      "bytes": 7765,
+      "sha256": "3a27b74827660fab6c07e82d85d1c56b8f918455c48b0686c04258cf3eb5813f"
+    },
+    {
+      "path": "thesis/harness/k1_mesh_warmup_finalize_v1719.py",
+      "bytes": 9054,
+      "sha256": "2cc2267e06fd605878a19e9ad041d66cd49c59a58fdc2ec75419851f4afa20ea"
+    },
+    {
+      "path": "thesis/harness/k1_mesh_warmup_finalize_v1779.py",
+      "bytes": 9665,
+      "sha256": "7ac5ea8d1b396c65dc59fdcd52daedff9ce852630a4c16def05796db8318ad7b"
+    },
+    {
+      "path": "thesis/harness/k2-native-proof-handler-fix-v1822/MODEL-HANDLER-ONLY.diff",
+      "bytes": 533,
+      "sha256": "780fc00727669166eeb502b598fad7230485418ef1b6362b7f14adecffa60b2b"
+    },
+    {
+      "path": "thesis/harness/k2-native-proof-handler-fix-v1822/receiver_proof.py",
+      "bytes": 25942,
+      "sha256": "3bb4af79cf2579023c0f1ff2025f69367717d49db7d09831c682c1bf52fc441f"
+    },
+    {
+      "path": "thesis/harness/k2_existing_provider_remote_proof_v1384.py",
+      "bytes": 6709,
+      "sha256": "a878bf86a1e1a98ede2eaee56f313d1758a9aa32331c174e26a6fd20a75a250a"
+    },
+    {
+      "path": "thesis/harness/k2_existing_provider_v1384.py",
+      "bytes": 15819,
+      "sha256": "27530814194dba79e984a2a7fd9b3bcbbac43bb48761d23c50713c11736554d7"
+    },
+    {
+      "path": "thesis/harness/k2_mesh_provider_v1733.SOURCE-RECEIPT.json",
+      "bytes": 1240,
+      "sha256": "c81bd870c830c126fa7cf31299a05474750263aea3d261bdeaf8afaecf545039"
+    },
+    {
+      "path": "thesis/harness/k2_mesh_provider_v1733.diff",
+      "bytes": 5139,
+      "sha256": "4a9840ef242bc7b8b4a099f42c7ea88f7dcea21507845f8e9216d386fc2d0d09"
+    },
+    {
+      "path": "thesis/harness/k2_mesh_provider_v1733.py",
+      "bytes": 13922,
+      "sha256": "8cf12851d4a56cc84daa72f3de429cae2126c1a03123d674b5c997bffefd8bcd"
+    },
+    {
+      "path": "thesis/harness/k2_mesh_root_v1787.py",
+      "bytes": 8982,
+      "sha256": "32d16576d2aa8c0ae884379cea99145b957fe6ca822fe850a07f7e870a12dfc6"
+    },
+    {
+      "path": "thesis/harness/k2_mesh_root_v1796.py",
+      "bytes": 9927,
+      "sha256": "34a21c34cc11c230f421e34e81cf46a3180fd8b33963820ab75b5b2bc0f7fdda"
+    },
+    {
+      "path": "thesis/harness/k2_mesh_root_v1807.py",
+      "bytes": 10423,
+      "sha256": "4d1a943858c897c08f7d48c7f799350062c427ed5a95aacecb89dcbb17c75be4"
+    },
+    {
+      "path": "thesis/harness/k2_mesh_root_v1813.py",
+      "bytes": 10423,
+      "sha256": "015ca37ac108b287877a9564c069a9278e48d582de1da5f673ee5c2a528c79a6"
+    },
+    {
+      "path": "thesis/harness/k2_mesh_root_v1818.py",
+      "bytes": 10964,
+      "sha256": "7d7d06ffdc8059c610a6905ce2e7286f664b953a15a680929479390ddef1e4c0"
+    },
+    {
+      "path": "thesis/harness/k2_mesh_root_v1826.py",
+      "bytes": 10964,
+      "sha256": "2bc562e8bd1ddc02a4de84d0b9516cfaf68bdf0b27418204f34fd3a09bf2b757"
+    },
+    {
+      "path": "thesis/harness/k2_mesh_saved_warmup_proof_v1735.SOURCE-RECEIPT.json",
+      "bytes": 1299,
+      "sha256": "828516a6fc6fce693f91f32039a299137e2f50c70bd4388043bf375d962769e5"
+    },
+    {
+      "path": "thesis/harness/k2_mesh_saved_warmup_proof_v1735.py",
+      "bytes": 9113,
+      "sha256": "5a8c4fdd50edc4c66c2f0e56ef552409b1132b1147c0e3e73075d75e5d2c27dd"
+    },
+    {
+      "path": "thesis/harness/k2_mesh_saved_warmup_proof_v1824.py",
+      "bytes": 9113,
+      "sha256": "4fe67e67ad34159ebeda14ac96ff0bcccf758adbe38d734e662558077b8f86e8"
+    },
+    {
+      "path": "thesis/harness/k2_mesh_warmup_finalize_v1787.py",
+      "bytes": 8984,
+      "sha256": "c184ef528e8ca57fa0f05a6a919cc35dc7f1e814fdd8d9d5cb41d7486f155041"
+    },
+    {
+      "path": "thesis/harness/k2_mesh_warmup_finalize_v1796.py",
+      "bytes": 9020,
+      "sha256": "76b3ae3ed5e3a311b1f9bcc0a86226bfe111949e7e6799c5b5961db47c9ff16c"
+    },
+    {
+      "path": "thesis/harness/k2_mesh_warmup_finalize_v1807.py",
+      "bytes": 9119,
+      "sha256": "b3756f9d41141a4efe0d77a179b49e8ac7aef6e128760da5c866f670728e2001"
+    },
+    {
+      "path": "thesis/harness/k2_mesh_warmup_finalize_v1813.py",
+      "bytes": 9119,
+      "sha256": "4148ad78fef0d3a76aaf8913b3f9b5a62333e7dcf78d4634f36c8aa66b4981fa"
+    },
+    {
+      "path": "thesis/harness/k2_mesh_warmup_finalize_v1818.py",
+      "bytes": 9119,
+      "sha256": "d682e6cc9a88797853ee60aec80b18cfd021bb4e54f338ebc5c5f09779f19d46"
+    },
+    {
+      "path": "thesis/harness/k2_mesh_warmup_finalize_v1826.py",
+      "bytes": 9119,
+      "sha256": "1d723348c6e73b62fe8a7e5b3fd16e23f82fc63bdbea8366b36657c832c82afa"
+    },
+    {
+      "path": "thesis/harness/k2_mesh_warmup_finalize_v1829.py",
+      "bytes": 9827,
+      "sha256": "7a65b52ff5cb6f964fb205ab0f24d992b292bcfa42e40448cc8f4be05b5dea49"
+    },
+    {
+      "path": "thesis/harness/k2_task_consent_control_v1805.py",
+      "bytes": 9303,
+      "sha256": "dc7d9e7aa8937af1537adf734a83ea6d70f14f0b6d69dbb7d5cf8fbebfff133b"
+    },
+    {
+      "path": "thesis/harness/k2_task_consent_control_v1811.py",
+      "bytes": 10734,
+      "sha256": "cda30df60a47dc5e97774c999357be6ba6375d2ff35780fced3dc7875544af92"
+    },
+    {
+      "path": "thesis/harness/k2_worker_task_consent_v1816.py",
+      "bytes": 11206,
+      "sha256": "fba35e5e8bbae4b893601f975f81eaac741e53bd52a9a670b0d38729e0ac3db4"
+    },
+    {
+      "path": "thesis/harness/k3_http_root_v1479.py",
+      "bytes": 9435,
+      "sha256": "bc8c090d89cca718574ccf1b297b07a9ec60d70a64a3eeaef45ce3902c5d8118"
+    },
+    {
+      "path": "thesis/harness/k3_http_root_v1481.py",
+      "bytes": 9842,
+      "sha256": "386fd05dca414886c72b3a36e93ef3df5eadb162025a97ef14451efb043613dd"
+    },
+    {
+      "path": "thesis/harness/k3_mesh_provider_v1911.SOURCE-RECEIPT.json",
+      "bytes": 399,
+      "sha256": "e1cdaf377bf2aad09fe14bfdf4f6b8bf0d96a5d078eec008d2543b469b43d8d2"
+    },
+    {
+      "path": "thesis/harness/k3_mesh_provider_v1911.diff",
+      "bytes": 7855,
+      "sha256": "fa5a62d31759a6c5601a73b8076b2590d1976f98dde21d0ef87184674013dd2b"
+    },
+    {
+      "path": "thesis/harness/k3_mesh_provider_v1911.py",
+      "bytes": 15500,
+      "sha256": "5e9d2212b0ee59848396888da919ef6a4695349bc880930a00e1aa1acd383dcd"
+    },
+    {
+      "path": "thesis/harness/k3_mesh_root_v1915.py",
+      "bytes": 11064,
+      "sha256": "e1ce5111cbdf5858d114b1ab4ed2c0a962b030a8213331b48696f7458b9e3c34"
+    },
+    {
+      "path": "thesis/harness/k3_mesh_root_v1920.py",
+      "bytes": 11169,
+      "sha256": "70b4a425f6b18bb43b0c7700a2f345fa84e0f428c339d0a36479841f1065c9f5"
+    },
+    {
+      "path": "thesis/harness/k3_mesh_root_v1924.py",
+      "bytes": 11488,
+      "sha256": "e720274e8aacb215188980e3ce32c47fa509533c8806554df79d50de82d9b6e8"
+    },
+    {
+      "path": "thesis/harness/k3_mesh_saved_warmup_proof_v1913.py",
+      "bytes": 9257,
+      "sha256": "56c9c9120e3243d12331b37d7558ab6782072c1aa0a5c0ebaf51f6cba79b8e3a"
+    },
+    {
+      "path": "thesis/harness/k3_mesh_warmup_finalize_v1916.py",
+      "bytes": 9958,
+      "sha256": "e7d6e4e4b9e5f49d54a174aa46f4c1dbbaa9b6439e8a4ffeb0dc985e20195f48"
+    },
+    {
+      "path": "thesis/harness/k3_mesh_warmup_finalize_v1921.py",
+      "bytes": 9958,
+      "sha256": "466dce08032ba53052973a66f12439f11a54b162e028acd69d75e79483f60aa1"
+    },
+    {
+      "path": "thesis/harness/k3_mesh_warmup_finalize_v1925.py",
+      "bytes": 9958,
+      "sha256": "a1651344b60022e4d4fbe049a0518f116bb265487427580eefbdb549c2530ebf"
+    },
+    {
+      "path": "thesis/harness/k3_remaining_root_v1513.py",
+      "bytes": 15581,
+      "sha256": "a4e54219424a3ccf7f57578340247351d3d41e329d2e1cf33dccc91822b7df14"
+    },
+    {
+      "path": "thesis/harness/k3_remaining_root_v1562.py",
+      "bytes": 16693,
+      "sha256": "7427f3e4eccecb7671ad86e049053ff43c8f21c5333514ba578c35fd9efbb227"
+    },
+    {
+      "path": "thesis/harness/k3_remaining_root_v1573.py",
+      "bytes": 16735,
+      "sha256": "9054836ff702bc02ddd0105ea1d9c1abccefea77632f7f9a6c4e3dd124d8e33a"
+    },
+    {
+      "path": "thesis/harness/k3_remaining_root_v1590.py",
+      "bytes": 16768,
+      "sha256": "c351063463603d509b081fc2cad95d1a7793a87cb710441177f742a54f049619"
+    },
+    {
+      "path": "thesis/harness/k3_remaining_root_v1610.py",
+      "bytes": 16768,
+      "sha256": "60bf19a8465103deffa003e2e2875be6f91ed9f9eb160998483496090135bb77"
+    },
+    {
+      "path": "thesis/harness/k3_remaining_root_v1620.py",
+      "bytes": 16796,
+      "sha256": "2a4471be2e48e7709bc64a090aa674e999fdfc34f8d7fedbdb9b08464a97b96e"
+    },
+    {
+      "path": "thesis/harness/k3_remaining_root_v1682.py",
+      "bytes": 17694,
+      "sha256": "ca23bc26dba4db00008ebd5876a6258c5d532baac28b5479cdc5840892481597"
+    },
+    {
+      "path": "thesis/harness/k3_remote_warmup_proof_v1479.py",
+      "bytes": 6589,
+      "sha256": "b4000f098f8524c2ea4d679dbc326a7329590374c2c3a464c8e94441b5e3a6e1"
+    },
+    {
+      "path": "thesis/harness/k3_remote_warmup_proof_v1481.py",
+      "bytes": 7487,
+      "sha256": "97fd0b2ca24610a51b1d38f33d57524c9a4be005c02103709102a154b35f6b20"
+    },
+    {
+      "path": "thesis/harness/k3_remote_warmup_proof_v1513.py",
+      "bytes": 7487,
+      "sha256": "fed0a8815ea1436b1b29e39fbda32e4bc04b4424694d0813eef1cddddf75e327"
+    },
+    {
+      "path": "thesis/harness/k3_remote_warmup_proof_v1562.py",
+      "bytes": 7487,
+      "sha256": "05c3e59bf2b72a6569fe9832c851e88ca2a7722105eebb1f4ba46992cbbf8f4a"
+    },
+    {
+      "path": "thesis/harness/k3_remote_warmup_proof_v1573.py",
+      "bytes": 7451,
+      "sha256": "0382e56a20289f4ffec91af1ceec9e98866afcd3218eb3c769b574c8f220b23e"
+    },
+    {
+      "path": "thesis/harness/k3_remote_warmup_proof_v1590.py",
+      "bytes": 7451,
+      "sha256": "d837e2b7aaa91049a21c04a42d1b2b970ce5958145fba19e6d0401eb54c5f538"
+    },
+    {
+      "path": "thesis/harness/k3_remote_warmup_proof_v1610.py",
+      "bytes": 7451,
+      "sha256": "69d9300f514fb129347e4fad88cd22a65e7d936fe0a47ab3d01419012e9545ff"
+    },
+    {
+      "path": "thesis/harness/k3_remote_warmup_proof_v1620.py",
+      "bytes": 7451,
+      "sha256": "bf2a99c301486765249e654c5af647b97c0e2bd5ea84c53a0cac300d5c870bb9"
+    },
+    {
+      "path": "thesis/harness/k3_remote_warmup_proof_v1682.py",
+      "bytes": 7451,
+      "sha256": "dde2165bb6beb8a475084f879548e28800f201a15f46aef0d3aab219e32b8365"
+    },
+    {
+      "path": "thesis/harness/k3_warmup_finalize_v1479.py",
+      "bytes": 6828,
+      "sha256": "7f7d210f532bbf863a662acefa1c8bd6427ded2c5d56b55896b109b33e9937e5"
+    },
+    {
+      "path": "thesis/harness/k3_warmup_finalize_v1481.py",
+      "bytes": 7291,
+      "sha256": "ce40c8d87ac6a09e22c305f753c5c4967ecaece1e658f42111d291f1226c9e05"
+    },
+    {
+      "path": "thesis/harness/k3_warmup_finalize_v1513.py",
+      "bytes": 7305,
+      "sha256": "1b4116ea46226bfc96cf5c56190662caf3070fc93c05f59465d332e5843a9488"
+    },
+    {
+      "path": "thesis/harness/k3_warmup_finalize_v1562.py",
+      "bytes": 7305,
+      "sha256": "2c6541b623f9e8fe862ffd30dc6c869d1e517b081023fd66414f2f6f61c223dd"
+    },
+    {
+      "path": "thesis/harness/k3_warmup_finalize_v1573.py",
+      "bytes": 7627,
+      "sha256": "d9c0392438feb5482ecf3dab8499b8b5772af110a96258b777f75aaa19390c43"
+    },
+    {
+      "path": "thesis/harness/k3_warmup_finalize_v1590.py",
+      "bytes": 7627,
+      "sha256": "2ce07306702a10068a96b683aa84832697fbb4911fd4c94a437ea5ed968adce9"
+    },
+    {
+      "path": "thesis/harness/k3_warmup_finalize_v1610.py",
+      "bytes": 7627,
+      "sha256": "460488b79eb9542f6929c90b4646bc20fbfe36a03bf7e9eb0e00daf9fd5f054a"
+    },
+    {
+      "path": "thesis/harness/k3_warmup_finalize_v1620.py",
+      "bytes": 7626,
+      "sha256": "8f6160bc3d34ba79fc04176297f07b19d45987e77a44550207c7a20dd484e4ed"
+    },
+    {
+      "path": "thesis/harness/k3_warmup_finalize_v1682.py",
+      "bytes": 7627,
+      "sha256": "1fc64d25eb0f5d0e97f4c7caaf259e4567ca869ab55d2063bc7da307b27bbb56"
+    },
+    {
+      "path": "thesis/harness/launch_k3_provider_v1914.py",
+      "bytes": 4675,
+      "sha256": "49e2b7877d86da600c027e5caa6af4c5fefcff2f9eb3b0406b198c9a002e88b5"
+    },
+    {
+      "path": "thesis/harness/mesh-route-observer-v868/REPORT.md",
+      "bytes": 4195,
+      "sha256": "977b7a16e3f462cea8e7357c7f3e8926c10bec92a03381f66f35b5e0afd46d5a"
+    },
+    {
+      "path": "thesis/harness/mesh-route-observer-v868/SOURCE-CUSTODY-v875.json",
+      "bytes": 825,
+      "sha256": "6efeb6db405a82a7fe0c4e4fe701e58a45dce024561771b7e2a5b95c10ecec50"
+    },
+    {
+      "path": "thesis/harness/mesh-route-observer-v868/mesh_route_observer.py",
+      "bytes": 9275,
+      "sha256": "2c23fd2bc69b00b746c2c5dc28c1d2b77428016314045363dceea5fe9ee5cdbb"
+    },
+    {
+      "path": "thesis/harness/mesh_existing_state_inventory_v1387.py",
+      "bytes": 4210,
+      "sha256": "ad28bb34ce00f4ddb0f311ae7f1636b849396bcd9082ef519a212c33d6d02c2e"
+    },
+    {
+      "path": "thesis/harness/mesh_pair_control_v1535.py",
+      "bytes": 15822,
+      "sha256": "1c6323bd93f308e0d955a920e6ca64ed01343c1a504cb69ae1ddd26e5ed9b957"
+    },
+    {
+      "path": "thesis/harness/mesh_pair_parameters_v1535.py",
+      "bytes": 5515,
+      "sha256": "400f67979a1f5e7e9716625295bc44860c0bcb94388f29aa8ff1761876459dcd"
+    },
+    {
+      "path": "thesis/harness/notebook_offline_runtime_admission_v1742.py",
+      "bytes": 5916,
+      "sha256": "ccb321268183f4f54fa4c2ff62662087817e271ffbc172304293c3afe02844a4"
+    },
+    {
+      "path": "thesis/harness/notebook_readonly_assets_v1737.py",
+      "bytes": 4490,
+      "sha256": "627a4d456c07044c724df5278b8bac8c91a930ade79174ddd1d9b584f8e204a9"
+    },
+    {
+      "path": "thesis/harness/observe_k3_v1481.py",
+      "bytes": 3293,
+      "sha256": "47bc13b99f6c8a90233dae46ea407b248db2148dab2e3a2ae6d8a9d8425f828d"
+    },
+    {
+      "path": "thesis/harness/orca_control_raw_read_v1523.py",
+      "bytes": 2691,
+      "sha256": "c3536841f9d16b0a43d21f98f769e9f091ebe402ed12fadb5d1cb77a494481a6"
+    },
+    {
+      "path": "thesis/harness/orca_control_read_v1106.py",
+      "bytes": 2380,
+      "sha256": "671de328ba97889f844217a0da41abf934d8192982a4ee612dcd777ba63cee90"
+    },
+    {
+      "path": "thesis/harness/orca_copy_control_raw_read_v1652.py",
+      "bytes": 2920,
+      "sha256": "4fea952826614564402c1926e565e38771601600757c7b7d6d931d18793c3a3f"
+    },
+    {
+      "path": "thesis/harness/prepare_k2_provider_v1786.py",
+      "bytes": 7621,
+      "sha256": "2700762316409f4f3df2987723312ff0acd9707517b67b5ab7dffba940caa8e7"
+    },
+    {
+      "path": "thesis/harness/prepare_k2_provider_v1792.py",
+      "bytes": 7512,
+      "sha256": "7326246588a1e4f5956751d10ca523d509de3833fa0fd7205aa91cf9ae00a0bf"
+    },
+    {
+      "path": "thesis/harness/prepare_k3_mesh_candidate_v1910.py",
+      "bytes": 17604,
+      "sha256": "ceb22d0f9bfdd5d498cc76d35bbba7a1cd988cae1d1c8df96e62dd950d179c64"
+    },
+    {
+      "path": "thesis/harness/prepare_k3_provider_v1912.py",
+      "bytes": 8195,
+      "sha256": "4d2827f51319ac0cd3afa32ab5eb3f03aad3e6aa48dd2fc9c1bbd4efaae39ada"
+    },
+    {
+      "path": "thesis/harness/prepare_k3_remaining_v1513.py",
+      "bytes": 10198,
+      "sha256": "cbe77c21d3cfc105fba0c4a95130443fe2c9b8a6795af6b25a03518d9dd1443e"
+    },
+    {
+      "path": "thesis/harness/prepare_k3_source_remote_v1908.py",
+      "bytes": 5016,
+      "sha256": "f540809abd41c4b1f42e814873beff05c5f5d579e21077707be7153f8afc76c3"
+    },
+    {
+      "path": "thesis/harness/provider_custody_v1216.py",
+      "bytes": 7520,
+      "sha256": "073a0708db0e59c8091eb8e56e012372e0fdf1e63169f5a1b2c688eefbb1b3fb"
+    },
+    {
+      "path": "thesis/harness/provider_export_delta_v1258.py",
+      "bytes": 6893,
+      "sha256": "b5298ba9a95d1226e776ccb671183d3d474f00eb4ead9af66dd62c409b948e8d"
+    },
+    {
+      "path": "thesis/harness/provider_export_delta_v1370.py",
+      "bytes": 6893,
+      "sha256": "d3abc9d55e226fa38e0b22a8e831bbcedf6f778102ae43cb795d956fb6b12de5"
+    },
+    {
+      "path": "thesis/harness/provider_export_delta_v1400.py",
+      "bytes": 6929,
+      "sha256": "6f4b3201b6e2d17eb3e94afb2f77ef9d3d56d76748dcf0b47ecf337326b3cc34"
+    },
+    {
+      "path": "thesis/harness/provider_export_delta_v1467.py",
+      "bytes": 6981,
+      "sha256": "442e6d4d77e7c58ccb4db14b77cfc6b8a7110bfd870a34afe28681cd1cefca6a"
+    },
+    {
+      "path": "thesis/harness/provider_export_k3_delta_v1554.py",
+      "bytes": 8261,
+      "sha256": "45320b5ecc012d06929a6fd87d04ad346c10de48820ce1b686af8606b5884e91"
+    },
+    {
+      "path": "thesis/harness/provider_export_k3_terminal_delta_v1652.py",
+      "bytes": 13430,
+      "sha256": "0c33af925f16d93bb714457583ad54d4afc62ddb7e26812cb657c4c0a005b705"
+    },
+    {
+      "path": "thesis/harness/provider_export_k3_v1507.py",
+      "bytes": 6957,
+      "sha256": "2fbdd09bde0b68fa6c546375be7023fcc7b10eda89d3f99e0b086fe9a5c1948f"
+    },
+    {
+      "path": "thesis/harness/provider_export_terminal_v1680.py",
+      "bytes": 13609,
+      "sha256": "8d8ab49fdcc94815eb5af1b5d534d97720fd97ab8f55c3337a42c718e901b79c"
+    },
+    {
+      "path": "thesis/harness/provider_export_v1231.py",
+      "bytes": 5205,
+      "sha256": "ab2bbe123dd2d8acc37dbe0295dc9d74b32c36f09186956973d58cce29c228f3"
+    },
+    {
+      "path": "thesis/harness/python-cpu-v1/README.md",
+      "bytes": 5383,
+      "sha256": "3975a7c83a099b3b9b6d5f36450234fcf7707a47d94c9f5e9411e81aad7297d6"
+    },
+    {
+      "path": "thesis/harness/python-cpu-v1/SOURCE-CUSTODY-v747.json",
+      "bytes": 2821,
+      "sha256": "9327d0bb82e2c414a779a22bfba932e9f156b202a55d3a102b12347b0d23edca"
+    },
+    {
+      "path": "thesis/harness/python-cpu-v1/SOURCE-CUSTODY-v756.json",
+      "bytes": 3274,
+      "sha256": "e8abcf71f4661479f228ff4eea82b56d2419e71ef25abe172722e12a34217a9a"
+    },
+    {
+      "path": "thesis/harness/python-cpu-v1/bindings.py",
+      "bytes": 3230,
+      "sha256": "52182f956b34788ecbfbbb241c8243ff88baebe2874e3605791793777ed0dc91"
+    },
+    {
+      "path": "thesis/harness/python-cpu-v1/bootstrap.py",
+      "bytes": 1677,
+      "sha256": "f5427da01815047ea886cf867147bd0175a187d1dda2c2bbc0fc905209d755d7"
+    },
+    {
+      "path": "thesis/harness/python-cpu-v1/controller.py",
+      "bytes": 22268,
+      "sha256": "08edc4aa73bcf4ebf666cf3c5145085d7a89b47fbb759f8f868be84993725535"
+    },
+    {
+      "path": "thesis/harness/python-cpu-v1/hook/aurora_voice_telemetry_v430.py",
+      "bytes": 11584,
+      "sha256": "8129ffe7591a47a0107ede53b101aead9fc1f58b92f0c0c4203176cc7608325d"
+    },
+    {
+      "path": "thesis/harness/python-cpu-v1/hook/observer.py",
+      "bytes": 11873,
+      "sha256": "784cc4bffc0d6824bbe378d17a7f632d587ca0a315896b048b2ebef727082df5"
+    },
+    {
+      "path": "thesis/harness/python-cpu-v1/runner.py",
+      "bytes": 54617,
+      "sha256": "7a4b01b357e235fdc70c8ad6d80f5254d854b145d529b3e464759da2b498146d"
+    },
+    {
+      "path": "thesis/harness/read_k2_provider_terminal_v1900.py",
+      "bytes": 4070,
+      "sha256": "49794f860b01c6aabc0e3b52eac5a1accf96e9a6cbb3bb249f95dc62cc11c18c"
+    },
+    {
+      "path": "thesis/harness/reconcile_provider_custody_v1655.py",
+      "bytes": 5424,
+      "sha256": "94035f98e5387321f665599ee5e131230ed6259dfcaa4abc2b06346856bc880d"
+    },
+    {
+      "path": "thesis/harness/retained/README.md",
+      "bytes": 2027,
+      "sha256": "a59900d85c9b62f280d070c1a822fd17a073f334fe8136943a8fe8e04fa95bdf"
+    },
+    {
+      "path": "thesis/harness/retained/SOURCE-CUSTODY-v758.json",
+      "bytes": 11554,
+      "sha256": "79fe4f12a2fcb05d4326842ed7f88f736beaadbe7f96567232db1099e2a7409c"
+    },
+    {
+      "path": "thesis/harness/retained/browser-prep-v704/bootstrap.py.source",
+      "bytes": 2219,
+      "sha256": "9920c1d8ddc358d7e28a19b4c2ace882552f5a1ac39a14e933467521017dbec9"
+    },
+    {
+      "path": "thesis/harness/retained/browser-prep-v704/controller.py.source",
+      "bytes": 28383,
+      "sha256": "bc0b3f8d136de611a2a4ae78f9d2edef1d654cd3173a196974297a1109c78ec1"
+    },
+    {
+      "path": "thesis/harness/retained/browser-prep-v704/gate.py.source",
+      "bytes": 6853,
+      "sha256": "cd5f7b4897bbc5181906031c51c1cabce93f957c253a59e86ee324df358ec44a"
+    },
+    {
+      "path": "thesis/harness/retained/browser-prep-v704/hook/aurora_voice_telemetry_v430.py.source",
+      "bytes": 15228,
+      "sha256": "cce47c11775101194cff6eb8fded2140bfba84a41a6dc39dca33efa8a7d5df98"
+    },
+    {
+      "path": "thesis/harness/retained/browser-prep-v704/hook/bindings.py.source",
+      "bytes": 3596,
+      "sha256": "d4a2ee4b9419b3be9713c55c5ffbdb3cdf29847f7a4be44e22ae64458d2471e0"
+    },
+    {
+      "path": "thesis/harness/retained/browser-prep-v704/hook/observer.py.source",
+      "bytes": 12656,
+      "sha256": "ce614d6e00bfd425a966eb3165f8b75e3269b956ef288c15f0cf31fd96e4e51a"
+    },
+    {
+      "path": "thesis/harness/retained/browser-prep-v704/voice-flow.mjs.source",
+      "bytes": 53996,
+      "sha256": "f1a9f9cf71dc4d2a775f657cd5b1cb9193800ba75d7e0e8fda3cdcfc4cddc456"
+    },
+    {
+      "path": "thesis/harness/retained/desktop-padded-http-v692/bootstrap.py.source",
+      "bytes": 1396,
+      "sha256": "18e710677bee8ee8a968f0c1a107cb94204977ad5aa306d4c8864729810e37b2"
+    },
+    {
+      "path": "thesis/harness/retained/desktop-padded-http-v692/controller.py.source",
+      "bytes": 23596,
+      "sha256": "2e9a34e998bfd95fb92d4f0eef3c0f9fddc7eeb43c3d3b5ccb764a71e05aa083"
+    },
+    {
+      "path": "thesis/harness/retained/desktop-padded-http-v692/hook/aurora_voice_telemetry_v430.py.source",
+      "bytes": 13406,
+      "sha256": "4d2e92a55dbdfd281ddadbe0c51378205164107d56d64e5fb1101757337a0103"
+    },
+    {
+      "path": "thesis/harness/retained/desktop-padded-http-v692/hook/bindings.py.source",
+      "bytes": 3596,
+      "sha256": "d4a2ee4b9419b3be9713c55c5ffbdb3cdf29847f7a4be44e22ae64458d2471e0"
+    },
+    {
+      "path": "thesis/harness/retained/desktop-padded-http-v692/hook/observer.py.source",
+      "bytes": 12656,
+      "sha256": "ce614d6e00bfd425a966eb3165f8b75e3269b956ef288c15f0cf31fd96e4e51a"
+    },
+    {
+      "path": "thesis/harness/retained/desktop-padded-http-v692/runner.py.source",
+      "bytes": 63119,
+      "sha256": "e0a388b96a7478ceb8aeccda9c0559c27a431c6c9b929a57526e39c6a9c1bace"
+    },
+    {
+      "path": "thesis/harness/retained/desktop-segment-v745/controller.py.source",
+      "bytes": 28131,
+      "sha256": "86579a6ad37a7e372c365db9c92fb871f5613b7ff0ce387ce8e91d7f078415ca"
+    },
+    {
+      "path": "thesis/harness/retained/desktop-segment-v745/runner.py.source",
+      "bytes": 52455,
+      "sha256": "34401b281b69f981be95da513bf56e2ee134654802af56a70e4d2f651fb995ab"
+    },
+    {
+      "path": "thesis/harness/retire_k1_provider_v1783.py",
+      "bytes": 7379,
+      "sha256": "43d0a23ea77f40fff64a221db0f713486f33bdca6c5da73b1c14c123d83537c2"
+    },
+    {
+      "path": "thesis/harness/retire_k2_provider_v1901.py",
+      "bytes": 7717,
+      "sha256": "b2ca0694c22135828f2e35051a858bfbfb6868706d30b3c846fd054f2897f44e"
+    },
+    {
+      "path": "thesis/harness/scope_tts_warmup_bindings_v1724.py",
+      "bytes": 2386,
+      "sha256": "c8fe746e2e5519c05496812bfb82537e5311bd0d8dbf9aaf7a5941c83300c6a2"
+    },
+    {
+      "path": "thesis/harness/seal_k1_mesh_v1716.py",
+      "bytes": 7343,
+      "sha256": "edea96eef8f1cb0c3afc4845d1fe0a87f8e0df4cb33e38823d3113672dfa0145"
+    },
+    {
+      "path": "thesis/harness/seal_k1_mesh_v1777.py",
+      "bytes": 7779,
+      "sha256": "d93a94845a1bcffcacf9ed6486b16161f3ce4382ba752ad064fff0f02d848500"
+    },
+    {
+      "path": "thesis/harness/seal_k1_provider_eof_v1784.py",
+      "bytes": 4976,
+      "sha256": "ef160058b8468b50d0b4c4fa78db628755a1fff6945cd1a9824d63a04dc9ee66"
+    },
+    {
+      "path": "thesis/harness/seal_k1_warmup_v1781.py",
+      "bytes": 7712,
+      "sha256": "42a17e9cfbf0fafb5d87d83f0bae2ed4cd838d8085c0e42f6132ff18be57d433"
+    },
+    {
+      "path": "thesis/harness/seal_k2_requester_v1899.py",
+      "bytes": 9256,
+      "sha256": "740b3a30c6eea9a6e9c62afa4bbd40f078688c9b0def14a841fe218db7b1476d"
+    },
+    {
+      "path": "thesis/harness/seal_k3_remaining160_v1682.py",
+      "bytes": 8558,
+      "sha256": "50389d62b6c72cb95f53381c7761891d1b4185ec670d5e269ce1c56bd0eef128"
+    },
+    {
+      "path": "thesis/harness/stage_p2p_tts_source_v1706.py",
+      "bytes": 3103,
+      "sha256": "53fbc110c1c6e2d6772df83d41f6aa21469c7e0523bc7fec65555bd99c120524"
+    },
+    {
+      "path": "thesis/harness/start_k3_requester_auxiliaries_v1917.py",
+      "bytes": 3752,
+      "sha256": "746f97c3423fe9b969c386c62ef0d337142cea056f97dc9ad47e1bed8aa5fa27"
+    },
+    {
+      "path": "thesis/harness/start_k3_requester_auxiliaries_v1922.py",
+      "bytes": 3759,
+      "sha256": "78f32fcd3a4ae842d8e8f44d84fffdb1ea937893a2d28db022a66f91ddb9eca2"
+    },
+    {
+      "path": "thesis/harness/start_k3_requester_auxiliaries_v1926.py",
+      "bytes": 3759,
+      "sha256": "917370ed4233ffe1e29347690092955b915e68b1eccb14dfd73efc15f753d702"
+    },
+    {
+      "path": "thesis/harness/stt-mesh-runtime-candidate-v1738/PROSPECTIVE.patch",
+      "bytes": 21621,
+      "sha256": "038f6d443fbee9b83202dabe4db60375ff2f059493007548ad5989a18842f27f"
+    },
+    {
+      "path": "thesis/harness/stt-mesh-runtime-candidate-v1738/README.md",
+      "bytes": 3119,
+      "sha256": "3d918b02f74c1e1413549b6ffc2742048b379f491233a3785e4de4043587efa6"
+    },
+    {
+      "path": "thesis/harness/stt-mesh-runtime-candidate-v1738/SOURCE-RECEIPT.json",
+      "bytes": 3152,
+      "sha256": "5acb3d2ccbc1be3586726248a9e283be995ea90175b274d106c002247f9c5949"
+    },
+    {
+      "path": "thesis/harness/stt-mesh-runtime-candidate-v1738/after/app/services/stt_transcription/service.py",
+      "bytes": 120508,
+      "sha256": "becf4222d99b02dbc4cac03ad098f275ccb288ceb35f44e945a521701ecaaf49"
+    },
+    {
+      "path": "thesis/harness/stt-mesh-runtime-candidate-v1738/after/app/shared/contracts/models/speech_runtime.py",
+      "bytes": 23082,
+      "sha256": "60113749d6cb874a478cd0551b4d39c7a024b02a3e99c0f0af4a2d2e095db9c7"
+    },
+    {
+      "path": "thesis/harness/stt-mesh-runtime-candidate-v1738/after/packages/aurora-sdk/src/webrtc/manifest.ts",
+      "bytes": 35101,
+      "sha256": "88d99c863d8bb218edd9afcd422de9a0206424efc81af344c91e94b2bd8eda6d"
+    },
+    {
+      "path": "thesis/harness/stt-mesh-runtime-candidate-v1738/after/packages/aurora-sdk/tests/webrtc-manifest.test.ts",
+      "bytes": 25274,
+      "sha256": "bae42355504d7f936c0c1843fdc7b71ea3927e81b6ab3a6ca63bfc64b467cafa"
+    },
+    {
+      "path": "thesis/harness/stt-mesh-runtime-candidate-v1738/after/tests/unit/stt_transcription/test_runtime_speech_announcement.py",
+      "bytes": 6246,
+      "sha256": "b0e6cf72ce657afcb29feb1404ef96fdde879e6a146cdf352f065a7294cc1098"
+    },
+    {
+      "path": "thesis/harness/stt-mesh-runtime-candidate-v1738/before/app/services/stt_transcription/service.py",
+      "bytes": 112263,
+      "sha256": "4723b798b2643cee262e3d1d0ad28114305c3e83c8ef5bae5becd790aac5f888"
+    },
+    {
+      "path": "thesis/harness/stt-mesh-runtime-candidate-v1738/before/app/shared/contracts/models/speech_runtime.py",
+      "bytes": 23016,
+      "sha256": "1f7ea66c9a4619439130a6a200647b49a1df5b5b8cd17490c5aab0a371e88d94"
+    },
+    {
+      "path": "thesis/harness/stt-mesh-runtime-candidate-v1738/before/packages/aurora-sdk/src/webrtc/manifest.ts",
+      "bytes": 35099,
+      "sha256": "b415b3bcddeda9adc38da47cb73db271f8eff52fb3671a572f0763c81e79d0a4"
+    },
+    {
+      "path": "thesis/harness/stt-mesh-runtime-candidate-v1738/before/packages/aurora-sdk/tests/webrtc-manifest.test.ts",
+      "bytes": 22844,
+      "sha256": "1e3cb696f2eba417e0264bed974a8a191043adb72b96987ae434e2528938db25"
+    },
+    {
+      "path": "thesis/harness/stt-mesh-runtime-candidate-v1738/review/P2P-K3-V1738-BOUNDED-PROSPECTIVE-SOURCE-REVIEW-20261020T0624.md",
+      "bytes": 5329,
+      "sha256": "e613f3be1f5a2bb0532fc31ed36607fdc9cfc43cd7fa5d6d92d9881258c78edc"
+    },
+    {
+      "path": "thesis/harness/transfer_audit_packet_v1338.py",
+      "bytes": 8496,
+      "sha256": "d54fdcd25b219eeefe17e59cca92da833af280e3c425930be0943c4e5114e1c2"
+    },
+    {
+      "path": "thesis/harness/transfer_k1_provider_terminal_v1785.py",
+      "bytes": 7897,
+      "sha256": "bb26b36ce549b472eac65a34726f4f569b1c843a9aa1dca07ab61fdb6bba7843"
+    },
+    {
+      "path": "thesis/harness/transfer_k1_provider_terminal_v1788.py",
+      "bytes": 8077,
+      "sha256": "0cf0bfebfc885e031f22ee3276e7589f4742d4c72a5d76abbcbafff8c79a49a3"
+    },
+    {
+      "path": "thesis/harness/transfer_k2_provider_terminal_v1902.py",
+      "bytes": 8320,
+      "sha256": "76ade4220f88ba81f52de0599633283d0c05147561841f99ef9378f75bab26f5"
+    },
+    {
+      "path": "thesis/harness/transfer_provider_checkpoint_v1232.py",
+      "bytes": 7782,
+      "sha256": "ce7fbb676c5a5291218007f6b6489129d51b1e259e8f6040c91eeb7fe7438d85"
+    },
+    {
+      "path": "thesis/harness/transfer_provider_delta_v1261.py",
+      "bytes": 7867,
+      "sha256": "723a755c3733cc6acac5c459d297dbee54370bf7d9c3eb0b0b8a8e37f1d06af6"
+    },
+    {
+      "path": "thesis/harness/transfer_provider_delta_v1372.py",
+      "bytes": 7875,
+      "sha256": "789007a00e375b3401f77dffe49952b7031a9e71e7c7832ca6bd11a17d95c991"
+    },
+    {
+      "path": "thesis/harness/transfer_provider_delta_v1402.py",
+      "bytes": 7875,
+      "sha256": "85b5250b8f8d42979eb2d55ea3d536720fffbfeff129321a2a25727951d2ebe3"
+    },
+    {
+      "path": "thesis/harness/transfer_provider_delta_v1468.py",
+      "bytes": 7914,
+      "sha256": "d72c417971b5d3b5e5eee2edd4f15a30073e2892d1f9386ecb25c07a299da0b7"
+    },
+    {
+      "path": "thesis/harness/transfer_provider_k3_delta_v1556.py",
+      "bytes": 7952,
+      "sha256": "c6f52babc5a963cf38317286b862948e53a0b1f5c3e489c328bd8613373f86a2"
+    },
+    {
+      "path": "thesis/harness/transfer_provider_k3_terminal_delta_v1654.py",
+      "bytes": 8129,
+      "sha256": "e38df635589b03e7ce02ea33233eca27d34f53113eac6a1570e5756a28710f50"
+    },
+    {
+      "path": "thesis/harness/transfer_provider_k3_v1508.py",
+      "bytes": 7905,
+      "sha256": "83322f04468580dd9a087ee86a4fa6f21834a9f8c5b71cacde98aea3b88d01e5"
+    },
+    {
+      "path": "thesis/harness/transfer_provider_terminal_v1680.py",
+      "bytes": 8296,
+      "sha256": "ba6af3438cb1f2a26dccb3231714925a60ef53567e652625c254be03f99857bc"
+    },
+    {
+      "path": "thesis/harness/worker-cpu-v737/README.md",
+      "bytes": 3562,
+      "sha256": "56579ede5905be1b2ee65701a2562564e1d43c519a06b18d9ff6c21760bb3a59"
+    },
+    {
+      "path": "thesis/harness/worker-cpu-v737/SOURCE-CUSTODY-v764.json",
+      "bytes": 2439,
+      "sha256": "ea660d120f0de7b395771ccf93323a467d20a4b371434a46d6e5058fe35ab33e"
+    },
+    {
+      "path": "thesis/harness/worker-cpu-v737/post_terminal.py",
+      "bytes": 43031,
+      "sha256": "1b9ef010c8c83dfab6f3a77f1da85a2238ec6a7d04c72465cd8ea91bb32c2150"
+    }
+  ],
+  "findings": [],
+  "historicalSyntaxIssues": [],
+  "note": "Preserve original historical harness source and failure states; do not execute or silently fix them. Binary audio remains physical repo custody and is excluded from source push."
+}

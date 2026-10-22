@@ -1,0 +1,27 @@
+[
+  {
+    "path": "thesis/campaigns/worker-desktop-k2-p2p-assistant-tts-v1826/analysis-v1904/INPUTS.json",
+    "bytes": 453665,
+    "sha256": "25bd87f9e1abcca695517adb720e69b13aa8516522ca2335e5016f9e75382a72"
+  },
+  {
+    "path": "thesis/campaigns/worker-desktop-k2-p2p-assistant-tts-v1826/analysis-v1904/REPORT.md",
+    "bytes": 3234,
+    "sha256": "12e63fc238755199e05f1534f6bcd2494fa312411536888c5e2ca24d16490c84"
+  },
+  {
+    "path": "thesis/campaigns/worker-desktop-k2-p2p-assistant-tts-v1826/analysis-v1904/SUMMARY.json",
+    "bytes": 7150,
+    "sha256": "797a2347c7e3a72936a595720c710dc14f091498ddfbac12bde4d26a7ff2c222"
+  },
+  {
+    "path": "thesis/campaigns/worker-desktop-k2-p2p-assistant-tts-v1826/analysis-v1904/cases.jsonl",
+    "bytes": 4748329,
+    "sha256": "2d6bdd43a9092268a66e20c0736fdb192d844289211ad56de3841a8244c375a3"
+  },
+  {
+    "path": "thesis/campaigns/worker-desktop-k2-p2p-assistant-tts-v1826/analysis-v1904/native-stages-and-resources.jsonl",
+    "bytes": 3592554,
+    "sha256": "1e74417609d3ad77936e0be3bab1ef8a344010d5f67cf9e41a2605e0bc0ee156"
+  }
+]

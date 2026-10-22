@@ -1,0 +1,21 @@
+{
+  "status": "SOURCE_ONLY_NOT_LAUNCHED",
+  "files": [
+    {
+      "source": "thesis/harness/custody_k1_mesh_requester_v1719.py",
+      "destination": "thesis/harness/custody_k1_mesh_requester_v1779.py",
+      "beforeSha256": "ce6b06927bcf6f15e2ef43a5a0a54a29e4de43ef73797a37700b52797d97a6bf",
+      "afterSha256": "228f26dde815cb3bc1502868f906ac5ba04c06a329b4ba0d275744c1aa6cea67"
+    },
+    {
+      "source": "thesis/harness/k1_mesh_warmup_finalize_v1719.py",
+      "destination": "thesis/harness/k1_mesh_warmup_finalize_v1779.py",
+      "beforeSha256": "2cc2267e06fd605878a19e9ad041d66cd49c59a58fdc2ec75419851f4afa20ea",
+      "afterSha256": "7ac5ea8d1b396c65dc59fdcd52daedff9ce852630a4c16def05796db8318ad7b"
+    }
+  ],
+  "diffSha256": "0ce6bba15d84cbb092b086f17388569da8f9599fa61a8b64da0f58692a414d8f",
+  "warmupCollector": "Only append delta from manifest-bound inode/length/SHA256; preserves all original provider-owned logs; strict existing15 joins unchanged.",
+  "copier": "Same custody primitives, fresh v1779 paths,15600s bounded observation for15240s controller.",
+  "sutCalls": 0
+}

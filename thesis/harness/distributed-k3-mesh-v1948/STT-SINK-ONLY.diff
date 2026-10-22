@@ -1,0 +1,20 @@
+--- thesis/harness/distributed-k3-mesh-v1919/route_observation_sink.py	2026-10-20 21:06:54.597776093 +0000
++++ thesis/harness/distributed-k3-mesh-v1948/route_observation_sink.py	2026-10-20 21:55:44.039671755 +0000
+@@ -11,7 +11,7 @@
+ 
+ _STOP = object()
+ _MAX_ROW_BYTES = 32 * 1024
+-_MAX_ROWS = 1_846  # 30 warmup + 1,800 measured calls + bounded 16-row setup slack
++_MAX_ROWS = 2_761  # 45 warmup + 2,700 measured calls + bounded 16-row setup slack
+ _MAX_TOTAL_BYTES = 64 * 1024 * 1024
+ _QUEUE_SIZE = 256
+ _SAFE_ROUTE_STATUSES = frozenset({
+@@ -74,7 +74,7 @@
+         }
+         if (not isinstance(row, dict) or set(row) != required_row_keys
+                 or row.get("schema") != "aurora.mesh_route_observation.v1"
+-                or row.get("topic") not in {"TTS.Synthesize", "Orchestrator.ExternalUserInput"}
++                or row.get("topic") not in {"TTS.Synthesize", "Orchestrator.ExternalUserInput", "Transcription.Transcribe"}
+                 or row.get("request_outcome") not in ("ok", "failed", "raised")
+                 or row.get("address_data_redacted") is not True
+                 or (row.get("correlation_id") is not None and

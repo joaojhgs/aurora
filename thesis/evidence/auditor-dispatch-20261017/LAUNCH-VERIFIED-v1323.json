@@ -1,0 +1,38 @@
+{
+  "at": "2026-10-17T22:14:26.161975+00:00",
+  "run": "run_e6054e76e9fc",
+  "task": "task_c626834bf1c6",
+  "dispatch": "ctx_dda469327d6f",
+  "request": "15142b33-da95-45c7-b9fd-6303d9cb3d61",
+  "replayed": false,
+  "terminal": "term_ce58b81d-c119-46dd-b816-6792a29065db",
+  "incarnation": "81a53f3a-88d2-4976-a141-8b1a21766b8b",
+  "executionHost": "ssh:ssh-oci-coding-worker",
+  "workspace": "314e7b89-8f19-4535-9443-22b342aedff7::/home/developer/projects/aurora",
+  "model": {
+    "agent": "codex",
+    "model": "gpt-6.1-sol",
+    "effort": "xhigh"
+  },
+  "state": "ready",
+  "stage": "input_accepted",
+  "turnStart": "observed",
+  "projectionLiveness": {
+    "verdict": "live",
+    "observedAt": 1792275215856,
+    "source": "agent_status"
+  },
+  "observation": {
+    "status": "unverifiable",
+    "exactWorker": true,
+    "reason": "missing_liveness_verdict",
+    "agentWait": null
+  },
+  "terminalConnected": true,
+  "terminalWritable": true,
+  "exclusiveFiles": "thesis/audit/20261017-data-and-results/",
+  "reportCompleted": false,
+  "authority": "Owner-authorized distinct audit Task, not replacement Root/monitor",
+  "oldAdmissionSuperseded": "CLI BUG fixed; normal workspace usage read now allowed",
+  "uiWarning": "Not discoverable in UI; actual ready/accepted/turn-started/live projection retained. No focus/relaunch action taken."
+}

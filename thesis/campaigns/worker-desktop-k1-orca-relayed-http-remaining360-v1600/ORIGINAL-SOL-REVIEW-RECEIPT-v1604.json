@@ -1,0 +1,67 @@
+{
+  "schema": "aurora.monitor.k1-finite-source-delta-review.v1",
+  "at": "2026-10-18T18:24:10.839632+00:00",
+  "rootRequest": "msg_3dbcffac056d",
+  "verdict": "NO_BLOCKING_FINDING_IN_REQUESTED_SOURCE_ONLY_DELTA",
+  "scope": "Count/index/namespace/accounting/provider-admission/failure-metadata delta only; no old model/algorithm/result/OS-lease reviews, tests, imports, model or network calls.",
+  "actualSourceFilesPinned": 12,
+  "draftImplementationPinsChecked": 9,
+  "pinErrors": [],
+  "sourceManifestSha256": "ffefef52d46d7f0ddc7d208778101a463b2e8d5b179a6b400f450f656cbb1c0c",
+  "draftSha256": "d278c1f6e51b62894b399b9cbf55062a2f1b1a1606657cef6d02443cf54c06b4",
+  "sourceDiffSha256": "33e00de9ae5d73ecb0ae77503b9fe20a118693d3cf16bb21be0b924dc904faa8",
+  "staticValidationSha256": "1fc159cff3c423476642e22236e88ccfab68cc3837b5a6995b6bee9309ebbc78",
+  "scienceFieldCount": 10,
+  "scienceExactParentEquality": true,
+  "scienceSha256": "87778af6b9b84f3098182c8a07c8ee78aaa70ca1e98fc3a4a562fcfa8e3f1e33",
+  "counts": {
+    "prior": 180,
+    "correct": 179,
+    "failed": 1,
+    "newPlanned": 360,
+    "globalIndices": [
+      181,
+      540
+    ],
+    "excludedWarmups": 15,
+    "conditionTarget": 900,
+    "futureSecondSession": [
+      541,
+      900
+    ],
+    "automaticSecondSession": false,
+    "automaticRetry": false,
+    "oldRowsReplayed": false
+  },
+  "budget": {
+    "priorAllInclusiveChargedSeconds": 10027.780472366,
+    "oldConditionOnlySeconds": 9996.643721086,
+    "additionalSetupShutdownChargedSeconds": 31.13675128,
+    "prospectiveNewCumulativeCapSeconds": 72000,
+    "eachSessionAllInclusiveCapSeconds": 28800,
+    "outerFromControllerEntrySeconds": 28620,
+    "conditionCapSeconds": 28320,
+    "setupReservedSeconds": 300,
+    "shutdownReservedSeconds": 180,
+    "twoSessionsPlusParentSeconds": 67627.780472366,
+    "forecastUsingSavedP95With20PercentPlusSetupShutdownSeconds": 27617.408083065,
+    "newWarmupP95GateBeforeMeasurements": true,
+    "oldFrozenCapOrDataChanged": false
+  },
+  "admission": {
+    "newProviderIdentityManifestDeadlineResourcesUnbound": true,
+    "controllerNullDeadlineRejectsBeforeBackendLaunch": true,
+    "providerLifetimeAndCumulativeChecksPresent": true,
+    "receiverProofPinGuardPresent": true,
+    "currentK3ProviderNotExtendedOrAdopted": true,
+    "resourceOrRuntimeAdmissionProven": false,
+    "runtimeLaunchProven": false
+  },
+  "diagnosticBoundary": "Reviewed same safe type/errno/hash/length helper reused; synchronous TTS function remains called through asyncio.to_thread. Successful exchange and retry policy unchanged in inspected delta. No additional helper test required.",
+  "limitations": "Prospective source preparation only. Root still must bind/freeze actual compatible provider/model/source/config/route/resource reservation and physical evidence custody/operator pins, then normal fresh native/local warmup admission; this receipt grants none of those and adds no gate to K3 remaining184. No scientific percentile pooling inferred.",
+  "newMeasurementsByMonitor": 0,
+  "productWritesByMonitor": 0,
+  "run": "run_e6054e76e9fc",
+  "task": "task_d7ea336050cf",
+  "dispatch": "ctx_37b4d0a3c14f"
+}

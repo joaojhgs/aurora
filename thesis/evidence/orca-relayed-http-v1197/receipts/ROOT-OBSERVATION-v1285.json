@@ -1,0 +1,49 @@
+{
+  "at": "2026-10-17T21:40:20Z",
+  "classification": "PROGRESS_SOURCE_STAGING_AND_VERIFIED_WAIT",
+  "progress": {
+    "attempted": 108,
+    "last_attempt_file": "attempts/attempt-0108-measured.jsonl",
+    "last_attempt_status": "completed_correct",
+    "measured_attempted": 93,
+    "planned_measured": 900,
+    "planned_warmups": 15,
+    "status": "running",
+    "unattempted_measured": 807,
+    "warmups_attempted": 15
+  },
+  "originalProcesses": {
+    "430655": {
+      "present": true,
+      "state": "S",
+      "startTicks": 104608580,
+      "sameProcess": true
+    },
+    "430656": {
+      "present": true,
+      "state": "R",
+      "startTicks": 104608648,
+      "sameProcess": true
+    },
+    "442775": {
+      "present": true,
+      "state": "S",
+      "startTicks": 104723117,
+      "sameProcess": true
+    },
+    "421717": {
+      "present": true,
+      "state": "S",
+      "startTicks": 104535394,
+      "sameProcess": true
+    }
+  },
+  "copierCheckpointAt": "2026-10-17T21:40:19.862778+00:00",
+  "physicalCompletedCases": 108,
+  "freeBytes": 7184936960,
+  "summaryPresent": false,
+  "sourceStagingReceipt": "thesis/campaigns/worker-desktop-k2-orca-relayed-http-v1264/SOURCE-STAGING-v1282.json",
+  "newMeasurementsByObserver": 0,
+  "nextOrdinaryObservationUtc": "2026-10-17T21:50:00Z",
+  "watchUtc": "2026-10-17T21:55:00Z"
+}

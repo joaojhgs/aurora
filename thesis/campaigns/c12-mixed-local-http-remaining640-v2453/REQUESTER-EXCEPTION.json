@@ -1,0 +1,6 @@
+{
+  "at": "2026-10-22T11:09:29.463133+00:00",
+  "exceptionType": "FileNotFoundError",
+  "modelQualityInference": false,
+  "reconcileBeforeAnyNewInference": true
+}

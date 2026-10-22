@@ -1,0 +1,19 @@
+{
+  "at": "2026-10-20T04:32:28.553840+00:00",
+  "verdict": "PASS",
+  "diffSha256": "63f613bba39ca2f9f9c13fa73451122a85445666f18fcc4b27deaa0efd86b03f",
+  "source": "Original Sol monitor ctx_37b4d0a3c14f actual msg_0c7ed7618abd; independent review not Root self-assertion",
+  "files": [
+    {
+      "path": "thesis/campaigns/worker-desktop-k1-p2p-tts-remaining880-v1719/review/P2P-K1-REMAINING880-BOUNDED-DELTA-REVIEW-20261020T0429.md",
+      "bytes": 4799,
+      "sha256": "b69a416970f762c48a3788cebcd3c114547524a82bc02b3de36b31997bd96b70"
+    },
+    {
+      "path": "thesis/campaigns/worker-desktop-k1-p2p-tts-remaining880-v1719/review/P2P-K1-REMAINING880-BOUNDED-DELTA-REVIEW-20261020T0429-RECEIPT.json",
+      "bytes": 1546,
+      "sha256": "8a32f0474a65bb3eb9580f33f363754ac40a2b9cfbb0e7fd65fe0b867ade80a6"
+    }
+  ],
+  "limits": "Future harness delta only; actual resource/native admission separately required."
+}

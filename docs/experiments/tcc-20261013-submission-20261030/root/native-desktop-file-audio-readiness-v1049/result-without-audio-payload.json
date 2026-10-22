@@ -1,0 +1,52 @@
+{
+  "elapsedMs": 15344.000000000004,
+  "result": {
+    "input": {
+      "bytes": 219794,
+      "channels": 1,
+      "format": "wav",
+      "sampleRate": 22050,
+      "sha256": "da0ecc4ad0885746ab6e716585473917ab2b543a505bf0db09ebacfaa7943cbb"
+    },
+    "native16kConversion": "not_exercised_by_finite_sdk_wav_request",
+    "runId": "aurora-native-file-audio-v1049",
+    "runtimeMode": "desktop-local",
+    "schema": "aurora.desktop_file_audio_e2e.report.v1",
+    "stages": {
+      "assistant": {
+        "automaticTtsStatus": "skipped",
+        "characters": 5,
+        "correlationId": null,
+        "exact": true,
+        "modelLabel": "Qwen3.5-0.8B-Q4_0.gguf",
+        "sessionId": "desktop-file-audio-aurora-native-file-audio-v1049",
+        "sha256": "5dd272b4f316b776a7b8e3d0894b37e1e42be3d5d3b204b8a5836cc50597a6b1"
+      },
+      "assistant_ms": 9908,
+      "synthesis_ms": 1656,
+      "transcript": {
+        "characters": 62,
+        "correlationId": null,
+        "exact": true,
+        "modelUsed": "accurate",
+        "sha256": "34b681e385feb3500c9e9849d30f5bac982716c4e4938cdb04c5fdc617cff624"
+      },
+      "transcription_ms": 3750
+    },
+    "status": "passed",
+    "synthesis": {
+      "actualDurationMs": 684.9886621315193,
+      "bytes": 30252,
+      "channels": 1,
+      "correlationId": null,
+      "durationMs": 684.9886621315193,
+      "format": "wav",
+      "frames": 15104,
+      "pcmSamples": 15104,
+      "sampleRate": 22050,
+      "sha256": "bbeea54c063212336472879a0db8ad3add462b1f854c4417dd8a1c03732893c0"
+    },
+    "transport": "tauri-local"
+  },
+  "status": "done"
+}

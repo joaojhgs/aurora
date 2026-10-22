@@ -1,0 +1,99 @@
+{
+  "private_report_sha256": "70b2b97d69e590b74b281dc595e647c0a11ce39401c5b7ddbae5bedb85392d73",
+  "safe_rows": [
+    {
+      "condition": "browser-webrtc-mesh",
+      "workload": "orbit-exact-v1",
+      "attempt": 1,
+      "warmupCount": 0,
+      "outcome": "completed_exact",
+      "requestId": "cbffa9a3-170a-4ecd-9d17-a63b644f4018",
+      "sessionId": "10506d3b-0ebb-494e-aa4e-5ef13a1e3d15",
+      "correlationId": "cbffa9a3-170a-4ecd-9d17-a63b644f4018",
+      "messageId": "cbffa9a3-170a-4ecd-9d17-a63b644f4018",
+      "modelLabel": "Qwen3.5-0.8B-Q4_0.gguf",
+      "exactResponse": true,
+      "completionCount": 1,
+      "completionKind": "fallback",
+      "updateKind": "fallback",
+      "updateKinds": [
+        "connecting",
+        "fallback"
+      ],
+      "requesterDispatchToTypedCompletionMs": 49178,
+      "errorCode": null,
+      "errorDetailCode": null,
+      "peerAtTerminal": {
+        "state": "authorized",
+        "status": "authorized",
+        "expectedStablePeerPresent": true,
+        "diagnosticCode": {
+          "state": "present_unmatched",
+          "value": null
+        },
+        "rosterTotal": 1,
+        "rosterAuthorized": 1
+      },
+      "peerBeforeDispatch": {
+        "state": "authorized",
+        "status": "authorized",
+        "expectedStablePeerPresent": true,
+        "diagnosticCode": {
+          "state": "present_unmatched",
+          "value": null
+        },
+        "rosterTotal": 1,
+        "rosterAuthorized": 1
+      },
+      "providerPreflight": "ready",
+      "readinessWaitMs": 1928
+    },
+    {
+      "condition": "browser-webrtc-mesh",
+      "workload": "orbit-exact-v1",
+      "attempt": 2,
+      "warmupCount": 0,
+      "outcome": "completed_exact",
+      "requestId": "6b4504e9-5fa3-4899-85f9-b0a1eb93eb08",
+      "sessionId": "a5636e4c-3d51-4b7b-9c96-c154dc6c68e5",
+      "correlationId": "6b4504e9-5fa3-4899-85f9-b0a1eb93eb08",
+      "messageId": "6b4504e9-5fa3-4899-85f9-b0a1eb93eb08",
+      "modelLabel": "Qwen3.5-0.8B-Q4_0.gguf",
+      "exactResponse": true,
+      "completionCount": 1,
+      "completionKind": "fallback",
+      "updateKind": "fallback",
+      "updateKinds": [
+        "connecting",
+        "fallback"
+      ],
+      "requesterDispatchToTypedCompletionMs": 33531,
+      "errorCode": null,
+      "errorDetailCode": null,
+      "peerAtTerminal": {
+        "state": "authorized",
+        "status": "authorized",
+        "expectedStablePeerPresent": true,
+        "diagnosticCode": {
+          "state": "present_unmatched",
+          "value": null
+        },
+        "rosterTotal": 1,
+        "rosterAuthorized": 1
+      },
+      "peerBeforeDispatch": {
+        "state": "authorized",
+        "status": "authorized",
+        "expectedStablePeerPresent": true,
+        "diagnosticCode": {
+          "state": "present_unmatched",
+          "value": null
+        },
+        "rosterTotal": 1,
+        "rosterAuthorized": 1
+      },
+      "providerPreflight": "ready",
+      "readinessWaitMs": 0
+    }
+  ]
+}

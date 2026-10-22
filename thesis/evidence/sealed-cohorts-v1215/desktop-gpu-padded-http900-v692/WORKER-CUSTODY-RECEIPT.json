@@ -1,0 +1,68 @@
+{
+  "status": "complete",
+  "at": "2026-10-15T21:27:04.276050+00:00",
+  "sourceHost": "personal.skyron-server",
+  "sourceRoot": "/tmp/aurora-root-padded-http900-v692/export-v715/",
+  "destinationHost": "code-worker",
+  "destination": "/home/developer/projects/aurora/docs/experiments/tcc-20261013-submission-20261030/root/desktop-gpu-padded-http900-v692",
+  "cursor": "91375",
+  "completedFiles": [
+    {
+      "name": "ARCHIVE-MANIFEST.json",
+      "bytes": 690579,
+      "sha256": "d87abd77df46d68fba1a4c420d411a95776026430b7100817aa1bf83f5d63605",
+      "path": "/home/developer/projects/aurora/docs/experiments/tcc-20261013-submission-20261030/root/desktop-gpu-padded-http900-v692/ARCHIVE-MANIFEST.json",
+      "savedCopySizeAndSHA256VerifiedOnce": true
+    },
+    {
+      "name": "NATIVE-STAGE-CASE-HISTORY.json",
+      "bytes": 2128044,
+      "sha256": "cc4aead5d0650ee8ae667e509b72bf01d6adbdf80de962cb47a1311ecb601158",
+      "path": "/home/developer/projects/aurora/docs/experiments/tcc-20261013-submission-20261030/root/desktop-gpu-padded-http900-v692/NATIVE-STAGE-CASE-HISTORY.json",
+      "savedCopySizeAndSHA256VerifiedOnce": true
+    },
+    {
+      "name": "audit-verification.json",
+      "bytes": 12033,
+      "sha256": "9658f29dfc939083445a98f26d222df3b622ac0cba5cc8396d5c22a09a342a6a",
+      "path": "/home/developer/projects/aurora/docs/experiments/tcc-20261013-submission-20261030/root/desktop-gpu-padded-http900-v692/audit-verification.json",
+      "savedCopySizeAndSHA256VerifiedOnce": true
+    },
+    {
+      "name": "aurora-desktop-gpu-padded-http900-v692.zip",
+      "bytes": 34691761,
+      "sha256": "7f1438bd700d5a794a879f5a38d7293275acf4d827289a50c6c49e01dc1a1870",
+      "path": "/home/developer/projects/aurora/docs/experiments/tcc-20261013-submission-20261030/root/desktop-gpu-padded-http900-v692/aurora-desktop-gpu-padded-http900-v692.zip",
+      "savedCopySizeAndSHA256VerifiedOnce": true
+    },
+    {
+      "name": "verification.json",
+      "bytes": 12399,
+      "sha256": "199ee53e338185d2e4222b98e88816beee5575cdfdaf9a49499198ce14d36ac2",
+      "path": "/home/developer/projects/aurora/docs/experiments/tcc-20261013-submission-20261030/root/desktop-gpu-padded-http900-v692/verification.json",
+      "savedCopySizeAndSHA256VerifiedOnce": true
+    }
+  ],
+  "originalAuditRerun": false,
+  "destinationAdmission": {
+    "freeBytes": 10061500416,
+    "requiredBytes": 117534816,
+    "reserveBytes": 80000000
+  },
+  "updatedAt": "2026-10-15T21:54:40.832065+00:00",
+  "errorClass": "AssertionError",
+  "error": "Page helper incomplete; reconcile SAME accepted command and output",
+  "priorFailedOperation": {
+    "name": "v732-copy-f00-p000",
+    "marker": "AURORA_COPY_V732_0_0",
+    "cursorBeforeSend": "2339",
+    "file": "ARCHIVE-MANIFEST.json",
+    "offset": 0,
+    "partial": "/home/developer/projects/aurora/docs/experiments/tcc-20261013-submission-20261030/root/desktop-gpu-padded-http900-v692/ARCHIVE-MANIFEST.json.partial-v732",
+    "status": "one read-only send; reconcile SAME accepted output on failure"
+  },
+  "priorAcceptedReadStatus": "Completed file-read response exceeded terminal history: oldestCursor3210, seq0..860 lost, latestCursor3516. Immutable source intact; no benchmark or audit repeated.",
+  "operation": null,
+  "transportPageBytes": 98304,
+  "currentFile": null
+}

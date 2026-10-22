@@ -1,0 +1,62 @@
+{
+  "observed_at": "2026-10-14T16:00:25.274194+00:00",
+  "source_path": ".git/aurora-handoff-import-20261006/desktop-gpu-vendor-actual-v408.json",
+  "source_sha256": "e42206e0928658b5988acf473eb85c57c1e8551f36c002694bee26219f7b6bce",
+  "root_message": "msg_af18e43d6577",
+  "root_message_delivery_ack": "delivery_bb067e59c291",
+  "run": "run_e6054e76e9fc",
+  "task": "task_d7ea336050cf",
+  "dispatch": "ctx_37b4d0a3c14f",
+  "hardware": {
+    "drm": [
+      {
+        "card": "card1",
+        "device": "0x7480",
+        "device_path": "/sys/devices/pci0000:00/0000:00:01.1/0000:01:00.0/0000:02:00.0/0000:03:00.0",
+        "driver": "/sys/bus/pci/drivers/amdgpu",
+        "gpu_busy_percent": null,
+        "mem_info_vram_total": "8573157376",
+        "mem_info_vram_used": "27262976",
+        "vendor": "0x1002"
+      },
+      {
+        "card": "card2",
+        "device": "0x15d8",
+        "device_path": "/sys/devices/pci0000:00/0000:00:08.1/0000:0a:00.0",
+        "driver": "/sys/bus/pci/drivers/amdgpu",
+        "gpu_busy_percent": "0",
+        "mem_info_vram_total": "2147483648",
+        "mem_info_vram_used": "847388672",
+        "vendor": "0x1002"
+      }
+    ],
+    "hostname": "personal.skyron-server",
+    "inference_started": false,
+    "kind": "aurora_root_vendor_neutral_gpu_readiness",
+    "python_packages": {
+      "llama-cpp-python": null,
+      "torch": null,
+      "uv": "0.11.21"
+    },
+    "recorded_at": "2026-10-14T15:52:32.326090+00:00",
+    "source_changes": false,
+    "tools": {
+      "distrobox-host-exec": "/usr/bin/distrobox-host-exec",
+      "host-spawn": "/usr/bin/host-spawn",
+      "lspci": null,
+      "nvidia-smi": null,
+      "python3.10": "/home/developer/.local/bin/python3.10",
+      "python3.11": "/home/developer/.local/bin/python3.11",
+      "rocm-smi": null,
+      "rocminfo": null,
+      "uv": "/home/developer/.local/bin/uv",
+      "vulkaninfo": "/usr/bin/vulkaninfo"
+    }
+  },
+  "inference_backend_verified": false,
+  "measured_gpu_baseline_launch_verified": false,
+  "dual_completion_barrier_ready": false,
+  "cpu_reviewed_measured_count": 700,
+  "cpu_cell08_observed_measured_count": 99,
+  "scope": "actual vendor-neutral hardware readiness, not inference or baseline completion"
+}

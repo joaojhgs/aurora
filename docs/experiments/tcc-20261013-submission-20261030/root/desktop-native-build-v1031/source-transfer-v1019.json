@@ -1,0 +1,918 @@
+{
+  "startedAt": "2026-10-16T11:22:38.939099+00:00",
+  "pid": 3658770,
+  "startTicks": "92821945",
+  "status": "TRANSFERRED_CHECKSUM_VERIFIED_NOT_MATERIALIZED",
+  "remoteInput": "/tmp/aurora-root-c06-current-source-v1019/input",
+  "completedBytes": 4174495,
+  "totalBytes": 4174495,
+  "chunks": [
+    {
+      "name": "v1019-source-chunk-0000",
+      "file": "DESKTOP-BUILD-INPUTS-v1015.json.gz",
+      "offset": 0,
+      "bytes": 32768,
+      "nextCursor": "184409"
+    },
+    {
+      "name": "v1019-source-chunk-0001",
+      "file": "DESKTOP-BUILD-INPUTS-v1015.json.gz",
+      "offset": 32768,
+      "bytes": 32768,
+      "nextCursor": "184428"
+    },
+    {
+      "name": "v1019-source-chunk-0002",
+      "file": "DESKTOP-BUILD-INPUTS-v1015.json.gz",
+      "offset": 65536,
+      "bytes": 32768,
+      "nextCursor": "184447"
+    },
+    {
+      "name": "v1019-source-chunk-0003",
+      "file": "DESKTOP-BUILD-INPUTS-v1015.json.gz",
+      "offset": 98304,
+      "bytes": 32768,
+      "nextCursor": "184466"
+    },
+    {
+      "name": "v1019-source-chunk-0004",
+      "file": "DESKTOP-BUILD-INPUTS-v1015.json.gz",
+      "offset": 131072,
+      "bytes": 32768,
+      "nextCursor": "184485"
+    },
+    {
+      "name": "v1019-source-chunk-0005",
+      "file": "DESKTOP-BUILD-INPUTS-v1015.json.gz",
+      "offset": 163840,
+      "bytes": 32768,
+      "nextCursor": "184504"
+    },
+    {
+      "name": "v1019-source-chunk-0006",
+      "file": "DESKTOP-BUILD-INPUTS-v1015.json.gz",
+      "offset": 196608,
+      "bytes": 11004,
+      "nextCursor": "184523"
+    },
+    {
+      "name": "v1019-source-chunk-0007",
+      "file": "desktop-build-input-delta-v1015.tar.gz",
+      "offset": 0,
+      "bytes": 32768,
+      "nextCursor": "184542"
+    },
+    {
+      "name": "v1019-source-chunk-0008",
+      "file": "desktop-build-input-delta-v1015.tar.gz",
+      "offset": 32768,
+      "bytes": 32768,
+      "nextCursor": "184561"
+    },
+    {
+      "name": "v1019-source-chunk-0009",
+      "file": "desktop-build-input-delta-v1015.tar.gz",
+      "offset": 65536,
+      "bytes": 32768,
+      "nextCursor": "184580"
+    },
+    {
+      "name": "v1019-source-chunk-0010",
+      "file": "desktop-build-input-delta-v1015.tar.gz",
+      "offset": 98304,
+      "bytes": 32768,
+      "nextCursor": "184599"
+    },
+    {
+      "name": "v1019-source-chunk-0011",
+      "file": "desktop-build-input-delta-v1015.tar.gz",
+      "offset": 131072,
+      "bytes": 32768,
+      "nextCursor": "184618"
+    },
+    {
+      "name": "v1019-source-chunk-0012",
+      "file": "desktop-build-input-delta-v1015.tar.gz",
+      "offset": 163840,
+      "bytes": 32768,
+      "nextCursor": "184637"
+    },
+    {
+      "name": "v1019-source-chunk-0013",
+      "file": "desktop-build-input-delta-v1015.tar.gz",
+      "offset": 196608,
+      "bytes": 32768,
+      "nextCursor": "184656"
+    },
+    {
+      "name": "v1019-source-chunk-0014",
+      "file": "desktop-build-input-delta-v1015.tar.gz",
+      "offset": 229376,
+      "bytes": 32768,
+      "nextCursor": "184675"
+    },
+    {
+      "name": "v1019-source-chunk-0015",
+      "file": "desktop-build-input-delta-v1015.tar.gz",
+      "offset": 262144,
+      "bytes": 32768,
+      "nextCursor": "184694"
+    },
+    {
+      "name": "v1019-source-chunk-0016",
+      "file": "desktop-build-input-delta-v1015.tar.gz",
+      "offset": 294912,
+      "bytes": 32768,
+      "nextCursor": "184713"
+    },
+    {
+      "name": "v1019-source-chunk-0017",
+      "file": "desktop-build-input-delta-v1015.tar.gz",
+      "offset": 327680,
+      "bytes": 32768,
+      "nextCursor": "184732"
+    },
+    {
+      "name": "v1019-source-chunk-0018",
+      "file": "desktop-build-input-delta-v1015.tar.gz",
+      "offset": 360448,
+      "bytes": 32768,
+      "nextCursor": "184751"
+    },
+    {
+      "name": "v1019-source-chunk-0019",
+      "file": "desktop-build-input-delta-v1015.tar.gz",
+      "offset": 393216,
+      "bytes": 32768,
+      "nextCursor": "184770"
+    },
+    {
+      "name": "v1019-source-chunk-0020",
+      "file": "desktop-build-input-delta-v1015.tar.gz",
+      "offset": 425984,
+      "bytes": 32768,
+      "nextCursor": "184789"
+    },
+    {
+      "name": "v1019-source-chunk-0021",
+      "file": "desktop-build-input-delta-v1015.tar.gz",
+      "offset": 458752,
+      "bytes": 32768,
+      "nextCursor": "184808"
+    },
+    {
+      "name": "v1019-source-chunk-0022",
+      "file": "desktop-build-input-delta-v1015.tar.gz",
+      "offset": 491520,
+      "bytes": 32768,
+      "nextCursor": "184827"
+    },
+    {
+      "name": "v1019-source-chunk-0023",
+      "file": "desktop-build-input-delta-v1015.tar.gz",
+      "offset": 524288,
+      "bytes": 32768,
+      "nextCursor": "184846"
+    },
+    {
+      "name": "v1019-source-chunk-0024",
+      "file": "desktop-build-input-delta-v1015.tar.gz",
+      "offset": 557056,
+      "bytes": 32768,
+      "nextCursor": "184865"
+    },
+    {
+      "name": "v1019-source-chunk-0025",
+      "file": "desktop-build-input-delta-v1015.tar.gz",
+      "offset": 589824,
+      "bytes": 32768,
+      "nextCursor": "184884"
+    },
+    {
+      "name": "v1019-source-chunk-0026",
+      "file": "desktop-build-input-delta-v1015.tar.gz",
+      "offset": 622592,
+      "bytes": 32768,
+      "nextCursor": "184903"
+    },
+    {
+      "name": "v1019-source-chunk-0027",
+      "file": "desktop-build-input-delta-v1015.tar.gz",
+      "offset": 655360,
+      "bytes": 32768,
+      "nextCursor": "184922"
+    },
+    {
+      "name": "v1019-source-chunk-0028",
+      "file": "desktop-build-input-delta-v1015.tar.gz",
+      "offset": 688128,
+      "bytes": 32768,
+      "nextCursor": "184941"
+    },
+    {
+      "name": "v1019-source-chunk-0029",
+      "file": "desktop-build-input-delta-v1015.tar.gz",
+      "offset": 720896,
+      "bytes": 32768,
+      "nextCursor": "184960"
+    },
+    {
+      "name": "v1019-source-chunk-0030",
+      "file": "desktop-build-input-delta-v1015.tar.gz",
+      "offset": 753664,
+      "bytes": 32768,
+      "nextCursor": "184979"
+    },
+    {
+      "name": "v1019-source-chunk-0031",
+      "file": "desktop-build-input-delta-v1015.tar.gz",
+      "offset": 786432,
+      "bytes": 32768,
+      "nextCursor": "184998"
+    },
+    {
+      "name": "v1019-source-chunk-0032",
+      "file": "desktop-build-input-delta-v1015.tar.gz",
+      "offset": 819200,
+      "bytes": 32768,
+      "nextCursor": "185017"
+    },
+    {
+      "name": "v1019-source-chunk-0033",
+      "file": "desktop-build-input-delta-v1015.tar.gz",
+      "offset": 851968,
+      "bytes": 32768,
+      "nextCursor": "185036"
+    },
+    {
+      "name": "v1019-source-chunk-0034",
+      "file": "desktop-build-input-delta-v1015.tar.gz",
+      "offset": 884736,
+      "bytes": 32768,
+      "nextCursor": "185055"
+    },
+    {
+      "name": "v1019-source-chunk-0035",
+      "file": "desktop-build-input-delta-v1015.tar.gz",
+      "offset": 917504,
+      "bytes": 32768,
+      "nextCursor": "185074"
+    },
+    {
+      "name": "v1019-source-chunk-0036",
+      "file": "desktop-build-input-delta-v1015.tar.gz",
+      "offset": 950272,
+      "bytes": 32768,
+      "nextCursor": "185093"
+    },
+    {
+      "name": "v1019-source-chunk-0037",
+      "file": "desktop-build-input-delta-v1015.tar.gz",
+      "offset": 983040,
+      "bytes": 32768,
+      "nextCursor": "185112"
+    },
+    {
+      "name": "v1019-source-chunk-0038",
+      "file": "desktop-build-input-delta-v1015.tar.gz",
+      "offset": 1015808,
+      "bytes": 32768,
+      "nextCursor": "185131"
+    },
+    {
+      "name": "v1019-source-chunk-0039",
+      "file": "desktop-build-input-delta-v1015.tar.gz",
+      "offset": 1048576,
+      "bytes": 32768,
+      "nextCursor": "185150"
+    },
+    {
+      "name": "v1019-source-chunk-0040",
+      "file": "desktop-build-input-delta-v1015.tar.gz",
+      "offset": 1081344,
+      "bytes": 32768,
+      "nextCursor": "185169"
+    },
+    {
+      "name": "v1019-source-chunk-0041",
+      "file": "desktop-build-input-delta-v1015.tar.gz",
+      "offset": 1114112,
+      "bytes": 32768,
+      "nextCursor": "185188"
+    },
+    {
+      "name": "v1019-source-chunk-0042",
+      "file": "desktop-build-input-delta-v1015.tar.gz",
+      "offset": 1146880,
+      "bytes": 32768,
+      "nextCursor": "185207"
+    },
+    {
+      "name": "v1019-source-chunk-0043",
+      "file": "desktop-build-input-delta-v1015.tar.gz",
+      "offset": 1179648,
+      "bytes": 32768,
+      "nextCursor": "185226"
+    },
+    {
+      "name": "v1019-source-chunk-0044",
+      "file": "desktop-build-input-delta-v1015.tar.gz",
+      "offset": 1212416,
+      "bytes": 32768,
+      "nextCursor": "185245"
+    },
+    {
+      "name": "v1019-source-chunk-0045",
+      "file": "desktop-build-input-delta-v1015.tar.gz",
+      "offset": 1245184,
+      "bytes": 32768,
+      "nextCursor": "185264"
+    },
+    {
+      "name": "v1019-source-chunk-0046",
+      "file": "desktop-build-input-delta-v1015.tar.gz",
+      "offset": 1277952,
+      "bytes": 32768,
+      "nextCursor": "185283"
+    },
+    {
+      "name": "v1019-source-chunk-0047",
+      "file": "desktop-build-input-delta-v1015.tar.gz",
+      "offset": 1310720,
+      "bytes": 32768,
+      "nextCursor": "185302"
+    },
+    {
+      "name": "v1019-source-chunk-0048",
+      "file": "desktop-build-input-delta-v1015.tar.gz",
+      "offset": 1343488,
+      "bytes": 32768,
+      "nextCursor": "185321"
+    },
+    {
+      "name": "v1019-source-chunk-0049",
+      "file": "desktop-build-input-delta-v1015.tar.gz",
+      "offset": 1376256,
+      "bytes": 32768,
+      "nextCursor": "185340"
+    },
+    {
+      "name": "v1019-source-chunk-0050",
+      "file": "desktop-build-input-delta-v1015.tar.gz",
+      "offset": 1409024,
+      "bytes": 32768,
+      "nextCursor": "185359"
+    },
+    {
+      "name": "v1019-source-chunk-0051",
+      "file": "desktop-build-input-delta-v1015.tar.gz",
+      "offset": 1441792,
+      "bytes": 32768,
+      "nextCursor": "185378"
+    },
+    {
+      "name": "v1019-source-chunk-0052",
+      "file": "desktop-build-input-delta-v1015.tar.gz",
+      "offset": 1474560,
+      "bytes": 32768,
+      "nextCursor": "185397"
+    },
+    {
+      "name": "v1019-source-chunk-0053",
+      "file": "desktop-build-input-delta-v1015.tar.gz",
+      "offset": 1507328,
+      "bytes": 32768,
+      "nextCursor": "185416"
+    },
+    {
+      "name": "v1019-source-chunk-0054",
+      "file": "desktop-build-input-delta-v1015.tar.gz",
+      "offset": 1540096,
+      "bytes": 32768,
+      "nextCursor": "185435"
+    },
+    {
+      "name": "v1019-source-chunk-0055",
+      "file": "desktop-build-input-delta-v1015.tar.gz",
+      "offset": 1572864,
+      "bytes": 32768,
+      "nextCursor": "185454"
+    },
+    {
+      "name": "v1019-source-chunk-0056",
+      "file": "desktop-build-input-delta-v1015.tar.gz",
+      "offset": 1605632,
+      "bytes": 32768,
+      "nextCursor": "185473"
+    },
+    {
+      "name": "v1019-source-chunk-0057",
+      "file": "desktop-build-input-delta-v1015.tar.gz",
+      "offset": 1638400,
+      "bytes": 32768,
+      "nextCursor": "185492"
+    },
+    {
+      "name": "v1019-source-chunk-0058",
+      "file": "desktop-build-input-delta-v1015.tar.gz",
+      "offset": 1671168,
+      "bytes": 32768,
+      "nextCursor": "185511"
+    },
+    {
+      "name": "v1019-source-chunk-0059",
+      "file": "desktop-build-input-delta-v1015.tar.gz",
+      "offset": 1703936,
+      "bytes": 32768,
+      "nextCursor": "185530"
+    },
+    {
+      "name": "v1019-source-chunk-0060",
+      "file": "desktop-build-input-delta-v1015.tar.gz",
+      "offset": 1736704,
+      "bytes": 32768,
+      "nextCursor": "185549"
+    },
+    {
+      "name": "v1019-source-chunk-0061",
+      "file": "desktop-build-input-delta-v1015.tar.gz",
+      "offset": 1769472,
+      "bytes": 32768,
+      "nextCursor": "185568"
+    },
+    {
+      "name": "v1019-source-chunk-0062",
+      "file": "desktop-build-input-delta-v1015.tar.gz",
+      "offset": 1802240,
+      "bytes": 32768,
+      "nextCursor": "185587"
+    },
+    {
+      "name": "v1019-source-chunk-0063",
+      "file": "desktop-build-input-delta-v1015.tar.gz",
+      "offset": 1835008,
+      "bytes": 32768,
+      "nextCursor": "185606"
+    },
+    {
+      "name": "v1019-source-chunk-0064",
+      "file": "desktop-build-input-delta-v1015.tar.gz",
+      "offset": 1867776,
+      "bytes": 32768,
+      "nextCursor": "185625"
+    },
+    {
+      "name": "v1019-source-chunk-0065",
+      "file": "desktop-build-input-delta-v1015.tar.gz",
+      "offset": 1900544,
+      "bytes": 32768,
+      "nextCursor": "185644"
+    },
+    {
+      "name": "v1019-source-chunk-0066",
+      "file": "desktop-build-input-delta-v1015.tar.gz",
+      "offset": 1933312,
+      "bytes": 32768,
+      "nextCursor": "185663"
+    },
+    {
+      "name": "v1019-source-chunk-0067",
+      "file": "desktop-build-input-delta-v1015.tar.gz",
+      "offset": 1966080,
+      "bytes": 32768,
+      "nextCursor": "185682"
+    },
+    {
+      "name": "v1019-source-chunk-0068",
+      "file": "desktop-build-input-delta-v1015.tar.gz",
+      "offset": 1998848,
+      "bytes": 32768,
+      "nextCursor": "185701"
+    },
+    {
+      "name": "v1019-source-chunk-0069",
+      "file": "desktop-build-input-delta-v1015.tar.gz",
+      "offset": 2031616,
+      "bytes": 32768,
+      "nextCursor": "185720"
+    },
+    {
+      "name": "v1019-source-chunk-0070",
+      "file": "desktop-build-input-delta-v1015.tar.gz",
+      "offset": 2064384,
+      "bytes": 32768,
+      "nextCursor": "185739"
+    },
+    {
+      "name": "v1019-source-chunk-0071",
+      "file": "desktop-build-input-delta-v1015.tar.gz",
+      "offset": 2097152,
+      "bytes": 32768,
+      "nextCursor": "185758"
+    },
+    {
+      "name": "v1019-source-chunk-0072",
+      "file": "desktop-build-input-delta-v1015.tar.gz",
+      "offset": 2129920,
+      "bytes": 32768,
+      "nextCursor": "185777"
+    },
+    {
+      "name": "v1019-source-chunk-0073",
+      "file": "desktop-build-input-delta-v1015.tar.gz",
+      "offset": 2162688,
+      "bytes": 32768,
+      "nextCursor": "185795"
+    },
+    {
+      "name": "v1019-source-chunk-0074",
+      "file": "desktop-build-input-delta-v1015.tar.gz",
+      "offset": 2195456,
+      "bytes": 32768,
+      "nextCursor": "185815"
+    },
+    {
+      "name": "v1019-source-chunk-0075",
+      "file": "desktop-build-input-delta-v1015.tar.gz",
+      "offset": 2228224,
+      "bytes": 32768,
+      "nextCursor": "185834"
+    },
+    {
+      "name": "v1019-source-chunk-0076",
+      "file": "desktop-build-input-delta-v1015.tar.gz",
+      "offset": 2260992,
+      "bytes": 32768,
+      "nextCursor": "185853"
+    },
+    {
+      "name": "v1019-source-chunk-0077",
+      "file": "desktop-build-input-delta-v1015.tar.gz",
+      "offset": 2293760,
+      "bytes": 32768,
+      "nextCursor": "185872"
+    },
+    {
+      "name": "v1019-source-chunk-0078",
+      "file": "desktop-build-input-delta-v1015.tar.gz",
+      "offset": 2326528,
+      "bytes": 32768,
+      "nextCursor": "185891"
+    },
+    {
+      "name": "v1019-source-chunk-0079",
+      "file": "desktop-build-input-delta-v1015.tar.gz",
+      "offset": 2359296,
+      "bytes": 32768,
+      "nextCursor": "185910"
+    },
+    {
+      "name": "v1019-source-chunk-0080",
+      "file": "desktop-build-input-delta-v1015.tar.gz",
+      "offset": 2392064,
+      "bytes": 32768,
+      "nextCursor": "185929"
+    },
+    {
+      "name": "v1019-source-chunk-0081",
+      "file": "desktop-build-input-delta-v1015.tar.gz",
+      "offset": 2424832,
+      "bytes": 32768,
+      "nextCursor": "185948"
+    },
+    {
+      "name": "v1019-source-chunk-0082",
+      "file": "desktop-build-input-delta-v1015.tar.gz",
+      "offset": 2457600,
+      "bytes": 32768,
+      "nextCursor": "185967"
+    },
+    {
+      "name": "v1019-source-chunk-0083",
+      "file": "desktop-build-input-delta-v1015.tar.gz",
+      "offset": 2490368,
+      "bytes": 32768,
+      "nextCursor": "185986"
+    },
+    {
+      "name": "v1019-source-chunk-0084",
+      "file": "desktop-build-input-delta-v1015.tar.gz",
+      "offset": 2523136,
+      "bytes": 32768,
+      "nextCursor": "186005"
+    },
+    {
+      "name": "v1019-source-chunk-0085",
+      "file": "desktop-build-input-delta-v1015.tar.gz",
+      "offset": 2555904,
+      "bytes": 32768,
+      "nextCursor": "186024"
+    },
+    {
+      "name": "v1019-source-chunk-0086",
+      "file": "desktop-build-input-delta-v1015.tar.gz",
+      "offset": 2588672,
+      "bytes": 32768,
+      "nextCursor": "186043"
+    },
+    {
+      "name": "v1019-source-chunk-0087",
+      "file": "desktop-build-input-delta-v1015.tar.gz",
+      "offset": 2621440,
+      "bytes": 32768,
+      "nextCursor": "186062"
+    },
+    {
+      "name": "v1019-source-chunk-0088",
+      "file": "desktop-build-input-delta-v1015.tar.gz",
+      "offset": 2654208,
+      "bytes": 32768,
+      "nextCursor": "186081"
+    },
+    {
+      "name": "v1019-source-chunk-0089",
+      "file": "desktop-build-input-delta-v1015.tar.gz",
+      "offset": 2686976,
+      "bytes": 32768,
+      "nextCursor": "186100"
+    },
+    {
+      "name": "v1019-source-chunk-0090",
+      "file": "desktop-build-input-delta-v1015.tar.gz",
+      "offset": 2719744,
+      "bytes": 32768,
+      "nextCursor": "186119"
+    },
+    {
+      "name": "v1019-source-chunk-0091",
+      "file": "desktop-build-input-delta-v1015.tar.gz",
+      "offset": 2752512,
+      "bytes": 32768,
+      "nextCursor": "186138"
+    },
+    {
+      "name": "v1019-source-chunk-0092",
+      "file": "desktop-build-input-delta-v1015.tar.gz",
+      "offset": 2785280,
+      "bytes": 32768,
+      "nextCursor": "186157"
+    },
+    {
+      "name": "v1019-source-chunk-0093",
+      "file": "desktop-build-input-delta-v1015.tar.gz",
+      "offset": 2818048,
+      "bytes": 32768,
+      "nextCursor": "186176"
+    },
+    {
+      "name": "v1019-source-chunk-0094",
+      "file": "desktop-build-input-delta-v1015.tar.gz",
+      "offset": 2850816,
+      "bytes": 32768,
+      "nextCursor": "186195"
+    },
+    {
+      "name": "v1019-source-chunk-0095",
+      "file": "desktop-build-input-delta-v1015.tar.gz",
+      "offset": 2883584,
+      "bytes": 32768,
+      "nextCursor": "186214"
+    },
+    {
+      "name": "v1019-source-chunk-0096",
+      "file": "desktop-build-input-delta-v1015.tar.gz",
+      "offset": 2916352,
+      "bytes": 32768,
+      "nextCursor": "186233"
+    },
+    {
+      "name": "v1019-source-chunk-0097",
+      "file": "desktop-build-input-delta-v1015.tar.gz",
+      "offset": 2949120,
+      "bytes": 32768,
+      "nextCursor": "186252"
+    },
+    {
+      "name": "v1019-source-chunk-0098",
+      "file": "desktop-build-input-delta-v1015.tar.gz",
+      "offset": 2981888,
+      "bytes": 32768,
+      "nextCursor": "186270"
+    },
+    {
+      "name": "v1019-source-chunk-0099",
+      "file": "desktop-build-input-delta-v1015.tar.gz",
+      "offset": 3014656,
+      "bytes": 32768,
+      "nextCursor": "186290"
+    },
+    {
+      "name": "v1019-source-chunk-0100",
+      "file": "desktop-build-input-delta-v1015.tar.gz",
+      "offset": 3047424,
+      "bytes": 32768,
+      "nextCursor": "186309"
+    },
+    {
+      "name": "v1019-source-chunk-0101",
+      "file": "desktop-build-input-delta-v1015.tar.gz",
+      "offset": 3080192,
+      "bytes": 32768,
+      "nextCursor": "186328"
+    },
+    {
+      "name": "v1019-source-chunk-0102",
+      "file": "desktop-build-input-delta-v1015.tar.gz",
+      "offset": 3112960,
+      "bytes": 32768,
+      "nextCursor": "186347"
+    },
+    {
+      "name": "v1019-source-chunk-0103",
+      "file": "desktop-build-input-delta-v1015.tar.gz",
+      "offset": 3145728,
+      "bytes": 32768,
+      "nextCursor": "186366"
+    },
+    {
+      "name": "v1019-source-chunk-0104",
+      "file": "desktop-build-input-delta-v1015.tar.gz",
+      "offset": 3178496,
+      "bytes": 32768,
+      "nextCursor": "186385"
+    },
+    {
+      "name": "v1019-source-chunk-0105",
+      "file": "desktop-build-input-delta-v1015.tar.gz",
+      "offset": 3211264,
+      "bytes": 32768,
+      "nextCursor": "186404"
+    },
+    {
+      "name": "v1019-source-chunk-0106",
+      "file": "desktop-build-input-delta-v1015.tar.gz",
+      "offset": 3244032,
+      "bytes": 32768,
+      "nextCursor": "186423"
+    },
+    {
+      "name": "v1019-source-chunk-0107",
+      "file": "desktop-build-input-delta-v1015.tar.gz",
+      "offset": 3276800,
+      "bytes": 32768,
+      "nextCursor": "186442"
+    },
+    {
+      "name": "v1019-source-chunk-0108",
+      "file": "desktop-build-input-delta-v1015.tar.gz",
+      "offset": 3309568,
+      "bytes": 32768,
+      "nextCursor": "186461"
+    },
+    {
+      "name": "v1019-source-chunk-0109",
+      "file": "desktop-build-input-delta-v1015.tar.gz",
+      "offset": 3342336,
+      "bytes": 32768,
+      "nextCursor": "186480"
+    },
+    {
+      "name": "v1019-source-chunk-0110",
+      "file": "desktop-build-input-delta-v1015.tar.gz",
+      "offset": 3375104,
+      "bytes": 32768,
+      "nextCursor": "186499"
+    },
+    {
+      "name": "v1019-source-chunk-0111",
+      "file": "desktop-build-input-delta-v1015.tar.gz",
+      "offset": 3407872,
+      "bytes": 32768,
+      "nextCursor": "186518"
+    },
+    {
+      "name": "v1019-source-chunk-0112",
+      "file": "desktop-build-input-delta-v1015.tar.gz",
+      "offset": 3440640,
+      "bytes": 32768,
+      "nextCursor": "186537"
+    },
+    {
+      "name": "v1019-source-chunk-0113",
+      "file": "desktop-build-input-delta-v1015.tar.gz",
+      "offset": 3473408,
+      "bytes": 32768,
+      "nextCursor": "186556"
+    },
+    {
+      "name": "v1019-source-chunk-0114",
+      "file": "desktop-build-input-delta-v1015.tar.gz",
+      "offset": 3506176,
+      "bytes": 32768,
+      "nextCursor": "186575"
+    },
+    {
+      "name": "v1019-source-chunk-0115",
+      "file": "desktop-build-input-delta-v1015.tar.gz",
+      "offset": 3538944,
+      "bytes": 32768,
+      "nextCursor": "186594"
+    },
+    {
+      "name": "v1019-source-chunk-0116",
+      "file": "desktop-build-input-delta-v1015.tar.gz",
+      "offset": 3571712,
+      "bytes": 32768,
+      "nextCursor": "186613"
+    },
+    {
+      "name": "v1019-source-chunk-0117",
+      "file": "desktop-build-input-delta-v1015.tar.gz",
+      "offset": 3604480,
+      "bytes": 32768,
+      "nextCursor": "186632"
+    },
+    {
+      "name": "v1019-source-chunk-0118",
+      "file": "desktop-build-input-delta-v1015.tar.gz",
+      "offset": 3637248,
+      "bytes": 32768,
+      "nextCursor": "186651"
+    },
+    {
+      "name": "v1019-source-chunk-0119",
+      "file": "desktop-build-input-delta-v1015.tar.gz",
+      "offset": 3670016,
+      "bytes": 32768,
+      "nextCursor": "186670"
+    },
+    {
+      "name": "v1019-source-chunk-0120",
+      "file": "desktop-build-input-delta-v1015.tar.gz",
+      "offset": 3702784,
+      "bytes": 32768,
+      "nextCursor": "186689"
+    },
+    {
+      "name": "v1019-source-chunk-0121",
+      "file": "desktop-build-input-delta-v1015.tar.gz",
+      "offset": 3735552,
+      "bytes": 32768,
+      "nextCursor": "186708"
+    },
+    {
+      "name": "v1019-source-chunk-0122",
+      "file": "desktop-build-input-delta-v1015.tar.gz",
+      "offset": 3768320,
+      "bytes": 32768,
+      "nextCursor": "186727"
+    },
+    {
+      "name": "v1019-source-chunk-0123",
+      "file": "desktop-build-input-delta-v1015.tar.gz",
+      "offset": 3801088,
+      "bytes": 32768,
+      "nextCursor": "186746"
+    },
+    {
+      "name": "v1019-source-chunk-0124",
+      "file": "desktop-build-input-delta-v1015.tar.gz",
+      "offset": 3833856,
+      "bytes": 32768,
+      "nextCursor": "186765"
+    },
+    {
+      "name": "v1019-source-chunk-0125",
+      "file": "desktop-build-input-delta-v1015.tar.gz",
+      "offset": 3866624,
+      "bytes": 32768,
+      "nextCursor": "186784"
+    },
+    {
+      "name": "v1019-source-chunk-0126",
+      "file": "desktop-build-input-delta-v1015.tar.gz",
+      "offset": 3899392,
+      "bytes": 32768,
+      "nextCursor": "186803"
+    },
+    {
+      "name": "v1019-source-chunk-0127",
+      "file": "desktop-build-input-delta-v1015.tar.gz",
+      "offset": 3932160,
+      "bytes": 32768,
+      "nextCursor": "186822"
+    },
+    {
+      "name": "v1019-source-chunk-0128",
+      "file": "desktop-build-input-delta-v1015.tar.gz",
+      "offset": 3964928,
+      "bytes": 1955,
+      "nextCursor": "186841"
+    }
+  ],
+  "plainTerminal": "term_00a86bfb-1ede-4fbf-8b5e-72e2a2629f62",
+  "newAgentProjectGitCloneOrWorktree": false,
+  "pending": null,
+  "finishedAt": "2026-10-16T12:08:11.040573+00:00"
+}

@@ -1,0 +1,17 @@
+{
+  "at": "2026-10-22T03:25:12.941586+00:00",
+  "templateOnly": true,
+  "activeConfigWritten": false,
+  "sourceSha": "ebde3a8acf6315f920d03593845f17a1fc65a733",
+  "remoteSha": null,
+  "effectiveBackend": "Unverified until actual model load; required settings retained",
+  "appliesVia": "Supported ConfigService/current schema on isolated notebook instance only",
+  "authFieldsAbsent": true,
+  "privateConfigurationRead": false,
+  "models": {
+    "stt": "base CPU int8 required; actual int8_float32 must be observed",
+    "llm": "Qwen3.5-0.8B Q4_0 Vulkan n_gpu_layers100",
+    "tts": "Piper CPU ljspeech medium"
+  },
+  "overlay": "templates/notebook-exact-model-overlay.json"
+}

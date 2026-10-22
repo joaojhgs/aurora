@@ -1,0 +1,62 @@
+{
+  "at": "2026-10-15T06:45:00Z",
+  "run": "run_e6054e76e9fc",
+  "task": "task_d7ea336050cf",
+  "dispatch": "ctx_37b4d0a3c14f",
+  "outcomeReceipt": {
+    "messageId": "msg_0108b35757ab",
+    "at": "2026-10-15T06:43:41Z",
+    "summarySHA256": "2734885f7f29c839b35059b208f47af5669975ae7c48992a4a7552e6fbbaec72",
+    "rootReportedNotIndependentRawVerification": true,
+    "desktop": {
+      "nMeasured": 900,
+      "nCorrect": 878,
+      "nIncorrect": 22,
+      "nFailed": 0,
+      "nTimeout": 0,
+      "nUnattempted": 0,
+      "nExcludedWarmup": 15,
+      "warmupsAllCorrect": true,
+      "allMeasuredType7": {
+        "p90ms": 11970.21691,
+        "p95ms": 12421.6015565,
+        "incorrectIncluded": true
+      },
+      "incorrect": {
+        "n": 22,
+        "rootOrdinalRange": [
+          894,
+          915
+        ],
+        "allSTTExact": true,
+        "allSessionRequestCorrelationMatched": true,
+        "failedCriterion": "assistant_reply_matches_expected_words",
+        "firstTwoReply": "The capital of France is Paris.",
+        "allReplyContentsClassified": false
+      },
+      "strictPredicatePreserved": true,
+      "rawSealComplete": false
+    },
+    "collector": {
+      "v520FixApproved": true,
+      "rootASTPass": true,
+      "deployOnceInFlight": true,
+      "defaultRejectAndScannerUnchanged": true
+    },
+    "cpuUnchanged": true,
+    "barrierPreserved": true
+  },
+  "intervention": {
+    "body": "V521 receipt FULLREAD: preserve878correct/22strictincorrect,900all-outcomeType7,15excludedwarm;900 attempts is not a clean all-pass baseline. After seal, classify ALL22 from existing saved raw ONCE in the same analysis (actual reply/failed criterion/stage+request linkage), then state impact and cause-supported next engineering action. ExactSTT/correlation pass does not support choosing a larger STT model; first2 verbose-but-city-containing replies do not justify weakening the frozen city-only criterion. No extra model probes, repeat900, changed predicates or new review matrix from this nudge. If a demonstrated necessary setup/source/model correction is made, preserve old cohort/raw and version/link affected replacement cells per owner authority. CPU unchanged; unresolved real productvoice and individualsurface/audio barrier remain. Please include actual sealed artifact paths/hashes with next receipt.",
+    "sourceMessage": "msg_0108b35757ab",
+    "at": "2026-10-15T06:45:00Z",
+    "intervention": "single existing-raw failure classification; preserve strict outcomes/no STT diagnosis or repeat900",
+    "noExtraExecutionRequested": true,
+    "messageId": "msg_b97fcb563eca",
+    "sentAt": "2026-10-15T06:44:48Z",
+    "rootAcknowledged": false
+  },
+  "monitorGoalActive": true,
+  "workerDoneSent": false,
+  "noMonitorTestsOrSourceEdits": true
+}

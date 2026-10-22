@@ -1,0 +1,12 @@
+{
+  "controlDeadline": "2026-10-22T12:29:50.926178+00:00",
+  "explicitNewline": true,
+  "host": "ssh:ssh-sem-notebook-personal",
+  "incarnation": "328cd72f-c7ea-49ff-a2db-b9275b085037",
+  "remoteResult": "/home/developer/projects/aurora/thesis/phone-notebook/20261020/evidence/actual-app-launch-v358.json",
+  "rootAdmissionMessage": "Existing owner six-hour continuation; exact normal launch receipt and same-app JS bootstrap source, no install/model/lockscreen bypass",
+  "script": "scripts/actual_app_launch_v358.py",
+  "scriptSha256": "f3256c2f36b408bd4600a5a135222c61a491ff47d283a7999e8d7b2e2a5e219e",
+  "singleSend": true,
+  "terminal": "term_a2ed5feb-7c92-48e4-bd88-d1b0e6737989"
+}

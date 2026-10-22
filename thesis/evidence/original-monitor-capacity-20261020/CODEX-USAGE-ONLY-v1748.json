@@ -1,0 +1,21 @@
+{
+  "at": "2026-10-20T07:55:34.018852+00:00",
+  "scope": {
+    "mode": "host",
+    "executionHostId": "ssh:ssh-oci-coding-worker"
+  },
+  "provider": "codex",
+  "status": "ok",
+  "error": null,
+  "weekly": {
+    "usedPercent": 1,
+    "windowMinutes": 10080,
+    "resetsAt": 1793082739000,
+    "resetDescription": "Tue 6:32 AM"
+  },
+  "session": null,
+  "checkedAt": 1792482646074,
+  "retryAt": 1792482944793,
+  "collectorUpdatedAt": 1792482653051,
+  "interpretation": "Collector status ok and weekly1percent do not prove selected-model capacity. Session bucket not reported; no zero inferred. Healthy retryAt is collector scheduling, not exhaustion. No account/login/token/grant changes or non-Codex account data retained here."
+}

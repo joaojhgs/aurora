@@ -1,0 +1,8 @@
+{
+  "bytes": 6752,
+  "copyOnly": true,
+  "custody": "Notebook result persisted and fsynced before relay; remote receipt in same output",
+  "localPath": "/home/developer/projects/aurora/thesis/phone-notebook/20261020/evidence/install-pinned-apk-v95/result.json",
+  "remotePath": "/home/developer/projects/aurora/thesis/phone-notebook/20261020/evidence/install-pinned-apk-v95.json",
+  "sha256": "31069a4457d2a6c053a3428a00d2671ee8d3e4e20f9dee397c93d4d7b2ac3961"
+}

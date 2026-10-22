@@ -1,0 +1,12 @@
+{
+  "controlDeadline": "2026-10-22T12:17:08.089657+00:00",
+  "explicitNewline": true,
+  "host": "ssh:ssh-sem-notebook-personal",
+  "incarnation": "328cd72f-c7ea-49ff-a2db-b9275b085037",
+  "remoteResult": "/home/developer/projects/aurora/thesis/phone-notebook/20261020/evidence/sync-closed-report-chunk-v348-001.json",
+  "rootAdmissionMessage": "Post-window DATA CUSTODY ONLY: public report bytes, no device/model/build/service commands or phone window extension",
+  "script": "scripts/sync_closed_report_chunk_v348_001.py",
+  "scriptSha256": "b1a2c022efc1dab16e58170149eefda9a47a555cf687beeafd9be130c7427de9",
+  "singleSend": true,
+  "terminal": "term_a2ed5feb-7c92-48e4-bd88-d1b0e6737989"
+}

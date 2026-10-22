@@ -1,0 +1,36 @@
+{
+  "schema": "aurora.android.file_audio.acl.repair.v1",
+  "at": "2026-10-22T06:37:27.640468+00:00",
+  "base": "android-finite-file-audio-v3",
+  "sourceEpoch": "android-finite-file-audio-v3a",
+  "files": [
+    {
+      "path": "apps/aurora-tauri/src-tauri/src/lib.rs",
+      "baseSha256": "652f2c85ab085289cd7e4d667bcd32f829c41a675804164ab99c9a4fbfa3f5ac",
+      "sha256": "7d0ce187a4bc52b5a996f59aa274f5d5483645ea66ad445a1dce182763902446",
+      "bytes": 525756
+    },
+    {
+      "path": "apps/aurora-tauri/src-tauri/src/native_speech_host.rs",
+      "baseSha256": "e0bce44834e270ee58f9280dd8b86fc3d4695ad2aa1fdb2668deaba79697abc3",
+      "sha256": "17ad0611aa8c205821d395813971b53a7415c9af17067a7b54a0d213a7ec2ea3",
+      "bytes": 94141
+    },
+    {
+      "path": "apps/aurora-tauri/src-tauri/build.rs",
+      "baseSha256": "ded86832b55b3e29d13dbc74945c95853836f4317209229888df38de43a553f6",
+      "sha256": "90fa583873b05fbc7f974e3ed50c42d8b6a5f15651d6afed40b79915cf2e112c",
+      "bytes": 11858
+    },
+    {
+      "path": "apps/aurora-tauri/src-tauri/permissions/aurora-android-voice-live-e2e.toml",
+      "baseSha256": "811b426aac23dac970b7d45d84ba3878a4065210c88278a8f4c586a6c850f27c",
+      "sha256": "412baf42401e1f4e981f7ed463201ab06027787e626f7af06d8d911d3274696a",
+      "bytes": 767
+    }
+  ],
+  "patchSha256": "13d9011e0914bc08d7f2b2dbcdc8509dd76c365829f548743d01b3b8730c08c4",
+  "actualFailure": "evidence/read-phone-file-audio-v197/result.json; production pack catalog ACL refused before model work",
+  "boundary": "Preserve production aurora-native-voice ACL; debug-only prepare/cancel aliases call same verified native manager/operation cancel. Only existing dedicated Android debug live-test capability grants aliases; no OS or peer authorization changes",
+  "modelCallsBeforeFailure": 0
+}

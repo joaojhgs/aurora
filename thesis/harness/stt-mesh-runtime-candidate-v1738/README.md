@@ -1,0 +1,15 @@
+# Prospective STT mesh readiness change V1738
+
+Status: source candidate only; not applied to the working application, imported, runtime-tested or admitted for measurement.
+
+The next cumulative K3 P2P condition needs the real Python Transcription service to advertise its loaded finite-transcription model and language coverage, and use the same instance constraints when validating a routed request. The current service has neither runtime projection override. This candidate reuses the existing BaseService and registry hooks already used by TTS; it adds no endpoint, permission, peer, fallback, profile or streaming implementation.
+
+`before/` preserves exact current bytes, including existing dirty STT work. `after/` and `PROSPECTIVE.patch` hold the bounded change. Do not apply the patch after target-file drift without reconciling that drift, and never change an active campaign snapshot or manifest.
+
+The factory resolves named models using the already-pinned Faster Whisper download helper, records the actual constructor-selected weight and its file metadata privately, then constructs the same model. The announcement hashes that real weight off the event loop and caches its redacted identity per model/revision. It uses each ready model's actual public `supported_languages`, advertises common coverage when both roles are resident, and guards model/revision/retirement state across awaits. Only the finite `Transcription.Transcribe` method is exported. Audio egress and consent requirements remain explicit; the normal mesh authority is unchanged.
+
+The legacy speech capability and SDK manifest language bounds are aligned to the existing 1024-language method-constraint bound. The pinned Faster Whisper1.1.1 source has100 language codes, which exceeds the old64 bound. This is source metadata, not a claim that every language was recognition-tested. Model/audio/decoding/quantization/settings are unchanged. The factory-selected weight digest is not a full model-pack archival claim; exact full assets/settings still require the normal versioned scientific manifest.
+
+Three Python main-flow checks are authored: ready multilingual announcement through receiver binding and withdrawal; common coverage for two resident roles; and named-model identity bound to the actual resolved constructor file. One SDK check preserves the full multilingual STT capability through normal projection digest verification and ACK. No tests have run. Python syntax and non-mutating patch applicability are the current checks only. Run the one focused validation batch at the existing natural measurement/resource boundary; do not repeat closed TTS/K1/K2/K3 tests or add a language/edge-case matrix.
+
+Before any new K3 measurement, Root must apply/reconcile the patch, run the focused checks, retain the actual source delta and new snapshot/manifest, then prove real full-audio ordinary warmups with native STT/LLM/TTS, actual backend/layer/resource evidence and exact-peer routes. Source preparation is not runtime or scientific admission. K2's separate qualified source remains unchanged and next in serial execution order.

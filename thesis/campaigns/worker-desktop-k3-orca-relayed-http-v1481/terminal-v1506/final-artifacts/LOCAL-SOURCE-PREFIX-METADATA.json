@@ -1,0 +1,14 @@
+{
+  "actual-provider-bindings.jsonl": {
+    "sourceBytesAtRetirement": 845,
+    "sourceInodeAtRetirement": 1665810
+  },
+  "resources.jsonl": {
+    "sourceBytesAtRetirement": 20803454,
+    "sourceInodeAtRetirement": 1665799
+  },
+  "voice-stages.jsonl": {
+    "sourceBytesAtRetirement": 0,
+    "sourceInodeAtRetirement": 1665801
+  }
+}

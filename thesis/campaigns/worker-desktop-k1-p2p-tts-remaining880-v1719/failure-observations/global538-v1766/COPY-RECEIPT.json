@@ -1,0 +1,12 @@
+{
+  "at": "2026-10-20T11:25:13.731162+00:00",
+  "source": ".omx/evidence/orca-monitor-20261010/K1-NEW-FAILURE-538-AND-CONTINUATION-20261020T112323Z.json",
+  "destination": "thesis/campaigns/worker-desktop-k1-p2p-tts-remaining880-v1719/failure-observations/global538-v1766/K1-NEW-FAILURE-538-AND-CONTINUATION-20261020T112323Z.json",
+  "bytes": 2751,
+  "sha256": "bac96b4427f3804b41903baf8afe3cf47e3802bf4ee321baf5ed02fe23f744c2",
+  "checksumVerified": true,
+  "copyOnly": true,
+  "newSutCalls": 0,
+  "liveSourcesChanged": false,
+  "reviewClosed": true
+}

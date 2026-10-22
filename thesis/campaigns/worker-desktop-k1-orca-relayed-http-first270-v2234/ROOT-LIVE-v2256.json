@@ -1,0 +1,60 @@
+{
+  "at": "2026-10-21T17:48:48.353347+00:00",
+  "status": "SAME_FROZEN_V2234_MEASURED_COLLECTION_RUNNING",
+  "newMeasured": {
+    "attempted": 63,
+    "correct": 63,
+    "failed": 0,
+    "planned": 270
+  },
+  "conditionCountsOnly": {
+    "attempted": 243,
+    "correct": 242,
+    "failed": 1,
+    "unattempted": 657,
+    "target": 900
+  },
+  "actors": [
+    {
+      "pid": 3751414,
+      "startTicks": 137933512,
+      "state": "S"
+    },
+    {
+      "pid": 3751426,
+      "startTicks": 137933748,
+      "state": "S"
+    },
+    {
+      "pid": 3751415,
+      "startTicks": 137933513,
+      "state": "S"
+    }
+  ],
+  "custody": {
+    "sequence": 68,
+    "cases": 78,
+    "WAV": 78,
+    "errors": [],
+    "errorSource": "actual last hashed checkpoint receipt, not an absent state.errors field"
+  },
+  "frozenManifestSha256": "11bbea3fc1e45e65da1ecb7b501aee77739870cb087d792e5bc5197f9b1027be",
+  "sameProvider": {
+    "pid": 1440196,
+    "startTicks": 35427408
+  },
+  "rootNativeGoal": "01a112a5-d6bb-74e2-bf7c-ace73cb513b5",
+  "rootNativeGoalStatus": "active",
+  "originalMonitorNativeGoal": "01a123ff-19ba-7332-a2f7-346a722af79f",
+  "originalMonitorNativeStatus": "active actualtool snapshot physicallyretained, no furtherresume",
+  "nextReadOnlyCheckAt": "2026-10-21T17:53:48.353347+00:00",
+  "postTerminalPipeline": "POSTTERMINAL-PIPELINE-PREP-v2255.json",
+  "postTerminalRuntimeStatus": "UNEXECUTED; preflight rightly refuseslive Wactors with0RPC/0newfiles/0inference; lintsPASS; executeonlyafter actualnaturalretirement",
+  "futureRemaining450AdmissionFacts": "NEXT-MISSING-INDEX-ADMISSION-FACTS-v2255.json",
+  "currentOrFutureClockReset": false,
+  "currentSourceOrSettingsChanged": false,
+  "newWorkers": 0,
+  "phoneNotGate": true,
+  "previousTurnClassification": "progress: saved-analysisimplementation and originalmonitoractualnative restoration",
+  "thisTurnClassification": "progress: postterminalcapture/transfer/drain/analysis toolsprepared; currentactualcasecountadvanced"
+}

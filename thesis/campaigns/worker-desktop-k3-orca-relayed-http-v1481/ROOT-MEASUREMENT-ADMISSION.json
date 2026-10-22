@@ -1,0 +1,47 @@
+{
+  "at": "2026-10-18T08:35:01.698441+00:00",
+  "status": "ACTUAL_MEASUREMENT_RUNNING_AFTER_RUNNER_NATIVE_ADMISSION",
+  "run": "run_e6054e76e9fc",
+  "nativeGoal": "01a112a5-d6bb-74e2-bf7c-ace73cb513b5",
+  "cohort": "V1481",
+  "frozenManifestSha256": "54d51acdf8219b4e69f21cabb9d9fb1b402acf9826196dbdcea4fcfd15bddb25",
+  "plannedMeasured": 900,
+  "excludedCorrectWarmups": 15,
+  "nativeModelJoins": 45,
+  "progress": {
+    "attempted": 21,
+    "last_attempt_file": "attempts/attempt-0021-measured.jsonl",
+    "last_attempt_status": "completed_correct",
+    "measured_attempted": 6,
+    "planned_measured": 900,
+    "planned_warmups": 15,
+    "status": "running",
+    "unattempted_measured": 894,
+    "warmups_attempted": 15
+  },
+  "actualCompletedMeasuredRows": 6,
+  "outcomes": {
+    "completed_correct": 6
+  },
+  "firstCompletedMeasuredRow": {
+    "source": ".git/aurora-handoff-import-20261006/distributed-k3-orca-relayed-http-cell-v1481/campaign/attempts/attempt-0016-measured.jsonl",
+    "sha256": "755b2c72be7c2a3d11b3f81f4d2c085f462190d5b204900180162a33f1d6d3ab",
+    "status": "completed_correct",
+    "flowDurationMs": 30161.826584
+  },
+  "nativeAdmissionReceipt": "thesis/campaigns/worker-desktop-k3-orca-relayed-http-v1481/ORDINARY-WARMUP-ADMISSION-v1481.json",
+  "proofSha256": "0be77ec24a551856161c2a2f0bbd129c382d08fa41310b0393b9267e96f7c9ac",
+  "requesterCustodySequence": 12,
+  "retainedCases": 20,
+  "retainedWavs": 20,
+  "custodyErrors": [],
+  "finalizerExited": true,
+  "controllerPid": 968671,
+  "controllerStartTicks": 109024884,
+  "providerReceiverPid": 1227894,
+  "providerManifestSha256": "b4b95d579c29695832c05d96692f2f15fd51cf3258333b9175091ab357280887",
+  "providerDeadlineUtc": "2026-10-19T00:08:53.328388+00:00",
+  "providerAndRequesterCohortNotComplete": true,
+  "closedOtherConditionsRepeated": false,
+  "personalControlFreeCursor": "33480"
+}

@@ -1,0 +1,8 @@
+{
+  "bytes": 2325,
+  "copyOnly": true,
+  "custody": "Notebook result persisted and fsynced before relay; remote receipt in same output",
+  "localPath": "/home/developer/projects/aurora/thesis/phone-notebook/20261020/evidence/diagnose-native-storage-v115/result.json",
+  "remotePath": "/home/developer/projects/aurora/thesis/phone-notebook/20261020/evidence/diagnose-native-storage-v115.json",
+  "sha256": "954fbeb668d775378e136608cc8dc5b36d55bee59669c69dadddfc63c7d47fec"
+}

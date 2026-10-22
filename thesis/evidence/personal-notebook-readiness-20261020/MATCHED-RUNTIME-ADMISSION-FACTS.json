@@ -1,0 +1,37 @@
+{
+  "at": "2026-10-20T01:29:57.486800+00:00",
+  "status": "BOUNDED_NOTEBOOK_METADATA_COMPLETE_NO_LANE_ADMITTED",
+  "hardwareReceipt": "thesis/evidence/personal-notebook-readiness-20261020/READINESS-RECEIPT.json",
+  "metadataReceipt": "thesis/evidence/personal-notebook-readiness-20261020/notebook-matched-runtime-metadata-r2-20261020T0128-RESULT.json",
+  "metadataBytes": 1993,
+  "metadataSha256": "e01b4644e658412fb9ed074db17b5e84b97a5c1aeb6968c25fcede5cc8f6ddde",
+  "matchedPackages": 5,
+  "expectedPackages": 6,
+  "missingPackages": {
+    "llama-cpp-python": "0.3.19"
+  },
+  "mismatchedPackages": {},
+  "gpuModelObserved": [
+    {
+      "source": "/proc/driver/nvidia/gpus/0000:01:00.0/information",
+      "fields": {
+        "Model": "NVIDIA GeForce RTX 3050 Laptop GPU",
+        "IRQ": "107",
+        "Bus Type": "PCIe",
+        "Bus Location": "0000:01:00.0",
+        "GPU Excluded": "No"
+      }
+    }
+  ],
+  "gpuAccelerationForMatchedModel": "UNKNOWN; device/driver metadata only, no inference performed",
+  "vramNvidiaBytes": "UNKNOWN",
+  "sharedResourceReservation": "UNKNOWN; Work/personal notebook share physical hardware, no company profile accessed",
+  "knownRuntimeGap": "Existing repo Python3.11 works; llama-cpp-python0.3.19 not installed, other5 pinned packages exact",
+  "modelAvailability": "Only exact known candidate path metadata inspected; full matched model/source assets remain UNVERIFIED, no model scan or weights read",
+  "existingApplicationConfiguration": "Currently selects OpenAI; do not launch it as the local benchmark. Qualified frozen LOCAL benchmark setup must be staged without copying credentials or changing live user config.",
+  "primaryK3Reservation": "Unchanged code-worker+Personal desktop; no source/model transfers or notebook measurements while shared routes/resources could perturb it",
+  "nextBoundedEngineering": "After resource/non-interference admission and current shared-route isolation boundary, stage qualified source/local model assets and missing compatible llama-cpp runtime with existing approved tools; finite actual local audio readiness, no smaller models or paid provider",
+  "newAgentWorkers": 0,
+  "buildsBenchmarksInferenceOrInstalls": 0,
+  "modelQualityFailureInferred": false
+}

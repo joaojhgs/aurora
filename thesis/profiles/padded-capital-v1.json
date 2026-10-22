@@ -1,0 +1,69 @@
+{
+  "schema": "aurora.thesis.performance-profile.v1",
+  "status": "Fixed semantic settings; manual full setup/launch package still incomplete. Preflight does not execute inference.",
+  "fixture": "../fixtures/capital-padded-v1/fixture.json",
+  "measurement": {
+    "measuredPerApplicableCondition": 900,
+    "excludedWarmups": 15,
+    "requestDeadlineSeconds": 180,
+    "quantileMethod": "HyndmanFanType7: sorted index=(n-1)*p, linear interpolation; separate all-outcome/correct-only denominators, timeout/unattempted counts explicit.",
+    "cpuConditionCapSeconds": 57600,
+    "cpuOuterCapSeconds": 57840,
+    "desktopConditionCapSeconds": 12600,
+    "desktopOuterCapSeconds": 12780
+  },
+  "models": {
+    "stt": {
+      "engine": "faster-whisper",
+      "weightSHA256": "d01c3014881c9c6f3133c182f3d2887eb6ca1c789a7538c5c007196857a0a6a9",
+      "bytes": 145217532,
+      "device": "cpu",
+      "requestedComputeType": "int8",
+      "observedComputeType": "int8_float32",
+      "beamSize": 5,
+      "vadFilter": true
+    },
+    "llm": {
+      "file": "Qwen3.5-0.8B-Q4_0.gguf",
+      "weightSHA256": "57d1997790d1744fba5b40a7317df71ea5e2acee28c47e78f0cce39c0703f8cf",
+      "bytes": 563036064,
+      "quantization": "Q4_0",
+      "options": {
+        "temperature": 0,
+        "max_tokens": 128,
+        "n_ctx": 4096,
+        "n_batch": 64,
+        "seed": 42,
+        "n_threads": 2,
+        "top_p": 1,
+        "top_k": 1,
+        "repeat_penalty": 1,
+        "min_p": 0,
+        "chat_format": "chatml-function-calling"
+      },
+      "cpuOffloadLayers": 0,
+      "desktopRequestedOffloadLayers": 100,
+      "desktopRequiredObservedOffloadLayers": 25,
+      "desktopBackend": "RX7600 Vulkan; STT/TTS remain CPU"
+    },
+    "tts": {
+      "file": "en_US-ljspeech-medium.onnx",
+      "weightSHA256": "6f52a751e2349abe7a76735eb09dc1875298c77ea2342ffd2fef79ff81b87f22",
+      "bytes": 63531379,
+      "voiceConfigSHA256": "141d612cc0a95ed7efc1ca936b845c2364967f2e9217c5dbfcf69fc4d6c65860",
+      "useCuda": false,
+      "sampleRate": 22050
+    }
+  },
+  "backendVersions": {
+    "faster-whisper": "1.1.1",
+    "ctranslate2": "4.7.1",
+    "llama-cpp-python": "0.3.19",
+    "piper-tts": "1.2.0",
+    "onnxruntime": "1.20.1",
+    "numpy": "2.2.6"
+  },
+  "comparison": "Keep exact same audio/weights/semantic settings on applicable surfaces/devices/modes; declare native builds/hardware/acceleration and honest infeasible/timeouts. No pooled CPU/GPU, changed input, clocks or incompatible quantiles.",
+  "missingMetrics": "Unknown queue/TTFT/first-streamed-audio/playback remain null with reason; aggregate network/process counters are not per-route contention proof.",
+  "licensesAndRetrieval": "Exact model-source/license/retrieval inventory remains pending; weights are not bundled or downloaded by this package."
+}

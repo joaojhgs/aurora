@@ -1,0 +1,12 @@
+{
+  "controlDeadline": "2026-10-20T22:02:00Z",
+  "explicitNewline": true,
+  "host": "ssh:ssh-sem-notebook-personal",
+  "incarnation": "633939eb-60f4-4bc0-9a0c-5941dc6db36a",
+  "remoteResult": "/home/developer/projects/aurora/thesis/phone-notebook/20261020/evidence/physical-phone-readiness-2138.json",
+  "rootAdmissionMessage": "msg_8560f2ed0ee7",
+  "script": "scripts/phone_readiness.py",
+  "scriptSha256": "f1dcfa69cda95ea8930512cdfc202dff93ea28774673a4f4d113e72923b6df9e",
+  "singleSend": true,
+  "terminal": "term_f40f2bd6-0f71-4484-8347-ac221cf6ce9b"
+}

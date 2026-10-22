@@ -1,0 +1,91 @@
+{
+  "at": "2026-10-15T01:12:30.319988+00:00",
+  "host": "personal.skyron-server",
+  "sampleClass": "one90s-capped startup-only diagnostic: actual incontext Miccapturefailed, causeUNKNOWN; noStop/STT/LLM/TTS/no ordinal; branchCLOSED",
+  "globalVoiceLogicalFlowsUnchanged": 8,
+  "voiceMeasuredSamples": 0,
+  "phase2Allowed": false,
+  "omitted": "fixture credentials/config/DB/full private backend logs/auth bodies; earlier unobserved list bodies not invented; originals retained",
+  "files": {
+    "retirement-v466.json": {
+      "bytes": 768,
+      "sha256": "09a0b4311eaa4cee98589ee90cbd9b424a8d757a4cb3d527c0f22dcb159cc2f2"
+    },
+    "startup-v466/driver-progress.json": {
+      "bytes": 530,
+      "sha256": "450339c5356a4e56af5fa3eccbe0fbdd141d898bfd4a9d71d55cfef40093d521"
+    },
+    "startup-v466/driver-spawn.json": {
+      "bytes": 321,
+      "sha256": "5439604c231f3480bbd9b57b4f7b80046d9f143a80586fb95ccbfd937583c182"
+    },
+    "startup-v466/driver-terminal.json": {
+      "bytes": 638,
+      "sha256": "ae5a3f927cb761af8f388718776a8ba03612ba2cfd56b7770aa43522f6f15fc3"
+    },
+    "startup-v466/manifest.json": {
+      "bytes": 1129,
+      "sha256": "1067ff7b7b940f8b6cf335c4d5bd4e4561fe7385b9d1128380bd850ebe30da37"
+    },
+    "startup-v466/ready.json": {
+      "bytes": 1915,
+      "sha256": "d8bd27811010ab618fd78a99dcedf594e8874768010e859ca6052b276a1a2a31"
+    },
+    "startup-v466/runtime/launch.json": {
+      "bytes": 1821,
+      "sha256": "b16a61375f68b742abd872240be8ffc354482dced1ee3eee14adea115aa8a980"
+    },
+    "startup-v466/runtime/terminal.json": {
+      "bytes": 2031,
+      "sha256": "efa45e455a4ad00f8dcee2470d11e8f508b0ad7665328965e9da186be072566d"
+    },
+    "startup-v466/runtime/voice-stages.installed.json": {
+      "bytes": 121,
+      "sha256": "d5a5dc17af6833de05a304c6ab979bca6fdafc9206386a9c819713e14a1ac7d8"
+    },
+    "startup-v466/runtime/voice-stages.jsonl": {
+      "bytes": 2286,
+      "sha256": "0050791d4d725da2cfb83abd61565590f4e32d61152739ed6405b6b7edd65c36"
+    },
+    "startup-v466/runtime/voice-stages.status.json": {
+      "bytes": 132,
+      "sha256": "1e366543f29a7e627d5fc2ad406df9817b554c0540881c6aa2cdbf142034900f"
+    },
+    "startup-v466/source-guard.json": {
+      "bytes": 455,
+      "sha256": "e442d5627920a1cf61a27c9c4c09d0d33c7556bcb8b425bb7b0ac731e09842bc"
+    },
+    "startup-v466/spawn.json": {
+      "bytes": 574,
+      "sha256": "2c598bda59c0aa070406897cd1405da7bedc5a1e62fb9f315a9d1e7811cae5b9"
+    },
+    "startup-v466/terminal.json": {
+      "bytes": 2194,
+      "sha256": "bbecf755d33c509a48c15734b6de8b7b61986c4c45db8298ccea6dfd0e5b298e"
+    },
+    "startup-v466/ui-case/private/browser-primary.json": {
+      "bytes": 2708,
+      "sha256": "83eddcfbb9eab5087c0adaf797676eaa565446dfd0647aae3f6c63828b160f4a"
+    },
+    "startup-v466/ui-case/private/driver-error.txt": {
+      "bytes": 1807,
+      "sha256": "d1061e14adfb3cddc4a75d2b0b217e9c793fd5052485f465d96b594ad2bd297d"
+    },
+    "startup-v466/ui-case/private/failed-product.png": {
+      "bytes": 49459,
+      "sha256": "f2777f7cdcaa96f7bb08a9445f6dba98debf1d0be7e417b5805219140a7f6d6b"
+    },
+    "startup-v466/ui-case/private/network-events.jsonl": {
+      "bytes": 37390,
+      "sha256": "2dc38ff210e42c902c8e35f66f77ed12dbe5ae070aa735a16ac849680808c8fb"
+    },
+    "startup-v466/ui-case/result.json": {
+      "bytes": 1060,
+      "sha256": "196201c6981fedad596577c594b46e74e01db01a809431ceb19c67ceb39c939d"
+    },
+    "startup-v466/ui-case/safe-projection.json": {
+      "bytes": 43608,
+      "sha256": "b9322d62c795e64ecd8d8275db4b6f842c783d9edfb4c25a28f5ff124738e8bf"
+    }
+  }
+}

@@ -1,0 +1,456 @@
+{
+  "schema": "aurora.full-audio-frozen-cohort.v1",
+  "version": 1,
+  "cohortId": "aurora-full-audio-capital-v1-worker-cpu-local-20261015",
+  "comparisonFamilyId": "aurora-full-audio-capital-base-qwen-piper-v1",
+  "status": "frozen_after_correct_real_audio_pilot_with_correlated_telemetry",
+  "freezeAt": "2026-10-15T03:57:38.621750+00:00",
+  "authority": "owner msg_92e2e65958c0/plan1670section30.15",
+  "sourceCommit": "cbac78fe3fb2b73100bfaa9dc198fb6bff689840",
+  "sourceOverlay": "byte-exact current backend snapshot with pyproject root marker;13pinnedcore files match primary; same passive observer; same exact pipeline; CPU0offload declared",
+  "sourceFiles": {
+    "main.py": {
+      "path": "/home/developer/projects/aurora/.git/aurora-handoff-import-20261006/cpu-full-audio-v490/source/main.py",
+      "bytes": 8936,
+      "sha256": "83c3f5dbcf939339e7643a46188acda4dd47b0bf3a78c13e2c087564c6d3730b"
+    },
+    "app/services/config/config_schema.json": {
+      "path": "/home/developer/projects/aurora/.git/aurora-handoff-import-20261006/cpu-full-audio-v490/source/app/services/config/config_schema.json",
+      "bytes": 86603,
+      "sha256": "558cf9641fcb050c60768c845ddb94558e6a1fe4656547a2e3efc638850969af"
+    },
+    "app/shared/config/models.py": {
+      "path": "/home/developer/projects/aurora/.git/aurora-handoff-import-20261006/cpu-full-audio-v490/source/app/shared/config/models.py",
+      "bytes": 37108,
+      "sha256": "00fb3ef21b4477f8d02cd1d47c702edadae982608ff4a28f72609a0e83f3f59f"
+    },
+    "app/shared/config/keys.py": {
+      "path": "/home/developer/projects/aurora/.git/aurora-handoff-import-20261006/cpu-full-audio-v490/source/app/shared/config/keys.py",
+      "bytes": 72060,
+      "sha256": "c14fb6252fa88e337b1a27d2fd20976ad98b4a59ef8a75065f9afac7de08d269"
+    },
+    "app/services/config/config_defaults.json": {
+      "path": "/home/developer/projects/aurora/.git/aurora-handoff-import-20261006/cpu-full-audio-v490/source/app/services/config/config_defaults.json",
+      "bytes": 14254,
+      "sha256": "1ddb323235b97b1211bcfbf97ca0b6167f2a42a48b76e7fa0db9dda3767939a8"
+    },
+    "app/services/stt_transcription/service.py": {
+      "path": "/home/developer/projects/aurora/.git/aurora-handoff-import-20261006/cpu-full-audio-v490/source/app/services/stt_transcription/service.py",
+      "bytes": 112263,
+      "sha256": "4723b798b2643cee262e3d1d0ad28114305c3e83c8ef5bae5becd790aac5f888"
+    },
+    "app/services/tts/service.py": {
+      "path": "/home/developer/projects/aurora/.git/aurora-handoff-import-20261006/cpu-full-audio-v490/source/app/services/tts/service.py",
+      "bytes": 227431,
+      "sha256": "6e4386aaf219ca5f5488ed007c03519be64f8de56aa2cc17956b5140218f234e"
+    },
+    "app/services/tts/providers/piper.py": {
+      "path": "/home/developer/projects/aurora/.git/aurora-handoff-import-20261006/cpu-full-audio-v490/source/app/services/tts/providers/piper.py",
+      "bytes": 14398,
+      "sha256": "b5c1cd3110b7405cf0990ad27c7d038a252b31af3d01191d415e3b76fd1ed7ac"
+    },
+    "app/services/orchestrator/service.py": {
+      "path": "/home/developer/projects/aurora/.git/aurora-handoff-import-20261006/cpu-full-audio-v490/source/app/services/orchestrator/service.py",
+      "bytes": 170198,
+      "sha256": "0b77092091946b94130945b3bfb670a922a209b846d5ffe30e23f75b52f982f3"
+    },
+    "app/services/orchestrator/agents/chatbot.py": {
+      "path": "/home/developer/projects/aurora/.git/aurora-handoff-import-20261006/cpu-full-audio-v490/source/app/services/orchestrator/agents/chatbot.py",
+      "bytes": 29489,
+      "sha256": "4e6d2b21a2eb672a47128340700a6d5f09adeabbab99980b6ba5d4e4e9e692ee"
+    },
+    "app/services/orchestrator/chat_llama_cpp.py": {
+      "path": "/home/developer/projects/aurora/.git/aurora-handoff-import-20261006/cpu-full-audio-v490/source/app/services/orchestrator/chat_llama_cpp.py",
+      "bytes": 40161,
+      "sha256": "bbb7a3d247af8b53f55ee0b15be81db520f02ab1a53a6aff49c1d2e523f0b55e"
+    },
+    "app/shared/services/base_service.py": {
+      "path": "/home/developer/projects/aurora/.git/aurora-handoff-import-20261006/cpu-full-audio-v490/source/app/shared/services/base_service.py",
+      "bytes": 68871,
+      "sha256": "580c691214761fcd6edef1c199731065151466c29be4aeccd7c096ac397778d6"
+    },
+    "app/messaging/local_bus.py": {
+      "path": "/home/developer/projects/aurora/.git/aurora-handoff-import-20261006/cpu-full-audio-v490/source/app/messaging/local_bus.py",
+      "bytes": 26579,
+      "sha256": "b80a4a54859f142f12c52bab640d5b7c2fe4fd6f66bcd831bc83cb6909ec3b6f"
+    }
+  },
+  "harnessFiles": {
+    "controller.py": {
+      "path": "/home/developer/projects/aurora/.git/aurora-handoff-import-20261006/cpu-full-audio-v490/controller.py",
+      "bytes": 14163,
+      "sha256": "e726ed7a67ba3cf0d456e7ceff094495ef2f79b514ecc04cdb687b4db6e6dc2b"
+    },
+    "bootstrap.py": {
+      "path": "/home/developer/projects/aurora/.git/aurora-handoff-import-20261006/cpu-full-audio-v490/bootstrap.py",
+      "bytes": 1359,
+      "sha256": "64cfd1781f57dc175295bee431e411fe8dcb24765f9e3f7a24abde6edeb00419"
+    },
+    "bindings.py": {
+      "path": "/home/developer/projects/aurora/.git/aurora-handoff-import-20261006/cpu-full-audio-v490/bindings.py",
+      "bytes": 3230,
+      "sha256": "52182f956b34788ecbfbbb241c8243ff88baebe2874e3605791793777ed0dc91"
+    },
+    "pilot.py": {
+      "path": "/home/developer/projects/aurora/.git/aurora-handoff-import-20261006/cpu-full-audio-v490/pilot.py",
+      "bytes": 21602,
+      "sha256": "7079b8fb2f3e74815fb0d7e1a26823270b05b0dbb8ea418437b979e4149e676d"
+    }
+  },
+  "audio": {
+    "candidateId": "audio-capital-base-qwen-piper-v481",
+    "wavSHA256": "139fa0c34b6d18600ad9608fd2d11c9389cae2f5f548ce0f4f23b735b176f0b3",
+    "wavPath": "/home/developer/projects/aurora/.git/aurora-handoff-import-20261006/cpu-full-audio-v490/input.wav",
+    "wavBytes": 153644,
+    "frames": 76800,
+    "sampleRate": 22050,
+    "channels": 1,
+    "sampleWidthBytes": 2,
+    "durationSeconds": 3.4829931972789114,
+    "referenceTranscript": "What is the capital of France? Answer with only the city name.",
+    "expectedReplyWords": "paris",
+    "correctness": "Exact normalized transcript word sequence and exact single reply word paris; no injected transcript/reply/hints.",
+    "provenance": "Original agent-authored factual assistant question, synthesized once with existing pinned PiperLJSpeech; not a personal recording. No voice/model license inferred from synthetic content.",
+    "modelWeightSHA256": {
+      "sttBase": "d01c3014881c9c6f3133c182f3d2887eb6ca1c789a7538c5c007196857a0a6a9",
+      "llm": "57d1997790d1744fba5b40a7317df71ea5e2acee28c47e78f0cce39c0703f8cf",
+      "tts": "6f52a751e2349abe7a76735eb09dc1875298c77ea2342ffd2fef79ff81b87f22"
+    },
+    "modelHashProvenance": "Existing V477 pinned files preserved; next runtime must bind actual engines/settings.",
+    "baselineFrozen": false,
+    "pilotRequestsPlanned": 1,
+    "pilotFlowCapSeconds": 180,
+    "pilotControllerCapSeconds": 300,
+    "newMeasuredRequests": 0,
+    "priorFailuresPreserved": true,
+    "changedCohort": true,
+    "oldV477ComparisonStatus": "SUPERSEDED for proposed new fullaudio condition only; originalfailure remains immutable; no measured oldaudio data to pool.",
+    "inputOriginal": {
+      "path": "/home/developer/projects/aurora/.git/aurora-handoff-import-20261006/cpu-full-audio-v490/input.wav",
+      "bytes": 153644,
+      "sha256": "139fa0c34b6d18600ad9608fd2d11c9389cae2f5f548ce0f4f23b735b176f0b3"
+    },
+    "referenceTranscriptSHA256": "34b681e385feb3500c9e9849d30f5bac982716c4e4938cdb04c5fdc617cff624",
+    "outputPilot": {
+      "path": "/home/developer/projects/aurora/.git/aurora-handoff-import-20261006/cpu-full-audio-v490/runtime/pilot/tts-output.wav",
+      "bytes": 31276,
+      "sha256": "45d5e347c90051de387ce874cdfac50e12980b7d3d8d2f602225b42b0f713f05"
+    }
+  },
+  "models": {
+    "stt": {
+      "weightFiles": [
+        {
+          "path": "/home/developer/.cache/huggingface/hub/models--Systran--faster-whisper-base/snapshots/ebe41f70d5b6dfa9166e2c581c45c9c0cfc57b66/config.json",
+          "bytes": 2309,
+          "sha256": "56a6d8110d311f19c8f0471e562832c7527f146b567275bfca59fcf7c184da9a"
+        },
+        {
+          "path": "/home/developer/.cache/huggingface/hub/models--Systran--faster-whisper-base/snapshots/ebe41f70d5b6dfa9166e2c581c45c9c0cfc57b66/model.bin",
+          "bytes": 145217532,
+          "sha256": "d01c3014881c9c6f3133c182f3d2887eb6ca1c789a7538c5c007196857a0a6a9"
+        },
+        {
+          "path": "/home/developer/.cache/huggingface/hub/models--Systran--faster-whisper-base/snapshots/ebe41f70d5b6dfa9166e2c581c45c9c0cfc57b66/tokenizer.json",
+          "bytes": 2203239,
+          "sha256": "fb7b63191e9bb045082c79fd742a3106a12c99513ab30df4a0d47fa6cb6fd0ab"
+        },
+        {
+          "path": "/home/developer/.cache/huggingface/hub/models--Systran--faster-whisper-base/snapshots/ebe41f70d5b6dfa9166e2c581c45c9c0cfc57b66/vocabulary.txt",
+          "bytes": 459861,
+          "sha256": "34ce3fe1c5041027b3f8d42912270993f986dbc4bb34cf27f951e34a1e453913"
+        }
+      ],
+      "engine": "faster_whisper/ctranslate2",
+      "actualComputeType": "int8_float32",
+      "actualDevice": "cpu",
+      "decode": {
+        "role": "accurate",
+        "beamSize": 5,
+        "vadFilter": true,
+        "language": null,
+        "inputSampleRate": 22050,
+        "modelSampleRate": 16000,
+        "resample": "single source-linked numpy.interp to float32; expected target55728samples",
+        "actualProviderInputHash": null,
+        "actualProviderInputHashReason": "Preprocessed numpy argument was not separately recorded in this passing pilot; full WAV hash/frame count and service source/pinned numpy version are retained."
+      }
+    },
+    "llm": {
+      "weights": {
+        "path": "/home/developer/projects/aurora/.artifacts/local-inference/models/Qwen3.5-0.8B-Q4_0.gguf",
+        "bytes": 563036064,
+        "sha256": "57d1997790d1744fba5b40a7317df71ea5e2acee28c47e78f0cce39c0703f8cf"
+      },
+      "quantization": "Q4_0",
+      "actualConstructor": {
+        "chat_format": "chatml-function-calling",
+        "max_tokens": 128,
+        "min_p": 0.0,
+        "model_path": "/home/developer/projects/aurora/.artifacts/local-inference/models/Qwen3.5-0.8B-Q4_0.gguf",
+        "n_batch": 64,
+        "n_ctx": 4096,
+        "n_gpu_layers": 0,
+        "n_threads": 2,
+        "repeat_penalty": 1.0,
+        "seed": 42,
+        "temperature": 0.0,
+        "top_k": 1,
+        "top_p": 1.0,
+        "verbose": true
+      },
+      "effectiveWrapperSettings": {
+        "n_batch": 64,
+        "n_ctx": 4096,
+        "n_gpu_layers": 0,
+        "n_threads": 2,
+        "seed": 42,
+        "verbose": true
+      },
+      "backend": "llama-cpp-python/CPU",
+      "hardware": "coding-worker ARM64 CPU",
+      "actualOffloadedLayers": 0,
+      "actualGpuProof": [],
+      "actualCpuProof": [
+        "done_getting_tensors: tensor 'token_embd.weight' (q8_0) (and 320 others) cannot be used with preferred buffer type CPU_REPACK, using CPU instead",
+        "load_tensors:   CPU_Mapped model buffer size =   526.50 MiB",
+        "llama_context:        CPU  output buffer size =     0.95 MiB",
+        "llama_kv_cache:        CPU KV buffer size =    48.00 MiB",
+        "llama_memory_recurrent:        CPU RS buffer size =    19.27 MiB",
+        "sched_reserve:        CPU compute buffer size =    61.38 MiB",
+        "CPU : NEON = 1 | ARM_FMA = 1 | LLAMAFILE = 1 | OPENMP = 1 | REPACK = 1 | ",
+        "~llama_context:        CPU compute buffer size is  61.3752 MiB, matches expectation of  61.3752 MiB"
+      ],
+      "actualClient": {
+        "class": "llama_cpp.llama.AuroraOwnedLlama",
+        "objectId": 255928651752336
+      }
+    },
+    "tts": {
+      "weights": {
+        "path": "/home/developer/projects/aurora/.git/aurora-handoff-import-20261006/cpu-full-audio-v483/models/en_US-ljspeech-medium.onnx",
+        "bytes": 63531379,
+        "sha256": "6f52a751e2349abe7a76735eb09dc1875298c77ea2342ffd2fef79ff81b87f22"
+      },
+      "voiceConfig": {
+        "path": "/home/developer/projects/aurora/.git/aurora-handoff-import-20261006/cpu-full-audio-v483/models/en_US-ljspeech-medium.onnx.json",
+        "bytes": 4972,
+        "sha256": "141d612cc0a95ed7efc1ca936b845c2364967f2e9217c5dbfcf69fc4d6c65860"
+      },
+      "executable": {
+        "path": "/home/developer/projects/aurora/.git/aurora-handoff-import-20261006/cpu-full-audio-v483/env/bin/piper",
+        "bytes": 382,
+        "sha256": "7cbc3e2a6c86ed33e91d8ab142030d0d34580fd3cc37e84b5cfa3056f55fcd7c"
+      },
+      "actualCall": {
+        "piperExecutable": "/home/developer/projects/aurora/.git/aurora-handoff-import-20261006/cpu-full-audio-v483/env/bin/piper",
+        "useCuda": false,
+        "voice": {
+          "config_file": "/home/developer/projects/aurora/.git/aurora-handoff-import-20261006/cpu-full-audio-v483/models/en_US-ljspeech-medium.onnx.json",
+          "expected_sample_rate": 22050,
+          "model_file": "/home/developer/projects/aurora/.git/aurora-handoff-import-20261006/cpu-full-audio-v483/models/en_US-ljspeech-medium.onnx",
+          "voice_id": "standard:piper:en-us"
+        }
+      },
+      "outputFormat": "monoPCM16/22050Hz",
+      "perChildORTProviderEnumeration": null,
+      "perChildORTProviderEnumerationReason": "Actual Piper CLI invocation has useCuda=false; per-child execution-provider enumeration not recorded."
+    }
+  },
+  "runtimeVersions": {
+    "pid": 2226057,
+    "packages": {
+      "faster-whisper": "1.1.1",
+      "ctranslate2": "4.7.1",
+      "llama-cpp-python": "0.3.19",
+      "piper-tts": "1.2.0",
+      "onnxruntime": "1.20.1",
+      "numpy": "2.2.6"
+    }
+  },
+  "hardware": {
+    "host": "code-worker",
+    "architecture": "aarch64",
+    "logicalCpuCount": 2,
+    "cpuIdentity": [
+      "CPU implementer\t: 0x41",
+      "CPU part\t: 0xd0c",
+      "CPU implementer\t: 0x41",
+      "CPU part\t: 0xd0c"
+    ],
+    "memoryTotalKiB": "12213568",
+    "gpuUsed": false,
+    "gpuAbsenceClaim": false
+  },
+  "condition": {
+    "surface": "headless productionPython",
+    "requester": "coding-worker",
+    "provider": "same-coding-worker",
+    "mode": "localBus",
+    "remoteStageSet": [],
+    "stageProviderMap": {
+      "stt": "samehost/faster-whisper CPU int8_float32/base",
+      "llm": "samehost/llama-cpp CPU/QwenQ4_0/zerooffload",
+      "tts": "samehost/PiperCLI/useCudaFalse"
+    },
+    "explicitHardwareDifferencesFromPrimary": {
+      "architecture": "aarch64 vs desktop x86_64",
+      "llmOffloadLayers": "0 vs25observed",
+      "libraryBuilds": "ARM64CPU vsVulkan; exactsame sixmodelbackendversions",
+      "absolutePaths": "host-local remapping of identicalweight/sourcehashes; host-specificCLIshebanghashrecorded"
+    }
+  },
+  "pilotProof": {
+    "resultPath": "/home/developer/projects/aurora/.git/aurora-handoff-import-20261006/cpu-full-audio-v490/runtime/pilot/pilot-result.json",
+    "resultSHA256": "2ecf698aa507b79924062fb53ecf7dc0beef3c8eed1b012b9714fd7fb5ced88e",
+    "nAttempted": 1,
+    "nCorrect": 1,
+    "nFailed": 0,
+    "nTimeout": 0,
+    "nMeasured": 0,
+    "flowMs": 49633.587315,
+    "correlation": {
+      "correlation_id": "wav-flow-8eeabac820bd46bd9fa81dd5f6f3aed2",
+      "request_id": "wav-request-c72201101b2a421eb7b2bd364d85d9ef",
+      "scope": "one parent LocalBus flow; STT/TTS contracts themselves have no caller id fields",
+      "session_id": "wav-session-9db00b247fe8464d9a12ffe4cad0b5bc"
+    },
+    "observer": {
+      "capture_complete": true,
+      "encoded_bytes": 16580,
+      "event_count": 20,
+      "flush_error_count": 0,
+      "rejected_event_count": 0,
+      "write_error_count": 0
+    },
+    "observerRawEvents": 20,
+    "terminal": {
+      "kind": "single_complete_prerecorded_audio_local_bus_cpu_readiness_pilot",
+      "controllerPid": 2226013,
+      "startedAt": "2026-10-15T03:53:53.930065+00:00",
+      "host": "code-worker",
+      "capSeconds": 300,
+      "flowCapSeconds": 180,
+      "maximumFullAudioAttempts": 1,
+      "measurementStarted": false,
+      "measuredRequests": 0,
+      "cohort": "cpu-n_gpu_layers-0-n_threads-2",
+      "gpuReservation": false,
+      "globalBuildLockHeld": true,
+      "sourceRoot": "/home/developer/projects/aurora/.git/aurora-handoff-import-20261006/cpu-full-audio-v490/source",
+      "surface": "headless production Python local bus; native/web/Android separate",
+      "physicalPlaybackVerified": false,
+      "matchedSourceFiles": 13,
+      "matchedModelFiles": 7,
+      "parentFrozenManifestSHA256": "d34d21d1a9b1a2db03be2ad64c096e77082168b3bcc09c28d442b4a61eaff3d7",
+      "initialResources": {
+        "candidateVolumeFree": 10616037376,
+        "memAvailable": 5969870848
+      },
+      "inputWavBytes": 153644,
+      "command": [
+        "/home/developer/projects/aurora/.git/aurora-handoff-import-20261006/cpu-full-audio-v490/env/bin/python",
+        "/home/developer/projects/aurora/.git/aurora-handoff-import-20261006/cpu-full-audio-v490/bootstrap.py"
+      ],
+      "configSHA256": "290888e1d8bb762c41f533d961d818168bff2ae575998a2aaa2169b40173e091",
+      "LLMOptionsSHA256": "92f175854914afa0aeed0d68c6518b37c400385519d15e8b32df5aea2a7ef25f",
+      "pid": 2226057,
+      "exitCode": 0,
+      "counterErrors": [],
+      "actualCpuBackendLogLines": [],
+      "finishedAt": "2026-10-15T03:55:10.323625+00:00",
+      "elapsedSeconds": 76.39362603297923,
+      "processPresentAfterWait": false
+    },
+    "retirement": {
+      "at": "2026-10-15T03:57:38.621262+00:00",
+      "pidsAbsent": [
+        2226013,
+        2226057
+      ],
+      "localGlobalBuildLock": "free",
+      "desktopGpuReservationTouched": false
+    },
+    "stageCallerDurationsMs": {
+      "assistant": 39262.118801,
+      "stt": 6301.671373,
+      "tts": 4065.091185
+    }
+  },
+  "measurementPlan": {
+    "plannedMeasuredPerApplicableNewCondition": 900,
+    "excludedWarmupsPerCondition": 15,
+    "requestDeadlineSeconds": 180,
+    "conditionOverallCapSeconds": 57600,
+    "capBasis": "Observed full CPU pilot49.633587315s*915attempts*1.25=56768.41549s; rounded up to57600s(16h). Fifteen excluded warmups,900measured; perrequest180s. No in-place extension.",
+    "quantileMethod": "HyndmanFanType7: sorted x, index=(n-1)*p, linear interpolation; correctness-success and all-outcome timing distributions reported separately, timeout censoring/denominators explicit.",
+    "sameEffectiveSemanticSetupRequiredAcrossSurfaces": true,
+    "hardwareAccelerationDifferenceMustBeExplicitSeparateCondition": true,
+    "currentMeasurementStarted": false
+  },
+  "telemetry": {
+    "clockDomain": "same Python process monotonic per spans; no unrelated clock subtraction",
+    "latencyEndpoint": "file-ready submission to validated generatedWAV; excludes input recordingduration/setup/shutdown; not physicalEOS/playback",
+    "correlationAndSpans": "20raw events/7pairedspans in samepid; actualparentSpanIdsnull retained",
+    "resourceSampling": "1Hz host RAM/storage, parent CPUticks/CPUpercent/RSS/HWM, networknamespace aggregate(notperprocessnetwork). Condition controller additionally captures raw /proc/stat hostCPU counters. ActualPiperchild peakRSS unavailable, NULL+reason, notparentRSS.",
+    "unknowns": {
+      "queue": null,
+      "nativeFirstToken": null,
+      "streamingFirstAudio": null,
+      "playbackStart": null,
+      "playbackEnd": null,
+      "physicalAudibility": null,
+      "piperChildPeakRSS": null
+    },
+    "unknownReasons": "No independent queue/firsttoken boundary in finite modeladapter; Piper is finite output; no playback in headlesspilot; network aggregate is not isolated providertraffic. PiperCLI subprocess peakRSS was not separately observed; parent and wholehost measurements are retained."
+  },
+  "historyPolicy": {
+    "allOldFailuresRetained": true,
+    "newSetupMustNotPoolOldPercentiles": true,
+    "unaffectedCPUExtraAndTypedControls": "retained_supplemental_in_original_limited_scope",
+    "cpuReadinessFailures": [
+      {
+        "id": "V483",
+        "path": "/home/developer/projects/aurora/.git/aurora-handoff-import-20261006/cpu-full-audio-v483/runtime/pilot/pilot-result.json",
+        "reason": "LLM missing projectroot marker; TTSstartup unavailable; no modelquality inference"
+      },
+      {
+        "id": "V486",
+        "path": "/home/developer/projects/aurora/.git/aurora-handoff-import-20261006/cpu-full-audio-v486/runtime/pilot/pilot-result.json",
+        "reason": "realSTT+LLMcorrect; missingRealtimeTTS/PyAudio prerequisites"
+      },
+      {
+        "id": "V488",
+        "path": "/home/developer/projects/aurora/.git/aurora-handoff-import-20261006/cpu-full-audio-v488/runtime/pilot/pilot-result.json",
+        "reason": "realSTT+LLMcorrect; configuredPiperconsoleentry absent in new inheritedenv"
+      }
+    ]
+  },
+  "acceptance": {
+    "pilotCorrect": true,
+    "requiredIndividualAudioAndSurfaceSealsComplete": false,
+    "phase2MeasuredAllowed": false,
+    "full13Complete": false
+  },
+  "parentGpuCohortManifest": {
+    "path": "/home/developer/projects/aurora/docs/experiments/tcc-20261013-submission-20261030/root/full-audio-capital-v481/raw/candidate-v481/frozen-manifest-v1.json",
+    "sha256": "d34d21d1a9b1a2db03be2ad64c096e77082168b3bcc09c28d442b4a61eaff3d7"
+  },
+  "sourceProjectMetadata": {
+    "path": "/home/developer/projects/aurora/.git/aurora-handoff-import-20261006/cpu-full-audio-v490/source/pyproject.toml",
+    "bytes": 32616,
+    "sha256": "c335d253896203e65b5d636e977326ac2d90d441fde1365adea7bc42eb91fda1"
+  },
+  "environmentPackageInventory": {
+    "path": "/home/developer/projects/aurora/.git/aurora-handoff-import-20261006/cpu-full-audio-v490/environment-package-inventory.json",
+    "bytes": 7465,
+    "sha256": "a90e6177b3a08d649aaa1b95fd68e952ca0336c0b475cf8dd9cc43051cfc253c"
+  },
+  "cpuReadinessProofComparability": {
+    "sameTaskAudioWeightHashesCoreSourceAndActiveModelSettings": true,
+    "explicitDifference": "CPU0offload/hardware/backendbuild/pathmapping declared",
+    "oldTypedCpuCohortRetainedSupplemental": "6ce98ae97d594d9fafcd1ff9ad4b9b1c",
+    "noPercentilePooling": true,
+    "noPhysicalCapturePlaybackClaim": true
+  }
+}

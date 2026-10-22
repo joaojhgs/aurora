@@ -1,0 +1,10 @@
+{
+  "exitCode": 0,
+  "elapsedSeconds": 3.644558574,
+  "finishedAt": "2026-10-14T00:57:09.994297+00:00",
+  "sourceHashes": {
+    "app/services/orchestrator/service.py": "36592a325e223e3e7b1788bdf3051dd6f795e941e9ffe3b60329bbd226d868e0",
+    "tests/unit/orchestrator/test_session_persistence.py": "3e171573ddac0d2eaed0f244207bd4934fcd6efb74fbca1997c409f058624390"
+  },
+  "benchmarkRequests": 0
+}

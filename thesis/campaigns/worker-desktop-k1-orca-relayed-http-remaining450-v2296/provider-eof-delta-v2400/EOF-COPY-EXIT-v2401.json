@@ -1,0 +1,20 @@
+{
+  "at": "2026-10-22T05:44:39.676993+00:00",
+  "pid": 183667,
+  "startTicks": 142627476,
+  "exitCode": 0,
+  "log": "thesis/campaigns/worker-desktop-k1-orca-relayed-http-remaining450-v2296/provider-eof-delta-v2400/EOF-COPY-v2401.log",
+  "logBytes": 1302,
+  "logSha256": "e71f06afdcec4d224326b917e48d705a99cbb72993e3954f4220a94230473900",
+  "inferenceReruns": 0,
+  "newSignals": 0,
+  "custodyStatus": "complete_verified_provider_prefix_archive",
+  "archiveVerified": {
+    "path": "thesis/campaigns/worker-desktop-k1-orca-relayed-http-remaining450-v2296/provider-eof-delta-v2400/provider-eof-delta-v2400.tar.gz",
+    "bytes": 670362,
+    "sha256": "252799b425f284ecd66c79718405bf3bc51d28f0b4e616906fda5052f87cc6d2"
+  },
+  "rawFiles": 3,
+  "rawPayloadBytes": 11283579,
+  "actorsAbsent": true
+}

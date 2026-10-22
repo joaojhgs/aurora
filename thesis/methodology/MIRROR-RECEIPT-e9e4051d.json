@@ -1,0 +1,14 @@
+{
+  "at": "2026-10-20T07:24:39.147703+00:00",
+  "source": ".omx/evidence/orca-monitor-20261010/PLAN-AFTER-NOTEBOOK-ACTUAL-ADMISSION-20261020T0710.md",
+  "destination": "thesis/methodology/owner-requirements-20261020-e9e4051d.md",
+  "bytes": 692672,
+  "sha256": "e9e4051dcaf6e03d3460cc2229c71c8d0d778835d50e618bc0fc5fe5d96fcdc7",
+  "priorBytes": 686926,
+  "exactPriorPrefix": true,
+  "appendBytes": 5746,
+  "completeCanonicalMirror": true,
+  "methodologyWriter": "Original monitor only",
+  "rootCopyOnly": true,
+  "sutCalls": 0
+}

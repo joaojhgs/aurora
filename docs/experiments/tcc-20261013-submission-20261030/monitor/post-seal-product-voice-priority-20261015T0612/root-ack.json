@@ -1,0 +1,29 @@
+{
+  "messageId": "msg_951d48fd1229",
+  "at": "2026-10-15T06:15:25Z",
+  "guidanceMessage": "msg_cc17f0e5bea9",
+  "fullReadApplied": true,
+  "actualPlan30_3Read": true,
+  "sameDRealUIVoicePilotAfterNaturalSealMayPrecedeHTTP900": true,
+  "finitePilotMeasuredCount": 0,
+  "cpuUnchanged": true,
+  "realInputAndModelStageClockResourceProofRequired": true,
+  "noSquarewaveProfileSeedingCachedTextReadAloudSubstituteOrUnchangedProbe": true,
+  "noSecurityDriverCredentialChanges": true,
+  "sourceLane": {
+    "version": "V512",
+    "existingLane": "Luna",
+    "maxSeconds": 300,
+    "sourceOnly": true,
+    "scope": "closedV466/source route or cause admission",
+    "noCodeChangeLiveArtifactsExecModelsTestsRemoteDevices": true,
+    "unknownThenStopRequired": true,
+    "firstObservedAssignedAt": "2026-10-15T06:14:48Z",
+    "reportedAt": "2026-10-15T06:15:25Z",
+    "monitorCheckBy": "2026-10-15T06:20:25Z"
+  },
+  "allIndividualAudioSurfaceBarrierPreserved": true,
+  "onePR177": true,
+  "noAuthoritativePlanRewrite": true,
+  "noCurrentRuntimeLaunch": true
+}

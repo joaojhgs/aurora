@@ -1,0 +1,53 @@
+{
+  "id": "remote-cli-1792639926138",
+  "ok": true,
+  "result": {
+    "runId": "run_e6054e76e9fc",
+    "deliveryId": "delivery_cf8b4ab818ea",
+    "messages": [
+      {
+        "id": "msg_c1fc90d66d90",
+        "run_id": "run_e6054e76e9fc",
+        "delivery_contract": "current_delivery",
+        "from_handle": "term_1f27be31-0284-4366-bb91-30fe538cd30e",
+        "to_handle": "run:run_e6054e76e9fc",
+        "subject": "Pinned runtime built8m16s; Vulkan reports no devices, native Android build continuing",
+        "body": "Notebook exact llama-cpp-python0.3.19 Vulkan build/import passed at03:21:26UTC in8m16s, no model calls, replacing historical thermal-blocked state. Actual import reports ggml_vulkan No devices found and gpuOffloadBuildSupport=false; I am diagnosing existing ICD/render-node exposure only, with no driver/security changes and no silent CPU cohort substitution. Sherpa1.13.5/ORT1.27.1 source-pinned archives and Android-native llama/Needle build inputs are exact verified; ARM64Sherpa build is running2jobs with deadline03:43:43, while all900/native route acceptance remains pending.",
+        "type": "status",
+        "priority": "normal",
+        "thread_id": null,
+        "payload": "{\"reportPath\":\"thesis/phone-notebook/20261020/REPORT.md\"}",
+        "created_at": "2026-10-22T03:26:37Z",
+        "delivered_at": null
+      },
+      {
+        "id": "msg_ce699bffa93a",
+        "run_id": "run_e6054e76e9fc",
+        "delivery_contract": "current_delivery",
+        "from_handle": "term_1f27be31-0284-4366-bb91-30fe538cd30e",
+        "to_handle": "run:run_e6054e76e9fc",
+        "subject": "Coding owner action: existing Personal Vulkan GPU unavailable, build passed; no thermal gate",
+        "body": "Fresh03:26\u201303:27 bounded existing-loader diagnosis: /dev/dri/renderD128 andrenderD129 both unreadable/unwritable in approved Personal context, noNVIDIA ICD in supported existing locations and libGLX_nvidia.so.0 absent; built0.3.19 Vulkan imports but reports No devices found/gpuOffloadBuildSupport=false. Please relay to Coding/owner the precise remaining GPU exposure/runtime prerequisite for matching n_gpu_layers100; I will not chmod/change groups/mounts/install drivers or silently substitute CPU/backend, and temperature no longer blocks anything. Independent source-pinned ARM64Sherpa/app preparation continues2jobs/finite deadline; no overnight900, no main campaign/provider interference and no Root routine phone check requested.",
+        "type": "status",
+        "priority": "high",
+        "thread_id": null,
+        "payload": "{\"reportPath\":\"thesis/phone-notebook/20261020/REPORT.md\"}",
+        "created_at": "2026-10-22T03:28:59Z",
+        "delivered_at": null
+      }
+    ],
+    "count": 2,
+    "replayed": false,
+    "acknowledged": null,
+    "timedOut": false,
+    "cancelled": false,
+    "connectionLost": false,
+    "mutation": {
+      "requestId": "751c6630-05d4-4f7a-96ea-152ae1d8bbed",
+      "replayed": false
+    }
+  },
+  "_meta": {
+    "runtimeId": "cc9e3275-28c6-4c45-85cc-bdcd2262aa7d"
+  }
+}

@@ -1,0 +1,15 @@
+{
+  "at": "2026-10-22T06:49:08.517618+00:00",
+  "version": "V2418",
+  "classification": "C12_PAIRED_READINESS_PASSED_SEALED_RELEASED",
+  "nativeGoalThread": "01a112a5-d6bb-74e2-bf7c-ace73cb513b5",
+  "nativeGoalStatus": "active",
+  "nativeGoalBudget": null,
+  "closedWorkerDesktopCoreConditions": 6,
+  "newC12Measured": 0,
+  "newC12Target": 900,
+  "latestRootReceipt": "thesis/campaigns/c12-mixed-local-http-readiness-v2414/READINESS-PASSED-v2416.json",
+  "nextAction": "thesis/campaigns/c12-mixed-local-http-readiness-v2414/NEXT-MAIN-ACTION-v2418.json",
+  "phoneOwner": "term_1f27be31-0284-4366-bb91-30fe538cd30e",
+  "full13AndRemainingMatrixOpen": true
+}

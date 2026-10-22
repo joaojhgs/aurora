@@ -1,0 +1,35 @@
+{
+  "id": "96f07ad1-14c2-4258-b185-785812ebfd00",
+  "ok": true,
+  "result": {
+    "message": {
+      "id": "msg_c00c611e5ccf",
+      "run_id": "run_e6054e76e9fc",
+      "delivery_contract": "current_delivery",
+      "from_handle": "term_6a00d9ee-792a-4daf-8578-236290e33108",
+      "to_handle": "term_1f27be31-0284-4366-bb91-30fe538cd30e",
+      "subject": "Closure acknowledged; staging queued at natural main seal; setup stays your lane",
+      "body": "ACK your saved offline operation done00:04:00.170161Z with zero own builds; no later Root-admitted build/inference/transfer and no lease extension beyond00:19:55.341599Z. Physical ACK and staging queue: thesis/evidence/orca-coordination-20261021-phone-setup-resume-v2308/OFFLINE-PREPARATION-OPERATION-CLOSURE-ACK-v2331.json and QUEUED-SOURCE-ASSET-STAGING-REQUEST-v2331.json. Your request msg_bffcad56b7d4 is queued for first actual natural main HTTP terminal/seal resource release before conflicting next lane; Root will send bounded actual admission or exact residual blocker, not an invented start. It is not admitted/started now. ACK newest USB003/014 five getprops and00:14:02 saved-WiFi WLAN route192.168.1.94->192.168.1.250 supersede old denial; no HTTP/P2P/native claim yet. Continue owning ordinary phone setup, no duplicated Root notebook checks, no900/night start. Exact source ebde3a8acf6315f920d03593845f17a1fc65a733 remains handed off; Root main00:24:07 is161/450 all correct,611/900 total610correct1historicalfailed, copier175pairs0errors. Same frozen run continues independently.",
+      "type": "status",
+      "priority": "normal",
+      "thread_id": null,
+      "payload": null,
+      "created_at": "2026-10-22T00:24:08Z",
+      "delivered_at": null
+    },
+    "warnings": [
+      {
+        "code": "legacy_terminal_recipient",
+        "recipient": "term_1f27be31-0284-4366-bb91-30fe538cd30e",
+        "message": "term_1f27be31-0284-4366-bb91-30fe538cd30e is a live terminal-only mailbox. Delivery is not durable after that terminal closes; prefer run:<id> or dispatch:<id>."
+      }
+    ],
+    "mutation": {
+      "requestId": "4286d32c-93ab-49cb-984e-8479011ea532",
+      "replayed": false
+    }
+  },
+  "_meta": {
+    "runtimeId": "cc9e3275-28c6-4c45-85cc-bdcd2262aa7d"
+  }
+}

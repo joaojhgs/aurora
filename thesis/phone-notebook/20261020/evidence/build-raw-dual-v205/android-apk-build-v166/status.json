@@ -1,0 +1,46 @@
+{
+  "elapsedSeconds": 101.74825930899897,
+  "error": "RuntimeError",
+  "finishedAt": "2026-10-22T05:49:36.302012+00:00",
+  "maxJobs": 2,
+  "maxOwnedTreeRssBytes": 8589934592,
+  "modelCalls": 0,
+  "ownBuildChildrenActive": false,
+  "pid": 210996,
+  "reason": "targeted_policy_test_failed_inspect_before_APK",
+  "resources": {
+    "at": "2026-10-22T05:49:34.300521+00:00",
+    "diskFreeBytes": 64081719296,
+    "load": [
+      3.6630859375,
+      2.56298828125,
+      2.46435546875
+    ],
+    "maxSensorC": 84.625,
+    "memAvailableBytes": 23183077376
+  },
+  "startTicks": "2866461",
+  "startedAt": "2026-10-22T05:47:54.553993+00:00",
+  "status": "FAILED_PRESERVED",
+  "targetedPolicyTests": {
+    "elapsedSeconds": 101.71034640700236,
+    "exit": 101,
+    "log": "/home/developer/projects/aurora/thesis/phone-notebook/20261020/deployment/ebde3a8acf6315f920d03593845f17a1fc65a733/android-apk-build-v166/policy-tests.log",
+    "sha256": "c0b1eececa31fc528436c305bd83ea0363f5cc0d75f50c9e61b6548eb92a5950",
+    "timeout": false
+  },
+  "temperaturePolicy": "observe_only_owner_correction",
+  "testCommand": [
+    "cargo",
+    "test",
+    "--offline",
+    "--manifest-path",
+    "/home/developer/projects/aurora/thesis/phone-notebook/20261020/deployment/ebde3a8acf6315f920d03593845f17a1fc65a733/android-build-ebde-v2383-native-rename-v1/rust/Cargo.toml",
+    "-p",
+    "aurora-voice-native",
+    "--lib",
+    "node_config_file::",
+    "--",
+    "--test-threads=1"
+  ]
+}

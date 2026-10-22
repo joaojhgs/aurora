@@ -1,0 +1,7 @@
+{
+  "wavSHA256": "da0ecc4ad0885746ab6e716585473917ab2b543a505bf0db09ebacfaa7943cbb",
+  "referenceTranscript": "What is the capital of France? Answer with only the city name.",
+  "expectedReplyWords": [
+    "paris"
+  ]
+}

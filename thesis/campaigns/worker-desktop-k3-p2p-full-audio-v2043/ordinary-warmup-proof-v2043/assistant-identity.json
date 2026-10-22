@@ -1,0 +1,26 @@
+{
+  "actual_loaded_acceleration": "PENDING_NEW_PROCESS_ORDINARY_WARMUP_PROOF",
+  "actual_provider_files": {
+    "config": {
+      "canonical_path": "/home/developer/projects/aurora/.git/aurora-handoff-import-20261006/k3-mesh-provider-v1965/config.json",
+      "sha256": "1b2e464a9dd2a191954504161862d3aa19a991126eb2b08c4de55a40778fd002"
+    },
+    "model": {
+      "canonical_path": "/home/developer/projects/aurora/.git/aurora-handoff-import-20261006/k1-provider-recovery-v1120/models/Qwen3.5-0.8B-Q4_0.gguf",
+      "sha256": "57d1997790d1744fba5b40a7317df71ea5e2acee28c47e78f0cce39c0703f8cf"
+    },
+    "source_receipt_sha256": "bff2a1486e4042787590fa8c9bb08c879317eca656e616cce54087488941741f"
+  },
+  "credential_value_logged": false,
+  "manifest_sha256": "716b893424f28ef19a1820820000c8a30fb6adbf87252c9f65e1bca30e717bb9",
+  "provider": {
+    "config_sha256": "1b2e464a9dd2a191954504161862d3aa19a991126eb2b08c4de55a40778fd002",
+    "model_sha256": "57d1997790d1744fba5b40a7317df71ea5e2acee28c47e78f0cce39c0703f8cf",
+    "peer_id_sha256": "77421aa81ce7ae2e865455348e9aa5ae17013d8f5e1f72d38d71d09f110ef868",
+    "provider_class": "app.services.orchestrator.chat_llama_cpp.ChatLlamaCpp",
+    "receiver_id": "personal-k3-mesh-qwen-v1965",
+    "source_sha256": "25026c4031e07d2e7cdac2afe269f78611ed375e53d3b64cd751b31867a552cf"
+  },
+  "receiver_pid": 251473,
+  "schema": "aurora.distributed_k3_receiver_identity.v1"
+}

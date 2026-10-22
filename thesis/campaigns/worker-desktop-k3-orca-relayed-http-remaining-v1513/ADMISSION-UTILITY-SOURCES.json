@@ -1,0 +1,33 @@
+{
+  "newRequests": 0,
+  "sources": [
+    {
+      "path": "thesis/harness/k3_remote_warmup_proof_v1513.py",
+      "source": "thesis/harness/k3_remote_warmup_proof_v1481.py",
+      "bytes": 7487,
+      "sha256": "fed0a8815ea1436b1b29e39fbda32e4bc04b4424694d0813eef1cddddf75e327"
+    },
+    {
+      "path": "thesis/harness/k3_warmup_finalize_v1513.py",
+      "source": "thesis/harness/k3_warmup_finalize_v1481.py",
+      "bytes": 7305,
+      "sha256": "1b4116ea46226bfc96cf5c56190662caf3070fc93c05f59465d332e5843a9488"
+    },
+    {
+      "path": "thesis/harness/custody_k3_requester_v1513.py",
+      "source": "thesis/harness/custody_k3_requester_v1481.py",
+      "bytes": 15847,
+      "sha256": "c11a7c4d0d8133603e52a0658eba797747cbb5ac99b87dd9f7248cf57ea0279a"
+    }
+  ],
+  "receiverProofSha256": "40ac64685ffb078b9d9aa983916d20df9c218badc40ae46b29c7398e4a0d259f",
+  "rawPlainShellCaller": {
+    "path": "thesis/harness/orca_control_raw_read_v1523.py",
+    "bytes": 2691,
+    "sha256": "c3536841f9d16b0a43d21f98f769e9f091ebe402ed12fadb5d1cb77a494481a6",
+    "actualChannelProof": "provider-readmission/raw-channel-v1522/RESULT.json"
+  },
+  "callerCorrection": "RAW-CONTROL-CALLER-CORRECTION.json",
+  "actualPrelaunchOperatorSources": "execution-sources-v1523/MANIFEST.json",
+  "parentMeasuredConfigReused": "EFFECTIVE-CONFIG-BINDING-v1523.json"
+}

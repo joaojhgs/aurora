@@ -1,0 +1,7 @@
+{
+  "at": "2026-10-22T06:17:13.434835+00:00",
+  "maximumSends": 1,
+  "commandFile": "/home/developer/projects/aurora/.git/aurora-handoff-import-20261006/c12-main-prepare-v2407-command.txt",
+  "commandSha256": "c9911daa465eb44045ae4fc7e9f8e82b6cf29b9692201f9d29f8242c8a2a76cb",
+  "allocationSha256": "36546873dbbc09afaf362f1777a662b173b8b67b0d556db1b09f67ab67c36bc4"
+}

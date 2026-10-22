@@ -1,0 +1,42 @@
+{
+  "at": "2026-10-16T01:23:56.350635+00:00",
+  "transportArchiveSHA256": "72412ba0364154ffc2c12a385019ee9cf0b915004421b85b837ad42a1beb909a",
+  "priorCopyVerifiedOnce": true,
+  "members": [
+    {
+      "member": "results/attempt-outcomes.csv",
+      "path": "docs/experiments/tcc-20261013-submission-20261030/root/desktop-gpu-padded-local900-joined-v779/results/attempt-outcomes.csv",
+      "bytes": 241082,
+      "sha256": "fa54b25c2d66448c058e2ddae75abfe1f3e0914601ef2aac7ace824733194642"
+    },
+    {
+      "member": "results/joined-stage-history.json",
+      "path": "docs/experiments/tcc-20261013-submission-20261030/root/desktop-gpu-padded-local900-joined-v779/results/joined-stage-history.json",
+      "bytes": 2195504,
+      "sha256": "a33c2d8d94e4d8366c8eee3b8ec3806133cd2c0217346750f4574bb53bdf7e80"
+    },
+    {
+      "member": "results/native-stage-spans.csv",
+      "path": "docs/experiments/tcc-20261013-submission-20261030/root/desktop-gpu-padded-local900-joined-v779/results/native-stage-spans.csv",
+      "bytes": 1086041,
+      "sha256": "6adb604c81ad179528c248aec305e189a6512799a1d9adfac404d33fbd1ae478"
+    },
+    {
+      "member": "results/summary.json",
+      "path": "docs/experiments/tcc-20261013-submission-20261030/root/desktop-gpu-padded-local900-joined-v779/results/summary.json",
+      "bytes": 563561,
+      "sha256": "e9ca56ce853ef652cf18be4d3519e7cdb56a57f0daeead046dc9761fdcf2337e"
+    },
+    {
+      "member": "ANALYSIS-RECEIPT.json",
+      "path": "docs/experiments/tcc-20261013-submission-20261030/root/desktop-gpu-padded-local900-joined-v779/ANALYSIS-RECEIPT.json",
+      "bytes": 592093,
+      "sha256": "0e384cfb178501db701e98bbb67d1cefa5a4c52a794e98de90114e980cb9b6eb"
+    }
+  ],
+  "originalAnalysisRerun": false,
+  "priorArchiveAuditsRepeated": false,
+  "scope": "Lossless extraction and byte custody of new derived outputs; no transcript/audio audit or measurement",
+  "analysisSourceSHA256": "6d5304090d091467f409ee0b1ab51e3baac53e8df0fbbe2ef452b4897d780272",
+  "analysisDurationSeconds": 0.367907373001799
+}

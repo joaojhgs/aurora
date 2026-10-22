@@ -1,0 +1,19 @@
+{
+  "actual_pairing_webrtc": true,
+  "measured_request_count": 1,
+  "warmups": 0,
+  "exact_reply_completion_component_successes": 1,
+  "full_flow_correct_successes": 0,
+  "full_flow_failures": 1,
+  "timeouts": 0,
+  "failure": "history_save_not_visible",
+  "history_saved": false,
+  "history_reopened": false,
+  "full_success_type7_p50_p90_p95": null,
+  "provider_reply_component_ms": 48665,
+  "requester_ui_visible_reply_component_ms": 49682.85000002384,
+  "endpoint_boundaries_differ": true,
+  "cli_comparable": false,
+  "clean_baseline": false,
+  "stable_tail_claim": false
+}

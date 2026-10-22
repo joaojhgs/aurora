@@ -1,0 +1,56 @@
+{
+  "adbMeasurementTransport": false,
+  "apkSha256": "1aaabb06746a70247562040a265a4efa6b80dcc4dc8f1fb25a0fb9da881025d6",
+  "appPid": "25389",
+  "at": "2026-10-22T07:06:29.233226+00:00",
+  "batteryAfter": {
+    "AC powered": "false",
+    "USB powered": "true",
+    "health": "2",
+    "level": "80",
+    "status": "2",
+    "temperature": "289"
+  },
+  "batteryBefore": {
+    "AC powered": "false",
+    "USB powered": "true",
+    "health": "2",
+    "level": "80",
+    "status": "2",
+    "temperature": "284"
+  },
+  "deadlineUtc": "2026-10-22T07:15:18.044031+00:00",
+  "elapsedSeconds": 290.8893030830004,
+  "finishedAt": "2026-10-22T07:11:20.125013+00:00",
+  "input": {
+    "avVersion": "16.0.1",
+    "entrypointFormat": "pcm_s16le",
+    "entrypointRateHz": 16000,
+    "fasterWhisperVersion": "1.1.1",
+    "normalization": "production faster_whisper.audio.decode_audio(PyAV) to16k float32 then rint*32768/clip/LEint16; setup before phone timing",
+    "numpyVersion": "2.2.6",
+    "pcmBytes": 159456,
+    "pcmSha256": "1d5147ec00b8582ffeeb2d6a196cfab6e713cc33c9beea9212e7bc91eeed8fbf",
+    "sampleCount": 79728,
+    "sourceChannels": 1,
+    "sourceFrames": 109875,
+    "sourceSampleRateHz": 22050,
+    "sourceWavSha256": "da0ecc4ad0885746ab6e716585473917ab2b543a505bf0db09ebacfaa7943cbb"
+  },
+  "maxPilotFlows": 1,
+  "maximumSeconds": 520,
+  "measuredCases": 0,
+  "nativeResultPath": "/home/developer/projects/aurora/thesis/phone-notebook/20261020/deployment/ebde3a8acf6315f920d03593845f17a1fc65a733/phone-file-audio-v211/native.json",
+  "nativeResultSha256": "3607be6176079da133893988ba2620858de3932a311e59aa1e419716c255adb5",
+  "nativeSessionClosed": true,
+  "nodeExit": 0,
+  "nodePid": 251898,
+  "notebookInference": false,
+  "phoneMemoryBefore": {
+    "MemAvailable": 3204681728,
+    "MemTotal": 11861921792
+  },
+  "sourceIdentity": "ebde3a8acf6315f920d03593845f17a1fc65a733 + source-closure-overlay-v2383 + android-bundled-model-rename-v1 + android-node-policy-initial-publication-v2 + android-finite-file-audio-v3 + android-finite-file-audio-v3a",
+  "startedAt": "2026-10-22T07:06:38.044021+00:00",
+  "status": "NATIVE_FILE_AUDIO_FAILED_PRESERVED"
+}

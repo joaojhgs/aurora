@@ -1,0 +1,135 @@
+{
+  "cohortId": "aurora-normal-ui-padded-file-mic-full-audio-v799",
+  "driverCampaignOutcome": "completed_with_failures",
+  "driverCountComparison": {
+    "attemptedMeasured": 900,
+    "attemptedWarmups": 15,
+    "failedMeasured": 0,
+    "incorrectMeasured": 11,
+    "passedMeasured": 889,
+    "passedWarmups": 15,
+    "unattemptedMeasured": 0,
+    "unattemptedWarmups": 0
+  },
+  "driverFatalStop": null,
+  "frozenManifestSha256": "e67f8f98830ef0ceb978590bbe6b8b496ada2ad4ddd05bc34fb22248c65c10b8",
+  "interruptedCaseIds": [],
+  "nativeStageMetrics": {
+    "metrics": [
+      {
+        "attemptedMeasuredCases": 900,
+        "handler": "resolved_chat_model.astream",
+        "invalidBoundaryCases": 0,
+        "missingCases": 0,
+        "multipleSpanCases": 0,
+        "p90_ms": 318.4108255,
+        "p95_ms": 394.0403657499996,
+        "scope": "single completed native span, exact handler, same backend process/clock and case/span/correlation; no sums",
+        "stage": "llm",
+        "validOneSpanCases": 900
+      },
+      {
+        "attemptedMeasuredCases": 900,
+        "handler": "Transcription.Transcribe",
+        "invalidBoundaryCases": 0,
+        "missingCases": 0,
+        "multipleSpanCases": 0,
+        "p90_ms": 3373.6866282,
+        "p95_ms": 3415.06362785,
+        "scope": "single completed native span, exact handler, same backend process/clock and case/span/correlation; no sums",
+        "stage": "stt",
+        "validOneSpanCases": 900
+      },
+      {
+        "attemptedMeasuredCases": 900,
+        "handler": "stt.model_invoke",
+        "invalidBoundaryCases": 0,
+        "missingCases": 0,
+        "multipleSpanCases": 0,
+        "p90_ms": 3365.1185497,
+        "p95_ms": 3403.9108729,
+        "scope": "single completed native span, exact handler, same backend process/clock and case/span/correlation; no sums",
+        "stage": "stt",
+        "validOneSpanCases": 900
+      },
+      {
+        "attemptedMeasuredCases": 900,
+        "handler": "TTS.Synthesize",
+        "invalidBoundaryCases": 0,
+        "missingCases": 11,
+        "multipleSpanCases": 0,
+        "p90_ms": 1723.374904,
+        "p95_ms": 1865.9596987999994,
+        "scope": "single completed native span, exact handler, same backend process/clock and case/span/correlation; no sums",
+        "stage": "tts",
+        "validOneSpanCases": 889
+      },
+      {
+        "attemptedMeasuredCases": 900,
+        "handler": "tts.model_invoke",
+        "invalidBoundaryCases": 0,
+        "missingCases": 11,
+        "multipleSpanCases": 0,
+        "p90_ms": 1722.8522654,
+        "p95_ms": 1865.0841541999996,
+        "scope": "single completed native span, exact handler, same backend process/clock and case/span/correlation; no sums",
+        "stage": "tts",
+        "validOneSpanCases": 889
+      }
+    ],
+    "pairingCounts": {
+      "unmatched_start": 0
+    },
+    "unknowns": {
+      "TTFT": null,
+      "physicalAcousticCapture": null,
+      "physicalMicrophone": null,
+      "physicalSpeakerOutput": null,
+      "queue": null,
+      "streamedFirstAudio": null
+    }
+  },
+  "phaseDenominators": {
+    "measured": {
+      "attempted": 900,
+      "completed_correct": 889,
+      "completed_incorrect": 11,
+      "failed_non_timeout": 0,
+      "interrupted": 0,
+      "planned": 900,
+      "timeouts": 0,
+      "unattempted": 0
+    },
+    "warmup_excluded": {
+      "attempted": 15,
+      "completed_correct": 15,
+      "completed_incorrect": 0,
+      "failed_non_timeout": 0,
+      "interrupted": 0,
+      "planned": 15,
+      "timeouts": 0,
+      "unattempted": 0
+    }
+  },
+  "rawOutcomeCounts": {
+    "incorrect": 11,
+    "passed": 904
+  },
+  "savedZipIntegrityHashesAndOutcomeAuditPassed": true,
+  "scope": "normal browser file microphone -> actual STT -> visible LLM reply -> normal TTS WAV -> software-connected playback; no physical acoustic claim",
+  "successfulFullFlowElapsedType7Ms": {
+    "denominator": 889,
+    "p90": 19297.6,
+    "p95": 19503.4,
+    "population": "measured outcome=passed only; per-case Node performance clock from runAttempt start through completed STT, visible correct reply, valid TTS WAV and connected playback end"
+  },
+  "terminalEventMissingCaseIds": [],
+  "unknownMetrics": {
+    "TTFT": null,
+    "physicalAcousticCapture": null,
+    "physicalMicrophone": null,
+    "physicalSpeakerOutput": null,
+    "queue": null,
+    "streamedFirstAudio": null
+  }
+}

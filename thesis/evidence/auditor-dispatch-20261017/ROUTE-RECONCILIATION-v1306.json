@@ -1,0 +1,57 @@
+{
+  "actualDispatchFresh": null,
+  "at": "2026-10-17T22:01:31Z",
+  "attentionError": "run_not_found",
+  "attentionMessageEnqueued": false,
+  "attentionMutationRequestId": "b17fb666-0409-4982-952e-48f843c9692c",
+  "auditorTask": "task_c626834bf1c6",
+  "bindingOrOwnershipMutated": false,
+  "coordinatorHandle": null,
+  "copies": [
+    {
+      "bytes": 544,
+      "destination": "thesis/evidence/auditor-dispatch-20261017/v1300-owner-named-personal-run-route.json",
+      "sha256": "78d1829191fea413b4c67e7b5384ac2ac97462be5100356e267bed05f08e9313",
+      "source": ".git/aurora-handoff-import-20261006/v1300-owner-named-personal-run-route.json"
+    },
+    {
+      "bytes": 808,
+      "destination": "thesis/evidence/auditor-dispatch-20261017/v1301-owner-named-personal-run-read.json",
+      "sha256": "3ff3172991e9de4f94122f580fb4ece8f984a0c79bb3d06ca917202c680563fa",
+      "source": ".git/aurora-handoff-import-20261006/v1301-owner-named-personal-run-read.json"
+    },
+    {
+      "bytes": 1082,
+      "destination": "thesis/evidence/auditor-dispatch-20261017/v1302-owner-named-run-task-read.json",
+      "sha256": "dd3912b70ee4c05651ec20d9aa560dfb3b05d5b20b96523f8afcf4212f46bc16",
+      "source": ".git/aurora-handoff-import-20261006/v1302-owner-named-run-task-read.json"
+    },
+    {
+      "bytes": 3022,
+      "destination": "thesis/evidence/auditor-dispatch-20261017/v1305-owner-named-run-admission-attention.json",
+      "sha256": "68e8df7c1d70cfefa4fcb136b8643caf7b7713cbc02c7bce7d2699ebc31ed0aa",
+      "source": ".git/aurora-handoff-import-20261006/v1305-owner-named-run-admission-attention.json"
+    },
+    {
+      "bytes": 179,
+      "destination": "thesis/evidence/auditor-dispatch-20261017/v1307-existing-auditor-dispatch-state.json",
+      "sha256": "2d93c409a2ad1e4f7154f27aff025a80d2de319a9d24b676c35ec725a49676a5",
+      "source": ".git/aurora-handoff-import-20261006/v1307-existing-auditor-dispatch-state.json"
+    }
+  ],
+  "credentialsOrGrantsChanged": false,
+  "doNotRepeat": "No more identical Run8 lookup/send retries, actor/context rebinding, forbidden quota/host/manager calls or worker launches without real admission capability.",
+  "fullObjective": "Original native aggregate remains active; live K1 continues under original reservation.",
+  "incarnation": null,
+  "missingCapability": "Existing authorized owning-Orca host manager context for live worker Codex Sol model/quota/resource admission; exact route still unverified. Owner route question remains pending.",
+  "notAGlobalRunAbsenceClaim": true,
+  "originalRun": "run_e6054e76e9fc",
+  "ownerNamedRun": "run_8e16b490b21b",
+  "ownerNamedTask": "task_c2f1ff86c6f3",
+  "readableRunExists": true,
+  "reservedWorkerRequest": "15142b33-da95-45c7-b9fd-6303d9cb3d61",
+  "sameAuroraObjective": true,
+  "status": "UNLAUNCHED_NO_SUPPORTED_MESSAGE_ROUTE_FROM_THIS_CONTEXT",
+  "terminal": null,
+  "workerStartAttempted": false
+}

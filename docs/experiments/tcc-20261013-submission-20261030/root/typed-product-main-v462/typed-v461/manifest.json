@@ -1,0 +1,31 @@
+{
+  "files": {
+    "supervisor.py": {
+      "sha256": "8ee7e4f3db876558eadd40aef998f0a7294d325c58a0c9b0f2c2c105c73a6394",
+      "bytes": 8054
+    },
+    "backend-controller.py": {
+      "sha256": "7970f28af80430165a22db5521190d7cfb19b1a0d009db0beb174a7024a947b5",
+      "bytes": 7197
+    },
+    "source_guard_v455.py": {
+      "sha256": "9cc029343c709ff154953032546bfe7bfb340692e25d12653416b4ff321e6a4e",
+      "bytes": 1588
+    },
+    "driver.py": {
+      "sha256": "fd744d6aaffb9302c0c0e9b9c2b7607c456bffa1e56d8c86c3a5ecc3136a1bf9",
+      "bytes": 32157
+    },
+    "driver-controller.py": {
+      "sha256": "8f6f5a2c14b54e0b8cb9a944344dc0ec8cfbfb9e884a090fa20ffeb3e844bb93",
+      "bytes": 2766
+    }
+  },
+  "onlyNewAction": "normal visible New conversation before typing; unchanged exactprompt/reply/Piper/history",
+  "extraPassiveBodies": "four actual DB session methods already used by normal UI; no added requests/internals",
+  "typedOrdinal": 3,
+  "globalVoiceLogicalFailuresUnchanged": 8,
+  "newSpeechRequests": 0,
+  "measurementStarted": false,
+  "phase2Allowed": false
+}

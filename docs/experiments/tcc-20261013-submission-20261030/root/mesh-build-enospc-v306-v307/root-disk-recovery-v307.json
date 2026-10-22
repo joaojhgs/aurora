@@ -1,0 +1,39 @@
+{
+  "disk_free_before": 589631488,
+  "disk_free_after": 3459829760,
+  "rows": [
+    {
+      "owned_run": "mesh-main-v281",
+      "receipt": ".git/aurora-handoff-import-20261006/mesh-main-v281/next-env.d.ts.generated-after",
+      "removed_generated_cache_only": "apps/aurora-web/.next-hosted-peer-eef3fb91ec49c1bf2a051054/cache",
+      "removed_file_bytes": 716948507,
+      "successful_standalone_and_marker_preserved": true,
+      "server_sha256": "7a680efa33609bc97bfc8b5dd27135075ec20b02c6a3824f2606d57b7e4566f0"
+    },
+    {
+      "owned_run": "matched-readiness-v293-mesh",
+      "receipt": ".git/aurora-handoff-import-20261006/matched-readiness-v293-mesh/next-env.d.ts.generated-after",
+      "removed_generated_cache_only": "apps/aurora-web/.next-hosted-peer-bacf14d90d691530bd746c34/cache",
+      "removed_file_bytes": 717455493,
+      "successful_standalone_and_marker_preserved": true,
+      "server_sha256": "93f57daf4b5460b0fe85184672e78b348138e3dbb3be9a364a00914565f7821b"
+    },
+    {
+      "owned_run": "matched-readiness-v296-mesh",
+      "receipt": ".git/aurora-handoff-import-20261006/matched-readiness-v296-mesh/next-env.d.ts.generated-after",
+      "removed_generated_cache_only": "apps/aurora-web/.next-hosted-peer-55c925ac0936763f5c015db8/cache",
+      "removed_file_bytes": 717575903,
+      "successful_standalone_and_marker_preserved": true,
+      "server_sha256": "f863f4eb02b39f086aa1612544610765b582df8320e74dd244cca9d9e603e6f1"
+    },
+    {
+      "owned_run": "matched-readiness-v302-mesh",
+      "receipt": ".git/aurora-handoff-import-20261006/matched-readiness-v302-mesh/next-env.d.ts.generated-after",
+      "removed_generated_cache_only": "apps/aurora-web/.next-hosted-peer-36d4735e6900877f527c422d/cache",
+      "removed_file_bytes": 717827914,
+      "successful_standalone_and_marker_preserved": true,
+      "server_sha256": "2af2ef5c310314d9b37f686c671e2ea48509b98426acef352a299f79d057ce1b"
+    }
+  ],
+  "scope": "Root-owned rebuildable webpack caches only; source/raw passed artifacts/runtime standalone+static and other sessions retained"
+}

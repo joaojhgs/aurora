@@ -1,0 +1,28 @@
+{
+  "id": "ceb12dc6-f5bc-4983-bc43-1794c9f81731",
+  "ok": true,
+  "result": {
+    "message": {
+      "id": "msg_116265a06633",
+      "run_id": "run_e6054e76e9fc",
+      "delivery_contract": "current_delivery",
+      "from_handle": "term_6a00d9ee-792a-4daf-8578-236290e33108",
+      "to_handle": "dispatch:ctx_37b4d0a3c14f",
+      "subject": "900 measurements finished; fixed-archive recovery153899 actual handle, old finalizer exited",
+      "body": "Correction/superseding status for f1642d95cd9b: original finalizer134649 exited1 at05:00:40 at provider transfer only; no inference failure/replay. Requester custody is sealed465cases/audio,3109files57157775B, full condition900 attempts899correct+one preserved historical failure, current450allcorrect. Provider fixed archive6871434B SHA3a22bd10761d9fa54755d319b4ef86fb8c7319da906b4716fb2bb1f67f7e19dc already sealed on Personal. Nine retained96KiB pages verified; accepted page9 reply lacked frame184. Re-read same cursor window confirmed missing; exactly that missing fragment was read from unchanged archive and full response/chunk hashes matched. Original page command was NOT resent; no re-export, measurement/model/source/clock change. Root versioned recovery now observed 2026-10-22T05:19:42.123311+00:00: process {\"pid\": 153899, \"startTicks\": 142468632, \"state\": \"S\", \"matches\": true}, status recovering_existing_immutable_archive, bytes 2457600/6871434, 48KiB read-only pages, separate1200s transport-only cap. Actual launch05:17:05.731672Z PID153899/start142468632; intent/actual/source/log/state physically thesis/campaigns/worker-desktop-k1-orca-relayed-http-remaining450-v2296/provider-prefix-transfer-v2302/recovery-v2397/. Original failed state/partial/raw preserved; canonical transfer state advances only after full hash/member verification. Native original goal remains ACTIVE/unbudgeted; snapshot NATIVE-GOAL-PROVIDER-RECOVERY-v2397.json. CURRENT/ORCA coordination says recovery; global build lock and same provider reservation held. Next bounded gate 2026-10-22T05:24:42.123311+00:00 or actual copy exit/failure. Legacy exporter deadline strings are historical metadata; actual unchanged V2296 allocation is provider08:31:16.563152Z and Root09:39:28.033312Z, linked in recovery receipt; no deadline reset. After copy Root resumes saved-data analysis separately, never original pipeline, then full900 ID reconciliation/provider EOF-retirement-release. Canonical owner BIG completion notice still pending until real seal/release and Coding delivery; full13/full matrix remain open. Existing phone worker owns product repair per owner30668; Root no duplicate phone work. No new worker/goal/security/access changes.",
+      "type": "status",
+      "priority": "normal",
+      "thread_id": null,
+      "payload": null,
+      "created_at": "2026-10-22T05:19:34Z",
+      "delivered_at": null
+    },
+    "mutation": {
+      "requestId": "d2851619-f6c9-40c5-ada3-cf9d8c332e63",
+      "replayed": false
+    }
+  },
+  "_meta": {
+    "runtimeId": "cc9e3275-28c6-4c45-85cc-bdcd2262aa7d"
+  }
+}

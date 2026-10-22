@@ -1,0 +1,89 @@
+{
+  "schema": "aurora.monitor.desktop-recovery-finite-window-review.v1",
+  "at": "2026-10-18T22:26:47.319116+00:00",
+  "rootRequest": "msg_40c0576ec5d4",
+  "verdict": "NO_BLOCKING_FINDING_IN_NEW_COUNT_END_WINDOW_NAMESPACE_DELTA",
+  "actualDesktopProof": {
+    "path": "thesis/evidence/orca-desktop-recovery-20261018T2221/ACTUAL-PERSONAL-COMMAND-RESULT.json",
+    "bytes": 1696,
+    "sha256": "99fad2e683546d6c9ffab014a35d780a387de51e9995fda0bb15b6d3611e2950",
+    "executedAt": "2026-10-18T22:22:53.237757Z",
+    "request": "32a39b1d-9c3f-4de7-b07c-2b58cb385131",
+    "host": "personal.skyron-server",
+    "cwd": "/home/developer/projects/aurora",
+    "originalProcessesStartTicks": [
+      [
+        1227847,
+        6621440
+      ],
+      [
+        1227894,
+        6621473
+      ],
+      [
+        1229873,
+        6630651
+      ]
+    ],
+    "manifestSha256": "b4b95d579c29695832c05d96692f2f15fd51cf3258333b9175091ab357280887",
+    "configSha256": "aa03866778b9a57e71a47bcab1a87dcd9adfadad2ec0974c127b98f80b40fba6",
+    "desktopControlTerminal": "term_d5651d8d-58e2-4b38-85e2-51c668cc933c",
+    "desktopControlIncarnation": "034ff933-61a3-4c74-b5ad-98a75e8ac21c",
+    "brokerRestorationProven": false
+  },
+  "count": {
+    "priorAttempts": 716,
+    "priorCorrect": 714,
+    "priorFailed": 2,
+    "newEpochPlanned": 120,
+    "indices": [
+      717,
+      836
+    ],
+    "stillRequired": 64,
+    "remainingRange": [
+      837,
+      900
+    ],
+    "fullTarget": 900,
+    "excludedWarmups": 15,
+    "nativeGateJoins": 45,
+    "oldMeasuredReplayed": false,
+    "automaticRetry": false,
+    "automaticPercentilePooling": false
+  },
+  "unchangedBudget": {
+    "priorUsedSeconds": 23578.905962333003,
+    "capSeconds": 57600,
+    "providerDeadline": "2026-10-19T00:08:53.328388Z",
+    "old184ForecastSeconds": 8238.719302368001,
+    "prefix120ForecastSeconds": 5790.469110239999,
+    "reason": "Fresh same-provider deadline cannot fit184; independently versioned finite prefix, not a target reduction or deadline extension. Fresh current-time and postwarmup-p95 gates remain."
+  },
+  "sourceReview": {
+    "sourcePinsChecked": 13,
+    "operatorCopiesAndSourcesChecked": 10,
+    "rootOperatorPinsMatch": true,
+    "receiverProofPinMatches": true,
+    "errors": [],
+    "draftSha256": "2ab977326d489f7e002d8fe14e69331e9b686b9226df600be96636a8a6858f9a",
+    "operatorManifestSha256": "ad540bb657c02517a8649b7bdb9e38270c15aee80a77696e40b03804a561413c",
+    "diffSha256": "34b33793437cc364b35ed3e5df8235545af71a301744ed24929e55e19c28156c",
+    "scienceFieldCount": 24,
+    "scienceExactPriorReviewedV1590Equality": true,
+    "scienceSha256": "f683a1c7e330076240bbb1d495b8f5b8af3d03cc70bb5a931980ebb142a4a7a7",
+    "collectorNamespaceOnlyFromClosedReader": true,
+    "collectorSha256": "69d9300f514fb129347e4fad88cd22a65e7d936fe0a47ab3d01419012e9545ff",
+    "noOldAlgorithmModelOSLeaseCollectorReviewOrTests": true
+  },
+  "admissionBoundary": "Root alone reconciles pending exactv1611 staging/freshresource receipt, existing-key authenticated route, fixed lifetime and source pins before one launch. Fresh15strict-correct excluded fullaudio warmups/45native joins and actual warmup-p95 remaining-time gate precede measured717. No GET200-only remedy assumption; exact safe diagnostics retained on failure. This review adds no new source/review matrix.",
+  "actualNewLaunchVerified": false,
+  "monitorBrokerCommands": 0,
+  "monitorPersonalCommands": 0,
+  "monitorModelOrBenchmarkRuns": 0,
+  "newRunWorkerGoalCreated": false,
+  "allOriginalLineagePreserved": true,
+  "run": "run_e6054e76e9fc",
+  "task": "task_d7ea336050cf",
+  "dispatch": "ctx_37b4d0a3c14f"
+}

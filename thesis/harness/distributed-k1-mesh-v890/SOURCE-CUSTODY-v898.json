@@ -1,0 +1,96 @@
+{
+  "at": "2026-10-16T04:56:02.916869+00:00",
+  "source": ".git/aurora-handoff-import-20261006/distributed-k1-mesh-observed-prep-v890",
+  "destination": "thesis/harness/distributed-k1-mesh-v890",
+  "files": [
+    {
+      "path": "README.md",
+      "bytes": 7909,
+      "sha256": "ab88986b5524595179614ca04069216ef55f31b7e8ba303ad614eca2062c539c"
+    },
+    {
+      "path": "REPORT.md",
+      "bytes": 3159,
+      "sha256": "0e20eb55de57bdd4c21a5b0d4446290488f319a59b9ece28639ed52351e74ccf"
+    },
+    {
+      "path": "requester/aurora_voice_telemetry_v430.py",
+      "bytes": 11584,
+      "sha256": "8129ffe7591a47a0107ede53b101aead9fc1f58b92f0c0c4203176cc7608325d"
+    },
+    {
+      "path": "requester/bindings.py",
+      "bytes": 5492,
+      "sha256": "79558452e6f61268ad246476ca848e060b8ea808e15091bc53a3c4e0e28b1647"
+    },
+    {
+      "path": "requester/bootstrap.py",
+      "bytes": 12833,
+      "sha256": "cb40f036566274ae4eff290a78a6124e4d9270189a0d31d3cce06fe9092e2537"
+    },
+    {
+      "path": "requester/candidate-input.wav",
+      "bytes": 219794,
+      "sha256": "da0ecc4ad0885746ab6e716585473917ab2b543a505bf0db09ebacfaa7943cbb"
+    },
+    {
+      "path": "requester/candidate-manifest.json",
+      "bytes": 220,
+      "sha256": "ce75b965ee5879ebece6ea7dfe133441547d20ccf89ecd5d66ea510bd9645e60"
+    },
+    {
+      "path": "requester/controller.py",
+      "bytes": 18484,
+      "sha256": "54c79dff9eabedb28370c9801dd7150d209d130886338e9bf578ac2628d51044"
+    },
+    {
+      "path": "requester/freeze-template.json",
+      "bytes": 2437,
+      "sha256": "0870998d1936b3c3b014d6f22b7fb4e6784b88ce64489a69f0e6508048ef3e8a"
+    },
+    {
+      "path": "requester/mesh_route_observer.py",
+      "bytes": 9275,
+      "sha256": "2c23fd2bc69b00b746c2c5dc28c1d2b77428016314045363dceea5fe9ee5cdbb"
+    },
+    {
+      "path": "requester/observer.py",
+      "bytes": 11873,
+      "sha256": "784cc4bffc0d6824bbe378d17a7f632d587ca0a315896b048b2ebef727082df5"
+    },
+    {
+      "path": "requester/receiver_proof.py",
+      "bytes": 24714,
+      "sha256": "7fa0d9c99273ee53c253e464a86b786d476ecfd302a36e8b07b80a891c505683"
+    },
+    {
+      "path": "requester/resource_sample.py",
+      "bytes": 7475,
+      "sha256": "8f62ec378e74036d4539d9159e3caf29b8fd7a9115de1ab0f482dfd58b6e1857"
+    },
+    {
+      "path": "requester/route_observation_sink.py",
+      "bytes": 11536,
+      "sha256": "2b235781c15410e6dbfc8829971a34e8334714cdf015053edfd127756325cfb8"
+    },
+    {
+      "path": "requester/route_runtime_pins.json",
+      "bytes": 2142,
+      "sha256": "529eb82badbb088b8e34e5a11c9a1c9fa7189134a20106d6fdadf5d99e1aabed"
+    },
+    {
+      "path": "requester/runner.py",
+      "bytes": 68564,
+      "sha256": "7cae2d9aa8b2bb36775ed6f6ec2131a8caa819dd2c0fd1531972308a0c629125"
+    },
+    {
+      "path": "requester/tts_mesh_adapter.py",
+      "bytes": 4307,
+      "sha256": "1db8cb386a37c680bec6e03135ee007f6b76a850a85c4e1eedda6562c0895ceb"
+    }
+  ],
+  "review": "thesis/validation/distributed-k1-mesh-observed-review-v891.md",
+  "reviewSHA256": "045d202d3d4249f7458f2fef377dd2e1d03cbc4c970e4e25090f1c078f470605",
+  "runtimeOrAuditExecuted": false,
+  "scope": "SOURCE_APPROVED_ONLY; actual peer/route/model/resource/15warmup admission or actual terminal audit remains Root future work"
+}

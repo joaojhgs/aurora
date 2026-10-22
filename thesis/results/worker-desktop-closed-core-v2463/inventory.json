@@ -1,0 +1,315 @@
+{
+  "at": "2026-10-22T12:58:31.847707+00:00",
+  "scope": "Only six worker-desktop service-boundary conditions; not full13, all surfaces, all directed pairs or all concurrency scenarios",
+  "status": "SIX_ATTEMPT_TARGETS_CLOSED_NOT_FULL_MATRIX_OR_PRODUCT_ACCEPTANCE",
+  "source": "thesis/analysis/index_worker_desktop_closed_core_v2463.py",
+  "sourceSha256": "b724de453d643c726c56ac7e6aebccc3826b298faaa6abb30de56ca7aaf5a3a8",
+  "newInference": 0,
+  "newNetworkTraffic": 0,
+  "newRawQuantileComputations": 0,
+  "crossConditionPercentilePooling": false,
+  "conditions": [
+    {
+      "condition": "K1 HTTP",
+      "route": "Orca-relayed HTTP",
+      "remoteStages": [
+        "TTS"
+      ],
+      "targetMeasured": 900,
+      "measuredAttempted": 900,
+      "correctFullAudio": 899,
+      "failedIncludingQualityAndTransport": 1,
+      "timeoutsIncludedInFailed": 0,
+      "unattempted": 0,
+      "excludedWarmups": 45,
+      "attemptTargetClosed": true,
+      "source": "thesis/results/worker-desktop-k1-http-full900-v2403/FULL900-SUMMARY.json",
+      "retainedLatencyStatistics": {
+        "V1197": {
+          "denominator": 179,
+          "p50_ms": 50322.932153,
+          "p90_ms": 57463.302423199995,
+          "p95_ms": 60305.3512957
+        },
+        "V2234": {
+          "denominator": 270,
+          "p50_ms": 50957.1080565,
+          "p90_ms": 58608.017694199996,
+          "p95_ms": 60103.400722399994
+        },
+        "V2296": {
+          "denominator": 450,
+          "p50_ms": 55696.430387500004,
+          "p90_ms": 63354.6776362,
+          "p95_ms": 64783.729364499995
+        }
+      },
+      "latencyUnits": "ms",
+      "latencyPolicy": "Counts combine only declared contiguous outcome indices; no cross-epoch pooling of latency percentiles",
+      "statisticsProvenance": "Extracted from the named retained analysis; this index does not recompute historical raw quantiles",
+      "epochMetricsBasis": {
+        "V1197": "Retained original summary aggregate; not recomputed by this closure",
+        "V2234": "Recomputed from retained raw data by the existing saved-data analyzer",
+        "V2296": "Recomputed from retained raw data by the existing saved-data analyzer"
+      },
+      "quantileMethod": "Hyndman-Fan Type7; h=(n-1)*p with linear interpolation; milliseconds"
+    },
+    {
+      "condition": "K1 P2P",
+      "route": "Actual paired P2P",
+      "remoteStages": [
+        "TTS"
+      ],
+      "targetMeasured": 900,
+      "measuredAttempted": 900,
+      "correctFullAudio": 885,
+      "failedIncludingQualityAndTransport": 15,
+      "timeoutsIncludedInFailed": 1,
+      "unattempted": 0,
+      "excludedWarmups": 45,
+      "attemptTargetClosed": true,
+      "source": "thesis/campaigns/worker-desktop-k1-p2p-tts-remaining191-v2153/CONDITION-CLOSURE-v2201.json",
+      "retainedLatencyStatistics": {
+        "first20": {
+          "n": 19,
+          "units": "ms",
+          "estimator": "Hyndman-Fan type 7",
+          "p50": 43657.277037,
+          "p90": 48616.7359926,
+          "p95": 49321.44234509999,
+          "p99": 52896.27271542
+        },
+        "next689": {
+          "n": 678,
+          "units": "ms",
+          "estimator": "Hyndman-Fan type 7",
+          "p50": 44990.468276,
+          "p90": 51271.1096626,
+          "p95": 53838.35479685,
+          "p99": 58142.1964085
+        },
+        "remaining191": {
+          "n": 188,
+          "units": "ms",
+          "estimator": "Hyndman-Fan type 7",
+          "p50": 44781.190986,
+          "p90": 49884.9047023,
+          "p95": 51352.36127465001,
+          "p99": 55648.307218669994
+        }
+      },
+      "latencyUnits": "ms",
+      "latencyPolicy": "Per-epoch distributions only: explicit language-list contract compatibility source delta and full-three-model desktop residency in final191; no silent context pooling or pure protocol-overhead interpretation",
+      "statisticsProvenance": "Extracted from the named retained analysis; this index does not recompute historical raw quantiles"
+    },
+    {
+      "condition": "K2 HTTP",
+      "route": "Orca-relayed HTTP",
+      "remoteStages": [
+        "TTS",
+        "LLM"
+      ],
+      "targetMeasured": 900,
+      "measuredAttempted": 900,
+      "correctFullAudio": 797,
+      "failedIncludingQualityAndTransport": 103,
+      "timeoutsIncludedInFailed": 0,
+      "unattempted": 0,
+      "excludedWarmups": {
+        "attempted": 15,
+        "correct": 15,
+        "failedOrInterrupted": 0,
+        "incorrect": 0,
+        "outcomes": {
+          "completed_correct": 15
+        },
+        "partialQualityIncorrect": 0,
+        "timeoutFlagAbsent": 0,
+        "timeouts": 0
+      },
+      "attemptTargetClosed": true,
+      "source": "thesis/campaigns/worker-desktop-k2-orca-relayed-http-v1264/terminal-v1465/FINAL-VALIDATION-v1472.json",
+      "retainedLatencyStatistics": {
+        "denominator": 797,
+        "p50_ms": 28967.940839,
+        "p90_ms": 31730.1032776,
+        "p95_ms": 33246.1032976
+      },
+      "latencyUnits": "ms",
+      "latencyPolicy": "Correct fullaudio only;103 strict answer failures remain in attempt denominator",
+      "statisticsProvenance": "Extracted from the named retained analysis; this index does not recompute historical raw quantiles"
+    },
+    {
+      "condition": "K2 P2P",
+      "route": "Actual paired P2P",
+      "remoteStages": [
+        "TTS",
+        "LLM"
+      ],
+      "targetMeasured": 900,
+      "measuredAttempted": 900,
+      "correctFullAudio": 774,
+      "failedIncludingQualityAndTransport": 126,
+      "timeoutsIncludedInFailed": 0,
+      "unattempted": 0,
+      "excludedWarmups": 15,
+      "attemptTargetClosed": true,
+      "source": "thesis/campaigns/worker-desktop-k2-p2p-assistant-tts-v1826/CONDITION-CLOSURE-v1906.json",
+      "retainedLatencyStatistics": {
+        "n": 774,
+        "units": "ms",
+        "estimator": "Hyndman-Fan type 7",
+        "p50": 16524.5190135,
+        "p90": 19429.4432782,
+        "p95": 20761.114956149995,
+        "p99": 23069.04744742
+      },
+      "latencyUnits": "ms",
+      "latencyPolicy": "Correct fullaudio only; failure time-to-outcome and native invoked-stage populations are separate",
+      "statisticsProvenance": "Extracted from the named retained analysis; this index does not recompute historical raw quantiles"
+    },
+    {
+      "condition": "K3 HTTP",
+      "route": "Orca-relayed HTTP",
+      "remoteStages": [
+        "TTS",
+        "LLM",
+        "STT"
+      ],
+      "targetMeasured": 900,
+      "measuredAttempted": 900,
+      "correctFullAudio": 885,
+      "failedIncludingQualityAndTransport": 15,
+      "timeoutsIncludedInFailed": 0,
+      "unattempted": 0,
+      "excludedWarmups": {
+        "perEpoch": 15,
+        "epochs": 4
+      },
+      "attemptTargetClosed": true,
+      "source": "thesis/campaigns/worker-desktop-k3-orca-relayed-http-remaining-v1682/condition-900-analysis/SUMMARY.json",
+      "retainedLatencyStatistics": {
+        "denominator": 885,
+        "p50_ms": 30277.170251,
+        "p90_ms": 31243.1636454,
+        "p95_ms": 31787.947598400002
+      },
+      "latencyUnits": "ms",
+      "latencyPolicy": "All900 outcomes retained. Latency quantiles condition on885 correct completed valid-audio responses;15 failed/partial attempts are excluded from successful e2e latency, not from outcome denominators. Epoch strata and warmup/setup histories remain separate.",
+      "statisticsProvenance": "Extracted from the named retained analysis; this index does not recompute historical raw quantiles"
+    },
+    {
+      "condition": "K3 P2P",
+      "route": "Actual paired P2P",
+      "remoteStages": [
+        "TTS",
+        "LLM",
+        "STT"
+      ],
+      "targetMeasured": 900,
+      "measuredAttempted": 900,
+      "correctFullAudio": 773,
+      "failedIncludingQualityAndTransport": 127,
+      "timeoutsIncludedInFailed": 1,
+      "unattempted": 0,
+      "excludedWarmups": {
+        "parent": 17,
+        "remainingEpoch": 18,
+        "correctTotal": 30,
+        "failedTotal": 5
+      },
+      "attemptTargetClosed": true,
+      "source": "thesis/campaigns/worker-desktop-k3-p2p-full-audio-v2043/CONDITION-CLOSURE-v2134.json",
+      "retainedLatencyStatistics": {
+        "n": 773,
+        "units": "ms",
+        "estimator": "Hyndman-Fan type 7",
+        "p50": 12482.77534,
+        "p90": 13919.323345600002,
+        "p95": 14665.765187399998,
+        "p99": 17466.009490199973
+      },
+      "latencyUnits": "ms",
+      "latencyPolicy": "Same effective setup, parent1\u2013276 plus continuation277\u2013900; raw histories and each manifest preserved; no failed-index retry or success top-up",
+      "statisticsProvenance": "Extracted from the named retained analysis; this index does not recompute historical raw quantiles"
+    }
+  ],
+  "sources": [
+    {
+      "path": "thesis/results/worker-desktop-core-v2231/inventory.json",
+      "bytes": 13650,
+      "sha256": "fffc6558068b9625315a4d407787de030f3913af13017bb847ed806dde8263e5",
+      "physicalSnapshot": "thesis/results/worker-desktop-closed-core-v2463/inputs/fffc6558068b9625315a4d407787de030f3913af13017bb847ed806dde8263e5.json"
+    },
+    {
+      "path": "thesis/results/worker-desktop-k1-http-full900-v2403/FULL900-SUMMARY.json",
+      "bytes": 10109,
+      "sha256": "cc803a992a86d9b15c41e2c6b5f01f6e4400360f0ad61a5f54f4b1dff041dbdc",
+      "physicalSnapshot": "thesis/results/worker-desktop-closed-core-v2463/inputs/cc803a992a86d9b15c41e2c6b5f01f6e4400360f0ad61a5f54f4b1dff041dbdc.json"
+    },
+    {
+      "path": "thesis/campaigns/worker-desktop-k1-p2p-tts-remaining191-v2153/CONDITION-CLOSURE-v2201.json",
+      "bytes": 4766,
+      "sha256": "50bc75b43b8dd7c1071de2380dab383306f935b6c9ba8bf0dbd2413382d9d5a0",
+      "physicalSnapshot": "thesis/results/worker-desktop-closed-core-v2463/inputs/50bc75b43b8dd7c1071de2380dab383306f935b6c9ba8bf0dbd2413382d9d5a0.json"
+    },
+    {
+      "path": "thesis/campaigns/worker-desktop-k1-p2p-tts-remaining191-v2153/analysis-v2200/RESULT.json",
+      "bytes": 13240,
+      "sha256": "1313a46e3319a22ad86ada92a0f76ad0e754031c6d6cc4a44b659ea5f6da3f3b",
+      "physicalSnapshot": "thesis/results/worker-desktop-closed-core-v2463/inputs/1313a46e3319a22ad86ada92a0f76ad0e754031c6d6cc4a44b659ea5f6da3f3b.json"
+    },
+    {
+      "path": "thesis/campaigns/worker-desktop-k2-orca-relayed-http-v1264/terminal-v1465/FINAL-VALIDATION-v1472.json",
+      "bytes": 4389,
+      "sha256": "910992937bdd8235d01d953eb9ac771df2c5409466ad2f075230bf020f64b8d4",
+      "physicalSnapshot": "thesis/results/worker-desktop-closed-core-v2463/inputs/910992937bdd8235d01d953eb9ac771df2c5409466ad2f075230bf020f64b8d4.json"
+    },
+    {
+      "path": "thesis/campaigns/worker-desktop-k2-orca-relayed-http-v1264/terminal-v1465/analysis-v1469/SUMMARY.json",
+      "bytes": 107912,
+      "sha256": "f1b1231416c5a0996b940b7f6103839965eba1479b7b137f25b3251d6f747c7f",
+      "physicalSnapshot": "thesis/results/worker-desktop-closed-core-v2463/inputs/f1b1231416c5a0996b940b7f6103839965eba1479b7b137f25b3251d6f747c7f.json"
+    },
+    {
+      "path": "thesis/campaigns/worker-desktop-k2-p2p-assistant-tts-v1826/CONDITION-CLOSURE-v1906.json",
+      "bytes": 2262,
+      "sha256": "050cd4d9d698696900f7c7189537cb810320ed33bbf668d2d6c996eea8352eb3",
+      "physicalSnapshot": "thesis/results/worker-desktop-closed-core-v2463/inputs/050cd4d9d698696900f7c7189537cb810320ed33bbf668d2d6c996eea8352eb3.json"
+    },
+    {
+      "path": "thesis/campaigns/worker-desktop-k2-p2p-assistant-tts-v1826/analysis-v1904/SUMMARY.json",
+      "bytes": 7150,
+      "sha256": "797a2347c7e3a72936a595720c710dc14f091498ddfbac12bde4d26a7ff2c222",
+      "physicalSnapshot": "thesis/results/worker-desktop-closed-core-v2463/inputs/797a2347c7e3a72936a595720c710dc14f091498ddfbac12bde4d26a7ff2c222.json"
+    },
+    {
+      "path": "thesis/campaigns/worker-desktop-k3-orca-relayed-http-remaining-v1682/condition-900-analysis/SUMMARY.json",
+      "bytes": 7307,
+      "sha256": "d0442026536ce0582e1b7ff87307e05ff125be3b6f468848e7867fc6ab67886b",
+      "physicalSnapshot": "thesis/results/worker-desktop-closed-core-v2463/inputs/d0442026536ce0582e1b7ff87307e05ff125be3b6f468848e7867fc6ab67886b.json"
+    },
+    {
+      "path": "thesis/campaigns/worker-desktop-k3-p2p-full-audio-v2043/CONDITION-CLOSURE-v2134.json",
+      "bytes": 5938,
+      "sha256": "3a3346861985651388c067dc604b26a635bfa7bbb24215fcf972f89f47a272b4",
+      "physicalSnapshot": "thesis/results/worker-desktop-closed-core-v2463/inputs/3a3346861985651388c067dc604b26a635bfa7bbb24215fcf972f89f47a272b4.json"
+    },
+    {
+      "path": "thesis/campaigns/worker-desktop-k3-p2p-full-audio-v2043/analysis-v2130/RESULT.json",
+      "bytes": 7367,
+      "sha256": "0c87ed8ab8ac34fcf021fa2fb490df476eca877d22638f20e2eb2be9dae9870f",
+      "physicalSnapshot": "thesis/results/worker-desktop-closed-core-v2463/inputs/0c87ed8ab8ac34fcf021fa2fb490df476eca877d22638f20e2eb2be9dae9870f.json"
+    }
+  ],
+  "limitations": [
+    "HTTP includes an Orca intermediary; no pure protocol-overhead claim",
+    "No cross-host timestamp subtraction or averaging percentile summaries",
+    "Reported timeout flags do not establish underlying transport causes",
+    "Collection reaching900 does not establish acceptable correctness or complete the product goal",
+    "K1 HTTP supersedes the earlier index's partial180 count only; original files are preserved",
+    "Source-reported percentiles are copied exactly, never averaged; K1 epoch settings/residency differ",
+    "Tables are machine-extracted descriptive records for owner review, not a scientific acceptance or submission approval",
+    "Active mixed-load C12, phone/notebook, other surfaces/pairs and remaining full13 work are outside this closed-condition index"
+  ]
+}

@@ -1,0 +1,10 @@
+{
+  "status": "COMPLETE_ALL_ROOT_EOF_FILES_SHA256_VERIFIED",
+  "archiveBytes": 157129,
+  "archiveSha256": "04212ae9a2cdc7f6dfd1d209f4df55b3eca0799b7ec12169fd7594e777cba6c3",
+  "members": 21,
+  "warmupPairs15AlreadyCopied": true,
+  "nativeOpen": 0,
+  "actorRetirementVerified": true,
+  "oldFailuresPreserved": true
+}

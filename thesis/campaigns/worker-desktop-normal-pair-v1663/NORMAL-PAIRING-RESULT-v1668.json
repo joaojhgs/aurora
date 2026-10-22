@@ -1,0 +1,24 @@
+{
+  "at": "2026-10-20T00:25:32.535826+00:00",
+  "status": "NORMAL_MQTT_RTC_BILATERAL_PAIR_AND_SCOPED_PERMISSION_CONSENT_PASSED",
+  "sameApprovedPrivateRoom": true,
+  "encryptedMqttPresenceOnBoth": true,
+  "iceCompletedAndDataChannelsOpenOnBoth": true,
+  "bilateralSasAndSessionFingerprintsMatched": true,
+  "normalTypedAuthApprovalCountPerEndpoint": 1,
+  "approvedInboundAndOutboundPermissions": [
+    "Gateway.GetRegistry",
+    "Gateway.GetMeshStatus",
+    "TTS.Synthesize"
+  ],
+  "bothAuthenticated": true,
+  "actualOriginalTestProfileIdentitiesReused": true,
+  "bothFiniteAppsNaturallyRetiredAndPidsAbsent": true,
+  "newOrcaWorkers": 0,
+  "newModelRequests": 0,
+  "httpListenerStarted": false,
+  "noTrustTableWritesOrSyntheticGrants": true,
+  "p2pMeasurementAdmission": "NOT_YET; model service/catalog/selected-route/native-stage proof is still required",
+  "controlRouteObserver": "Personal observer returned exact_peer_connection_missing despite open authenticated RTC; stable-vs-signaling peer lookup in observer must be corrected before route-metric claims, not an ICE failure",
+  "measured900Acceptance": false
+}

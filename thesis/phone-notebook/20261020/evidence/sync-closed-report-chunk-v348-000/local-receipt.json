@@ -1,0 +1,9 @@
+{
+  "at": "2026-10-22T12:12:08.029773+00:00",
+  "recoveredFromSavedReadOnlyOutput": true,
+  "remoteResultPersistedBeforeRelay": true,
+  "remoteRawSha256": "152a572a643b9e16539e815cb8fdfdeb36e70c2854bfc55e54e50d564295dadd",
+  "originalWrapperJsonParsingFailed": true,
+  "parseRecovery": "ast.literal_eval on exact own standalone result, original bytes retained",
+  "replayedRemoteAction": false
+}

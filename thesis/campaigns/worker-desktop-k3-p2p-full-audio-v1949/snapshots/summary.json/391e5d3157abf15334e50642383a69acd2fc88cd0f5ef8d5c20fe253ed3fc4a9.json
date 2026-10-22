@@ -1,0 +1,295 @@
+{
+  "attempted": 13,
+  "attempts": [
+    {
+      "file": "attempts/attempt-0001-warmup.jsonl",
+      "ordinal": 1,
+      "partial_quality_incorrect": false,
+      "phase": "warmup",
+      "status": "completed_correct",
+      "timeout": false
+    },
+    {
+      "file": "attempts/attempt-0002-warmup.jsonl",
+      "ordinal": 2,
+      "partial_quality_incorrect": false,
+      "phase": "warmup",
+      "status": "completed_correct",
+      "timeout": false
+    },
+    {
+      "file": "attempts/attempt-0003-warmup.jsonl",
+      "ordinal": 3,
+      "partial_quality_incorrect": false,
+      "phase": "warmup",
+      "status": "completed_correct",
+      "timeout": false
+    },
+    {
+      "file": "attempts/attempt-0004-warmup.jsonl",
+      "ordinal": 4,
+      "partial_quality_incorrect": false,
+      "phase": "warmup",
+      "status": "completed_correct",
+      "timeout": false
+    },
+    {
+      "file": "attempts/attempt-0005-warmup.jsonl",
+      "ordinal": 5,
+      "partial_quality_incorrect": false,
+      "phase": "warmup",
+      "status": "completed_correct",
+      "timeout": false
+    },
+    {
+      "file": "attempts/attempt-0006-warmup.jsonl",
+      "ordinal": 6,
+      "partial_quality_incorrect": false,
+      "phase": "warmup",
+      "status": "completed_correct",
+      "timeout": false
+    },
+    {
+      "file": "attempts/attempt-0007-warmup.jsonl",
+      "ordinal": 7,
+      "partial_quality_incorrect": false,
+      "phase": "warmup",
+      "status": "completed_correct",
+      "timeout": false
+    },
+    {
+      "file": "attempts/attempt-0008-warmup.jsonl",
+      "ordinal": 8,
+      "partial_quality_incorrect": false,
+      "phase": "warmup",
+      "status": "completed_correct",
+      "timeout": false
+    },
+    {
+      "file": "attempts/attempt-0009-warmup.jsonl",
+      "ordinal": 9,
+      "partial_quality_incorrect": false,
+      "phase": "warmup",
+      "status": "completed_correct",
+      "timeout": false
+    },
+    {
+      "file": "attempts/attempt-0010-warmup.jsonl",
+      "ordinal": 10,
+      "partial_quality_incorrect": false,
+      "phase": "warmup",
+      "status": "completed_correct",
+      "timeout": false
+    },
+    {
+      "file": "attempts/attempt-0011-warmup.jsonl",
+      "ordinal": 11,
+      "partial_quality_incorrect": false,
+      "phase": "warmup",
+      "status": "completed_correct",
+      "timeout": false
+    },
+    {
+      "file": "attempts/attempt-0012-warmup.jsonl",
+      "ordinal": 12,
+      "partial_quality_incorrect": false,
+      "phase": "warmup",
+      "status": "completed_correct",
+      "timeout": false
+    },
+    {
+      "file": "attempts/attempt-0013-warmup.jsonl",
+      "ordinal": 13,
+      "partial_quality_incorrect": false,
+      "phase": "warmup",
+      "status": "failed",
+      "timeout": false
+    }
+  ],
+  "candidate_manifest_reference_sha256": "34b681e385feb3500c9e9849d30f5bac982716c4e4938cdb04c5fdc617cff624",
+  "candidate_manifest_role": "exact_three_key_pilot_input_manifest",
+  "candidate_manifest_sha256": "ce75b965ee5879ebece6ea7dfe133441547d20ccf89ecd5d66ea510bd9645e60",
+  "completed_flow_count_including_incorrect": 0,
+  "completed_flow_latency_ms_r7_including_incorrect": {
+    "p50": null,
+    "p90": null,
+    "p95": null
+  },
+  "condition": "remote_mesh_stt_assistant_tts",
+  "condition_cap_seconds": 57600.0,
+  "condition_elapsed_ms_excluding_setup_and_shutdown": 159708.395879,
+  "condition_ended_monotonic_ns": 1312115795652350,
+  "condition_started_monotonic_ns": 1311956087256471,
+  "config_raw_sha256_after_startup": "f715bb17a804ec1a510ff44ced402341700a1ca1e1e3e45dd845aa910560be35",
+  "config_raw_sha256_before_startup": "1b62c18fcfc9f0e66b82719323a9f4cc4f43efed7c503fbe2b31be8702e33a98",
+  "config_sha256": "f715bb17a804ec1a510ff44ced402341700a1ca1e1e3e45dd845aa910560be35",
+  "config_startup_changed_key_paths": [
+    "services.gateway.api.token_secret",
+    "services.gateway.webrtc.password"
+  ],
+  "config_startup_changed_values_redacted": true,
+  "config_startup_semantics_verified": true,
+  "correct": 0,
+  "correctness_denominator": {
+    "measured_attempted": 0,
+    "measured_correct": 0,
+    "measured_execution_failed_or_interrupted": 0,
+    "measured_failed_or_interrupted": 0,
+    "measured_incorrect_completed": 0,
+    "measured_partial_quality_incorrect_before_full_flow": 0,
+    "measured_planned": 900,
+    "unattempted_measured": 900,
+    "warmup_attempted_excluded": 13,
+    "warmup_failed_or_interrupted_excluded": 1,
+    "warmup_partial_quality_incorrect_excluded": 0,
+    "warmup_planned_excluded": 15
+  },
+  "execution_failed_or_interrupted": 1,
+  "expected_reply_words": [
+    "paris"
+  ],
+  "failed": 1,
+  "failure_policy": {
+    "all_other_system_failures": "hard_stop",
+    "consecutive_rejection_hard_stop": 3,
+    "known_structured_preaccept_capability_changed": "count_failed_then_next_distinct_measured_index",
+    "retry_or_fallback": false,
+    "warmup_failure": "hard_stop"
+  },
+  "finished_monotonic_ns": 1312116125078281,
+  "flow_end_point": "valid_non_silent_pcm16_tts_wav_received_decoded_and_checked_before_artifact_write",
+  "frozen_cohort_manifest_name": "condition-frozen-v1949.json",
+  "frozen_cohort_manifest_sha256": "4ffe1f86fa652554123fd30b6cf18f6794ee8bfe9f08ae624e0304814e6258de",
+  "input": {
+    "bytes": 219794,
+    "channels": 1,
+    "frames": 109875,
+    "sample_rate": 22050,
+    "sample_width_bytes": 2,
+    "sha256": "da0ecc4ad0885746ab6e716585473917ab2b543a505bf0db09ebacfaa7943cbb"
+  },
+  "measured_requests": 0,
+  "mesh_route_admission_timing": {
+    "clock_domain": "python_process_monotonic",
+    "duration_ms": 10246.509909,
+    "ended_monotonic_ns": 1311956084434530,
+    "error_class": null,
+    "model_requests": 0,
+    "process_id": 3116250,
+    "started_monotonic_ns": 1311945837924621,
+    "status": "admitted"
+  },
+  "missing_metrics": {
+    "first_audio": "no playback path in this pilot",
+    "first_token": "not exposed by this caller boundary",
+    "playback_end": "no playback path in this pilot",
+    "playback_start": "no playback path in this pilot"
+  },
+  "observed_measured_attempt_latency_ms_r7_including_failures": {
+    "p50": null,
+    "p90": null,
+    "p95": null
+  },
+  "partial_quality_incorrect": 0,
+  "phase_denominators": {
+    "all": {
+      "attempted": 13,
+      "completed_correct": 12,
+      "completed_incorrect": 0,
+      "failed_or_interrupted": 1,
+      "planned": 915,
+      "timeouts": 0,
+      "unattempted": 902
+    },
+    "measured": {
+      "attempted": 0,
+      "completed_correct": 0,
+      "completed_incorrect": 0,
+      "failed_or_interrupted": 0,
+      "planned": 900,
+      "timeouts": 0,
+      "unattempted": 900
+    },
+    "warmup_excluded": {
+      "attempted": 13,
+      "completed_correct": 12,
+      "completed_incorrect": 0,
+      "failed_or_interrupted": 1,
+      "planned": 15,
+      "timeouts": 0,
+      "unattempted": 2
+    }
+  },
+  "physical_microphone": false,
+  "physical_playback_or_audibility": false,
+  "planned_measured": 900,
+  "planned_warmups": 15,
+  "provider_bindings_after": {
+    "configured_llm": {
+      "model_file": "Qwen3.5-0.8B-Q4_0.gguf",
+      "provider": "llama_cpp",
+      "settings": {
+        "chat_format": "chatml-function-calling",
+        "max_tokens": 128,
+        "min_p": 0.0,
+        "n_batch": 64,
+        "n_ctx": 4096,
+        "n_gpu_layers": 0,
+        "n_threads": 2,
+        "repeat_penalty": 1.0,
+        "seed": 42,
+        "temperature": 0.0,
+        "top_k": 1,
+        "top_p": 1.0
+      }
+    },
+    "transcription": null,
+    "tts": null
+  },
+  "provider_bindings_before": {
+    "configured_llm": {
+      "model_file": "Qwen3.5-0.8B-Q4_0.gguf",
+      "provider": "llama_cpp",
+      "settings": {
+        "chat_format": "chatml-function-calling",
+        "max_tokens": 128,
+        "min_p": 0.0,
+        "n_batch": 64,
+        "n_ctx": 4096,
+        "n_gpu_layers": 0,
+        "n_threads": 2,
+        "repeat_penalty": 1.0,
+        "seed": 42,
+        "temperature": 0.0,
+        "top_k": 1,
+        "top_p": 1.0
+      }
+    },
+    "transcription": null,
+    "tts": null
+  },
+  "remote_assistant_automatic_tts_readback_disabled_by_frozen_manifest": true,
+  "remote_assistant_peer_id_sha256": "77421aa81ce7ae2e865455348e9aa5ae17013d8f5e1f72d38d71d09f110ef868",
+  "remote_authority_binding": "existing_authorized_peer_session",
+  "remote_tts_peer_id_sha256": "77421aa81ce7ae2e865455348e9aa5ae17013d8f5e1f72d38d71d09f110ef868",
+  "request_cap_seconds": 180.0,
+  "schema_version": "aurora.full_audio_campaign.v1",
+  "setup_completed": true,
+  "setup_duration_ms": 15401.007302,
+  "setup_ended_monotonic_ns": 1311956087256471,
+  "setup_started_monotonic_ns": 1311940686249169,
+  "shutdown_completed": true,
+  "shutdown_duration_ms": 329.33121,
+  "status": "stopped_system_failure",
+  "stop_reason": "preaccept_capability_changed",
+  "successful_correct_count": 0,
+  "successful_correct_latency_ms_r7": {
+    "p50": null,
+    "p90": null,
+    "p95": null,
+    "p99": null
+  },
+  "timeouts": 0,
+  "unattempted_measured": 900,
+  "warmup_requests": 13
+}

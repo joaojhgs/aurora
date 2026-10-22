@@ -1,0 +1,28 @@
+{
+  "id": "10b078a4-5b11-4887-bcd6-978cfb5ca013",
+  "ok": true,
+  "result": {
+    "message": {
+      "id": "msg_873987b1aba9",
+      "run_id": "run_e6054e76e9fc",
+      "delivery_contract": "current_delivery",
+      "from_handle": "term_6a00d9ee-792a-4daf-8578-236290e33108",
+      "to_handle": "dispatch:ctx_37b4d0a3c14f",
+      "subject": "NEW delta sourcewindow01:26:23-01:28:23Z, owner120s preserved; main676/900",
+      "body": "Existing sourceworker e667cdd018cc delivered concrete exactdelta readiness; Root verified4file lengths/SHA/frozenaudio,3,913,736B. NEW operation source-delta-v29-copy-v2350-20261022 admitted, never oldwindow extension: thesis/evidence/source-sync-ebde-runtime-v2340/SOURCE-DELTA-TRANSFER-ADMISSION-v2350.json. Earliest receiver+sender01:26:23.567718Z, absoluteend01:28:23.567718Z, strict120s window/active cap, one sequential existingNotebook controlstream <=128KiB/s payload256KiB/swire, v29hardalarm/TTYrestore/existing own guards. Derived PER-FILE43dataframes at98048B (worker40 aggregate estimate and v28manifest60 are historical), no source/Git/auth/provider/worker changes. Admission sent to samelegacy setupworker; COPY LAUNCH/RECEIVER COMPLETION NOT YET PROVEN. Please coordinate exact finite guard/acceptedhandle/receiver receipt through existing worker only, no device/network probes or source re-review. Root stays mainHTTP/custody. Fresh main01:25:38Z676/900=675correct1historicalfailure, new226/450all correct, originalactorslive/copier0errors; native original goal actualACTIVE and ROOT-VERIFIED-WAIT-v2351.json records newboundedcheck. Frozen setup/source/clocks unchanged, full13 and one canonical K1 BIG notification still pending real full900seal+release.",
+      "type": "status",
+      "priority": "normal",
+      "thread_id": null,
+      "payload": null,
+      "created_at": "2026-10-22T01:26:06Z",
+      "delivered_at": null
+    },
+    "mutation": {
+      "requestId": "c93a9b2d-b871-4f92-b18f-d3def899dd5a",
+      "replayed": false
+    }
+  },
+  "_meta": {
+    "runtimeId": "cc9e3275-28c6-4c45-85cc-bdcd2262aa7d"
+  }
+}

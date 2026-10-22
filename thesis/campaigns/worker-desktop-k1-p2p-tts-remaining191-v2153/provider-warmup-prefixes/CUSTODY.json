@@ -1,0 +1,62 @@
+{
+  "at": "2026-10-21T03:10:22.740015+00:00",
+  "files": {
+    "STATUS.json": {
+      "bytes": 167812,
+      "prefix": false,
+      "priorPrefixBinding": null,
+      "sha256": "55acdd0ad179c8df08dc670dc0bc791456f21c1877d130b9a1d5fee62cbc4fcd",
+      "sourceEndByte": 167812,
+      "sourceStartByte": 0,
+      "terminalEOF": false
+    },
+    "actual-provider-bindings.jsonl": {
+      "bytes": 11265,
+      "prefix": true,
+      "priorPrefixBinding": {
+        "inode": 4621214,
+        "path": "/home/developer/projects/aurora/thesis/campaigns/worker-desktop-k3-p2p-full-audio-v1965/provider/actual-provider-bindings.jsonl",
+        "sha256": "fcb59a35c3297db3b0f3ddde9f373d3b66141e5290705a12112ed3d2d078260d",
+        "sourceBytes": 616507
+      },
+      "sha256": "256f7aa1168526dbbcd38d631a87c2398cf50aa5175e5b97ab020c4001a0eb2b",
+      "sourceEndByte": 627772,
+      "sourceStartByte": 616507,
+      "terminalEOF": false
+    },
+    "controller-launch.json": {
+      "bytes": 300,
+      "prefix": false,
+      "priorPrefixBinding": null,
+      "sha256": "709e177210d5782ecc89852ee7231b256100dab321e9d27aa9262838641df8ef",
+      "sourceEndByte": 300,
+      "sourceStartByte": 0,
+      "terminalEOF": false
+    },
+    "receiver-identity.json": {
+      "bytes": 1372,
+      "prefix": false,
+      "priorPrefixBinding": null,
+      "sha256": "37e4c22e225c8f863dd3ed7645633b2fad56525497faf7937fb5b0a41c63de72",
+      "sourceEndByte": 1372,
+      "sourceStartByte": 0,
+      "terminalEOF": false
+    },
+    "voice-stages.jsonl": {
+      "bytes": 73635,
+      "prefix": true,
+      "priorPrefixBinding": {
+        "inode": 4621211,
+        "path": "/home/developer/projects/aurora/thesis/campaigns/worker-desktop-k3-p2p-full-audio-v1965/provider/voice-stages.jsonl",
+        "sha256": "e8ef8cdbaefcf334f20919edab6e557e6d42a1d15b0539e1004b14e7173531af",
+        "sourceBytes": 11572367
+      },
+      "sha256": "7575b1326d736e6c31d58bce3521936ddc4c9368d49f63debf52bbc3b63cbef9",
+      "sourceEndByte": 11646002,
+      "sourceStartByte": 11572367,
+      "terminalEOF": false
+    }
+  },
+  "prefixesOnly": true,
+  "sutCalls": 0
+}

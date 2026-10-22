@@ -1,0 +1,53 @@
+{
+  "at": "2026-10-18T16:44:09.142443+00:00",
+  "status": "PREPARED_NOT_ADMITTED_NO_MODEL_REQUESTS",
+  "condition": "Same W-to-D K1 full audio workload; local STT+LLM, remote Piper TTS over Orca-relayed HTTP",
+  "ownerAuthority": "30.56 remaining-only versioned epoch/session allocation",
+  "parentAttempts": 180,
+  "parentCorrect": 179,
+  "parentFailuresRetained": 1,
+  "remainingMeasured": 720,
+  "conditionTargetAttempts": 900,
+  "parentSummaryPath": "thesis/evidence/orca-relayed-http-v1197/terminal-v1377/analysis/SUMMARY.json",
+  "parentSummarySha256": "5c0c9e2eb40b072afced68042e9c390b0fd7622e8c2d68f83a6849ab6bcbb540",
+  "matchedObservedP95Seconds": 60.3053512957,
+  "p95Population": "179 successful-correct original K1 requests",
+  "p95Estimator": "Hyndman-Fan Type7",
+  "parentElapsedSeconds": 9996.643721086,
+  "originalFrozenConditionCapSeconds": 57600,
+  "prospectiveVersionedCumulativeConditionCapSeconds": 72000,
+  "revisionRationale": "Observed K1 timing plus new excluded warmups requires more than the old16h cap; old frozen cap/result remain unchanged. Two explicit8h session caps plus prior actualelapsed total67596.643721086s below new20h cap. This is a declared proposal requiring actual source/model/route/resource/lifetime freeze, not a silent reservation extension.",
+  "sessions": [
+    {
+      "epoch": "K1-remaining-A-NOT_FROZEN",
+      "firstConditionMeasuredIndex": 181,
+      "lastConditionMeasuredIndex": 540,
+      "measuredAttempts": 360,
+      "additionalExcludedWarmups": 15,
+      "sessionCapSeconds": 28800
+    },
+    {
+      "epoch": "K1-remaining-B-NOT_FROZEN",
+      "firstConditionMeasuredIndex": 541,
+      "lastConditionMeasuredIndex": 900,
+      "measuredAttempts": 360,
+      "additionalExcludedWarmups": 15,
+      "sessionCapSeconds": 28800
+    }
+  ],
+  "planningForecastEachSessionSeconds": 27617.408083065002,
+  "forecastFormula": "(15 excluded warmups+360 measured)*matched p95*1.2 +300setup +180shutdown",
+  "combinedWorstSessionCapsPlusParentSeconds": 67596.643721086,
+  "admissionRequirements": [
+    "Old data/failure immutable; exact matched audio/model/source/effectiveCPU settings and route source map",
+    "Actual newly available provider sessions after prior ownership retirement; current00:08:53 deadline not extended",
+    "Declare actual initial health/readmission operation, maxone launch and per-request180s cap before each epoch",
+    "Transport failures counted; seal failed prefix then only changed-remedy bounded new stage, no automatic target abandonment/hidden retry",
+    "No percentile pooling until raw-row eligibility explicitly established; keep epoch metrics and all warmups separate"
+  ],
+  "currentProviderReservationReuseClaimed": false,
+  "currentProviderDeadlineUtc": "2026-10-19T00:08:53.328388+00:00",
+  "currentK3FinalState": "203/387 newattempts=202correct+1assistanttransportfailure;184remaining, localprocessesretired and requestersealed",
+  "newInferenceRequests": 0,
+  "coverageReduction": false
+}

@@ -1,0 +1,11 @@
+{
+  "at": "2026-10-22T11:00:41.640739+00:00",
+  "eligibleForOneProviderObservation": true,
+  "inference": 0,
+  "remoteOperations": 0,
+  "requesterTerminalPresent": true,
+  "worker": {
+    "originalPresent": false,
+    "pid": 281887
+  }
+}

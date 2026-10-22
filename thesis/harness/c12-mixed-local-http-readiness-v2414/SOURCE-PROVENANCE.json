@@ -1,0 +1,12 @@
+{
+  "sourceHashes": {
+    "local_composition.py": "aaf9585ad24429c44ea5ed78b00a7ad49369f324528f901ac46a56eae9b22ba0",
+    "stage_adapter.py": "f678712c75a50146194ccb34331fab8d995f057461e565be99be8d69c2b364a6",
+    "provider_controller.py": "82413b36c2de85cc09d1661e17c8de5c70817062fd67f8e62b0a851c34cdf6aa",
+    "paired_case.py": "f3c606653db453c4dbc6e82c0bdcc0339c78f59f7e0d72ac3eae885ae2c379fe",
+    "k3_composition.py": "777bfb6abf34a1485a38c1076c86a06776de4017f1f27715b326403aba15effa",
+    "prepare_and_launch.py": "13d1020596191a51f97ac5b1b810780cf6b026088a57ab91189b5c09635b081c",
+    "worker_driver.py": "77b116b7ac9931be3316dbffc2a244cd53d0ef018054ffb6f0602040faacb633"
+  },
+  "delta": "Only bounded controller scheduling margin/shorter lifetime; same product native UserInput flow and strict fixture/model predicates. Prior v2411 had ZERO actual inference due orchestration timing assertion; no model-quality inference, all old failure history preserved."
+}

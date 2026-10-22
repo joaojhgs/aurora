@@ -1,0 +1,16 @@
+{
+  "at": "2026-10-16T07:37:41.785360+00:00",
+  "scope": "Root exact immutable canonical promotion through original monitor30.43.1; no plan writes",
+  "sourceReceipt": ".omx/evidence/orca-monitor-20261010/browser-format-plan-update-20261016T0720/receipt.json",
+  "canonicalPath": "thesis/methodology/owner-requirements-20261016-05e532e7.md",
+  "bytes": 457110,
+  "lines": 2348,
+  "sha256": "05e532e74bc319fa4bdf43c2ee40d2f6ca83ee62326783cb74d6da512313adf7",
+  "previousFullyReadBytes": 448023,
+  "previousPrefixUnchanged": true,
+  "newDeltaFullreadBytes": 9087,
+  "newDeltaSha256": "8bb7eb284af0cba9784c78d8c3c7bc78d7520c3c419cc7c0dad42d92c918c4b5",
+  "liveFileBytesAfterSnapshot": 0,
+  "newConditionsOrBaselineGate": false,
+  "runtimeExecuted": false
+}

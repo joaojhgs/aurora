@@ -1,0 +1,43 @@
+{
+  "schema": "aurora.primary-model-metadata-retrieval.v747",
+  "at": "2026-10-15T23:10:20.558654+00:00",
+  "scope": "Bounded public immutable-revision publisher metadata only, max64KiB/8s each; no weights, credentials, installs, backend or benchmark calls.",
+  "durationSeconds": 0.3684772279812023,
+  "sources": [
+    {
+      "role": "stt",
+      "url": "https://huggingface.co/Systran/faster-whisper-base/raw/ebe41f70d5b6dfa9166e2c581c45c9c0cfc57b66/README.md",
+      "at": "2026-10-15T23:10:20.190200+00:00",
+      "httpStatus": 200,
+      "contentType": "text/plain; charset=utf-8",
+      "status": "retrieved_metadata",
+      "bytes": 1991,
+      "sha256": "b922acef3616e27b1d416260b63ba7114c732f0315012006781af2da69cd1ebf",
+      "declaredModelCardLicense": "mit",
+      "weightsRetrieved": false
+    },
+    {
+      "role": "llm",
+      "url": "https://huggingface.co/ggml-org/Qwen3.5-0.8B-GGUF/raw/9447f74101aeb4e93621884dfa36ee8effb8831b/README.md",
+      "at": "2026-10-15T23:10:20.318462+00:00",
+      "status": "metadata_retrieval_failed",
+      "errorClass": "HTTPError",
+      "httpStatus": 404,
+      "error": "HTTP Error 404: Not Found",
+      "inference": "Tool/network/HTTP result only; no conclusion that model, host or card is absent."
+    },
+    {
+      "role": "tts",
+      "url": "https://huggingface.co/rhasspy/piper-voices/raw/c10ece1aade47bb51c153c893d14e5bf8e5b7117/en/en_US/ljspeech/medium/MODEL_CARD",
+      "at": "2026-10-15T23:10:20.429248+00:00",
+      "httpStatus": 200,
+      "contentType": "text/plain; charset=utf-8",
+      "status": "retrieved_metadata",
+      "bytes": 517,
+      "sha256": "fbee1529c89d36b3fe76d7e9f3f832dce17f44900a52d76a9bda735654766b4d",
+      "declaredModelCardLicense": null,
+      "weightsRetrieved": false
+    }
+  ],
+  "newMeasuredRequests": 0
+}

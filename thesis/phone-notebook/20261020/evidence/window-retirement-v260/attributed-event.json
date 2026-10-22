@@ -1,0 +1,28 @@
+{
+  "id": "f922c48f-3772-4c28-bedb-ef0452910ec2",
+  "ok": true,
+  "result": {
+    "message": {
+      "id": "msg_ed4d60aab5f7",
+      "run_id": "run_e6054e76e9fc",
+      "delivery_contract": "current_delivery",
+      "from_handle": "term_1f27be31-0284-4366-bb91-30fe538cd30e",
+      "to_handle": "run:run_e6054e76e9fc",
+      "subject": "Phone window retirement: ACTUAL_RETIREMENT_VERIFIED",
+      "body": "Phone setup finite-window artifact collector: ACTUAL_RETIREMENT_VERIFIED. The existing notebook provider PID271169 epoch3652215 was verified closed by its actual receipt, with no phone commands or inference calls by this collector. Original hard stop remains11:57:25.269652UTC; main campaign untouched and evidence is at thesis/phone-notebook/20261020/evidence/window-retirement-v260/status.json.",
+      "type": "status",
+      "priority": "high",
+      "thread_id": null,
+      "payload": "{\"reportPath\":\"thesis/phone-notebook/20261020/evidence/window-retirement-v260/status.json\"}",
+      "created_at": "2026-10-22T11:57:01Z",
+      "delivered_at": null
+    },
+    "mutation": {
+      "requestId": "709a9ed7-24bf-4927-8c9b-97b643c41e14",
+      "replayed": false
+    }
+  },
+  "_meta": {
+    "runtimeId": "cc9e3275-28c6-4c45-85cc-bdcd2262aa7d"
+  }
+}

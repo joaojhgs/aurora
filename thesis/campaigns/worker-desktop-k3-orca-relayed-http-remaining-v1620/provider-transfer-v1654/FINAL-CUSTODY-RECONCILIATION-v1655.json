@@ -1,0 +1,45 @@
+{
+  "at": "2026-10-19T23:59:22.301333+00:00",
+  "coverageChain": {
+    "bytes": 669839,
+    "path": "thesis/campaigns/worker-desktop-k3-orca-relayed-http-remaining-v1620/provider-transfer-v1654/COVERAGE-CHAIN.json",
+    "sha256": "876994a55e0726c74f5d81ab223d581d8d83e7ac68e0bd6be37588651e017cc9"
+  },
+  "diskAfter": {
+    "free": 5420404736,
+    "total": 109128826880,
+    "used": 103691644928
+  },
+  "goalResumePerformed": false,
+  "newFileHashesVerifiedByTransfer": true,
+  "newFiles": 489,
+  "newInferenceOrTests": 0,
+  "newRawBytes": 117658016,
+  "originalCurrent956Preserved": true,
+  "physicalExistenceAndLengthsReconciled": true,
+  "prefixes": {
+    "actual-provider-bindings.jsonl": {
+      "chunks": 410,
+      "contiguousBytes": 604547,
+      "terminalEOF": true
+    },
+    "resources.jsonl": {
+      "chunks": 957,
+      "contiguousBytes": 251985391,
+      "terminalEOF": true
+    },
+    "voice-stages.jsonl": {
+      "chunks": 415,
+      "contiguousBytes": 13323436,
+      "terminalEOF": true
+    }
+  },
+  "priorFilesReused": 1305,
+  "priorRawRecopiedOrRehashedBytes": 0,
+  "reservedFreeFloorBytes": 2147483648,
+  "resolvedBytes": 267408575,
+  "resolvedFiles": 1794,
+  "scientificAcceptance": "Custody recovery only; K3 remains740attempted/160unattempted, not900 acceptance.",
+  "status": "ORIGINAL_PROVIDER_RAW_CUSTODY_RECONCILED",
+  "terminalSnapshotIsExplicitDerivative": true
+}

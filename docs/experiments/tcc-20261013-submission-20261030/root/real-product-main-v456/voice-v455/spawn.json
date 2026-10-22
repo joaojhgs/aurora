@@ -1,0 +1,13 @@
+{
+  "at": "2026-10-15T00:10:01.950346+00:00",
+  "controllerPid": 2856612,
+  "packetSHA256": "43a100e6a7279806bdc49e32176599093d6dc89d3ecb80ffb0793a12220ffc9a",
+  "capSeconds": 900,
+  "nextActualTranscriptionOrdinal": 8,
+  "measurementStarted": false,
+  "phase2MeasuredAllowed": false,
+  "sameFrozenSource": "/home/developer/projects/aurora/.git/aurora-real-ui-voice-v452/source/app/services/gateway/fastapi_app.py",
+  "sameProductionWebBuild": true,
+  "normalSPAAuthNavigationCorrection": true,
+  "sourceGuardRequiredBeforeUI": true
+}

@@ -1,0 +1,162 @@
+{
+  "at": "2026-10-18T23:23:28Z",
+  "lineage": {
+    "run": "run_e6054e76e9fc",
+    "task": "task_d7ea336050cf",
+    "dispatch": "ctx_37b4d0a3c14f",
+    "monitorTerminal": "term_2eab47ed-ab9b-4e35-bd9b-fc068c60e3fc",
+    "monitorIncarnation": "37e50d9c-6cf5-4e28-a63b-f2bc3eed5661",
+    "rootTerminal": "term_6a00d9ee-792a-4daf-8578-236290e33108",
+    "rootIncarnation": "fe7e63c7-d260-465f-b37e-f6fc78f8a1af"
+  },
+  "audit": {
+    "sameConditionThreeConsecutiveGoalTurns": true,
+    "turns": [
+      {
+        "turn": 1,
+        "ownerTriggered": true,
+        "evidence": "f2f7472f-e005-46ec-9eb9-715187e69291 terminal_not_writable; DB.GetSession alternate RemoteDisconnected, actual terminal24 reconciled; Root CURRENT fixed; new broker TLS relayed",
+        "progress": "new actual terminal evidence and owner instruction ACK"
+      },
+      {
+        "turn": 2,
+        "evidence": "Fresh public catalog301commands receipt d7af71ee... no same-SSH write recovery operation; exact owning-Orca action escalated msg_40deafed6209",
+        "progress": "new missing-capability fact; Root still sealing saved data"
+      },
+      {
+        "turn": 3,
+        "evidence": "Root msg_23792ef796fb says retrospective EOF/statistics complete; final receipt fbc2b1c3... and4838B results SHA9497... independently read; actual full fleet unchanged; no changed writer capability",
+        "progress": "final local deliverable verified; now no remaining monitor-owned safe action can unblock execution"
+      }
+    ],
+    "atImpasse": true,
+    "externalChangeRequired": "Owning Orca restores original Personal terminal.send route term_d5651d8d-58e2-4b38-85e2-51c668cc933c inc034ff933-61a3-4c74-b5ad-98a75e8ac21c on ssh:ssh-1786238480967-semdev; preserve PTY/provider/reservations. No public recovery operation exposed.",
+    "safeAlternativesExhausted": [
+      "Exact rejected SEND read and original output cursor reconciled57008/no execution; no blind resend",
+      "ONE existing same-auth application history read also RemoteDisconnected11.930s",
+      "Fresh public301command catalog excludes applicable recovery; environment recover inappropriate/not invoked",
+      "Root saved requester data/statistics/EOF complete; provider native/resource raw delta cannot be retrieved until control works",
+      "No permission to duplicate workers/terminals/restarts/bypass/security changes; no new owner credential missing",
+      "Fresh full fleet130rows sameownership/worker states; no other authorized live execution lane to advance"
+    ],
+    "aggregateIncomplete": true,
+    "workerDoneAllowed": false,
+    "rootGoalStatus": "last Root-reported ACTIVE original; do not mutate",
+    "monitorOnlyNativeGoal": "01a123ff-19ba-7332-a2f7-346a722af79f"
+  },
+  "actualNativeUpdate": {
+    "goal": {
+      "threadId": "01a123ff-19ba-7332-a2f7-346a722af79f",
+      "objective": "Monitor the existing Aurora aggregate goal and all of its Orca workers, including Root, until completed/cancelled; prevent excessive edge-case testing, repeated unchanged checks, stalls and resource conflicts using Orca bounded timeouts and evidence-backed nudges.",
+      "status": "blocked",
+      "tokensUsed": 46822518,
+      "timeUsedSeconds": 480996,
+      "createdAt": 1791605305,
+      "updatedAt": 1792365808
+    },
+    "remainingTokens": null,
+    "completionBudgetReport": null
+  },
+  "freshNativeGet": {
+    "goal": {
+      "threadId": "01a123ff-19ba-7332-a2f7-346a722af79f",
+      "objective": "Monitor the existing Aurora aggregate goal and all of its Orca workers, including Root, until completed/cancelled; prevent excessive edge-case testing, repeated unchanged checks, stalls and resource conflicts using Orca bounded timeouts and evidence-backed nudges.",
+      "status": "blocked",
+      "tokensUsed": 46822518,
+      "timeUsedSeconds": 480996,
+      "createdAt": 1791605305,
+      "updatedAt": 1792365808
+    },
+    "remainingTokens": null,
+    "completionBudgetReport": null
+  },
+  "finalLocalResult": {
+    "receipt": "thesis/campaigns/worker-desktop-k3-orca-relayed-http-remaining-v1620/terminal-v1637/FINAL-LOCAL-RESULT-RECEIPT-v1642.json",
+    "receiptBytes": 1314,
+    "receiptSha256": "fbc2b1c3cc50f414a422be0d6688cde66e474639e4e68369e95afaf9fe9d47ee",
+    "readableReport": "thesis/campaigns/worker-desktop-k3-orca-relayed-http-remaining-v1620/terminal-v1637/RESULTS-v1642.md",
+    "reportBytes": 4838,
+    "reportSha256": "9497deccbf28fe22d44fb4768848f63c330860151322ae158745ca4e6a2cbe38",
+    "sealedCases": 39,
+    "audioFiles": 26,
+    "indexedFiles": 161,
+    "indexedBytes": 3096631,
+    "newFinalTailBytes": 433,
+    "old160HashesNotRechecked": true,
+    "measured": {
+      "attempted": 24,
+      "correct": 11,
+      "strictFormatFailure": 12,
+      "transportFailure": 1,
+      "explicitTimeout": 0
+    },
+    "latency": {
+      "population": "11 complete correct audio flows ONLY; conditional small sample, not900 acceptance",
+      "method": "Hyndman-Fan Type7",
+      "p90ms": 31998.645717,
+      "p95ms": 32039.2865055,
+      "noCrossEpochPooling": true,
+      "partialFailureDurationsSeparate": true
+    },
+    "wholeK3CountsOnly": {
+      "attempted": 740,
+      "correct": 725,
+      "failed": 15,
+      "stillRequired": 160
+    },
+    "budget": {
+      "newActualChargeSeconds": 1121.556635285,
+      "cumulativeUsedSeconds": 24715.685852618,
+      "capSeconds": 57600,
+      "remainingSeconds": 32884.314147382,
+      "originalProviderDeadline": "2026-10-19T00:08:53.328388Z",
+      "noDeadlineExtension": true
+    },
+    "providerMeasuredNativeAndResourceDelta": "PENDING original Personal retrieval; warmup45joins do not prove measured24 native coverage",
+    "globalDocsCheck": "Existing report-policy/historical-link failures remain; no bulk cleanup or full rerun"
+  },
+  "fleet": {
+    "at": "2026-10-18T23:22:24.014376Z",
+    "path": ".omx/evidence/orca-monitor-20261010/fleet-20261018T2322.json",
+    "receipts": [
+      "b7fa82f3-0529-48ec-befd-dbc1886237cd",
+      "6f96d600-6fd3-4bf6-acfc-50b503c01563"
+    ],
+    "total": 130,
+    "live": 1,
+    "unverifiable": 76,
+    "exited": 53,
+    "retained": 77,
+    "released": 53,
+    "dispatchSetUnchanged": true,
+    "ownershipStateUnchanged": true,
+    "onlyDifference": "own monitor liveness.observedAt1792365736888 (was1792363960630), same verdict/source; no worker replacement"
+  },
+  "freshWorkspace": {
+    "observedAt": "2026-10-18T23:23:02Z",
+    "topLevel": "/home/developer/projects/aurora",
+    "branch": "codex/aurora-native-speech-routing-20261007",
+    "head": "cbac78fe3fb2b73100bfaa9dc198fb6bff689840",
+    "trackedDirtyCount": 53,
+    "trackedPorcelainSha256": "52edd8341708ae65624a871f31b8da499fad76f0e16860f5a6c13a2f4c94775f",
+    "unchanged": true
+  },
+  "lastInbox": {
+    "request": "d1bd6b93-6490-4a58-9d35-036790144a39",
+    "noNewMessages": true
+  },
+  "preservation": {
+    "workerDoneSent": false,
+    "taskOutcomeNotSettled": true,
+    "aggregateComplete": false,
+    "rootGoalMutated": false,
+    "otherWorkersStopped": 0,
+    "rejectedCommandsRepeated": 0,
+    "providerRestarts": 0,
+    "newWorkers": 0,
+    "personalWritesByMonitor": 0,
+    "modelCallsByMonitor": 0,
+    "credentialsOrSecurityChanges": 0
+  },
+  "restartContract": "Only resume SAME existing monitor/native goal after actual changed owning-Orca control capability/owner recovery evidence; do not create another monitor or blindly replay rejected command/run. Root remains sole original execution integrator; first reconcile provider raw/locks and then one normal existing MQTT-room/pair/consent check. No automatic replay of closed900/baselines."
+}

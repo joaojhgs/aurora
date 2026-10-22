@@ -1,0 +1,60 @@
+{
+  "group_count": 1,
+  "groups": [
+    {
+      "censored_outcomes_retained": {
+        "cancelled": 0,
+        "infeasible": 0,
+        "timeout": 0
+      },
+      "correct_success_latency_ms": {
+        "p50": 31975.320043,
+        "p90": 36250.76030560001,
+        "p95": 37587.2728986
+      },
+      "correct_success_latency_n": 100,
+      "correct_success_rate": 1.0,
+      "counts": {
+        "cancelled": 0,
+        "correct_success": 100,
+        "failure": 0,
+        "incorrect_answer": 0,
+        "infeasible": 0,
+        "timeout": 0
+      },
+      "exclusion_reasons_predeclared": {},
+      "group": {
+        "config_sha256": "6217ab451bffcb9718dc935da9984762ffaf6c1d89f1d9774ad28ece738ba48a",
+        "host_id_pseudonym": "799084bdade5453b",
+        "model_id": "qwen3.5-0.8b-q4_0-gguf",
+        "model_sha256": "57d1997790d1744fba5b40a7317df71ea5e2acee28c47e78f0cce39c0703f8cf",
+        "route": "python_gateway_api",
+        "session_id": "pilot-run-efe02b8f97534c7e83f50af8616075e7",
+        "source_commit": "5782746afba213f6b36907db2f09f0017625e218",
+        "surface": "python-production-local",
+        "workload_id": "public-exact-answer-orbit-v1",
+        "workload_sha256": "0f3b83f8fbf0e55e7b7faf8a75e99f42fdad42128b908e7f7c18cd4d8faeed86"
+      },
+      "n_eligible": 100,
+      "n_excluded": 0,
+      "n_raw_records": 105,
+      "n_success": 100,
+      "n_success_denominator": 100,
+      "n_total": 100,
+      "n_warmup": 5,
+      "quantile_method": "type7_linear_interpolation",
+      "schema_version": "aurora.assistant.measurement_summary.v1",
+      "warmup_counts": {
+        "cancelled": 0,
+        "correct_success": 5,
+        "excluded": 0,
+        "failure": 0,
+        "incorrect_answer": 0,
+        "infeasible": 0,
+        "timeout": 0
+      }
+    }
+  ],
+  "quantile_method": "type7_linear_interpolation",
+  "schema_version": "aurora.assistant.measurement_summary.v1"
+}

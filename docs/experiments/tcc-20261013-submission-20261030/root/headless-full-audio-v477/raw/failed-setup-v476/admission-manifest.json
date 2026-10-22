@@ -1,0 +1,44 @@
+{
+  "at": "2026-10-15T02:33:57.742168+00:00",
+  "sourceFiles": {
+    "controller.py": "85e9a4d299c455fb0e534c25378c998f15d040f00f6d1a6176977f6ec4a823fb",
+    "bootstrap.py": "782091f55804e6002f5422b07dca661ea43dc41e7f79b1c6c9bbe6f822965f31",
+    "bindings.py": "4a5e406a1a801b84615a695ae03ecd5a13a81db4eb055946524ce0b350d706f3",
+    "pilot.py": "8a2c2d1d709c252e29c2f53781e2873bccc0b981526aed2e620ac5458f0efc24"
+  },
+  "observerSHA256": "8129ffe7591a47a0107ede53b101aead9fc1f58b92f0c0c4203176cc7608325d",
+  "modelFiles": {
+    "stt": {
+      "bytes": 145217532,
+      "sha256": "d01c3014881c9c6f3133c182f3d2887eb6ca1c789a7538c5c007196857a0a6a9",
+      "path": "/dev/shm/aurora-root-accurate-base-v443/model/model.bin"
+    },
+    "tts": {
+      "bytes": 63531379,
+      "sha256": "6f52a751e2349abe7a76735eb09dc1875298c77ea2342ffd2fef79ff81b87f22",
+      "path": "/tmp/aurora-root-voice-primary-v426/models-v427/piper-ljspeech/en_US-ljspeech-medium.onnx"
+    },
+    "ttsConfig": {
+      "bytes": 4972,
+      "sha256": "141d612cc0a95ed7efc1ca936b845c2364967f2e9217c5dbfcf69fc4d6c65860",
+      "path": "/tmp/aurora-root-voice-primary-v426/models-v427/piper-ljspeech/en_US-ljspeech-medium.onnx.json"
+    },
+    "llm": {
+      "bytes": 563036064,
+      "sha256": "57d1997790d1744fba5b40a7317df71ea5e2acee28c47e78f0cce39c0703f8cf",
+      "path": "/tmp/aurora-root-gpu-primary-v409/models/Qwen3.5-0.8B-Q4_0.gguf"
+    }
+  },
+  "newMeasuredRequests": 0,
+  "inputIsAgentAuthoredSyntheticWav": true,
+  "voiceModelLicenseNotInferredFromSyntheticTask": true,
+  "sourceModuleSHA256": {
+    "main.py": "83c3f5dbcf939339e7643a46188acda4dd47b0bf3a78c13e2c087564c6d3730b",
+    "app/services/stt_transcription/service.py": "4723b798b2643cee262e3d1d0ad28114305c3e83c8ef5bae5becd790aac5f888",
+    "app/services/tts/service.py": "6e4386aaf219ca5f5488ed007c03519be64f8de56aa2cc17956b5140218f234e",
+    "app/services/tts/providers/piper.py": "b5c1cd3110b7405cf0990ad27c7d038a252b31af3d01191d415e3b76fd1ed7ac",
+    "app/services/orchestrator/service.py": "0b77092091946b94130945b3bfb670a922a209b846d5ffe30e23f75b52f982f3",
+    "app/services/orchestrator/agents/chatbot.py": "4e6d2b21a2eb672a47128340700a6d5f09adeabbab99980b6ba5d4e4e9e692ee",
+    "app/services/gateway/fastapi_app.py": "c90ade3dc52f1dfdf3840225894d24cefa530b063b2b32e1b289139772e65273"
+  }
+}

@@ -1,0 +1,25 @@
+{
+  "id": "a217f121-877a-4684-91e1-1090615267d6",
+  "ok": false,
+  "error": {
+    "code": "terminal_not_writable",
+    "message": "terminal_not_writable Terminal prompt request ID: d2cc0e31-dc5f-43d7-b2d2-cd85d538d2b6. Re-issue the exact command with --retry-request d2cc0e31-dc5f-43d7-b2d2-cd85d538d2b6 --wait-submit <seconds>; do not retry it without that ID.",
+    "data": {
+      "orchestrationRequestId": "d2cc0e31-dc5f-43d7-b2d2-cd85d538d2b6",
+      "originalCommand": [
+        "orca",
+        "terminal",
+        "send",
+        "--terminal",
+        "term_00a86bfb-1ede-4fbf-8b5e-72e2a2629f62",
+        "--text",
+        "printf '%s\\n' 'AURORA_ROOT_CONTROL_PROBE_V1090'",
+        "--enter",
+        "--json"
+      ]
+    }
+  },
+  "_meta": {
+    "runtimeId": "c056e640-4085-4377-83d5-c299190ee880"
+  }
+}

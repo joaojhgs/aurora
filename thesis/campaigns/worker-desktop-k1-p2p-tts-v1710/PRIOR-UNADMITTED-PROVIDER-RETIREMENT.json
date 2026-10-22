@@ -1,0 +1,2741 @@
+{
+  "terminal": {
+    "at": "2026-10-20T03:09:03.910075+00:00",
+    "controllerPid": 3159861,
+    "elapsedSeconds": 1824.6391323219868,
+    "exitCode": 0,
+    "finishedAt": "2026-10-20T03:39:28.549171+00:00",
+    "host": "personal.skyron-server",
+    "manifestSha256": "ee66b83078410588f3af09db6f496319ea10e75ad6c4074c8180a8d2f5728543",
+    "measurementStartedByController": false,
+    "receiverAbsent": true,
+    "receiverPid": 3159877,
+    "receiverStartTicks": 22126487
+  },
+  "status": {
+    "at": "2026-10-20T03:39:26.397340+00:00",
+    "catalogue": {
+      "action_index": {
+        "TTS": [
+          "local:aurora-276bb04e1276201922851f6a222110de:TTS:CreateVoiceProfile",
+          "local:aurora-276bb04e1276201922851f6a222110de:TTS:DeleteVoiceProfile",
+          "local:aurora-276bb04e1276201922851f6a222110de:TTS:ExportVoiceProfile",
+          "local:aurora-276bb04e1276201922851f6a222110de:TTS:GetCapabilities",
+          "local:aurora-276bb04e1276201922851f6a222110de:TTS:GetVoiceProfile",
+          "local:aurora-276bb04e1276201922851f6a222110de:TTS:ImportVoiceProfile",
+          "local:aurora-276bb04e1276201922851f6a222110de:TTS:InstallVoiceProfile",
+          "local:aurora-276bb04e1276201922851f6a222110de:TTS:ListLanguagePacks",
+          "local:aurora-276bb04e1276201922851f6a222110de:TTS:ListVoiceProfiles",
+          "local:aurora-276bb04e1276201922851f6a222110de:TTS:ListVoices",
+          "local:aurora-276bb04e1276201922851f6a222110de:TTS:RemoveVoiceProfile",
+          "local:aurora-276bb04e1276201922851f6a222110de:TTS:Request",
+          "local:aurora-276bb04e1276201922851f6a222110de:TTS:SetDefaultVoice",
+          "local:aurora-276bb04e1276201922851f6a222110de:TTS:StreamCancel",
+          "local:aurora-276bb04e1276201922851f6a222110de:TTS:StreamChunk",
+          "local:aurora-276bb04e1276201922851f6a222110de:TTS:StreamEnd",
+          "local:aurora-276bb04e1276201922851f6a222110de:TTS:StreamPrepareV1",
+          "local:aurora-276bb04e1276201922851f6a222110de:TTS:StreamResult",
+          "local:aurora-276bb04e1276201922851f6a222110de:TTS:StreamStart",
+          "local:aurora-276bb04e1276201922851f6a222110de:TTS:StreamStatus",
+          "local:aurora-276bb04e1276201922851f6a222110de:TTS:Synthesize",
+          "local:aurora-276bb04e1276201922851f6a222110de:TTS:UpdateVoiceProfile",
+          "local:aurora-276bb04e1276201922851f6a222110de:TTS:VoiceImportAbort",
+          "local:aurora-276bb04e1276201922851f6a222110de:TTS:VoiceImportChunk",
+          "local:aurora-276bb04e1276201922851f6a222110de:TTS:VoiceImportEnd",
+          "local:aurora-276bb04e1276201922851f6a222110de:TTS:VoiceImportStart"
+        ]
+      },
+      "actions": [
+        {
+          "action_id": "local:aurora-276bb04e1276201922851f6a222110de:TTS:CreateVoiceProfile",
+          "bindability": "approval-required",
+          "callable_feature_ids": [
+            "speech_voice_management"
+          ],
+          "callable_features": [
+            {
+              "feature_id": "speech_voice_management",
+              "label": "Voice Profile Management",
+              "method_ids": [
+                "TTS.ListLanguagePacks",
+                "TTS.ListVoiceProfiles",
+                "TTS.GetVoiceProfile",
+                "TTS.UpdateVoiceProfile",
+                "TTS.InstallVoiceProfile",
+                "TTS.RemoveVoiceProfile",
+                "TTS.SetDefaultVoice",
+                "TTS.VoiceImportStart",
+                "TTS.VoiceImportChunk",
+                "TTS.VoiceImportEnd",
+                "TTS.VoiceImportAbort",
+                "TTS.CreateVoiceProfile",
+                "TTS.DeleteVoiceProfile",
+                "TTS.ExportVoiceProfile",
+                "TTS.ImportVoiceProfile"
+              ],
+              "module": "TTS",
+              "summary": "Administer local TTS voice profiles and bounded voice imports."
+            }
+          ],
+          "freshness": {
+            "last_probe_age_s": null,
+            "manifest_time": null,
+            "registry_digest": "",
+            "source": "local_registry",
+            "stale": false,
+            "ttl_s": null
+          },
+          "input_schema": null,
+          "method": "CreateVoiceProfile",
+          "module": "TTS",
+          "output_schema": null,
+          "peer_id": "aurora-276bb04e1276201922851f6a222110de",
+          "policy": {
+            "allowed_provider_peer_ids": null,
+            "approval_required": false,
+            "bandwidth_check_required": false,
+            "consent_required": true,
+            "denial_reasons": [],
+            "explicit_selector_required": true,
+            "local_only": false,
+            "mesh_visible": true,
+            "operation_class": "audio_service",
+            "privacy_indicator_required": true,
+            "required_callable_feature_ids": [
+              "speech_voice_management"
+            ],
+            "required_permissions": [
+              "TTS.manage"
+            ],
+            "resource_scope": "audio",
+            "safety_class": "admin",
+            "selector_required": true,
+            "trust_tier": "local"
+          },
+          "provider_id": "local:aurora-276bb04e1276201922851f6a222110de:TTS",
+          "provider_kind": "local",
+          "resource_id": null,
+          "route_blockers": [],
+          "route_hints": [
+            "local",
+            "explicit_selector_required",
+            "routable"
+          ],
+          "sdk_operation_kind": "audio_service",
+          "selector": {
+            "data_scope": null,
+            "hardware_target": null,
+            "peer_id": "aurora-276bb04e1276201922851f6a222110de",
+            "provider_id": "local:aurora-276bb04e1276201922851f6a222110de:TTS",
+            "resource_namespace": null,
+            "service_instance_id": "local:aurora-276bb04e1276201922851f6a222110de:TTS",
+            "tool_id": null
+          },
+          "service_instance_id": "local:aurora-276bb04e1276201922851f6a222110de:TTS",
+          "summary": "Create a cloned TTS voice profile",
+          "tool_id": null,
+          "topic": "TTS.CreateVoiceProfile"
+        },
+        {
+          "action_id": "local:aurora-276bb04e1276201922851f6a222110de:TTS:DeleteVoiceProfile",
+          "bindability": "approval-required",
+          "callable_feature_ids": [
+            "speech_voice_management"
+          ],
+          "callable_features": [
+            {
+              "feature_id": "speech_voice_management",
+              "label": "Voice Profile Management",
+              "method_ids": [
+                "TTS.ListLanguagePacks",
+                "TTS.ListVoiceProfiles",
+                "TTS.GetVoiceProfile",
+                "TTS.UpdateVoiceProfile",
+                "TTS.InstallVoiceProfile",
+                "TTS.RemoveVoiceProfile",
+                "TTS.SetDefaultVoice",
+                "TTS.VoiceImportStart",
+                "TTS.VoiceImportChunk",
+                "TTS.VoiceImportEnd",
+                "TTS.VoiceImportAbort",
+                "TTS.CreateVoiceProfile",
+                "TTS.DeleteVoiceProfile",
+                "TTS.ExportVoiceProfile",
+                "TTS.ImportVoiceProfile"
+              ],
+              "module": "TTS",
+              "summary": "Administer local TTS voice profiles and bounded voice imports."
+            }
+          ],
+          "freshness": {
+            "last_probe_age_s": null,
+            "manifest_time": null,
+            "registry_digest": "",
+            "source": "local_registry",
+            "stale": false,
+            "ttl_s": null
+          },
+          "input_schema": null,
+          "method": "DeleteVoiceProfile",
+          "module": "TTS",
+          "output_schema": null,
+          "peer_id": "aurora-276bb04e1276201922851f6a222110de",
+          "policy": {
+            "allowed_provider_peer_ids": null,
+            "approval_required": false,
+            "bandwidth_check_required": false,
+            "consent_required": true,
+            "denial_reasons": [],
+            "explicit_selector_required": true,
+            "local_only": false,
+            "mesh_visible": true,
+            "operation_class": "audio_service",
+            "privacy_indicator_required": true,
+            "required_callable_feature_ids": [
+              "speech_voice_management"
+            ],
+            "required_permissions": [
+              "TTS.manage"
+            ],
+            "resource_scope": "audio",
+            "safety_class": "admin",
+            "selector_required": true,
+            "trust_tier": "local"
+          },
+          "provider_id": "local:aurora-276bb04e1276201922851f6a222110de:TTS",
+          "provider_kind": "local",
+          "resource_id": null,
+          "route_blockers": [],
+          "route_hints": [
+            "local",
+            "explicit_selector_required",
+            "routable"
+          ],
+          "sdk_operation_kind": "audio_service",
+          "selector": {
+            "data_scope": null,
+            "hardware_target": null,
+            "peer_id": "aurora-276bb04e1276201922851f6a222110de",
+            "provider_id": "local:aurora-276bb04e1276201922851f6a222110de:TTS",
+            "resource_namespace": null,
+            "service_instance_id": "local:aurora-276bb04e1276201922851f6a222110de:TTS",
+            "tool_id": null
+          },
+          "service_instance_id": "local:aurora-276bb04e1276201922851f6a222110de:TTS",
+          "summary": "Delete a managed cloned TTS voice profile",
+          "tool_id": null,
+          "topic": "TTS.DeleteVoiceProfile"
+        },
+        {
+          "action_id": "local:aurora-276bb04e1276201922851f6a222110de:TTS:ExportVoiceProfile",
+          "bindability": "approval-required",
+          "callable_feature_ids": [
+            "speech_voice_management"
+          ],
+          "callable_features": [
+            {
+              "feature_id": "speech_voice_management",
+              "label": "Voice Profile Management",
+              "method_ids": [
+                "TTS.ListLanguagePacks",
+                "TTS.ListVoiceProfiles",
+                "TTS.GetVoiceProfile",
+                "TTS.UpdateVoiceProfile",
+                "TTS.InstallVoiceProfile",
+                "TTS.RemoveVoiceProfile",
+                "TTS.SetDefaultVoice",
+                "TTS.VoiceImportStart",
+                "TTS.VoiceImportChunk",
+                "TTS.VoiceImportEnd",
+                "TTS.VoiceImportAbort",
+                "TTS.CreateVoiceProfile",
+                "TTS.DeleteVoiceProfile",
+                "TTS.ExportVoiceProfile",
+                "TTS.ImportVoiceProfile"
+              ],
+              "module": "TTS",
+              "summary": "Administer local TTS voice profiles and bounded voice imports."
+            }
+          ],
+          "freshness": {
+            "last_probe_age_s": null,
+            "manifest_time": null,
+            "registry_digest": "",
+            "source": "local_registry",
+            "stale": false,
+            "ttl_s": null
+          },
+          "input_schema": null,
+          "method": "ExportVoiceProfile",
+          "module": "TTS",
+          "output_schema": null,
+          "peer_id": "aurora-276bb04e1276201922851f6a222110de",
+          "policy": {
+            "allowed_provider_peer_ids": null,
+            "approval_required": false,
+            "bandwidth_check_required": false,
+            "consent_required": true,
+            "denial_reasons": [],
+            "explicit_selector_required": true,
+            "local_only": false,
+            "mesh_visible": true,
+            "operation_class": "audio_service",
+            "privacy_indicator_required": true,
+            "required_callable_feature_ids": [
+              "speech_voice_management"
+            ],
+            "required_permissions": [
+              "TTS.manage"
+            ],
+            "resource_scope": "audio",
+            "safety_class": "admin",
+            "selector_required": true,
+            "trust_tier": "local"
+          },
+          "provider_id": "local:aurora-276bb04e1276201922851f6a222110de:TTS",
+          "provider_kind": "local",
+          "resource_id": null,
+          "route_blockers": [],
+          "route_hints": [
+            "local",
+            "explicit_selector_required",
+            "routable"
+          ],
+          "sdk_operation_kind": "audio_service",
+          "selector": {
+            "data_scope": null,
+            "hardware_target": null,
+            "peer_id": "aurora-276bb04e1276201922851f6a222110de",
+            "provider_id": "local:aurora-276bb04e1276201922851f6a222110de:TTS",
+            "resource_namespace": null,
+            "service_instance_id": "local:aurora-276bb04e1276201922851f6a222110de:TTS",
+            "tool_id": null
+          },
+          "service_instance_id": "local:aurora-276bb04e1276201922851f6a222110de:TTS",
+          "summary": "Export a managed cloned TTS voice profile",
+          "tool_id": null,
+          "topic": "TTS.ExportVoiceProfile"
+        },
+        {
+          "action_id": "local:aurora-276bb04e1276201922851f6a222110de:TTS:GetCapabilities",
+          "bindability": "approval-required",
+          "callable_feature_ids": [
+            "speech_voice_discovery"
+          ],
+          "callable_features": [
+            {
+              "feature_id": "speech_voice_discovery",
+              "label": "Voice Discovery",
+              "method_ids": [
+                "TTS.GetCapabilities",
+                "TTS.ListVoices"
+              ],
+              "module": "TTS",
+              "summary": "Read TTS capabilities and use-safe voice choices."
+            }
+          ],
+          "freshness": {
+            "last_probe_age_s": null,
+            "manifest_time": null,
+            "registry_digest": "",
+            "source": "local_registry",
+            "stale": false,
+            "ttl_s": null
+          },
+          "input_schema": null,
+          "method": "GetCapabilities",
+          "module": "TTS",
+          "output_schema": null,
+          "peer_id": "aurora-276bb04e1276201922851f6a222110de",
+          "policy": {
+            "allowed_provider_peer_ids": null,
+            "approval_required": false,
+            "bandwidth_check_required": false,
+            "consent_required": true,
+            "denial_reasons": [],
+            "explicit_selector_required": true,
+            "local_only": false,
+            "mesh_visible": true,
+            "operation_class": "audio_service",
+            "privacy_indicator_required": true,
+            "required_callable_feature_ids": [
+              "speech_voice_discovery"
+            ],
+            "required_permissions": [
+              "TTS.use"
+            ],
+            "resource_scope": "audio",
+            "safety_class": "hardware",
+            "selector_required": true,
+            "trust_tier": "local"
+          },
+          "provider_id": "local:aurora-276bb04e1276201922851f6a222110de:TTS",
+          "provider_kind": "local",
+          "resource_id": null,
+          "route_blockers": [],
+          "route_hints": [
+            "local",
+            "explicit_selector_required",
+            "routable"
+          ],
+          "sdk_operation_kind": "audio_service",
+          "selector": {
+            "data_scope": null,
+            "hardware_target": null,
+            "peer_id": "aurora-276bb04e1276201922851f6a222110de",
+            "provider_id": "local:aurora-276bb04e1276201922851f6a222110de:TTS",
+            "resource_namespace": null,
+            "service_instance_id": "local:aurora-276bb04e1276201922851f6a222110de:TTS",
+            "tool_id": null
+          },
+          "service_instance_id": "local:aurora-276bb04e1276201922851f6a222110de:TTS",
+          "summary": "Get TTS runtime capabilities",
+          "tool_id": null,
+          "topic": "TTS.GetCapabilities"
+        },
+        {
+          "action_id": "local:aurora-276bb04e1276201922851f6a222110de:TTS:GetVoiceProfile",
+          "bindability": "approval-required",
+          "callable_feature_ids": [
+            "speech_voice_management"
+          ],
+          "callable_features": [
+            {
+              "feature_id": "speech_voice_management",
+              "label": "Voice Profile Management",
+              "method_ids": [
+                "TTS.ListLanguagePacks",
+                "TTS.ListVoiceProfiles",
+                "TTS.GetVoiceProfile",
+                "TTS.UpdateVoiceProfile",
+                "TTS.InstallVoiceProfile",
+                "TTS.RemoveVoiceProfile",
+                "TTS.SetDefaultVoice",
+                "TTS.VoiceImportStart",
+                "TTS.VoiceImportChunk",
+                "TTS.VoiceImportEnd",
+                "TTS.VoiceImportAbort",
+                "TTS.CreateVoiceProfile",
+                "TTS.DeleteVoiceProfile",
+                "TTS.ExportVoiceProfile",
+                "TTS.ImportVoiceProfile"
+              ],
+              "module": "TTS",
+              "summary": "Administer local TTS voice profiles and bounded voice imports."
+            }
+          ],
+          "freshness": {
+            "last_probe_age_s": null,
+            "manifest_time": null,
+            "registry_digest": "",
+            "source": "local_registry",
+            "stale": false,
+            "ttl_s": null
+          },
+          "input_schema": null,
+          "method": "GetVoiceProfile",
+          "module": "TTS",
+          "output_schema": null,
+          "peer_id": "aurora-276bb04e1276201922851f6a222110de",
+          "policy": {
+            "allowed_provider_peer_ids": null,
+            "approval_required": false,
+            "bandwidth_check_required": false,
+            "consent_required": true,
+            "denial_reasons": [],
+            "explicit_selector_required": true,
+            "local_only": false,
+            "mesh_visible": true,
+            "operation_class": "audio_service",
+            "privacy_indicator_required": true,
+            "required_callable_feature_ids": [
+              "speech_voice_management"
+            ],
+            "required_permissions": [
+              "TTS.manage"
+            ],
+            "resource_scope": "audio",
+            "safety_class": "admin",
+            "selector_required": true,
+            "trust_tier": "local"
+          },
+          "provider_id": "local:aurora-276bb04e1276201922851f6a222110de:TTS",
+          "provider_kind": "local",
+          "resource_id": null,
+          "route_blockers": [],
+          "route_hints": [
+            "local",
+            "explicit_selector_required",
+            "routable"
+          ],
+          "sdk_operation_kind": "audio_service",
+          "selector": {
+            "data_scope": null,
+            "hardware_target": null,
+            "peer_id": "aurora-276bb04e1276201922851f6a222110de",
+            "provider_id": "local:aurora-276bb04e1276201922851f6a222110de:TTS",
+            "resource_namespace": null,
+            "service_instance_id": "local:aurora-276bb04e1276201922851f6a222110de:TTS",
+            "tool_id": null
+          },
+          "service_instance_id": "local:aurora-276bb04e1276201922851f6a222110de:TTS",
+          "summary": "Get one managed TTS voice profile",
+          "tool_id": null,
+          "topic": "TTS.GetVoiceProfile"
+        },
+        {
+          "action_id": "local:aurora-276bb04e1276201922851f6a222110de:TTS:ImportVoiceProfile",
+          "bindability": "approval-required",
+          "callable_feature_ids": [
+            "speech_voice_management"
+          ],
+          "callable_features": [
+            {
+              "feature_id": "speech_voice_management",
+              "label": "Voice Profile Management",
+              "method_ids": [
+                "TTS.ListLanguagePacks",
+                "TTS.ListVoiceProfiles",
+                "TTS.GetVoiceProfile",
+                "TTS.UpdateVoiceProfile",
+                "TTS.InstallVoiceProfile",
+                "TTS.RemoveVoiceProfile",
+                "TTS.SetDefaultVoice",
+                "TTS.VoiceImportStart",
+                "TTS.VoiceImportChunk",
+                "TTS.VoiceImportEnd",
+                "TTS.VoiceImportAbort",
+                "TTS.CreateVoiceProfile",
+                "TTS.DeleteVoiceProfile",
+                "TTS.ExportVoiceProfile",
+                "TTS.ImportVoiceProfile"
+              ],
+              "module": "TTS",
+              "summary": "Administer local TTS voice profiles and bounded voice imports."
+            }
+          ],
+          "freshness": {
+            "last_probe_age_s": null,
+            "manifest_time": null,
+            "registry_digest": "",
+            "source": "local_registry",
+            "stale": false,
+            "ttl_s": null
+          },
+          "input_schema": null,
+          "method": "ImportVoiceProfile",
+          "module": "TTS",
+          "output_schema": null,
+          "peer_id": "aurora-276bb04e1276201922851f6a222110de",
+          "policy": {
+            "allowed_provider_peer_ids": null,
+            "approval_required": false,
+            "bandwidth_check_required": false,
+            "consent_required": true,
+            "denial_reasons": [],
+            "explicit_selector_required": true,
+            "local_only": false,
+            "mesh_visible": true,
+            "operation_class": "audio_service",
+            "privacy_indicator_required": true,
+            "required_callable_feature_ids": [
+              "speech_voice_management"
+            ],
+            "required_permissions": [
+              "TTS.manage"
+            ],
+            "resource_scope": "audio",
+            "safety_class": "admin",
+            "selector_required": true,
+            "trust_tier": "local"
+          },
+          "provider_id": "local:aurora-276bb04e1276201922851f6a222110de:TTS",
+          "provider_kind": "local",
+          "resource_id": null,
+          "route_blockers": [],
+          "route_hints": [
+            "local",
+            "explicit_selector_required",
+            "routable"
+          ],
+          "sdk_operation_kind": "audio_service",
+          "selector": {
+            "data_scope": null,
+            "hardware_target": null,
+            "peer_id": "aurora-276bb04e1276201922851f6a222110de",
+            "provider_id": "local:aurora-276bb04e1276201922851f6a222110de:TTS",
+            "resource_namespace": null,
+            "service_instance_id": "local:aurora-276bb04e1276201922851f6a222110de:TTS",
+            "tool_id": null
+          },
+          "service_instance_id": "local:aurora-276bb04e1276201922851f6a222110de:TTS",
+          "summary": "Import a managed cloned TTS voice profile",
+          "tool_id": null,
+          "topic": "TTS.ImportVoiceProfile"
+        },
+        {
+          "action_id": "local:aurora-276bb04e1276201922851f6a222110de:TTS:InstallVoiceProfile",
+          "bindability": "approval-required",
+          "callable_feature_ids": [
+            "speech_voice_management"
+          ],
+          "callable_features": [
+            {
+              "feature_id": "speech_voice_management",
+              "label": "Voice Profile Management",
+              "method_ids": [
+                "TTS.ListLanguagePacks",
+                "TTS.ListVoiceProfiles",
+                "TTS.GetVoiceProfile",
+                "TTS.UpdateVoiceProfile",
+                "TTS.InstallVoiceProfile",
+                "TTS.RemoveVoiceProfile",
+                "TTS.SetDefaultVoice",
+                "TTS.VoiceImportStart",
+                "TTS.VoiceImportChunk",
+                "TTS.VoiceImportEnd",
+                "TTS.VoiceImportAbort",
+                "TTS.CreateVoiceProfile",
+                "TTS.DeleteVoiceProfile",
+                "TTS.ExportVoiceProfile",
+                "TTS.ImportVoiceProfile"
+              ],
+              "module": "TTS",
+              "summary": "Administer local TTS voice profiles and bounded voice imports."
+            }
+          ],
+          "freshness": {
+            "last_probe_age_s": null,
+            "manifest_time": null,
+            "registry_digest": "",
+            "source": "local_registry",
+            "stale": false,
+            "ttl_s": null
+          },
+          "input_schema": null,
+          "method": "InstallVoiceProfile",
+          "module": "TTS",
+          "output_schema": null,
+          "peer_id": "aurora-276bb04e1276201922851f6a222110de",
+          "policy": {
+            "allowed_provider_peer_ids": null,
+            "approval_required": false,
+            "bandwidth_check_required": false,
+            "consent_required": true,
+            "denial_reasons": [],
+            "explicit_selector_required": true,
+            "local_only": false,
+            "mesh_visible": true,
+            "operation_class": "audio_service",
+            "privacy_indicator_required": true,
+            "required_callable_feature_ids": [
+              "speech_voice_management"
+            ],
+            "required_permissions": [
+              "TTS.manage"
+            ],
+            "resource_scope": "audio",
+            "safety_class": "admin",
+            "selector_required": true,
+            "trust_tier": "local"
+          },
+          "provider_id": "local:aurora-276bb04e1276201922851f6a222110de:TTS",
+          "provider_kind": "local",
+          "resource_id": null,
+          "route_blockers": [],
+          "route_hints": [
+            "local",
+            "explicit_selector_required",
+            "routable"
+          ],
+          "sdk_operation_kind": "audio_service",
+          "selector": {
+            "data_scope": null,
+            "hardware_target": null,
+            "peer_id": "aurora-276bb04e1276201922851f6a222110de",
+            "provider_id": "local:aurora-276bb04e1276201922851f6a222110de:TTS",
+            "resource_namespace": null,
+            "service_instance_id": "local:aurora-276bb04e1276201922851f6a222110de:TTS",
+            "tool_id": null
+          },
+          "service_instance_id": "local:aurora-276bb04e1276201922851f6a222110de:TTS",
+          "summary": "Install a manifest-known TTS voice profile",
+          "tool_id": null,
+          "topic": "TTS.InstallVoiceProfile"
+        },
+        {
+          "action_id": "local:aurora-276bb04e1276201922851f6a222110de:TTS:ListLanguagePacks",
+          "bindability": "approval-required",
+          "callable_feature_ids": [
+            "speech_voice_management"
+          ],
+          "callable_features": [
+            {
+              "feature_id": "speech_voice_management",
+              "label": "Voice Profile Management",
+              "method_ids": [
+                "TTS.ListLanguagePacks",
+                "TTS.ListVoiceProfiles",
+                "TTS.GetVoiceProfile",
+                "TTS.UpdateVoiceProfile",
+                "TTS.InstallVoiceProfile",
+                "TTS.RemoveVoiceProfile",
+                "TTS.SetDefaultVoice",
+                "TTS.VoiceImportStart",
+                "TTS.VoiceImportChunk",
+                "TTS.VoiceImportEnd",
+                "TTS.VoiceImportAbort",
+                "TTS.CreateVoiceProfile",
+                "TTS.DeleteVoiceProfile",
+                "TTS.ExportVoiceProfile",
+                "TTS.ImportVoiceProfile"
+              ],
+              "module": "TTS",
+              "summary": "Administer local TTS voice profiles and bounded voice imports."
+            }
+          ],
+          "freshness": {
+            "last_probe_age_s": null,
+            "manifest_time": null,
+            "registry_digest": "",
+            "source": "local_registry",
+            "stale": false,
+            "ttl_s": null
+          },
+          "input_schema": null,
+          "method": "ListLanguagePacks",
+          "module": "TTS",
+          "output_schema": null,
+          "peer_id": "aurora-276bb04e1276201922851f6a222110de",
+          "policy": {
+            "allowed_provider_peer_ids": null,
+            "approval_required": false,
+            "bandwidth_check_required": false,
+            "consent_required": true,
+            "denial_reasons": [],
+            "explicit_selector_required": true,
+            "local_only": false,
+            "mesh_visible": true,
+            "operation_class": "audio_service",
+            "privacy_indicator_required": true,
+            "required_callable_feature_ids": [
+              "speech_voice_management"
+            ],
+            "required_permissions": [
+              "TTS.manage"
+            ],
+            "resource_scope": "audio",
+            "safety_class": "admin",
+            "selector_required": true,
+            "trust_tier": "local"
+          },
+          "provider_id": "local:aurora-276bb04e1276201922851f6a222110de:TTS",
+          "provider_kind": "local",
+          "resource_id": null,
+          "route_blockers": [],
+          "route_hints": [
+            "local",
+            "explicit_selector_required",
+            "routable"
+          ],
+          "sdk_operation_kind": "audio_service",
+          "selector": {
+            "data_scope": null,
+            "hardware_target": null,
+            "peer_id": "aurora-276bb04e1276201922851f6a222110de",
+            "provider_id": "local:aurora-276bb04e1276201922851f6a222110de:TTS",
+            "resource_namespace": null,
+            "service_instance_id": "local:aurora-276bb04e1276201922851f6a222110de:TTS",
+            "tool_id": null
+          },
+          "service_instance_id": "local:aurora-276bb04e1276201922851f6a222110de:TTS",
+          "summary": "List managed TTS language packs",
+          "tool_id": null,
+          "topic": "TTS.ListLanguagePacks"
+        },
+        {
+          "action_id": "local:aurora-276bb04e1276201922851f6a222110de:TTS:ListVoiceProfiles",
+          "bindability": "approval-required",
+          "callable_feature_ids": [
+            "speech_voice_management"
+          ],
+          "callable_features": [
+            {
+              "feature_id": "speech_voice_management",
+              "label": "Voice Profile Management",
+              "method_ids": [
+                "TTS.ListLanguagePacks",
+                "TTS.ListVoiceProfiles",
+                "TTS.GetVoiceProfile",
+                "TTS.UpdateVoiceProfile",
+                "TTS.InstallVoiceProfile",
+                "TTS.RemoveVoiceProfile",
+                "TTS.SetDefaultVoice",
+                "TTS.VoiceImportStart",
+                "TTS.VoiceImportChunk",
+                "TTS.VoiceImportEnd",
+                "TTS.VoiceImportAbort",
+                "TTS.CreateVoiceProfile",
+                "TTS.DeleteVoiceProfile",
+                "TTS.ExportVoiceProfile",
+                "TTS.ImportVoiceProfile"
+              ],
+              "module": "TTS",
+              "summary": "Administer local TTS voice profiles and bounded voice imports."
+            }
+          ],
+          "freshness": {
+            "last_probe_age_s": null,
+            "manifest_time": null,
+            "registry_digest": "",
+            "source": "local_registry",
+            "stale": false,
+            "ttl_s": null
+          },
+          "input_schema": null,
+          "method": "ListVoiceProfiles",
+          "module": "TTS",
+          "output_schema": null,
+          "peer_id": "aurora-276bb04e1276201922851f6a222110de",
+          "policy": {
+            "allowed_provider_peer_ids": null,
+            "approval_required": false,
+            "bandwidth_check_required": false,
+            "consent_required": true,
+            "denial_reasons": [],
+            "explicit_selector_required": true,
+            "local_only": false,
+            "mesh_visible": true,
+            "operation_class": "audio_service",
+            "privacy_indicator_required": true,
+            "required_callable_feature_ids": [
+              "speech_voice_management"
+            ],
+            "required_permissions": [
+              "TTS.manage"
+            ],
+            "resource_scope": "audio",
+            "safety_class": "admin",
+            "selector_required": true,
+            "trust_tier": "local"
+          },
+          "provider_id": "local:aurora-276bb04e1276201922851f6a222110de:TTS",
+          "provider_kind": "local",
+          "resource_id": null,
+          "route_blockers": [],
+          "route_hints": [
+            "local",
+            "explicit_selector_required",
+            "routable"
+          ],
+          "sdk_operation_kind": "audio_service",
+          "selector": {
+            "data_scope": null,
+            "hardware_target": null,
+            "peer_id": "aurora-276bb04e1276201922851f6a222110de",
+            "provider_id": "local:aurora-276bb04e1276201922851f6a222110de:TTS",
+            "resource_namespace": null,
+            "service_instance_id": "local:aurora-276bb04e1276201922851f6a222110de:TTS",
+            "tool_id": null
+          },
+          "service_instance_id": "local:aurora-276bb04e1276201922851f6a222110de:TTS",
+          "summary": "List managed TTS voice profiles",
+          "tool_id": null,
+          "topic": "TTS.ListVoiceProfiles"
+        },
+        {
+          "action_id": "local:aurora-276bb04e1276201922851f6a222110de:TTS:ListVoices",
+          "bindability": "approval-required",
+          "callable_feature_ids": [
+            "speech_voice_discovery"
+          ],
+          "callable_features": [
+            {
+              "feature_id": "speech_voice_discovery",
+              "label": "Voice Discovery",
+              "method_ids": [
+                "TTS.GetCapabilities",
+                "TTS.ListVoices"
+              ],
+              "module": "TTS",
+              "summary": "Read TTS capabilities and use-safe voice choices."
+            }
+          ],
+          "freshness": {
+            "last_probe_age_s": null,
+            "manifest_time": null,
+            "registry_digest": "",
+            "source": "local_registry",
+            "stale": false,
+            "ttl_s": null
+          },
+          "input_schema": null,
+          "method": "ListVoices",
+          "module": "TTS",
+          "output_schema": null,
+          "peer_id": "aurora-276bb04e1276201922851f6a222110de",
+          "policy": {
+            "allowed_provider_peer_ids": null,
+            "approval_required": false,
+            "bandwidth_check_required": false,
+            "consent_required": true,
+            "denial_reasons": [],
+            "explicit_selector_required": true,
+            "local_only": false,
+            "mesh_visible": true,
+            "operation_class": "audio_service",
+            "privacy_indicator_required": true,
+            "required_callable_feature_ids": [
+              "speech_voice_discovery"
+            ],
+            "required_permissions": [
+              "TTS.use"
+            ],
+            "resource_scope": "audio",
+            "safety_class": "hardware",
+            "selector_required": true,
+            "trust_tier": "local"
+          },
+          "provider_id": "local:aurora-276bb04e1276201922851f6a222110de:TTS",
+          "provider_kind": "local",
+          "resource_id": null,
+          "route_blockers": [],
+          "route_hints": [
+            "local",
+            "explicit_selector_required",
+            "routable"
+          ],
+          "sdk_operation_kind": "audio_service",
+          "selector": {
+            "data_scope": null,
+            "hardware_target": null,
+            "peer_id": "aurora-276bb04e1276201922851f6a222110de",
+            "provider_id": "local:aurora-276bb04e1276201922851f6a222110de:TTS",
+            "resource_namespace": null,
+            "service_instance_id": "local:aurora-276bb04e1276201922851f6a222110de:TTS",
+            "tool_id": null
+          },
+          "service_instance_id": "local:aurora-276bb04e1276201922851f6a222110de:TTS",
+          "summary": "List ready TTS voices",
+          "tool_id": null,
+          "topic": "TTS.ListVoices"
+        },
+        {
+          "action_id": "local:aurora-276bb04e1276201922851f6a222110de:TTS:RemoveVoiceProfile",
+          "bindability": "approval-required",
+          "callable_feature_ids": [
+            "speech_voice_management"
+          ],
+          "callable_features": [
+            {
+              "feature_id": "speech_voice_management",
+              "label": "Voice Profile Management",
+              "method_ids": [
+                "TTS.ListLanguagePacks",
+                "TTS.ListVoiceProfiles",
+                "TTS.GetVoiceProfile",
+                "TTS.UpdateVoiceProfile",
+                "TTS.InstallVoiceProfile",
+                "TTS.RemoveVoiceProfile",
+                "TTS.SetDefaultVoice",
+                "TTS.VoiceImportStart",
+                "TTS.VoiceImportChunk",
+                "TTS.VoiceImportEnd",
+                "TTS.VoiceImportAbort",
+                "TTS.CreateVoiceProfile",
+                "TTS.DeleteVoiceProfile",
+                "TTS.ExportVoiceProfile",
+                "TTS.ImportVoiceProfile"
+              ],
+              "module": "TTS",
+              "summary": "Administer local TTS voice profiles and bounded voice imports."
+            }
+          ],
+          "freshness": {
+            "last_probe_age_s": null,
+            "manifest_time": null,
+            "registry_digest": "",
+            "source": "local_registry",
+            "stale": false,
+            "ttl_s": null
+          },
+          "input_schema": null,
+          "method": "RemoveVoiceProfile",
+          "module": "TTS",
+          "output_schema": null,
+          "peer_id": "aurora-276bb04e1276201922851f6a222110de",
+          "policy": {
+            "allowed_provider_peer_ids": null,
+            "approval_required": false,
+            "bandwidth_check_required": false,
+            "consent_required": true,
+            "denial_reasons": [],
+            "explicit_selector_required": true,
+            "local_only": false,
+            "mesh_visible": true,
+            "operation_class": "audio_service",
+            "privacy_indicator_required": true,
+            "required_callable_feature_ids": [
+              "speech_voice_management"
+            ],
+            "required_permissions": [
+              "TTS.manage"
+            ],
+            "resource_scope": "audio",
+            "safety_class": "admin",
+            "selector_required": true,
+            "trust_tier": "local"
+          },
+          "provider_id": "local:aurora-276bb04e1276201922851f6a222110de:TTS",
+          "provider_kind": "local",
+          "resource_id": null,
+          "route_blockers": [],
+          "route_hints": [
+            "local",
+            "explicit_selector_required",
+            "routable"
+          ],
+          "sdk_operation_kind": "audio_service",
+          "selector": {
+            "data_scope": null,
+            "hardware_target": null,
+            "peer_id": "aurora-276bb04e1276201922851f6a222110de",
+            "provider_id": "local:aurora-276bb04e1276201922851f6a222110de:TTS",
+            "resource_namespace": null,
+            "service_instance_id": "local:aurora-276bb04e1276201922851f6a222110de:TTS",
+            "tool_id": null
+          },
+          "service_instance_id": "local:aurora-276bb04e1276201922851f6a222110de:TTS",
+          "summary": "Remove installed TTS voice profile artifacts",
+          "tool_id": null,
+          "topic": "TTS.RemoveVoiceProfile"
+        },
+        {
+          "action_id": "local:aurora-276bb04e1276201922851f6a222110de:TTS:Request",
+          "bindability": "approval-required",
+          "callable_feature_ids": [
+            "speech_playback"
+          ],
+          "callable_features": [
+            {
+              "feature_id": "speech_playback",
+              "label": "Speech Playback",
+              "method_ids": [
+                "TTS.Request"
+              ],
+              "module": "TTS",
+              "summary": "Play synthesized speech on the provider."
+            }
+          ],
+          "freshness": {
+            "last_probe_age_s": null,
+            "manifest_time": null,
+            "registry_digest": "",
+            "source": "local_registry",
+            "stale": false,
+            "ttl_s": null
+          },
+          "input_schema": null,
+          "method": "Request",
+          "module": "TTS",
+          "output_schema": null,
+          "peer_id": "aurora-276bb04e1276201922851f6a222110de",
+          "policy": {
+            "allowed_provider_peer_ids": null,
+            "approval_required": false,
+            "bandwidth_check_required": false,
+            "consent_required": true,
+            "denial_reasons": [],
+            "explicit_selector_required": true,
+            "local_only": false,
+            "mesh_visible": true,
+            "operation_class": "remote_playback",
+            "privacy_indicator_required": true,
+            "required_callable_feature_ids": [
+              "speech_playback"
+            ],
+            "required_permissions": [
+              "TTS.Request"
+            ],
+            "resource_scope": "output_device",
+            "safety_class": "hardware",
+            "selector_required": true,
+            "trust_tier": "local"
+          },
+          "provider_id": "local:aurora-276bb04e1276201922851f6a222110de:TTS",
+          "provider_kind": "local",
+          "resource_id": null,
+          "route_blockers": [],
+          "route_hints": [
+            "local",
+            "explicit_selector_required",
+            "routable"
+          ],
+          "sdk_operation_kind": "remote_playback",
+          "selector": {
+            "data_scope": null,
+            "hardware_target": null,
+            "peer_id": "aurora-276bb04e1276201922851f6a222110de",
+            "provider_id": "local:aurora-276bb04e1276201922851f6a222110de:TTS",
+            "resource_namespace": null,
+            "service_instance_id": "local:aurora-276bb04e1276201922851f6a222110de:TTS",
+            "tool_id": null
+          },
+          "service_instance_id": "local:aurora-276bb04e1276201922851f6a222110de:TTS",
+          "summary": "Process text-to-speech request (plays on server)",
+          "tool_id": null,
+          "topic": "TTS.Request"
+        },
+        {
+          "action_id": "local:aurora-276bb04e1276201922851f6a222110de:TTS:SetDefaultVoice",
+          "bindability": "approval-required",
+          "callable_feature_ids": [
+            "speech_voice_management"
+          ],
+          "callable_features": [
+            {
+              "feature_id": "speech_voice_management",
+              "label": "Voice Profile Management",
+              "method_ids": [
+                "TTS.ListLanguagePacks",
+                "TTS.ListVoiceProfiles",
+                "TTS.GetVoiceProfile",
+                "TTS.UpdateVoiceProfile",
+                "TTS.InstallVoiceProfile",
+                "TTS.RemoveVoiceProfile",
+                "TTS.SetDefaultVoice",
+                "TTS.VoiceImportStart",
+                "TTS.VoiceImportChunk",
+                "TTS.VoiceImportEnd",
+                "TTS.VoiceImportAbort",
+                "TTS.CreateVoiceProfile",
+                "TTS.DeleteVoiceProfile",
+                "TTS.ExportVoiceProfile",
+                "TTS.ImportVoiceProfile"
+              ],
+              "module": "TTS",
+              "summary": "Administer local TTS voice profiles and bounded voice imports."
+            }
+          ],
+          "freshness": {
+            "last_probe_age_s": null,
+            "manifest_time": null,
+            "registry_digest": "",
+            "source": "local_registry",
+            "stale": false,
+            "ttl_s": null
+          },
+          "input_schema": null,
+          "method": "SetDefaultVoice",
+          "module": "TTS",
+          "output_schema": null,
+          "peer_id": "aurora-276bb04e1276201922851f6a222110de",
+          "policy": {
+            "allowed_provider_peer_ids": null,
+            "approval_required": false,
+            "bandwidth_check_required": false,
+            "consent_required": true,
+            "denial_reasons": [],
+            "explicit_selector_required": true,
+            "local_only": false,
+            "mesh_visible": true,
+            "operation_class": "audio_service",
+            "privacy_indicator_required": true,
+            "required_callable_feature_ids": [
+              "speech_voice_management"
+            ],
+            "required_permissions": [
+              "TTS.manage"
+            ],
+            "resource_scope": "audio",
+            "safety_class": "admin",
+            "selector_required": true,
+            "trust_tier": "local"
+          },
+          "provider_id": "local:aurora-276bb04e1276201922851f6a222110de:TTS",
+          "provider_kind": "local",
+          "resource_id": null,
+          "route_blockers": [],
+          "route_hints": [
+            "local",
+            "explicit_selector_required",
+            "routable"
+          ],
+          "sdk_operation_kind": "audio_service",
+          "selector": {
+            "data_scope": null,
+            "hardware_target": null,
+            "peer_id": "aurora-276bb04e1276201922851f6a222110de",
+            "provider_id": "local:aurora-276bb04e1276201922851f6a222110de:TTS",
+            "resource_namespace": null,
+            "service_instance_id": "local:aurora-276bb04e1276201922851f6a222110de:TTS",
+            "tool_id": null
+          },
+          "service_instance_id": "local:aurora-276bb04e1276201922851f6a222110de:TTS",
+          "summary": "Set the default TTS voice",
+          "tool_id": null,
+          "topic": "TTS.SetDefaultVoice"
+        },
+        {
+          "action_id": "local:aurora-276bb04e1276201922851f6a222110de:TTS:StreamCancel",
+          "bindability": "approval-required",
+          "callable_feature_ids": [
+            "speech_streaming"
+          ],
+          "callable_features": [
+            {
+              "feature_id": "speech_streaming",
+              "label": "Speech Streaming",
+              "method_ids": [
+                "TTS.StreamStart",
+                "TTS.StreamChunk",
+                "TTS.StreamEnd",
+                "TTS.StreamPrepareV1",
+                "TTS.StreamStatus",
+                "TTS.StreamCancel",
+                "TTS.StreamResult"
+              ],
+              "module": "TTS",
+              "summary": "Start, stream, and end ordered text-to-speech audio streams."
+            }
+          ],
+          "freshness": {
+            "last_probe_age_s": null,
+            "manifest_time": null,
+            "registry_digest": "",
+            "source": "local_registry",
+            "stale": false,
+            "ttl_s": null
+          },
+          "input_schema": null,
+          "method": "StreamCancel",
+          "module": "TTS",
+          "output_schema": null,
+          "peer_id": "aurora-276bb04e1276201922851f6a222110de",
+          "policy": {
+            "allowed_provider_peer_ids": null,
+            "approval_required": false,
+            "bandwidth_check_required": false,
+            "consent_required": true,
+            "denial_reasons": [],
+            "explicit_selector_required": true,
+            "local_only": false,
+            "mesh_visible": true,
+            "operation_class": "audio_service",
+            "privacy_indicator_required": true,
+            "required_callable_feature_ids": [
+              "speech_streaming"
+            ],
+            "required_permissions": [
+              "TTS.StreamCancel"
+            ],
+            "resource_scope": "audio",
+            "safety_class": "hardware",
+            "selector_required": true,
+            "trust_tier": "local"
+          },
+          "provider_id": "local:aurora-276bb04e1276201922851f6a222110de:TTS",
+          "provider_kind": "local",
+          "resource_id": null,
+          "route_blockers": [],
+          "route_hints": [
+            "local",
+            "explicit_selector_required",
+            "routable"
+          ],
+          "sdk_operation_kind": "audio_service",
+          "selector": {
+            "data_scope": null,
+            "hardware_target": null,
+            "peer_id": "aurora-276bb04e1276201922851f6a222110de",
+            "provider_id": "local:aurora-276bb04e1276201922851f6a222110de:TTS",
+            "resource_namespace": null,
+            "service_instance_id": "local:aurora-276bb04e1276201922851f6a222110de:TTS",
+            "tool_id": null
+          },
+          "service_instance_id": "local:aurora-276bb04e1276201922851f6a222110de:TTS",
+          "summary": "Cancel an owner-scoped speech-session-v1 TTS stream",
+          "tool_id": null,
+          "topic": "TTS.StreamCancel"
+        },
+        {
+          "action_id": "local:aurora-276bb04e1276201922851f6a222110de:TTS:StreamChunk",
+          "bindability": "approval-required",
+          "callable_feature_ids": [
+            "speech_streaming"
+          ],
+          "callable_features": [
+            {
+              "feature_id": "speech_streaming",
+              "label": "Speech Streaming",
+              "method_ids": [
+                "TTS.StreamStart",
+                "TTS.StreamChunk",
+                "TTS.StreamEnd",
+                "TTS.StreamPrepareV1",
+                "TTS.StreamStatus",
+                "TTS.StreamCancel",
+                "TTS.StreamResult"
+              ],
+              "module": "TTS",
+              "summary": "Start, stream, and end ordered text-to-speech audio streams."
+            }
+          ],
+          "freshness": {
+            "last_probe_age_s": null,
+            "manifest_time": null,
+            "registry_digest": "",
+            "source": "local_registry",
+            "stale": false,
+            "ttl_s": null
+          },
+          "input_schema": null,
+          "method": "StreamChunk",
+          "module": "TTS",
+          "output_schema": null,
+          "peer_id": "aurora-276bb04e1276201922851f6a222110de",
+          "policy": {
+            "allowed_provider_peer_ids": null,
+            "approval_required": false,
+            "bandwidth_check_required": false,
+            "consent_required": true,
+            "denial_reasons": [],
+            "explicit_selector_required": true,
+            "local_only": false,
+            "mesh_visible": true,
+            "operation_class": "audio_service",
+            "privacy_indicator_required": true,
+            "required_callable_feature_ids": [
+              "speech_streaming"
+            ],
+            "required_permissions": [
+              "TTS.StreamChunk"
+            ],
+            "resource_scope": "audio",
+            "safety_class": "hardware",
+            "selector_required": true,
+            "trust_tier": "local"
+          },
+          "provider_id": "local:aurora-276bb04e1276201922851f6a222110de:TTS",
+          "provider_kind": "local",
+          "resource_id": null,
+          "route_blockers": [],
+          "route_hints": [
+            "local",
+            "explicit_selector_required",
+            "routable"
+          ],
+          "sdk_operation_kind": "audio_service",
+          "selector": {
+            "data_scope": null,
+            "hardware_target": null,
+            "peer_id": "aurora-276bb04e1276201922851f6a222110de",
+            "provider_id": "local:aurora-276bb04e1276201922851f6a222110de:TTS",
+            "resource_namespace": null,
+            "service_instance_id": "local:aurora-276bb04e1276201922851f6a222110de:TTS",
+            "tool_id": null
+          },
+          "service_instance_id": "local:aurora-276bb04e1276201922851f6a222110de:TTS",
+          "summary": "Process an ordered text chunk for a TTS audio stream",
+          "tool_id": null,
+          "topic": "TTS.StreamChunk"
+        },
+        {
+          "action_id": "local:aurora-276bb04e1276201922851f6a222110de:TTS:StreamEnd",
+          "bindability": "approval-required",
+          "callable_feature_ids": [
+            "speech_streaming"
+          ],
+          "callable_features": [
+            {
+              "feature_id": "speech_streaming",
+              "label": "Speech Streaming",
+              "method_ids": [
+                "TTS.StreamStart",
+                "TTS.StreamChunk",
+                "TTS.StreamEnd",
+                "TTS.StreamPrepareV1",
+                "TTS.StreamStatus",
+                "TTS.StreamCancel",
+                "TTS.StreamResult"
+              ],
+              "module": "TTS",
+              "summary": "Start, stream, and end ordered text-to-speech audio streams."
+            }
+          ],
+          "freshness": {
+            "last_probe_age_s": null,
+            "manifest_time": null,
+            "registry_digest": "",
+            "source": "local_registry",
+            "stale": false,
+            "ttl_s": null
+          },
+          "input_schema": null,
+          "method": "StreamEnd",
+          "module": "TTS",
+          "output_schema": null,
+          "peer_id": "aurora-276bb04e1276201922851f6a222110de",
+          "policy": {
+            "allowed_provider_peer_ids": null,
+            "approval_required": false,
+            "bandwidth_check_required": false,
+            "consent_required": true,
+            "denial_reasons": [],
+            "explicit_selector_required": true,
+            "local_only": false,
+            "mesh_visible": true,
+            "operation_class": "audio_service",
+            "privacy_indicator_required": true,
+            "required_callable_feature_ids": [
+              "speech_streaming"
+            ],
+            "required_permissions": [
+              "TTS.StreamEnd"
+            ],
+            "resource_scope": "audio",
+            "safety_class": "hardware",
+            "selector_required": true,
+            "trust_tier": "local"
+          },
+          "provider_id": "local:aurora-276bb04e1276201922851f6a222110de:TTS",
+          "provider_kind": "local",
+          "resource_id": null,
+          "route_blockers": [],
+          "route_hints": [
+            "local",
+            "explicit_selector_required",
+            "routable"
+          ],
+          "sdk_operation_kind": "audio_service",
+          "selector": {
+            "data_scope": null,
+            "hardware_target": null,
+            "peer_id": "aurora-276bb04e1276201922851f6a222110de",
+            "provider_id": "local:aurora-276bb04e1276201922851f6a222110de:TTS",
+            "resource_namespace": null,
+            "service_instance_id": "local:aurora-276bb04e1276201922851f6a222110de:TTS",
+            "tool_id": null
+          },
+          "service_instance_id": "local:aurora-276bb04e1276201922851f6a222110de:TTS",
+          "summary": "End an ordered text-to-speech audio stream",
+          "tool_id": null,
+          "topic": "TTS.StreamEnd"
+        },
+        {
+          "action_id": "local:aurora-276bb04e1276201922851f6a222110de:TTS:StreamPrepareV1",
+          "bindability": "approval-required",
+          "callable_feature_ids": [
+            "speech_streaming"
+          ],
+          "callable_features": [
+            {
+              "feature_id": "speech_streaming",
+              "label": "Speech Streaming",
+              "method_ids": [
+                "TTS.StreamStart",
+                "TTS.StreamChunk",
+                "TTS.StreamEnd",
+                "TTS.StreamPrepareV1",
+                "TTS.StreamStatus",
+                "TTS.StreamCancel",
+                "TTS.StreamResult"
+              ],
+              "module": "TTS",
+              "summary": "Start, stream, and end ordered text-to-speech audio streams."
+            }
+          ],
+          "freshness": {
+            "last_probe_age_s": null,
+            "manifest_time": null,
+            "registry_digest": "",
+            "source": "local_registry",
+            "stale": false,
+            "ttl_s": null
+          },
+          "input_schema": null,
+          "method": "StreamPrepareV1",
+          "module": "TTS",
+          "output_schema": null,
+          "peer_id": "aurora-276bb04e1276201922851f6a222110de",
+          "policy": {
+            "allowed_provider_peer_ids": null,
+            "approval_required": false,
+            "bandwidth_check_required": false,
+            "consent_required": true,
+            "denial_reasons": [],
+            "explicit_selector_required": true,
+            "local_only": false,
+            "mesh_visible": true,
+            "operation_class": "audio_service",
+            "privacy_indicator_required": true,
+            "required_callable_feature_ids": [
+              "speech_streaming"
+            ],
+            "required_permissions": [
+              "TTS.StreamPrepareV1"
+            ],
+            "resource_scope": "audio",
+            "safety_class": "hardware",
+            "selector_required": true,
+            "trust_tier": "local"
+          },
+          "provider_id": "local:aurora-276bb04e1276201922851f6a222110de:TTS",
+          "provider_kind": "local",
+          "resource_id": null,
+          "route_blockers": [],
+          "route_hints": [
+            "local",
+            "explicit_selector_required",
+            "routable"
+          ],
+          "sdk_operation_kind": "audio_service",
+          "selector": {
+            "data_scope": null,
+            "hardware_target": null,
+            "peer_id": "aurora-276bb04e1276201922851f6a222110de",
+            "provider_id": "local:aurora-276bb04e1276201922851f6a222110de:TTS",
+            "resource_namespace": null,
+            "service_instance_id": "local:aurora-276bb04e1276201922851f6a222110de:TTS",
+            "tool_id": null
+          },
+          "service_instance_id": "local:aurora-276bb04e1276201922851f6a222110de:TTS",
+          "summary": "Admit an owner-scoped speech-session-v1 TTS stream",
+          "tool_id": null,
+          "topic": "TTS.StreamPrepareV1"
+        },
+        {
+          "action_id": "local:aurora-276bb04e1276201922851f6a222110de:TTS:StreamResult",
+          "bindability": "approval-required",
+          "callable_feature_ids": [
+            "speech_streaming"
+          ],
+          "callable_features": [
+            {
+              "feature_id": "speech_streaming",
+              "label": "Speech Streaming",
+              "method_ids": [
+                "TTS.StreamStart",
+                "TTS.StreamChunk",
+                "TTS.StreamEnd",
+                "TTS.StreamPrepareV1",
+                "TTS.StreamStatus",
+                "TTS.StreamCancel",
+                "TTS.StreamResult"
+              ],
+              "module": "TTS",
+              "summary": "Start, stream, and end ordered text-to-speech audio streams."
+            }
+          ],
+          "freshness": {
+            "last_probe_age_s": null,
+            "manifest_time": null,
+            "registry_digest": "",
+            "source": "local_registry",
+            "stale": false,
+            "ttl_s": null
+          },
+          "input_schema": null,
+          "method": "StreamResult",
+          "module": "TTS",
+          "output_schema": null,
+          "peer_id": "aurora-276bb04e1276201922851f6a222110de",
+          "policy": {
+            "allowed_provider_peer_ids": null,
+            "approval_required": false,
+            "bandwidth_check_required": false,
+            "consent_required": true,
+            "denial_reasons": [],
+            "explicit_selector_required": true,
+            "local_only": false,
+            "mesh_visible": true,
+            "operation_class": "audio_service",
+            "privacy_indicator_required": true,
+            "required_callable_feature_ids": [
+              "speech_streaming"
+            ],
+            "required_permissions": [
+              "TTS.StreamResult"
+            ],
+            "resource_scope": "audio",
+            "safety_class": "hardware",
+            "selector_required": true,
+            "trust_tier": "local"
+          },
+          "provider_id": "local:aurora-276bb04e1276201922851f6a222110de:TTS",
+          "provider_kind": "local",
+          "resource_id": null,
+          "route_blockers": [],
+          "route_hints": [
+            "local",
+            "explicit_selector_required",
+            "routable"
+          ],
+          "sdk_operation_kind": "audio_service",
+          "selector": {
+            "data_scope": null,
+            "hardware_target": null,
+            "peer_id": "aurora-276bb04e1276201922851f6a222110de",
+            "provider_id": "local:aurora-276bb04e1276201922851f6a222110de:TTS",
+            "resource_namespace": null,
+            "service_instance_id": "local:aurora-276bb04e1276201922851f6a222110de:TTS",
+            "tool_id": null
+          },
+          "service_instance_id": "local:aurora-276bb04e1276201922851f6a222110de:TTS",
+          "summary": "Return the terminal metadata for an admitted TTS stream",
+          "tool_id": null,
+          "topic": "TTS.StreamResult"
+        },
+        {
+          "action_id": "local:aurora-276bb04e1276201922851f6a222110de:TTS:StreamStart",
+          "bindability": "approval-required",
+          "callable_feature_ids": [
+            "speech_streaming"
+          ],
+          "callable_features": [
+            {
+              "feature_id": "speech_streaming",
+              "label": "Speech Streaming",
+              "method_ids": [
+                "TTS.StreamStart",
+                "TTS.StreamChunk",
+                "TTS.StreamEnd",
+                "TTS.StreamPrepareV1",
+                "TTS.StreamStatus",
+                "TTS.StreamCancel",
+                "TTS.StreamResult"
+              ],
+              "module": "TTS",
+              "summary": "Start, stream, and end ordered text-to-speech audio streams."
+            }
+          ],
+          "freshness": {
+            "last_probe_age_s": null,
+            "manifest_time": null,
+            "registry_digest": "",
+            "source": "local_registry",
+            "stale": false,
+            "ttl_s": null
+          },
+          "input_schema": null,
+          "method": "StreamStart",
+          "module": "TTS",
+          "output_schema": null,
+          "peer_id": "aurora-276bb04e1276201922851f6a222110de",
+          "policy": {
+            "allowed_provider_peer_ids": null,
+            "approval_required": false,
+            "bandwidth_check_required": false,
+            "consent_required": true,
+            "denial_reasons": [],
+            "explicit_selector_required": true,
+            "local_only": false,
+            "mesh_visible": true,
+            "operation_class": "audio_service",
+            "privacy_indicator_required": true,
+            "required_callable_feature_ids": [
+              "speech_streaming"
+            ],
+            "required_permissions": [
+              "TTS.StreamStart"
+            ],
+            "resource_scope": "audio",
+            "safety_class": "hardware",
+            "selector_required": true,
+            "trust_tier": "local"
+          },
+          "provider_id": "local:aurora-276bb04e1276201922851f6a222110de:TTS",
+          "provider_kind": "local",
+          "resource_id": null,
+          "route_blockers": [],
+          "route_hints": [
+            "local",
+            "explicit_selector_required",
+            "routable"
+          ],
+          "sdk_operation_kind": "audio_service",
+          "selector": {
+            "data_scope": null,
+            "hardware_target": null,
+            "peer_id": "aurora-276bb04e1276201922851f6a222110de",
+            "provider_id": "local:aurora-276bb04e1276201922851f6a222110de:TTS",
+            "resource_namespace": null,
+            "service_instance_id": "local:aurora-276bb04e1276201922851f6a222110de:TTS",
+            "tool_id": null
+          },
+          "service_instance_id": "local:aurora-276bb04e1276201922851f6a222110de:TTS",
+          "summary": "Start an ordered text-to-speech audio stream",
+          "tool_id": null,
+          "topic": "TTS.StreamStart"
+        },
+        {
+          "action_id": "local:aurora-276bb04e1276201922851f6a222110de:TTS:StreamStatus",
+          "bindability": "approval-required",
+          "callable_feature_ids": [
+            "speech_streaming"
+          ],
+          "callable_features": [
+            {
+              "feature_id": "speech_streaming",
+              "label": "Speech Streaming",
+              "method_ids": [
+                "TTS.StreamStart",
+                "TTS.StreamChunk",
+                "TTS.StreamEnd",
+                "TTS.StreamPrepareV1",
+                "TTS.StreamStatus",
+                "TTS.StreamCancel",
+                "TTS.StreamResult"
+              ],
+              "module": "TTS",
+              "summary": "Start, stream, and end ordered text-to-speech audio streams."
+            }
+          ],
+          "freshness": {
+            "last_probe_age_s": null,
+            "manifest_time": null,
+            "registry_digest": "",
+            "source": "local_registry",
+            "stale": false,
+            "ttl_s": null
+          },
+          "input_schema": null,
+          "method": "StreamStatus",
+          "module": "TTS",
+          "output_schema": null,
+          "peer_id": "aurora-276bb04e1276201922851f6a222110de",
+          "policy": {
+            "allowed_provider_peer_ids": null,
+            "approval_required": false,
+            "bandwidth_check_required": false,
+            "consent_required": true,
+            "denial_reasons": [],
+            "explicit_selector_required": true,
+            "local_only": false,
+            "mesh_visible": true,
+            "operation_class": "audio_service",
+            "privacy_indicator_required": true,
+            "required_callable_feature_ids": [
+              "speech_streaming"
+            ],
+            "required_permissions": [
+              "TTS.StreamStatus"
+            ],
+            "resource_scope": "audio",
+            "safety_class": "hardware",
+            "selector_required": true,
+            "trust_tier": "local"
+          },
+          "provider_id": "local:aurora-276bb04e1276201922851f6a222110de:TTS",
+          "provider_kind": "local",
+          "resource_id": null,
+          "route_blockers": [],
+          "route_hints": [
+            "local",
+            "explicit_selector_required",
+            "routable"
+          ],
+          "sdk_operation_kind": "audio_service",
+          "selector": {
+            "data_scope": null,
+            "hardware_target": null,
+            "peer_id": "aurora-276bb04e1276201922851f6a222110de",
+            "provider_id": "local:aurora-276bb04e1276201922851f6a222110de:TTS",
+            "resource_namespace": null,
+            "service_instance_id": "local:aurora-276bb04e1276201922851f6a222110de:TTS",
+            "tool_id": null
+          },
+          "service_instance_id": "local:aurora-276bb04e1276201922851f6a222110de:TTS",
+          "summary": "Read an owner-scoped speech-session-v1 TTS stream status",
+          "tool_id": null,
+          "topic": "TTS.StreamStatus"
+        },
+        {
+          "action_id": "local:aurora-276bb04e1276201922851f6a222110de:TTS:Synthesize",
+          "bindability": "model-bindable",
+          "callable_feature_ids": [
+            "speech_synthesis"
+          ],
+          "callable_features": [
+            {
+              "feature_id": "speech_synthesis",
+              "label": "Speech Synthesis",
+              "method_ids": [
+                "TTS.Synthesize"
+              ],
+              "module": "TTS",
+              "summary": "Return synthesized audio data without provider playback."
+            }
+          ],
+          "freshness": {
+            "last_probe_age_s": null,
+            "manifest_time": null,
+            "registry_digest": "",
+            "source": "local_registry",
+            "stale": false,
+            "ttl_s": null
+          },
+          "input_schema": null,
+          "method": "Synthesize",
+          "module": "TTS",
+          "output_schema": null,
+          "peer_id": "aurora-276bb04e1276201922851f6a222110de",
+          "policy": {
+            "allowed_provider_peer_ids": null,
+            "approval_required": false,
+            "bandwidth_check_required": false,
+            "consent_required": false,
+            "denial_reasons": [],
+            "explicit_selector_required": false,
+            "local_only": false,
+            "mesh_visible": true,
+            "operation_class": "batch_synthesize",
+            "privacy_indicator_required": false,
+            "required_callable_feature_ids": [
+              "speech_synthesis"
+            ],
+            "required_permissions": [
+              "TTS.Synthesize"
+            ],
+            "resource_scope": "generated_audio",
+            "safety_class": "standard",
+            "selector_required": false,
+            "trust_tier": "local"
+          },
+          "provider_id": "local:aurora-276bb04e1276201922851f6a222110de:TTS",
+          "provider_kind": "local",
+          "resource_id": null,
+          "route_blockers": [],
+          "route_hints": [
+            "local",
+            "routable"
+          ],
+          "sdk_operation_kind": "batch_synthesize",
+          "selector": {
+            "data_scope": null,
+            "hardware_target": null,
+            "peer_id": "aurora-276bb04e1276201922851f6a222110de",
+            "provider_id": "local:aurora-276bb04e1276201922851f6a222110de:TTS",
+            "resource_namespace": null,
+            "service_instance_id": "local:aurora-276bb04e1276201922851f6a222110de:TTS",
+            "tool_id": null
+          },
+          "service_instance_id": "local:aurora-276bb04e1276201922851f6a222110de:TTS",
+          "summary": "Synthesize text to audio and return audio data",
+          "tool_id": null,
+          "topic": "TTS.Synthesize"
+        },
+        {
+          "action_id": "local:aurora-276bb04e1276201922851f6a222110de:TTS:UpdateVoiceProfile",
+          "bindability": "approval-required",
+          "callable_feature_ids": [
+            "speech_voice_management"
+          ],
+          "callable_features": [
+            {
+              "feature_id": "speech_voice_management",
+              "label": "Voice Profile Management",
+              "method_ids": [
+                "TTS.ListLanguagePacks",
+                "TTS.ListVoiceProfiles",
+                "TTS.GetVoiceProfile",
+                "TTS.UpdateVoiceProfile",
+                "TTS.InstallVoiceProfile",
+                "TTS.RemoveVoiceProfile",
+                "TTS.SetDefaultVoice",
+                "TTS.VoiceImportStart",
+                "TTS.VoiceImportChunk",
+                "TTS.VoiceImportEnd",
+                "TTS.VoiceImportAbort",
+                "TTS.CreateVoiceProfile",
+                "TTS.DeleteVoiceProfile",
+                "TTS.ExportVoiceProfile",
+                "TTS.ImportVoiceProfile"
+              ],
+              "module": "TTS",
+              "summary": "Administer local TTS voice profiles and bounded voice imports."
+            }
+          ],
+          "freshness": {
+            "last_probe_age_s": null,
+            "manifest_time": null,
+            "registry_digest": "",
+            "source": "local_registry",
+            "stale": false,
+            "ttl_s": null
+          },
+          "input_schema": null,
+          "method": "UpdateVoiceProfile",
+          "module": "TTS",
+          "output_schema": null,
+          "peer_id": "aurora-276bb04e1276201922851f6a222110de",
+          "policy": {
+            "allowed_provider_peer_ids": null,
+            "approval_required": false,
+            "bandwidth_check_required": false,
+            "consent_required": true,
+            "denial_reasons": [],
+            "explicit_selector_required": true,
+            "local_only": false,
+            "mesh_visible": true,
+            "operation_class": "audio_service",
+            "privacy_indicator_required": true,
+            "required_callable_feature_ids": [
+              "speech_voice_management"
+            ],
+            "required_permissions": [
+              "TTS.manage"
+            ],
+            "resource_scope": "audio",
+            "safety_class": "admin",
+            "selector_required": true,
+            "trust_tier": "local"
+          },
+          "provider_id": "local:aurora-276bb04e1276201922851f6a222110de:TTS",
+          "provider_kind": "local",
+          "resource_id": null,
+          "route_blockers": [],
+          "route_hints": [
+            "local",
+            "explicit_selector_required",
+            "routable"
+          ],
+          "sdk_operation_kind": "audio_service",
+          "selector": {
+            "data_scope": null,
+            "hardware_target": null,
+            "peer_id": "aurora-276bb04e1276201922851f6a222110de",
+            "provider_id": "local:aurora-276bb04e1276201922851f6a222110de:TTS",
+            "resource_namespace": null,
+            "service_instance_id": "local:aurora-276bb04e1276201922851f6a222110de:TTS",
+            "tool_id": null
+          },
+          "service_instance_id": "local:aurora-276bb04e1276201922851f6a222110de:TTS",
+          "summary": "Update managed TTS voice profile metadata",
+          "tool_id": null,
+          "topic": "TTS.UpdateVoiceProfile"
+        },
+        {
+          "action_id": "local:aurora-276bb04e1276201922851f6a222110de:TTS:VoiceImportAbort",
+          "bindability": "approval-required",
+          "callable_feature_ids": [
+            "speech_voice_management"
+          ],
+          "callable_features": [
+            {
+              "feature_id": "speech_voice_management",
+              "label": "Voice Profile Management",
+              "method_ids": [
+                "TTS.ListLanguagePacks",
+                "TTS.ListVoiceProfiles",
+                "TTS.GetVoiceProfile",
+                "TTS.UpdateVoiceProfile",
+                "TTS.InstallVoiceProfile",
+                "TTS.RemoveVoiceProfile",
+                "TTS.SetDefaultVoice",
+                "TTS.VoiceImportStart",
+                "TTS.VoiceImportChunk",
+                "TTS.VoiceImportEnd",
+                "TTS.VoiceImportAbort",
+                "TTS.CreateVoiceProfile",
+                "TTS.DeleteVoiceProfile",
+                "TTS.ExportVoiceProfile",
+                "TTS.ImportVoiceProfile"
+              ],
+              "module": "TTS",
+              "summary": "Administer local TTS voice profiles and bounded voice imports."
+            }
+          ],
+          "freshness": {
+            "last_probe_age_s": null,
+            "manifest_time": null,
+            "registry_digest": "",
+            "source": "local_registry",
+            "stale": false,
+            "ttl_s": null
+          },
+          "input_schema": null,
+          "method": "VoiceImportAbort",
+          "module": "TTS",
+          "output_schema": null,
+          "peer_id": "aurora-276bb04e1276201922851f6a222110de",
+          "policy": {
+            "allowed_provider_peer_ids": null,
+            "approval_required": false,
+            "bandwidth_check_required": false,
+            "consent_required": true,
+            "denial_reasons": [],
+            "explicit_selector_required": true,
+            "local_only": false,
+            "mesh_visible": true,
+            "operation_class": "audio_service",
+            "privacy_indicator_required": true,
+            "required_callable_feature_ids": [
+              "speech_voice_management"
+            ],
+            "required_permissions": [
+              "TTS.manage"
+            ],
+            "resource_scope": "audio",
+            "safety_class": "admin",
+            "selector_required": true,
+            "trust_tier": "local"
+          },
+          "provider_id": "local:aurora-276bb04e1276201922851f6a222110de:TTS",
+          "provider_kind": "local",
+          "resource_id": null,
+          "route_blockers": [],
+          "route_hints": [
+            "local",
+            "explicit_selector_required",
+            "routable"
+          ],
+          "sdk_operation_kind": "audio_service",
+          "selector": {
+            "data_scope": null,
+            "hardware_target": null,
+            "peer_id": "aurora-276bb04e1276201922851f6a222110de",
+            "provider_id": "local:aurora-276bb04e1276201922851f6a222110de:TTS",
+            "resource_namespace": null,
+            "service_instance_id": "local:aurora-276bb04e1276201922851f6a222110de:TTS",
+            "tool_id": null
+          },
+          "service_instance_id": "local:aurora-276bb04e1276201922851f6a222110de:TTS",
+          "summary": "Abort a bounded TTS voice import upload",
+          "tool_id": null,
+          "topic": "TTS.VoiceImportAbort"
+        },
+        {
+          "action_id": "local:aurora-276bb04e1276201922851f6a222110de:TTS:VoiceImportChunk",
+          "bindability": "approval-required",
+          "callable_feature_ids": [
+            "speech_voice_management"
+          ],
+          "callable_features": [
+            {
+              "feature_id": "speech_voice_management",
+              "label": "Voice Profile Management",
+              "method_ids": [
+                "TTS.ListLanguagePacks",
+                "TTS.ListVoiceProfiles",
+                "TTS.GetVoiceProfile",
+                "TTS.UpdateVoiceProfile",
+                "TTS.InstallVoiceProfile",
+                "TTS.RemoveVoiceProfile",
+                "TTS.SetDefaultVoice",
+                "TTS.VoiceImportStart",
+                "TTS.VoiceImportChunk",
+                "TTS.VoiceImportEnd",
+                "TTS.VoiceImportAbort",
+                "TTS.CreateVoiceProfile",
+                "TTS.DeleteVoiceProfile",
+                "TTS.ExportVoiceProfile",
+                "TTS.ImportVoiceProfile"
+              ],
+              "module": "TTS",
+              "summary": "Administer local TTS voice profiles and bounded voice imports."
+            }
+          ],
+          "freshness": {
+            "last_probe_age_s": null,
+            "manifest_time": null,
+            "registry_digest": "",
+            "source": "local_registry",
+            "stale": false,
+            "ttl_s": null
+          },
+          "input_schema": null,
+          "method": "VoiceImportChunk",
+          "module": "TTS",
+          "output_schema": null,
+          "peer_id": "aurora-276bb04e1276201922851f6a222110de",
+          "policy": {
+            "allowed_provider_peer_ids": null,
+            "approval_required": false,
+            "bandwidth_check_required": false,
+            "consent_required": true,
+            "denial_reasons": [],
+            "explicit_selector_required": true,
+            "local_only": false,
+            "mesh_visible": true,
+            "operation_class": "audio_service",
+            "privacy_indicator_required": true,
+            "required_callable_feature_ids": [
+              "speech_voice_management"
+            ],
+            "required_permissions": [
+              "TTS.manage"
+            ],
+            "resource_scope": "audio",
+            "safety_class": "admin",
+            "selector_required": true,
+            "trust_tier": "local"
+          },
+          "provider_id": "local:aurora-276bb04e1276201922851f6a222110de:TTS",
+          "provider_kind": "local",
+          "resource_id": null,
+          "route_blockers": [],
+          "route_hints": [
+            "local",
+            "explicit_selector_required",
+            "routable"
+          ],
+          "sdk_operation_kind": "audio_service",
+          "selector": {
+            "data_scope": null,
+            "hardware_target": null,
+            "peer_id": "aurora-276bb04e1276201922851f6a222110de",
+            "provider_id": "local:aurora-276bb04e1276201922851f6a222110de:TTS",
+            "resource_namespace": null,
+            "service_instance_id": "local:aurora-276bb04e1276201922851f6a222110de:TTS",
+            "tool_id": null
+          },
+          "service_instance_id": "local:aurora-276bb04e1276201922851f6a222110de:TTS",
+          "summary": "Append a bounded TTS voice import chunk",
+          "tool_id": null,
+          "topic": "TTS.VoiceImportChunk"
+        },
+        {
+          "action_id": "local:aurora-276bb04e1276201922851f6a222110de:TTS:VoiceImportEnd",
+          "bindability": "approval-required",
+          "callable_feature_ids": [
+            "speech_voice_management"
+          ],
+          "callable_features": [
+            {
+              "feature_id": "speech_voice_management",
+              "label": "Voice Profile Management",
+              "method_ids": [
+                "TTS.ListLanguagePacks",
+                "TTS.ListVoiceProfiles",
+                "TTS.GetVoiceProfile",
+                "TTS.UpdateVoiceProfile",
+                "TTS.InstallVoiceProfile",
+                "TTS.RemoveVoiceProfile",
+                "TTS.SetDefaultVoice",
+                "TTS.VoiceImportStart",
+                "TTS.VoiceImportChunk",
+                "TTS.VoiceImportEnd",
+                "TTS.VoiceImportAbort",
+                "TTS.CreateVoiceProfile",
+                "TTS.DeleteVoiceProfile",
+                "TTS.ExportVoiceProfile",
+                "TTS.ImportVoiceProfile"
+              ],
+              "module": "TTS",
+              "summary": "Administer local TTS voice profiles and bounded voice imports."
+            }
+          ],
+          "freshness": {
+            "last_probe_age_s": null,
+            "manifest_time": null,
+            "registry_digest": "",
+            "source": "local_registry",
+            "stale": false,
+            "ttl_s": null
+          },
+          "input_schema": null,
+          "method": "VoiceImportEnd",
+          "module": "TTS",
+          "output_schema": null,
+          "peer_id": "aurora-276bb04e1276201922851f6a222110de",
+          "policy": {
+            "allowed_provider_peer_ids": null,
+            "approval_required": false,
+            "bandwidth_check_required": false,
+            "consent_required": true,
+            "denial_reasons": [],
+            "explicit_selector_required": true,
+            "local_only": false,
+            "mesh_visible": true,
+            "operation_class": "audio_service",
+            "privacy_indicator_required": true,
+            "required_callable_feature_ids": [
+              "speech_voice_management"
+            ],
+            "required_permissions": [
+              "TTS.manage"
+            ],
+            "resource_scope": "audio",
+            "safety_class": "admin",
+            "selector_required": true,
+            "trust_tier": "local"
+          },
+          "provider_id": "local:aurora-276bb04e1276201922851f6a222110de:TTS",
+          "provider_kind": "local",
+          "resource_id": null,
+          "route_blockers": [],
+          "route_hints": [
+            "local",
+            "explicit_selector_required",
+            "routable"
+          ],
+          "sdk_operation_kind": "audio_service",
+          "selector": {
+            "data_scope": null,
+            "hardware_target": null,
+            "peer_id": "aurora-276bb04e1276201922851f6a222110de",
+            "provider_id": "local:aurora-276bb04e1276201922851f6a222110de:TTS",
+            "resource_namespace": null,
+            "service_instance_id": "local:aurora-276bb04e1276201922851f6a222110de:TTS",
+            "tool_id": null
+          },
+          "service_instance_id": "local:aurora-276bb04e1276201922851f6a222110de:TTS",
+          "summary": "Seal a bounded TTS voice import upload",
+          "tool_id": null,
+          "topic": "TTS.VoiceImportEnd"
+        },
+        {
+          "action_id": "local:aurora-276bb04e1276201922851f6a222110de:TTS:VoiceImportStart",
+          "bindability": "approval-required",
+          "callable_feature_ids": [
+            "speech_voice_management"
+          ],
+          "callable_features": [
+            {
+              "feature_id": "speech_voice_management",
+              "label": "Voice Profile Management",
+              "method_ids": [
+                "TTS.ListLanguagePacks",
+                "TTS.ListVoiceProfiles",
+                "TTS.GetVoiceProfile",
+                "TTS.UpdateVoiceProfile",
+                "TTS.InstallVoiceProfile",
+                "TTS.RemoveVoiceProfile",
+                "TTS.SetDefaultVoice",
+                "TTS.VoiceImportStart",
+                "TTS.VoiceImportChunk",
+                "TTS.VoiceImportEnd",
+                "TTS.VoiceImportAbort",
+                "TTS.CreateVoiceProfile",
+                "TTS.DeleteVoiceProfile",
+                "TTS.ExportVoiceProfile",
+                "TTS.ImportVoiceProfile"
+              ],
+              "module": "TTS",
+              "summary": "Administer local TTS voice profiles and bounded voice imports."
+            }
+          ],
+          "freshness": {
+            "last_probe_age_s": null,
+            "manifest_time": null,
+            "registry_digest": "",
+            "source": "local_registry",
+            "stale": false,
+            "ttl_s": null
+          },
+          "input_schema": null,
+          "method": "VoiceImportStart",
+          "module": "TTS",
+          "output_schema": null,
+          "peer_id": "aurora-276bb04e1276201922851f6a222110de",
+          "policy": {
+            "allowed_provider_peer_ids": null,
+            "approval_required": false,
+            "bandwidth_check_required": false,
+            "consent_required": true,
+            "denial_reasons": [],
+            "explicit_selector_required": true,
+            "local_only": false,
+            "mesh_visible": true,
+            "operation_class": "audio_service",
+            "privacy_indicator_required": true,
+            "required_callable_feature_ids": [
+              "speech_voice_management"
+            ],
+            "required_permissions": [
+              "TTS.manage"
+            ],
+            "resource_scope": "audio",
+            "safety_class": "admin",
+            "selector_required": true,
+            "trust_tier": "local"
+          },
+          "provider_id": "local:aurora-276bb04e1276201922851f6a222110de:TTS",
+          "provider_kind": "local",
+          "resource_id": null,
+          "route_blockers": [],
+          "route_hints": [
+            "local",
+            "explicit_selector_required",
+            "routable"
+          ],
+          "sdk_operation_kind": "audio_service",
+          "selector": {
+            "data_scope": null,
+            "hardware_target": null,
+            "peer_id": "aurora-276bb04e1276201922851f6a222110de",
+            "provider_id": "local:aurora-276bb04e1276201922851f6a222110de:TTS",
+            "resource_namespace": null,
+            "service_instance_id": "local:aurora-276bb04e1276201922851f6a222110de:TTS",
+            "tool_id": null
+          },
+          "service_instance_id": "local:aurora-276bb04e1276201922851f6a222110de:TTS",
+          "summary": "Start a bounded TTS voice import upload",
+          "tool_id": null,
+          "topic": "TTS.VoiceImportStart"
+        }
+      ],
+      "aurora_version": "0.0.0",
+      "generated_at": "2026-10-20T03:39:20.690463+00:00",
+      "local_node_name": "aurora-tcc-pair-v1535-personal",
+      "local_peer_id": "aurora-276bb04e1276201922851f6a222110de",
+      "provider_index": {
+        "TTS": [
+          "local:aurora-276bb04e1276201922851f6a222110de:TTS"
+        ]
+      },
+      "providers": [
+        {
+          "active_calls": 0,
+          "available_capacity": 10,
+          "eligible": true,
+          "freshness": {
+            "last_probe_age_s": null,
+            "manifest_time": null,
+            "registry_digest": "",
+            "source": "local_registry",
+            "stale": false,
+            "ttl_s": null
+          },
+          "latency_ms": 0.0,
+          "max_concurrent": 10,
+          "module": "TTS",
+          "node_name": "aurora-tcc-pair-v1535-personal",
+          "peer_id": "aurora-276bb04e1276201922851f6a222110de",
+          "policy": {
+            "allowed_provider_peer_ids": null,
+            "approval_required": false,
+            "bandwidth_check_required": false,
+            "consent_required": true,
+            "denial_reasons": [],
+            "explicit_selector_required": true,
+            "local_only": false,
+            "mesh_visible": true,
+            "operation_class": "audio_service",
+            "privacy_indicator_required": true,
+            "required_callable_feature_ids": [],
+            "required_permissions": [],
+            "resource_scope": "audio",
+            "safety_class": "hardware",
+            "selector_required": true,
+            "trust_tier": "local"
+          },
+          "provider_id": "local:aurora-276bb04e1276201922851f6a222110de:TTS",
+          "provider_kind": "local",
+          "reason": "",
+          "reason_code": "",
+          "service_instance_id": "local:aurora-276bb04e1276201922851f6a222110de:TTS",
+          "status": "local",
+          "version": "0.0.0"
+        }
+      ],
+      "resources": [],
+      "secrets_redacted": true
+    },
+    "host": "personal.skyron-server",
+    "httpListener": true,
+    "manifestSha256": "ee66b83078410588f3af09db6f496319ea10e75ad6c4074c8180a8d2f5728543",
+    "mesh": {
+      "compatibility_failures": [],
+      "export_summaries": [
+        {
+          "excluded_feature_count": 0,
+          "excluded_method_count": 0,
+          "policy_revision": 1,
+          "reason_codes": [
+            "service_not_shared"
+          ],
+          "service_id": "DB",
+          "service_label": "",
+          "shared": false
+        },
+        {
+          "excluded_feature_count": 0,
+          "excluded_method_count": 0,
+          "policy_revision": 1,
+          "reason_codes": [
+            "service_not_shared"
+          ],
+          "service_id": "Orchestrator",
+          "service_label": "",
+          "shared": false
+        },
+        {
+          "excluded_feature_count": 0,
+          "excluded_method_count": 0,
+          "policy_revision": 1,
+          "reason_codes": [
+            "service_not_shared"
+          ],
+          "service_id": "STTCoordinator",
+          "service_label": "",
+          "shared": false
+        },
+        {
+          "excluded_feature_count": 0,
+          "excluded_method_count": 0,
+          "policy_revision": 1,
+          "reason_codes": [
+            "service_not_shared"
+          ],
+          "service_id": "Scheduler",
+          "service_label": "",
+          "shared": false
+        },
+        {
+          "excluded_feature_count": 0,
+          "excluded_method_count": 0,
+          "policy_revision": 1,
+          "reason_codes": [],
+          "service_id": "TTS",
+          "service_label": "",
+          "shared": true
+        },
+        {
+          "excluded_feature_count": 0,
+          "excluded_method_count": 0,
+          "policy_revision": 1,
+          "reason_codes": [
+            "service_not_shared"
+          ],
+          "service_id": "Tooling",
+          "service_label": "",
+          "shared": false
+        },
+        {
+          "excluded_feature_count": 0,
+          "excluded_method_count": 0,
+          "policy_revision": 1,
+          "reason_codes": [
+            "service_not_shared"
+          ],
+          "service_id": "Transcription",
+          "service_label": "",
+          "shared": false
+        },
+        {
+          "excluded_feature_count": 0,
+          "excluded_method_count": 0,
+          "policy_revision": 1,
+          "reason_codes": [
+            "service_not_shared"
+          ],
+          "service_id": "WakeWord",
+          "service_label": "",
+          "shared": false
+        }
+      ],
+      "local": {
+        "mesh_enabled": true,
+        "mesh_started": true,
+        "node_name": "aurora-tcc-pair-v1535-personal",
+        "peer_id": "aurora-276bb04e1276201922851f6a222110de",
+        "peer_selection": "lowest_latency",
+        "routed_modules": [],
+        "shared_modules": [
+          "TTS"
+        ],
+        "version_policy": "compatible",
+        "webrtc_started": true
+      },
+      "peers": [],
+      "routes": [
+        {
+          "configured": true,
+          "decision_latency_ms": null,
+          "decision_peer_id": null,
+          "decision_target": "local",
+          "decision_version": "",
+          "fallback": "local",
+          "min_version": null,
+          "module": "DB",
+          "prefer": "local",
+          "providers": [],
+          "reason": "configured local preference",
+          "required_capabilities": [],
+          "share": false
+        },
+        {
+          "configured": true,
+          "decision_latency_ms": null,
+          "decision_peer_id": null,
+          "decision_target": "local",
+          "decision_version": "",
+          "fallback": "local",
+          "min_version": null,
+          "module": "Orchestrator",
+          "prefer": "local",
+          "providers": [],
+          "reason": "configured local preference",
+          "required_capabilities": [],
+          "share": false
+        },
+        {
+          "configured": true,
+          "decision_latency_ms": null,
+          "decision_peer_id": null,
+          "decision_target": "local",
+          "decision_version": "",
+          "fallback": "local",
+          "min_version": null,
+          "module": "STTCoordinator",
+          "prefer": "local",
+          "providers": [],
+          "reason": "configured local preference",
+          "required_capabilities": [],
+          "share": false
+        },
+        {
+          "configured": true,
+          "decision_latency_ms": null,
+          "decision_peer_id": null,
+          "decision_target": "local",
+          "decision_version": "",
+          "fallback": "local",
+          "min_version": null,
+          "module": "Scheduler",
+          "prefer": "local",
+          "providers": [],
+          "reason": "configured local preference",
+          "required_capabilities": [],
+          "share": false
+        },
+        {
+          "configured": true,
+          "decision_latency_ms": null,
+          "decision_peer_id": null,
+          "decision_target": "local",
+          "decision_version": "",
+          "fallback": "local",
+          "min_version": null,
+          "module": "TTS",
+          "prefer": "local",
+          "providers": [],
+          "reason": "configured local preference",
+          "required_capabilities": [],
+          "share": true
+        },
+        {
+          "configured": true,
+          "decision_latency_ms": null,
+          "decision_peer_id": null,
+          "decision_target": "local",
+          "decision_version": "",
+          "fallback": "local",
+          "min_version": null,
+          "module": "Tooling",
+          "prefer": "local",
+          "providers": [],
+          "reason": "configured local preference",
+          "required_capabilities": [],
+          "share": false
+        },
+        {
+          "configured": true,
+          "decision_latency_ms": null,
+          "decision_peer_id": null,
+          "decision_target": "local",
+          "decision_version": "",
+          "fallback": "local",
+          "min_version": null,
+          "module": "Transcription",
+          "prefer": "local",
+          "providers": [],
+          "reason": "configured local preference",
+          "required_capabilities": [],
+          "share": false
+        },
+        {
+          "configured": true,
+          "decision_latency_ms": null,
+          "decision_peer_id": null,
+          "decision_target": "local",
+          "decision_version": "",
+          "fallback": "local",
+          "min_version": null,
+          "module": "WakeWord",
+          "prefer": "local",
+          "providers": [],
+          "reason": "configured local preference",
+          "required_capabilities": [],
+          "share": false
+        }
+      ],
+      "routing_summaries": [
+        {
+          "configured": true,
+          "eligible_provider_ids": [],
+          "fallback": "local",
+          "ineligible_provider_ids": [],
+          "policy_revision": 1,
+          "prefer": "local",
+          "reason_codes": [],
+          "service_id": "DB",
+          "service_label": ""
+        },
+        {
+          "configured": true,
+          "eligible_provider_ids": [],
+          "fallback": "local",
+          "ineligible_provider_ids": [],
+          "policy_revision": 1,
+          "prefer": "local",
+          "reason_codes": [],
+          "service_id": "Orchestrator",
+          "service_label": ""
+        },
+        {
+          "configured": true,
+          "eligible_provider_ids": [],
+          "fallback": "local",
+          "ineligible_provider_ids": [],
+          "policy_revision": 1,
+          "prefer": "local",
+          "reason_codes": [],
+          "service_id": "STTCoordinator",
+          "service_label": ""
+        },
+        {
+          "configured": true,
+          "eligible_provider_ids": [],
+          "fallback": "local",
+          "ineligible_provider_ids": [],
+          "policy_revision": 1,
+          "prefer": "local",
+          "reason_codes": [],
+          "service_id": "Scheduler",
+          "service_label": ""
+        },
+        {
+          "configured": true,
+          "eligible_provider_ids": [],
+          "fallback": "local",
+          "ineligible_provider_ids": [],
+          "policy_revision": 1,
+          "prefer": "local",
+          "reason_codes": [],
+          "service_id": "TTS",
+          "service_label": ""
+        },
+        {
+          "configured": true,
+          "eligible_provider_ids": [],
+          "fallback": "local",
+          "ineligible_provider_ids": [],
+          "policy_revision": 1,
+          "prefer": "local",
+          "reason_codes": [],
+          "service_id": "Tooling",
+          "service_label": ""
+        },
+        {
+          "configured": true,
+          "eligible_provider_ids": [],
+          "fallback": "local",
+          "ineligible_provider_ids": [],
+          "policy_revision": 1,
+          "prefer": "local",
+          "reason_codes": [],
+          "service_id": "Transcription",
+          "service_label": ""
+        },
+        {
+          "configured": true,
+          "eligible_provider_ids": [],
+          "fallback": "local",
+          "ineligible_provider_ids": [],
+          "policy_revision": 1,
+          "prefer": "local",
+          "reason_codes": [],
+          "service_id": "WakeWord",
+          "service_label": ""
+        }
+      ],
+      "secrets_redacted": true
+    },
+    "newOrcaWorker": false,
+    "observedRoute": {
+      "clock_domain": "python.monotonic_ns:pid:3159877",
+      "peer_connection_instance_sha256": null,
+      "peer_id_sha256": "557ac4a75a8f44d5afcb0babca83e79600fe2317f3f896fcb12c49a826d63614",
+      "pid": 3159877,
+      "sampled_monotonic_ns": 223081808157146,
+      "session_peer_id_sha256": "557ac4a75a8f44d5afcb0babca83e79600fe2317f3f896fcb12c49a826d63614",
+      "status": "exact_peer_connection_missing"
+    },
+    "ownRuntimeRetired": true,
+    "phase": "no_requester_admission_deadline",
+    "pid": 3159877,
+    "trust": [
+      {
+        "inboundPermissions": [
+          "Gateway.GetRegistry",
+          "Gateway.GetMeshStatus",
+          "TTS.Synthesize"
+        ],
+        "inboundStatus": "approved",
+        "outboundPermissions": [
+          "Gateway.GetRegistry",
+          "Gateway.GetMeshStatus",
+          "TTS.Synthesize"
+        ],
+        "outboundStatus": "approved",
+        "peerId": "aurora-03a910366bf721d72a9ef481d2e08fbd"
+      }
+    ]
+  },
+  "actorsAbsent": true,
+  "files": {
+    "terminal.json": {
+      "path": "/home/developer/projects/aurora/thesis/campaigns/worker-desktop-k1-p2p-tts-v1696/provider/terminal.json",
+      "bytes": 437,
+      "sha256": "39cb0e8beea8c30323708862fafc908cdf2db2e1ba2dc44f47121de7aba84a3d"
+    },
+    "runtime-versions.json": {
+      "path": "/home/developer/projects/aurora/thesis/campaigns/worker-desktop-k1-p2p-tts-v1696/provider/runtime-versions.json",
+      "bytes": 211,
+      "sha256": "7333dc38d8d222a446eadfe9683d738e937a1a1761df74c823e014572bc7ab3e"
+    },
+    "STATUS.json": {
+      "path": "/home/developer/projects/aurora/thesis/campaigns/worker-desktop-k1-p2p-tts-v1696/provider/STATUS.json",
+      "bytes": 92601,
+      "sha256": "b35764ac6169bdf2e2e1e206718c015575512c37b40b5173d8ab04ff627e92a1"
+    },
+    "receiver-identity.json": {
+      "path": "/home/developer/projects/aurora/thesis/campaigns/worker-desktop-k1-p2p-tts-v1696/provider/receiver-identity.json",
+      "bytes": 1523,
+      "sha256": "a55bfbe77b07c4d3c15c539f3e5153ca9eecc9b619b7f1a3f40eec340686949c"
+    },
+    "provider-manifest.json": {
+      "path": "/home/developer/projects/aurora/thesis/campaigns/worker-desktop-k1-p2p-tts-v1696/provider/provider-manifest.json",
+      "bytes": 4494,
+      "sha256": "ee66b83078410588f3af09db6f496319ea10e75ad6c4074c8180a8d2f5728543"
+    },
+    "controller-launch.json": {
+      "path": "/home/developer/projects/aurora/thesis/campaigns/worker-desktop-k1-p2p-tts-v1696/provider/controller-launch.json",
+      "bytes": 302,
+      "sha256": "a71303fe877ca28206aaf34b1dba881520c804114b689008e0e8c07a2ee372b8"
+    },
+    "voice-stages.jsonl": {
+      "path": "/home/developer/projects/aurora/thesis/campaigns/worker-desktop-k1-p2p-tts-v1696/provider/voice-stages.jsonl",
+      "bytes": 0,
+      "sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+    },
+    "voice-stages.status.json": {
+      "path": "/home/developer/projects/aurora/thesis/campaigns/worker-desktop-k1-p2p-tts-v1696/provider/voice-stages.status.json",
+      "bytes": 129,
+      "sha256": "33092f425f332f5fd463fbc1b5a24197757503094adc77bc92d814f09735bb68"
+    },
+    "ROOT-LAUNCH.json": {
+      "path": "/home/developer/projects/aurora/thesis/campaigns/worker-desktop-k1-p2p-tts-v1696/provider/ROOT-LAUNCH.json",
+      "bytes": 5117,
+      "sha256": "4153950337fe5d07ba8dfb3f3a68c00b3e037f396d36eb58a4e004c85f157047"
+    },
+    "resources.jsonl": {
+      "path": "/home/developer/projects/aurora/thesis/campaigns/worker-desktop-k1-p2p-tts-v1696/provider/resources.jsonl",
+      "bytes": 7846182,
+      "sha256": "2dd9dfbe665f18a8f44f9bd897cbcc95d523765a9de917f8662c396618d152b6"
+    }
+  }
+}

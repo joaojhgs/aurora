@@ -1,0 +1,103 @@
+{
+  "host": "personal.skyron-server",
+  "at": "2026-10-22T07:37:55.820785+00:00",
+  "actorsAbsent": [
+    2516853,
+    2516854
+  ],
+  "nativeOpen": 0,
+  "signalsSent": 0,
+  "warmupPairsCorrect": 15,
+  "measured": 0,
+  "archive": "/home/developer/projects/aurora/thesis/campaigns/c12-mixed-local-http-900-v2421/provider/terminal-v2425/provider-root-eof-v2421.tar.gz",
+  "bytes": 157129,
+  "sha256": "04212ae9a2cdc7f6dfd1d209f4df55b3eca0799b7ec12169fd7594e777cba6c3",
+  "members": {
+    "terminal.json": {
+      "bytes": 436,
+      "sha256": "43138464718be1072129f0f59270274757702109f51d8187b520c947a3bf81ff"
+    },
+    "runtime-versions.json": {
+      "bytes": 211,
+      "sha256": "3a0eeda911d8faa03adb9a0ff6493b1cbef411ac767d4ffe646352dc671017b7"
+    },
+    "assistant-identity.json": {
+      "bytes": 1420,
+      "sha256": "7b8742663c5ea0148b9e3215105e863650f449cac199438f9cb0a44b444bc81b"
+    },
+    "STATUS.json": {
+      "bytes": 161096,
+      "sha256": "8acf9d439fce8e81371ceb02954e1cd1cbddb3bf91d668cfc493b67dbeffad99"
+    },
+    "receiver-identity.json": {
+      "bytes": 1375,
+      "sha256": "55463273adee6e615b725711657e009d60d73a8c6a95d8c5ab367e3c4f235eee"
+    },
+    "stt-identity.json": {
+      "bytes": 1402,
+      "sha256": "7833eab3dc01bbb5696b7623734f2d43c377a7980de5f5f1040f14c4e3b89898"
+    },
+    "provider-manifest.json": {
+      "bytes": 10718,
+      "sha256": "e102c9a57c9da8cd60a8a74012249c7e4290f017fc157fea4336143a2a90b4cf"
+    },
+    "controller-launch.json": {
+      "bytes": 302,
+      "sha256": "e3560142a96d9023e7c20e936bc41cedb28796dc79b15e514a249f483f8a60de"
+    },
+    "voice-stages.jsonl": {
+      "bytes": 499320,
+      "sha256": "683362cafdcadfa9e893e276f811cc3a535dbf91e4f05cb4fbabcff72c9b797b"
+    },
+    "LOCAL-PRODUCER-TERMINAL.json": {
+      "bytes": 134,
+      "sha256": "dcfc10fbf299145549f99bf27d9d0b1ab2ad66a5020ed37b35e4f65ac7922fff"
+    },
+    "LOCAL-PRODUCER-ARMED.json": {
+      "bytes": 183,
+      "sha256": "0a077f1bf30b9816f71396def734d90f9e2e240d9c632ddd12dab4f1bd276dc1"
+    },
+    "voice-stages.status.json": {
+      "bytes": 136,
+      "sha256": "cebba66b933ec3ff34671962a28e06ec91a06eb94c9d19a81b3161372a119425"
+    },
+    "LOCAL-CURRENT.json": {
+      "bytes": 207,
+      "sha256": "73f30fe507577449d9270615d8ee4dc5dde4c518ec93a7fbebc25b0565eb250a"
+    },
+    "binding-guard-diagnostic.jsonl": {
+      "bytes": 0,
+      "sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+    },
+    "actual-provider-bindings.jsonl": {
+      "bytes": 24783,
+      "sha256": "8e638b74e6587debd2173e78707b072a6a90942e3019cffd9482d895476b31e5"
+    },
+    "ROOT-LAUNCH-INTENT.json": {
+      "bytes": 286,
+      "sha256": "6d86aa4d6d496e14e869b17ed753eab7871e354b56304c75ed227d6bf00a75fe"
+    },
+    "ROOT-LAUNCH.json": {
+      "bytes": 498,
+      "sha256": "d46a6d128c3adc44c8ca6ee90c0c552b23ae98309f7fe22695be6d98d3e26707"
+    },
+    "STOP-REQUESTED.json": {
+      "bytes": 103,
+      "sha256": "a3b30a43e775c4280a532e68799acee9968b3c9bd39e815247a722eb20aadbc9"
+    },
+    "resources.jsonl": {
+      "bytes": 3234648,
+      "sha256": "bf92e8e213dcbc7819a418f741e74c238b82e9accb06b84345404823ac0d2147"
+    },
+    "CAMPAIGN-MANIFEST.json": {
+      "bytes": 8967,
+      "sha256": "3817e5a54ef45cf806bd337689e0172ec7185d12fdcd54f1a342d07bdac321dd"
+    },
+    "ACTUAL-FILES.json": {
+      "bytes": 2100,
+      "sha256": "1274085ad54270b7b28adfea731321e31ad4e17d1d21ee216184de381cba0937"
+    }
+  },
+  "caseCapsules": "All15 already physical worker thesis with every member checksum verified",
+  "originalMasterClock": "07:14:51-21:14:51UTC unchanged; correction charged against same allocation"
+}

@@ -1,0 +1,58 @@
+{
+  "at": "2026-10-15T07:07:00Z",
+  "run": "run_e6054e76e9fc",
+  "task": "task_d7ea336050cf",
+  "dispatch": "ctx_37b4d0a3c14f",
+  "sentBody": "FULLREAD local verification-v522.json18,697B SHA8b649a34aee6d347c16ea6e6a6a4310babb2d91b0cbf868dc46cddc47c13ae6c: ALL22 same verbosecityreply/assistantcriterion only, IDs matched,878/22 and all900Type7 preserved. Savedraw-classification nudge b97f is fulfilled; close this slice without another data/source-review matrix or repeat900. Report explicitly retains queue/first_token/first_audio/playback/physical_audibility UNKNOWN, sourceHashValidation collector_only and no repeatedWAVdecode; no all-pass/mic/playback/fulltelemetry acceptance. Advance Root-owned justified nextindividual fullaudio gate after actual admission; same effective frozen setup/900percondition/excludedwarm and fullsurface/audio barrier stay. In next normal launch/admission receipt attach exact source/disk/reservation/conditioncaps and fresh SAMECPU2232517/2232566 count/resources (last numericdelivered205at06:49; newer54obs visible). No interruption/restart/newworker. LocalZIPcopy still notverified; report copy is verified.",
+  "source": {
+    "path": "docs/experiments/tcc-20261013-submission-20261030/root/desktop-gpu-full-audio-local900-v485/verification-v522.json",
+    "bytes": 18697,
+    "sha256": "8b649a34aee6d347c16ea6e6a6a4310babb2d91b0cbf868dc46cddc47c13ae6c",
+    "fullRead": true,
+    "verifiedAt": "2026-10-15T06:56:46.642350Z",
+    "monitorReadAt": "2026-10-15T07:05:27Z",
+    "nMeasured": 900,
+    "nCorrect": 878,
+    "nIncorrect": 22,
+    "nRuntimeFailures": 0,
+    "nTimeouts": 0,
+    "nWarmup": 15,
+    "all22": {
+      "sameResponse": "The capital of France is Paris.",
+      "falseChecks": [
+        "all_expected",
+        "assistant_reply_matches_expected_words"
+      ],
+      "stage": "assistant",
+      "requestSessionCorrelationIDsMatched": true,
+      "ordinals": [
+        894,
+        915
+      ]
+    },
+    "latencyAll900Type7": {
+      "p90ms": 11970.216910000001,
+      "p95ms": 12421.6015565
+    },
+    "unknowns": [
+      "queue",
+      "first_token",
+      "first_audio",
+      "playback",
+      "physical_audibility"
+    ],
+    "stageQuantilesIndependentNotAdditive": true,
+    "sourceHashValidation": "collector_only",
+    "outputAudioReferencesVerified": 915,
+    "wavDecodingRepeated": false,
+    "monitorZIPReexecution": false,
+    "codingWorkerZIPCopyNotVerified": true,
+    "notAllIndividualAcceptance": true
+  },
+  "rootAckPending": true,
+  "messageId": "msg_083773f7d814",
+  "sentAt": "2026-10-15T07:06:38Z",
+  "noTestsOrBenchmarkRerun": true,
+  "monitorGoalActive": true,
+  "workerDoneSent": false
+}

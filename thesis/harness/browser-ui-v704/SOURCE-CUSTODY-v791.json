@@ -1,0 +1,21 @@
+{
+  "at": "2026-10-16T01:40:38.806366+00:00",
+  "scope": "exact reviewed source copies for declared readonly V472 build alias; no runtime acceptance",
+  "files": [
+    {
+      "source": ".git/aurora-handoff-import-20261006/browser-ready-prep-v789/controller.py",
+      "canonicalCopy": "thesis/harness/browser-ui-v704/controller.py",
+      "bytes": 37040,
+      "sha256": "68096214890bbab8353ba6b1a13743789e54212996cc26fae685cb03fe489f99"
+    },
+    {
+      "source": ".git/aurora-handoff-import-20261006/browser-ready-prep-v789/stage_freeze.py",
+      "canonicalCopy": "thesis/harness/browser-ui-v704/stage_freeze.py",
+      "bytes": 25308,
+      "sha256": "c721c0af05acead41ee7d55f0782ca05dcae899b218dfaa4f49b3380bf4c7fb5"
+    }
+  ],
+  "reviewSHA256": "744905b4fc1bd4858b97b3a91b1992b19dbc2e6a2951bed4eb338268d4a0b91a",
+  "previousSourceCustody": "SOURCE-CUSTODY-v774.json",
+  "runtimeLaunched": false
+}

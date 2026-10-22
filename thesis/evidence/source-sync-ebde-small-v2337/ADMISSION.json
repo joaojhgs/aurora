@@ -1,0 +1,76 @@
+{
+  "at": "2026-10-22T00:45:42.511131+00:00",
+  "sourceSha": "ebde3a8acf6315f920d03593845f17a1fc65a733",
+  "mainBefore": {
+    "at": "2026-10-22T00:45:42.508324+00:00",
+    "classification": "VERIFIED_WAIT",
+    "manifestSha256": "9adbf9ba3a7ec0948a087edad3655cf94ee344b3a2371a78d15f188f44150d42",
+    "actors": [
+      {
+        "pid": 3965950,
+        "expectedStartTicks": 139740362,
+        "state": "S",
+        "startTicks": 139740362,
+        "matches": true
+      },
+      {
+        "pid": 3965978,
+        "expectedStartTicks": 139740616,
+        "state": "S",
+        "startTicks": 139740616,
+        "matches": true
+      },
+      {
+        "pid": 3965951,
+        "expectedStartTicks": 139740363,
+        "state": "S",
+        "startTicks": 139740363,
+        "matches": true
+      }
+    ],
+    "epochMeasured": {
+      "attempted": 184,
+      "correct": 184,
+      "failed": 0,
+      "incorrect": 0,
+      "timeouts": 0,
+      "planned": 450
+    },
+    "conditionCountsOnly": {
+      "attempted": 634,
+      "correct": 633,
+      "failed": 1,
+      "incorrect": 0,
+      "unattempted": 266,
+      "planned": 900
+    },
+    "copier": {
+      "receipt": "thesis/campaigns/worker-desktop-k1-orca-relayed-http-remaining450-v2296/receipts/000183.json",
+      "sha256": "6540541ff1c20d97fb254bc00a4b96db93e9556caa6ecf727411d2fd0ffd29cb",
+      "cases": 198,
+      "WAV": 198,
+      "errors": [],
+      "freeBytes": 3263561728
+    },
+    "terminalSummaryPresent": false,
+    "observationOnly": true,
+    "newSutCalls": 0,
+    "processSignals": 0,
+    "measurementInputsNotModifiedByThisObserver": true
+  },
+  "purpose": "Root-only bounded exact committed source archive for existing setup worker; independent public notebook downloads already owner-authorized",
+  "sourceExclusions": [
+    ".gitnexus",
+    ".omx",
+    "thesis"
+  ],
+  "maximumArchiveBytes": 12582912,
+  "maximumSeconds": 120,
+  "priority": "nice19 ioniceidle",
+  "readChunkBytes": 262144,
+  "minimumPausePerChunkSeconds": 0.02,
+  "minimumFreeBytes": 2147483648,
+  "mainInputsModified": false,
+  "gitIndexOrRefsModified": false,
+  "newWorkers": 0
+}

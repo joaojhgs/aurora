@@ -1,0 +1,12 @@
+{
+  "controlDeadline": "2026-10-20T22:02:00Z",
+  "explicitNewline": true,
+  "host": "ssh:ssh-sem-notebook-personal",
+  "incarnation": "633939eb-60f4-4bc0-9a0c-5941dc6db36a",
+  "remoteResult": "/home/developer/projects/aurora/thesis/phone-notebook/20261020/evidence/preparation-copy-07-2152.json",
+  "rootAdmissionMessage": "msg_241213ebc84e",
+  "script": "evidence/preparation-transfer-source/receive-07.py",
+  "scriptSha256": "d3377e3fef390009cbdb78bc095bd5092c55ef4ee5e945be33d67b4cf48f3939",
+  "singleSend": true,
+  "terminal": "term_f40f2bd6-0f71-4484-8347-ac221cf6ce9b"
+}

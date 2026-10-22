@@ -1,0 +1,21 @@
+{
+  "files": [
+    {
+      "path": "thesis/validation/android-orca-relay-preparation-v1315/SKILL.md",
+      "bytes": 10254,
+      "sha256": "4de175839cbcfbe01d5e87069510592cfcfa06cf832c12adb06a3a3ca9de724e"
+    },
+    {
+      "path": "thesis/validation/android-orca-relay-preparation-v1315/GUIDE-RECEIPT.json",
+      "bytes": 10493,
+      "sha256": "640c13028b76dabedbd0d5c2bb1e0fc34a2abf298cfe08626323d8d7d6caf2ec"
+    },
+    {
+      "path": "thesis/validation/android-orca-relay-preparation-v1315/PREPARATION.json",
+      "bytes": 4781,
+      "sha256": "23dcca33eb23d2a07e96d1813b0eb1a75cb00f053f3604a0c4d01feca24ffdf0"
+    }
+  ],
+  "actualDeviceActions": 0,
+  "newMeasurements": 0
+}

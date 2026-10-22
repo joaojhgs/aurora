@@ -1,0 +1,1 @@
+{"attempted": 580, "condition_measured_offset": 276, "condition_measured_target": 900, "last_attempt_file": "attempts/attempt-0580-measured.jsonl", "last_attempt_status": "failed", "measured_attempted": 562, "planned_measured": 624, "planned_warmups": 15, "status": "running", "unattempted_measured": 62, "warmups_attempted": 18}

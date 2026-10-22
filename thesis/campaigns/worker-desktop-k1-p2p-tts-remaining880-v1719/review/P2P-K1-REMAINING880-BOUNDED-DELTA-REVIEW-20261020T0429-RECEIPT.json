@@ -1,0 +1,38 @@
+{
+  "at": "2026-10-20T04:29:53.112883+00:00",
+  "verdict": "PASS",
+  "report": ".omx/evidence/orca-monitor-20261010/P2P-K1-REMAINING880-BOUNDED-DELTA-REVIEW-20261020T0429.md",
+  "bytes": 4799,
+  "sha256": "b69a416970f762c48a3788cebcd3c114547524a82bc02b3de36b31997bd96b70",
+  "diffPath": "thesis/harness/distributed-k1-mesh-remaining880-v1719/REMAINING880.diff",
+  "diffSha256": "63f613bba39ca2f9f9c13fa73451122a85445666f18fcc4b27deaa0efd86b03f",
+  "reviewedFiles": [
+    {
+      "path": "thesis/harness/distributed-k1-mesh-remaining880-v1719/requester/runner.py",
+      "bytes": 72783,
+      "sha256": "c55f5f394a22b2cf64a76e7819d31c3a731ae97000236b4ab3f03434291050b1"
+    },
+    {
+      "path": "thesis/harness/distributed-k1-mesh-remaining880-v1719/requester/controller.py",
+      "bytes": 19652,
+      "sha256": "2a782c273a283ed45b266ad854bf36a6e5ab1ccfcdd9a8c0be9e0ae1762de530"
+    },
+    {
+      "path": "thesis/harness/distributed-k1-mesh-remaining880-v1719/requester/tts_mesh_adapter.py",
+      "bytes": 4976,
+      "sha256": "be34f6c73d2901c64f3273bdac73102e306bc3151f610adb2fd65f916195a5ec"
+    },
+    {
+      "path": "thesis/harness/distributed-k1-mesh-remaining880-v1719/requester/receiver_proof.py",
+      "bytes": 24715,
+      "sha256": "4357fb4809eb3c5d6042eb5ceb215b4662b2cd449c79c0fe9b2322cf892c1c4d"
+    }
+  ],
+  "sourceOnly": true,
+  "testsOrInference": 0,
+  "remaining880LaunchVerified": false,
+  "rootRequest": "msg_bce51900e0a9",
+  "run": "run_e6054e76e9fc",
+  "task": "task_d7ea336050cf",
+  "dispatch": "ctx_37b4d0a3c14f"
+}

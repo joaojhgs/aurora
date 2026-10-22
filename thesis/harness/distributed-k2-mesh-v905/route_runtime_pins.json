@@ -1,0 +1,10 @@
+{
+  "schema": "aurora.mesh_route_runtime_pins.v1",
+  "status": "template_only_not_launchable",
+  "runtimePrefix": null,
+  "pathFile": null,
+  "searchRoots": null,
+  "firstLocatedRoot": null,
+  "packages": null,
+  "loadedModules": null
+}

@@ -1,0 +1,46 @@
+{
+  "artifacts": [
+    {
+      "actualSha256": "99f520db7364a06be0c174a385d03f9ccdbfe08f61146055229e4a990e285262",
+      "bytes": 11448570,
+      "expectedBytes": 0,
+      "expectedSha256": "99f520db7364a06be0c174a385d03f9ccdbfe08f61146055229e4a990e285262",
+      "name": "sherpa-onnx-v1.13.5.tar.gz",
+      "path": "/home/developer/projects/aurora/thesis/phone-notebook/20261020/deployment/ebde3a8acf6315f920d03593845f17a1fc65a733/android-build-ebde3a8a-v48/.artifacts/sherpa-onnx/android-runtime-build/sources/sherpa-onnx-v1.13.5.tar.gz",
+      "status": "VERIFIED_EXACT",
+      "url": "https://github.com/k2-fsa/sherpa-onnx/archive/refs/tags/v1.13.5.tar.gz"
+    },
+    {
+      "actualSha256": "defade26209f72cf4fa9769b18052c842833d6bef12924595d26f03b995548ca",
+      "bytes": 32785641,
+      "expectedBytes": 32785641,
+      "expectedSha256": "defade26209f72cf4fa9769b18052c842833d6bef12924595d26f03b995548ca",
+      "name": "onnxruntime-android-1.27.1.zip",
+      "path": "/home/developer/projects/aurora/thesis/phone-notebook/20261020/deployment/ebde3a8acf6315f920d03593845f17a1fc65a733/android-build-ebde3a8a-v48/.artifacts/sherpa-onnx/android-runtime-build/sources/onnxruntime-android-1.27.1.zip",
+      "status": "VERIFIED_EXACT",
+      "url": "https://github.com/csukuangfj/onnxruntime-libs/releases/download/v1.27.1/onnxruntime-android-1.27.1.zip"
+    }
+  ],
+  "deadlineUtc": "2026-10-22T03:27:22.160561+00:00",
+  "elapsedSeconds": 84.56351554199864,
+  "finishedAt": "2026-10-22T03:18:46.723715+00:00",
+  "modelCalls": 0,
+  "modelDownloads": 0,
+  "pid": 121272,
+  "rateBytesPerSecond": 524288,
+  "resources": {
+    "at": "2026-10-22T03:18:46.692544+00:00",
+    "diskFreeBytes": 99796721664,
+    "load": [
+      4.61474609375,
+      5.89404296875,
+      5.08349609375
+    ],
+    "maxSensorC": 91.25,
+    "memAvailableBytes": 20410519552
+  },
+  "startTicks": "1963220",
+  "startedAt": "2026-10-22T03:17:22.160218+00:00",
+  "status": "VERIFIED_PINNED_ANDROID_ENGINE_ARCHIVES",
+  "temperaturePolicy": "observe_only_owner_correction"
+}

@@ -1,0 +1,34 @@
+{
+  "id": "79f797c2-8663-4860-a7d4-e02812d8e8f8",
+  "ok": false,
+  "error": {
+    "code": "run_not_found",
+    "message": "Run run_8e16b490b21b was not found. Orchestration mutation request ID: b17fb666-0409-4982-952e-48f843c9692c.",
+    "data": {
+      "orchestrationRequestId": "b17fb666-0409-4982-952e-48f843c9692c",
+      "originalCommand": [
+        "orca",
+        "orchestration",
+        "send",
+        "--run",
+        "run_e6054e76e9fc",
+        "--from",
+        "term_6a00d9ee-792a-4daf-8578-236290e33108",
+        "--to",
+        "run:run_8e16b490b21b",
+        "--type",
+        "escalation",
+        "--priority",
+        "high",
+        "--subject",
+        "Existing Aurora audit Task: owning-host read-only admission route needed",
+        "--body",
+        "Read-only admission attention for the existing owner-named Personal Aurora Run. Original Root remains native goal01a112a5-d6bb-74e2-bf7c-ace73cb513b5, Run run_e6054e76e9fc, terminal term_6a00d9ee-792a-4daf-8578-236290e33108/incarnation fe7e63c7-d260-465f-b37e-f6fc78f8a1af. Owner explicitly authorized ONE separate audit session under that ORIGINAL Run, not a replacement Root/monitor. Audit Task task_c626834bf1c6 already exists; task-create request5d982b0e-7361-400c-80f8-b5d5f42544c9. Worker request15142b33-da95-45c7-b9fd-6303d9cb3d61 is reserved and NEVER ATTEMPTED; Dispatch/terminal/incarnation absent. Exact approved existing worker workspace314e7b89-8f19-4535-9443-22b342aedff7::/home/developer/projects/aurora on ssh:ssh-oci-coding-worker. The SSH client reports Manager service credential is not configured; account usage is locally forbidden and requires the owning Orca host. No repeated quota probes or credential changes were made. Please, ONLY if an existing authorized owning-host manager context already handles this Run, return read-only live worker-host Codex Sol model/agent availability, reachable account quota with checkedAt/retryAt, and resource/admission evidence, or the exact supported owning-host action/capability required. Do not create/claim/adopt a Run/session, start Taskc2, launch any worker, resume a goal, change grants/accounts/credentials, or run builds/tests/inference in response to this route request. Root will retain sole actual launch decision using the same audit Task/request after admission. Return evidence through the existing original Run mailbox: orchestration send --to run:run_e6054e76e9fc. Existing monitor dispatch ctx_37b4d0a3c14f remains sole methodology writer. Audit exclusive write claim: thesis/audit/20261017-data-and-results/; task spec and exact refusal receipts physically at thesis/evidence/auditor-dispatch-20261017/. Current K1 measurement and Root reservations must remain untouched. This packet is durable attention to the owner-named Run only: run-show found coordinator_handle null, so the sender does not claim a live Coding recipient or accepted delivery.",
+        "--json"
+      ]
+    }
+  },
+  "_meta": {
+    "runtimeId": "cc9e3275-28c6-4c45-85cc-bdcd2262aa7d"
+  }
+}

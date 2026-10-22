@@ -1,0 +1,41 @@
+{
+  "at": "2026-10-20T16:44:20.404957+00:00",
+  "run": "run_e6054e76e9fc",
+  "task": "task_d7ea336050cf",
+  "dispatch": "ctx_37b4d0a3c14f",
+  "nativeGoal": "01a123ff-19ba-7332-a2f7-346a722af79f",
+  "kind": "bounded supervision-efficiency nudge; no measurement intervention",
+  "evidence": {
+    "captureAt": "2026-10-20T16:44:20.404957+00:00",
+    "measured": 134,
+    "correct": 134,
+    "failed": 0,
+    "remaining": 766,
+    "actors": [
+      {
+        "role": "controller",
+        "pid": 2830732,
+        "startTicks": 129050331,
+        "sameLive": true
+      },
+      {
+        "role": "backend",
+        "pid": 2830763,
+        "startTicks": 129050436,
+        "sameLive": true
+      },
+      {
+        "role": "copier",
+        "pid": 2831081,
+        "startTicks": 129052325,
+        "sameLive": true
+      }
+    ],
+    "custodyUpdatedAt": "2026-10-20T16:44:10.163258+00:00",
+    "rootScreenReceipt": "4408c68c-1fe4-404a-b797-911eba233bd4",
+    "rootScreenObservations": "Successive routine progress reads at 129 and 132, and earlier 111/114, while same frozen run advances. No extra tests/source reviews observed; no stall claimed.",
+    "frozenSha256": "a653d60065616e34844d956d1ed47038aa94f3ff876c36bf3a98e904ca838641"
+  },
+  "recommendation": "Use existing durable event wakeups and bounded <=60s mailbox waits, with about 5-minute local PID-start/progress/custody checks while healthy and immediate terminal/error handling; avoid minute-by-minute LLM progress restatements. No new watchdog process, worker, source change, test, model traffic or campaign gate.",
+  "boundary": "Root remains sole execution/reservation owner. Frozen campaign unchanged. K1 191 and wider matrix remain open."
+}

@@ -1,0 +1,25 @@
+{
+  "recordedAt": "2026-10-14T17:03:13.538989+00:00",
+  "tools": {
+    "matched-main-export-v320/export.py": {
+      "sha256": "34ccb4fd3ebac585813a043e53c7e0db8f59b85936f336e4ad8626bffc7c766e",
+      "AST": "pass"
+    },
+    "matched-main-analysis-v324/analyze.py": {
+      "sha256": "42c42917b30df199c27476bcf66ae8abbf638157b39e25f3a11828e1326c5ed8",
+      "AST": "pass"
+    }
+  },
+  "campaignReportedExitCode": 0,
+  "observedOwnedCampaignPIDsAbsent": [
+    1305953,
+    1305954,
+    1665506
+  ],
+  "timeoutWrapperOSExitCode": null,
+  "retiredOuterHandle": 33217,
+  "retiredOuterExitCode": 143,
+  "globalHostCleanupClaim": false,
+  "criticalRuffExitCode": 1,
+  "criticalRuffOutput": "F401 [*] `shutil` imported but unused\n  --> .git/aurora-handoff-import-20261006/matched-main-export-v320/export.py:18:8\n   |\n16 | import os\n17 | import re\n18 | import shutil\n   |        ^^^^^^\n19 | import sys\n20 | from collections import Counter\n   |\nhelp: Remove unused import: `shutil`\n\nFound 1 error.\n[*] 1 fixable with the `--fix` option.\n"
+}

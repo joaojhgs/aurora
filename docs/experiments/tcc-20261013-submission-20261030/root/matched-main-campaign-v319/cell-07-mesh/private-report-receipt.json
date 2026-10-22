@@ -1,0 +1,541 @@
+{
+  "full_report_retained_private": true,
+  "original_private_report_bytes": 181028,
+  "original_private_report_sha256": "f8e992195c83eac29181ded15a0bedd9c9833801cae2ab07689f4404121830f1",
+  "report_stats": {
+    "duration": 3772326.381,
+    "expected": 1,
+    "flaky": 0,
+    "skipped": 0,
+    "startTime": "2026-10-14T13:55:52.071Z",
+    "unexpected": 0
+  },
+  "selected_attachment_count": 105,
+  "selected_attachments_sha256": [
+    {
+      "attempt_type": "warmup",
+      "ordinal": 1,
+      "sha256": "359520beda4c6052fb85f83cadcaacced31686cd63641a2ae9784d06c2658ff6"
+    },
+    {
+      "attempt_type": "warmup",
+      "ordinal": 2,
+      "sha256": "3cc2863493b6bef6d3e42f21128102c93b91f3dcf518751ec1aac8eeee434192"
+    },
+    {
+      "attempt_type": "warmup",
+      "ordinal": 3,
+      "sha256": "5fcbf1200bcdd09c3cf19f6d31783c8917e71ee0054e541cdb1aefb07a67796d"
+    },
+    {
+      "attempt_type": "warmup",
+      "ordinal": 4,
+      "sha256": "76032dd50fe9bc53d5ff73c78f6c95b405f61a44aafb5cf03bc7c0ea3c770a54"
+    },
+    {
+      "attempt_type": "warmup",
+      "ordinal": 5,
+      "sha256": "9b329e472afcf6d24ccc1cdef9051db828e1f655671f3e5944c268e17b992b51"
+    },
+    {
+      "attempt_type": "measured",
+      "ordinal": 6,
+      "sha256": "05307846a6f8bffd7685e9ba00d4544bf4015e4015fe79125a43905c7daf121a"
+    },
+    {
+      "attempt_type": "measured",
+      "ordinal": 7,
+      "sha256": "4db1a2241830a551b46913e51280093e05335e0e204b0351697ec7d81013b9c0"
+    },
+    {
+      "attempt_type": "measured",
+      "ordinal": 8,
+      "sha256": "9529f20df05db7334a33a514fe206f3323f8e0dd3bd9fe30d200b639b4645149"
+    },
+    {
+      "attempt_type": "measured",
+      "ordinal": 9,
+      "sha256": "e1d04cf0a12dec9e17bdd272a7a6a47c90e5270916e69f2fbdd24627c33e9b94"
+    },
+    {
+      "attempt_type": "measured",
+      "ordinal": 10,
+      "sha256": "d2eaf0f4d8f77038470853d17ed8051e5c3aee4848a71c3e54c02ce222cad57d"
+    },
+    {
+      "attempt_type": "measured",
+      "ordinal": 11,
+      "sha256": "0ae040584d7d38061333330311e8917cc82a2cbdd012f3e46dd0dcfbaa732cc2"
+    },
+    {
+      "attempt_type": "measured",
+      "ordinal": 12,
+      "sha256": "e5c8485a5623686b9c3e2c0704fd3934dca351cb22bd0e9ce8bf0589679dd891"
+    },
+    {
+      "attempt_type": "measured",
+      "ordinal": 13,
+      "sha256": "27c357fb7cea0ebb912a2487ec4c7d135cd1c2228fbdd06ffdda9673e2456c1d"
+    },
+    {
+      "attempt_type": "measured",
+      "ordinal": 14,
+      "sha256": "1cc4fd4e11520752aa2d597afa475c63c4923fd5eae808a56205386fa0e50a28"
+    },
+    {
+      "attempt_type": "measured",
+      "ordinal": 15,
+      "sha256": "4c5c1e4274ad4168ada3d1c64ff9074c89459ae7a5056c6072f99083c0e37c3b"
+    },
+    {
+      "attempt_type": "measured",
+      "ordinal": 16,
+      "sha256": "c72c01e2cbf02c908dba55c3fed009e7b724c77dd2e2f06f0a19d55c0ae58f4e"
+    },
+    {
+      "attempt_type": "measured",
+      "ordinal": 17,
+      "sha256": "6186678ee9a282d00c001a8a8363f846c0ada76124e67f6a9562a774c0f6c0eb"
+    },
+    {
+      "attempt_type": "measured",
+      "ordinal": 18,
+      "sha256": "9901993a585d1baa04575f0b8e1c47b7c2d83824569b6b6104f255ff23920ab6"
+    },
+    {
+      "attempt_type": "measured",
+      "ordinal": 19,
+      "sha256": "5a54047ebe698ca95596fb7f250cd7d40c453cfdcd8132ca5c3f27b5d203fc95"
+    },
+    {
+      "attempt_type": "measured",
+      "ordinal": 20,
+      "sha256": "eaf398f6dfe6e5a3bcb90c505bcf899ae492f2ab652f01f07a5ca54510b652de"
+    },
+    {
+      "attempt_type": "measured",
+      "ordinal": 21,
+      "sha256": "b7456bde6fdbad019126cb694c885ab9a22eaa983cf739f4d915b0b21601bf78"
+    },
+    {
+      "attempt_type": "measured",
+      "ordinal": 22,
+      "sha256": "355f538f5faf9c4592f54a494451f74368fe439ff83c479396afd6f88d9c81ab"
+    },
+    {
+      "attempt_type": "measured",
+      "ordinal": 23,
+      "sha256": "ca38b47356554f342466a405450477c07e260eea74d28a1652f9cf9df638cc17"
+    },
+    {
+      "attempt_type": "measured",
+      "ordinal": 24,
+      "sha256": "4fcb12f0c658a79ce4cf1552a90a1f856ba2fae685b1f3aa94cd55c1640a5113"
+    },
+    {
+      "attempt_type": "measured",
+      "ordinal": 25,
+      "sha256": "3629d0e3c47c9a96ecdb92a00e868f1d8be5f02a9f58e6d869994e8f0499bbaf"
+    },
+    {
+      "attempt_type": "measured",
+      "ordinal": 26,
+      "sha256": "ee8c4d04ab3f2bc6bdbe70f3f6853a19bf16ffc456b274fc0ecfc4c788cfad33"
+    },
+    {
+      "attempt_type": "measured",
+      "ordinal": 27,
+      "sha256": "5ab730e51c914cf9f8a988c098c38e506f5d52d53a3068e177c99c59b90a6ea2"
+    },
+    {
+      "attempt_type": "measured",
+      "ordinal": 28,
+      "sha256": "0d66fce7bd13048423188e2b36a46bb1e6101737022dac56d8adf8276b862aa3"
+    },
+    {
+      "attempt_type": "measured",
+      "ordinal": 29,
+      "sha256": "c2a26831e9071dd45bd342db7ccc6b499063c535091cc7941084546f63947929"
+    },
+    {
+      "attempt_type": "measured",
+      "ordinal": 30,
+      "sha256": "c2a15ab84c66e09a5df0be929de4aa6bee9fe3c0204e8c5b85852983e9f58add"
+    },
+    {
+      "attempt_type": "measured",
+      "ordinal": 31,
+      "sha256": "2d5a0dcb381210c54abdfe6978622f42d0f5f8ea055606ba910c059df09ca8cd"
+    },
+    {
+      "attempt_type": "measured",
+      "ordinal": 32,
+      "sha256": "55a5e699448e761c90b7bc178f5ba5111f7928d732d6101dad30c2d540d87886"
+    },
+    {
+      "attempt_type": "measured",
+      "ordinal": 33,
+      "sha256": "a1db11e7ffbe39b7276a0e6a6932c8a3319b77bd43b8479d27a4506834f753da"
+    },
+    {
+      "attempt_type": "measured",
+      "ordinal": 34,
+      "sha256": "def2d6bede16585f7985a60c54f69b602c9a0c2cea885d22d63f66d28e75504e"
+    },
+    {
+      "attempt_type": "measured",
+      "ordinal": 35,
+      "sha256": "c7f4244db1442f5d49b63693af5df477883fe156c1b8185c0fd644e875a2a23b"
+    },
+    {
+      "attempt_type": "measured",
+      "ordinal": 36,
+      "sha256": "baaac2a389b55ec0e827351149851455a9e86d6c6c134b38a2314ae1e036d572"
+    },
+    {
+      "attempt_type": "measured",
+      "ordinal": 37,
+      "sha256": "84cd78ec1006a914f52c90b9c4462db49732664d5bf2f2dd639f802ca93a6f91"
+    },
+    {
+      "attempt_type": "measured",
+      "ordinal": 38,
+      "sha256": "6a902388e58d7349c655efc44c56e2ee07af744266a5e448a5915426dc6de0ba"
+    },
+    {
+      "attempt_type": "measured",
+      "ordinal": 39,
+      "sha256": "5f1bcd9e21a33adcde25a9b547334c26fab76e6b3d2582ed6947efbf6dc91a2a"
+    },
+    {
+      "attempt_type": "measured",
+      "ordinal": 40,
+      "sha256": "f822c29f016b6e9c9c8f174ddd2c10e4eeae7409ce87f7d3c85351a9e251435f"
+    },
+    {
+      "attempt_type": "measured",
+      "ordinal": 41,
+      "sha256": "e0c16caad0bfd6b07aea79be96efe808ae4ebc5ab7c128b369ccf9039dcc7148"
+    },
+    {
+      "attempt_type": "measured",
+      "ordinal": 42,
+      "sha256": "d053fb326eb5ed04b1385090211fb6d901c615c768f87c827b99aa5522e16adf"
+    },
+    {
+      "attempt_type": "measured",
+      "ordinal": 43,
+      "sha256": "774db6e0de1e307a357df9d2b4042ba1a100d4f81c49d8f4e971735ed4772697"
+    },
+    {
+      "attempt_type": "measured",
+      "ordinal": 44,
+      "sha256": "2670ece772239cca01ad9a629fe3d800a8ecb1c81b57185097d7971e581d9e75"
+    },
+    {
+      "attempt_type": "measured",
+      "ordinal": 45,
+      "sha256": "81f9d1ff57323d1ba48ae82b92f6a70903ed3046b8b1451505a5062f179cfc07"
+    },
+    {
+      "attempt_type": "measured",
+      "ordinal": 46,
+      "sha256": "7ebfd48fc05a3ec6addb246fd7dc7ee04936c03d952432ca52539484edf99a0f"
+    },
+    {
+      "attempt_type": "measured",
+      "ordinal": 47,
+      "sha256": "40a5339408da0b68bb77d94c05c000fe46ffc96e5dcf42beed90a278fc8951a8"
+    },
+    {
+      "attempt_type": "measured",
+      "ordinal": 48,
+      "sha256": "b5d384bda28cd254656c5f6e6bf5ed8f8fe1bae76eb703445a1302694d37ab8b"
+    },
+    {
+      "attempt_type": "measured",
+      "ordinal": 49,
+      "sha256": "bb62948e8aa08c27f491cf2a797890aa14e6332c4762e394fcd7b056760bec91"
+    },
+    {
+      "attempt_type": "measured",
+      "ordinal": 50,
+      "sha256": "e79c62a08a3fe44a186b9dc4b97595108167bb00042af7c18ff95bbfddaf3243"
+    },
+    {
+      "attempt_type": "measured",
+      "ordinal": 51,
+      "sha256": "c670a2ca10b71e1ae4662ca3c631c5fc4fe8ccfc2f3c5508459a953edff6e15c"
+    },
+    {
+      "attempt_type": "measured",
+      "ordinal": 52,
+      "sha256": "8d8e6a06c3902c7e92434ee6df9d344ee590bf275c4b3ffa6b164a1606dd929d"
+    },
+    {
+      "attempt_type": "measured",
+      "ordinal": 53,
+      "sha256": "4d6ebfed8327d8007251ee4a12991221e50cdf76280db397fac969b537d3fa1b"
+    },
+    {
+      "attempt_type": "measured",
+      "ordinal": 54,
+      "sha256": "394eb6765a9a784ac21ed7135f8d51af82e582ab9e65f5f5d4d7285031b7ffbb"
+    },
+    {
+      "attempt_type": "measured",
+      "ordinal": 55,
+      "sha256": "8ab53f676ef3037d9935676fcb55875c6fdedbcc2e98aba6a6ab1bb3b9f8a187"
+    },
+    {
+      "attempt_type": "measured",
+      "ordinal": 56,
+      "sha256": "5ebb7d8f5c2de73f44dd35bccddb89f1801a0a4d63dd36d75890c514a40367ca"
+    },
+    {
+      "attempt_type": "measured",
+      "ordinal": 57,
+      "sha256": "a3ec18304b08c3422c7f4f5af7eb355568f0c3dce8b2e898c422f6f969907a46"
+    },
+    {
+      "attempt_type": "measured",
+      "ordinal": 58,
+      "sha256": "829db8e7fdd8e3b10a18ba3c5b9814e96ec0517fa7da0f831d86e8ffe6907189"
+    },
+    {
+      "attempt_type": "measured",
+      "ordinal": 59,
+      "sha256": "a258813f2e16f6fe1a7acb45a5fa43de2880971e981dbdfdbe81e301525159a9"
+    },
+    {
+      "attempt_type": "measured",
+      "ordinal": 60,
+      "sha256": "653c7d4f28dd97885da45b13d5281649d9317a201eeda9f5de8f212430b72bd4"
+    },
+    {
+      "attempt_type": "measured",
+      "ordinal": 61,
+      "sha256": "6e809dc26953b3c607219693a5e9c047a17e6c3916a7fb9b813fcbb9b0bb0816"
+    },
+    {
+      "attempt_type": "measured",
+      "ordinal": 62,
+      "sha256": "c6feeb40cb63a675ed5968aabb3e70e8e95d0606503af383a65449ca3a6957d3"
+    },
+    {
+      "attempt_type": "measured",
+      "ordinal": 63,
+      "sha256": "3dae811858952aeac8c98db2d269d1380842404e7b37c537418effe8927b0693"
+    },
+    {
+      "attempt_type": "measured",
+      "ordinal": 64,
+      "sha256": "d6010d16699726d53cb586024d130e5c650fbdf6998d2ce3d6b9339b9af0a87f"
+    },
+    {
+      "attempt_type": "measured",
+      "ordinal": 65,
+      "sha256": "579eeeb083dffa93dae32f35ae7c83bb49cc3690122b8b93b9a96074a791ab33"
+    },
+    {
+      "attempt_type": "measured",
+      "ordinal": 66,
+      "sha256": "49b1da2a856874edb6e3436ec3670d8e09b7d81a9d814d8ad593087e79310714"
+    },
+    {
+      "attempt_type": "measured",
+      "ordinal": 67,
+      "sha256": "58ec0ca3fad85be76fac49a537503853c195440ab3eea93e05c5be2e13f9b259"
+    },
+    {
+      "attempt_type": "measured",
+      "ordinal": 68,
+      "sha256": "82d7bfced12cafa64d488ff5b3abc819e8b8b4e25aee8e58f78c4514e152531a"
+    },
+    {
+      "attempt_type": "measured",
+      "ordinal": 69,
+      "sha256": "196535eb1ece875c43627945cd254a11b9dafbd9f4d16c33f7c4eecd0b604114"
+    },
+    {
+      "attempt_type": "measured",
+      "ordinal": 70,
+      "sha256": "019e597c3d346d81c265bcd068d65e5b001275792deac2ad5c236e4ec7c6c463"
+    },
+    {
+      "attempt_type": "measured",
+      "ordinal": 71,
+      "sha256": "70d3588bf137f77ebaa8f0aac584525fda067e81fde3b8d077004c02fcc14e42"
+    },
+    {
+      "attempt_type": "measured",
+      "ordinal": 72,
+      "sha256": "b213f76e623bd4ae1f39e1e396b76fa56c9c55a72d3e88f5ad59cd18e3501693"
+    },
+    {
+      "attempt_type": "measured",
+      "ordinal": 73,
+      "sha256": "df00d43b497aad3c3230a875af826c310471802f9a251577efe9141d562ecb98"
+    },
+    {
+      "attempt_type": "measured",
+      "ordinal": 74,
+      "sha256": "fd046d3609086e708d4f8fe8db3c9d729c0c09123f0dec2beacac768b67869cc"
+    },
+    {
+      "attempt_type": "measured",
+      "ordinal": 75,
+      "sha256": "463dcf915c005d3b8417457bb636bd323fa605f3029a6d5835a56cf56a8ca89f"
+    },
+    {
+      "attempt_type": "measured",
+      "ordinal": 76,
+      "sha256": "ff5e14bbf81471d4390e60d469693970616ae7d34f040a90293cf4030dc7aa17"
+    },
+    {
+      "attempt_type": "measured",
+      "ordinal": 77,
+      "sha256": "dde7faa826c9f29359681dd7dab320a50525b8346cde818cdb386eceb49660b0"
+    },
+    {
+      "attempt_type": "measured",
+      "ordinal": 78,
+      "sha256": "32b1366a94f8a5b2ca56861667b6f9fd1894f1a0e3312b56cd9ea48df23a7854"
+    },
+    {
+      "attempt_type": "measured",
+      "ordinal": 79,
+      "sha256": "caa4f98a0b435cb252c7b2e6d129004ef9c24105e3175b600d8fcac85a106aaf"
+    },
+    {
+      "attempt_type": "measured",
+      "ordinal": 80,
+      "sha256": "0a9cc27d41f6e117c87e0acb4fa4434244eb3d95e4c091bbef115b27dc23a5a7"
+    },
+    {
+      "attempt_type": "measured",
+      "ordinal": 81,
+      "sha256": "b4089a95482881199bf9b09787bc1a42f9f684efe55445b9197e9d3f6f201575"
+    },
+    {
+      "attempt_type": "measured",
+      "ordinal": 82,
+      "sha256": "38099aeb01026108272fdaf62d8dfd45501231d890684c8b64d10ab571cfa9ce"
+    },
+    {
+      "attempt_type": "measured",
+      "ordinal": 83,
+      "sha256": "7b49df8060b5a06c9fd5fcd9b1d9bc51b60c273a38d60225fb2853eabda8eef0"
+    },
+    {
+      "attempt_type": "measured",
+      "ordinal": 84,
+      "sha256": "87858ecf00a25d9feeccfd80b381227482207bc71eadb4ad1fa3c84f0e1c15c7"
+    },
+    {
+      "attempt_type": "measured",
+      "ordinal": 85,
+      "sha256": "affd0b3d1545311b195b8d5f75cb6bbc55044a4e439e232d15fb5701910c05ca"
+    },
+    {
+      "attempt_type": "measured",
+      "ordinal": 86,
+      "sha256": "462b375bbd8ce933835afd967c3769242103ef0861f24a3ec16a92befda24754"
+    },
+    {
+      "attempt_type": "measured",
+      "ordinal": 87,
+      "sha256": "1250627bd348eecfad28759a0943e937474fc584a876f3a142e8f0792b1d79c5"
+    },
+    {
+      "attempt_type": "measured",
+      "ordinal": 88,
+      "sha256": "96484193fd2abd376c09a18deaea6d59beb022f204e33c7dc93a50f2e886c896"
+    },
+    {
+      "attempt_type": "measured",
+      "ordinal": 89,
+      "sha256": "c672ec71f6a4198bb4b96b11151ab685fcf891f550e793bb1aab25ed9ca5af5d"
+    },
+    {
+      "attempt_type": "measured",
+      "ordinal": 90,
+      "sha256": "9b95072e0cc7babc906b8290343040026e10c07178ec2e16b579543e7d492a9e"
+    },
+    {
+      "attempt_type": "measured",
+      "ordinal": 91,
+      "sha256": "a7b798c17b93bd5e119606e4c9a2b620e30791a9769a71159fa0715b09451bbd"
+    },
+    {
+      "attempt_type": "measured",
+      "ordinal": 92,
+      "sha256": "50a10850edc2f3aaca47a8eb50dbc79b8ea409770ac0e51b9052c6571db5ae5b"
+    },
+    {
+      "attempt_type": "measured",
+      "ordinal": 93,
+      "sha256": "7dcb7e1f440f3787133218f967c7634b76034525a27ca92fa3112d83cb212737"
+    },
+    {
+      "attempt_type": "measured",
+      "ordinal": 94,
+      "sha256": "d942bbfeefea28ab2034bdbb74c461d3b793b2fb16e77247f2874dfbe4111006"
+    },
+    {
+      "attempt_type": "measured",
+      "ordinal": 95,
+      "sha256": "063652334e4f6ad9d7496365eaf9dbf636eaf2c02f172b0e3bcb7bfae1dcc855"
+    },
+    {
+      "attempt_type": "measured",
+      "ordinal": 96,
+      "sha256": "782eedb478302e360e211b251083e600a3bdfb2478bb9d2d89cd82c07818ae89"
+    },
+    {
+      "attempt_type": "measured",
+      "ordinal": 97,
+      "sha256": "5f1e9a914cfcdcb8576ea06f5a76e671d41aed8c12266451ef75d2a1c35654f6"
+    },
+    {
+      "attempt_type": "measured",
+      "ordinal": 98,
+      "sha256": "c876edbdc4ca80b69e4c1b30e1900ecd09bfd59ba371348ed780e575951bdc53"
+    },
+    {
+      "attempt_type": "measured",
+      "ordinal": 99,
+      "sha256": "b76d2bfca9017625a36a74da141bb3e02c67c7702220d85fa05b3e1ca36142bd"
+    },
+    {
+      "attempt_type": "measured",
+      "ordinal": 100,
+      "sha256": "9576a2d12dc5f86c38f20ea17955d82d7f5c1a22018f94acfa139c1955092dcb"
+    },
+    {
+      "attempt_type": "measured",
+      "ordinal": 101,
+      "sha256": "d3522ace88707100f4b33685055dab22a1a4697114cf3d9ca173062e711d3a02"
+    },
+    {
+      "attempt_type": "measured",
+      "ordinal": 102,
+      "sha256": "8233a1276bbe41ef4f695f4ddab3136de34850c09be94f3db07992592b396b64"
+    },
+    {
+      "attempt_type": "measured",
+      "ordinal": 103,
+      "sha256": "93df023ece3944b6905b219a36a39581186321d0635300a55f8afeebfef8e9d9"
+    },
+    {
+      "attempt_type": "measured",
+      "ordinal": 104,
+      "sha256": "056ef259b6d351263956a01931bf84935949979c30a15c9a72187ccfd569168f"
+    },
+    {
+      "attempt_type": "measured",
+      "ordinal": 105,
+      "sha256": "4432cad70be6047b206ef5378a9ebe86d7cbc00e5bff27e51b854958310d22ad"
+    }
+  ]
+}

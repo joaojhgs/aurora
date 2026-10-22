@@ -1,0 +1,17 @@
+{
+  "at": "2026-10-17T23:42:40.868391+00:00",
+  "progress": {
+    "attempted": 15,
+    "last_attempt_file": "attempts/attempt-0015-warmup.jsonl",
+    "last_attempt_status": "completed_correct",
+    "measured_attempted": 0,
+    "planned_measured": 900,
+    "planned_warmups": 15,
+    "status": "running",
+    "unattempted_measured": 900,
+    "warmups_attempted": 15
+  },
+  "finalizerResult": null,
+  "finalizerFailure": null,
+  "summary": null
+}

@@ -1,0 +1,31 @@
+{
+  "observed_at": "2026-10-14T16:34:02.633130+00:00",
+  "source": "supported Root-owned job terminal screen16 lines",
+  "source_receipt": "f51c4215-53e9-4a66-b811-34b678349a43",
+  "terminal": "term_2e93af9c-1589-414b-8f92-17649f3c8069",
+  "known_incarnation": "9a6a4e5a-d9db-4d83-ae31-907ff2149dd1",
+  "run_id": "v409-llamacpp019-vulkan",
+  "child_pid": 2676589,
+  "start_ticks": "62337023",
+  "pgid": 2676589,
+  "outcome": "build_completed",
+  "exit_code": 0,
+  "finished_at": "2026-10-14T16:31:46.885269+00:00",
+  "elapsed_seconds": 445.10631669091526,
+  "last_resources": {
+    "elapsed_seconds": 440.91447183990385,
+    "mem_available_bytes": 20930514944,
+    "owned_logical_bytes": 876648797,
+    "tmp_free_bytes": 14246064128
+  },
+  "backend_package": "llama-cpp-python==0.3.19",
+  "target": "/tmp/aurora-root-gpu-primary-v409",
+  "log_bytes": 380,
+  "log_sha256": "52e67fec323f5b6a586cc9c00ff1a82e915a71749e27892a22a36ff4f2c43f01",
+  "source_changes": false,
+  "system_changes": false,
+  "inference_started": false,
+  "benchmark_started": false,
+  "dual_barrier_ready": false,
+  "limitation": "build receipt does not prove model/accelerator inference or benchmark launch; no host-wide cleanup claim"
+}

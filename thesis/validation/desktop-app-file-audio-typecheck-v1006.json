@@ -1,0 +1,35 @@
+{
+  "at": "2026-10-16T10:00:18.541419+00:00",
+  "command": [
+    "flock",
+    "-n",
+    "/tmp/aurora-global-build.lock",
+    "pnpm",
+    "--filter",
+    "@aurora/tauri-ui",
+    "typecheck"
+  ],
+  "nativeExecSessionId": 39043,
+  "exitCode": 0,
+  "script": "tsc --noEmit --incremental false",
+  "sourceBindings": [
+    {
+      "path": "apps/aurora-tauri/src/desktop-file-audio-e2e.ts",
+      "bytes": 11119,
+      "postCheckSha256": "48b6fc597996536ead4439bca2024a3b3a4f5c6d1ad4c64f8a5d68f84a05c522"
+    },
+    {
+      "path": "apps/aurora-tauri/src/tauri-app.tsx",
+      "bytes": 112690,
+      "postCheckSha256": "edfbf868d97bd1e0257aa88211b95e4bf9af7ddacebc130b3940238ad9156c5a"
+    },
+    {
+      "path": "apps/aurora-tauri/src/vite-env.d.ts",
+      "bytes": 627,
+      "postCheckSha256": "90bd48f78c1b0df2f700fbb6c95ca2729dd0e166f38b4c9ceb5b2af4b49f482c"
+    }
+  ],
+  "scope": "Typecheck only for current app source integration and its actual imported types; no native build, installed Tauri run or full-audio surface acceptance claim",
+  "sameOriginalRootSerialOwner": true,
+  "firstDistributedConditionGate": false
+}

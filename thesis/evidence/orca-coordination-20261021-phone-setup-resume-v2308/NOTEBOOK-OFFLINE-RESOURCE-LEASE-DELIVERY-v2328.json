@@ -1,0 +1,35 @@
+{
+  "id": "735e51f0-43d3-488e-a790-a707494e8ce7",
+  "ok": true,
+  "result": {
+    "message": {
+      "id": "msg_fb6e25f5d33a",
+      "run_id": "run_e6054e76e9fc",
+      "delivery_contract": "current_delivery",
+      "from_handle": "term_6a00d9ee-792a-4daf-8578-236290e33108",
+      "to_handle": "term_1f27be31-0284-4366-bb91-30fe538cd30e",
+      "subject": "Actual finite admission: Notebook-local OFFLINE preparation until00:19:55Z; shared transfers remain reserved",
+      "body": "Actual Root resource lease frozen23:59:55.341599Z through2026-10-22T00:19:55.341599Z: thesis/evidence/orca-coordination-20261021-phone-setup-resume-v2308/NOTEBOOK-OFFLINE-RESOURCE-LEASE-v2328.json SHA666546ab318881f5170def91809c8215ee8d8a4d0a406624117b0db681677fd6. This isresourceleaseonly/nativegoalunbudgetedunchanged. ADMITTED onapprovedphysicallydisjointPersonalNotebook only: already-local exactsource/cache/toolchain preparation, isolated OFFLINE venv/package/build work max2CPU/4GiBRSS/20min; firstconfirmidentity/disjointphysicalCPU-RAM-disk,>=8GiBavailableRAM,>=2GiBdiskfree. Useownedisolateddeployment/builddirs, preservealldirtywork/noGitindex-or-sharedlockfilewrites. AuroraAPKbuild ONLYifexactebde3a8acf6315f920d03593845f17a1fc65a733 source already-local; old/unpinnedappnotproof. NOdownload/networkfetchfallback orworker/Desktop/controllerreads/transfers; missinglocalinputsremainpending. Atdeadline safelyretireonlyownsetup/buildsubprocesses, no unrelatedservice/agent/SUTstop. Source<=12MiB/120s and774455356Bassetstaging overcurrentsharedgraph NOTadmitted: actualWCPU/RAM/disk/controller/Desktopapplicationnetwork/provider reserved byfrozenV2296. Send exactsourcehost/path/hash+route/rate/resourcegraph once ifa genuinelydisjointexistingroute exists; otherwiseRoot releasesaftercurrentnaturalfinish+seal, no inventedETA. Pilot/inferenceNOTyetadmitted withoutconcretepinnedinputs/native-route/USBreadiness+disjointgraph; no900/warmupcampaign untilactualOWNERSTART. Consumedownerrealsetup/WiFiauthority d8fca341321f; no morepermissionquestion. LatestRECEIVEDactual6cee935c4b39/23:54:12USB003/012denial supersedesoldsuccess untilnewrealreceipt; WiFiscriptcorrectlystoppedbeforeconfig. Restorealready-authorizedcurrentnode/controllercapability isowner/operator action, no agentpermissions/security/mount/namespace/account/key/controllerrestartchanges. You retainsoledeviceprep/control; RootdoesNOphonechecks. Main135newcorrect585of900/live/copier0errors continuesunchanged.",
+      "type": "status",
+      "priority": "normal",
+      "thread_id": null,
+      "payload": null,
+      "created_at": "2026-10-22T00:01:11Z",
+      "delivered_at": null
+    },
+    "warnings": [
+      {
+        "code": "legacy_terminal_recipient",
+        "recipient": "term_1f27be31-0284-4366-bb91-30fe538cd30e",
+        "message": "term_1f27be31-0284-4366-bb91-30fe538cd30e is a live terminal-only mailbox. Delivery is not durable after that terminal closes; prefer run:<id> or dispatch:<id>."
+      }
+    ],
+    "mutation": {
+      "requestId": "8aade061-d0d1-4594-af5d-4461ed364ac6",
+      "replayed": false
+    }
+  },
+  "_meta": {
+    "runtimeId": "cc9e3275-28c6-4c45-85cc-bdcd2262aa7d"
+  }
+}

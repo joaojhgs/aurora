@@ -1,0 +1,42 @@
+{
+  "at": "2026-10-17T16:52:00.941080+00:00",
+  "files": [
+    {
+      "source": ".git/aurora-handoff-import-20261006/v1109-piper-asset-recovery-launch-RESULT.json",
+      "copy": "v1109-piper-asset-recovery-launch-RESULT.json",
+      "bytes": 311,
+      "sha256": "7ab32d499f446b39fd518fbca98f4a36783746f907753f17239dcbb443876502"
+    },
+    {
+      "source": ".git/aurora-handoff-import-20261006/v1113-piper-assets-existing-owner-status-RESULT.json",
+      "copy": "v1113-piper-assets-existing-owner-status-RESULT.json",
+      "bytes": 5987,
+      "sha256": "4b54819c1e6f73270c1276d8dcfedb86f453ced860804fb7af2835379de7e8df"
+    },
+    {
+      "source": ".git/aurora-handoff-import-20261006/v1108-worker-current-route-admission.json",
+      "copy": "v1108-worker-current-route-admission.json",
+      "bytes": 982,
+      "sha256": "4d04c9928096654219c8c6c3097ecb57d85d419d73c0cc33fd646549d237c0a4"
+    },
+    {
+      "source": ".git/aurora-handoff-import-20261006/v1114-approved-personal-android-devices.json",
+      "copy": "v1114-approved-personal-android-devices.json",
+      "bytes": 155,
+      "sha256": "4ee6c033782485bdb484f30b312d78212b28302ab2e6e2b3f9652425ce7be962"
+    },
+    {
+      "source": ".git/aurora-handoff-import-20261006/v1115-approved-explicit-orca-android-relay.json",
+      "copy": "v1115-approved-explicit-orca-android-relay.json",
+      "bytes": 330,
+      "sha256": "c4096204cabc729b18909fc1308742ffb41d0f1e60115b2589c09b9c651ac709"
+    },
+    {
+      "source": "Root evidence report",
+      "copy": "REPORT.md",
+      "bytes": 2969,
+      "sha256": "42df8eab6b88ed99a874f06499a66016fd87bca72436f6617127ebf5b27af1b0"
+    }
+  ],
+  "copyHashesVerified": true
+}

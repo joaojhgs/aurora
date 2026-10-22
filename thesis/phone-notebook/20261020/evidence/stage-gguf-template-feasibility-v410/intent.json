@@ -1,0 +1,13 @@
+{
+  "controlDeadline": "2026-10-22T13:44:51.141821+00:00",
+  "host": "ssh:ssh-sem-notebook-personal",
+  "incarnation": "328cd72f-c7ea-49ff-a2db-b9275b085037",
+  "remoteResult": "/home/developer/projects/aurora/thesis/phone-notebook/20261020/evidence/stage-gguf-template-feasibility-v410.json",
+  "rootAdmissionMessage": "Owner requires actual compatible setup with exact model/runtime; explicitly separate finite embedded-model-template feasibility cohort after fixed-format failure, only chat_format changes, no silent pooling/substitution or frozen source change; own old provider closes first",
+  "script": "scripts/stage_gguf_template_feasibility_v410.py",
+  "scriptSha256": "c331afada6fcec1a56587d97d17ce6bf2f453914329d3259c6bcd320417f5c0a",
+  "singleSend": true,
+  "supportedEnter": true,
+  "terminal": "term_a2ed5feb-7c92-48e4-bd88-d1b0e6737989",
+  "textTrailingNewline": false
+}

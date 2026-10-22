@@ -1,0 +1,12 @@
+{
+  "exit_code": 1,
+  "finished_at": "2026-10-14T03:30:15.471567+00:00",
+  "elapsed_seconds": 338.494873166,
+  "deadline_reached": false,
+  "protected_private_after": {
+    "config.json": "32a0c6db8b9f6583a25d8506c7df6f8f670108fe0653c88a7068654f22714604",
+    ".env": "67267e15b0ce219244c7c7f9df73efa65d6942339a646c346fd8d80366c2d3c9"
+  },
+  "protected_private_files_unchanged": true,
+  "scope": "one real explicitly onboarded mesh-node browser/Python WebRTC Assistant exactORBIT completion and client-owned saved/reopened history; prerequisite-first; V261 remote-console history gap remains; no nativeRust/mobile/stabletails/CLIcomparable latency"
+}

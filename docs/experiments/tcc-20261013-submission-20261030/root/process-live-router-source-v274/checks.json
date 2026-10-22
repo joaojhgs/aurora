@@ -1,0 +1,42 @@
+[
+  {
+    "label": "ruff",
+    "exit_code": 0,
+    "argv": [
+      "flock",
+      "--nonblock",
+      "/tmp/aurora-global-build.lock",
+      "timeout",
+      "--signal=INT",
+      "--kill-after=10s",
+      "120s",
+      "/home/developer/projects/aurora/.venv/bin/ruff",
+      "check",
+      "app/services/gateway/fastapi_app.py",
+      "tests/unit/gateway/test_fastapi_dynamic_routes.py"
+    ],
+    "elapsed_seconds": 0.024490425013937056
+  },
+  {
+    "label": "one-late-route-dispatch-regression",
+    "exit_code": 0,
+    "argv": [
+      "flock",
+      "--nonblock",
+      "/tmp/aurora-global-build.lock",
+      "timeout",
+      "--signal=INT",
+      "--kill-after=10s",
+      "120s",
+      "/home/developer/projects/aurora/.venv/bin/python",
+      "-m",
+      "pytest",
+      "--no-cov",
+      "--basetemp=/tmp/aurora-live-router-source-v274",
+      "-q",
+      "--junitxml=/home/developer/projects/aurora/.git/aurora-handoff-import-20261006/process-live-router-source-v274/junit.xml",
+      "tests/unit/gateway/test_fastapi_dynamic_routes.py"
+    ],
+    "elapsed_seconds": 2.835080919088796
+  }
+]

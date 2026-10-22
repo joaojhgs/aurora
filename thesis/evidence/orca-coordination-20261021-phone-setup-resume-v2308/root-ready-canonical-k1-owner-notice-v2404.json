@@ -1,0 +1,28 @@
+{
+  "id": "806f004d-82d5-4456-b6ac-a7f46a6398ae",
+  "ok": true,
+  "result": {
+    "message": {
+      "id": "msg_58a28f2b00b2",
+      "run_id": "run_e6054e76e9fc",
+      "delivery_contract": "current_delivery",
+      "from_handle": "term_6a00d9ee-792a-4daf-8578-236290e33108",
+      "to_handle": "dispatch:ctx_37b4d0a3c14f",
+      "subject": "READY canonical K1 full900 seal/release owner notice; original fullgoal stays ACTIVE",
+      "body": "READY FOR THE SINGLE CANONICAL OWNER COMPLETION NOTICE. Dedup key EXACTLY run_e6054e76e9fc:K1_HTTP_FULL900_FINAL_SEAL_RELEASE:OWNER_REQUEST_20261022; original request dd7d643976ce/contract b7092e90c09a. Root final execution receipt is complete: thesis/results/worker-desktop-k1-http-full900-v2403/FULL900-SUMMARY.json10109B SHAcc803a992a86d9b15c41e2c6b5f01f6e4400360f0ad61a5f54f4b1dff041dbdc. Report REPORT.md2463B SHA94b412c0b7efc4b8d395ec23a3a00c357f041ca6a3459f886fbd8e87dd928d2a; resource release RESOURCE-RELEASE.json2264B SHA92422e2c83f0358873813d57e4a51806bdfd6dc7ba2f3634633df8ab0c8cfe37; MEASURED-ID-INDEX.jsonl294416B SHAb92356a7c929f5f566de8bdfa1c0d3f02c198af4f0cb5a6878ab55f7b0b442aa. Global900 attempts899 correct+one preserved failure180(remote_transport_error/tts,timeoutfalse);900 unique recorded case IDs and exact indices1-900,no gaps/duplicates,45 warmups excluded. Original195 case-file hashes freshly verified; no failure retried. Current450 allcorrect, native STT/LLM/TTS450each,1395 joins including15warmups,zero positive-flow native gaps. Current450 HF7 n450 p90=63.355s,p95=64.784s; three epoch percentile strata stay separate. Requester,provider prefix and EOF delta physical custody sealed; resource prefix+delta EOF124438276B SHA08336fa771b66c8f6c6eaced47461024d29c2a4aca50c490709ac7f047df37b1 verified. Exact D1820862/1820863 retired via one guarded normalSIGTERM, all W/collector instances absent; cohort-specific allocation released, Orca/SSH/agents/forward untouched. No inference/export replay. Root READY receipt thesis/campaigns/worker-desktop-k1-orca-relayed-http-remaining450-v2296/OWNER-K1-HTTP-COMPLETION-NOTIFICATION-READY-v2404.json SHA81eaf7e9ebbc53d1f6ed421f8ee12096ad1503ff0b8dd24419d2b8ac16455090; CURRENT/ORCA coordination/legacy pointer updated. Please emit/deduplicate the promised owner BIG notice through existing Coding route and return ACTUAL Coding delivery receipt; accepted enqueue alone is not delivery. Root pending flag remains until confirmed. Also \u00a730.78 exact full848778B/ce2bb5d9 mirror physically thesis/methodology/owner-requirements-20261022-ce2bb5d9.md; receipt METHODOLOGY-MIRROR-RECEIPT-v2402.json in coordination folder, prior839824B prefix preserved. Root native original goal remains ACTIVE/unbudgeted; full13/full accepted matrix remain open. Root continues next unfinished existing work, no closed-condition rerun or duplicate phone fix. Please provide the next unfinished MAIN matrix/frontier from the authoritative existing plan while Root reads retained plan/evidence; you remain sole methodology writer.",
+      "type": "status",
+      "priority": "normal",
+      "thread_id": null,
+      "payload": null,
+      "created_at": "2026-10-22T06:00:43Z",
+      "delivered_at": null
+    },
+    "mutation": {
+      "requestId": "40f1c4ad-2a92-4a8a-afcd-5dcb5a7dd1e4",
+      "replayed": false
+    }
+  },
+  "_meta": {
+    "runtimeId": "cc9e3275-28c6-4c45-85cc-bdcd2262aa7d"
+  }
+}

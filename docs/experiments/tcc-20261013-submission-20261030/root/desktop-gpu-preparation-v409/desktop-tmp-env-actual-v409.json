@@ -1,0 +1,33 @@
+{
+  "caps": {
+    "environment_timeout_seconds": 90,
+    "max_environment_bytes": 4294967296,
+    "required_available_ram_bytes": 17179869184,
+    "required_free_tmp_bytes": 6442450944
+  },
+  "inference_started": false,
+  "kind": "aurora_root_gpu_tmpfs_environment",
+  "memory": {
+    "MemAvailable": 21892956160,
+    "MemTotal": 31480418304
+  },
+  "outcome": {
+    "environment_python_exists": true,
+    "exit_code": 0,
+    "stderr": "Using CPython 3.11.11 interpreter at: /home/developer/.local/bin/python3.11\nCreating virtual environment at: /tmp/aurora-root-gpu-primary-v409/env\nActivate with: source /tmp/aurora-root-gpu-primary-v409/env/bin/activate\n",
+    "stdout": ""
+  },
+  "recorded_at": "2026-10-14T16:19:21.903114+00:00",
+  "source_changes": false,
+  "storage": {
+    "/home/developer/projects/aurora": {
+      "free_bytes": 2032181248,
+      "total_bytes": 491054088192
+    },
+    "/tmp": {
+      "free_bytes": 15138418688,
+      "total_bytes": 15740207104
+    }
+  },
+  "target": "/tmp/aurora-root-gpu-primary-v409"
+}

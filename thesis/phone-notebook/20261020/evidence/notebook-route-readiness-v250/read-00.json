@@ -1,0 +1,37 @@
+{
+  "_meta": {
+    "runtimeId": "cc9e3275-28c6-4c45-85cc-bdcd2262aa7d"
+  },
+  "id": "8e60e5e3-c2c3-4958-9014-55f4de8ff99e",
+  "ok": true,
+  "result": {
+    "terminal": {
+      "handle": "term_a2ed5feb-7c92-48e4-bd88-d1b0e6737989",
+      "latestCursor": "1265",
+      "limited": false,
+      "nextCursor": "1265",
+      "oldestCursor": "1081",
+      "returnedLineCount": 15,
+      "source": "stream",
+      "status": "running",
+      "tail": [
+        "mps(receipt))'                                       >....",
+        "",
+        "Traceback (most recent call last):",
+        "  File \"<string>\", line 1, in <module>",
+        "  File \"approved-notebook-script\", line 18, in <module>",
+        "  File \"/home/developer/.local/share/uv/python/cpython-3.11.14-linux-x86_64-gnu/lib/python3.11/json/__init__.py\", line 238, in dumps",
+        "    **kw).encode(obj)",
+        "          ^^^^^^^^^^^",
+        "  File \"/home/developer/.local/share/uv/python/cpython-3.11.14-linux-x86_64-gnu/lib/python3.11/json/encoder.py\", line 200, in encode",
+        "    chunks = self.iterencode(o, _one_shot=True)",
+        "             ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^",
+        "  File \"/home/developer/.local/share/uv/python/cpython-3.11.14-linux-x86_64-gnu/lib/python3.11/json/encoder.py\", line 258, in iterencode",
+        "    return _iterencode(o, 0)",
+        "           ^^^^^^^^^^^^^^^^^",
+        "TypeError: '<' not supported between instances of 'NoneType' and 'str'"
+      ],
+      "truncated": false
+    }
+  }
+}

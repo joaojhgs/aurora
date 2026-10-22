@@ -1,0 +1,352 @@
+[
+  {
+    "path": "thesis/campaigns/worker-desktop-k1-orca-relayed-http-first270-v2224/CURRENT.json",
+    "bytes": 111500,
+    "sha256": "8dcbba99f24be7d8d368aa7359843b50f2061d1d12831c1f48de22ca504d7482"
+  },
+  {
+    "path": "thesis/campaigns/worker-desktop-k1-orca-relayed-http-first270-v2224/frozen/condition.json",
+    "bytes": 18435,
+    "sha256": "40a606f2113708bbb5bf6cc528f038c00a35a8944ebfb1e424c93215dc922294"
+  },
+  {
+    "path": "thesis/campaigns/worker-desktop-k1-orca-relayed-http-first270-v2224/snapshots/control-launch.json/02cb2c2a001886aa9dc57596936f85a6302e0d20b4434b2fd94e8f169a098af1.json",
+    "bytes": 2008,
+    "sha256": "02cb2c2a001886aa9dc57596936f85a6302e0d20b4434b2fd94e8f169a098af1"
+  },
+  {
+    "path": "thesis/campaigns/worker-desktop-k1-orca-relayed-http-first270-v2224/snapshots/summary.json/26d7da3e2be29cb38bd856fadaaadbbfae74dd1fbf82033d673e3f00d0c2277f.json",
+    "bytes": 9765,
+    "sha256": "26d7da3e2be29cb38bd856fadaaadbbfae74dd1fbf82033d673e3f00d0c2277f"
+  },
+  {
+    "path": "thesis/campaigns/worker-desktop-k1-orca-relayed-http-first270-v2224/attempts/attempt-0001-warmup.jsonl",
+    "bytes": 4819,
+    "sha256": "061a642f92894cc23aae24dd10b239b3f6133a6474fdea11657aab814f9f06b4"
+  },
+  {
+    "path": "thesis/campaigns/worker-desktop-k1-orca-relayed-http-first270-v2224/attempts/attempt-0002-warmup.jsonl",
+    "bytes": 4819,
+    "sha256": "ac37abd721c558c17d64e7af2cfa4cf5c52c37ce27cab6c23ee3637b97908863"
+  },
+  {
+    "path": "thesis/campaigns/worker-desktop-k1-orca-relayed-http-first270-v2224/attempts/attempt-0003-warmup.jsonl",
+    "bytes": 4819,
+    "sha256": "65be98b2dfcdd518c8907bb7cafafd24ef7819132b6da44d0d51bc113ff4a38a"
+  },
+  {
+    "path": "thesis/campaigns/worker-desktop-k1-orca-relayed-http-first270-v2224/attempts/attempt-0004-warmup.jsonl",
+    "bytes": 4821,
+    "sha256": "fcbfc7922a32a10be60ca41a6b24979a0b9c88771fa294ee50b5f34273c1bcda"
+  },
+  {
+    "path": "thesis/campaigns/worker-desktop-k1-orca-relayed-http-first270-v2224/attempts/attempt-0005-warmup.jsonl",
+    "bytes": 4818,
+    "sha256": "8b256058fb97537495cd0f88e0cd72767af9000e306cf2bbfbc0006d793a13d4"
+  },
+  {
+    "path": "thesis/campaigns/worker-desktop-k1-orca-relayed-http-first270-v2224/attempts/attempt-0006-warmup.jsonl",
+    "bytes": 4819,
+    "sha256": "bf0812574e762c067499eb269461be118aae8b735feb2d759e5d357e60c071b0"
+  },
+  {
+    "path": "thesis/campaigns/worker-desktop-k1-orca-relayed-http-first270-v2224/attempts/attempt-0007-warmup.jsonl",
+    "bytes": 4817,
+    "sha256": "c60d4d888f51a87fd5a528f6d4c264e0e9b4868c4fda09c3f8cb8bc053c62665"
+  },
+  {
+    "path": "thesis/campaigns/worker-desktop-k1-orca-relayed-http-first270-v2224/attempts/attempt-0008-warmup.jsonl",
+    "bytes": 4819,
+    "sha256": "e2b3562255cbbb612b6c8b30dd58ac4031d6404d6e05a38ef7fbd2c26d3e6ef8"
+  },
+  {
+    "path": "thesis/campaigns/worker-desktop-k1-orca-relayed-http-first270-v2224/attempts/attempt-0009-warmup.jsonl",
+    "bytes": 4819,
+    "sha256": "bd2a9df8928180e140207d4cd61ff48537613a9b403b951ad1669ea6bf631677"
+  },
+  {
+    "path": "thesis/campaigns/worker-desktop-k1-orca-relayed-http-first270-v2224/attempts/attempt-0010-warmup.jsonl",
+    "bytes": 4820,
+    "sha256": "a1fbed5e3e3eb3415f9ce6173cf371469980ea75184bf0d600bc84ff0a5458da"
+  },
+  {
+    "path": "thesis/campaigns/worker-desktop-k1-orca-relayed-http-first270-v2224/attempts/attempt-0011-warmup.jsonl",
+    "bytes": 4821,
+    "sha256": "e16ce43f19a972bc16929eecab3def7b190bc3a2dcecad199f77387291c3b10d"
+  },
+  {
+    "path": "thesis/campaigns/worker-desktop-k1-orca-relayed-http-first270-v2224/attempts/attempt-0012-warmup.jsonl",
+    "bytes": 4821,
+    "sha256": "3572f960a509b36af9db58ec1205f3606a2459c73ed199708190d19daa7ac235"
+  },
+  {
+    "path": "thesis/campaigns/worker-desktop-k1-orca-relayed-http-first270-v2224/attempts/attempt-0013-warmup.jsonl",
+    "bytes": 4819,
+    "sha256": "14663b663f24110b9f0258716db26fb8dcf8286116f4fb542d84d1e635b6c5f2"
+  },
+  {
+    "path": "thesis/campaigns/worker-desktop-k1-orca-relayed-http-first270-v2224/attempts/attempt-0014-warmup.jsonl",
+    "bytes": 4822,
+    "sha256": "08844082e7be749fe983c5004f53608a5f4f0fa5e8726f4267237d88e1d43d70"
+  },
+  {
+    "path": "thesis/campaigns/worker-desktop-k1-orca-relayed-http-first270-v2224/attempts/attempt-0015-warmup.jsonl",
+    "bytes": 4821,
+    "sha256": "23abc6f260ac71b231e09380e2e3e8da8d0d7ff2dc473c3495265072e706d752"
+  },
+  {
+    "path": "thesis/campaigns/worker-desktop-k1-orca-relayed-http-first270-v2224/provider-saved15-v2233/receiver-identity.json",
+    "bytes": 1373,
+    "sha256": "46cea26a99e5b8f9587363dcb7272be52c1a5e3dc922a0a76931c1886430c58d"
+  },
+  {
+    "path": "thesis/campaigns/worker-desktop-k1-orca-relayed-http-first270-v2224/provider-saved15-v2233/voice-stages.jsonl",
+    "bytes": 72825,
+    "sha256": "2dc5cb62a0b6d436eda4114609628eb4be46e894957640aabc19db0cc71c3af8"
+  },
+  {
+    "path": "thesis/campaigns/worker-desktop-k1-orca-relayed-http-first270-v2224/prefixes/voice-stages.jsonl/000000000000-000000009274.chunk",
+    "bytes": 9274,
+    "sha256": "5a19c9eda67c1684d4a3bb6ef844c114360a880d95dcde4225b3f890b9680d05"
+  },
+  {
+    "path": "thesis/campaigns/worker-desktop-k1-orca-relayed-http-first270-v2224/prefixes/voice-stages.jsonl/000000009274-000000021023.chunk",
+    "bytes": 11749,
+    "sha256": "923bcfa54f43225f88d2646db62ab544598eed73fa966d50ea2222cb312be6e5"
+  },
+  {
+    "path": "thesis/campaigns/worker-desktop-k1-orca-relayed-http-first270-v2224/prefixes/voice-stages.jsonl/000000021023-000000032772.chunk",
+    "bytes": 11749,
+    "sha256": "031ab2401c45964a4fb3791a075258829c4149bd2e2bb792dae97a6de95ed79c"
+  },
+  {
+    "path": "thesis/campaigns/worker-desktop-k1-orca-relayed-http-first270-v2224/prefixes/voice-stages.jsonl/000000032772-000000044521.chunk",
+    "bytes": 11749,
+    "sha256": "975ea5be78203a3e44ae7e4c126b68505ec1ad3fd0fc3ba4ae3ffdc5678f29e4"
+  },
+  {
+    "path": "thesis/campaigns/worker-desktop-k1-orca-relayed-http-first270-v2224/prefixes/voice-stages.jsonl/000000044521-000000058745.chunk",
+    "bytes": 14224,
+    "sha256": "aa1cdbe349dea561b195d12e6f7499670f6f9f475703fe9fef1064aeb7b495fb"
+  },
+  {
+    "path": "thesis/campaigns/worker-desktop-k1-orca-relayed-http-first270-v2224/prefixes/voice-stages.jsonl/000000058745-000000070494.chunk",
+    "bytes": 11749,
+    "sha256": "7edf677de274ecc8da94adaffb622cdf21c9d7857ee2bfda1e3cef25d178ec15"
+  },
+  {
+    "path": "thesis/campaigns/worker-desktop-k1-orca-relayed-http-first270-v2224/prefixes/voice-stages.jsonl/000000070494-000000082243.chunk",
+    "bytes": 11749,
+    "sha256": "e23ed67c7a7fcadd006d469ab55762fd2996b379f2b30742790c42d998c9952a"
+  },
+  {
+    "path": "thesis/campaigns/worker-desktop-k1-orca-relayed-http-first270-v2224/prefixes/voice-stages.jsonl/000000082243-000000097393.chunk",
+    "bytes": 15150,
+    "sha256": "47c2f9a5823b1b039064a144173427c0ea07c1e861b941cbc090fff930b6ee57"
+  },
+  {
+    "path": "thesis/campaigns/worker-desktop-k1-orca-relayed-http-first270-v2224/prefixes/voice-stages.jsonl/000000097393-000000115015.chunk",
+    "bytes": 17622,
+    "sha256": "84b8b1900dd4fbe3aab04c0291d98e1602c7532f4d2f104c8ffb875fc54e765a"
+  },
+  {
+    "path": "thesis/campaigns/worker-desktop-k1-orca-relayed-http-first270-v2224/prefixes/voice-stages.jsonl/000000115015-000000126764.chunk",
+    "bytes": 11749,
+    "sha256": "1780d9b2f368b3dd30e7d8c478152398bb4867f14619d03f1d1f3370db33a3a1"
+  },
+  {
+    "path": "thesis/campaigns/worker-desktop-k1-orca-relayed-http-first270-v2224/prefixes/voice-stages.jsonl/000000126764-000000138513.chunk",
+    "bytes": 11749,
+    "sha256": "afc869248bc3f1ca467390bc7504bfe536b8b5a656ea1d6345a81b24a148dfd5"
+  },
+  {
+    "path": "thesis/campaigns/worker-desktop-k1-orca-relayed-http-first270-v2224/prefixes/voice-stages.jsonl/000000138513-000000150262.chunk",
+    "bytes": 11749,
+    "sha256": "74f53bab3058dea97f8ee83d1ea849e83bfbc141e949fbef96dfa89db9b13546"
+  },
+  {
+    "path": "thesis/campaigns/worker-desktop-k1-orca-relayed-http-first270-v2224/prefixes/voice-stages.jsonl/000000150262-000000162011.chunk",
+    "bytes": 11749,
+    "sha256": "29be95143ca70d6f0e72bbbf92dce44948a19b8b8c04763b178a7ddd2fbb1910"
+  },
+  {
+    "path": "thesis/campaigns/worker-desktop-k1-orca-relayed-http-first270-v2224/prefixes/voice-stages.jsonl/000000162011-000000176235.chunk",
+    "bytes": 14224,
+    "sha256": "5496fb6b783da40850e93a1e2d2c939a3010836410e669089ec288f9e116ccac"
+  },
+  {
+    "path": "thesis/campaigns/worker-desktop-k1-orca-relayed-http-first270-v2224/provider-saved15-v2233/actual-provider-bindings.jsonl",
+    "bytes": 12116,
+    "sha256": "74c190e3922e1d64af00a10773746271d47c9110a46ec32df74e14fb1156fe4c"
+  },
+  {
+    "path": "thesis/campaigns/worker-desktop-k1-orca-relayed-http-first270-v2224/prefixes/resources.jsonl/000000000000-000000076005.chunk",
+    "bytes": 76005,
+    "sha256": "c5a47104e9eef22a7cd54ffa8749021f6bfab50a846fe5e1cd4aba8637faad5a"
+  },
+  {
+    "path": "thesis/campaigns/worker-desktop-k1-orca-relayed-http-first270-v2224/prefixes/resources.jsonl/000000076005-000000153465.chunk",
+    "bytes": 77460,
+    "sha256": "6ec2c478958ffa14f3f637adfe2339a258440befa3d5811e6df73700c436cc2a"
+  },
+  {
+    "path": "thesis/campaigns/worker-desktop-k1-orca-relayed-http-first270-v2224/prefixes/resources.jsonl/000000153465-000000230940.chunk",
+    "bytes": 77475,
+    "sha256": "d778ba02e9027a7a7446b956dc01b3988145b713a40e019dddff708d1f105be7"
+  },
+  {
+    "path": "thesis/campaigns/worker-desktop-k1-orca-relayed-http-first270-v2224/prefixes/resources.jsonl/000000230940-000000308460.chunk",
+    "bytes": 77520,
+    "sha256": "1a51d2d401362686b70a416898564d55fc64f83dd23a4e82e6f99950065ef9cd"
+  },
+  {
+    "path": "thesis/campaigns/worker-desktop-k1-orca-relayed-http-first270-v2224/prefixes/resources.jsonl/000000308460-000000385980.chunk",
+    "bytes": 77520,
+    "sha256": "e37bc9b36ddf4a7659ce4cedd9b74eb72454f940a64367d3b4eed0a6e5e93708"
+  },
+  {
+    "path": "thesis/campaigns/worker-desktop-k1-orca-relayed-http-first270-v2224/prefixes/resources.jsonl/000000385980-000000462208.chunk",
+    "bytes": 76228,
+    "sha256": "5ada245b48ccd5f16d10a900a37e4c032ea30b618d00d49e8a48a16a9ab796d8"
+  },
+  {
+    "path": "thesis/campaigns/worker-desktop-k1-orca-relayed-http-first270-v2224/prefixes/resources.jsonl/000000462208-000000539728.chunk",
+    "bytes": 77520,
+    "sha256": "fee978ea9a9e05b0bbfcb7ce2abacbf4ff8ee38e30fc670f83bb80df5f155332"
+  },
+  {
+    "path": "thesis/campaigns/worker-desktop-k1-orca-relayed-http-first270-v2224/prefixes/resources.jsonl/000000539728-000000617300.chunk",
+    "bytes": 77572,
+    "sha256": "d08941e0a231d34f2099b0ca97aab6325d59470150e2d40bab5b723de2a01f46"
+  },
+  {
+    "path": "thesis/campaigns/worker-desktop-k1-orca-relayed-http-first270-v2224/prefixes/resources.jsonl/000000617300-000000694880.chunk",
+    "bytes": 77580,
+    "sha256": "efad35f04cde2ce39a180836689f78be3ba3b4c266cbee318556150258e9bfa5"
+  },
+  {
+    "path": "thesis/campaigns/worker-desktop-k1-orca-relayed-http-first270-v2224/prefixes/resources.jsonl/000000694880-000000772460.chunk",
+    "bytes": 77580,
+    "sha256": "edc098cd66961d4916d75d300c77cf2ba8a8e2dc33ab131744338d18218f455f"
+  },
+  {
+    "path": "thesis/campaigns/worker-desktop-k1-orca-relayed-http-first270-v2224/prefixes/resources.jsonl/000000772460-000000850040.chunk",
+    "bytes": 77580,
+    "sha256": "4b26f407d68ea9740a9db968f213ab26a3d7f807adaddd4e04dbb8abcdbced33"
+  },
+  {
+    "path": "thesis/campaigns/worker-desktop-k1-orca-relayed-http-first270-v2224/prefixes/resources.jsonl/000000850040-000000926327.chunk",
+    "bytes": 76287,
+    "sha256": "845cde96295dec6898a369215dc00d5d2233579b01c0295cb9e5ca24ef794032"
+  },
+  {
+    "path": "thesis/campaigns/worker-desktop-k1-orca-relayed-http-first270-v2224/prefixes/resources.jsonl/000000926327-000001003907.chunk",
+    "bytes": 77580,
+    "sha256": "e4fbeb92738016814bc5bdea7b0c7d2eb5afd7e0f615d4069bbcbee8747e040a"
+  },
+  {
+    "path": "thesis/campaigns/worker-desktop-k1-orca-relayed-http-first270-v2224/prefixes/resources.jsonl/000001003907-000001081487.chunk",
+    "bytes": 77580,
+    "sha256": "ff52b4dc86ebecd2156b8a5f7b19ac0b9477486d9505a6042193e6502f7a76a6"
+  },
+  {
+    "path": "thesis/campaigns/worker-desktop-k1-orca-relayed-http-first270-v2224/prefixes/resources.jsonl/000001081487-000001090534.chunk",
+    "bytes": 9047,
+    "sha256": "16e59f1299508acf55ae9f72dce4f8eb7782b0c2627f3a9695f514262efaa1b0"
+  },
+  {
+    "path": "thesis/campaigns/worker-desktop-k1-orca-relayed-http-first270-v2224/audio/0c32efa50ad7d02b35a3c80a824b470303b626ff20673be9160993b23dea2d22.wav",
+    "bytes": 32300,
+    "sha256": "0c32efa50ad7d02b35a3c80a824b470303b626ff20673be9160993b23dea2d22"
+  },
+  {
+    "path": "thesis/campaigns/worker-desktop-k1-orca-relayed-http-first270-v2224/audio/982d56cb863ec73ee16f1e8d9f875f817897124aaf0d9653c38c54955cdfe97e.wav",
+    "bytes": 31788,
+    "sha256": "982d56cb863ec73ee16f1e8d9f875f817897124aaf0d9653c38c54955cdfe97e"
+  },
+  {
+    "path": "thesis/campaigns/worker-desktop-k1-orca-relayed-http-first270-v2224/audio/2bba4e8767105cfe8f68c9c4b1ecfb373059e34ad22d90208711176ce152ca2b.wav",
+    "bytes": 32812,
+    "sha256": "2bba4e8767105cfe8f68c9c4b1ecfb373059e34ad22d90208711176ce152ca2b"
+  },
+  {
+    "path": "thesis/campaigns/worker-desktop-k1-orca-relayed-http-first270-v2224/audio/28193af2936c0af1815f7a9f9e0b46bec3e9e6bc1e46b053adabede01b434160.wav",
+    "bytes": 29740,
+    "sha256": "28193af2936c0af1815f7a9f9e0b46bec3e9e6bc1e46b053adabede01b434160"
+  },
+  {
+    "path": "thesis/campaigns/worker-desktop-k1-orca-relayed-http-first270-v2224/audio/ff3db2f86a03e76fa3c3134e56a62adee45f6ba6c6964086ea1232322ce90a19.wav",
+    "bytes": 31788,
+    "sha256": "ff3db2f86a03e76fa3c3134e56a62adee45f6ba6c6964086ea1232322ce90a19"
+  },
+  {
+    "path": "thesis/campaigns/worker-desktop-k1-orca-relayed-http-first270-v2224/audio/32783e654f1fd5d5e680a634b1ae41fcd76f50332f9866f07d468afc2f524704.wav",
+    "bytes": 29740,
+    "sha256": "32783e654f1fd5d5e680a634b1ae41fcd76f50332f9866f07d468afc2f524704"
+  },
+  {
+    "path": "thesis/campaigns/worker-desktop-k1-orca-relayed-http-first270-v2224/audio/420b7e2f366616926b0883108caf45b96784a007b5e1af1d6c77913edcb8f03a.wav",
+    "bytes": 31276,
+    "sha256": "420b7e2f366616926b0883108caf45b96784a007b5e1af1d6c77913edcb8f03a"
+  },
+  {
+    "path": "thesis/campaigns/worker-desktop-k1-orca-relayed-http-first270-v2224/audio/8dca6ac3de25ecad486e028faa498fb5ef1ad5ad18092c76bdef9c4e3e379079.wav",
+    "bytes": 32300,
+    "sha256": "8dca6ac3de25ecad486e028faa498fb5ef1ad5ad18092c76bdef9c4e3e379079"
+  },
+  {
+    "path": "thesis/campaigns/worker-desktop-k1-orca-relayed-http-first270-v2224/audio/e00fa572bf213a4ab34d781f2c2071337bda178ce2ef64c75d3087bed89f8b79.wav",
+    "bytes": 29740,
+    "sha256": "e00fa572bf213a4ab34d781f2c2071337bda178ce2ef64c75d3087bed89f8b79"
+  },
+  {
+    "path": "thesis/campaigns/worker-desktop-k1-orca-relayed-http-first270-v2224/audio/6e27a3e7d28953fe168202f0d007572a636cc96fb98edda79d220cecc551764d.wav",
+    "bytes": 31276,
+    "sha256": "6e27a3e7d28953fe168202f0d007572a636cc96fb98edda79d220cecc551764d"
+  },
+  {
+    "path": "thesis/campaigns/worker-desktop-k1-orca-relayed-http-first270-v2224/audio/0f8e917e82998d49254ea6aca736f208edc010f422a821bb74f52d0d6ed1a075.wav",
+    "bytes": 30764,
+    "sha256": "0f8e917e82998d49254ea6aca736f208edc010f422a821bb74f52d0d6ed1a075"
+  },
+  {
+    "path": "thesis/campaigns/worker-desktop-k1-orca-relayed-http-first270-v2224/audio/dae629e1700facd79150e30e6dad7ca3b84771474cf8fdd89fbde6eb8ed1f5e3.wav",
+    "bytes": 30252,
+    "sha256": "dae629e1700facd79150e30e6dad7ca3b84771474cf8fdd89fbde6eb8ed1f5e3"
+  },
+  {
+    "path": "thesis/campaigns/worker-desktop-k1-orca-relayed-http-first270-v2224/audio/4f62c98ad6817cce9e0d086c3f1be85f37e57668e81714a12f5844a07278dda8.wav",
+    "bytes": 30764,
+    "sha256": "4f62c98ad6817cce9e0d086c3f1be85f37e57668e81714a12f5844a07278dda8"
+  },
+  {
+    "path": "thesis/campaigns/worker-desktop-k1-orca-relayed-http-first270-v2224/audio/d55b40aac26472a4470624aebacadfad539bf2cf9c9d90e6944601e7f44bbd2e.wav",
+    "bytes": 30764,
+    "sha256": "d55b40aac26472a4470624aebacadfad539bf2cf9c9d90e6944601e7f44bbd2e"
+  },
+  {
+    "path": "thesis/campaigns/worker-desktop-k1-orca-relayed-http-first270-v2224/audio/9b7a142fdea8880b43fe9804d143e4d1d30cef367a0863559158b7aeccde8eeb.wav",
+    "bytes": 30764,
+    "sha256": "9b7a142fdea8880b43fe9804d143e4d1d30cef367a0863559158b7aeccde8eeb"
+  },
+  {
+    "path": "thesis/analysis/analyze_k1_http_epoch_saved_v2242.py",
+    "bytes": 18585,
+    "sha256": "a8c40fad5537af133b4212e63a1932a4f6242904c3996c988d83d578d742c04c"
+  },
+  {
+    "path": "thesis/analysis/k1_saved_case_history.py",
+    "bytes": 18039,
+    "sha256": "4a406dd330e2396d38a6ce3b8b5a38362a7727058aff644d0232bdff54474608"
+  },
+  {
+    "path": "thesis/analysis/native_span_metrics_v2.py",
+    "bytes": 5210,
+    "sha256": "b8fc433bae6e941bd8829df1fa65a5df42af94f2a45d1f3e7174aca8767a7932"
+  },
+  {
+    "path": "thesis/harness/analyze_k2_mesh_saved_v1904.py",
+    "bytes": 22722,
+    "sha256": "aefa658239e4e8fab1e4690a6e6156448314f60e4d5c377defe7b0cf49748ed4"
+  }
+]

@@ -1,0 +1,78 @@
+{
+  "at": "2026-10-20T04:34:17.898168+00:00",
+  "host": "personal.skyron-server",
+  "sutCalls": 0,
+  "receiver": {
+    "pid": 3194394,
+    "state": "R",
+    "startTicks": 22320527
+  },
+  "controller": {
+    "pid": 3194385,
+    "state": "R",
+    "startTicks": 22320508
+  },
+  "manifestSha256": "245d1739111a7162287fcece91dc005958722e062a1e028613c3f85e21e3d339",
+  "expectedConfigSha256": "8fb168df7a62d04c99c16a61c1fc3b5a18500ebf2e0009c0cb41c1e9069ec27c",
+  "actualConfigSha256": "06a199cfb688cd952359bc5fadfc26ca83fabf13059a0f9fa3d581832eb62493",
+  "reconstructedLaunchInputSha256": "8fb168df7a62d04c99c16a61c1fc3b5a18500ebf2e0009c0cb41c1e9069ec27c",
+  "diffs": [
+    {
+      "path": "services.gateway.api.token_secret",
+      "beforeSha256": "ea5c4088a9d8f70030cb3738c332852bb366bba668781c813c076a6f879bc8ce",
+      "afterSha256": "12ae32cb1ec02d01eda3581b127c1fee3b0dc53572ed6baf239721a03d82e126",
+      "beforeValue": "[string/list redacted]",
+      "afterValue": "[string/list redacted]"
+    },
+    {
+      "path": "services.gateway.webrtc.password",
+      "beforeSha256": "36fe97aee2dabe887090b0963ca3f692dca1b4a114002b80aefdfcd41df8420b",
+      "afterSha256": "12ae32cb1ec02d01eda3581b127c1fee3b0dc53572ed6baf239721a03d82e126",
+      "beforeValue": "[string/list redacted]",
+      "afterValue": "[string/list redacted]"
+    },
+    {
+      "path": "services.tts.mesh_sharing.allowed_peers",
+      "beforeSha256": "26d5c81cad011d69bb7e6f315c316bfc36fe041454761603c2caad9498724299",
+      "afterSha256": "74234e98afe7498fb5daf1f36ac2d78acc339464f950703b8c019892f982b90b",
+      "beforeValue": "[string/list redacted]",
+      "afterValue": null
+    },
+    {
+      "path": "services.tts.mesh_sharing.require_explicit_selector",
+      "beforeSha256": "b5bea41b6c623f7c09f1bf24dcae58ebab3c0cdd90ad966bc43a45b44867e12b",
+      "afterSha256": "fcbcf165908dd18a9e49f7ff27810176db8e9f63b4352213741664245224f8aa",
+      "beforeValue": true,
+      "afterValue": false
+    }
+  ],
+  "memAvailableBytes": 24591790080,
+  "freeBytes": 147503501312,
+  "configMutatedByRead": false,
+  "startupMigrationWitness": {
+    "pureStartupMigrationExactlyMatchesActualTree": true,
+    "existingTaskEnvCarriesSameOriginalSecretValues": true,
+    "migratedSecretPaths": [
+      "services.gateway.api.token_secret",
+      "services.gateway.webrtc.password"
+    ],
+    "privateConfigMtimeUtc": "2026-10-20T03:41:27.134124+00:00",
+    "configOrEnvWrittenByRead": false,
+    "pureMigrationFunctions": [
+      "migrate_mesh_service_policies",
+      "ConfigManager._normalize_config"
+    ],
+    "normalMainMigration": "main.py:36 calls migrate_from_env; ConfigManager.migrate_secrets_to_env clears persisted secret fields and retains same values in existing task env"
+  },
+  "sourceThreeFilesUnchanged": true,
+  "sourceThreeFilesCheckedAt": "2026-10-20T04:30:05.785309+00:00",
+  "sourceConfigUnchanged": false,
+  "startupConfigChangeBeforeAllWarmups": true,
+  "originalPrelaunchBytesRetained": true,
+  "rootCredentialOrPolicyMutation": false,
+  "basis": {
+    "freshActorAndConfigWitness": "CONFIG-STARTUP-WITNESS-v1721.json",
+    "sourceThreeFileCheck": "SAME-PROVIDER-FRESH-ADMISSION.json",
+    "note": "Actual config differs bytewise from prelaunch; pure normal startup migration exactly reproduces it. Config mtime03:41:27 predates original excluded warmups. Same original task env values verified in memory; no credential output or mutation."
+  }
+}

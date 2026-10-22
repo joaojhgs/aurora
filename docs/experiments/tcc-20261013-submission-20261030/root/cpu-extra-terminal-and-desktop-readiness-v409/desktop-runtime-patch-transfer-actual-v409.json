@@ -1,0 +1,77 @@
+{
+  "kind": "actual_bounded_runtime_patch_transfer",
+  "chunks": [
+    {
+      "index": 0,
+      "size": 3072,
+      "sha256": "dd0b2b8a4984f7f32b28151639eb03e6f9d3fc53da8540dd3a72268e949e86db"
+    },
+    {
+      "index": 1,
+      "size": 6144,
+      "sha256": "38f8217d026999ab383cdb3a53dbe1d4d178237cb94f3a3dc196e69d5ad1de2c"
+    },
+    {
+      "index": 2,
+      "size": 9216,
+      "sha256": "212f151a50ea02f0d49d35683426315df5aeaff5fc96257ca7dc94bf840afa2d"
+    },
+    {
+      "index": 3,
+      "size": 12288,
+      "sha256": "467a16fc43e7a67fee44d3594fa589973d97259f9e4d50e22a72efa0e84a034b"
+    },
+    {
+      "index": 4,
+      "size": 15360,
+      "sha256": "c1a717665dc8b24a641d241c2e51969d2bb6ea50b12bba3204aa7a2ecc6fce0c"
+    },
+    {
+      "index": 5,
+      "size": 18432,
+      "sha256": "e0aa1a4dc1c06f2adf3152121c6b137e7368f2fb48e701c3114a34ea50d012aa"
+    },
+    {
+      "index": 6,
+      "size": 21504,
+      "sha256": "cc8d181f388479a309fa97e827489ad6c9f36f46884e8d6c58fd82de6747aeee"
+    },
+    {
+      "index": 7,
+      "size": 24576,
+      "sha256": "372d0fd7d15c4d91238ebcfa75d238b7525dd5c157abc52ace43057291b1cd94"
+    },
+    {
+      "index": 8,
+      "size": 27648,
+      "sha256": "2d51d7793e764bbc2f17d797783125f53dc5e8dd9a431465f743dd6f53b1d92a"
+    },
+    {
+      "index": 9,
+      "size": 30720,
+      "sha256": "c9cfa2a397f7c7fbb66fa2f3cc25ca85d7288dd15876d62218a1c8992ad70d69"
+    },
+    {
+      "index": 10,
+      "size": 33792,
+      "sha256": "d23d2c06062d3fb8c01991ee4997dcd4a8a08951f59aeadcdaad661ab11a7ff9"
+    },
+    {
+      "index": 11,
+      "size": 36864,
+      "sha256": "6380e1dad06ef2aef6d384b904e867fada2231c922ca9033c6567a6acdecf148"
+    },
+    {
+      "index": 12,
+      "size": 37772,
+      "sha256": "f7b6d8a548b5ffffb9204eef0330e679b1500f9b508ca9b4d9eb730d40ac2ae9"
+    }
+  ],
+  "receiverCursor": "323",
+  "expectedBytes": 37772,
+  "sha256": "07fc379ee788bf09d561dca6c9b7a2cb3126c2eaa383f49a941dc2602b2bc28f",
+  "target": "/tmp/aurora-root-gpu-primary-v409/runtime-patch-v409.zip.part",
+  "sourceApplied": false,
+  "benchmarkStarted": false,
+  "elapsedSeconds": 54.29882293601986
+}

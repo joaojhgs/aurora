@@ -1,0 +1,47 @@
+{
+  "at": "2026-10-22T10:17:41.359427+00:00",
+  "sourceEpoch": "android-native-pairing-role-v7",
+  "baseSource": "ebde+v2383+v1+v2+v3+v3a+v4+v4a+v5+v6",
+  "actualFailureReceipt": "evidence/read-native-failure-v275/result.json",
+  "files": [
+    {
+      "path": "packages/aurora-sdk/src/webrtc/peer-session.ts",
+      "baseSha256": "5f9d08a04225c060b8794d1db1051452493439225fe6c504b67c22e04ce2012d",
+      "sha256": "79f66917319930299601ea8b3a95cc381ef4d6907b9ae9b2df695427b3b26fc8",
+      "bytes": 60313
+    },
+    {
+      "path": "packages/aurora-sdk/src/webrtc/runtime.ts",
+      "baseSha256": "849a820c8f94261996307d1e06b0dc421e4a4f13f70a4d38e26c002a338dbc15",
+      "sha256": "41e4deaff8f6d4ee99e01ce58929fc6e996db58bc1df0ec9fb7de0b7dd7fda6d",
+      "bytes": 105136
+    },
+    {
+      "path": "packages/aurora-sdk/tests/webrtc-peer-session.test.ts",
+      "baseSha256": "8a0a72b157936bac0d319136e137fc30bbf1a02bfd8a4624fe0ddd346d9eeafb",
+      "sha256": "e044c76492f5103f640361c8f0a4ec7cb8278ee465c99a420de88741dcf50914",
+      "bytes": 80095
+    },
+    {
+      "path": "packages/aurora-sdk/tests/webrtc-runtime.test.ts",
+      "baseSha256": "d49e75cbc70b3e4a547790d0f20f6012542c56c729e27f4c41db35bd2f768c3b",
+      "sha256": "93f09b141dc84040941c3d5be4ed5fd004058bedc38a92d4a543ec8ec4d77918",
+      "bytes": 161944
+    },
+    {
+      "path": "apps/aurora-tauri/src/native-webrtc.ts",
+      "baseSha256": "01181528b3bae9c661ab275ce45a4f74522bab45ab59bc8b5b65c63b83c43779",
+      "sha256": "0327bbea9362edde4768ba3de94ea49ee7b1886e85fbd6a0b5f768eb0d311fbf",
+      "bytes": 27776
+    },
+    {
+      "path": "apps/aurora-tauri/src/native-webrtc.test.ts",
+      "baseSha256": "42e13933280378bd0a4b16da4d1a4307ca73723bd8d2baba3d6c6fe1c0dfc3c2",
+      "sha256": "402524f883ded37a0a2b37705412b18fc2ed1768828d7711f164e4e6954ed49b",
+      "bytes": 14306
+    }
+  ],
+  "patchSha256": "bfafd70fc63a0ef922d359e4ed10655da35b44b3db5d091b0c036512ac2035f1",
+  "sharedSourceOrGitModified": false,
+  "scope": "Preserve existing SAS/channel binding validation; use actual negotiated SDP role. Replace unsupported native rollback transport, fence old events."
+}

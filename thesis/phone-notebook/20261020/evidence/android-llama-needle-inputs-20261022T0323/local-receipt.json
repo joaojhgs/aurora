@@ -1,0 +1,8 @@
+{
+  "bytes": 234,
+  "copyOnly": true,
+  "custody": "Notebook result persisted and fsynced before relay; remote receipt in same output",
+  "localPath": "/home/developer/projects/aurora/thesis/phone-notebook/20261020/evidence/android-llama-needle-inputs-20261022T0323/result.json",
+  "remotePath": "/home/developer/projects/aurora/thesis/phone-notebook/20261020/evidence/android-llama-needle-inputs-20261022T0323.json",
+  "sha256": "c5f329028862c9a5c3a9dfb97ea8ec361d3050a07aaf565b47cc2864ef29ac08"
+}

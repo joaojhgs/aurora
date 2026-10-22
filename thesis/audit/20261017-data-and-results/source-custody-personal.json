@@ -1,0 +1,81 @@
+{
+  "admissions": [
+    {
+      "at": "2026-10-17T22:22:53.211384+00:00",
+      "freeBytes": 7021174784,
+      "importBudgetBytes": 134217728,
+      "importedBefore": 48931006,
+      "label": "Root_verified_Personal_small_saved_packet_and_plan_identity",
+      "plannedImportBytes": 1175687,
+      "rateBytesPerSecond": 4194304
+    }
+  ],
+  "at": "2026-10-17T22:22:53.491175+00:00",
+  "fsyncAtomicDestinations": true,
+  "importedUniqueBytes": 50106693,
+  "noNewMeasurements": true,
+  "records": [
+    {
+      "bytes": 4470,
+      "capturedAt": "2026-10-17T22:22:53.216183+00:00",
+      "destination": "thesis/audit/20261017-data-and-results/imports/objects/a355efa553645c5053a515f25eb97acfbfefe5c36651a70dccc5dbf8a513e1ae",
+      "duplicateContent": false,
+      "kind": "copied_saved_input",
+      "sha256": "a355efa553645c5053a515f25eb97acfbfefe5c36651a70dccc5dbf8a513e1ae",
+      "source": "thesis/evidence/sealed-cohorts-v1215/personal-timing-packet-v1338/CUSTODY.json",
+      "sourceMtimeNs": 1792275727267283237
+    },
+    {
+      "bytes": 1348,
+      "capturedAt": "2026-10-17T22:22:53.225227+00:00",
+      "destination": "thesis/audit/20261017-data-and-results/imports/objects/9f91acd634a8f9c2214efc9762f4cba1ffe9ad14a78db12e20eb7dd0cd18f83b",
+      "duplicateContent": false,
+      "kind": "copied_saved_input",
+      "sha256": "9f91acd634a8f9c2214efc9762f4cba1ffe9ad14a78db12e20eb7dd0cd18f83b",
+      "source": "thesis/evidence/sealed-cohorts-v1215/personal-timing-packet-v1338/SOURCE-CUSTODY.json",
+      "sourceMtimeNs": 1792275735185331912
+    },
+    {
+      "bytes": 719,
+      "capturedAt": "2026-10-17T22:22:53.229239+00:00",
+      "destination": "thesis/audit/20261017-data-and-results/imports/objects/f60415d11f660a3e0d846478316a8d9091b5c32f94e88d8ad0328c63bc5709d6",
+      "duplicateContent": false,
+      "kind": "copied_saved_input",
+      "sha256": "f60415d11f660a3e0d846478316a8d9091b5c32f94e88d8ad0328c63bc5709d6",
+      "source": "thesis/evidence/sealed-cohorts-v1215/personal-timing-packet-v1338/EXPORT-RECEIPT-v1336.json",
+      "sourceMtimeNs": 1792275735179938311
+    },
+    {
+      "bytes": 648751,
+      "capturedAt": "2026-10-17T22:22:53.425593+00:00",
+      "destination": "thesis/audit/20261017-data-and-results/imports/objects/d07fc1596526a0a8a46f86e7556af2db2160bfeb0619e61765a917849b01ccf6",
+      "duplicateContent": false,
+      "kind": "copied_saved_input",
+      "sha256": "d07fc1596526a0a8a46f86e7556af2db2160bfeb0619e61765a917849b01ccf6",
+      "source": "thesis/evidence/sealed-cohorts-v1215/personal-timing-packet-v1338/personal-v485-v497-timing-packet.json.gz",
+      "sourceMtimeNs": 1792275726992366150
+    },
+    {
+      "bytes": 5406,
+      "capturedAt": "2026-10-17T22:22:53.435303+00:00",
+      "destination": "thesis/audit/20261017-data-and-results/imports/objects/b1236289abf318425ea9ace924b80f42da8b7d6574cb2a39324071f2909598a6",
+      "duplicateContent": false,
+      "kind": "copied_saved_input",
+      "sha256": "b1236289abf318425ea9ace924b80f42da8b7d6574cb2a39324071f2909598a6",
+      "source": "thesis/evidence/sealed-cohorts-v1215/personal-timing-packet-v1338/EXECUTED-EXPORTER.py",
+      "sourceMtimeNs": 1792275735167128414
+    },
+    {
+      "bytes": 514993,
+      "capturedAt": "2026-10-17T22:22:53.491126+00:00",
+      "destination": "thesis/audit/20261017-data-and-results/imports/objects/9b03f764bf88ca6fec2ff16585c102d456746b33e082790374a2effd3539d42d",
+      "duplicateContent": false,
+      "kind": "copied_saved_input",
+      "sha256": "9b03f764bf88ca6fec2ff16585c102d456746b33e082790374a2effd3539d42d",
+      "source": "thesis/methodology/owner-requirements-20261017-9b03f764.md",
+      "sourceMtimeNs": 1792275475129267792
+    }
+  ],
+  "schema": "aurora.audit.custody.v1",
+  "sourceReadBytes": 1175687
+}

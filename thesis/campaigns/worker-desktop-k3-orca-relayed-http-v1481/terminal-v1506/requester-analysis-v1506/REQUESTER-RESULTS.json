@@ -1,0 +1,130 @@
+{
+  "cohort": "V1481",
+  "condition": "K3 Orca-relayed HTTP worker requester to Personal STT+LLM+TTS",
+  "status": "stopped_system_failure",
+  "stopReason": "transport_ambiguous",
+  "plannedMeasured": 900,
+  "measuredAttempted": 513,
+  "measuredOutcomes": {
+    "completed_correct": 512,
+    "failed": 1
+  },
+  "timeouts": 0,
+  "unattempted": 387,
+  "excludedWarmups": 15,
+  "warmupOutcomes": {
+    "completed_correct": 15
+  },
+  "correctFullFlows": {
+    "n": 512,
+    "unit": "ms",
+    "estimator": "Hyndman-Fan Type 7",
+    "p50": 30319.603404,
+    "p90": 31478.8600903,
+    "p95": 31878.2577095
+  },
+  "completedFullFlowsIncludingIncorrect": {
+    "n": 512,
+    "unit": "ms",
+    "estimator": "Hyndman-Fan Type 7",
+    "p50": 30319.603404,
+    "p90": 31478.8600903,
+    "p95": 31878.2577095
+  },
+  "allObservedAttemptsIncludingFailureObservation": {
+    "n": 513,
+    "unit": "ms",
+    "estimator": "Hyndman-Fan Type 7",
+    "p50": 30319.973579,
+    "p90": 31482.348846599998,
+    "p95": 31898.9148128
+  },
+  "requesterObservedStages": {
+    "stt": {
+      "population": "measured requester-observed stage wall time; separate outcome groups",
+      "outcomes": {
+        "completed": 513
+      },
+      "latencies": {
+        "completed": {
+          "n": 513,
+          "unit": "ms",
+          "estimator": "Hyndman-Fan Type 7",
+          "p50": 10283.504347,
+          "p90": 10773.0714682,
+          "p95": 11130.2764916
+        }
+      }
+    },
+    "assistant": {
+      "population": "measured requester-observed stage wall time; separate outcome groups",
+      "outcomes": {
+        "completed": 513
+      },
+      "latencies": {
+        "completed": {
+          "n": 513,
+          "unit": "ms",
+          "estimator": "Hyndman-Fan Type 7",
+          "p50": 11768.951639,
+          "p90": 12257.378335000001,
+          "p95": 12610.9586342
+        }
+      }
+    },
+    "tts": {
+      "population": "measured requester-observed stage wall time; separate outcome groups",
+      "outcomes": {
+        "completed": 512,
+        "failed": 1
+      },
+      "latencies": {
+        "completed": {
+          "n": 512,
+          "unit": "ms",
+          "estimator": "Hyndman-Fan Type 7",
+          "p50": 8149.6318075,
+          "p90": 8700.062344200001,
+          "p95": 8955.907217150001
+        },
+        "failed": {
+          "n": 1,
+          "unit": "ms",
+          "estimator": "Hyndman-Fan Type 7",
+          "p50": 27133.88993,
+          "p90": 27133.88993,
+          "p95": 27133.88993
+        }
+      }
+    }
+  },
+  "failures": [
+    {
+      "ordinal": 528,
+      "measuredIndex": 513,
+      "requestId": "audio-request-1a9213b60cb6458a9ce50fe4ba549746",
+      "status": "failed",
+      "failure": {
+        "code": "transport_ambiguous",
+        "stage": "tts"
+      },
+      "timeout": false,
+      "failureObservedDurationMs": 49164.00898,
+      "correctness": {
+        "assistant_reply_matches_expected_words": true,
+        "transcript_matches_reference_words": true
+      },
+      "outputAudioPresentInRequesterRow": false
+    }
+  ],
+  "nativeProviderStageAndResourceJoin": "PENDING full saved provider packet; do not substitute client stage durations for native model latency",
+  "physicalMicPlaybackOrAudibility": false,
+  "protocolAttribution": "Includes Orca intermediary hop; not actual P2P or pure protocol overhead",
+  "bindingCaveat": "Requester configured n_gpu_layers=0 is not invoked remote provider backend; use retained provider-native evidence",
+  "rawRetention": {
+    "cases": 528,
+    "uniqueWavs": 527
+  },
+  "full900Complete": false,
+  "full13Complete": false
+}

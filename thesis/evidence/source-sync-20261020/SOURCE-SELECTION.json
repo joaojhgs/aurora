@@ -1,0 +1,336 @@
+{
+  "files": [
+    {
+      "path": "app/services/config/config_defaults.json",
+      "bytes": 14254,
+      "sha256": "1ddb323235b97b1211bcfbf97ca0b6167f2a42a48b76e7fa0db9dda3767939a8"
+    },
+    {
+      "path": "app/services/config/config_schema.json",
+      "bytes": 86603,
+      "sha256": "558cf9641fcb050c60768c845ddb94558e6a1fe4656547a2e3efc638850969af"
+    },
+    {
+      "path": "app/services/gateway/fastapi_app.py",
+      "bytes": 24489,
+      "sha256": "c90ade3dc52f1dfdf3840225894d24cefa530b063b2b32e1b289139772e65273"
+    },
+    {
+      "path": "app/services/gateway/registry_aggregator.py",
+      "bytes": 27485,
+      "sha256": "10d555a1486fb2c804cbb97539878fcb8cf2a6c314e123ca9149215f3a66b98e"
+    },
+    {
+      "path": "app/services/gateway/route_generator.py",
+      "bytes": 45834,
+      "sha256": "40ccde0e90273842ccdedb331f63e8cb979b22bc9d3d5ce2caaab1a2bbdd9a83"
+    },
+    {
+      "path": "app/services/gateway/webrtc/rpc.py",
+      "bytes": 92358,
+      "sha256": "68cdd7c932c23e5054d53013a57f2c39c923d0d4fde98077953c9a665d4cb005"
+    },
+    {
+      "path": "app/services/gateway/webrtc/rtc_client.py",
+      "bytes": 315736,
+      "sha256": "9e787da2f5c072cb9550b90480e5ce787accb9c042bbe29b06def8c5d12db890"
+    },
+    {
+      "path": "app/services/orchestrator/service.py",
+      "bytes": 170198,
+      "sha256": "0b77092091946b94130945b3bfb670a922a209b846d5ffe30e23f75b52f982f3"
+    },
+    {
+      "path": "app/services/stt_transcription/service.py",
+      "bytes": 120668,
+      "sha256": "e7e791531475eeb62edaf7af06ccb74e25b4043b831143b3e8654a314b9dea3a"
+    },
+    {
+      "path": "app/services/supervisor.py",
+      "bytes": 24235,
+      "sha256": "4ac2b5578fa8b3759bf30e7dfe8c68364e3453eba5020663dc3be670b838a7d8"
+    },
+    {
+      "path": "app/services/tts/service.py",
+      "bytes": 228651,
+      "sha256": "96f916131756a5ec2a27f606c719d4c360a9d6d52890a266b59ef3193f14b07e"
+    },
+    {
+      "path": "app/shared/config/keys.py",
+      "bytes": 72060,
+      "sha256": "c14fb6252fa88e337b1a27d2fd20976ad98b4a59ef8a75065f9afac7de08d269"
+    },
+    {
+      "path": "app/shared/config/models.py",
+      "bytes": 37108,
+      "sha256": "00fb3ef21b4477f8d02cd1d47c702edadae982608ff4a28f72609a0e83f3f59f"
+    },
+    {
+      "path": "app/shared/contracts/models/speech_runtime.py",
+      "bytes": 23096,
+      "sha256": "8eb028756d4d9b987641e98564a9acdcd737ed0b88519ead8943b95adf8c1595"
+    },
+    {
+      "path": "app/shared/services/base_service.py",
+      "bytes": 69281,
+      "sha256": "39702090d31044081ecd4425c7f04858397337ae83b3425612766db783c560ec"
+    },
+    {
+      "path": "app/shared/services/process_launcher.py",
+      "bytes": 12132,
+      "sha256": "c6e102416d03b092d5ac33ef50caa5dc4f5448daf480606a0026f72e16a4eef3"
+    },
+    {
+      "path": "apps/aurora-tauri/src-tauri/src/lib.rs",
+      "bytes": 523880,
+      "sha256": "16a837eb74ced7ddcea59337cdade5c543709fe0412b843c0543a76e7d0e2107"
+    },
+    {
+      "path": "apps/aurora-tauri/src/aurora-client.ts",
+      "bytes": 119635,
+      "sha256": "b54392ff9c883d061a736c5fc8d90bedfe070cda7a5a7e29f096f6bd39a92b0a"
+    },
+    {
+      "path": "apps/aurora-tauri/src/offline-profile-main.test.ts",
+      "bytes": 13183,
+      "sha256": "3ab2a4c61e47c98e61bf17deff4a1ac7b585985768e4a5f52d792f7d3a11e3c3"
+    },
+    {
+      "path": "apps/aurora-tauri/src/tauri-app.tsx",
+      "bytes": 113845,
+      "sha256": "1b7637e5359e4c02cf1df52f968b799f50947ad0c9607d1fdf84e3252824db65"
+    },
+    {
+      "path": "apps/aurora-tauri/src/vite-env.d.ts",
+      "bytes": 627,
+      "sha256": "90bd48f78c1b0df2f700fbb6c95ca2729dd0e166f38b4c9ceb5b2af4b49f482c"
+    },
+    {
+      "path": "apps/aurora-web/app/assistant-client.tsx",
+      "bytes": 4703,
+      "sha256": "9d5571da7fc21b99921ae7601b3cf1cd993e730581d014e19f8201162066bb96"
+    },
+    {
+      "path": "apps/aurora-web/app/browser-shell-runtime.tsx",
+      "bytes": 32601,
+      "sha256": "70baa11dabba1186f73460ac46c5486f92216e02c03623a0071a8bdc3c92a522"
+    },
+    {
+      "path": "docker-compose.webrtc-interop.yml",
+      "bytes": 1278,
+      "sha256": "59e78d7a3c3f75aead932006675c2ec8d1f743954ed994c19df6bb5cc36cdfe9"
+    },
+    {
+      "path": "packages/aurora-sdk/src/generated-contracts.ts",
+      "bytes": 11725,
+      "sha256": "696fc4fa11d095655718da263951d3a4c1aa69c5bbfe67d4b1b1ae01d867f3b7"
+    },
+    {
+      "path": "packages/aurora-sdk/src/webrtc/manifest.ts",
+      "bytes": 35101,
+      "sha256": "88d99c863d8bb218edd9afcd422de9a0206424efc81af344c91e94b2bd8eda6d"
+    },
+    {
+      "path": "packages/aurora-sdk/tests/generated-speech-client.test.ts",
+      "bytes": 8796,
+      "sha256": "95f2a5c4ed383b29a337f6511756c580012d33776ebd39ad22779b4eb4cc9cca"
+    },
+    {
+      "path": "packages/aurora-sdk/tests/webrtc-manifest.test.ts",
+      "bytes": 25274,
+      "sha256": "bae42355504d7f936c0c1843fdc7b71ea3927e81b6ab3a6ca63bfc64b467cafa"
+    },
+    {
+      "path": "packages/aurora-ui/src/assistant-history-persistence.ts",
+      "bytes": 6947,
+      "sha256": "651033b8ea953397a046cfd000213b9bf66d6a1b0d32198df73fd49a8252bbe8"
+    },
+    {
+      "path": "packages/aurora-ui/src/assistant-view-types.ts",
+      "bytes": 3978,
+      "sha256": "3f129d205313eece70b3bb594f568f0511a2c38c43339d3ccf275b0e32db6dc2"
+    },
+    {
+      "path": "packages/aurora-ui/src/assistant-view.tsx",
+      "bytes": 28184,
+      "sha256": "d244100fdd1db1a996f304b2555821807f6c1aa973d6660ef27ff762780033bb"
+    },
+    {
+      "path": "packages/aurora-ui/src/onboarding-view.tsx",
+      "bytes": 52274,
+      "sha256": "a46a71c92ef44a259931bc04336436ff585f7654e023e595a41feb80f194b33e"
+    },
+    {
+      "path": "packages/aurora-ui/src/runtime-profile.ts",
+      "bytes": 31555,
+      "sha256": "c55a893eb1541714d001af27c3ec23e809e612201e2fdafe0444ccd15036a944"
+    },
+    {
+      "path": "packages/aurora-ui/src/styles.css",
+      "bytes": 323539,
+      "sha256": "970640f74b8483effe558b527ac384ad2ae7ce6eacdb931bc271b4e4c121346f"
+    },
+    {
+      "path": "packages/aurora-ui/src/use-assistant-browser-capture.test.ts",
+      "bytes": 12865,
+      "sha256": "599f004438d7fdd2f444cb40944e1a8769acb70e891b747798ebf9926430ab74"
+    },
+    {
+      "path": "packages/aurora-ui/src/use-assistant-browser-capture.ts",
+      "bytes": 20297,
+      "sha256": "cef59aa2f2ddbc0774099ebcce27e92159734d9028ad56e09bf3ecb8efe57fd5"
+    },
+    {
+      "path": "packages/aurora-ui/src/use-assistant-foreground-turn.ts",
+      "bytes": 18275,
+      "sha256": "dae3bdf7ab9baaeffd8d9ae0339b7200e520ec5f0c64e1bdb461d967e85fdcbb"
+    },
+    {
+      "path": "packages/aurora-ui/src/use-assistant-tts.test.ts",
+      "bytes": 15931,
+      "sha256": "a176e81d7a45ae511bb36183d19620d9ece8598fabd9b8c3680da39f5268635f"
+    },
+    {
+      "path": "packages/aurora-ui/src/use-assistant-tts.ts",
+      "bytes": 12909,
+      "sha256": "e5caa61b1158946b4e9f0d274a898c3e2c6b538cff5b4aef941d474ee3a08745"
+    },
+    {
+      "path": "packages/aurora-ui/src/use-assistant-view-coordination.ts",
+      "bytes": 6047,
+      "sha256": "6f2d63c3ae30dd9447e939a4caf2e4bffc3925613c44446fd33a74057cc33196"
+    },
+    {
+      "path": "packages/aurora-ui/tests/native-assistant-view.test.tsx",
+      "bytes": 16710,
+      "sha256": "0f8fc23fa51d0a0cde010f5aa3a83c11609cdd6dee73799107c72b702ab5a957"
+    },
+    {
+      "path": "packages/aurora-ui/tests/onboarding-and-mesh-baseline.test.tsx",
+      "bytes": 57510,
+      "sha256": "705220a9debc4743828b0cfcd55211b482c37dfbac8eb92bc59d34fd6c85bae5"
+    },
+    {
+      "path": "packages/aurora-ui/tests/runtime-profile.test.ts",
+      "bytes": 22130,
+      "sha256": "c0d77039cbd772f16d9a6c9f35762ca747964033bc8f4551fa50b9548ae440fa"
+    },
+    {
+      "path": "packages/aurora-voice-web/src/audio-worklet-source.ts",
+      "bytes": 26473,
+      "sha256": "af88cb9a88bdc8887ac6edfcd26f4dc6bb59d75bec84a5da3418c9453b6bc643"
+    },
+    {
+      "path": "packages/aurora-voice-web/tests/audio-worklet-source.test.ts",
+      "bytes": 29065,
+      "sha256": "53a3e4898f59606a736b572d77699fa4c8fdb9d8967d86eab8d9d7245e41c274"
+    },
+    {
+      "path": "rust/crates/aurora-voice-native/src/runtime_profile.rs",
+      "bytes": 50477,
+      "sha256": "40c25d866e95cdfe2cd9d22fcbcb6dfde8e8be2d6f8364d5e9eabc575c61a29e"
+    },
+    {
+      "path": "scripts/experiments/assistant_local_api_pilot.py",
+      "bytes": 52433,
+      "sha256": "f06ce2f2e63d7fe5a143c966d017319a5e9e0fe4cb4b271311be3b6e8060d235"
+    },
+    {
+      "path": "scripts/experiments/assistant_matched_input_hook.py",
+      "bytes": 4373,
+      "sha256": "1e342abe17092ac6b237564f51c31344e60f84fde8c1d1636b8876bd33a1f622"
+    },
+    {
+      "path": "scripts/experiments/assistant_measurement_records.py",
+      "bytes": 14209,
+      "sha256": "2648b5579c487e15936bf2eafd70ae8b63db5567915ff4c1c1b318989da2a646"
+    },
+    {
+      "path": "scripts/hosted_peer_e2e.sh",
+      "bytes": 38307,
+      "sha256": "51d2e5f44cfc24c4afbd5e91c79822ea5d9c1ccc63721da1acc226225099634c"
+    },
+    {
+      "path": "tests/e2e/hosted_peer/hosted-peer-live-helpers.ts",
+      "bytes": 14374,
+      "sha256": "fc1a89f4925ea419f3eb14b68568a95b04d5a8375fbf1ff512f81e199a35b6cd"
+    },
+    {
+      "path": "tests/e2e/hosted_peer/hosted-peer-live-shell.spec.ts",
+      "bytes": 27736,
+      "sha256": "db4e6612284ab0491a538ab99d7a3707dc513e0fdc3249463d54d5c6b1765bfe"
+    },
+    {
+      "path": "tests/unit/app/services/test_process_launcher_signal_lifecycle.py",
+      "bytes": 2591,
+      "sha256": "22972439f515a1d1288233b745e1ed38a789e961c9be86a76b005d0905245f79"
+    },
+    {
+      "path": "tests/unit/gateway/test_fastapi_cors_auth_order.py",
+      "bytes": 1908,
+      "sha256": "c6f3fa83851f5713e6de32db101e9ad6007575f30ccaee5d73537547f148531e"
+    },
+    {
+      "path": "tests/unit/gateway/test_fastapi_dynamic_routes.py",
+      "bytes": 4648,
+      "sha256": "b614fa92186ee74d0979b23c05041930ff90f67a92c246171c1a9d094478f76b"
+    },
+    {
+      "path": "tests/unit/gateway/test_rpc.py",
+      "bytes": 127133,
+      "sha256": "50ed8a0e7a19b0c2344a2de6589eb7dee9c6409dfc420fb774e002811e971c29"
+    },
+    {
+      "path": "tests/unit/gateway/test_rtc_client_lifecycle.py",
+      "bytes": 51932,
+      "sha256": "a9dfed7df2411d7434df10c17826ea2a9f69964819e0f5a4db48505641079664"
+    },
+    {
+      "path": "tests/unit/orchestrator/test_llama_configured_options_product.py",
+      "bytes": 8554,
+      "sha256": "55fa269116be506b86b8a02bfde184b6620fe9486bbbe72602785c628d0be2ff"
+    },
+    {
+      "path": "tests/unit/orchestrator/test_session_persistence.py",
+      "bytes": 9096,
+      "sha256": "3e171573ddac0d2eaed0f244207bd4934fcd6efb74fbca1997c409f058624390"
+    },
+    {
+      "path": "tests/unit/services/test_supervisor.py",
+      "bytes": 18531,
+      "sha256": "b9138279d6d98e53a8ada9f2c53bddc36cf5cb806fe69a453608a8e935061813"
+    },
+    {
+      "path": "tests/unit/stt_transcription/test_finite_transcription_execution.py",
+      "bytes": 24291,
+      "sha256": "05c9d50233a07d135d6c06d05d65815898d34d9232e107ade6fc350829ecc8ce"
+    },
+    {
+      "path": "tests/unit/stt_transcription/test_runtime_speech_announcement.py",
+      "bytes": 6862,
+      "sha256": "1e4daf52372f1268e584e65db2e66ae278dbf1682fdcccd6a944bd985e335656"
+    },
+    {
+      "path": "tests/unit/tools/test_assistant_measurement_records.py",
+      "bytes": 6704,
+      "sha256": "d974dc5f6007807e2de5a74dc7152e296934fba58b7062cae474e4a5d8852181"
+    },
+    {
+      "path": "tests/unit/tts/test_runtime_speech_announcement.py",
+      "bytes": 15103,
+      "sha256": "5cb4d99379ed9456aaa8028e8c367ae929404c1de4c7b6ce8075b3e03a0fac18"
+    }
+  ],
+  "secretScanFindings": [
+    {
+      "path": "apps/aurora-tauri/src-tauri/src/lib.rs",
+      "pattern": "assigned_long_secret",
+      "disposition": "all ten matches are unchanged HEAD test data; no matching secret-shaped values introduced by selected diff",
+      "unchangedMatchCount": 10,
+      "valuesSuppressed": true
+    }
+  ],
+  "scanPolicy": "key/token/private-key shapes; path/type only, no values",
+  "frozenSourcesUntouched": true,
+  "secretScanNewFindings": []
+}

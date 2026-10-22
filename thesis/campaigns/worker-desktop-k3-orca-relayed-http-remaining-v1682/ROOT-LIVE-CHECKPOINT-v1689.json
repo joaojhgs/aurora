@@ -1,0 +1,53 @@
+{
+  "at": "2026-10-20T01:05:56.957155+00:00",
+  "classification": "VERIFIED_WAIT",
+  "processes": [
+    {
+      "role": "controller",
+      "pid": 2202799,
+      "startTicks": 123551050,
+      "alive": true
+    },
+    {
+      "role": "backend",
+      "pid": 2202983,
+      "startTicks": 123552157,
+      "alive": true
+    },
+    {
+      "role": "copier",
+      "pid": 2202800,
+      "startTicks": 123551051,
+      "alive": true
+    }
+  ],
+  "newMeasured": 26,
+  "correct": 26,
+  "failed": 0,
+  "remaining": 134,
+  "lastGlobalIndex": 766,
+  "outcomes": {
+    "completed_correct": 26
+  },
+  "custodyCases": 40,
+  "custodyFiles": 174,
+  "custodyErrors": null,
+  "freeBytes": 5377544192,
+  "summaryExists": false,
+  "previousGoalTurnClassification": "VERIFIED_WAIT on confirmed live original controller/backend/copier; this turn observed new measured count18->26 without extra traffic",
+  "nativeGoal": "01a112a5-d6bb-74e2-bf7c-ace73cb513b5",
+  "nativeGoalStatus": "active",
+  "countsOnly": {
+    "attempted": 766,
+    "correct": 751,
+    "failed": 15,
+    "remaining": 134,
+    "target": 900,
+    "prior740Preserved": true
+  },
+  "nextAction": "Continue same frozen live K3 tail; no new source/test/network calls, no restart/resume/new worker. Seal actual requester/provider raw and exact missing counts at natural terminal, then next authorized remaining condition.",
+  "nextProgressCheckAt": "2026-10-20T01:11:23.508206+00:00",
+  "noAdvanceNudgeAt": "2026-10-20T01:11:23.508227+00:00",
+  "frozenManifestSha256": "32c5ac87c8cd765f0117a0312b6941c8f69c7731dfe66987826311e74e34b506",
+  "providerDeadlineUtc": "2026-10-20T03:42:15.698294+00:00"
+}

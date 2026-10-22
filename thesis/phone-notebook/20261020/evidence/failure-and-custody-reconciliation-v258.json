@@ -1,0 +1,38 @@
+{
+  "at": "2026-10-22T09:14:55.741147+00:00",
+  "noModelOrServiceLaunchesReplayed": true,
+  "preservedReadFailures": [
+    {
+      "operation": "notebook-route-readiness-v249",
+      "error": "KeyError auth_enabled",
+      "scope": "read-only config projection before network/device reads",
+      "workerEvidence": "evidence/notebook-route-readiness-v249/read-01.json"
+    },
+    {
+      "operation": "notebook-route-readiness-v250",
+      "error": "TypeError sorting mixed None/string event counter keys",
+      "scope": "read-only result serialization; source data remained on notebook",
+      "workerEvidence": "evidence/notebook-route-readiness-v250/read-00.json"
+    }
+  ],
+  "correctedReceipt": "evidence/notebook-route-readiness-v251/result.json",
+  "custodyRecovery": {
+    "initialImmutableZipBytes": 105807,
+    "sha256": "a2a7814f8d6b9de26881db2f297074e7e6aa7559dcb08ad7fcb2fa112e1b80ed",
+    "initialFramesReceived": 18,
+    "initialContiguousPrefixBytes": 8192,
+    "missingFramesOnlyRecovered": [
+      2,
+      5,
+      8,
+      11,
+      14,
+      17,
+      20,
+      23
+    ],
+    "causeObserved": "Unpaced terminal stream blocks dropped starts of some frame lines;100ms pacing retained all frames",
+    "fullPacedCopyReceipt": "evidence/paced-public-custody-smoke-v261/COPY-RECEIPT.json",
+    "fullCopyCommandSeconds": 7.977620038902387
+  }
+}

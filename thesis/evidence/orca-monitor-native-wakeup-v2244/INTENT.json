@@ -1,0 +1,15 @@
+{
+  "at": "2026-10-21T17:12:01.892772+00:00",
+  "targetTerminal": "term_2eab47ed-ab9b-4e35-bd9b-fc068c60e3fc",
+  "targetIncarnation": "37e50d9c-6cf5-4e28-a63b-f2bc3eed5661",
+  "targetNativeGoal": "01a123ff-19ba-7332-a2f7-346a722af79f",
+  "rootNativeGoalUntouched": "01a112a5-d6bb-74e2-bf7c-ace73cb513b5",
+  "supportedCommand": "/goal resume",
+  "maximumSends": 1,
+  "existingSameRun": "run_e6054e76e9fc",
+  "authority": "Existing owner-authorized same-monitor wakeup; original monitor latest sameRun msg_efa46bd2383c 2026-10-21T15:49:18 directs single supported sameoriginalmonitor resume at idle if stillblocked/no priorresume; CODING-SINGLE-ROOT-RESUME-ACK-20261020T0009 assigns originalRoot monitorresumeownership. Actual Rootrouting alreadySentForThisRecovery=false.",
+  "newWorkers": 0,
+  "noInterrupt": true,
+  "noNewGoalOrTask": true,
+  "onAmbiguousResult": "Reconcile exact returned request; never resend without verified supported retry identity"
+}

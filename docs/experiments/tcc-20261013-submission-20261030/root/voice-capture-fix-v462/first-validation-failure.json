@@ -1,0 +1,15 @@
+{
+  "at": "2026-10-15T00:53:04.593092+00:00",
+  "name": "ui-capture-tests-first",
+  "exitCode": 1,
+  "elapsedSeconds": 3.675700812949799,
+  "fileCounts": {
+    "failed": 1,
+    "passed": 5
+  },
+  "failedTest": "does not advertise listening until runtime microphone startup succeeds",
+  "primary": "expected stream message was undefined because jsdom document.hasFocus defaultfalse and correctforegroundeligibility rejectedstart",
+  "testOnlyCorrection": "spy document.hasFocus true withintry/finally; productforegroundeligibility preserved",
+  "firstActualStdout": "native exec tool result chunk655360; original logfile path reused by next validation (not claimed separate byteexactlog)",
+  "sourceHashesUnchanged": true
+}

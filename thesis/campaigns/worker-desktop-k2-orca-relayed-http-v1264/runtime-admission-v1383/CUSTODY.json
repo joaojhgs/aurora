@@ -1,0 +1,19 @@
+{
+  "records": [
+    {
+      "source": ".git/aurora-handoff-import-20261006/v1381-existing-k2-runtime-metadata-RESULT.json",
+      "destination": "thesis/campaigns/worker-desktop-k2-orca-relayed-http-v1264/runtime-admission-v1383/v1381-existing-k2-runtime-metadata-RESULT.json",
+      "bytes": 1849,
+      "sha256": "6011248a6b9d693c60c876ed7192957dcbbd09855a1137b37b2baff0a98a98b1"
+    },
+    {
+      "source": ".git/aurora-handoff-import-20261006/v1382-k2-existing-gpu-config-RESULT.json",
+      "destination": "thesis/campaigns/worker-desktop-k2-orca-relayed-http-v1264/runtime-admission-v1383/v1382-k2-existing-gpu-config-RESULT.json",
+      "bytes": 1839,
+      "sha256": "dc74f2a27818543ee0d1f1e0dfad69cd01de96051a770521e529828a6c036633"
+    }
+  ],
+  "newModelRequests": 0,
+  "actualLoadedOffloadProven": false,
+  "noProviderRestartOrSettingsChange": true
+}

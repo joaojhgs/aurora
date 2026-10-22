@@ -1,0 +1,169 @@
+{
+  "objective": "tcc:20261013:submission-20261030",
+  "serial_owner": "same original Aurora Root01a112a5",
+  "files": {
+    "root-manifest.json": {
+      "private_original_sha256": "c4791d3cdafe6d392a0fdb690b7af59f19f871f5e90cea1bd9ac55f5aa6fde61",
+      "export_sha256": "c4791d3cdafe6d392a0fdb690b7af59f19f871f5e90cea1bd9ac55f5aa6fde61",
+      "credential_lines_withheld": 0,
+      "byte_identical": true
+    },
+    "root-result.json": {
+      "private_original_sha256": "898ee3f6563a7003739a7abb8a3754046018fbaea71ba21205c983648df37030",
+      "export_sha256": "898ee3f6563a7003739a7abb8a3754046018fbaea71ba21205c983648df37030",
+      "credential_lines_withheld": 0,
+      "byte_identical": true
+    },
+    "live-handle.json": {
+      "private_original_sha256": "ad5d8c75a5813fcfdfc6ae5bab103b545cee20632b1099cbdba4a930cce47db1",
+      "export_sha256": "ad5d8c75a5813fcfdfc6ae5bab103b545cee20632b1099cbdba4a930cce47db1",
+      "credential_lines_withheld": 0,
+      "byte_identical": true
+    },
+    "case-history.jsonl": {
+      "private_original_sha256": "6a26f53d1a1116bb6dd45da8b87b227781250c9608f212ce41a2f61c30c98201",
+      "export_sha256": "6a26f53d1a1116bb6dd45da8b87b227781250c9608f212ce41a2f61c30c98201",
+      "credential_lines_withheld": 0,
+      "byte_identical": true
+    },
+    "next-autogen-cleanup.json": {
+      "private_original_sha256": "99c313fec011b86cd1cbc818bb76a4190d5607d06d078c62bd3ea81376b47014",
+      "export_sha256": "99c313fec011b86cd1cbc818bb76a4190d5607d06d078c62bd3ea81376b47014",
+      "credential_lines_withheld": 0,
+      "byte_identical": true
+    },
+    "owned-container-cleanup.json": {
+      "private_original_sha256": "1a216389f4aaa0aba0e766314f70ab81e2f57f565c3567b8f1e382eb88e544f2",
+      "export_sha256": "1a216389f4aaa0aba0e766314f70ab81e2f57f565c3567b8f1e382eb88e544f2",
+      "credential_lines_withheld": 0,
+      "byte_identical": true
+    },
+    "stdout.log": {
+      "private_original_sha256": "ff058d6f3f9ec4826c18cea541b7818260410399584b79e8e9693cb72ad55289",
+      "export_sha256": "ff058d6f3f9ec4826c18cea541b7818260410399584b79e8e9693cb72ad55289",
+      "credential_lines_withheld": 0,
+      "byte_identical": true
+    },
+    "stderr.log": {
+      "private_original_sha256": "c41a20454673b6b1b08041a30579f00b3713dfb3cdacc5623c48fabf0e4c9644",
+      "export_sha256": "e26f21e478073a14288cf40809360a09edf12160e01ce1ada0104fa390f92715",
+      "credential_lines_withheld": 1,
+      "byte_identical": false
+    },
+    "artifacts/python-service.log": {
+      "private_original_sha256": "c6767ed14584be43b95ebf7b00e7fcd2c327a2ae963d9ef210af22fc6ec89d14",
+      "export_sha256": "2a7d2cfadf1d05b3f94b5e394f955884c89666430a519eaea9c7b44bbda13ddb",
+      "credential_lines_withheld": 4,
+      "byte_identical": false
+    },
+    "artifacts/web-ui.log": {
+      "private_original_sha256": "1871f24fb11ff65da2dfe1b948122d85480e6f00aa8620260d9d501904eba6bb",
+      "export_sha256": "1871f24fb11ff65da2dfe1b948122d85480e6f00aa8620260d9d501904eba6bb",
+      "credential_lines_withheld": 0,
+      "byte_identical": true
+    },
+    "artifacts/playwright-results/.last-run.json": {
+      "private_original_sha256": "91d1c43004802cd49950d78eb11c8fa7d05da8ffffe219a8b13b2f561bc00903",
+      "export_sha256": "91d1c43004802cd49950d78eb11c8fa7d05da8ffffe219a8b13b2f561bc00903",
+      "credential_lines_withheld": 0,
+      "byte_identical": true
+    },
+    "source/docker-compose.webrtc-interop.yml": {
+      "private_original_sha256": "59e78d7a3c3f75aead932006675c2ec8d1f743954ed994c19df6bb5cc36cdfe9",
+      "export_sha256": "59e78d7a3c3f75aead932006675c2ec8d1f743954ed994c19df6bb5cc36cdfe9",
+      "credential_lines_withheld": 0,
+      "byte_identical": true
+    },
+    "source/scripts/hosted_peer_e2e.sh": {
+      "private_original_sha256": "36d9e2907d9f19590f3552d2ea2aefad27cdb6f2c09d8e2cdfac748dccf0a267",
+      "export_sha256": "36d9e2907d9f19590f3552d2ea2aefad27cdb6f2c09d8e2cdfac748dccf0a267",
+      "credential_lines_withheld": 0,
+      "byte_identical": true
+    },
+    "source/app/services/supervisor.py": {
+      "private_original_sha256": "4ac2b5578fa8b3759bf30e7dfe8c68364e3453eba5020663dc3be670b838a7d8",
+      "export_sha256": "4ac2b5578fa8b3759bf30e7dfe8c68364e3453eba5020663dc3be670b838a7d8",
+      "credential_lines_withheld": 0,
+      "byte_identical": true
+    },
+    "source/app/shared/services/process_launcher.py": {
+      "private_original_sha256": "c6e102416d03b092d5ac33ef50caa5dc4f5448daf480606a0026f72e16a4eef3",
+      "export_sha256": "c6e102416d03b092d5ac33ef50caa5dc4f5448daf480606a0026f72e16a4eef3",
+      "credential_lines_withheld": 0,
+      "byte_identical": true
+    },
+    "source/app/services/gateway/fastapi_app.py": {
+      "private_original_sha256": "319469ee90ab706eaf5066bcde9f3f65b69b2894a4054c4bfe07190b25f6e94b",
+      "export_sha256": "319469ee90ab706eaf5066bcde9f3f65b69b2894a4054c4bfe07190b25f6e94b",
+      "credential_lines_withheld": 0,
+      "byte_identical": true
+    },
+    "source/app/services/orchestrator/service.py": {
+      "private_original_sha256": "0b77092091946b94130945b3bfb670a922a209b846d5ffe30e23f75b52f982f3",
+      "export_sha256": "0b77092091946b94130945b3bfb670a922a209b846d5ffe30e23f75b52f982f3",
+      "credential_lines_withheld": 0,
+      "byte_identical": true
+    },
+    "source/apps/aurora-web/app/assistant-client.tsx": {
+      "private_original_sha256": "9d5571da7fc21b99921ae7601b3cf1cd993e730581d014e19f8201162066bb96",
+      "export_sha256": "9d5571da7fc21b99921ae7601b3cf1cd993e730581d014e19f8201162066bb96",
+      "credential_lines_withheld": 0,
+      "byte_identical": true
+    },
+    "source/packages/aurora-ui/src/assistant-view.tsx": {
+      "private_original_sha256": "d244100fdd1db1a996f304b2555821807f6c1aa973d6660ef27ff762780033bb",
+      "export_sha256": "d244100fdd1db1a996f304b2555821807f6c1aa973d6660ef27ff762780033bb",
+      "credential_lines_withheld": 0,
+      "byte_identical": true
+    },
+    "source/packages/aurora-ui/src/use-assistant-view-coordination.ts": {
+      "private_original_sha256": "6f2d63c3ae30dd9447e939a4caf2e4bffc3925613c44446fd33a74057cc33196",
+      "export_sha256": "6f2d63c3ae30dd9447e939a4caf2e4bffc3925613c44446fd33a74057cc33196",
+      "credential_lines_withheld": 0,
+      "byte_identical": true
+    },
+    "source/packages/aurora-ui/src/assistant-view-types.ts": {
+      "private_original_sha256": "3f129d205313eece70b3bb594f568f0511a2c38c43339d3ccf275b0e32db6dc2",
+      "export_sha256": "3f129d205313eece70b3bb594f568f0511a2c38c43339d3ccf275b0e32db6dc2",
+      "credential_lines_withheld": 0,
+      "byte_identical": true
+    },
+    "source/packages/aurora-ui/src/assistant-history-persistence.ts": {
+      "private_original_sha256": "651033b8ea953397a046cfd000213b9bf66d6a1b0d32198df73fd49a8252bbe8",
+      "export_sha256": "651033b8ea953397a046cfd000213b9bf66d6a1b0d32198df73fd49a8252bbe8",
+      "credential_lines_withheld": 0,
+      "byte_identical": true
+    },
+    "source/packages/aurora-ui/tests/native-assistant-view.test.tsx": {
+      "private_original_sha256": "0f8fc23fa51d0a0cde010f5aa3a83c11609cdd6dee73799107c72b702ab5a957",
+      "export_sha256": "0f8fc23fa51d0a0cde010f5aa3a83c11609cdd6dee73799107c72b702ab5a957",
+      "credential_lines_withheld": 0,
+      "byte_identical": true
+    },
+    "source/tests/e2e/hosted_peer/hosted-peer-live-helpers.ts": {
+      "private_original_sha256": "fc1a89f4925ea419f3eb14b68568a95b04d5a8375fbf1ff512f81e199a35b6cd",
+      "export_sha256": "fc1a89f4925ea419f3eb14b68568a95b04d5a8375fbf1ff512f81e199a35b6cd",
+      "credential_lines_withheld": 0,
+      "byte_identical": true
+    },
+    "source/tests/e2e/hosted_peer/hosted-peer-live-shell.spec.ts": {
+      "private_original_sha256": "a257aa79f03423fa412ffa53099f124910c248a3c3591924e9e3688de0891b2b",
+      "export_sha256": "a257aa79f03423fa412ffa53099f124910c248a3c3591924e9e3688de0891b2b",
+      "credential_lines_withheld": 0,
+      "byte_identical": true
+    },
+    "independent-functional-review.md": {
+      "private_original_sha256": "022807eaa924a113b836bc65e381f9b720698fa918f718e3a88337dd6aa9bcd8",
+      "export_sha256": "022807eaa924a113b836bc65e381f9b720698fa918f718e3a88337dd6aa9bcd8",
+      "byte_identical": true
+    },
+    "next-pilot-success-retention-source.md": {
+      "private_original_sha256": "564125be87a3f18c38508515e4664d181841784e851b7fcf78f03b6834be4fce",
+      "export_sha256": "564125be87a3f18c38508515e4664d181841784e851b7fcf78f03b6834be4fce",
+      "byte_identical": true
+    }
+  },
+  "private_browser_bodies_exported": false,
+  "full_playwright_report_exported": false,
+  "readme_sha256": "62293c1e46abd728450fed926545cdab88f1b575c8fea95acc282dec01a10569"
+}

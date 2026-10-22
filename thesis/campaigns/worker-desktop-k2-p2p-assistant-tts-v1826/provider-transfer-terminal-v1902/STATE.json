@@ -1,0 +1,364 @@
+{
+  "startedAt": "2026-10-20T20:33:52.661634+00:00",
+  "status": "complete_verified_provider_terminal_archive",
+  "export": {
+    "K2Correct": 774,
+    "K2Failed": 126,
+    "K2MeasuredAttempted": 900,
+    "K2Unattempted": 0,
+    "actors": [
+      {
+        "absent": true,
+        "expectedStartTicks": 26503295,
+        "pid": 3938174
+      },
+      {
+        "absent": true,
+        "expectedStartTicks": 26503353,
+        "pid": 3938202
+      }
+    ],
+    "archive": "/home/developer/projects/aurora/thesis/campaigns/worker-desktop-k2-p2p-assistant-tts-v1813/terminal-v1901/provider-eof-v1901.tar.gz",
+    "archiveContainsPhysicalCopies": true,
+    "at": "2026-10-20T20:31:55.507482+00:00",
+    "bytes": 2927485,
+    "comparisonStatus": "K2 measured collection complete; provider native/resource join remains pending; no pooled unlike-cohort percentiles",
+    "excludedWarmups": 15,
+    "files": 12,
+    "host": "personal.skyron-server",
+    "originalFilesPreserved": true,
+    "postStartupConfigSha256": "efed0546bf49f4e99cc977c643fa80e2f611fa99ab7fbcd5d9c9fb31d078beef",
+    "providerManifestSha256": "d133ecead33bca857e64a5bee381b030f297155ab4e0e723eeb64fc16f4ce667",
+    "rawPayloadBytes": 87266093,
+    "receiverPredicateCause": "UNKNOWN",
+    "sealSha256": "f53bb34da4470448d3e57b6bcec1652a38babc20998c734784df5b7ed404e9a2",
+    "sha256": "232066d69ed28795544bf181ae8caac00340df71f73892a6f477d861661e24e6",
+    "status": "original_provider_retired_raw_eof_sealed",
+    "sutCalls": 0,
+    "uncompressedDuplicateCreated": false
+  },
+  "copiedBytes": 2927485,
+  "operation": null,
+  "pages": [
+    {
+      "offset": 0,
+      "bytes": 98304,
+      "sha256": "293e90efcb7195364ba8ce95ce1d0f8d44ab4821f3458d8133ecaed65e652505",
+      "nextCursor": "105742",
+      "receipt": "k2-eof-v1902-provider-page-0000-RESULT.json"
+    },
+    {
+      "offset": 98304,
+      "bytes": 98304,
+      "sha256": "0514a5f119fa36d028fc1793580a8b339b107e916886400986957da751d24093",
+      "nextCursor": "105962",
+      "receipt": "k2-eof-v1902-provider-page-0001-RESULT.json"
+    },
+    {
+      "offset": 196608,
+      "bytes": 98304,
+      "sha256": "dd0089f22f7fe2ac569eaa59c1c1a8ecb7b6f7ba6ff7b905d4103ce0065e4c01",
+      "nextCursor": "106182",
+      "receipt": "k2-eof-v1902-provider-page-0002-RESULT.json"
+    },
+    {
+      "offset": 294912,
+      "bytes": 98304,
+      "sha256": "7e4e38376081208b58fd817331b8adcdf6490e86e2a2bf15edaa78779505f165",
+      "nextCursor": "106402",
+      "receipt": "k2-eof-v1902-provider-page-0003-RESULT.json"
+    },
+    {
+      "offset": 393216,
+      "bytes": 98304,
+      "sha256": "cea3075d16ae882b81e81c80a51226bef76c396ef5cb71e803bc44133995067d",
+      "nextCursor": "106622",
+      "receipt": "k2-eof-v1902-provider-page-0004-RESULT.json"
+    },
+    {
+      "offset": 491520,
+      "bytes": 98304,
+      "sha256": "fbaf23a587f7ea9b7ed8b1a105f4d8c0c071107d2151532223d1def35fddefbb",
+      "nextCursor": "106842",
+      "receipt": "k2-eof-v1902-provider-page-0005-RESULT.json"
+    },
+    {
+      "offset": 589824,
+      "bytes": 98304,
+      "sha256": "e4a34d4548584fe778b3a226c6021e948b493f4212439467499e40e318120e74",
+      "nextCursor": "107062",
+      "receipt": "k2-eof-v1902-provider-page-0006-RESULT.json"
+    },
+    {
+      "offset": 688128,
+      "bytes": 98304,
+      "sha256": "3e43043069bd9a361ba5c74cfa21b98c5f7eb7a1fd13484b806d5404cd4dd125",
+      "nextCursor": "107282",
+      "receipt": "k2-eof-v1902-provider-page-0007-RESULT.json"
+    },
+    {
+      "offset": 786432,
+      "bytes": 98304,
+      "sha256": "aa7ef59c027d4a5c73d6b3c946c2b227e604dbef56c6e2fe4055b71cbeb420a1",
+      "nextCursor": "107502",
+      "receipt": "k2-eof-v1902-provider-page-0008-RESULT.json"
+    },
+    {
+      "offset": 884736,
+      "bytes": 98304,
+      "sha256": "a2947e349fd4b3268d6adf8e63f440823dfb261c142a79b9c973f8066b9b4077",
+      "nextCursor": "107722",
+      "receipt": "k2-eof-v1902-provider-page-0009-RESULT.json"
+    },
+    {
+      "offset": 983040,
+      "bytes": 98304,
+      "sha256": "15b0aa5ef6c03244ede2c4c7c98fa4c0d0951e36fdfdc80d4ba2fdd9605e0052",
+      "nextCursor": "107942",
+      "receipt": "k2-eof-v1902-provider-page-0010-RESULT.json"
+    },
+    {
+      "offset": 1081344,
+      "bytes": 98304,
+      "sha256": "049a67b94fd73ba103a22b9df04a022945d66bf8a7fafedb27dbca3d46af2a03",
+      "nextCursor": "108162",
+      "receipt": "k2-eof-v1902-provider-page-0011-RESULT.json"
+    },
+    {
+      "offset": 1179648,
+      "bytes": 98304,
+      "sha256": "e0fe21165d043f29660ea580cac51bed80703add39d73108e50e2d2c79056b72",
+      "nextCursor": "108382",
+      "receipt": "k2-eof-v1902-provider-page-0012-RESULT.json"
+    },
+    {
+      "offset": 1277952,
+      "bytes": 98304,
+      "sha256": "adbc74532a01d424429672a09874a8ad11baeadcbbe6cc852ca75c1a01a5f85c",
+      "nextCursor": "108602",
+      "receipt": "k2-eof-v1902-provider-page-0013-RESULT.json"
+    },
+    {
+      "offset": 1376256,
+      "bytes": 98304,
+      "sha256": "2d14bacc6754effbb26a95063c34ce3c22c3d02dde19a2e78e19bcd5915af1d8",
+      "nextCursor": "108822",
+      "receipt": "k2-eof-v1902-provider-page-0014-RESULT.json"
+    },
+    {
+      "offset": 1474560,
+      "bytes": 98304,
+      "sha256": "a4a43bf5db34b421057ab3907bd147850ebc24fe199b4dd40992cdb8d793b10f",
+      "nextCursor": "109042",
+      "receipt": "k2-eof-v1902-provider-page-0015-RESULT.json"
+    },
+    {
+      "offset": 1572864,
+      "bytes": 98304,
+      "sha256": "17bad7650e491d7584450f1921f85cbf0216755a1dc1c2f01586860cb443f570",
+      "nextCursor": "109262",
+      "receipt": "k2-eof-v1902-provider-page-0016-RESULT.json"
+    },
+    {
+      "offset": 1671168,
+      "bytes": 98304,
+      "sha256": "b810a5d3e51801ebf600da8c1a71211b75ae9ebc667c7d7d3510702b022a92d1",
+      "nextCursor": "109482",
+      "receipt": "k2-eof-v1902-provider-page-0017-RESULT.json"
+    },
+    {
+      "offset": 1769472,
+      "bytes": 98304,
+      "sha256": "fd15e64c0feae4e380d8d52224d160622ebc7568d1167df84d5c06c47143cdc2",
+      "nextCursor": "109702",
+      "receipt": "k2-eof-v1902-provider-page-0018-RESULT.json"
+    },
+    {
+      "offset": 1867776,
+      "bytes": 98304,
+      "sha256": "ec3b588225f325a28fa3368af85d399352ddf1a8ae136a1a5cbbcff81474877d",
+      "nextCursor": "109922",
+      "receipt": "k2-eof-v1902-provider-page-0019-RESULT.json"
+    },
+    {
+      "offset": 1966080,
+      "bytes": 98304,
+      "sha256": "b99e1e8a69542410601bc05c27be2fe58c4ad81c0b0b5f3cb993a3dedc0fe33b",
+      "nextCursor": "110142",
+      "receipt": "k2-eof-v1902-provider-page-0020-RESULT.json"
+    },
+    {
+      "offset": 2064384,
+      "bytes": 98304,
+      "sha256": "0967905c1d78ee51434f2fe5a2aeeccefd9db5300fb598bcc35aa217fd0b8a57",
+      "nextCursor": "110362",
+      "receipt": "k2-eof-v1902-provider-page-0021-RESULT.json"
+    },
+    {
+      "offset": 2162688,
+      "bytes": 98304,
+      "sha256": "6c5b7d0be74c81d9513b272bee37787ff89953126f7e92c7c989dfafe6889b4a",
+      "nextCursor": "110582",
+      "receipt": "k2-eof-v1902-provider-page-0022-RESULT.json"
+    },
+    {
+      "offset": 2260992,
+      "bytes": 98304,
+      "sha256": "a980a014b267f8f6b0ab153984c74cf102c6d6e9731921fa78f33167846abdb6",
+      "nextCursor": "110802",
+      "receipt": "k2-eof-v1902-provider-page-0023-RESULT.json"
+    },
+    {
+      "offset": 2359296,
+      "bytes": 98304,
+      "sha256": "2fbad1313c255a8f2b4be968723df3d2f8b53278a32db4dfb00337ede720bf9a",
+      "nextCursor": "111022",
+      "receipt": "k2-eof-v1902-provider-page-0024-RESULT.json"
+    },
+    {
+      "offset": 2457600,
+      "bytes": 98304,
+      "sha256": "6ada5c8aad9ff0b80aec702d90edfc905f198a8fbdd28beb2a8ee11f74593b5a",
+      "nextCursor": "111242",
+      "receipt": "k2-eof-v1902-provider-page-0025-RESULT.json"
+    },
+    {
+      "offset": 2555904,
+      "bytes": 98304,
+      "sha256": "85fc0407214c0e93430c660902a1e43dc83e330ea99d3b02ecf9966742427d00",
+      "nextCursor": "111462",
+      "receipt": "k2-eof-v1902-provider-page-0026-RESULT.json"
+    },
+    {
+      "offset": 2654208,
+      "bytes": 98304,
+      "sha256": "6e5d651c615a7d307760d79db2cab48797968f54692ea884eb48e9a761b8cf88",
+      "nextCursor": "111682",
+      "receipt": "k2-eof-v1902-provider-page-0027-RESULT.json"
+    },
+    {
+      "offset": 2752512,
+      "bytes": 98304,
+      "sha256": "af8b1381d0350be2a07c012c766d1a1aadbb5f2bd954b975b4f669c302f747de",
+      "nextCursor": "111902",
+      "receipt": "k2-eof-v1902-provider-page-0028-RESULT.json"
+    },
+    {
+      "offset": 2850816,
+      "bytes": 76669,
+      "sha256": "ad0f32646bc4ebe946b4fcfe761fbc2b2f6055b2ae66fa3dc7a321a106002af1",
+      "nextCursor": "112074",
+      "receipt": "k2-eof-v1902-provider-page-0029-RESULT.json"
+    }
+  ],
+  "diskBefore": {
+    "total": 109128826880,
+    "used": 104839856128,
+    "free": 4272193536
+  },
+  "outerSeconds": 600,
+  "priorTransportAttempt": "Existing qualified96KiB read-only pages; current provider is retired and archive EOF is sealed. No inference replay or duplicate uncompressed resource payload.",
+  "sutCalls": 0,
+  "newAgents": 0,
+  "newK2ProviderArchiveBytes": 2927485,
+  "baseline": null,
+  "possibleConfound": "Post-requester-terminal retrieval of existing checksummed archive; no active measurements or new SUT traffic; all original provider owners retired.",
+  "updatedAt": "2026-10-20T20:36:16.852971+00:00",
+  "archiveVerified": {
+    "path": "thesis/campaigns/worker-desktop-k2-p2p-assistant-tts-v1826/provider-transfer-terminal-v1902/provider-eof-v1901.tar.gz",
+    "bytes": 2927485,
+    "sha256": "232066d69ed28795544bf181ae8caac00340df71f73892a6f477d861661e24e6"
+  },
+  "files": [
+    {
+      "member": "raw/provider-manifest.json",
+      "bytes": 6055,
+      "sha256": "d133ecead33bca857e64a5bee381b030f297155ab4e0e723eeb64fc16f4ce667",
+      "custody": "verified member of physical retained archive"
+    },
+    {
+      "member": "raw/controller-launch.json",
+      "bytes": 302,
+      "sha256": "d412d52b1d7cc367121a114fc365dd115875637b8a9f6de2dbcb31c67772c2a8",
+      "custody": "verified member of physical retained archive"
+    },
+    {
+      "member": "raw/receiver-identity.json",
+      "bytes": 1373,
+      "sha256": "93c8563732a075358a87104f155a20a7a6dd2ad4e729d53e5e3ada817d2b898d",
+      "custody": "verified member of physical retained archive"
+    },
+    {
+      "member": "raw/runtime-versions.json",
+      "bytes": 211,
+      "sha256": "47cf28ef11dc4ee028a835ed397a98b4215fa24e48c9eacdd485e2cc46d52904",
+      "custody": "verified member of physical retained archive"
+    },
+    {
+      "member": "raw/assistant-identity.json",
+      "bytes": 1418,
+      "sha256": "9d0e33780a49774676dca63464f0e98d9fb2f193d16800c0ec6b63a4abf292f0",
+      "custody": "verified member of physical retained archive"
+    },
+    {
+      "member": "raw/ACTUAL-FILES-v1812.json",
+      "bytes": 1763,
+      "sha256": "dd01ccfd94666caec109bb6283e09ffb70c312d13d867c06d820f60ed14d5ac6",
+      "custody": "verified member of physical retained archive"
+    },
+    {
+      "member": "raw/ROOT-LAUNCH-v1812.json",
+      "bytes": 629,
+      "sha256": "55ceef4e784e4c573438c32086c7f86aa8b05acd9adfea49d08cf04d1316ad05",
+      "custody": "verified member of physical retained archive"
+    },
+    {
+      "member": "raw/terminal.json",
+      "bytes": 436,
+      "sha256": "0d8d62fcc267ff97bdbbdbaf6501b3edabd1f7174e90b42e172c6cd50a279780",
+      "custody": "verified member of physical retained archive"
+    },
+    {
+      "member": "raw/STATUS.json",
+      "bytes": 131608,
+      "sha256": "79a305c671c7e23c159cc4befd23e08fa35c51bebaa867278923b6393c9d4cf6",
+      "custody": "verified member of physical retained archive"
+    },
+    {
+      "member": "raw/voice-stages.jsonl",
+      "bytes": 5549400,
+      "sha256": "4848f1e34b3914005e878db8d895e050e3961a488e1191217f62f19f5428b048",
+      "custody": "verified member of physical retained archive"
+    },
+    {
+      "member": "raw/actual-provider-bindings.jsonl",
+      "bytes": 606784,
+      "sha256": "de77f3d88413cffd31e4150195801d9dd8f06cc5c2d9612a3255008a82ddc12f",
+      "custody": "verified member of physical retained archive"
+    },
+    {
+      "member": "raw/resources.jsonl",
+      "bytes": 80966114,
+      "sha256": "0a316002312e46851c8d7a6ef68f4fca7b01b473e5c8b8ae9c07dafd6697db8c",
+      "custody": "verified member of physical retained archive"
+    },
+    {
+      "member": "PROVIDER-SEAL.json",
+      "bytes": 5298,
+      "sha256": "f53bb34da4470448d3e57b6bcec1652a38babc20998c734784df5b7ed404e9a2",
+      "custody": "verified member of physical retained archive"
+    }
+  ],
+  "finishedAt": "2026-10-20T20:36:16.852924+00:00",
+  "rawFiles": 12,
+  "rawPayloadBytes": 87266093,
+  "originalRawPreserved": true,
+  "duplicateUncompressedBytes": 0,
+  "actorsAbsent": true,
+  "K2Measured": 900,
+  "diskAfter": {
+    "total": 109128826880,
+    "used": 104861949952,
+    "free": 4250099712
+  }
+}

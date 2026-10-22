@@ -1,0 +1,57 @@
+{
+  "adbMeasurementTransport": false,
+  "apkSha256": "1aaabb06746a70247562040a265a4efa6b80dcc4dc8f1fb25a0fb9da881025d6",
+  "appPid": "21053",
+  "at": "2026-10-22T06:54:42.750883+00:00",
+  "batteryAfter": {
+    "AC powered": "false",
+    "USB powered": "true",
+    "health": "2",
+    "level": "79",
+    "status": "2",
+    "temperature": "294"
+  },
+  "batteryBefore": {
+    "AC powered": "false",
+    "USB powered": "true",
+    "health": "2",
+    "level": "79",
+    "status": "2",
+    "temperature": "272"
+  },
+  "deadlineUtc": "2026-10-22T07:22:51.566396+00:00",
+  "elapsedSeconds": 327.08565612500024,
+  "finishedAt": "2026-10-22T07:00:09.838825+00:00",
+  "input": {
+    "avVersion": "16.0.1",
+    "entrypointFormat": "pcm_s16le",
+    "entrypointRateHz": 16000,
+    "fasterWhisperVersion": "1.1.1",
+    "normalization": "production faster_whisper.audio.decode_audio(PyAV) to16k float32 then rint*32768/clip/LEint16; setup before phone timing",
+    "numpyVersion": "2.2.6",
+    "pcmBytes": 159456,
+    "pcmSha256": "1d5147ec00b8582ffeeb2d6a196cfab6e713cc33c9beea9212e7bc91eeed8fbf",
+    "sampleCount": 79728,
+    "sourceChannels": 1,
+    "sourceFrames": 109875,
+    "sourceSampleRateHz": 22050,
+    "sourceWavSha256": "da0ecc4ad0885746ab6e716585473917ab2b543a505bf0db09ebacfaa7943cbb"
+  },
+  "maxPilotFlows": 1,
+  "maximumSeconds": 1680,
+  "measuredCases": 0,
+  "nativeResultPath": "/home/developer/projects/aurora/thesis/phone-notebook/20261020/deployment/ebde3a8acf6315f920d03593845f17a1fc65a733/phone-file-audio-v207/native.json",
+  "nativeResultSha256": "4104573edf7fb58aeeecf7e079a368df1bc5a7d3ec457010a4f2e4cbc0951ce0",
+  "nativeSessionClosed": null,
+  "nodeExit": 0,
+  "nodePid": 248381,
+  "notebookInference": false,
+  "ownedAppStoppedAfterUnconfirmedNativeClose": true,
+  "phoneMemoryBefore": {
+    "MemAvailable": 3358642176,
+    "MemTotal": 11861921792
+  },
+  "sourceIdentity": "ebde3a8acf6315f920d03593845f17a1fc65a733 + source-closure-overlay-v2383 + android-bundled-model-rename-v1 + android-node-policy-initial-publication-v2 + android-finite-file-audio-v3 + android-finite-file-audio-v3a",
+  "startedAt": "2026-10-22T06:54:51.566385+00:00",
+  "status": "NATIVE_FILE_AUDIO_SETUP_OR_FLOW_FAILED_PRESERVED"
+}

@@ -1,0 +1,25 @@
+{
+  "_meta": {
+    "runtimeId": "cc9e3275-28c6-4c45-85cc-bdcd2262aa7d"
+  },
+  "id": "322eba46-e057-4798-8ddc-8e482eecb6bf",
+  "ok": true,
+  "result": {
+    "terminal": {
+      "handle": "term_a2ed5feb-7c92-48e4-bd88-d1b0e6737989",
+      "latestCursor": "1561",
+      "limited": false,
+      "nextCursor": "1561",
+      "oldestCursor": "1325",
+      "returnedLineCount": 3,
+      "source": "stream",
+      "status": "running",
+      "tail": [
+        "",
+        "AURORA_NOTEBOOK_read-exact-rpc-denial-v315=eyJhdCI6ICIyMDI2LTEwLTIyVDExOjExOjE1LjQ3ODU1NCswMDowMCIsICJhY3R1YWxScGNGYWlsdXJlIjogeyJkZW5pYWxzIjogW10sICJ0b3RhbENvdW50IjogMTEyLCAicmF3UGFyYW1zT3JJZGVudGl0eU9yVmVyaWZpY2F0aW9uVmFsdWVzRXhwb3J0ZWQiOiBmYWxzZX0sICJtb2RlbENhbGxzIjogMH0K",
+        "AURORA_COPY_RECEIPT={\"path\": \"/home/developer/projects/aurora/thesis/phone-notebook/20261020/evidence/read-exact-rpc-denial-v315.json\", \"bytes\": 174, \"sha256\": \"c46806474c74469bc3ea7cd8d191def5c185725afc3f598a6d699873fdd3d81e\"}"
+      ],
+      "truncated": false
+    }
+  }
+}

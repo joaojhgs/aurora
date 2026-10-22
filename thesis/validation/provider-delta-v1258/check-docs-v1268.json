@@ -1,0 +1,23 @@
+{
+  "command": [
+    "nice",
+    "-n",
+    "19",
+    "make",
+    "check-docs"
+  ],
+  "exitCode": 2,
+  "seconds": 32.06088028801605,
+  "log": "thesis/validation/provider-delta-v1258/check-docs-v1268.log",
+  "sourceOfChanges": "Current live evidence index and provider delta custody links; no application/build/runtime change.",
+  "priorBaselineFacts": {
+    "source": ".git/aurora-handoff-import-20261006/EXISTING-SESSION-CURRENT-V491.json",
+    "key": "docsValidationV1186",
+    "scope": "Older known full documentation failure; no claimed byte-identical finding set."
+  },
+  "findingCount": 1243,
+  "brokenLinks": [
+    "- docs/experiments/tcc-20261013-submission-20261030/root/matched-main-campaign-v319/runner-report.md:3: broken link -> campaign.py"
+  ],
+  "otherFindingCount": 1242
+}

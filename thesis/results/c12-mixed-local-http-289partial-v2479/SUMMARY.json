@@ -1,0 +1,689 @@
+{
+  "at": "2026-10-22T15:11:52.430400+00:00",
+  "campaignManifestSha256": "3bfca19d2dd0a9eec3981eae256168a5badd9ac2bb58a270ff8a55df1d986cce",
+  "copyControlGapDuration": {
+    "estimator": "Hyndman-Fan type7 h=(n-1)p linear interpolation",
+    "max": 19048.063141,
+    "min": 9490.02821,
+    "n": 304,
+    "p50": 10641.8185335,
+    "p90": 12871.9540585,
+    "p95": 13523.439280899998,
+    "units": "ms"
+  },
+  "globalMeasuredIndices": [
+    261,
+    900
+  ],
+  "historicalWarmups": "Prior16 excluded paired warmups remain separate; this recovery epoch has15fresh excluded pairs. No measured or warmup pooling.",
+  "lastPairedOrdinal": 304,
+  "latencyBoundary": "Full-case duration includes fixed input read/start-record persistence, actual STT/LLM/TTS, strict correctness/valid-audio validation and WAV persistence; pipeline duration is separately retained from composition. Copy/control after completion is separate and influences reported inter-arrival/rate windows.",
+  "newInference": 0,
+  "newNetworkTraffic": 0,
+  "parentCampaign": "thesis/campaigns/c12-mixed-local-http-900-v2426",
+  "parentCampaignManifestSha256": "316d4cc09adc44d0104dca8ac1f2a966347588ffef37bc2fa809ec14fd5efff8",
+  "parentTargetPerStream": 900,
+  "percentilesPooledAcrossStreamsOrEpochs": false,
+  "populations": {
+    "HTTP": {
+      "correct": 289,
+      "excludedCurrentEpochWarmups": 15,
+      "failedIncludingIncorrect": 0,
+      "failedTimeToOutcome": {
+        "estimator": "Hyndman-Fan type7 h=(n-1)p linear interpolation",
+        "max": null,
+        "min": null,
+        "n": 0,
+        "p50": null,
+        "p90": null,
+        "p95": null,
+        "units": "ms"
+      },
+      "failureClasses": {},
+      "fullCaseCorrectOnly": {
+        "estimator": "Hyndman-Fan type7 h=(n-1)p linear interpolation",
+        "max": 40008.275048,
+        "min": 29294.402527,
+        "n": 289,
+        "p50": 30760.627031,
+        "p90": 32377.6613926,
+        "p95": 32741.308526999997,
+        "units": "ms"
+      },
+      "pipelineCorrectOnly": {
+        "estimator": "Hyndman-Fan type7 h=(n-1)p linear interpolation",
+        "max": 40001.675718,
+        "min": 29285.925583,
+        "n": 289,
+        "p50": 30748.716219,
+        "p90": 32370.715924,
+        "p95": 32733.175224999995,
+        "units": "ms"
+      },
+      "plannedMeasured": 640,
+      "priorAcceptedExcludedWarmupPairs": 16,
+      "rateIncludingBetweenPairGaps": {
+        "completedPerSecond": 0.02376598949793894,
+        "n": 289,
+        "offeredPerSecond": 0.023767272568722003,
+        "scope": "Same-stream inter-arrival/inter-completion windows include between-pair copy/control gaps; excludes warmups and no capacity/saturation claim"
+      },
+      "snapshotMeasuredOutcomes": 289,
+      "stages": {
+        "assistant": {
+          "callerStageDuration": {
+            "estimator": "Hyndman-Fan type7 h=(n-1)p linear interpolation",
+            "max": 14318.61151,
+            "min": 11451.390273,
+            "n": 289,
+            "p50": 11916.046917,
+            "p90": 13198.546085,
+            "p95": 13463.4126112,
+            "units": "ms"
+          },
+          "enqueueToModelUpperBoundMs": {
+            "estimator": "Hyndman-Fan type7 h=(n-1)p linear interpolation",
+            "max": 6944.062055,
+            "min": 5224.166558,
+            "n": 289,
+            "p50": 5268.960972,
+            "p90": 5443.3204178,
+            "p95": 5592.591202599998,
+            "units": "ms"
+          },
+          "nativeModelDurationInvokedPopulation": {
+            "estimator": "Hyndman-Fan type7 h=(n-1)p linear interpolation",
+            "max": 1938.690392,
+            "min": 215.748221,
+            "n": 289,
+            "p50": 265.383827,
+            "p90": 587.1513057999998,
+            "p95": 1286.968489199999,
+            "units": "ms"
+          },
+          "observedQueueDepthAfterEnqueue": {
+            "max": 1,
+            "n": 289
+          },
+          "scope": "Caller durations use caller clock, native/queue measurements use provider clock; absolute timestamps are never subtracted across hosts."
+        },
+        "stt": {
+          "callerStageDuration": {
+            "estimator": "Hyndman-Fan type7 h=(n-1)p linear interpolation",
+            "max": 19884.180377,
+            "min": 9711.418935,
+            "n": 289,
+            "p50": 10218.5177,
+            "p90": 10865.7292554,
+            "p95": 11183.863802599999,
+            "units": "ms"
+          },
+          "enqueueToModelUpperBoundMs": {
+            "estimator": "Hyndman-Fan type7 h=(n-1)p linear interpolation",
+            "max": 233.422838,
+            "min": 3.193519,
+            "n": 289,
+            "p50": 5.147304,
+            "p90": 7.0359384,
+            "p95": 8.289866799999999,
+            "units": "ms"
+          },
+          "nativeModelDurationInvokedPopulation": {
+            "estimator": "Hyndman-Fan type7 h=(n-1)p linear interpolation",
+            "max": 3760.801898,
+            "min": 3113.927377,
+            "n": 289,
+            "p50": 3287.716415,
+            "p90": 3505.7171528,
+            "p95": 3565.0191282,
+            "units": "ms"
+          },
+          "observedQueueDepthAfterEnqueue": {
+            "max": 1,
+            "n": 289
+          },
+          "scope": "Caller durations use caller clock, native/queue measurements use provider clock; absolute timestamps are never subtracted across hosts."
+        },
+        "tts": {
+          "callerStageDuration": {
+            "estimator": "Hyndman-Fan type7 h=(n-1)p linear interpolation",
+            "max": 15982.647377,
+            "min": 7710.577259,
+            "n": 289,
+            "p50": 8280.627151,
+            "p90": 9031.331388999999,
+            "p95": 9389.8551424,
+            "units": "ms"
+          },
+          "enqueueToModelUpperBoundMs": {
+            "estimator": "Hyndman-Fan type7 h=(n-1)p linear interpolation",
+            "max": 2.337805,
+            "min": 0.57203,
+            "n": 289,
+            "p50": 1.320837,
+            "p90": 1.4583481999999999,
+            "p95": 1.5845743999999993,
+            "units": "ms"
+          },
+          "nativeModelDurationInvokedPopulation": {
+            "estimator": "Hyndman-Fan type7 h=(n-1)p linear interpolation",
+            "max": 2735.424374,
+            "min": 1550.173524,
+            "n": 289,
+            "p50": 1703.103756,
+            "p90": 1950.8484916,
+            "p95": 2042.8343972,
+            "units": "ms"
+          },
+          "observedQueueDepthAfterEnqueue": {
+            "max": 1,
+            "n": 289
+          },
+          "scope": "Caller durations use caller clock, native/queue measurements use provider clock; absolute timestamps are never subtracted across hosts."
+        }
+      },
+      "timeoutsIncludedInFailed": 0,
+      "unobservedAtSnapshot": 351,
+      "unobservedMeaning": "Not a completed measurement at this paired custody cutoff; later/in-flight data not claimed missing or unstarted."
+    },
+    "local": {
+      "correct": 289,
+      "excludedCurrentEpochWarmups": 15,
+      "failedIncludingIncorrect": 0,
+      "failedTimeToOutcome": {
+        "estimator": "Hyndman-Fan type7 h=(n-1)p linear interpolation",
+        "max": null,
+        "min": null,
+        "n": 0,
+        "p50": null,
+        "p90": null,
+        "p95": null,
+        "units": "ms"
+      },
+      "failureClasses": {},
+      "fullCaseCorrectOnly": {
+        "estimator": "Hyndman-Fan type7 h=(n-1)p linear interpolation",
+        "max": 16365.505168,
+        "min": 13566.888716,
+        "n": 289,
+        "p50": 14029.190679,
+        "p90": 15122.86625,
+        "p95": 15619.902521399996,
+        "units": "ms"
+      },
+      "pipelineCorrectOnly": {
+        "estimator": "Hyndman-Fan type7 h=(n-1)p linear interpolation",
+        "max": 16197.690076,
+        "min": 13391.736711,
+        "n": 289,
+        "p50": 13934.902981,
+        "p90": 15062.9221798,
+        "p95": 15560.856544599996,
+        "units": "ms"
+      },
+      "plannedMeasured": 640,
+      "priorAcceptedExcludedWarmupPairs": 16,
+      "rateIncludingBetweenPairGaps": {
+        "completedPerSecond": 0.023767396914416584,
+        "n": 289,
+        "offeredPerSecond": 0.02376735429597165,
+        "scope": "Same-stream inter-arrival/inter-completion windows include between-pair copy/control gaps; excludes warmups and no capacity/saturation claim"
+      },
+      "snapshotMeasuredOutcomes": 289,
+      "stages": {
+        "assistant": {
+          "callerStageDuration": {
+            "estimator": "Hyndman-Fan type7 h=(n-1)p linear interpolation",
+            "max": 7986.236509,
+            "min": 5629.464665,
+            "n": 289,
+            "p50": 5807.11469,
+            "p90": 6628.1939484,
+            "p95": 7053.4284229999985,
+            "units": "ms"
+          },
+          "enqueueToModelUpperBoundMs": {
+            "estimator": "Hyndman-Fan type7 h=(n-1)p linear interpolation",
+            "max": 7409.789969,
+            "min": 5217.038513,
+            "n": 289,
+            "p50": 5268.912111,
+            "p90": 5591.707378599999,
+            "p95": 5993.845417999996,
+            "units": "ms"
+          },
+          "nativeModelDurationInvokedPopulation": {
+            "estimator": "Hyndman-Fan type7 h=(n-1)p linear interpolation",
+            "max": 1930.139225,
+            "min": 207.077956,
+            "n": 289,
+            "p50": 264.751122,
+            "p90": 324.31676119999986,
+            "p95": 678.9931235999949,
+            "units": "ms"
+          },
+          "observedQueueDepthAfterEnqueue": {
+            "max": 1,
+            "n": 289
+          },
+          "scope": "Caller durations use caller clock, native/queue measurements use provider clock; absolute timestamps are never subtracted across hosts."
+        },
+        "stt": {
+          "callerStageDuration": {
+            "estimator": "Hyndman-Fan type7 h=(n-1)p linear interpolation",
+            "max": 8582.851058,
+            "min": 6072.111525,
+            "n": 289,
+            "p50": 6393.914988,
+            "p90": 6827.4249262,
+            "p95": 7169.6723492,
+            "units": "ms"
+          },
+          "enqueueToModelUpperBoundMs": {
+            "estimator": "Hyndman-Fan type7 h=(n-1)p linear interpolation",
+            "max": 4374.2717,
+            "min": 2830.138837,
+            "n": 289,
+            "p50": 3152.510447,
+            "p90": 3434.3199946,
+            "p95": 3755.910264799999,
+            "units": "ms"
+          },
+          "nativeModelDurationInvokedPopulation": {
+            "estimator": "Hyndman-Fan type7 h=(n-1)p linear interpolation",
+            "max": 4444.43899,
+            "min": 3124.040236,
+            "n": 289,
+            "p50": 3224.319068,
+            "p90": 3364.199513,
+            "p95": 3461.7817487999996,
+            "units": "ms"
+          },
+          "observedQueueDepthAfterEnqueue": {
+            "max": 1,
+            "n": 289
+          },
+          "scope": "Caller durations use caller clock, native/queue measurements use provider clock; absolute timestamps are never subtracted across hosts."
+        },
+        "tts": {
+          "callerStageDuration": {
+            "estimator": "Hyndman-Fan type7 h=(n-1)p linear interpolation",
+            "max": 2738.407638,
+            "min": 1550.790394,
+            "n": 289,
+            "p50": 1679.272103,
+            "p90": 1889.0417558,
+            "p95": 2012.6307133999996,
+            "units": "ms"
+          },
+          "enqueueToModelUpperBoundMs": {
+            "estimator": "Hyndman-Fan type7 h=(n-1)p linear interpolation",
+            "max": 406.297346,
+            "min": 0.677391,
+            "n": 289,
+            "p50": 1.552347,
+            "p90": 1.7467926,
+            "p95": 1.884996199999999,
+            "units": "ms"
+          },
+          "nativeModelDurationInvokedPopulation": {
+            "estimator": "Hyndman-Fan type7 h=(n-1)p linear interpolation",
+            "max": 2539.150542,
+            "min": 1548.316792,
+            "n": 289,
+            "p50": 1676.563919,
+            "p90": 1885.8639608,
+            "p95": 1999.4815037999995,
+            "units": "ms"
+          },
+          "observedQueueDepthAfterEnqueue": {
+            "max": 1,
+            "n": 289
+          },
+          "scope": "Caller durations use caller clock, native/queue measurements use provider clock; absolute timestamps are never subtracted across hosts."
+        }
+      },
+      "timeoutsIncludedInFailed": 0,
+      "unobservedAtSnapshot": 351,
+      "unobservedMeaning": "Not a completed measurement at this paired custody cutoff; later/in-flight data not claimed missing or unstarted."
+    }
+  },
+  "positiveFlowEvidenceGaps": [],
+  "priorMeasuredRetainedPerStream": 260,
+  "providerResourceWindow": {
+    "aggregateInterfaceCounters": {
+      "br-2ca9dd421f66": {
+        "delta": {
+          "rx_bytes": 5108,
+          "rx_packets": 27,
+          "tx_bytes": 26048,
+          "tx_packets": 65
+        },
+        "first": {
+          "rx_bytes": 119016,
+          "rx_packets": 665,
+          "tx_bytes": 718198,
+          "tx_packets": 2098
+        },
+        "last": {
+          "rx_bytes": 124124,
+          "rx_packets": 692,
+          "tx_bytes": 744246,
+          "tx_packets": 2163
+        }
+      },
+      "br-798370959adc": {
+        "delta": {
+          "rx_bytes": 0,
+          "rx_packets": 0,
+          "tx_bytes": 10212,
+          "tx_packets": 42
+        },
+        "first": {
+          "rx_bytes": 140,
+          "rx_packets": 5,
+          "tx_bytes": 357461,
+          "tx_packets": 1541
+        },
+        "last": {
+          "rx_bytes": 140,
+          "rx_packets": 5,
+          "tx_bytes": 367673,
+          "tx_packets": 1583
+        }
+      },
+      "docker0": {
+        "delta": {
+          "rx_bytes": 0,
+          "rx_packets": 0,
+          "tx_bytes": 0,
+          "tx_packets": 0
+        },
+        "first": {
+          "rx_bytes": 0,
+          "rx_packets": 0,
+          "tx_bytes": 0,
+          "tx_packets": 0
+        },
+        "last": {
+          "rx_bytes": 0,
+          "rx_packets": 0,
+          "tx_bytes": 0,
+          "tx_packets": 0
+        }
+      },
+      "enp7s0": {
+        "delta": {
+          "rx_bytes": 243077535,
+          "rx_packets": 438450,
+          "tx_bytes": 535867500,
+          "tx_packets": 618820
+        },
+        "first": {
+          "rx_bytes": 8380388244,
+          "rx_packets": 11906297,
+          "tx_bytes": 11267669965,
+          "tx_packets": 14366309
+        },
+        "last": {
+          "rx_bytes": 8623465779,
+          "rx_packets": 12344747,
+          "tx_bytes": 11803537465,
+          "tx_packets": 14985129
+        }
+      },
+      "lo": {
+        "delta": {
+          "rx_bytes": 334751066,
+          "rx_packets": 671551,
+          "tx_bytes": 334751066,
+          "tx_packets": 671551
+        },
+        "first": {
+          "rx_bytes": 2101297893,
+          "rx_packets": 6692766,
+          "tx_bytes": 2101297893,
+          "tx_packets": 6692766
+        },
+        "last": {
+          "rx_bytes": 2436048959,
+          "rx_packets": 7364317,
+          "tx_bytes": 2436048959,
+          "tx_packets": 7364317
+        }
+      },
+      "lxcbr0": {
+        "delta": {
+          "rx_bytes": 0,
+          "rx_packets": 0,
+          "tx_bytes": 0,
+          "tx_packets": 0
+        },
+        "first": {
+          "rx_bytes": 0,
+          "rx_packets": 0,
+          "tx_bytes": 0,
+          "tx_packets": 0
+        },
+        "last": {
+          "rx_bytes": 0,
+          "rx_packets": 0,
+          "tx_bytes": 0,
+          "tx_packets": 0
+        }
+      },
+      "tailscale0": {
+        "delta": {
+          "rx_bytes": 115969869,
+          "rx_packets": 230268,
+          "tx_bytes": 464377393,
+          "tx_packets": 304703
+        },
+        "first": {
+          "rx_bytes": 759600011,
+          "rx_packets": 4224717,
+          "tx_bytes": 9437055592,
+          "tx_packets": 5645032
+        },
+        "last": {
+          "rx_bytes": 875569880,
+          "rx_packets": 4454985,
+          "tx_bytes": 9901432985,
+          "tx_packets": 5949735
+        }
+      },
+      "veth178d1bd": {
+        "delta": {
+          "rx_bytes": 0,
+          "rx_packets": 0,
+          "tx_bytes": 10755,
+          "tx_packets": 48
+        },
+        "first": {
+          "rx_bytes": 126,
+          "rx_packets": 3,
+          "tx_bytes": 385818,
+          "tx_packets": 1822
+        },
+        "last": {
+          "rx_bytes": 126,
+          "rx_packets": 3,
+          "tx_bytes": 396573,
+          "tx_packets": 1870
+        }
+      },
+      "veth2745be7": {
+        "delta": {
+          "rx_bytes": 0,
+          "rx_packets": 0,
+          "tx_bytes": 10533,
+          "tx_packets": 45
+        },
+        "first": {
+          "rx_bytes": 126,
+          "rx_packets": 3,
+          "tx_bytes": 381937,
+          "tx_packets": 1725
+        },
+        "last": {
+          "rx_bytes": 126,
+          "rx_packets": 3,
+          "tx_bytes": 392470,
+          "tx_packets": 1770
+        }
+      },
+      "veth3551b41": {
+        "delta": {
+          "rx_bytes": 0,
+          "rx_packets": 0,
+          "tx_bytes": 10755,
+          "tx_packets": 48
+        },
+        "first": {
+          "rx_bytes": 126,
+          "rx_packets": 3,
+          "tx_bytes": 385860,
+          "tx_packets": 1823
+        },
+        "last": {
+          "rx_bytes": 126,
+          "rx_packets": 3,
+          "tx_bytes": 396615,
+          "tx_packets": 1871
+        }
+      },
+      "veth57262b4": {
+        "delta": {
+          "rx_bytes": 47170448,
+          "rx_packets": 162358,
+          "tx_bytes": 11580490,
+          "tx_packets": 154559
+        },
+        "first": {
+          "rx_bytes": 1532610898,
+          "rx_packets": 5279335,
+          "tx_bytes": 614754163,
+          "tx_packets": 5029281
+        },
+        "last": {
+          "rx_bytes": 1579781346,
+          "rx_packets": 5441693,
+          "tx_bytes": 626334653,
+          "tx_packets": 5183840
+        }
+      },
+      "veth67ac67b": {
+        "delta": {
+          "rx_bytes": 62488,
+          "rx_packets": 460,
+          "tx_bytes": 39036,
+          "tx_packets": 525
+        },
+        "first": {
+          "rx_bytes": 240258759,
+          "rx_packets": 26153,
+          "tx_bytes": 2037047,
+          "tx_packets": 25463
+        },
+        "last": {
+          "rx_bytes": 240321247,
+          "rx_packets": 26613,
+          "tx_bytes": 2076083,
+          "tx_packets": 25988
+        }
+      },
+      "veth9888232": {
+        "delta": {
+          "rx_bytes": 11078086,
+          "rx_packets": 149655,
+          "tx_bytes": 46690317,
+          "tx_packets": 157523
+        },
+        "first": {
+          "rx_bytes": 360336534,
+          "rx_packets": 4859147,
+          "tx_bytes": 1516380685,
+          "tx_packets": 5115046
+        },
+        "last": {
+          "rx_bytes": 371414620,
+          "rx_packets": 5008802,
+          "tx_bytes": 1563071002,
+          "tx_packets": 5272569
+        }
+      },
+      "vethc06bfd4": {
+        "delta": {
+          "rx_bytes": 0,
+          "rx_packets": 0,
+          "tx_bytes": 10755,
+          "tx_packets": 48
+        },
+        "first": {
+          "rx_bytes": 126,
+          "rx_packets": 3,
+          "tx_bytes": 385818,
+          "tx_packets": 1822
+        },
+        "last": {
+          "rx_bytes": 126,
+          "rx_packets": 3,
+          "tx_bytes": 396573,
+          "tx_packets": 1870
+        }
+      },
+      "vethe3bc6c8": {
+        "delta": {
+          "rx_bytes": 413547,
+          "rx_packets": 4376,
+          "tx_bytes": 467652,
+          "tx_packets": 4424
+        },
+        "first": {
+          "rx_bytes": 13420428,
+          "rx_packets": 141719,
+          "tx_bytes": 15215508,
+          "tx_packets": 143541
+        },
+        "last": {
+          "rx_bytes": 13833975,
+          "rx_packets": 146095,
+          "tx_bytes": 15683160,
+          "tx_packets": 147965
+        }
+      }
+    },
+    "counterErrorDenominators": [
+      {
+        "errorClass": "OSError",
+        "field": "gpu.gpu_busy_percent",
+        "samples": 48
+      },
+      {
+        "errorClass": "FileNotFoundError",
+        "field": "gpu.vendor",
+        "samples": 90216
+      }
+    ],
+    "gpuDevicePeaks": {
+      "29824": {
+        "peakBusyPercent": 12,
+        "peakVramBytes": 749404160
+      },
+      "5592": {
+        "peakBusyPercent": 98,
+        "peakVramBytes": 309387264
+      }
+    },
+    "peakProcessRssKiB": 1482400,
+    "peakProcessThreads": 23,
+    "samples": 12888,
+    "scope": "Process RSS values from /proc/status are KiB; network interface deltas are host aggregates, not attributed to individual requests. Resource snapshot windows may include setup/warmups/control."
+  },
+  "requesterTerminalPresent": true,
+  "snapshotCurrentAt": "2026-10-22T14:45:10.627475+00:00",
+  "sourceEpoch": "c12-mixed-local-http-remaining640-v2453",
+  "sourceScriptSha256": "20234279339c2099610c0270a0307b020dab87b40583fd9c0115cfec57d0215c",
+  "status": "POINT_IN_TIME_PARTIAL_REMAINING640_NOT_COMPLETE",
+  "warmupsPooledIntoMeasured": false
+}

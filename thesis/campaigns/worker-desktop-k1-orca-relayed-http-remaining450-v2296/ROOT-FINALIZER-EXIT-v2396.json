@@ -1,0 +1,12 @@
+{
+  "at": "2026-10-22T05:00:40.409891+00:00",
+  "pid": 134649,
+  "startTicks": 142354932,
+  "exitCode": 1,
+  "log": "thesis/campaigns/worker-desktop-k1-orca-relayed-http-remaining450-v2296/FINALIZER-v2396.log",
+  "logBytes": 826,
+  "logSha256": "3d152e1a954158024871abc4356d7c4a31b9413058f36d9c3373cfa619a13548",
+  "inferenceReruns": 0,
+  "providerReleaseMustStillBeReconciled": true,
+  "fullNativeGoalNotCompleted": true
+}

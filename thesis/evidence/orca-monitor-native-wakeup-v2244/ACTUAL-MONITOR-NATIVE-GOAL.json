@@ -1,0 +1,26 @@
+{
+  "at": "2026-10-21T17:19:49.668184+00:00",
+  "source": "actual_native_get_goal_tool",
+  "native": {
+    "goal": {
+      "threadId": "01a123ff-19ba-7332-a2f7-346a722af79f",
+      "objective": "Monitor the existing Aurora aggregate goal and all of its Orca workers, including Root, until completed/cancelled; prevent excessive edge-case testing, repeated unchanged checks, stalls and resource conflicts using Orca bounded timeouts and evidence-backed nudges.",
+      "status": "active",
+      "tokensUsed": 57618979,
+      "timeUsedSeconds": 590308,
+      "createdAt": 1791605305,
+      "updatedAt": 1792603189
+    },
+    "remainingTokens": null,
+    "completionBudgetReport": null
+  },
+  "sameTerminal": "term_2eab47ed-ab9b-4e35-bd9b-fc068c60e3fc",
+  "sameIncarnation": "37e50d9c-6cf5-4e28-a63b-f2bc3eed5661",
+  "rootOwnedSingleResumeRequest": "51ca813a-6535-4199-9e94-a1e7a24080ba",
+  "rootMessage": "msg_1998192101bb",
+  "run": "run_e6054e76e9fc",
+  "task": "task_d7ea336050cf",
+  "dispatch": "ctx_37b4d0a3c14f",
+  "monitorResumeCommands": 0,
+  "noMoreResumeNeeded": true
+}

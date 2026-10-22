@@ -1,0 +1,23 @@
+{
+  "schema": "aurora.phone.repair-overlay.v1",
+  "at": "2026-10-22T04:54:37.024045+00:00",
+  "authority": "owner explicit phone/app source responsibility expansion",
+  "baseSourceSha": "ebde3a8acf6315f920d03593845f17a1fc65a733",
+  "parentSourceClosureOverlayManifestSha256": "6fb03ee20bc4bed033b3edf49ef48d952583710cebfa34cbd81ffdeb928c0f87",
+  "sourceIdentity": "ebde + source-closure-overlay-v2383 + android-bundled-model-rename-v1",
+  "reason": "Actual Android app sandbox denies hard_link during mandatory bundled model startup",
+  "actualCauseReceipt": "evidence/native-storage-cause-v116/result.json",
+  "files": [
+    {
+      "path": "rust/crates/aurora-local-inference/src/lib.rs",
+      "baseBytes": 52056,
+      "baseSha256": "24cf451b6e938372d129ea3d1b1989b83282cac675805fb3d431ac2175a0021d",
+      "bytes": 52237,
+      "sha256": "571e41b2b026de8f4f079e926d629da71e82f8f71c947f565f8d58b7dbaa4587"
+    }
+  ],
+  "patchSha256": "40b385401472445ec32c184e73a99495efee8d59e4c3c34af2d62aa1edb3d9fc",
+  "sharedCheckoutMutated": false,
+  "gitCommit": null,
+  "modelsOrSettingsChanged": false
+}

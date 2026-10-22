@@ -1,0 +1,10 @@
+{
+  "at": "2026-10-22T07:17:24.006207+00:00",
+  "maximumPopen": 1,
+  "campaignManifestSha256": "3817e5a54ef45cf806bd337689e0172ec7185d12fdcd54f1a342d07bdac321dd",
+  "newOrcaWorker": false,
+  "maximumPrimaryFlows": 915,
+  "maximumLocalCompanions": 915,
+  "measuredAdmitted": false,
+  "rootNativeGoal": "01a112a5-d6bb-74e2-bf7c-ace73cb513b5 ACTIVE"
+}

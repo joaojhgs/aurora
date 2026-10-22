@@ -1,0 +1,7 @@
+{
+  "at": "2026-10-22T05:47:54.526938+00:00",
+  "reason": "source-receipt hardlink alias corrected before next build; original v118 manifest reconstructs exact deterministic JSON content",
+  "reconstructedOriginalReceiptSha256": "704974f1edbe955f515f323dd3704e507841575791b9a8881dd32d5ede613504",
+  "originalInstalledApkUntouched": true,
+  "sourceOrMeasuredDataRewritten": false
+}

@@ -1,0 +1,22 @@
+{
+  "at": "2026-10-20T04:01:30.221433+00:00",
+  "files": [
+    {
+      "source": "/home/developer/projects/aurora/.git/aurora-handoff-import-20261006/distributed-k1-mesh-cell-v1711/voice-stages.jsonl",
+      "path": "thesis/campaigns/worker-desktop-k1-p2p-tts-v1711/native-warmup-admission/voice-stages.jsonl",
+      "bytes": 244254,
+      "sha256": "82f85db0e291cf798ec67706462ea481863ae31c81ecd8bced4083a435461f09",
+      "boundedPrefix": true,
+      "terminalEOF": false
+    },
+    {
+      "source": "/home/developer/projects/aurora/.git/aurora-handoff-import-20261006/distributed-k1-mesh-cell-v1711/actual-provider-bindings.jsonl",
+      "path": "thesis/campaigns/worker-desktop-k1-p2p-tts-v1711/native-warmup-admission/actual-provider-bindings.jsonl",
+      "bytes": 2143,
+      "sha256": "aed68b9a4cb3a46458d8e7e223258b217ebe4c8d7eefeecd67537380947f7b04",
+      "boundedPrefix": true,
+      "terminalEOF": false
+    }
+  ],
+  "newSutCalls": 0
+}

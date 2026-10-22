@@ -1,0 +1,33 @@
+{
+  "objective": "tcc:20261013:submission-20261030",
+  "serial_owner": "same original Aurora Root01a112a5",
+  "files": {
+    "integration.json": {
+      "private_original_sha256": "7ac80ee9df387c953f2bc40962049809cde9e7503d429b8ac03b996bde62f69d",
+      "export_sha256": "7ac80ee9df387c953f2bc40962049809cde9e7503d429b8ac03b996bde62f69d",
+      "credential_lines_withheld": 0,
+      "byte_identical": true
+    },
+    "sol-review.md": {
+      "private_original_sha256": "1695c865fce43ac9a5823bfcfeffc006ecd390869d8e63752a703cf8e34eabe0",
+      "export_sha256": "1695c865fce43ac9a5823bfcfeffc006ecd390869d8e63752a703cf8e34eabe0",
+      "credential_lines_withheld": 0,
+      "byte_identical": true
+    },
+    "ui-types.log": {
+      "private_original_sha256": "96b1501ffb2795cddeb0a4733312ee5018b7eb11edabb9c91b4ee727b7978ab3",
+      "export_sha256": "96b1501ffb2795cddeb0a4733312ee5018b7eb11edabb9c91b4ee727b7978ab3",
+      "credential_lines_withheld": 0,
+      "byte_identical": true
+    },
+    "checks.json": {
+      "private_original_sha256": "05eb170dfa2d07858de1121840d0aa483bb2d76dac67f9361af7c0b7846e185e",
+      "export_sha256": "05eb170dfa2d07858de1121840d0aa483bb2d76dac67f9361af7c0b7846e185e",
+      "credential_lines_withheld": 0,
+      "byte_identical": true
+    }
+  },
+  "private_browser_bodies_exported": false,
+  "full_playwright_report_exported": false,
+  "readme_sha256": "15d6c951008fd5aebbd506b7ca1e0109b490202371b379e0cb7766caed20cae5"
+}

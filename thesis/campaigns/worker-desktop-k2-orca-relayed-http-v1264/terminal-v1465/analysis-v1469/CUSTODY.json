@@ -1,0 +1,25 @@
+{
+  "newMeasurements": 0,
+  "outputs": [
+    {
+      "bytes": 107912,
+      "path": "/home/developer/projects/aurora/thesis/campaigns/worker-desktop-k2-orca-relayed-http-v1264/terminal-v1465/analysis-v1469/SUMMARY.json",
+      "sha256": "f1b1231416c5a0996b940b7f6103839965eba1479b7b137f25b3251d6f747c7f"
+    },
+    {
+      "bytes": 8353252,
+      "path": "/home/developer/projects/aurora/thesis/campaigns/worker-desktop-k2-orca-relayed-http-v1264/terminal-v1465/analysis-v1469/CASE-HISTORY.json",
+      "sha256": "0482ede44f6ef3993da0144b54f2aa65c8ce9c881bdd8a0b10526249e1936614"
+    },
+    {
+      "bytes": 528437,
+      "path": "/home/developer/projects/aurora/thesis/campaigns/worker-desktop-k2-orca-relayed-http-v1264/terminal-v1465/analysis-v1469/SOURCE-IDENTITIES.json",
+      "sha256": "fc762b675fa8b8a691ff2eba58ae817ce72cee210619e88ef82cb6188f941a5a"
+    },
+    {
+      "bytes": 2257065,
+      "path": "/home/developer/projects/aurora/thesis/campaigns/worker-desktop-k2-orca-relayed-http-v1264/terminal-v1465/analysis-v1469/REQUESTER-CURRENT.snapshot.json",
+      "sha256": "71ec3b1ac69c01d7c097772f2e54088b513f728cb1be97bec050e85964287ac2"
+    }
+  ]
+}

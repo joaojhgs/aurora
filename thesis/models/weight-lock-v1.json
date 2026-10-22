@@ -1,0 +1,50 @@
+{
+  "schema": "aurora.thesis.weight-lock.v1",
+  "files": [
+    {
+      "role": "stt",
+      "name": "config.json",
+      "bytes": 2309,
+      "sha256": "56a6d8110d311f19c8f0471e562832c7527f146b567275bfca59fcf7c184da9a"
+    },
+    {
+      "role": "stt",
+      "name": "model.bin",
+      "bytes": 145217532,
+      "sha256": "d01c3014881c9c6f3133c182f3d2887eb6ca1c789a7538c5c007196857a0a6a9"
+    },
+    {
+      "role": "stt",
+      "name": "tokenizer.json",
+      "bytes": 2203239,
+      "sha256": "fb7b63191e9bb045082c79fd742a3106a12c99513ab30df4a0d47fa6cb6fd0ab"
+    },
+    {
+      "role": "stt",
+      "name": "vocabulary.txt",
+      "bytes": 459861,
+      "sha256": "34ce3fe1c5041027b3f8d42912270993f986dbc4bb34cf27f951e34a1e453913"
+    },
+    {
+      "role": "llm",
+      "name": "Qwen3.5-0.8B-Q4_0.gguf",
+      "bytes": 563036064,
+      "sha256": "57d1997790d1744fba5b40a7317df71ea5e2acee28c47e78f0cce39c0703f8cf"
+    },
+    {
+      "role": "tts",
+      "name": "en_US-ljspeech-medium.onnx",
+      "bytes": 63531379,
+      "sha256": "6f52a751e2349abe7a76735eb09dc1875298c77ea2342ffd2fef79ff81b87f22"
+    },
+    {
+      "role": "tts",
+      "name": "en_US-ljspeech-medium.onnx.json",
+      "bytes": 4972,
+      "sha256": "141d612cc0a95ed7efc1ca936b845c2364967f2e9217c5dbfcf69fc4d6c65860"
+    }
+  ],
+  "origin": "Retained original CPU model bindings; same bytes independently admitted in current CPU/GPU padded-input cohorts.",
+  "weightsBundled": false,
+  "modelsChanged": false
+}

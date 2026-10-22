@@ -1,0 +1,21 @@
+{
+  "at": "2026-10-16T15:35:32.231878+00:00",
+  "startedAt": "2026-10-16T15:35:20.415635+00:00",
+  "command": [
+    "pnpm",
+    "--filter",
+    "@aurora/tauri-ui",
+    "exec",
+    "vitest",
+    "run",
+    "--environment",
+    "jsdom",
+    "--no-file-parallelism",
+    "src/offline-profile-main.test.ts",
+    "-t",
+    "preserves and reloads the saved desktop profile"
+  ],
+  "exitCode": 1,
+  "error": null,
+  "scope": "Existing main profile reuse regression only; no added test count or model requests"
+}

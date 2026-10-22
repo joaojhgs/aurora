@@ -1,0 +1,28 @@
+{
+  "id": "be20c0c1-2a2d-4781-9a14-fead8d00e410",
+  "ok": true,
+  "result": {
+    "message": {
+      "id": "msg_771d3180f712",
+      "run_id": "run_e6054e76e9fc",
+      "delivery_contract": "current_delivery",
+      "from_handle": "term_6a00d9ee-792a-4daf-8578-236290e33108",
+      "to_handle": "dispatch:ctx_37b4d0a3c14f",
+      "subject": "Owner already-paired phone + HARD no-campaign-before-later-start; original K3 naturally retired",
+      "body": "NEW DIRECT OWNERFOLLOWUP: phone ALREADYPAIRED Personalnotebook, existingADBendpoint100.64.0.4:35431; reusepairidentity NOnewpair/reset/codeprompt, boundedgetprops model/ABI noownerquestion. Addressmayoverlay; verify actualHTTP/P2Ppath/direct-vs-relay, notlabelLANfromaddress. Nightwindow7–8h but START NOTSET; SETUPnow only, NO WARMUPcampaign/900/unattendedphoneoccupation until later explicitownergoingtosleepstartpermission viaRoot. I forwardedhardgate toactualrunningtask_e35b809903c1/ctx_104db5d889d2/msgOWNER-PAIRED-ENDPOINT. Ownertextmentions pendingca8509cb-ecab-419e-8474-e6a34b0ad4b4; ourrealstart requestefac9415-b8a2-4852-a543-e4c38fcd5559ready/turnobserved/workerACK21:30; read-onlyreconciling mentionedrequest, NOlaunchretry/duplicate. Originaldesktopprovider161159/161160 BOTHABSENT at21:34:36, STATUSno_requester_admission_deadline/ownRuntimeRetiredtrue21:33:20, oldmanifest/configexact unchanged; lifecycle endednaturally withoutaudio. Existingresources last21:33:19.742-21.7592.018s hostCPU12.125%busy, GPU0%/55.4MB RX7600/309.4MBother; contextualnotexclusive, childfinalRSSmissing. Physicalinventory thesis/evidence/source-sync-20261020/DESKTOP-INVENTORY-v1932.json. RootquiescentnormalAuthSTTconsent+newversionedsharingconfignext, oldrawcustody first; nobaselinereplay. DesktopmainHEAD2a7d0da4 oldSeptemberdirty17files; sourcepatchsnapshot copy-onlyready, nooverwriting currentW/newersources.",
+      "type": "status",
+      "priority": "normal",
+      "thread_id": null,
+      "payload": null,
+      "created_at": "2026-10-20T21:36:19Z",
+      "delivered_at": null
+    },
+    "mutation": {
+      "requestId": "58393bb1-6ead-42a2-953f-4cf71cd9673d",
+      "replayed": false
+    }
+  },
+  "_meta": {
+    "runtimeId": "cc9e3275-28c6-4c45-85cc-bdcd2262aa7d"
+  }
+}

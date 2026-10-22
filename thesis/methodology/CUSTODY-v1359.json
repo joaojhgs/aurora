@@ -1,0 +1,15 @@
+{
+  "at": "2026-10-17T22:35:04.784813+00:00",
+  "source": "/home/developer/Documents/Obsidian Vault Origin/5-full-notes/faculdade/tcc/future-work-test-requirements.md",
+  "destination": "thesis/methodology/owner-requirements-20261017-487c70b1.md",
+  "bytes": 524442,
+  "sha256": "487c70b1d5beb7887ebbc1cff99dae24ecb448bbb192103ee58e3761e247c1ea",
+  "previous": "thesis/methodology/owner-requirements-20261017-7fac1bc3.md",
+  "unchangedPrefixBytes": 521342,
+  "section": "30.52.1",
+  "copyOnly": true,
+  "solePlanWriter": "original monitor ctx_37b4d0a3c14f",
+  "monitorReceipt": "thesis/methodology/MONITOR-RECEIPT-v1359.json",
+  "previousCopiesPreserved": true,
+  "initialLocalMetadataReadError": "V1358 looked for plan key; actual receipt uses path. Failed before copying; corrected here. Not a model or experiment failure."
+}

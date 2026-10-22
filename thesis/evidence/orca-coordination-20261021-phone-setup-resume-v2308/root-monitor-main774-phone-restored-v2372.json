@@ -1,0 +1,28 @@
+{
+  "id": "8a63b4b3-75af-4779-b2ee-1fe54dacc0d7",
+  "ok": true,
+  "result": {
+    "message": {
+      "id": "msg_3df3f99c58ff",
+      "run_id": "run_e6054e76e9fc",
+      "delivery_contract": "current_delivery",
+      "from_handle": "term_6a00d9ee-792a-4daf-8578-236290e33108",
+      "to_handle": "dispatch:ctx_37b4d0a3c14f",
+      "subject": "Main774/900 live; worker freshphoneRESTORED, onlythermalguard remains",
+      "body": "Original Root native goal actualACTIVE/unbudgeted. Actual02:56:04Z V2296 new324/450 allcorrect; full774/900=773correct1historicalfailure126mandatoryremain, originalactors/startticks live/copier339pairs0errors3.099GBfree. ROOT-VERIFIED-WAIT-v2372.json/fresh native snapshot/CURRENT nextbound03:00:56.739121Z or earlierfailure/terminal/guard; finiteobserver endednormally, mainSUT stilllive. No restart/newtests/reviews/baselines/source changes or Rootdevice/thermal queries. Changedsource event895b0d7b06eb actual02:53:35: existingPersonal controller seesPOCO/device/get-state0/003-015r+w/API36arm64; priorphoneabsence attention superseded. Tctl90.75C/ACPI90C still above85C build/pilotguard, no build/model/app/download/900started; source andall833499307Binputs retained. PhysicalRun receipt PHONE-RESTORED-THERMAL-PENDING-v2372.json, Current reflectsnewfacts. Please keep existing Codingattentiondedup accurate and relaychangedownerreadiness through alreadyapproved route if available, no claimedCodingdelivery/no duplicateRootprobes. Source/pilotfinalnotification and canonicalK1BIGnotice staypending actual respectivecompletion; Root continuesmain/full13 open.",
+      "type": "status",
+      "priority": "normal",
+      "thread_id": null,
+      "payload": null,
+      "created_at": "2026-10-22T02:57:56Z",
+      "delivered_at": null
+    },
+    "mutation": {
+      "requestId": "6509865e-534e-4e63-b7e4-66901d4a39c6",
+      "replayed": false
+    }
+  },
+  "_meta": {
+    "runtimeId": "cc9e3275-28c6-4c45-85cc-bdcd2262aa7d"
+  }
+}

@@ -1,0 +1,158 @@
+{
+  "AURORA_GPU_V412_ACTUAL_LAUNCH": {
+    "kind": "actual_desktop_gpu_excluded_readiness_launch",
+    "startedAtUtc": "2026-10-14T17:37:31.394278+00:00",
+    "pid": 2699838,
+    "startTicks": "62775984",
+    "parentPid": 2699733,
+    "host": "personal.skyron-server",
+    "sourceRoot": "/home/developer/projects/aurora/.git/aurora-root-gpu-primary-v408/source-v409",
+    "sourceCommit": "c0f4c0013cea5bb11ef81297194d0dc142a47bc4",
+    "output": "/home/developer/projects/aurora/.git/aurora-handoff-import-20261006/desktop-gpu-readiness-v412",
+    "requestCapSeconds": 300,
+    "outerCapSeconds": 350,
+    "requestsPlanned": 2,
+    "measuredRequestsPlanned": 0,
+    "GPUReservation": "exclusive original Root desktop GPU baseline flock",
+    "selectedVulkanPhysicalDevice": "1",
+    "diagnosticOnlyVerbosity": true,
+    "runnerSha256": "a07bb880eb71ae7959732c4626a673daa9e07af1eea798cea917afd8441b4e83",
+    "primary900Started": false,
+    "crossDeviceMeasuredAllowed": false
+  },
+  "AURORA_GPU_V412_ACTUAL_TERMINAL": {
+    "kind": "actual_desktop_gpu_excluded_readiness_terminal",
+    "finishedAtUtc": "2026-10-14T17:37:36.414161+00:00",
+    "elapsedSeconds": 5.01991471205838,
+    "exitCode": 1,
+    "deadlineAction": null,
+    "resourceSamples": 5,
+    "pid": 2699838,
+    "startTicks": "62775984",
+    "processPresentAfterWait": false,
+    "files": [
+      {
+        "name": "launch.json",
+        "bytes": 903,
+        "sha256": "7ad8bfe2772737f80fb7389205eebf24eb8e2b79897fa89ccf9e2b9074962b54"
+      },
+      {
+        "name": "requests.jsonl",
+        "bytes": 0,
+        "sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+      },
+      {
+        "name": "requests.jsonl.cleanup.json",
+        "bytes": 53,
+        "sha256": "b520a0441c3f52026bcd3f44fdcd6bc0f737d8f220ed62460b82564c81af2c63"
+      },
+      {
+        "name": "requests.jsonl.manifest.json",
+        "bytes": 3091,
+        "sha256": "e5fd2668aebe903a742c5b398db9832f911192f0bfd316d8678cb885e34724f6"
+      },
+      {
+        "name": "requests.jsonl.provider-inputs.jsonl",
+        "bytes": 0,
+        "sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+      },
+      {
+        "name": "resources.jsonl",
+        "bytes": 4395,
+        "sha256": "3e90ac3a75803b418d521ddf4ce67d71f2ed4c71236a88efb6bd081935c87cd7"
+      },
+      {
+        "name": "runtime-private.log",
+        "bytes": 6313,
+        "sha256": "1ef1f8741a72ac471db7cc0dc8fd552920d6de67fbbfbb9d625c542a4c4746b7"
+      }
+    ],
+    "primary900Started": false,
+    "crossDeviceMeasuredAllowed": false
+  },
+  "diagnostic": {
+    "manifest": {
+      "actual_gpu_offload_observation": null,
+      "cleanup_status": "not_observed_before_shutdown",
+      "cohort_epoch_sessions": [],
+      "condition_cohort": "desktop-vulkan-readiness-v1",
+      "condition_id": "desktop-vulkan-readiness-local-only",
+      "condition_lifecycle": "one_persistent_supervisor_with_two_logical_readiness_phases",
+      "config_sha256": "de1d42267e0fb22b71ac48d2c7ec135b24f1b70b81757d272e58bfeb230ced6d",
+      "deadline_ms": 180000,
+      "driver_sha256": "a07bb880eb71ae7959732c4626a673daa9e07af1eea798cea917afd8441b4e83",
+      "epoch_session_ids": [],
+      "failure_type": "RuntimeError",
+      "generation_settings": {
+        "chat_format": "chatml-function-calling",
+        "main_gpu": 0,
+        "max_tokens": 128,
+        "min_p": 0.0,
+        "n_batch": 64,
+        "n_ctx": 4096,
+        "n_gpu_layers": -1,
+        "n_threads": 2,
+        "repeat_penalty": 1.0,
+        "seed": 42,
+        "temperature": 0.0,
+        "top_k": 1,
+        "top_p": 1.0
+      },
+      "ggml_vk_visible_devices": "1",
+      "measured_requests_attempted": 0,
+      "measured_requests_per_route": 0,
+      "measured_requests_unattempted": 0,
+      "measurement_tier": "desktop_gpu_readiness",
+      "metric_definition": "reply latency; exact answer and persisted history gate correctness, DB readback time excluded",
+      "model_id": "qwen3.5-0.8b-q4_0-gguf",
+      "model_sha256": "57d1997790d1744fba5b40a7317df71ea5e2acee28c47e78f0cce39c0703f8cf",
+      "pilot_route": "local-only",
+      "planned_epochs": 2,
+      "planned_measured_per_epoch": 0,
+      "planned_measured_requests_per_condition": 0,
+      "planned_warmups_per_epoch": 1,
+      "provider_input_capture": {
+        "artifact": "requests.jsonl.provider-inputs.jsonl",
+        "context_verified": false,
+        "sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+      },
+      "provider_span_attempt_count": 0,
+      "provider_span_pairs_verified": false,
+      "readiness_sequence": [
+        "cold",
+        "warm"
+      ],
+      "record_helper_sha256": "2648b5579c487e15936bf2eafd70ae8b63db5567915ff4c1c1b318989da2a646",
+      "request_count": 0,
+      "request_jsonl_sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+      "requested_backend": "llama_cpp",
+      "requested_gpu_layers": -1,
+      "requested_main_gpu": 0,
+      "routes": [
+        "python_local_bus"
+      ],
+      "run_mode": "desktop_gpu_readiness",
+      "run_status": "harness_failed",
+      "schema_version": "aurora.assistant.local_api_pilot_manifest.v1",
+      "scope_limit": "bounded desktop Vulkan readiness only; two exact-answer/history requests, not a performance sample",
+      "session_cap_seconds": 300,
+      "source_commit": "unavailable",
+      "stage_observer": {
+        "artifact": "requests.jsonl.stages.jsonl",
+        "capture_complete": false,
+        "sha256": null
+      },
+      "study_session_id": "pilot-run-fe665eadbc02481ca414fd5aff7c4674",
+      "warmup_requests_attempted": 0,
+      "warmup_requests_unattempted": 2,
+      "warmups_per_run": 2,
+      "workload": {
+        "expected_sha256": "46d27380af82d6d618e163346c67dd7bc617d40836551d082e0aa6582b8bc934",
+        "predicate_id": "exact-answer-v1",
+        "prompt_sha256": "dcf0bf9982b7155c68f792031bd3a1e8e8e42a08a79fc4dd1136df8c602a6121"
+      },
+      "workload_id": "public-exact-answer-orbit-v1"
+    },
+    "errorTail": "tion was the direct cause of the following exception:\n\nTraceback (most recent call last):\n  File \"/home/developer/projects/aurora/.git/aurora-root-gpu-primary-v408/source-v409/app/services/config/config_manager.py\", line 186, in load_config\n    raise RuntimeError(f\"Configuration validation failed: {e}\") from e\nRuntimeError: Configuration validation failed: 1 validation error for Model\nservices.orchestrator.llm.local.llama_cpp.options.n_gpu_layers\n  Input should be greater than or equal to 0 [type=greater_than_equal, input_value=-1, input_type=int]\n    For further information visit https://errors.pydantic.dev/2.12/v/greater_than_equal\n\nThe above exception was the direct cause of the following exception:\n\nTraceback (most recent call last):\n  File \"<string>\", line 1, in <module>\n  File \"/home/developer/projects/aurora/.git/aurora-handoff-import-20261006/desktop-primary-runner-v412/runner.py\", line 1466, in main\n    return asyncio.run(asyncio.wait_for(_run(args), timeout=args.session_cap_seconds))\n           ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^\n  File \"/home/developer/.local/share/uv/python/cpython-3.11.11-linux-x86_64-gnu/lib/python3.11/asyncio/runners.py\", line 190, in run\n    return runner.run(main)\n           ^^^^^^^^^^^^^^^^\n  File \"/home/developer/.local/share/uv/python/cpython-3.11.11-linux-x86_64-gnu/lib/python3.11/asyncio/runners.py\", line 118, in run\n    return self._loop.run_until_complete(task)\n           ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^\n  File \"/home/developer/.local/share/uv/python/cpython-3.11.11-linux-x86_64-gnu/lib/python3.11/asyncio/base_events.py\", line 654, in run_until_complete\n    return future.result()\n           ^^^^^^^^^^^^^^^\n  File \"/home/developer/.local/share/uv/python/cpython-3.11.11-linux-x86_64-gnu/lib/python3.11/asyncio/tasks.py\", line 489, in wait_for\n    return fut.result()\n           ^^^^^^^^^^^^\n  File \"/home/developer/projects/aurora/.git/aurora-handoff-import-20261006/desktop-primary-runner-v412/runner.py\", line 1423, in _run\n    raise pending_error\n  File \"/home/developer/projects/aurora/.git/aurora-handoff-import-20261006/desktop-primary-runner-v412/runner.py\", line 965, in _run\n    await supervisor.start_services()\n  File \"/home/developer/projects/aurora/.git/aurora-root-gpu-primary-v408/source-v409/app/services/supervisor.py\", line 198, in start_services\n    await self._start_services_threads()\n  File \"/home/developer/projects/aurora/.git/aurora-root-gpu-primary-v408/source-v409/app/services/supervisor.py\", line 220, in _start_services_threads\n    config_service = ConfigService()\n                     ^^^^^^^^^^^^^^^\n  File \"/home/developer/projects/aurora/.git/aurora-root-gpu-primary-v408/source-v409/app/services/config/service.py\", line 69, in __init__\n    self.config_manager = ConfigManager()\n                          ^^^^^^^^^^^^^^^\n  File \"/home/developer/projects/aurora/.git/aurora-root-gpu-primary-v408/source-v409/app/services/config/config_manager.py\", line 93, in __init__\n    self.load_config()\n  File \"/home/developer/projects/aurora/.git/aurora-root-gpu-primary-v408/source-v409/app/services/config/config_manager.py\", line 193, in load_config\n    raise RuntimeError(f\"Error loading config: {e}\") from e\nRuntimeError: Error loading config: Configuration validation failed: 1 validation error for Model\nservices.orchestrator.llm.local.llama_cpp.options.n_gpu_layers\n  Input should be greater than or equal to 0 [type=greater_than_equal, input_value=-1, input_type=int]\n    For further information visit https://errors.pydantic.dev/2.12/v/greater_than_equal\n"
+  }
+}

@@ -1,0 +1,35 @@
+{
+  "at": "2026-10-18T09:08:03.061839+00:00",
+  "classification": "VERIFIED_WAIT",
+  "window": "thesis/campaigns/worker-desktop-k3-orca-relayed-http-v1481/observations/root-read-only-window-v1483.jsonl",
+  "windowSha256": "6d0fe34635060281a1a3f156d3972d9efe9ba877d4298a23494dd5190a8fdf50",
+  "windowStarted": "2026-10-18T08:57:24.278289+00:00",
+  "windowEnded": "2026-10-18T09:05:24.278392+00:00",
+  "measuredStart": 50,
+  "measuredEnd": 66,
+  "allExactHandlesLiveThroughout": true,
+  "progress": {
+    "attempted": 87,
+    "last_attempt_file": "attempts/attempt-0087-measured.jsonl",
+    "last_attempt_status": "completed_correct",
+    "measured_attempted": 72,
+    "planned_measured": 900,
+    "planned_warmups": 15,
+    "status": "running",
+    "unattempted_measured": 828,
+    "warmups_attempted": 15
+  },
+  "measuredOutcomes": {
+    "completed_correct": 72
+  },
+  "copiedCases": 85,
+  "copiedWavs": 85,
+  "copierErrors": [],
+  "frozenManifestSha256": "54d51acdf8219b4e69f21cabb9d9fb1b402acf9826196dbdcea4fcfd15bddb25",
+  "observerSource": "thesis/harness/observe_k3_v1481.py",
+  "observerSourceSha256": "47bc13b99f6c8a90233dae46ea407b248db2148dab2e3a2ae6d8a9d8425f828d",
+  "sutCallsTestsSettingsSourceOrLifecycleChanges": 0,
+  "methodologyAndFull13ScopeUnchanged": true,
+  "nextAction": "Continue SAME frozen900 to naturalterminal; no newbaseline/replay/review or duplicateP2Pquestion",
+  "full13Complete": false
+}

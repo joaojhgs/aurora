@@ -1,0 +1,23 @@
+{
+  "actualReceipt": "/home/developer/projects/aurora/thesis/phone-notebook/20261020/evidence/owner-window-retirement-read-v260/result.json",
+  "actualRetirementVerified": true,
+  "attributedEventExit": 0,
+  "collectionExit": 0,
+  "collectionStartedAt": "2026-10-22T11:57:03.000092+00:00",
+  "finishedAt": "2026-10-22T11:57:10.363019+00:00",
+  "inferenceCalls": 0,
+  "measurementWindowExtended": false,
+  "notACodingAgent": true,
+  "notAnOrcaTaskOrMonitor": true,
+  "oneExistingServiceEpoch": {
+    "pid": 271169,
+    "startTicks": "3652215"
+  },
+  "oneReadAtUtc": "2026-10-22T11:57:03+00:00",
+  "ownerHardStopUtc": "2026-10-22T11:57:25.269652Z",
+  "phoneCommands": 0,
+  "pid": 354471,
+  "startTicks": "143854244",
+  "startedAt": "2026-10-22T09:08:01.935649+00:00",
+  "status": "ACTUAL_RETIREMENT_VERIFIED"
+}

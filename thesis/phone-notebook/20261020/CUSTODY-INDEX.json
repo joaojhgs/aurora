@@ -1,0 +1,84 @@
+{
+  "schema": "aurora.phone_notebook.dual_host_custody_index.v1",
+  "receipts": [
+    {
+      "operation": "adb-controller-diagnostic-2141",
+      "bytes": 1840,
+      "sha256": "d436116c5dcb0a1f66fe8e18d5f7c1128e90e13e1675864b3373acae658f24be",
+      "remotePath": "/home/developer/projects/aurora/thesis/phone-notebook/20261020/evidence/adb-controller-diagnostic-2141.json",
+      "localPath": "thesis/phone-notebook/20261020/evidence/adb-controller-diagnostic-2141/result.json"
+    },
+    {
+      "operation": "notebook-kit-smoke-2153",
+      "bytes": 3234,
+      "sha256": "7dbb4dac1df1432a14ddfe6a1c7817a5edadec14b98442e4582765c7179a165d",
+      "remotePath": "/home/developer/projects/aurora/thesis/phone-notebook/20261020/evidence/notebook-kit-smoke-2153.json",
+      "localPath": "thesis/phone-notebook/20261020/evidence/notebook-kit-smoke-2153/result.json"
+    },
+    {
+      "operation": "notebook-readiness-2135",
+      "bytes": 4462,
+      "sha256": "2b50c7d214675abc1aac1c41b30fb61a2864ea9aa0ffd9c9f57db1442f439482",
+      "remotePath": "/home/developer/projects/aurora/thesis/phone-notebook/20261020/evidence/notebook-readiness-2135.json",
+      "localPath": "thesis/phone-notebook/20261020/evidence/notebook-readiness-2135/result.json"
+    },
+    {
+      "operation": "physical-phone-readiness-2138",
+      "bytes": 711,
+      "sha256": "67eb03777523d98f7721a45a0617d83bbe8809fd753499cd019ed19e6b4b83c6",
+      "remotePath": "/home/developer/projects/aurora/thesis/phone-notebook/20261020/evidence/physical-phone-readiness-2138.json",
+      "localPath": "thesis/phone-notebook/20261020/evidence/physical-phone-readiness-2138/result.json"
+    },
+    {
+      "operation": "preparation-copy-01-2150",
+      "bytes": 641,
+      "sha256": "c18b48a176cb26a609184acc1c0e1f99ca32d592d10a4f0321a51439474babd6",
+      "remotePath": "/home/developer/projects/aurora/thesis/phone-notebook/20261020/evidence/preparation-copy-01-2150.json",
+      "localPath": "thesis/phone-notebook/20261020/evidence/preparation-copy-01-2150/result.json"
+    },
+    {
+      "operation": "preparation-copy-02-2151",
+      "bytes": 627,
+      "sha256": "1dd508a8f232f5a33c9babf94b9e63ca72d71492d4e83c36930444582b396923",
+      "remotePath": "/home/developer/projects/aurora/thesis/phone-notebook/20261020/evidence/preparation-copy-02-2151.json",
+      "localPath": "thesis/phone-notebook/20261020/evidence/preparation-copy-02-2151/result.json"
+    },
+    {
+      "operation": "preparation-copy-03-2151",
+      "bytes": 1066,
+      "sha256": "c0c7bea54f4a8c4e76deb42b7b4593d83f0733deac1a20fceff6683aa6cc401b",
+      "remotePath": "/home/developer/projects/aurora/thesis/phone-notebook/20261020/evidence/preparation-copy-03-2151.json",
+      "localPath": "thesis/phone-notebook/20261020/evidence/preparation-copy-03-2151/result.json"
+    },
+    {
+      "operation": "preparation-copy-04-2151",
+      "bytes": 597,
+      "sha256": "ac09c2b3af50ac48bd6ee95ba2956e9abca241b811c75b94a8690674728a5ecd",
+      "remotePath": "/home/developer/projects/aurora/thesis/phone-notebook/20261020/evidence/preparation-copy-04-2151.json",
+      "localPath": "thesis/phone-notebook/20261020/evidence/preparation-copy-04-2151/result.json"
+    },
+    {
+      "operation": "preparation-copy-05-2151",
+      "bytes": 495,
+      "sha256": "6ca8cc674d560cb7ce878e2cdee072647bd749a1b9f9c9dcd5663549ced2f12b",
+      "remotePath": "/home/developer/projects/aurora/thesis/phone-notebook/20261020/evidence/preparation-copy-05-2151.json",
+      "localPath": "thesis/phone-notebook/20261020/evidence/preparation-copy-05-2151/result.json"
+    },
+    {
+      "operation": "preparation-copy-06-2152",
+      "bytes": 267,
+      "sha256": "0b0c4ea362d494d5ca09177809fc4f29e40cc5b77016e55ff2a5ef0abd999be4",
+      "remotePath": "/home/developer/projects/aurora/thesis/phone-notebook/20261020/evidence/preparation-copy-06-2152.json",
+      "localPath": "thesis/phone-notebook/20261020/evidence/preparation-copy-06-2152/result.json"
+    },
+    {
+      "operation": "preparation-copy-07-2152",
+      "bytes": 287,
+      "sha256": "f9d114a65de9ba9950d9e4ba502c9a4094643591ecbaaf282548f509134036f1",
+      "remotePath": "/home/developer/projects/aurora/thesis/phone-notebook/20261020/evidence/preparation-copy-07-2152.json",
+      "localPath": "thesis/phone-notebook/20261020/evidence/preparation-copy-07-2152/result.json"
+    }
+  ],
+  "count": 11,
+  "allChecksumsVerified": true
+}

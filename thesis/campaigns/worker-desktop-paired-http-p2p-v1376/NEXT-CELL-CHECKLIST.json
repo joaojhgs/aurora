@@ -1,0 +1,200 @@
+{
+  "schema": "aurora.same_physical_pair_transport_execution_checklist.v1",
+  "at": "2026-10-17T23:15:20.730753+00:00",
+  "ownerDirectiveMessage": "msg_80478d6dc73b",
+  "authoritativeMethodology": "thesis/methodology/owner-requirements-20261018-2d81ca2a.md",
+  "methodologySHA256": "2d81ca2a42a50931aa5d1956a0b1dd89668737795eeb11e7c1517541ea08b4c3",
+  "executionOwner": "original Root",
+  "methodologyOwner": "original Sol monitor",
+  "cells": [
+    {
+      "cell": "K1-HTTP",
+      "requesterPhysicalHost": "code-worker / ssh:ssh-oci-coding-worker",
+      "providerPhysicalHost": "personal.skyron-server / ssh:ssh-1786238480967-semdev",
+      "direction": "coding-worker requests Personal compute/audio",
+      "stagePlacement": {
+        "stt": "coding-worker CPU",
+        "llm": "coding-worker CPU",
+        "tts": "Personal desktop Piper CPU"
+      },
+      "transport": "ORCA-RELAYED HTTP extra intermediary hop",
+      "source": "thesis/evidence/orca-relayed-http-v1197",
+      "sourceState": "preserved original runtime/source",
+      "runtimeAdmitted": false,
+      "newRuntimeLaunched": false,
+      "state": "TERMINAL_PARTIAL_180_OF_900",
+      "plannedMeasuredPerApplicableNewCondition": 900,
+      "excludedWarmups": 15
+    },
+    {
+      "cell": "K1-P2P",
+      "requesterPhysicalHost": "code-worker / ssh:ssh-oci-coding-worker",
+      "providerPhysicalHost": "personal.skyron-server / ssh:ssh-1786238480967-semdev",
+      "direction": "coding-worker requests Personal compute/audio",
+      "stagePlacement": {
+        "stt": "coding-worker CPU",
+        "llm": "coding-worker CPU",
+        "tts": "Personal desktop Piper CPU"
+      },
+      "transport": "actual production MeshBus/PeerBridge over WebRTC; sampled ICE direct/TURN classification required",
+      "source": "thesis/harness/distributed-k1-mesh-v890",
+      "sourceState": "reviewed source candidate; actual launch inputs unadmitted",
+      "runtimeAdmitted": false,
+      "newRuntimeLaunched": false,
+      "state": "NOT_ADMITTED",
+      "plannedMeasuredPerApplicableNewCondition": 900,
+      "excludedWarmups": 15
+    },
+    {
+      "cell": "K2-HTTP",
+      "requesterPhysicalHost": "code-worker / ssh:ssh-oci-coding-worker",
+      "providerPhysicalHost": "personal.skyron-server / ssh:ssh-1786238480967-semdev",
+      "direction": "coding-worker requests Personal compute/audio",
+      "stagePlacement": {
+        "stt": "coding-worker CPU",
+        "llm": "Personal desktop same pinned Qwen Vulkan",
+        "tts": "Personal desktop Piper CPU"
+      },
+      "transport": "ORCA-RELAYED HTTP extra intermediary hop",
+      "source": "thesis/harness/distributed-k2-http-v852",
+      "sourceState": "reviewed source candidate; actual launch inputs unadmitted",
+      "runtimeAdmitted": true,
+      "newRuntimeLaunched": true,
+      "state": "TERMINAL_900_COLLECTED_797_CORRECT_103_FAILED_ANALYSIS_REVIEW_CLOSED",
+      "plannedMeasuredPerApplicableNewCondition": 900,
+      "excludedWarmups": 15,
+      "actualWarmups": 15,
+      "actualMeasured": 900,
+      "frozenManifestSha256": "b15a49adffc5aaa43b426563d5776fa384c92f58e339030b69cb3877e98f2399",
+      "actualOffloadedLayers": 25,
+      "admissionReceipt": "thesis/campaigns/worker-desktop-k2-orca-relayed-http-v1264/ORDINARY-WARMUP-ADMISSION-v1394.json",
+      "observationAt": "2026-10-17T23:47:02.757389+00:00",
+      "correctMeasured": 797,
+      "failedMeasured": 103,
+      "timeoutFlags": 0,
+      "unattempted": 0,
+      "terminalReport": "thesis/campaigns/worker-desktop-k2-orca-relayed-http-v1264/terminal-v1465/RESULTS.md",
+      "reviewClosure": "thesis/campaigns/worker-desktop-k2-orca-relayed-http-v1264/terminal-v1465/REVIEW-CLOSURE-v1473.json"
+    },
+    {
+      "cell": "K2-P2P",
+      "requesterPhysicalHost": "code-worker / ssh:ssh-oci-coding-worker",
+      "providerPhysicalHost": "personal.skyron-server / ssh:ssh-1786238480967-semdev",
+      "direction": "coding-worker requests Personal compute/audio",
+      "stagePlacement": {
+        "stt": "coding-worker CPU",
+        "llm": "Personal desktop same pinned Qwen Vulkan",
+        "tts": "Personal desktop Piper CPU"
+      },
+      "transport": "actual production MeshBus/PeerBridge over WebRTC; sampled ICE direct/TURN classification required",
+      "source": "thesis/harness/distributed-k2-mesh-v905",
+      "sourceState": "reviewed source candidate; actual launch inputs unadmitted",
+      "runtimeAdmitted": false,
+      "newRuntimeLaunched": false,
+      "state": "NOT_ADMITTED",
+      "plannedMeasuredPerApplicableNewCondition": 900,
+      "excludedWarmups": 15
+    },
+    {
+      "cell": "K3-HTTP",
+      "requesterPhysicalHost": "code-worker / ssh:ssh-oci-coding-worker",
+      "providerPhysicalHost": "personal.skyron-server / ssh:ssh-1786238480967-semdev",
+      "direction": "coding-worker requests Personal compute/audio",
+      "stagePlacement": {
+        "stt": "Personal desktop same pinned Whisper",
+        "llm": "Personal desktop same pinned Qwen Vulkan",
+        "tts": "Personal desktop Piper CPU"
+      },
+      "transport": "ORCA-RELAYED HTTP extra intermediary hop",
+      "source": "thesis/harness/distributed-k3-http-v857",
+      "sourceState": "reviewed source candidate; actual launch inputs unadmitted",
+      "runtimeAdmitted": false,
+      "newRuntimeLaunched": true,
+      "state": "V1481_ORDINARY_WARMUPS_RUNNING_NATIVE_GATE_PENDING",
+      "plannedMeasuredPerApplicableNewCondition": 900,
+      "excludedWarmups": 15,
+      "actualMeasured": 0,
+      "frozenManifestSha256": "54d51acdf8219b4e69f21cabb9d9fb1b402acf9826196dbdcea4fcfd15bddb25",
+      "actualLaunchReceipt": "thesis/campaigns/worker-desktop-k3-orca-relayed-http-v1481/REQUESTER-LAUNCH.json",
+      "unadmittedPredecessor": "thesis/campaigns/worker-desktop-k3-orca-relayed-http-v1413/terminal-unadmitted-v1480/SEAL.json"
+    },
+    {
+      "cell": "K3-P2P",
+      "requesterPhysicalHost": "code-worker / ssh:ssh-oci-coding-worker",
+      "providerPhysicalHost": "personal.skyron-server / ssh:ssh-1786238480967-semdev",
+      "direction": "coding-worker requests Personal compute/audio",
+      "stagePlacement": {
+        "stt": "Personal desktop same pinned Whisper",
+        "llm": "Personal desktop same pinned Qwen Vulkan",
+        "tts": "Personal desktop Piper CPU"
+      },
+      "transport": "actual production MeshBus/PeerBridge over WebRTC; sampled ICE direct/TURN classification required",
+      "source": "thesis/harness/distributed-k3-mesh-v911",
+      "sourceState": "reviewed source candidate; actual launch inputs unadmitted",
+      "runtimeAdmitted": false,
+      "newRuntimeLaunched": false,
+      "state": "NOT_ADMITTED",
+      "plannedMeasuredPerApplicableNewCondition": 900,
+      "excludedWarmups": 15
+    }
+  ],
+  "priorityCandidate": "K1-P2P TTS-only, same physical pair and direction",
+  "prioritySource": "thesis/harness/distributed-k1-mesh-v890",
+  "priorityRuntimeState": "NOT_ADMITTED_LIVE_MESH_WEBRTC_DISABLED_NO_PEER",
+  "specificMeshPrerequisites": [
+    "Actual existing authorized peer ID, active session/negotiation, TTS provider route/policy binding and receiver identity are not yet bound in current launch receipts",
+    "A real WebRTC path between these two hosts, using already-approved direct/TURN availability, must be observed; HTTP reachability is not ICE/datachannel proof",
+    "Freeze current exact source/.pth/aiortc/aioice/model/config/provider/runtime/resource bindings and provider lifetime",
+    "Ordinary15 excluded full-flow warmups must join exact selected-peer calls, nominated-pair observations and receiver native TTS/provider records; no fallback or extra request"
+  ],
+  "finiteExecutionOrder": [
+    {
+      "step": 1,
+      "action": "Seal original V1197 partial180 measured plus15warmups; preserve179correct/1transport failure/720unattempted, summary/control/raw tails; no replay/top-up",
+      "state": "COMPLETED_PARTIAL_SEAL_V1377"
+    },
+    {
+      "step": 2,
+      "action": "Finish already-exported checkpoint148 delta transfer via existing approved Personal control; do not resend export",
+      "state": "COMPLETED_CUSTODY_V1372_CONTROL_RELEASED",
+      "operation": "v1372"
+    },
+    {
+      "step": 3,
+      "action": "Read existing approved mesh runtime/session/route and configured ICE authority through current source-supported interfaces; bind actual pair/receiver and existing grants without changes",
+      "state": "COMPLETED_ACTUAL_CAPABILITY_GAP"
+    },
+    {
+      "step": 4,
+      "action": "If admission succeeds, freeze and launch K1-P2P only,15ordinary excluded warmups then900 measured",
+      "state": "CONDITIONAL_NOT_LAUNCHED"
+    },
+    {
+      "step": 5,
+      "action": "If the specific P2P prerequisite cannot be satisfied within existing authority, record exact receipt/capability and proceed to the next actual-admissible candidate; K2 HTTP has source/harness/custody ready but still needs actual GPU/auth/config/lifetime admission",
+      "state": "K2_HTTP_ACTUALLY_MEASURING_AFTER_NATIVE_GPU_LIFETIME_ADMISSION"
+    }
+  ],
+  "requesterShellNotComparisonVariable": true,
+  "otherSurfaceCoverage": "Separate product/platform coverage; no per-UI-shell multiplication or blanket gating of this six-cell comparison",
+  "eligibleLocalReferences": "Reuse validated matching fixed-task/audio/model references with explicit hardware/placement scope; no baseline replay",
+  "noProtocolOnlyInference": "Keep topology, placement and transport spans/clocks separate; no causal e2e subtraction/GPU conflation",
+  "noNewProviderForwardRestartWorkerOrSecurityChange": true,
+  "newMeasuredRequests": 0,
+  "newWarmups": 0,
+  "oldK1RecoveryStatus": "179correct+1transport failure; original provider PIDs and450ee5af frozen manifest unchanged, current relay public health200 is transport observation only",
+  "terminalSeal": "thesis/evidence/orca-relayed-http-v1197/terminal-v1377/SEAL.json",
+  "terminalAnalysis": "thesis/evidence/orca-relayed-http-v1197/terminal-v1377/analysis/SUMMARY.json",
+  "actualMeshRuntimeRead": {
+    "receipt": "thesis/campaigns/worker-desktop-paired-http-p2p-v1376/EXISTING-PROVIDER-MESH-READ-v1380.json",
+    "httpStatus": 200,
+    "meshEnabled": false,
+    "meshStarted": false,
+    "webrtcStarted": false,
+    "peerId": null,
+    "peers": 0,
+    "newGrantsOrSettings": false
+  },
+  "latestMethodology": "thesis/methodology/owner-requirements-20261017-dd38c288.md",
+  "existingProfileInventory": "thesis/campaigns/worker-desktop-paired-http-p2p-v1376/K1-P2P-ADMISSION-DECISION-v1387.json"
+}

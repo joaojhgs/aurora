@@ -1,0 +1,17 @@
+{
+  "at": "2026-10-21T03:27:52.543383+00:00",
+  "status": "BOUNDED_LOOKUP_STOPPED_NO_CAUSAL_RESULT",
+  "observedSavedOutcome": "55recordedassistant-predicatefailures all31chars/sameSHAa1b7eb2ee7a6aded8dda4e6cf30826f5afffb28a5597ee9389e91eb326d4e319",
+  "sourcePrerequisite": {
+    "path": "thesis/sources/k3-stt-runtime-v1907/personal/source-inventory.json",
+    "exists": false,
+    "sha256": null,
+    "expectedActualPersonalInventorySha256": "25026c4031e07d2e7cdac2afe269f78611ed375e53d3b64cd751b31867a552cf"
+  },
+  "invalidNegativeInference": "Prior0matches/0files is NOT evidence that source has no matchingfallback; failedprerequisite is not loss of Personal original",
+  "firstReportPreserved": true,
+  "scopeCorrection": "SOURCE-LOOKUP-SCOPE-CORRECTION.json",
+  "ownerImpact": "No modelquality/harness/runtime rootcause claim; original55failures remainfailed; no inference/model/substitution/sourcechange/replay requested",
+  "stop": "No further lookup/remotecontrol/sourcecopy during currentK1; returnmainexecuting191",
+  "sutCalls": 0
+}

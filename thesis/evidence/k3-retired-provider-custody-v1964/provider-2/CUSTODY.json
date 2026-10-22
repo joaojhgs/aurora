@@ -1,0 +1,131 @@
+{
+  "archive": "thesis/evidence/k3-retired-provider-custody-v1964/provider-2/provider.tar.gz",
+  "bytes": 412192,
+  "sha256": "2c8729abfcaee0f1fdb033e3bb1d3050f0d66ca62323b3bf595ff85f24c2b6dd",
+  "rawMembers": 17,
+  "rawBytes": 7189179,
+  "allRawMemberHashesVerified": true,
+  "sealOriginalSha256": "120272910962253995485de2a46e7df94ed0521d74ed88517679320e7ee1fdda",
+  "sealTrailingRepresentation": "'\\n'",
+  "metadataNote": "Original seal is valid JSON with a normal newline. Original archive/seal/raw member bytes remain unchanged; canonical seal copy contains the same parsed object.",
+  "files": [
+    {
+      "member": "ACTUAL-FILES-v1935.json",
+      "bytes": 2221,
+      "sha256": "292868f1d4386c23a0011828e6aaef3a03c9fc1de2d516722dc7a0816573eaea"
+    },
+    {
+      "member": "PREPARATION-v1935.json",
+      "bytes": 9221,
+      "sha256": "e0315e7737c780b9bbb70f8d28b06a8d6067216058064e2de018fb02d4a5ff77"
+    },
+    {
+      "member": "ROOT-ADMISSION-v1936.json",
+      "bytes": 8462,
+      "sha256": "fced4808b8f1e92700742227f9fda695d8913a1bf60158e5be5573a6f0d17bd8"
+    },
+    {
+      "member": "ROOT-LAUNCH-INTENT-v1936.json",
+      "bytes": 183,
+      "sha256": "30caf9b8b2ff9e2685835ba276de9c3dfc29cb636e7b43906f9c58ffe12fba6a"
+    },
+    {
+      "member": "ROOT-LAUNCH-v1936.json",
+      "bytes": 275,
+      "sha256": "6f1475767376e68735c566939b90bb5aec20c430dc2357dc8508c3d5ba6d7f6f"
+    },
+    {
+      "member": "STATUS.json",
+      "bytes": 161092,
+      "sha256": "c707b051c133c285fe087c3a609a905126fa74065f7fd0f131444c7f38f8e7b0"
+    },
+    {
+      "member": "actual-provider-bindings.jsonl",
+      "bytes": 22466,
+      "sha256": "dc1349752b93a3dd0a350bb5b2cf0460d42898504f8d875e97f3f2841e4800f2"
+    },
+    {
+      "member": "assistant-identity.json",
+      "bytes": 1417,
+      "sha256": "d5c81ed53e1da4bfbde2a748e8fda5ee7447d1c4f1ba1c1b143c7932d8c5b61d"
+    },
+    {
+      "member": "controller-launch.json",
+      "bytes": 300,
+      "sha256": "85ad3c2a318a7ebad37403278e63cdce28fef623920b90605a307c97d970f9b8"
+    },
+    {
+      "member": "provider-manifest.json",
+      "bytes": 7320,
+      "sha256": "016d461363c4f1d3baa2fbb67bf7a85c0aa79df1a0ebb419fc7d3f166a4de629"
+    },
+    {
+      "member": "receiver-identity.json",
+      "bytes": 1372,
+      "sha256": "1c5978697b8e89471ca34f15574dd84c466d30c01afca6d754926d06b0cfb28d"
+    },
+    {
+      "member": "resources.jsonl",
+      "bytes": 6599356,
+      "sha256": "d36bcb9b97fe84b213caaf17b76e99db21feffc6121b84eb3c7c83ab92e6698e"
+    },
+    {
+      "member": "runtime-versions.json",
+      "bytes": 210,
+      "sha256": "1f497cc20227145e68a338084a561f540f21e34da47c459441b279a6f4c2a6f8"
+    },
+    {
+      "member": "stt-identity.json",
+      "bytes": 1399,
+      "sha256": "a1827ac1c251fcc0505f9a802f1ac53f7fbb042ca0291d00f2b91fa218760b2f"
+    },
+    {
+      "member": "terminal.json",
+      "bytes": 434,
+      "sha256": "3ec23b309023d6b1654bccf68eb7a1dae40fcb2d648c3b8619ff8702bcfc419c"
+    },
+    {
+      "member": "voice-stages.jsonl",
+      "bytes": 373315,
+      "sha256": "14469f770c7f01387c330a517eaad830a24d1b0b5766954aec1a518901637459"
+    },
+    {
+      "member": "voice-stages.status.json",
+      "bytes": 136,
+      "sha256": "0f11fbceca55da2f2d41204080441abafd856b1c68bfe304a7f8a7cb64954e1d"
+    }
+  ],
+  "pages": [
+    {
+      "offset": 0,
+      "bytes": 98304,
+      "sha256": "45cfe905c65075d5819b74e3eb7af1392da7bdf07486897dc852e13cf2a40db2"
+    },
+    {
+      "offset": 98304,
+      "bytes": 98304,
+      "sha256": "350d6b9af65d418070d7b67c838874b1b5335d5aa3da15c1208fbf406ba38ebf"
+    },
+    {
+      "offset": 196608,
+      "bytes": 98304,
+      "sha256": "5b4f24610b0c35cc259bd3faa6afcf19710585735805a68248e668c2e4382806"
+    },
+    {
+      "offset": 294912,
+      "bytes": 98304,
+      "sha256": "f2c37ccecdcf41745d0e40ab7dd33a77f90766a8349bad6dbe0ae685d2a833a7"
+    },
+    {
+      "offset": 393216,
+      "bytes": 18976,
+      "sha256": "689bf4f3fd0a6064ff2303dba8771f62d0ccb7f3cf52df011a581947f66f87a1"
+    }
+  ],
+  "originalsPreserved": true,
+  "duplicateUncompressedRawBytes": 0,
+  "sealTrailingOrdinals": [
+    10
+  ],
+  "noteCorrectionReceipt": "NOTE-CORRECTION.json"
+}

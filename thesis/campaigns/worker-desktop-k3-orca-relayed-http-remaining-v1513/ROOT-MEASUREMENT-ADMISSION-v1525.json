@@ -1,0 +1,61 @@
+{
+  "at": "2026-10-18T14:58:25.832352+00:00",
+  "status": "V1513_MEASURED_ADMITTED_RUNNING",
+  "cohortManifestSha256": "b19c10d9aad4f9a2261d7eac5b52c258315eea94db256a411e66981e6a45d4a4",
+  "measuredAttempted": 9,
+  "measuredOutcomes": {
+    "completed_correct": 9
+  },
+  "plannedEpochMeasured": 387,
+  "unattemptedEpochMeasured": 378,
+  "excludedCorrectWarmups": 15,
+  "strictNativeJoins": 45,
+  "proofSha256": "7e14895b02975970a994fdac7738527ace37d0fc583282134b40ff938eb0efc9",
+  "nativeGateAt": "2026-10-18T14:53:49.323090+00:00",
+  "actualSttDevice": "cpu",
+  "actualSttComputeType": "int8_float32",
+  "actualLlmOffloadedLayers": 25,
+  "totalLlmLayers": 25,
+  "warmupP95MsType7": 30991.7879499,
+  "warmupForecastWith20PercentPlus300Seconds": 14692.586323933561,
+  "providerRemainingSecondsAtAdmission": 33325.655267,
+  "providerDeadlineUtc": "2026-10-19T00:08:53.328388+00:00",
+  "originalParentAttempts": 513,
+  "originalParentOutcomes": {
+    "completed_correct": 512,
+    "failed": 1
+  },
+  "combinedConditionAttemptedCountOnly": 522,
+  "originalFailureUnchanged": true,
+  "noEpochMetricPooling": true,
+  "pids": [
+    {
+      "role": "controller",
+      "pid": 1231594,
+      "startTicks": 111317576,
+      "sameLiveProcess": true
+    },
+    {
+      "role": "backend",
+      "pid": 1231687,
+      "startTicks": 111318838,
+      "sameLiveProcess": true
+    },
+    {
+      "role": "copier",
+      "pid": 1231601,
+      "startTicks": 111317577,
+      "sameLiveProcess": true
+    }
+  ],
+  "finalizerComplete": true,
+  "personalControlReleasedCursor": "47908",
+  "copier": {
+    "sequence": 14,
+    "cases": 23,
+    "audio": 23,
+    "bytes": 2428095,
+    "errors": []
+  },
+  "actualNewWorkers": 0
+}

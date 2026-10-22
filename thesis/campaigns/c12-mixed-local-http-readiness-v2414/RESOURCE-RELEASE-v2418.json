@@ -1,0 +1,27 @@
+{
+  "at": "2026-10-22T06:49:08.517618+00:00",
+  "scope": "C12 finite excluded-readiness allocation ONLY",
+  "state": "SEALED_AND_RELEASED",
+  "providerActorsAbsent": [
+    2474823,
+    2474824
+  ],
+  "workerActorAbsent": 230839,
+  "providerShutdown": "Natural finite lifetime; Root sent zero retirement signals",
+  "nativeOpen": 0,
+  "physicalArchive": {
+    "status": "COMPLETE_ARCHIVE_AND_ALL_MEMBERS_SHA256_VERIFIED",
+    "archiveBytes": 99697,
+    "archiveSha256": "febeb16355fff56082f1336d08736fd791fbecc0dc2977dc9ce8f8cb7225159e",
+    "files": 22,
+    "physicalRepoCopy": "/home/developer/projects/aurora/thesis/campaigns/c12-mixed-local-http-readiness-v2414/terminal-v2417/provider-raw-v2414.tar.gz",
+    "oldFailureRetained": true
+  },
+  "sourceAndOldFailuresPreserved": true,
+  "originalAbsoluteDeadlineUtc": "2026-10-22T06:47:13.434835+00:00",
+  "sourceSutDeadlineExtended": false,
+  "nativeAggregateGoal": "01a112a5-d6bb-74e2-bf7c-ace73cb513b5 ACTIVE/unbudgeted",
+  "rootSchedulingOwnershipRetained": true,
+  "OrcaSshForwardAgentsUntouched": true,
+  "phoneNotRootTask": true
+}

@@ -1,0 +1,377 @@
+{
+  "at": "2026-10-16T09:05:52.207961+00:00",
+  "scope": "Root execution receipt; monitor sole methodology writer",
+  "firstCell": {
+    "status": "SOURCE_APPROVED_AND_RECEIVER_FILES_STAGED_EXISTING_FIXTURE_RECOVERED_RUNTIME_NOT_LAUNCHED",
+    "requester": "code-worker",
+    "requesterSurface": "S-N native/headless file-audio",
+    "provider": "personal.skyron-server",
+    "mode": "K1 TTS only remote over actualHTTP; localSTT+LLM",
+    "route": "POST /api/TTS/Synthesize, actualbaseoriginunadmitted",
+    "privateNetworkCandidate": "100.64.0.3 already present on Personal tailscale0; worker kernelrouteexists but no endpoint/connectivity/authproof",
+    "sourceSlice": "distributed-k1-http-prep-v802",
+    "nativeStageProof": "receiveractualTTS/provider15correlations REQUIRED separately from localSTT/LLM; adapterdraft alone notready",
+    "nextResourceWindow": "Conditional worker naturalfinish/seal09:30-10:30UTC; desktop browser alreadysealed/released06:52. Measured-start ETA remains conditional on startup/15ordinarywarmups.",
+    "exactLaunchETAUnknownBecause": [
+      "Worker V737 CPU/RAM reservation remains until natural terminal and one seal.",
+      "Fresh private-bind/source/model/config/runtime/resource admission and actualHTTP/auth/receiver-stage warmups have not yet run."
+    ],
+    "globalGateExcluded": [
+      "thesispackaging",
+      "general13storyacceptance",
+      "Androidrender/microphone",
+      "unrelatedTauri/browserUIacceptance"
+    ],
+    "laterCoverageUnchanged": true,
+    "noNewBaselineRunsQueued": true,
+    "sourceStatus": "INTEGRATED_SOURCE_APPROVED_NO_RUNTIME",
+    "sourceReview": "distributed-k1-review-v805/SOL-REVIEW.md",
+    "canonicalModule": "thesis/harness/distributed-k1-http-v822/",
+    "requesterRunnerSHA256": "45d2c3f4df7353c2fc162c6986d125096b64216a76575a8a1d5bae4e5c154b0f",
+    "httpAdapterSHA256": "29ad1e394257720eb1cad16f67a20f7e637f3fe354bbe16c462723853e5ee9a5",
+    "nextControlSourceOwner": "existing /root/luna_android_offline_answer_v118",
+    "nextControlSource": "distributed-k1-control-prep-v804/",
+    "exactFirstPairPrerequisites": {
+      "sealedAlready": [
+        "originalCPU_V491_900",
+        "desktopLocal900",
+        "desktopHTTP900"
+      ],
+      "inFlightResourceReservations": [
+        "workerCPU737",
+        "desktopBrowser799"
+      ],
+      "newIndividualBaselineRunsQueued": 0,
+      "requiredBeforeMeasuredK1": [
+        "actual occupied resources retired/reconciled and required seals retained",
+        "real crosshostHTTPendpoint/existingidentity+methodauth admitted",
+        "integrated reviewedK1 controller/bootstrap/source/modelmanifest",
+        "actual15warmup localSTT/LLM +remoteTTSreceiver correlation/provider proof"
+      ],
+      "explicitNonGates": [
+        "thesispackaging",
+        "general13productacceptance",
+        "unrelatedTauri/AndroidUI/mic acceptance",
+        "meshgrantfortheHTTPcell"
+      ],
+      "laterSurface900CoverageStillRequired": true,
+      "newScientificIndividualBaselineConditionsBeforeFirstHeadlessPair": 0,
+      "firstPairWaitReason": "Both selected physical hosts actively measured: worker STT/LLM competes with V737; desktop PiperCPU competes with V799 STT/TTS. Browser coverage open does not universally block another admitted isolated pair."
+    },
+    "exactMonitorReply": "v806-reply-original-transition-question.json / msg_08c81d1d5039; original question answered, monitor acknowledged msg_819fc5a3041e",
+    "controlSourceReview": "distributed-k1-control-review-v810/SOL-REVIEW.md",
+    "controlSourceReviewSHA256": "57bea1f112ed0b95e3f60b4ebe98e25b2239fcccd8b8de1fd3196caa34e85b09",
+    "controllerSHA256": "ada49340e64d3f9069c88b4329389d907c6a484291451297ff67658726a2ffc8",
+    "bootstrapSHA256": "bf0da2f51e174193ceca7636ddfa1d602e56027afca339d23cb9366f96916926",
+    "receiverAssemblerSHA256": "aed9bd0f6109f8ab97c8b4eba8c3809bf1d865c9cba05999b52769f2862d857d",
+    "latestActualGatewayBinding": "Personal current Aurora authenticated127.0.0.1:55741 only; read-only metadata v810-desktop-existing-gateway-metadata-RESULT.json. No cross-host Gateway origin/proxy identified or probed; other listeners not product-route evidence.",
+    "sourceGateClosed": "AST/source review only; three deterministic launch/binding bugs fixed, no test/model/runtime/network action.",
+    "scientificBaselineBarrierSatisfied": true,
+    "newScientificIndividualRunsBeforeFirstHeadlessPair": 0,
+    "boundedPrivatePathProbe": "v814-existing-personal-private-path-tcp.json: actualcode-worker 2026-10-16T02:50:08.979659Z socket.create_connection(100.64.0.3:22,3s) and192.168.1.11:22 eachConnectionRefusedError errno111. Only already-listeningSSH connectivity probes; noauthentication/inference/model/securitychanges. Does not establish allportsunreachable, emulatorabsent or Auroraendpoint.",
+    "nextProviderSource": "distributed-k1-provider-prep-v815/ source-only existingLuna preparing; no listener/runtime; needs Root-admitted origin/config and actualresource release.",
+    "latestSourceBundle": "distributed-k1-integrated-prep-v822/",
+    "latestSourceReview": "distributed-k1-integrated-review-v823/SOL-REVIEW.md",
+    "sourceReviewSHA256": "3dccb56fbb571e64ab252cac2072d1aa7b27ed4f52541fd2072be0dd6bf11b6c",
+    "providerSourceReview": "distributed-k1-provider-review-v818/SOL-REVIEW.md",
+    "providerSourceReviewSHA256": "737436dd3e15015be626f0dde77dc6b49b0ebfdc67caab2bd364d4f82cb4a7df",
+    "resourceSamplerSHA256": "8f62ec378e74036d4539d9159e3caf29b8fd7a9115de1ab0f482dfd58b6e1857",
+    "sourceOnlyMetricLimit": "Request payload bytes returned by adapter but not persisted by unchanged runner; no payload-total claim. CPU/RAM/net/AMD sampled as per-device/child or aggregate context, no per-request network attribution.",
+    "laterCumulativeHTTPSource": "thesis/harness/distributed-k2k3-http-v819/: source-reviewed partial typed stage adapter only; no composed runner, runtime or measurements.",
+    "deploymentAdmissionSemantics": "Owner necessary scoped test deployment already authorized. Before startup verify approved private binding/source/config/identity/resource receipt; actual HTTP/auth/TTS route proven after startup through normal15warmups, not a circular already-live requirement.",
+    "hostOnlyMetadataCapability": "v816-approved-host-metadata.json: orca host list --json returns forbidden: acts on Orca host machine; cannot run from SSH host. No bypass/retry on same route.",
+    "existingFixtureEnvMetadata": "Both Rootworker env and Personalplain shell show hostedpeer/thinAPIkey env absent; this is process metadata only, not absence of retained approved test key or existing identity. Future launch must reuse retained original fixture binding; no new credentials/accounts/grants.",
+    "canonicalLatestBundle": "thesis/harness/distributed-k1-http-v822/",
+    "actualProviderSourceStage": {
+      "host": "personal.skyron-server",
+      "at": "2026-10-16T03:23:26.602474+00:00",
+      "status": "SOURCE_AND_PRIVATE_CONFIG_STAGED_UNFROZEN_NOT_LAUNCHED",
+      "root": "/tmp/aurora-root-k1-http-provider-prep-v825",
+      "baselineManifestSha256": "e67f8f98830ef0ceb978590bbe6b8b496ada2ad4ddd05bc34fb22248c65c10b8",
+      "baselineInputConfigUnchanged": true,
+      "proposedConfigSha256": "531368116489ed98abb521e09c8b1b2980b7a6ba819e51e808b969ed3be47f15",
+      "proposedPrivateInterface": "100.64.0.3",
+      "proposedPort": 8000,
+      "bindingAdmitted": false,
+      "routeReachabilityVerified": false,
+      "sourceInventoryCount": 403,
+      "sourceInventorySha256": "bcc9ec8765616093b0b0b4dd2bf35847a6653f242e09f809e93ee5199f409848",
+      "stagedSourceFiles": [
+        {
+          "path": "bootstrap.py",
+          "bytes": 1673,
+          "sha256": "bf0da2f51e174193ceca7636ddfa1d602e56027afca339d23cb9366f96916926"
+        },
+        {
+          "path": "controller.py",
+          "bytes": 24773,
+          "sha256": "27a09e195d1a82f6dde770f60b15bcdcbf93f3743bf661c012405ae22eece5de"
+        },
+        {
+          "path": "hook/aurora_voice_telemetry_v430.py",
+          "bytes": 11584,
+          "sha256": "8129ffe7591a47a0107ede53b101aead9fc1f58b92f0c0c4203176cc7608325d"
+        },
+        {
+          "path": "hook/bindings.py",
+          "bytes": 3230,
+          "sha256": "52182f956b34788ecbfbbb241c8243ff88baebe2874e3605791793777ed0dc91"
+        },
+        {
+          "path": "hook/observer.py",
+          "bytes": 11873,
+          "sha256": "784cc4bffc0d6824bbe378d17a7f632d587ca0a315896b048b2ebef727082df5"
+        },
+        {
+          "path": "resource_sample.py",
+          "bytes": 7475,
+          "sha256": "8f62ec378e74036d4539d9159e3caf29b8fd7a9115de1ab0f482dfd58b6e1857"
+        }
+      ],
+      "authConfigurationPreservedExceptNoActiveProcessEnvCopied": true,
+      "existingCredentialsTransferredOrCreated": false,
+      "runtimeCreated": false,
+      "listenerStarted": false,
+      "modelsStarted": false,
+      "networkOrSecurityChanged": false,
+      "futureRootStillRequired": [
+        "fresh physical retirement/locks/resources/free private bind admission",
+        "existing original fixture auth process binding",
+        "fresh source/model/runtime/file identity pins and frozen provider manifest",
+        "exact baseline nonsecret environment passed at actual launch",
+        "actual normal15 warmups with authenticated HTTP and receiver stage proof"
+      ]
+    },
+    "actualProviderSourceScope": {
+      "host": "personal.skyron-server",
+      "at": "2026-10-16T03:27:00.279478+00:00",
+      "sourceRoot": "/home/developer/projects/aurora/.git/aurora-handoff-import-20261006/http-full-audio-v497/source",
+      "manifestEntryCount": 403,
+      "actualFrozenMainEntry": {
+        "bytes": 8936,
+        "path": "/home/developer/projects/aurora/.git/aurora-handoff-import-20261006/http-full-audio-v497/source/main.py",
+        "sha256": "83c3f5dbcf939339e7643a46188acda4dd47b0bf3a78c13e2c087564c6d3730b"
+      },
+      "insideCount": 403,
+      "outsideCount": 0,
+      "outsideEntries": [],
+      "stagedInventoryUnchanged": true,
+      "runtimeCreated": false,
+      "actualSourceBytesRead": false
+    },
+    "sourceInventoryClarification": "403 is correct retained backend source metadata: canonical400 plus readme.md,uv.lock,voice-source-provenance.json, all under actual backend source. Preserve all403; failed400-filter assertion before writes is historical, reconciled; NEVER rerun that filter.",
+    "sourceNamesComparison": {
+      "knownBackendPackageCount": 400,
+      "actualFrozenSourceCount": 403,
+      "additionalFrozenSourceNames": [
+        "readme.md",
+        "uv.lock",
+        "voice-source-provenance.json"
+      ],
+      "packageNamesMissingFromFrozen": [],
+      "contentsRead": false
+    },
+    "mappedFixtureAuthPresence": {
+      "plainShellMappedKeyPresent": false,
+      "backendMappedKeyPresent": false,
+      "valuesLogged": false
+    },
+    "actualRuntimeEnvironment": {
+      "AURORA_STT_WHISPER_DOWNLOAD_ROOT": "/dev/shm/aurora-root-accurate-base-v443/model",
+      "GGML_VK_VISIBLE_DEVICES": "1",
+      "OMP_NUM_THREADS": "2",
+      "OPENBLAS_NUM_THREADS": "2",
+      "MKL_NUM_THREADS": "2"
+    },
+    "cumulativeHTTPAdapterReview": "distributed-k2k3-http-review-v827/SOL-REVIEW.md",
+    "cumulativeHTTPAdapterReviewSHA256": "0a29930723eb33f8fd47681292fe42064f6d610c462bb3b5819b6643be2ebc4d",
+    "canonicalMethodology": "thesis/methodology/owner-requirements-20261016-797b3dd5.md",
+    "fixtureBindingStatus": "RESOLVED_AND_ALREADY_STAGED: V838 proves the unchanged provider config already contains exact original V692 fixture and automatic_tts_readback=false; no auth/config rewrite needed. Future parent process binding must reuse this original private input. Real route/auth/native stage proof remains ordinary15warmups.",
+    "normalMainSetupScope": "Actual frozen main83c3f5db source holdsSupervisor until shutdown (not stdin EOF). Normal main may emit setup greeting before warmups. At actual receiver15 proof collection, preserve full raw setup and select actual15 correlated warmup provider-call rows; do not pretend all provider records are warmup-only or fabricate IDs. Queue/TTFT/streamedfirstaudio remain honest unknown.",
+    "existingFixtureBindingReceipt": "v832-existing-v692-fixture-config-REDACTED.json",
+    "stagedExistingAuthVerified": {
+      "receipt": "v838-staged-auth-binding-metadata-RESULT.json",
+      "configSHA256": "531368116489ed98abb521e09c8b1b2980b7a6ba819e51e808b969ed3be47f15",
+      "sameExactOriginalFixture": true,
+      "existingFixtureCount": 1,
+      "automaticTtsReadback": false,
+      "configurationChanged": false,
+      "runtimePresent": false
+    },
+    "cumulativeCompositionSource": "thesis/harness/distributed-k2-composition-v839/: independent partial APPROVE841, two837findings closed; campaign integration842 in progress on existing Luna; no runtime.",
+    "actualRequesterSourceStage": "distributed-k1-requester-prep-v843/STAGING-RECEIPT.json: sources,400-entry inventory and baseline runtime-config copy actually staged, no live source/config/model/runtime change.",
+    "cumulativeCompositionReview": "distributed-k2-composition-review-v841/SOL-REVIEW.md",
+    "cumulativeRunnerSource": "distributed-k2-campaign-prep-v842/runner.py SHA472b55...; independent Sol846 found3main-path/proof/accounting fixes, already assigned to existing Luna complete847 bundle; no runtime or extra scenarios.",
+    "canonicalSurfaceRegistry": "thesis/matrix/existing-surface-applicability-20261016-bd06b744.md",
+    "exactCurrentSurfaceStatus": {
+      "runningCampaigns": 1,
+      "unadmittedExistingSurfaceFamilies": 4,
+      "mobileBrowser": "existing C07 subcase, separately unadmitted",
+      "expandedEligibleConditionCount": null,
+      "extraIndividualScientificRunsBeforeFirstHeadlessPair": 0
+    },
+    "unadmittedRequesterManifestDraft": "distributed-k1-requester-prep-v843/input/requester-unadmitted-manifest-v853.json: actual8harnesspins and retained config/model references; explicit unadmitted/notfrozen; actualsource/model/runtime/resource and receiver bindings remain.",
+    "cumulativeSourceIntegration": {
+      "K2": {
+        "canonical": "thesis/harness/distributed-k2-http-v852/",
+        "review": "distributed-k2-integrated-review-v856/SOL-REVIEW.md",
+        "reviewSHA256": "b1f4c531281240e08ff1f55541d59af3bc9d0c03299916b489875eae2f514faf",
+        "status": "COHERENT_SOURCE_APPROVED_NO_RUNTIME",
+        "privateInputStaged": true
+      },
+      "K3": {
+        "canonical": "thesis/harness/distributed-k3-http-v857/",
+        "review": "distributed-k3-integrated-review-v860/SOL-REVIEW.md",
+        "reviewSHA256": "48ad99a97a326bb4e904642dc2599d98d0995905af4eab40197f447c68a8fdaf",
+        "status": "COHERENT_SOURCE_APPROVED_NO_RUNTIME",
+        "privateInputStaged": true
+      }
+    },
+    "meshSourcePreparation": "K1observed890 sourceAPP891; coherentK2mesh905 sourceAPP906/canonical907; coherentK3mesh911 sourceAPP912/canonical918. All source gates closed. Actual authorizedpeer/session/route/model/config/resource/runtime/ordinarywarmup admission still future. No source re-review or extra pilot queued.",
+    "actualNextSequence": "Ordinary worker progress at07:45; preserve frozen healthy run to natural terminal, once-only finalizer and release. Then fresh selected-host admission/freeze/provider-first/requester-second startup and15realHTTP/auth/nativejoin warmups before900K1HTTP. No other individual baseline/product gate.",
+    "unadmittedProviderManifestDraft": {
+      "path": "distributed-k1-provider-manifest-prep-v973/provider-unadmitted-manifest-v973.json",
+      "sha256": "31e7844b406efba9e47cf9413a9bb768f0214977ada1b456efb35b90430c27e1",
+      "status": "UNADMITTED_NOT_FROZEN_NOT_LAUNCHABLE",
+      "staticExpectedClass": "app.services.tts.providers.piper.PiperTTSProvider",
+      "classIsActualLoadedProof": false,
+      "originalV885Preserved": true,
+      "receipt": "distributed-k1-provider-manifest-prep-v973/PREPARATION-RECEIPT.json",
+      "controllerFrozenPathWritten": false,
+      "runtimeOrNetworkExecuted": false
+    },
+    "laterCumulativeMeshSources": {
+      "K1": {
+        "canonical": "thesis/harness/distributed-k1-mesh-v890/",
+        "status": "COHERENT_SOURCE_APPROVED_NO_RUNTIME",
+        "review": "thesis/validation/distributed-k1-mesh-source-review-v891.md",
+        "reviewSHA256": "045d202d3d4249f7458f2fef377dd2e1d03cbc4c970e4e25090f1c078f470605"
+      },
+      "K2": {
+        "canonical": "thesis/harness/distributed-k2-mesh-v905/",
+        "status": "COHERENT_SOURCE_APPROVED_NO_RUNTIME",
+        "review": "thesis/validation/distributed-k2-mesh-source-review-v906.md",
+        "reviewSHA256": "ea3edbf5fbc011eabd0f1b7e8c447d24824fec01387408e547f5acd9e5b03235"
+      },
+      "K3": {
+        "canonical": "thesis/harness/distributed-k3-mesh-v911/",
+        "status": "COHERENT_SOURCE_APPROVED_NO_RUNTIME",
+        "review": "thesis/validation/distributed-k3-mesh-source-review-v912.md",
+        "reviewSHA256": "be5bb7689bd0968cf371a74a050d42f3e3546e2ff8152b693de86450551d20de"
+      }
+    },
+    "rootLaunchWorksheet": {
+      "path": "distributed-k1-launch-worksheet-v923/LAUNCH.md",
+      "sha256": "7c0ff894d59e2f84aa614351d84fefd657cd5186bb232bdecea64df004411bf9",
+      "status": "OPERATIONAL_INSTRUCTIONS_COMPLETE_NOT_EXECUTED_NOT_FROZEN",
+      "preStart": "freshpredecessor/resource/privatebind/source/config/runtime/modelcanonicalfile receipts and expectedreceiver declaration",
+      "postStart": "actualPID/loadedprovider/nativecorrelated15warmups before900",
+      "newReviewPilotOrAuthorityGate": false,
+      "existingAuthorizedPrivateCustody": "Root chooses fresh0700child within existing project private handoff via originalOrca artifact control; no new security/permission requirement"
+    }
+  },
+  "worker": {
+    "status": "ACTUAL_V737_MEASURING_FROZEN_UNCHANGED",
+    "runtimeLaunched": true,
+    "controllerPid": 3038114,
+    "backendPid": 3038148,
+    "manifestSHA256": "acbdc1d3827502513237220fcc3bf60cc3a007b7dc246b1a4b21b1a0ef8ce5fc",
+    "sourceReviewSHA256": "e677082419ca276af968110a05c482648b2ce2a0a6be6058bb2eff24fac2de13",
+    "soleSemanticFix": "Piper actual/config model+voice-config paths use strict canonical identity; unchanged observer/STT/LLM/correctness/native/CPU/pinned weights/settings",
+    "plannedMeasured": 900,
+    "excludedWarmups": 15,
+    "latestActualObservationAt": "2026-10-16T09:05:52.207961+00:00",
+    "measured": 845,
+    "unattempted": 55,
+    "lastStatus": "completed_correct",
+    "allOwnedPIDsLive": true,
+    "progressReceipt": "worker-padded900-prep-v737/ordinary-progress-v986.json",
+    "estimate": {
+      "basis": "observed progress since V789; not a guaranteed completion time",
+      "secondsPerMeasured": 45.38497367307692,
+      "estimatedNaturalFinish": "2026-10-16T09:50:04.646536+00:00",
+      "originalOuterDeadline": "2026-10-16T14:19:27.058533Z"
+    },
+    "scientificRequirement": "SUPPLEMENTAL under owner30.39; original V491 seal valid. Physical reservation remains until natural terminal."
+  },
+  "browserCounts": {
+    "plannedWarmups": 15,
+    "attemptedWarmups": 15,
+    "passedWarmups": 15,
+    "plannedMeasured": 900,
+    "attemptedMeasured": 900,
+    "passedMeasured": 889,
+    "incorrectMeasured": 11,
+    "failedMeasured": 0,
+    "unattemptedWarmups": 0,
+    "unattemptedMeasured": 0
+  },
+  "browserObservedAt": "2026-10-16T06:52:21.514776Z",
+  "canonicalMethodology": "thesis/methodology/owner-requirements-20261016-05e532e7.md",
+  "canonicalSurfaceRegistry": "thesis/matrix/existing-surface-applicability-20261016-bd06b744.md",
+  "notebookExistingReference": {
+    "monitorMessage": "msg_c3eb11b51957",
+    "source": ".omx/evidence/orca-monitor-20261010/notebook-reference-lookup-20261016T0426.json",
+    "historicalAlias": "ssh:ssh-sem-notebook-personal",
+    "physicalConstraint": "Personal and work distroboxes share physical N; no company boundary crossing",
+    "actualSetupWorktreeControlAndPhysicalBinding": "UNVERIFIED_MISSING_RECEIPT",
+    "absenceClaim": false,
+    "gateToFirstWorkerDesktopK1": false
+  },
+  "browserFinalizationSource": {
+    "canonical": "thesis/harness/browser-ui-v799-finalization-v896/post_terminal.py",
+    "sha256": "a0cfe99fc2d1348ba078b1d11adbdad081921accb3ce8ee094873203ae54f6c9",
+    "review": "browser-post-terminal-review-v897/SOL-REVIEW.md",
+    "reviewSHA256": "22550cd1d1e9a18f4b5b6bc1b8f91dd79d157a15c89760c08a3253b6e047d7b5",
+    "status": "EXECUTED_ONCE941_SAVED_AUDIT_PASS",
+    "futureInvocation": "python3 /tmp/aurora-root-browser799-post-terminal-v896.py --execute-finalization",
+    "rule": "Once only after actual natural terminal/original controller+everyownedPID absence/free locks; no signals, cleanup or rerun. Actual archive+80MB worker-custody reserve before transfer.",
+    "personalStageReceipt": "v898-stage-browser-finalizer-RESULT.json",
+    "personalStagePath": "/tmp/aurora-root-browser799-post-terminal-v896.py",
+    "personalStageSha256": "a0cfe99fc2d1348ba078b1d11adbdad081921accb3ce8ee094873203ae54f6c9",
+    "auditExecuted": true,
+    "actualReceipt": "v941-browser-once-finalize-RESULT.json"
+  },
+  "desktopSourceCapability": {
+    "canonical": "thesis/matrix/desktop-surface-source-capabilities-v884.md",
+    "sha256": "6808510a606c36509fcc7e78d2abad18ffedaadf1c33e0198966a663e2659912",
+    "status": "SOURCE_CONDITIONAL_NOT_RUNTIME_ADMITTED",
+    "sourceFacts": [
+      "desktop focused PTT is native CPAL, no controlled-WAV argument on inspected public start",
+      "finite typed SDK Transcribe/ExternalUserInput/Synthesize exists through actual Tauri transport; owned app/action missing",
+      "native STT default realtime unless accurate selected; Gateway TTS uses server default and native16k conversion",
+      "native mesh STT/TTS does not itself establish exact-peer Assistant mesh hop"
+    ],
+    "noNewConditionOrCoverageWaiver": true,
+    "gateToFirstS_N_HTTP": false
+  },
+  "updatedAt": "2026-10-16T10:12:33.332816+00:00",
+  "browserStatus": "SEALED_ONCE_900_ATTEMPTED_889_CORRECT_11_INCORRECT",
+  "browserReport": "../browser-normal-ui-padded900-v799/REPORT.md",
+  "desktopSourceAction": {
+    "canonical": "thesis/harness/desktop-app-file-audio-v955",
+    "review": "thesis/validation/desktop-app-file-audio-source-review-v957.md",
+    "status": "APP_SOURCE_INTEGRATED_NOT_TYPECHECKED_NOT_RUNTIME",
+    "gateToFirstHTTP": false,
+    "integration": "thesis/harness/desktop-app-file-audio-v955/INTEGRATION-v961.md",
+    "firstHTTPGate": false,
+    "readinessReceipt": "thesis/validation/desktop-app-build-readiness-v964.json",
+    "personalAppSourceAligned": false,
+    "sourceRevisionLookup": "thesis/validation/desktop-current-revision-lookup-v982.json",
+    "sourceSnapshotDeliveryRequired": true
+  },
+  "actualRuntimeStatus": "TERMINAL_FIRST_WARMUP_REMOTE_TRANSPORT_ERROR_ZERO_MEASURED",
+  "actualAttemptReport": "../distributed-k1-http-v994/REPORT.md",
+  "actualWorkerSeal": "../worker-cpu-padded-local900-v737/verification.json",
+  "actualFirstCondition": {
+    "providerStartedAt": "2026-10-16T09:47:18.317042Z",
+    "requesterStartedAt": "2026-10-16T09:48:52.941804Z",
+    "requesterEndedAt": "2026-10-16T09:50:15.846352Z",
+    "excludedWarmupsAttempted": 1,
+    "excludedWarmupsFailed": 1,
+    "measuredAttempted": 0,
+    "measuredUnattempted": 900,
+    "exactMissingCapability": "existing approved worker-reachable Gateway origin or supported existing SSH/Orca TCP forward; current direct TCP refused",
+    "sourceReviewOrIndividualBaselineGateAdded": false
+  }
+}

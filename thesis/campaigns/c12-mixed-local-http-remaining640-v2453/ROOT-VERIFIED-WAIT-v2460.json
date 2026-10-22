@@ -1,0 +1,90 @@
+{
+  "at": "2026-10-22T12:33:10.667040+00:00",
+  "requester": {
+    "pid": 462924,
+    "startTicks": 144596371,
+    "state": "S"
+  },
+  "current": {
+    "at": "2026-10-22T12:32:53.453203+00:00",
+    "companion": {
+      "measured": {
+        "attempted": 101,
+        "correct": 101,
+        "failed": 0,
+        "harnessErrorsIncludedInFailed": 0,
+        "incorrectIncludedInFailed": 0,
+        "offered": 101,
+        "planned": 640,
+        "timeouts": 0,
+        "unstarted": 539
+      },
+      "warmup": {
+        "attempted": 15,
+        "correct": 15,
+        "failed": 0,
+        "harnessErrorsIncludedInFailed": 0,
+        "incorrectIncludedInFailed": 0,
+        "offered": 15,
+        "planned": 15,
+        "timeouts": 0,
+        "unstarted": 0
+      }
+    },
+    "completePairedCapsules": 116,
+    "elapsedSeconds": 4863.214185344,
+    "lastIndex": 101,
+    "lastNativeParent": "f616d98719c0f71b15706218df75c6b3",
+    "lastOrdinal": 116,
+    "manifestSha256": "3bfca19d2dd0a9eec3981eae256168a5badd9ac2bb58a270ff8a55df1d986cce",
+    "phase": "measured",
+    "pid": 462924,
+    "primary": {
+      "measured": {
+        "attempted": 101,
+        "correct": 101,
+        "failed": 0,
+        "harnessErrorsIncludedInFailed": 0,
+        "incorrectIncludedInFailed": 0,
+        "offered": 101,
+        "planned": 640,
+        "timeouts": 0,
+        "unstarted": 539
+      },
+      "warmup": {
+        "attempted": 15,
+        "correct": 15,
+        "failed": 0,
+        "harnessErrorsIncludedInFailed": 0,
+        "incorrectIncludedInFailed": 0,
+        "offered": 15,
+        "planned": 15,
+        "timeouts": 0,
+        "unstarted": 0
+      }
+    },
+    "status": "running"
+  },
+  "priorRetainedMeasuredPerStream": 260,
+  "combinedCorrectPerStream": {
+    "primary": 361,
+    "companion": 361
+  },
+  "terminalPresent": false,
+  "activeErrorPresent": false,
+  "freeBytes": 2308984832,
+  "nextMaximumObservationUtc": "2026-10-22T12:38:10.667040+00:00",
+  "mainSourceSettingsCountsClocksFloorChanged": false,
+  "turnClassification": "progress: one-pass bounded incremental custody eliminated repeated old-file hashing; actual stat-only storage projection exposed current/future condition capacity risk; future unlaunched admission now requires whole-condition raw reserve",
+  "incrementalCustodyTool": "thesis/harness/c12_control_custody_incremental_v2460.py",
+  "oldVerifiedFilesRehashed": 0,
+  "storageProjection": "STORAGE-OBSERVATION-v2460.json; linear remaining shortfall39636356B, not a guaranteed capacity forecast",
+  "exactUnusedWebpackCachePermission": "PENDING, no deletion or duplicate question",
+  "initialOrcaEscalation": "REJECTED worker_identity_changed; no acceptance/adoption; ordinary supported status subsequently accepted",
+  "phone": "Existing worker has reported renewed owner6h window from12:21:09.788710 to18:21:09.788710; Root no device/Notebook operations; no remote qualification inferred",
+  "latestMethodology": {
+    "bytes": 918313,
+    "sha256": "df1ee91616e2d02aa0c29aa4e76f9edae298b676154ae25315cfac997370f56d"
+  },
+  "newWorkersTestsModelsOrAuthChanges": 0
+}

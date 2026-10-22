@@ -1,0 +1,22 @@
+{
+  "at": "2026-10-18T14:36:58.923647+00:00",
+  "status": "RAW_SHELL_CHANNEL_ACTUALLY_VERIFIED_CALLER_CORRECTED_NO_NEW_MODEL_REQUESTS",
+  "priorMetadataPromptRequest": "cdac7533-7309-4015-be6f-69bae4a8f0ee",
+  "priorPromptOutcome": "UNKNOWN_NOT_RESENT_OR_SETTLED",
+  "newRawCapabilityReceipt": "provider-readmission/raw-channel-v1522/RESULT.json",
+  "sources": [
+    {
+      "path": "thesis/harness/orca_control_raw_read_v1523.py",
+      "bytes": 2691,
+      "sha256": "c3536841f9d16b0a43d21f98f769e9f091ebe402ed12fadb5d1cb77a494481a6"
+    },
+    {
+      "path": "thesis/harness/k3_warmup_finalize_v1513.py",
+      "bytes": 7305,
+      "sha256": "1b4116ea46226bfc96cf5c56190662caf3070fc93c05f59465d332e5843a9488"
+    }
+  ],
+  "modelCalls": 0,
+  "SutScientificSourceChanged": false,
+  "credentialsOrPermissionsChanged": false
+}

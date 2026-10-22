@@ -1,0 +1,492 @@
+{
+  "at": "2026-10-20T04:45:50.210617+00:00",
+  "publicCli": "/home/developer/.orca-relay/bin/orca",
+  "exitCode": 0,
+  "sourceSha256": "3b0f038b98224545d3a53339b1a37fb1ef4ae82c1ede38e7a14f3cc7f25e2574",
+  "sourceBytes": 237920,
+  "priorAliasRead": {
+    "command": "orca adb use --help",
+    "result": "Unknown command: adb use",
+    "scope": "Installed normal CLI; not evidence that emulator is absent"
+  },
+  "selected": [
+    {
+      "path": ".commands[62]",
+      "item": {
+        "command": "emulator attach",
+        "path": [
+          "emulator",
+          "attach"
+        ],
+        "aliases": [],
+        "argumentMode": "parsed",
+        "summary": "Attach/start helper for a device and make it active for the worktree",
+        "usage": "orca emulator attach [device] [--worktree <selector>] [--focus] [--json]",
+        "flags": [
+          "help",
+          "json",
+          "pairing-code",
+          "environment",
+          "worktree",
+          "focus",
+          "device"
+        ],
+        "positionalArgs": [
+          "device"
+        ],
+        "examples": [],
+        "notes": []
+      }
+    },
+    {
+      "path": ".commands[63]",
+      "item": {
+        "command": "emulator ax",
+        "path": [
+          "emulator",
+          "ax"
+        ],
+        "aliases": [],
+        "argumentMode": "parsed",
+        "summary": "Dump the accessibility tree (Android uiautomator; iOS serve-sim AX, frames 0..1)",
+        "usage": "orca emulator ax [--device <id>] [--worktree <selector>] [--json]",
+        "flags": [
+          "help",
+          "json",
+          "pairing-code",
+          "environment",
+          "device",
+          "emulator",
+          "worktree"
+        ],
+        "positionalArgs": [],
+        "examples": [],
+        "notes": []
+      }
+    },
+    {
+      "path": ".commands[64]",
+      "item": {
+        "command": "emulator button",
+        "path": [
+          "emulator",
+          "button"
+        ],
+        "aliases": [],
+        "argumentMode": "parsed",
+        "summary": "Hardware button (home, side_button, etc.)",
+        "usage": "orca emulator button <name> [--device <id>] [--worktree <selector>] [--json]",
+        "flags": [
+          "help",
+          "json",
+          "pairing-code",
+          "environment",
+          "device",
+          "emulator",
+          "worktree",
+          "name"
+        ],
+        "positionalArgs": [
+          "name"
+        ],
+        "examples": [],
+        "notes": []
+      }
+    },
+    {
+      "path": ".commands[65]",
+      "item": {
+        "command": "emulator devices",
+        "path": [
+          "emulator",
+          "devices"
+        ],
+        "aliases": [],
+        "argumentMode": "parsed",
+        "summary": "List local devices and approved Android devices on connected SSH hosts",
+        "usage": "orca emulator devices [--local-only] [--worktree <selector>] [--json]",
+        "flags": [
+          "help",
+          "json",
+          "pairing-code",
+          "environment",
+          "worktree",
+          "local-only"
+        ],
+        "positionalArgs": [],
+        "examples": [],
+        "notes": []
+      }
+    },
+    {
+      "path": ".commands[66]",
+      "item": {
+        "command": "emulator exec",
+        "path": [
+          "emulator",
+          "exec"
+        ],
+        "aliases": [],
+        "argumentMode": "parsed",
+        "summary": "Raw passthrough (e.g. orca emulator exec --command \"tap 0.5 0.7\" or \"ca-debug blended on\")",
+        "usage": "orca emulator exec --command <cmd> [--device <id>] [--worktree <selector>] [--json]",
+        "flags": [
+          "help",
+          "json",
+          "pairing-code",
+          "environment",
+          "command",
+          "device",
+          "emulator",
+          "worktree"
+        ],
+        "positionalArgs": [],
+        "examples": [],
+        "notes": []
+      }
+    },
+    {
+      "path": ".commands[67]",
+      "item": {
+        "command": "emulator gesture",
+        "path": [
+          "emulator",
+          "gesture"
+        ],
+        "aliases": [],
+        "argumentMode": "parsed",
+        "summary": "Send a multi-point gesture sequence",
+        "usage": "orca emulator gesture '<json>' [--device <id>] [--worktree <selector>] [--json]",
+        "flags": [
+          "help",
+          "json",
+          "pairing-code",
+          "environment",
+          "points",
+          "device",
+          "emulator",
+          "worktree"
+        ],
+        "positionalArgs": [
+          "points"
+        ],
+        "examples": [],
+        "notes": []
+      }
+    },
+    {
+      "path": ".commands[68]",
+      "item": {
+        "command": "emulator install",
+        "path": [
+          "emulator",
+          "install"
+        ],
+        "aliases": [],
+        "argumentMode": "parsed",
+        "summary": "Install an APK onto the target Android device",
+        "usage": "orca emulator install <apkPath> [--reinstall] [--device <id>] [--json]",
+        "flags": [
+          "help",
+          "json",
+          "pairing-code",
+          "environment",
+          "device",
+          "emulator",
+          "worktree",
+          "path",
+          "reinstall"
+        ],
+        "positionalArgs": [
+          "path"
+        ],
+        "examples": [],
+        "notes": []
+      }
+    },
+    {
+      "path": ".commands[69]",
+      "item": {
+        "command": "emulator kill",
+        "path": [
+          "emulator",
+          "kill"
+        ],
+        "aliases": [],
+        "argumentMode": "parsed",
+        "summary": "Stop helper for device",
+        "usage": "orca emulator kill [--device <id>] [--worktree <selector>] [--json]",
+        "flags": [
+          "help",
+          "json",
+          "pairing-code",
+          "environment",
+          "device",
+          "emulator",
+          "worktree"
+        ],
+        "positionalArgs": [],
+        "examples": [],
+        "notes": []
+      }
+    },
+    {
+      "path": ".commands[70]",
+      "item": {
+        "command": "emulator launch",
+        "path": [
+          "emulator",
+          "launch"
+        ],
+        "aliases": [],
+        "argumentMode": "parsed",
+        "summary": "Launch an Android app by package (and optional activity)",
+        "usage": "orca emulator launch <package> [--activity <name>] [--device <id>] [--json]",
+        "flags": [
+          "help",
+          "json",
+          "pairing-code",
+          "environment",
+          "device",
+          "emulator",
+          "worktree",
+          "package",
+          "activity"
+        ],
+        "positionalArgs": [
+          "package"
+        ],
+        "examples": [],
+        "notes": []
+      }
+    },
+    {
+      "path": ".commands[71]",
+      "item": {
+        "command": "emulator list",
+        "path": [
+          "emulator",
+          "list"
+        ],
+        "aliases": [],
+        "argumentMode": "parsed",
+        "summary": "List available/running emulators (Orca-managed + raw serve-sim)",
+        "usage": "orca emulator list [--worktree <selector>] [--json]",
+        "flags": [
+          "help",
+          "json",
+          "pairing-code",
+          "environment",
+          "worktree"
+        ],
+        "positionalArgs": [],
+        "examples": [],
+        "notes": []
+      }
+    },
+    {
+      "path": ".commands[72]",
+      "item": {
+        "command": "emulator logcat",
+        "path": [
+          "emulator",
+          "logcat"
+        ],
+        "aliases": [],
+        "argumentMode": "parsed",
+        "summary": "Capture a one-shot logcat dump from the Android device",
+        "usage": "orca emulator logcat [--lines <n>] [--device <id>] [--worktree <selector>] [--json]",
+        "flags": [
+          "help",
+          "json",
+          "pairing-code",
+          "environment",
+          "device",
+          "emulator",
+          "worktree",
+          "lines"
+        ],
+        "positionalArgs": [],
+        "examples": [],
+        "notes": []
+      }
+    },
+    {
+      "path": ".commands[73]",
+      "item": {
+        "command": "emulator permissions",
+        "path": [
+          "emulator",
+          "permissions"
+        ],
+        "aliases": [],
+        "argumentMode": "parsed",
+        "summary": "Grant/revoke an Android runtime permission, or reset all runtime grants",
+        "usage": "orca emulator permissions <grant|revoke> <package> <permission> [--device <id>] [--json]\n       orca emulator permissions reset [--device <id>] [--json]",
+        "flags": [
+          "help",
+          "json",
+          "pairing-code",
+          "environment",
+          "device",
+          "emulator",
+          "worktree",
+          "op",
+          "package",
+          "permission"
+        ],
+        "positionalArgs": [
+          "op",
+          "package",
+          "permission"
+        ],
+        "examples": [],
+        "notes": []
+      }
+    },
+    {
+      "path": ".commands[74]",
+      "item": {
+        "command": "emulator rotate",
+        "path": [
+          "emulator",
+          "rotate"
+        ],
+        "aliases": [],
+        "argumentMode": "parsed",
+        "summary": "Rotate device",
+        "usage": "orca emulator rotate <orientation> [--device <id>] [--worktree <selector>] [--json]",
+        "flags": [
+          "help",
+          "json",
+          "pairing-code",
+          "environment",
+          "device",
+          "emulator",
+          "worktree",
+          "orientation"
+        ],
+        "positionalArgs": [
+          "orientation"
+        ],
+        "examples": [],
+        "notes": []
+      }
+    },
+    {
+      "path": ".commands[75]",
+      "item": {
+        "command": "emulator screenshot",
+        "path": [
+          "emulator",
+          "screenshot"
+        ],
+        "aliases": [],
+        "argumentMode": "parsed",
+        "summary": "Capture a device screenshot through its owning host",
+        "usage": "orca emulator screenshot [--device <id>] [--worktree <selector>] --json",
+        "flags": [
+          "help",
+          "json",
+          "pairing-code",
+          "environment",
+          "device",
+          "emulator",
+          "worktree"
+        ],
+        "positionalArgs": [],
+        "examples": [],
+        "notes": []
+      }
+    },
+    {
+      "path": ".commands[76]",
+      "item": {
+        "command": "emulator shutdown",
+        "path": [
+          "emulator",
+          "shutdown"
+        ],
+        "aliases": [],
+        "argumentMode": "parsed",
+        "summary": "Stop helper and shut down the simulator device",
+        "usage": "orca emulator shutdown [--device <id>] [--emulator <id>] [--worktree <selector>] [--json]",
+        "flags": [
+          "help",
+          "json",
+          "pairing-code",
+          "environment",
+          "device",
+          "emulator",
+          "worktree"
+        ],
+        "positionalArgs": [],
+        "examples": [],
+        "notes": []
+      }
+    },
+    {
+      "path": ".commands[77]",
+      "item": {
+        "command": "emulator tap",
+        "path": [
+          "emulator",
+          "tap"
+        ],
+        "aliases": [],
+        "argumentMode": "parsed",
+        "summary": "Tap at normalized 0..1 coords (preferred for single taps)",
+        "usage": "orca emulator tap <x> <y> [--device <id>] [--worktree <selector>] [--json]",
+        "flags": [
+          "help",
+          "json",
+          "pairing-code",
+          "environment",
+          "device",
+          "emulator",
+          "worktree",
+          "x",
+          "y"
+        ],
+        "positionalArgs": [
+          "x",
+          "y"
+        ],
+        "examples": [],
+        "notes": []
+      }
+    },
+    {
+      "path": ".commands[78]",
+      "item": {
+        "command": "emulator type",
+        "path": [
+          "emulator",
+          "type"
+        ],
+        "aliases": [],
+        "argumentMode": "parsed",
+        "summary": "Type text (US ASCII only)",
+        "usage": "orca emulator type <text> [--device <id>] [--worktree <selector>] [--json]",
+        "flags": [
+          "help",
+          "json",
+          "pairing-code",
+          "environment",
+          "text",
+          "device",
+          "emulator",
+          "worktree"
+        ],
+        "positionalArgs": [
+          "text"
+        ],
+        "examples": [],
+        "notes": []
+      }
+    }
+  ],
+  "metadataOnly": true,
+  "deviceTraffic": 0,
+  "restarts": 0
+}

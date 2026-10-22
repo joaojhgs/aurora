@@ -1,0 +1,47 @@
+{
+  "at": "2026-10-14T20:08:27.911637+00:00",
+  "host": "personal.skyron-server",
+  "correct_STT_config_path": "services.stt.transcription",
+  "STT_selected": {
+    "enabled": true,
+    "model": null,
+    "model_size": null,
+    "realtime_model": {
+      "enabled": true,
+      "model_size": "tiny",
+      "model_size_or_path": null,
+      "device": "cpu",
+      "compute_type": "int8"
+    },
+    "accurate_model": {
+      "enabled": true,
+      "model_size": "base",
+      "model_size_or_path": null,
+      "device": "cpu",
+      "compute_type": "int8"
+    }
+  },
+  "hf_hub_entries": [],
+  "hf_hub_limit": 20,
+  "voice_README": "# Aurora Voice Model Workspace\n\nThis directory is a local workspace only. Aurora does not ship wake word,\nspeech-to-text, VAD, or TTS model weights from this repository.\n\nProduction speech setup is catalog-first:\n\n1. Aurora shows the available speech packs as metadata.\n2. The user chooses the exact pack, voice, language, or wake phrase they want.\n3. Aurora downloads the selected files from the pinned source, verifies the\n   declared hashes, and caches them in the user's data directory.\n4. The cached files stay local and are reused until the user removes them or\n   chooses a replacement.\n\nThe repository keeps this directory ignored so downloaded model files, voice\narchives, generated profiles, and private speech state do not enter version\ncontrol.\n\n## Advanced Local Overrides\n\nDevelopers can still point Aurora at a user-managed local file when testing a\ncustom ONNX wake word model:\n\n```bash\nAURORA_WAKE_WORD_MODEL_PATH=/absolute/path/to/custom-wakeword.onnx\n```\n\nThat override is compatibility-only. The release path for end users is the\ncatalog and on-demand cache flow across desktop, web, Android, and iOS roles.\n",
+  "selected_piper_config_metadata": {
+    "audio": {
+      "sample_rate": 22050,
+      "quality": "medium"
+    },
+    "language": {
+      "code": "en_US",
+      "family": "en",
+      "region": "US",
+      "name_native": "English",
+      "name_english": "English",
+      "country_english": "United States"
+    },
+    "dataset": "lessac",
+    "num_speakers": 1,
+    "piper_version": "1.0.0"
+  },
+  "elapsed_seconds": 0.02378897403832525,
+  "no_binary_read_or_model_audio_calls": true,
+  "nextCursor": "1128"
+}

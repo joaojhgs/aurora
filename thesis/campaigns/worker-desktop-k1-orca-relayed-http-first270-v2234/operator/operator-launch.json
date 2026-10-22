@@ -1,0 +1,35 @@
+{
+  "auxiliary": {
+    "requesterCopier": {
+      "pid": 3751415,
+      "startTicks": 137933513,
+      "state": "R"
+    },
+    "warmupFinalizer": {
+      "pid": 3751416,
+      "startTicks": 137933514,
+      "state": "R"
+    }
+  },
+  "requester": {
+    "at": "2026-10-21T16:41:14.532364+00:00",
+    "controllerPid": 3751414,
+    "controllerStartTicks": 137933512,
+    "excludedWarmups": 15,
+    "firstGlobalIndex": 181,
+    "frozenManifestSha256": "11bbea3fc1e45e65da1ecb7b501aee77739870cb087d792e5bc5197f9b1027be",
+    "lastGlobalIndex": 450,
+    "measuredObserved": 0,
+    "newWorker": false,
+    "plannedMeasured": 270,
+    "providerReceiver": {
+      "pid": 1440196,
+      "startTicks": 35427408,
+      "state": "S"
+    },
+    "sourceInventorySha256": "000202cdddb9803d503fc44f8aaf58eb469475890751a310193418330aa79937",
+    "sourceReadyIsNotMeasurement": true,
+    "status": "HTTP_FIRST270_REQUESTER_CONTROLLER_STARTED_NATIVE_ADMISSION_PENDING",
+    "warmupsObserved": 0
+  }
+}

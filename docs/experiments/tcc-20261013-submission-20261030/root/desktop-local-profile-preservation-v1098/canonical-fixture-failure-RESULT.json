@@ -1,0 +1,19 @@
+{
+  "at": "2026-10-16T15:36:34.806906+00:00",
+  "startedAt": "2026-10-16T15:36:22.775886+00:00",
+  "command": [
+    "pnpm",
+    "--filter",
+    "@aurora/tauri-ui",
+    "exec",
+    "vitest",
+    "run",
+    "--environment",
+    "jsdom",
+    "--no-file-parallelism",
+    "src/offline-profile-main.test.ts"
+  ],
+  "exitCode": 1,
+  "error": null,
+  "scope": "Affected main-profile reuse source/test only; no unchanged shared/native suites or SUT/model requests"
+}

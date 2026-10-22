@@ -1,0 +1,7 @@
+{
+  "scope": "Initial copy-only guard, no SUT/source mutation",
+  "failure": "Whitelist omitted actual approved AGENTS.md and other inventory-listed source/assets",
+  "copiedBeforeFailure": 6,
+  "copiedBytesBeforeFailure": 10877,
+  "recovery": "Resume exact inventory; verify and retain existing copied bytes, never delete/overwrite. Approved inventory, paths, size/hash/privacy checks remain mandatory."
+}

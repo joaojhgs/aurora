@@ -1,0 +1,12 @@
+{
+  "controlDeadline": "2026-10-22T02:00:18.572962+00:00",
+  "explicitNewline": true,
+  "host": "ssh:ssh-sem-notebook-personal",
+  "incarnation": "328cd72f-c7ea-49ff-a2db-b9275b085037",
+  "remoteResult": "/home/developer/projects/aurora/thesis/phone-notebook/20261020/evidence/sync-final-checkpoint-0-20261022T015018.json",
+  "rootAdmissionMessage": "owner-final-source-asset-actual-readiness-dual-custody-only",
+  "script": "scripts/sync-final-checkpoint-0.py",
+  "scriptSha256": "72cb6155e8c3bf161dec0fab896e65a8bfbdbb4f2e657f28eccd15b91bccfad3",
+  "singleSend": true,
+  "terminal": "term_a2ed5feb-7c92-48e4-bd88-d1b0e6737989"
+}

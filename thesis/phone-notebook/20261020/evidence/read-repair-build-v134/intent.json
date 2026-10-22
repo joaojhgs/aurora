@@ -1,0 +1,12 @@
+{
+  "controlDeadline": "2026-10-22T05:25:00Z",
+  "explicitNewline": true,
+  "host": "ssh:ssh-sem-notebook-personal",
+  "incarnation": "328cd72f-c7ea-49ff-a2db-b9275b085037",
+  "remoteResult": "/home/developer/projects/aurora/thesis/phone-notebook/20261020/evidence/read-repair-build-v134.json",
+  "rootAdmissionMessage": "APK packaging completion check; same bounded job no duplicate",
+  "script": "scripts/read_repair_build_v127.py",
+  "scriptSha256": "0af7638aec11796a93dc669cd6af4d368da7e51e9f975dac9b2a2b06f7918e14",
+  "singleSend": true,
+  "terminal": "term_a2ed5feb-7c92-48e4-bd88-d1b0e6737989"
+}

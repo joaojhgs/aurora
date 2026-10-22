@@ -1,0 +1,79 @@
+{
+  "observedAt": "2026-10-18T06:14:58.529995+00:00",
+  "run": "run_e6054e76e9fc",
+  "task": "task_d7ea336050cf",
+  "dispatch": "ctx_37b4d0a3c14f",
+  "source": "thesis/campaigns/worker-desktop-k2-orca-relayed-http-v1264/attempts/attempt-0813-measured.jsonl",
+  "sourceBytes": 4881,
+  "sourceSha256": "6ab5ea9d968b0086c2de5182588e44fd4578cc37ebe55f6854f6a711b4e59ca2",
+  "case": {
+    "ordinal": 813,
+    "phase": "measured",
+    "phase_index": 798,
+    "status": "failed",
+    "failure": {
+      "code": "assistant_reply_predicate_failed",
+      "stage": "assistant"
+    },
+    "partial_failure_class": "quality_predicate_failed_before_full_flow_completion",
+    "partial_quality_incorrect": true,
+    "correctness": {
+      "assistant_reply_matches_expected_words": false,
+      "transcript_matches_reference_words": true
+    },
+    "flow_duration_ms": 21189.716281,
+    "timeout": false,
+    "within_request_deadline": true,
+    "correlation": {
+      "correlation_id": "audio-campaign-7eced9edcea444e5a4891fbf17fbdf5c",
+      "request_id": "audio-request-d70e7ebd60c4489a8b7f46945276ee02",
+      "session_id": "audio-session-60e97601e74c4117a62e38055f261189"
+    },
+    "stageOutcomes": {
+      "assistant": {
+        "status": "completed",
+        "duration_ms": 12106.888462,
+        "http_status": 200,
+        "server_tts_status": "skipped",
+        "metadata_error": false,
+        "correlation_id_matches": true,
+        "request_id_matches": true
+      },
+      "stt": {
+        "status": "completed",
+        "duration_ms": 9082.142813
+      }
+    }
+  },
+  "campaignSnapshot": {
+    "at": "2026-10-18T06:13:48.420195+00:00",
+    "measuredAttempted": 798,
+    "plannedMeasured": 900,
+    "warmups": 15,
+    "caseFiles": 813,
+    "copierErrors": [],
+    "pendingStatic": [],
+    "status": "running"
+  },
+  "processObservation": {
+    "at": "2026-10-18T06:14:17.479159+00:00",
+    "controller": [
+      588011,
+      105853078,
+      "S"
+    ],
+    "backend": [
+      588053,
+      105853326,
+      "R"
+    ],
+    "copier": [
+      588276,
+      105855021,
+      "S"
+    ],
+    "allStartTicksMatched": true
+  },
+  "interpretation": "Observed assistant quality predicate failure with HTTP200 after completed STT, no raw timeout flag, server TTS skipped; not evidence of transport outage or model-quality root cause. Preserve failed raw case and denominator; frozen run continues unchanged. No restart, top-up, replay, new SUT call, fixture/model/settings change or baseline repeat.",
+  "next": "Root reconcile saved failure at next scheduled checkpoint and retain in terminal analysis; no new test/investigation matrix."
+}

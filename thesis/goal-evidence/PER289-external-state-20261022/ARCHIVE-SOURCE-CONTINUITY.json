@@ -1,0 +1,23 @@
+{
+  "at": "2026-10-22T12:06:32.497104+00:00",
+  "readOnly": true,
+  "archiveHeadAncestorOfCurrentProductPr": true,
+  "sourceComparisons": [
+    {
+      "label": "archive_to_current_pr",
+      "from": "14df693f0d3f00aa7468ec7be8f64438fec014da",
+      "to": "c0f4c0013cea5bb11ef81297194d0dc142a47bc4",
+      "ownedArchivePaths": 18,
+      "changedPaths": []
+    },
+    {
+      "label": "current_pr_to_root",
+      "from": "c0f4c0013cea5bb11ef81297194d0dc142a47bc4",
+      "to": "ebde3a8acf6315f920d03593845f17a1fc65a733",
+      "ownedArchivePaths": 18,
+      "changedPaths": []
+    }
+  ],
+  "scope": "18 exact archive paths from prepared-per289.json; config/native-policy mapping evaluated separately",
+  "newTestsOrReviews": 0
+}

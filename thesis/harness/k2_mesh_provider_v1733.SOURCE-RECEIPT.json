@@ -1,0 +1,26 @@
+{
+  "at": "2026-10-20T05:53:57.441770+00:00",
+  "status": "SOURCE_ONLY_NOT_LAUNCHED",
+  "source": "thesis/harness/k1_mesh_provider_v1710.py",
+  "sourceSha256": "7e924a34e2c4b2b75f0d8dab29deb81be9b5d113e42b2035a5b4df37bd2f9ed5",
+  "path": "thesis/harness/k2_mesh_provider_v1733.py",
+  "sha256": "8cf12851d4a56cc84daa72f3de429cae2126c1a03123d674b5c997bffefd8bcd",
+  "diff": "thesis/harness/k2_mesh_provider_v1733.diff",
+  "diffSha256": "4a9840ef242bc7b8b4a099f42c7ea88f7dcea21507845f8e9216d386fc2d0d09",
+  "syntax": "AST_PASS",
+  "modelCalls": 0,
+  "runtimeImports": 0,
+  "networkCalls": 0,
+  "builds": 0,
+  "newWorker": false,
+  "activeFilesModified": false,
+  "newManifestRequired": true,
+  "loadedGpuProof": "Pending actual new process: same configured100, observed25/25 Vulkan via ordinary warmups; declaration is not proof",
+  "serialGate": "Current K1 natural terminal and raw custody/released resources precede new provider start",
+  "reviewStatus": "BOUNDED_SOURCE_DELTA_PASS_NOT_RUNTIME_ADMITTED",
+  "review": {
+    "path": "thesis/harness/distributed-k2-mesh-v1731/review/P2P-K2-V1733-PROVIDER-DELTA-REVIEW-20261020T0559.md",
+    "bytes": 3949,
+    "sha256": "57e00d5169d0955eef0ff937ccacbf560b392488bc9d483d7aeebe34db90bcd8"
+  }
+}

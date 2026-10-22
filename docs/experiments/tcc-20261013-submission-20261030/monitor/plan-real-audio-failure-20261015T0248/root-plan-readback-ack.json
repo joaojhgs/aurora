@@ -1,0 +1,17 @@
+{
+  "message": "msg_420ff8b5ded5",
+  "at": "2026-10-15T02:52:10Z",
+  "delivery": "delivery_cf97eb980cb6",
+  "from": "term_6a00d9ee-792a-4daf-8578-236290e33108",
+  "section": "30.14",
+  "lines": 1643,
+  "newLinesRead": 23,
+  "sha256": "47272b6b3acd9da36bbbbe2665d2e47d09224a7d280f7d357d3a737bc6789019",
+  "prior1620PrefixUnchanged": true,
+  "priorSHA256": "3f1be78afb16c9fb7ecd2fed197ff3ec0cf5725af971037d1d0ba79b39370e8b",
+  "diffSHA256": "bf23b0c0609186fb601abd92dfa235406bddc194d292a9f2c015dbfc6a9472fb",
+  "fullReceiptRead": true,
+  "fullDiffRead": true,
+  "ownerCalibrationDecisionPending": true,
+  "executionAllowedByACK": false
+}

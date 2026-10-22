@@ -1,0 +1,9 @@
+# Desktop storage intervention resolved
+
+Root answered existing question msg_6e543ae3a58c in msg_ffc37d754cd0: continue the same V485 controller2910571/child2910591 under its unchanged one-second minimum-free-space guard. The measured runtime-volume free space was506,871,808bytes; the existing guard is100,000,000bytes. The conservative observed-growth projection budgets302,338,352additionalbytes and leaves204,533,456bytes, or104,533,456bytes above that guard. Unrelated future writes remain a stated uncertainty. No cleanup, download, build, extra model request, source/input/model/guard change or interruption was needed.
+
+The source JSON and both listed package members were fully read and their hashes verified once. Evidence: root/live-storage-headroom-v495/desktop-v485-storage-budget.json SHA22f6ecb1fc8478d20b3d1d1cbc843bfbf8e3f90efef646da43775e122eec2873; outer manifest SHA4c69ba1129a63f7793ad1c0a2cacc75de6969a46d9b4eda4061e16502708a15c. Projection is planning evidence, not a guarantee or a reason to modify an active condition.
+
+At04:13:56.172342Z desktop recorded163/900measured requests after15excludedwarmups; the latest outcome was correct. Only the earlier129/129 snapshot established all-outcome counts. Do not relabel163as163correct or compute final percentiles early. CPU remains a separate running cohort. Root will use existing progress/resource checkpoints and aggregate complete raw outcomes after natural termination. No all-surface/full-matrix or phase2 acceptance follows.
+
+The same original Root and monitor remain in Runrun_e6054e76e9fc, Tasktask_d7ea336050cf, Dispatchctx_37b4d0a3c14f. Both native goals remain active. The1720-line authoritative plan received exact Root full-read/hash/prefix/diff acknowledgement msg_928d2d7b5383. Full required individual audio and surface seals remain incomplete and measured cross-device traffic remains held.

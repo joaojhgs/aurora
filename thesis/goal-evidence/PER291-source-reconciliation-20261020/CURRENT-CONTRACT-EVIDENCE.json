@@ -1,0 +1,244 @@
+{
+  "at": "2026-10-20T06:40:18.474681+00:00",
+  "issue": "PER-291",
+  "nativeGoal": "01a112a5-d6bb-74e2-bf7c-ace73cb513b5",
+  "status": "LOCAL_CORRECTED_PLAN_PROPOSAL_NOT_TASK_ACCEPTANCE",
+  "acceptedPlanSha256": "7eaf5ef7568684d104fafe4a34b0b05894abb65e0af7feade288c6e58678355a",
+  "proposalSha256": "f13a55481818ebcb4900d3676164f2562f6c5a9fbcbcf947cddc4375dcd8c9c8",
+  "diffSha256": "337e1656ecb3409b41643c19fd0be52da925987db4ed4da0e9bfde26dd92dbb7",
+  "sourceHead": "cbac78fe3fb2b73100bfaa9dc198fb6bff689840",
+  "sources": [
+    {
+      "path": ".omx/task-intake/PER-291.md",
+      "bytes": 3364,
+      "priorReviewedSha256": "0070fab1323899d0de89504115b0f4c1a55f80e202368e244d47d25946433349",
+      "currentSha256": "0070fab1323899d0de89504115b0f4c1a55f80e202368e244d47d25946433349",
+      "unchanged": true
+    },
+    {
+      "path": "packages/aurora-sdk/src/local-data/records.zod.ts",
+      "bytes": 11933,
+      "priorReviewedSha256": "65b736dd3a1b1c3c5c7705364ce011a31f597e377b642a232c17fa037aae6c28",
+      "currentSha256": "65b736dd3a1b1c3c5c7705364ce011a31f597e377b642a232c17fa037aae6c28",
+      "unchanged": true
+    },
+    {
+      "path": "packages/aurora-sdk/src/local-data/repositories.ts",
+      "bytes": 7475,
+      "priorReviewedSha256": "6f766f4a513773e1308f1aa1add8153f0be042b09889b00f040bb33bfe2d8c4f",
+      "currentSha256": "6f766f4a513773e1308f1aa1add8153f0be042b09889b00f040bb33bfe2d8c4f",
+      "unchanged": true
+    },
+    {
+      "path": "packages/aurora-sdk/src/local-data/session.ts",
+      "bytes": 720,
+      "priorReviewedSha256": "e79c8550ddccd1e3c19a67a2bd75952dc406ee5a698a872d738ed94630904caf",
+      "currentSha256": "e79c8550ddccd1e3c19a67a2bd75952dc406ee5a698a872d738ed94630904caf",
+      "unchanged": true
+    },
+    {
+      "path": "packages/aurora-sdk/src/local-data/search.ts",
+      "bytes": 18286,
+      "priorReviewedSha256": "4afac1daddbf7c3e5c7f994d5305deb1d80a7bc1b0f3823d6af54b7531a541d8",
+      "currentSha256": "13cf66e1e2a457d67a6238d409bf7fe0c87a899ad2e18568987ab6f4d29162c0",
+      "unchanged": false
+    },
+    {
+      "path": "packages/aurora-sdk/src/local-data/export-v1.ts",
+      "bytes": 8796,
+      "priorReviewedSha256": "da10de8cd80bcf71f753a9fe62a9538078bb8eb0938db110ce21e7a1a29af9f3",
+      "currentSha256": "da10de8cd80bcf71f753a9fe62a9538078bb8eb0938db110ce21e7a1a29af9f3",
+      "unchanged": true
+    },
+    {
+      "path": "packages/aurora-sdk/src/local-data/envelope-crypto-port.ts",
+      "bytes": 487,
+      "priorReviewedSha256": "9dd3b7be9afd34c4ca1568d50af535af2410f66e793205b8dd90cced5666d903",
+      "currentSha256": "9dd3b7be9afd34c4ca1568d50af535af2410f66e793205b8dd90cced5666d903",
+      "unchanged": true
+    },
+    {
+      "path": "apps/aurora-tauri/src/local-data/tauri-envelope-crypto.ts",
+      "bytes": 3961,
+      "priorReviewedSha256": "f424128d07a04e26fd0bc1aa93d74e62feca559ca4163b0fbd5796fe997f2e8b",
+      "currentSha256": "f424128d07a04e26fd0bc1aa93d74e62feca559ca4163b0fbd5796fe997f2e8b",
+      "unchanged": true
+    },
+    {
+      "path": "packages/aurora-ui/src/local-data/local-data-context.ts",
+      "bytes": 3581,
+      "priorReviewedSha256": "54ce8d53e14cb9974e0520fb3c19d2b78387a6a1296a08e18348486980bfa95f",
+      "currentSha256": "54ce8d53e14cb9974e0520fb3c19d2b78387a6a1296a08e18348486980bfa95f",
+      "unchanged": true
+    },
+    {
+      "path": "packages/aurora-ui/src/local-data/local-data-provider.tsx",
+      "bytes": 6642,
+      "priorReviewedSha256": "8df5e6a5237ad8fafd8614e3894b67c3bab6a7e03da9dbb0817e9f91fd6e9a05",
+      "currentSha256": "8df5e6a5237ad8fafd8614e3894b67c3bab6a7e03da9dbb0817e9f91fd6e9a05",
+      "unchanged": true
+    },
+    {
+      "path": "packages/aurora-sdk/src/background-transcription.ts",
+      "bytes": 2862,
+      "priorReviewedSha256": "33e9fc3ff6a5bec0487dbf368c0f2a6cfed5a73e49a109eabf9937e21078cc07",
+      "currentSha256": "33e9fc3ff6a5bec0487dbf368c0f2a6cfed5a73e49a109eabf9937e21078cc07",
+      "unchanged": true
+    },
+    {
+      "path": "packages/aurora-sdk/src/types.ts",
+      "bytes": 79635,
+      "priorReviewedSha256": "31c26f3b5fa84103bd899e16afd6f6b46c1351ada796b3ee11da292b88edfcdc",
+      "currentSha256": "31c26f3b5fa84103bd899e16afd6f6b46c1351ada796b3ee11da292b88edfcdc",
+      "unchanged": true
+    },
+    {
+      "path": "packages/aurora-ui/src/native-speech-policy.ts",
+      "bytes": 32988,
+      "priorReviewedSha256": "d574ec220195b941329cffda02e29b7faf7169134df23bdb1dd8b44b73cc3d7a",
+      "currentSha256": "eabb4d1fe95490bad5acfdc222afe11bd082d28cdea64661ed20da729b7e3efb",
+      "unchanged": false
+    },
+    {
+      "path": "apps/aurora-tauri/src-tauri/src/native_transcription_archive.rs",
+      "bytes": 17212,
+      "priorReviewedSha256": "dff90b6bd4a6a9b00a67b258fdd76e86603a21b847d22e0a8623cff3340b66b7",
+      "currentSha256": "dff90b6bd4a6a9b00a67b258fdd76e86603a21b847d22e0a8623cff3340b66b7",
+      "unchanged": true
+    },
+    {
+      "path": "packages/aurora-ui/src/platform-surface.ts",
+      "bytes": 27237,
+      "priorReviewedSha256": "cd48d57c6001958e2f03bef6ed7f3028d93296acd840519de81038b6300b2afe",
+      "currentSha256": "c83c6acfcb825366497f6ac16a24983b04b7b96acd066967f50afc34daf547cf",
+      "unchanged": false
+    }
+  ],
+  "unchangedSources": 12,
+  "changedSources": 3,
+  "requirements": [
+    {
+      "id": "start_gate",
+      "requirement": "Accepted Stage2 capture/configuration behavior and repository API",
+      "disposition": "NOT_MET",
+      "evidence": "PER290-SEPARATED-PENDING-GATE-V79.json; PER289-PER291-MAIN-ACCEPTANCE-SOL-V1.md",
+      "limit": "Archive DATA acceptance and desktop audio do not prove Android notification capture; active iOS excluded rather than a new execution gate."
+    },
+    {
+      "id": "two_views",
+      "requirement": "Ambient day/speaker timeline and manual notification intervals, truthful diarization absence/partial",
+      "disposition": "CONTENT_COVERED_CONDITIONAL",
+      "evidence": "Product structure; contract mapping; state behavior in proposal"
+    },
+    {
+      "id": "states",
+      "requirement": "List/detail/loading/empty/partial/interrupted/storage/degraded/retention/delete/export/permission-revoked states",
+      "disposition": "CONTENT_COVERED_CONDITIONAL",
+      "evidence": "State and interaction behavior; current record schemas unchanged"
+    },
+    {
+      "id": "search",
+      "requirement": "Search/filter/pagination identity and budgets",
+      "disposition": "STALE_CLAIM_CORRECTED_REMAINING_GAP_EXPLICIT",
+      "evidence": "Current13cf66e1 search source equals accepted search checkpoint; typed filters and continuation remain absent"
+    },
+    {
+      "id": "privacy",
+      "requirement": "Scope, encrypted content access, no remote transcript feed, retention/delete/export consequences",
+      "disposition": "CONTENT_COVERED_CONDITIONAL",
+      "evidence": "Scope/AAD record/context sources unchanged; explicit decrypt/export follow-ups remain"
+    },
+    {
+      "id": "speakers_provenance",
+      "requirement": "Only stored speaker/model/language evidence; immutable corrections boundary",
+      "disposition": "CONTENT_COVERED_CONDITIONAL",
+      "evidence": "Unchanged records/status/native archive hashes; named annotation/provenance gaps"
+    },
+    {
+      "id": "ownership",
+      "requirement": "Components/state/routes/cancellation and no reopened SDK/native ownership",
+      "disposition": "CONTENT_COVERED_CONDITIONAL",
+      "evidence": "Component/state boundaries; current native policy port injection and central surface flags retain these boundaries"
+    },
+    {
+      "id": "accessibility_surfaces",
+      "requirement": "Desktop/mobile/narrow/keyboard/screenreader/reduced-motion/degraded matrices",
+      "disposition": "PLAN_MATRIX_COVERED_NO_RENDERED_VIEWER_CLAIM",
+      "evidence": "Layout/accessibility/copy; five-surface matrix; retained original Sol plan review"
+    },
+    {
+      "id": "followups",
+      "requirement": "Bounded backend/frontend tasks, dependencies and non-goals",
+      "disposition": "NAMED_IN_SPEC_EXTERNAL_WORKFLOW_PENDING",
+      "evidence": "Six named follow-ups and bounded implementation sequence; no new tracker issue or viewer authorization claimed"
+    },
+    {
+      "id": "delivery",
+      "requirement": "Committed plan/current linked PR, QA then architecture, accurate tracker readiness",
+      "disposition": "HISTORICAL_DRAFT_RETAINED_CURRENT_WORKFLOW_NOT_PROVEN",
+      "evidence": ".omx/delivery/20261010/per291-pr.md references draft176; this proposal is local only; current commit/push/CI/newPR holds preserved"
+    }
+  ],
+  "retainedSearchValidation": "2 main-flow tests, SDK typecheck and build, independent Sol approval; exact source and test hashes unchanged; zero reruns",
+  "copiedEvidence": [
+    {
+      "source": ".omx/evidence/receiving-session-20261006/PER291-PLAN-CHECKPOINT-V1.json",
+      "path": "thesis/goal-evidence/PER291-source-reconciliation-20261020/PER291-PLAN-CHECKPOINT-V1.json",
+      "bytes": 1877,
+      "sha256": "eaa931da698af53b3dc094e193561caef0659359374190a2d0e4b6c6f44a555f"
+    },
+    {
+      "source": ".omx/evidence/receiving-session-20261006/PER291-PLAN-SOL-REVIEW-PROVENANCE-V1.json",
+      "path": "thesis/goal-evidence/PER291-source-reconciliation-20261020/PER291-PLAN-SOL-REVIEW-PROVENANCE-V1.json",
+      "bytes": 1086,
+      "sha256": "add1810eab9989c62f7b9e32d0302f043a4ea07b7231694f9d3f40d97f553429"
+    },
+    {
+      "source": ".omx/evidence/receiving-session-20261006/PER291-PLAN-SOL-V1-REVIEW.md",
+      "path": "thesis/goal-evidence/PER291-source-reconciliation-20261020/PER291-PLAN-SOL-V1-REVIEW.md",
+      "bytes": 368,
+      "sha256": "d04b7305c654b65ceb34728aa5426711d13637f86be56c0c46b06015ddff06d2"
+    },
+    {
+      "source": ".omx/evidence/receiving-session-20261006/PER289-SEARCH-CHECKPOINT-V1.json",
+      "path": "thesis/goal-evidence/PER291-source-reconciliation-20261020/PER289-SEARCH-CHECKPOINT-V1.json",
+      "bytes": 4566,
+      "sha256": "0a9d7430cc91df36ee881b0ce02ecf29d87218c0efe950647b54ef4cc61c1761"
+    },
+    {
+      "source": ".omx/evidence/receiving-session-20261006/PER289-PER291-MAIN-ACCEPTANCE-SOL-V1.md",
+      "path": "thesis/goal-evidence/PER291-source-reconciliation-20261020/PER289-PER291-MAIN-ACCEPTANCE-SOL-V1.md",
+      "bytes": 7794,
+      "sha256": "8c04d7e70f9614112904d99ab38d7855236f72be3170b27e58b488e364234075"
+    },
+    {
+      "source": ".omx/evidence/receiving-session-20261006/PER290-SEPARATED-PENDING-GATE-V79.json",
+      "path": "thesis/goal-evidence/PER291-source-reconciliation-20261020/PER290-SEPARATED-PENDING-GATE-V79.json",
+      "bytes": 955,
+      "sha256": "4043d1a32d32f9c8c0726ad8e29fee961cfe4ed4cbe9f2a9ec725cb010eaed14"
+    },
+    {
+      "source": "/tmp/aurora-sol-transcription-integrated-architecture-review.md",
+      "path": "thesis/goal-evidence/PER291-source-reconciliation-20261020/original-integrated-architecture-review.md",
+      "bytes": 7949,
+      "sha256": "6b3718dd169d9f499e93fe19ce855c735b15cb58d915b9d73f639cb75c6ba200"
+    }
+  ],
+  "productionSourceChanged": false,
+  "publishedOrCommittedPlanChanged": false,
+  "productTestsBuildsInferenceOrDeviceCalls": 0,
+  "currentK1OrK2GateAdded": false,
+  "screenImplementation": false,
+  "aggregateStatusChange": false,
+  "remainingBeforeOriginalGoalCompletion": [
+    "Real parent Stage2 capture/config acceptance",
+    "Original linked-delivery QA/architecture/tracker workflow under current owner authority"
+  ],
+  "review": {
+    "status": "BOUNDED_FACTUAL_DELTA_PASS_CLOSED_NOT_TASK_QA_ACCEPTANCE",
+    "path": "thesis/goal-evidence/PER291-source-reconciliation-20261020/PER291-FACTUAL-CORRECTION-REVIEW.md",
+    "bytes": 4995,
+    "sha256": "45b8a4f7ec9a9b2e85e56832f20f33d2cf020f174109a062a680c343da4aca3f"
+  },
+  "iosScopeQualification": "Current non-iOS measurement execution scope does not itself satisfy or waive any separately retained original product iOS acceptance requirement; those remain in full13 evidence map/parent gates."
+}

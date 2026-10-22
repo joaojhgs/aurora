@@ -1,0 +1,14 @@
+{
+  "at": "2026-10-20T06:28:38.998782+00:00",
+  "source": ".omx/evidence/orca-monitor-20261010/PLAN-AFTER-K3-SOURCE-CLOSURE-LANGUAGE-CORRECTION-20261020T0626.md",
+  "destination": "thesis/methodology/owner-requirements-20261020-30c3de63.md",
+  "bytes": 686926,
+  "sha256": "30c3de632df4290e856e42c793c93c265e0463e84046267391fae8d6c1017e4e",
+  "priorBytes": 683551,
+  "exactPriorPrefix": true,
+  "appendBytes": 3375,
+  "completeCanonicalMirror": true,
+  "methodologyWriter": "Original monitor only",
+  "rootCopyOnly": true,
+  "sutCalls": 0
+}

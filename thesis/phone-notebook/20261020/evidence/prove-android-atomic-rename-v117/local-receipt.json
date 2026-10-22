@@ -1,0 +1,8 @@
+{
+  "bytes": 488,
+  "copyOnly": true,
+  "custody": "Notebook result persisted and fsynced before relay; remote receipt in same output",
+  "localPath": "/home/developer/projects/aurora/thesis/phone-notebook/20261020/evidence/prove-android-atomic-rename-v117/result.json",
+  "remotePath": "/home/developer/projects/aurora/thesis/phone-notebook/20261020/evidence/prove-android-atomic-rename-v117.json",
+  "sha256": "1ec7817b772b535eb840ab155f4d05ddc92f4b6f37f6ad7cf2d581139d9df668"
+}

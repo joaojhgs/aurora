@@ -1,0 +1,36 @@
+{
+  "message": "msg_1928ae46bc57",
+  "at": "2026-10-15T03:33:36Z",
+  "v482": {
+    "controllerPID": 2907500,
+    "childPID": 2907520,
+    "startedAt": "2026-10-15T03:31:53.702394Z",
+    "terminalAt": "2026-10-15T03:32:07.245122Z",
+    "exitCode": 1,
+    "controllerAndChildAbsent": true,
+    "frozenChecksPassed": 26,
+    "homeFreeBytes": 534974464,
+    "availableRAMBytes": 3289284608,
+    "status": "stopped_system_failure",
+    "reason": "runtime_config_changed during ordinary Supervisor startup before first attempt",
+    "nWarmup": 0,
+    "nMeasured": 0,
+    "nAudioAttempt": 0,
+    "nUnattempted": 900,
+    "semanticDiffDiagnosed": false,
+    "rootNext": "exact semantic config diff, evidenced startup-normalization harnessguard correction, source review, new measurementlaunch; no pilot replay or settings weakening",
+    "retirementLocksVerified": false
+  },
+  "publishedPilotPackage": "docs/experiments/tcc-20261013-submission-20261030/root/full-audio-capital-v481",
+  "projectManifestSHA256": "695245c5f4b75a45e462d4c2b8302b4dea8e281bf756c8f8b7c06e68f039b4a9",
+  "rootVerifiedFrames": 255,
+  "rootVerifiedRawMembers": 19,
+  "workerCPU": {
+    "exactSixBackendVersionsInstalled": true,
+    "installSeconds": 3.6,
+    "inferenceRun": false,
+    "mainVenvModified": false,
+    "voiceAssetStagingPending": true
+  },
+  "phase2MeasuredAllowed": false
+}

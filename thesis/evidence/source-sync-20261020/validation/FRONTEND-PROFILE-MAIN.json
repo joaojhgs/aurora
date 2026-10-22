@@ -1,0 +1,18 @@
+{
+  "command": [
+    "pnpm",
+    "--filter",
+    "@aurora/tauri-ui",
+    "exec",
+    "vitest",
+    "run",
+    "--environment",
+    "jsdom",
+    "--no-file-parallelism",
+    "src/offline-profile-main.test.ts"
+  ],
+  "exitCode": 0,
+  "timeoutSeconds": 90,
+  "coverage": "saved-profile/offline bootstrap main tests; not Android runtime acceptance",
+  "newInference": 0
+}

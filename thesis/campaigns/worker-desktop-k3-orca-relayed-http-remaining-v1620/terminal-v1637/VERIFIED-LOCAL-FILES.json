@@ -1,0 +1,805 @@
+{
+  "files": [
+    {
+      "path": "thesis/campaigns/worker-desktop-k3-orca-relayed-http-remaining-v1620/admission/receiver-warmup-proof.json",
+      "bytes": 61660,
+      "sha256": "ddba3b4c18f6ff576b28ca5c559eacc1f38e4c29a1774d2e5e4fec037e4ce025"
+    },
+    {
+      "path": "thesis/campaigns/worker-desktop-k3-orca-relayed-http-remaining-v1620/admission/warmup-finalizer-result.json",
+      "bytes": 1194,
+      "sha256": "afce78baed25a15cac6eafb826f9863b00ae36f61fd7c414996539f28fc581c0"
+    },
+    {
+      "path": "thesis/campaigns/worker-desktop-k3-orca-relayed-http-remaining-v1620/attempts/attempt-0001-warmup.jsonl",
+      "bytes": 6629,
+      "sha256": "cf65d56e0f233b5eeef2f3a5662a04e1e9c88bc61474544e96ffe5845dca0b77"
+    },
+    {
+      "path": "thesis/campaigns/worker-desktop-k3-orca-relayed-http-remaining-v1620/attempts/attempt-0002-warmup.jsonl",
+      "bytes": 6631,
+      "sha256": "934df96170df640a159b427e9f513e6a0df0be8a5f91df176e41e762c453cac6"
+    },
+    {
+      "path": "thesis/campaigns/worker-desktop-k3-orca-relayed-http-remaining-v1620/attempts/attempt-0003-warmup.jsonl",
+      "bytes": 6631,
+      "sha256": "42b3b163518204db14609075bb6ae5f29685f62908d28a95a37eef823745ab77"
+    },
+    {
+      "path": "thesis/campaigns/worker-desktop-k3-orca-relayed-http-remaining-v1620/attempts/attempt-0004-warmup.jsonl",
+      "bytes": 6629,
+      "sha256": "1a57ef1f7430c98114755e9b42cc5ab07c68084c08f94fa1c82ef835beee3793"
+    },
+    {
+      "path": "thesis/campaigns/worker-desktop-k3-orca-relayed-http-remaining-v1620/attempts/attempt-0005-warmup.jsonl",
+      "bytes": 6630,
+      "sha256": "818c873ae5941ffe73559d3bf8542b16ea3a4bf2162a65dff95945db9729cf8f"
+    },
+    {
+      "path": "thesis/campaigns/worker-desktop-k3-orca-relayed-http-remaining-v1620/attempts/attempt-0006-warmup.jsonl",
+      "bytes": 6628,
+      "sha256": "5b7150c36801930493f4d7d27805f506a792d39df77ff6e1a75c0190b51f20a1"
+    },
+    {
+      "path": "thesis/campaigns/worker-desktop-k3-orca-relayed-http-remaining-v1620/attempts/attempt-0007-warmup.jsonl",
+      "bytes": 6627,
+      "sha256": "87c25c3ca2aa0f25c5211774685385749363c157da2547979816cd4472f97cc5"
+    },
+    {
+      "path": "thesis/campaigns/worker-desktop-k3-orca-relayed-http-remaining-v1620/attempts/attempt-0008-warmup.jsonl",
+      "bytes": 6629,
+      "sha256": "cbb25b88fed9d3bc657467e06fb6d6e9dcdda1ca69d58eada454e6beb45e6d8f"
+    },
+    {
+      "path": "thesis/campaigns/worker-desktop-k3-orca-relayed-http-remaining-v1620/attempts/attempt-0009-warmup.jsonl",
+      "bytes": 6629,
+      "sha256": "3836a6db9e69dfcadd77cc8ee9bfd9cf50909d05500951deb97cc28ce24a199a"
+    },
+    {
+      "path": "thesis/campaigns/worker-desktop-k3-orca-relayed-http-remaining-v1620/attempts/attempt-0010-warmup.jsonl",
+      "bytes": 6630,
+      "sha256": "e28cbb6eb11d931349aa226e8baed60f10d4837e1dfea93351df1af96b0ed4ab"
+    },
+    {
+      "path": "thesis/campaigns/worker-desktop-k3-orca-relayed-http-remaining-v1620/attempts/attempt-0011-warmup.jsonl",
+      "bytes": 6630,
+      "sha256": "ce8e72120643256fdb4a5463a36cc69bd1af49181b562cf3e19ba57abde52f26"
+    },
+    {
+      "path": "thesis/campaigns/worker-desktop-k3-orca-relayed-http-remaining-v1620/attempts/attempt-0012-warmup.jsonl",
+      "bytes": 6631,
+      "sha256": "e4792c346bc7b6cae1a4eafa2d5aa855a180be6cc325164f6a2be089c99ed5a3"
+    },
+    {
+      "path": "thesis/campaigns/worker-desktop-k3-orca-relayed-http-remaining-v1620/attempts/attempt-0013-warmup.jsonl",
+      "bytes": 6630,
+      "sha256": "ed402c31a2ab575452612d4a071a2fc71e6807a653a9ec9f0628240e5c63a6e2"
+    },
+    {
+      "path": "thesis/campaigns/worker-desktop-k3-orca-relayed-http-remaining-v1620/attempts/attempt-0014-warmup.jsonl",
+      "bytes": 6630,
+      "sha256": "7cd4e8faa28dd6232163f1172080b3b2dc3ac6f80523184ac2479e56949aec9b"
+    },
+    {
+      "path": "thesis/campaigns/worker-desktop-k3-orca-relayed-http-remaining-v1620/attempts/attempt-0015-warmup.jsonl",
+      "bytes": 6633,
+      "sha256": "c5e1f60d3501fc0d21c4078de705064cffea664510b820e2dfeb8c346ad84747"
+    },
+    {
+      "path": "thesis/campaigns/worker-desktop-k3-orca-relayed-http-remaining-v1620/attempts/attempt-0016-measured.jsonl",
+      "bytes": 6633,
+      "sha256": "d910f8852c0c28622825ff4ba8c3268f23dca7f8ababb055922c97095c5f36be"
+    },
+    {
+      "path": "thesis/campaigns/worker-desktop-k3-orca-relayed-http-remaining-v1620/attempts/attempt-0017-measured.jsonl",
+      "bytes": 6633,
+      "sha256": "35b6c00537dea0b872c2690a0e675eb6933d87bc09a76231bedf1ef2cd20d048"
+    },
+    {
+      "path": "thesis/campaigns/worker-desktop-k3-orca-relayed-http-remaining-v1620/attempts/attempt-0018-measured.jsonl",
+      "bytes": 6632,
+      "sha256": "e2b67dfc4ed62d3bbb51e9a06c238cdfe3bd833c25b52850d58875d32cb3baa0"
+    },
+    {
+      "path": "thesis/campaigns/worker-desktop-k3-orca-relayed-http-remaining-v1620/attempts/attempt-0019-measured.jsonl",
+      "bytes": 6633,
+      "sha256": "58eeafc1dc145980dbcf1ad2b65c1821ddd5ce01a2a948d8409f4dcbd77e343f"
+    },
+    {
+      "path": "thesis/campaigns/worker-desktop-k3-orca-relayed-http-remaining-v1620/attempts/attempt-0020-measured.jsonl",
+      "bytes": 6631,
+      "sha256": "e9fd37ee18d4144e23a9b59b0bca9ab48b7accbb8d2c4fe7e5159e8c68aed114"
+    },
+    {
+      "path": "thesis/campaigns/worker-desktop-k3-orca-relayed-http-remaining-v1620/attempts/attempt-0021-measured.jsonl",
+      "bytes": 6632,
+      "sha256": "9bd1c7ed621704c8e46754cc101d21bc8520d6df205e3dd53d3f6a4cd0df549d"
+    },
+    {
+      "path": "thesis/campaigns/worker-desktop-k3-orca-relayed-http-remaining-v1620/attempts/attempt-0022-measured.jsonl",
+      "bytes": 6632,
+      "sha256": "3351c29878d407bec046107ee1630ab0ce91a10b2df70a039fe6abf04fc9bb95"
+    },
+    {
+      "path": "thesis/campaigns/worker-desktop-k3-orca-relayed-http-remaining-v1620/attempts/attempt-0023-measured.jsonl",
+      "bytes": 6632,
+      "sha256": "7f327827687807b62f674d3d1508832e08156058d492244a3802e046c1199d6a"
+    },
+    {
+      "path": "thesis/campaigns/worker-desktop-k3-orca-relayed-http-remaining-v1620/attempts/attempt-0024-measured.jsonl",
+      "bytes": 6632,
+      "sha256": "380af24a07e9590a1c7336fc0c68c5b85354eb1752ea8b2f1fdac1066afa9a27"
+    },
+    {
+      "path": "thesis/campaigns/worker-desktop-k3-orca-relayed-http-remaining-v1620/attempts/attempt-0025-measured.jsonl",
+      "bytes": 6634,
+      "sha256": "fa3c8596b2f11dc98015b97c46836569260374deffedfce9ddba31b9d554a510"
+    },
+    {
+      "path": "thesis/campaigns/worker-desktop-k3-orca-relayed-http-remaining-v1620/attempts/attempt-0026-measured.jsonl",
+      "bytes": 6634,
+      "sha256": "bddfba9de515d047bffa9aaba03718cbc27c3f363908c2ae649c764830fa277d"
+    },
+    {
+      "path": "thesis/campaigns/worker-desktop-k3-orca-relayed-http-remaining-v1620/attempts/attempt-0027-measured.jsonl",
+      "bytes": 5562,
+      "sha256": "eebaf2e716579580bcf9b610a26220dcc9eef4d6c34a77214dabdca4b2d1924c"
+    },
+    {
+      "path": "thesis/campaigns/worker-desktop-k3-orca-relayed-http-remaining-v1620/attempts/attempt-0028-measured.jsonl",
+      "bytes": 5563,
+      "sha256": "5eb8f323e846845e3ddf5452ce7c8d1b133df677e69f400ce961d7ef2783ea01"
+    },
+    {
+      "path": "thesis/campaigns/worker-desktop-k3-orca-relayed-http-remaining-v1620/attempts/attempt-0029-measured.jsonl",
+      "bytes": 5563,
+      "sha256": "3448704d46561a66b8338b528ff00dd99ba2c7a84808002b7ce82566fed79276"
+    },
+    {
+      "path": "thesis/campaigns/worker-desktop-k3-orca-relayed-http-remaining-v1620/attempts/attempt-0030-measured.jsonl",
+      "bytes": 5561,
+      "sha256": "d85dfe8230d2dbc900b2fda2a71538fcb7a7ffd757942f1546236a2ec528aa13"
+    },
+    {
+      "path": "thesis/campaigns/worker-desktop-k3-orca-relayed-http-remaining-v1620/attempts/attempt-0031-measured.jsonl",
+      "bytes": 5563,
+      "sha256": "d69ff6da2fbba1f257c2f2916a2ffcc10fee0e7a7706635b1e1ceb974b60a441"
+    },
+    {
+      "path": "thesis/campaigns/worker-desktop-k3-orca-relayed-http-remaining-v1620/attempts/attempt-0032-measured.jsonl",
+      "bytes": 5562,
+      "sha256": "377a453ec2d8269602ac5905665aba7995c97e21438fdf9b72e10df1414cffaa"
+    },
+    {
+      "path": "thesis/campaigns/worker-desktop-k3-orca-relayed-http-remaining-v1620/attempts/attempt-0033-measured.jsonl",
+      "bytes": 5561,
+      "sha256": "cdf07772ef196428c412ed8899063a7d82a4f57a42dc2009432efdbeba1e092a"
+    },
+    {
+      "path": "thesis/campaigns/worker-desktop-k3-orca-relayed-http-remaining-v1620/attempts/attempt-0034-measured.jsonl",
+      "bytes": 5562,
+      "sha256": "3238b5eb4ae0a1a36015df31cd10308d6b94517c76fe68a9929e5502022eb67b"
+    },
+    {
+      "path": "thesis/campaigns/worker-desktop-k3-orca-relayed-http-remaining-v1620/attempts/attempt-0035-measured.jsonl",
+      "bytes": 5560,
+      "sha256": "00a5e81ccfa0d1f187de62f786d462d06fea448156350460b5f8b174c4e1405f"
+    },
+    {
+      "path": "thesis/campaigns/worker-desktop-k3-orca-relayed-http-remaining-v1620/attempts/attempt-0036-measured.jsonl",
+      "bytes": 5562,
+      "sha256": "d0d3a47422507d2ad0f90ee1f97303893cc52f82e68cce5401de03952c1b8889"
+    },
+    {
+      "path": "thesis/campaigns/worker-desktop-k3-orca-relayed-http-remaining-v1620/attempts/attempt-0037-measured.jsonl",
+      "bytes": 5563,
+      "sha256": "bb7c29c8e784caae2432c4cc7e7f190b6564416ba71e34d1b6995bae6d65f8c6"
+    },
+    {
+      "path": "thesis/campaigns/worker-desktop-k3-orca-relayed-http-remaining-v1620/attempts/attempt-0038-measured.jsonl",
+      "bytes": 5563,
+      "sha256": "0efdf6b99076f1e702bd9d5cc969fd44dd1404cfe487070a3ac322efb8edc487"
+    },
+    {
+      "path": "thesis/campaigns/worker-desktop-k3-orca-relayed-http-remaining-v1620/attempts/attempt-0039-measured.jsonl",
+      "bytes": 4250,
+      "sha256": "33e9780e03527d0a8354de9710cad8f37d54de7f0cdbf67411e24fd8a2e6a86d"
+    },
+    {
+      "path": "thesis/campaigns/worker-desktop-k3-orca-relayed-http-remaining-v1620/audio/051093db5536ff59991bea5d6ca48b5264ddae4e2147a6d89f06884d10de80f1.wav",
+      "bytes": 30252,
+      "sha256": "051093db5536ff59991bea5d6ca48b5264ddae4e2147a6d89f06884d10de80f1"
+    },
+    {
+      "path": "thesis/campaigns/worker-desktop-k3-orca-relayed-http-remaining-v1620/audio/0e933d6a13098066e6bec67cf0d6db7f5237f68b19ddbfbceeeb73250e0d744c.wav",
+      "bytes": 30252,
+      "sha256": "0e933d6a13098066e6bec67cf0d6db7f5237f68b19ddbfbceeeb73250e0d744c"
+    },
+    {
+      "path": "thesis/campaigns/worker-desktop-k3-orca-relayed-http-remaining-v1620/audio/30e2567e205269ac1fa06e464bb7c24de2cd3d24656542213e59aa4c315244a5.wav",
+      "bytes": 30252,
+      "sha256": "30e2567e205269ac1fa06e464bb7c24de2cd3d24656542213e59aa4c315244a5"
+    },
+    {
+      "path": "thesis/campaigns/worker-desktop-k3-orca-relayed-http-remaining-v1620/audio/38489bc18d505b639058033a35aa6976ca1bf07895e8bd400df383f93e13910a.wav",
+      "bytes": 31276,
+      "sha256": "38489bc18d505b639058033a35aa6976ca1bf07895e8bd400df383f93e13910a"
+    },
+    {
+      "path": "thesis/campaigns/worker-desktop-k3-orca-relayed-http-remaining-v1620/audio/3e3000b63c7d45919908baf07539a4c5c0d6a792c227e8ba688d570646570400.wav",
+      "bytes": 29740,
+      "sha256": "3e3000b63c7d45919908baf07539a4c5c0d6a792c227e8ba688d570646570400"
+    },
+    {
+      "path": "thesis/campaigns/worker-desktop-k3-orca-relayed-http-remaining-v1620/audio/464c2312e8d0d9f260f3b0631c0254b64e85a5d7ba7a5ded22572d7d9ae89458.wav",
+      "bytes": 31276,
+      "sha256": "464c2312e8d0d9f260f3b0631c0254b64e85a5d7ba7a5ded22572d7d9ae89458"
+    },
+    {
+      "path": "thesis/campaigns/worker-desktop-k3-orca-relayed-http-remaining-v1620/audio/588ea99ca482a78916f04d4f15b8a4305d9ffe6a4ebcb12052a9422cbeb45cc5.wav",
+      "bytes": 30764,
+      "sha256": "588ea99ca482a78916f04d4f15b8a4305d9ffe6a4ebcb12052a9422cbeb45cc5"
+    },
+    {
+      "path": "thesis/campaigns/worker-desktop-k3-orca-relayed-http-remaining-v1620/audio/59e731397971b3cea716032aabec486b8e8f592a72ffca7b1b11d87c3f892e01.wav",
+      "bytes": 29740,
+      "sha256": "59e731397971b3cea716032aabec486b8e8f592a72ffca7b1b11d87c3f892e01"
+    },
+    {
+      "path": "thesis/campaigns/worker-desktop-k3-orca-relayed-http-remaining-v1620/audio/615a395dcf389159dba4261cd8230648d976ed17783c7b7c6db4bec3d80f37c9.wav",
+      "bytes": 30252,
+      "sha256": "615a395dcf389159dba4261cd8230648d976ed17783c7b7c6db4bec3d80f37c9"
+    },
+    {
+      "path": "thesis/campaigns/worker-desktop-k3-orca-relayed-http-remaining-v1620/audio/6793fcc1671b5c485e8c37ba993492fcbce4feccf81dc56fbcf2eb9329223d3f.wav",
+      "bytes": 30764,
+      "sha256": "6793fcc1671b5c485e8c37ba993492fcbce4feccf81dc56fbcf2eb9329223d3f"
+    },
+    {
+      "path": "thesis/campaigns/worker-desktop-k3-orca-relayed-http-remaining-v1620/audio/6d18f070dc62e35e704f2931e58cf0d173e0127870fabcca7413387918cb59f9.wav",
+      "bytes": 29740,
+      "sha256": "6d18f070dc62e35e704f2931e58cf0d173e0127870fabcca7413387918cb59f9"
+    },
+    {
+      "path": "thesis/campaigns/worker-desktop-k3-orca-relayed-http-remaining-v1620/audio/71924558b90dc240b7741e36c733c18c959d1d2006a07af8e963b1aa09380c37.wav",
+      "bytes": 33324,
+      "sha256": "71924558b90dc240b7741e36c733c18c959d1d2006a07af8e963b1aa09380c37"
+    },
+    {
+      "path": "thesis/campaigns/worker-desktop-k3-orca-relayed-http-remaining-v1620/audio/75710eaf12e9a32e04a78ef41fd37c0f7c19fedad989165036d5dea19de4ef85.wav",
+      "bytes": 31276,
+      "sha256": "75710eaf12e9a32e04a78ef41fd37c0f7c19fedad989165036d5dea19de4ef85"
+    },
+    {
+      "path": "thesis/campaigns/worker-desktop-k3-orca-relayed-http-remaining-v1620/audio/7c865bf81eb81125843c3c955ed29c6e376049e62942fb18ef5106a2428d2897.wav",
+      "bytes": 31276,
+      "sha256": "7c865bf81eb81125843c3c955ed29c6e376049e62942fb18ef5106a2428d2897"
+    },
+    {
+      "path": "thesis/campaigns/worker-desktop-k3-orca-relayed-http-remaining-v1620/audio/916855b61724bbec5c2102699994cbf84c546e46193f6b494b04762e47e4266d.wav",
+      "bytes": 31276,
+      "sha256": "916855b61724bbec5c2102699994cbf84c546e46193f6b494b04762e47e4266d"
+    },
+    {
+      "path": "thesis/campaigns/worker-desktop-k3-orca-relayed-http-remaining-v1620/audio/99e680e8dac4d343bd2868192357feb8361f682b47c2efd4e36fb78922e22d15.wav",
+      "bytes": 29228,
+      "sha256": "99e680e8dac4d343bd2868192357feb8361f682b47c2efd4e36fb78922e22d15"
+    },
+    {
+      "path": "thesis/campaigns/worker-desktop-k3-orca-relayed-http-remaining-v1620/audio/a2ed6208588fe4e72ba0955c6fd259cffd12235de6c7f18bfc6e51d6acac5575.wav",
+      "bytes": 29740,
+      "sha256": "a2ed6208588fe4e72ba0955c6fd259cffd12235de6c7f18bfc6e51d6acac5575"
+    },
+    {
+      "path": "thesis/campaigns/worker-desktop-k3-orca-relayed-http-remaining-v1620/audio/a656469d5ac1bf9c208b56d47cd8d58f587ebf31a819ff8b0e8f737d1b7e724c.wav",
+      "bytes": 30252,
+      "sha256": "a656469d5ac1bf9c208b56d47cd8d58f587ebf31a819ff8b0e8f737d1b7e724c"
+    },
+    {
+      "path": "thesis/campaigns/worker-desktop-k3-orca-relayed-http-remaining-v1620/audio/b4cffeffdda46b7efc2a016777efd062b2e31a2fb5d0c13898fa2ea9227edb56.wav",
+      "bytes": 31276,
+      "sha256": "b4cffeffdda46b7efc2a016777efd062b2e31a2fb5d0c13898fa2ea9227edb56"
+    },
+    {
+      "path": "thesis/campaigns/worker-desktop-k3-orca-relayed-http-remaining-v1620/audio/bcfcf5c35eab8eee3e41f0fca52c7733fa2c15a3a0af31f1184df63fc5519b55.wav",
+      "bytes": 30764,
+      "sha256": "bcfcf5c35eab8eee3e41f0fca52c7733fa2c15a3a0af31f1184df63fc5519b55"
+    },
+    {
+      "path": "thesis/campaigns/worker-desktop-k3-orca-relayed-http-remaining-v1620/audio/bf95da28075e1e4bd3d7d1869d0f10abdd6cce948cbabe7f0f6fd7959fe45775.wav",
+      "bytes": 31788,
+      "sha256": "bf95da28075e1e4bd3d7d1869d0f10abdd6cce948cbabe7f0f6fd7959fe45775"
+    },
+    {
+      "path": "thesis/campaigns/worker-desktop-k3-orca-relayed-http-remaining-v1620/audio/c2bf6c27a0f3742f26202dfa48fbb8ba931724377a55bdb1a87641945dfb9dd3.wav",
+      "bytes": 30252,
+      "sha256": "c2bf6c27a0f3742f26202dfa48fbb8ba931724377a55bdb1a87641945dfb9dd3"
+    },
+    {
+      "path": "thesis/campaigns/worker-desktop-k3-orca-relayed-http-remaining-v1620/audio/cece1be31ebc0bd5a1c0714a5f1ba5633cce14b5cdf1106fe55bf921da810efd.wav",
+      "bytes": 30764,
+      "sha256": "cece1be31ebc0bd5a1c0714a5f1ba5633cce14b5cdf1106fe55bf921da810efd"
+    },
+    {
+      "path": "thesis/campaigns/worker-desktop-k3-orca-relayed-http-remaining-v1620/audio/e562d674f15dc08a9760bb36c15e336f819ba83fc42beb19bc4849e51af4534d.wav",
+      "bytes": 30764,
+      "sha256": "e562d674f15dc08a9760bb36c15e336f819ba83fc42beb19bc4849e51af4534d"
+    },
+    {
+      "path": "thesis/campaigns/worker-desktop-k3-orca-relayed-http-remaining-v1620/audio/fe65d35970fadb390561d02a2d9dca61972fe40dcaf19a9890e54dd034330a70.wav",
+      "bytes": 29740,
+      "sha256": "fe65d35970fadb390561d02a2d9dca61972fe40dcaf19a9890e54dd034330a70"
+    },
+    {
+      "path": "thesis/campaigns/worker-desktop-k3-orca-relayed-http-remaining-v1620/audio/ff58c0eab381454991cbccb5d245244c6bba4a3c5a1fdb22a30e2bbb54f2f746.wav",
+      "bytes": 30252,
+      "sha256": "ff58c0eab381454991cbccb5d245244c6bba4a3c5a1fdb22a30e2bbb54f2f746"
+    },
+    {
+      "path": "thesis/campaigns/worker-desktop-k3-orca-relayed-http-remaining-v1620/frozen/condition.json",
+      "bytes": 22263,
+      "sha256": "4f1a09e7ac7dedeaeae6c1bef5a364d4a007e9249aec74f20a0b63b6375a6279"
+    },
+    {
+      "path": "thesis/campaigns/worker-desktop-k3-orca-relayed-http-remaining-v1620/harness/aurora_voice_telemetry_v430.py",
+      "bytes": 11584,
+      "sha256": "8129ffe7591a47a0107ede53b101aead9fc1f58b92f0c0c4203176cc7608325d"
+    },
+    {
+      "path": "thesis/campaigns/worker-desktop-k3-orca-relayed-http-remaining-v1620/harness/bindings.py",
+      "bytes": 3230,
+      "sha256": "52182f956b34788ecbfbbb241c8243ff88baebe2874e3605791793777ed0dc91"
+    },
+    {
+      "path": "thesis/campaigns/worker-desktop-k3-orca-relayed-http-remaining-v1620/harness/bootstrap.py",
+      "bytes": 1950,
+      "sha256": "6dddcd75348326ed65f6efaf05abdc40dcc503d512dd0a20b6335cbb277f5d50"
+    },
+    {
+      "path": "thesis/campaigns/worker-desktop-k3-orca-relayed-http-remaining-v1620/harness/candidate-input.wav",
+      "bytes": 219794,
+      "sha256": "da0ecc4ad0885746ab6e716585473917ab2b543a505bf0db09ebacfaa7943cbb"
+    },
+    {
+      "path": "thesis/campaigns/worker-desktop-k3-orca-relayed-http-remaining-v1620/harness/candidate-manifest.json",
+      "bytes": 220,
+      "sha256": "ce75b965ee5879ebece6ea7dfe133441547d20ccf89ecd5d66ea510bd9645e60"
+    },
+    {
+      "path": "thesis/campaigns/worker-desktop-k3-orca-relayed-http-remaining-v1620/harness/controller.py",
+      "bytes": 19509,
+      "sha256": "e3a909c69f21eaefa240ca876ac44e758ca8e60cfc8a47f769e4390cf46446ce"
+    },
+    {
+      "path": "thesis/campaigns/worker-desktop-k3-orca-relayed-http-remaining-v1620/harness/k3_composition.py",
+      "bytes": 13333,
+      "sha256": "a62e5a036eb127657e1f81c503c08a272a7ef603c53c5e03991c17f4daa1a9e6"
+    },
+    {
+      "path": "thesis/campaigns/worker-desktop-k3-orca-relayed-http-remaining-v1620/harness/observer.py",
+      "bytes": 11873,
+      "sha256": "784cc4bffc0d6824bbe378d17a7f632d587ca0a315896b048b2ebef727082df5"
+    },
+    {
+      "path": "thesis/campaigns/worker-desktop-k3-orca-relayed-http-remaining-v1620/harness/receiver_proof.py",
+      "bytes": 15751,
+      "sha256": "be81af7dd90812509f217f62281c51ae6bee7eb4c4f10fb02c73056e4e274470"
+    },
+    {
+      "path": "thesis/campaigns/worker-desktop-k3-orca-relayed-http-remaining-v1620/harness/resource_sample.py",
+      "bytes": 7475,
+      "sha256": "8f62ec378e74036d4539d9159e3caf29b8fd7a9115de1ab0f482dfd58b6e1857"
+    },
+    {
+      "path": "thesis/campaigns/worker-desktop-k3-orca-relayed-http-remaining-v1620/harness/runner.py",
+      "bytes": 55135,
+      "sha256": "ce56c2c1588e8bbd77bce823987447c444553fe78a2be8e7d9467c466970f680"
+    },
+    {
+      "path": "thesis/campaigns/worker-desktop-k3-orca-relayed-http-remaining-v1620/harness/source-inventory.json",
+      "bytes": 58216,
+      "sha256": "96ec8e3e14233520d4cd469c4177264a193d05cf26b4b512d91d98f16bbb7dee"
+    },
+    {
+      "path": "thesis/campaigns/worker-desktop-k3-orca-relayed-http-remaining-v1620/harness/stage_adapter.py",
+      "bytes": 10811,
+      "sha256": "eb4538e453b3f0f4d1eac9bd1437d222d9333d68d7a0280f68cc5682d052e5c3"
+    },
+    {
+      "path": "thesis/campaigns/worker-desktop-k3-orca-relayed-http-remaining-v1620/operator/LAUNCH-INTENT.json",
+      "bytes": 199,
+      "sha256": "8cf41b8429171268cf4772a13bc5ab8cc7ea24078fbd7599aaf5a79ab889f1f8"
+    },
+    {
+      "path": "thesis/campaigns/worker-desktop-k3-orca-relayed-http-remaining-v1620/operator/operator-launch.json",
+      "bytes": 589,
+      "sha256": "3c39cde3b5e4e5e25977818298ba5752554624335f2996f3cf5578a308b0a114"
+    },
+    {
+      "path": "thesis/campaigns/worker-desktop-k3-orca-relayed-http-remaining-v1620/operator/proof-collection-request.json",
+      "bytes": 238,
+      "sha256": "2d944c29c56dad6d3425b41c34ad237601ce98108b8b2fedc0e1291f17cc2a21"
+    },
+    {
+      "path": "thesis/campaigns/worker-desktop-k3-orca-relayed-http-remaining-v1620/operator/requester-launch.json",
+      "bytes": 828,
+      "sha256": "feabf68e287e889fe3405c9f350e388232992b201d788856c22cd2fb5c9e075f"
+    },
+    {
+      "path": "thesis/campaigns/worker-desktop-k3-orca-relayed-http-remaining-v1620/operator/requesterCopier-launch.json",
+      "bytes": 257,
+      "sha256": "4b60802fa1671c4bfdfa6380c40471b9c0d3bca879f80ac7abdb45eaa9215533"
+    },
+    {
+      "path": "thesis/campaigns/worker-desktop-k3-orca-relayed-http-remaining-v1620/operator/warmupFinalizer-launch.json",
+      "bytes": 257,
+      "sha256": "38084193fc4ae32a31e8dbde35074b4ab0059fc6f79429e66b39b363a627dfc9"
+    },
+    {
+      "path": "thesis/campaigns/worker-desktop-k3-orca-relayed-http-remaining-v1620/prefixes/actual-provider-bindings.jsonl/000000000000-000000000847.chunk",
+      "bytes": 847,
+      "sha256": "b66ff91aacbc96b59bf78dc11f1469959a45cf386db3325e2f7f2aac2d2f8ce9"
+    },
+    {
+      "path": "thesis/campaigns/worker-desktop-k3-orca-relayed-http-remaining-v1620/prefixes/backend.private.log/000000000000-000000034661.chunk",
+      "bytes": 34661,
+      "sha256": "a8f3e0891234d85d4d3e2d83b45da885f55e8b3ddc0f88331e8aac2a7a264e99"
+    },
+    {
+      "path": "thesis/campaigns/worker-desktop-k3-orca-relayed-http-remaining-v1620/prefixes/backend.private.log/000000034661-000000034831.chunk",
+      "bytes": 170,
+      "sha256": "c2a77f4e0fcd60f1e722361795ae727205066d7f85896c6e6d10c323879a920c"
+    },
+    {
+      "path": "thesis/campaigns/worker-desktop-k3-orca-relayed-http-remaining-v1620/prefixes/backend.private.log/000000034831-000000035001.chunk",
+      "bytes": 170,
+      "sha256": "3ce847b88f3d2de4ace5a4bf188ee33f30b104e9319bc408ab641ebf09487b27"
+    },
+    {
+      "path": "thesis/campaigns/worker-desktop-k3-orca-relayed-http-remaining-v1620/prefixes/backend.private.log/000000035001-000000035086.chunk",
+      "bytes": 85,
+      "sha256": "9c5199deb5589d96d6763ddfaf8be3bbf6bab38ba99784699c237ea735088e21"
+    },
+    {
+      "path": "thesis/campaigns/worker-desktop-k3-orca-relayed-http-remaining-v1620/prefixes/backend.private.log/000000035086-000000037514.chunk",
+      "bytes": 2428,
+      "sha256": "e2b88930a923ebc69fa341ac4430d6cfdbe8583337311189a30af5880f022fee"
+    },
+    {
+      "path": "thesis/campaigns/worker-desktop-k3-orca-relayed-http-remaining-v1620/prefixes/proof-collection.private.log/000000000000-000000000122.chunk",
+      "bytes": 122,
+      "sha256": "4498602c825c848bd8ec222bf372049e3b000582743cb0681f00607e634300a6"
+    },
+    {
+      "path": "thesis/campaigns/worker-desktop-k3-orca-relayed-http-remaining-v1620/prefixes/requesterCopier.private.log/000000000000-000000000959.chunk",
+      "bytes": 959,
+      "sha256": "645330339e232e37f14480c5cde911e220995cc8287134d4749e4b36b3f32242"
+    },
+    {
+      "path": "thesis/campaigns/worker-desktop-k3-orca-relayed-http-remaining-v1620/prefixes/requesterCopier.private.log/000000000959-000000001435.chunk",
+      "bytes": 476,
+      "sha256": "b61b4de7b1c942d56949497855b68d2c88244a1b29f9b60628df88e4be00053d"
+    },
+    {
+      "path": "thesis/campaigns/worker-desktop-k3-orca-relayed-http-remaining-v1620/prefixes/requesterCopier.private.log/000000001435-000000001911.chunk",
+      "bytes": 476,
+      "sha256": "814d6c0bd0da1961b970360ca883cb99b366d60390b94fe589d115bef7fd1b87"
+    },
+    {
+      "path": "thesis/campaigns/worker-desktop-k3-orca-relayed-http-remaining-v1620/prefixes/requesterCopier.private.log/000000001911-000000002387.chunk",
+      "bytes": 476,
+      "sha256": "81fbbdb6832db8de466fedac79ab3a9253943f72968326fe8a43390f1deae677"
+    },
+    {
+      "path": "thesis/campaigns/worker-desktop-k3-orca-relayed-http-remaining-v1620/prefixes/requesterCopier.private.log/000000002387-000000002864.chunk",
+      "bytes": 477,
+      "sha256": "21ceca60977e1d4aa11a5cab51c755ef047214443c7eb7112c32db5939320b61"
+    },
+    {
+      "path": "thesis/campaigns/worker-desktop-k3-orca-relayed-http-remaining-v1620/prefixes/requesterCopier.private.log/000000002864-000000003341.chunk",
+      "bytes": 477,
+      "sha256": "0bf0009f70e0f49391b9ff634c7a21fc02eab3baaeabeb93d4efc331338d7b95"
+    },
+    {
+      "path": "thesis/campaigns/worker-desktop-k3-orca-relayed-http-remaining-v1620/prefixes/requesterCopier.private.log/000000003341-000000003822.chunk",
+      "bytes": 481,
+      "sha256": "7945ef31e8b547563dbce626fddf8a183f44d364e8a3e48400b966944a00e6e8"
+    },
+    {
+      "path": "thesis/campaigns/worker-desktop-k3-orca-relayed-http-remaining-v1620/prefixes/requesterCopier.private.log/000000003822-000000004303.chunk",
+      "bytes": 481,
+      "sha256": "90c9e1139d510e348fbb62c1fbb68c6d1eb24b333b48160c744090dca4dd4a97"
+    },
+    {
+      "path": "thesis/campaigns/worker-desktop-k3-orca-relayed-http-remaining-v1620/prefixes/requesterCopier.private.log/000000004303-000000004784.chunk",
+      "bytes": 481,
+      "sha256": "12f90144aaf67e188f65398187c81ced853f2ba2c17451892faa19905a1143fd"
+    },
+    {
+      "path": "thesis/campaigns/worker-desktop-k3-orca-relayed-http-remaining-v1620/prefixes/requesterCopier.private.log/000000004784-000000005268.chunk",
+      "bytes": 484,
+      "sha256": "066e7b8a3f46216575d00cf9eee62ef88373dd1759ace362f9d8176d833d67ea"
+    },
+    {
+      "path": "thesis/campaigns/worker-desktop-k3-orca-relayed-http-remaining-v1620/prefixes/requesterCopier.private.log/000000005268-000000005752.chunk",
+      "bytes": 484,
+      "sha256": "58188769bd06c33a72d2dd861c7d290ce26b7e69666a9863086f159716e32497"
+    },
+    {
+      "path": "thesis/campaigns/worker-desktop-k3-orca-relayed-http-remaining-v1620/prefixes/requesterCopier.private.log/000000005752-000000006236.chunk",
+      "bytes": 484,
+      "sha256": "5ea377458e6d2a7ac96f0b92af4c6b79a8c168c0dcaa9b58a670eef37de381d1"
+    },
+    {
+      "path": "thesis/campaigns/worker-desktop-k3-orca-relayed-http-remaining-v1620/prefixes/requesterCopier.private.log/000000006236-000000006720.chunk",
+      "bytes": 484,
+      "sha256": "01c54341a07861fc5f9c30bcb39b681c57479d1c62d6e4bd346f80223cf47c7d"
+    },
+    {
+      "path": "thesis/campaigns/worker-desktop-k3-orca-relayed-http-remaining-v1620/prefixes/requesterCopier.private.log/000000006720-000000007204.chunk",
+      "bytes": 484,
+      "sha256": "fbf8dcf22669b3d90bb669ea138c8858c14f04d522ec5b0bcaebe3df7fc44552"
+    },
+    {
+      "path": "thesis/campaigns/worker-desktop-k3-orca-relayed-http-remaining-v1620/prefixes/requesterCopier.private.log/000000007204-000000007689.chunk",
+      "bytes": 485,
+      "sha256": "1a938ca9be36edf554394439c224da374c0f5675649ef9674602e559f2452512"
+    },
+    {
+      "path": "thesis/campaigns/worker-desktop-k3-orca-relayed-http-remaining-v1620/prefixes/requesterCopier.private.log/000000007689-000000008163.chunk",
+      "bytes": 474,
+      "sha256": "5070d4843aee42c82e5969f350227545d9067bbb4821473a100d17e3c0f34399"
+    },
+    {
+      "path": "thesis/campaigns/worker-desktop-k3-orca-relayed-http-remaining-v1620/prefixes/requesterCopier.private.log/000000008163-000000008637.chunk",
+      "bytes": 474,
+      "sha256": "0c131237760379f545fc7ab0c9068469deabf22948e23e5eb1144d660c48dfd1"
+    },
+    {
+      "path": "thesis/campaigns/worker-desktop-k3-orca-relayed-http-remaining-v1620/prefixes/requesterCopier.private.log/000000008637-000000009111.chunk",
+      "bytes": 474,
+      "sha256": "bac5e06325b587f839080c5d0defbde754b606d806f6d1017b8d81a9e109f729"
+    },
+    {
+      "path": "thesis/campaigns/worker-desktop-k3-orca-relayed-http-remaining-v1620/prefixes/requesterCopier.private.log/000000009111-000000009585.chunk",
+      "bytes": 474,
+      "sha256": "503098c09a15b927d67ae63a84504624f95b1033b1f865bc0f4b0ee0f9931353"
+    },
+    {
+      "path": "thesis/campaigns/worker-desktop-k3-orca-relayed-http-remaining-v1620/prefixes/requesterCopier.private.log/000000009585-000000010018.chunk",
+      "bytes": 433,
+      "sha256": "74f0871b03f2e09299faed86ce2e9ea2aaaec8152854349b288f3a6d1e89c8ed"
+    },
+    {
+      "path": "thesis/campaigns/worker-desktop-k3-orca-relayed-http-remaining-v1620/prefixes/resources.jsonl/000000000000-000000072077.chunk",
+      "bytes": 72077,
+      "sha256": "3684c9a264e08eb5220a56345f44bbe7b3ec4ce73820d0fd7bd3762046e31d2e"
+    },
+    {
+      "path": "thesis/campaigns/worker-desktop-k3-orca-relayed-http-remaining-v1620/prefixes/resources.jsonl/000000072077-000000149357.chunk",
+      "bytes": 77280,
+      "sha256": "1fe1911ce813670992d953856a7a5c37d40dd5e7e770ac52406ca77f3f7bc5d7"
+    },
+    {
+      "path": "thesis/campaigns/worker-desktop-k3-orca-relayed-http-remaining-v1620/prefixes/resources.jsonl/000000149357-000000226637.chunk",
+      "bytes": 77280,
+      "sha256": "3055915440bc50409bc589d80bf0b9b09c24d4279c3d2defc4697f5fc22a74a3"
+    },
+    {
+      "path": "thesis/campaigns/worker-desktop-k3-orca-relayed-http-remaining-v1620/prefixes/resources.jsonl/000000226637-000000303917.chunk",
+      "bytes": 77280,
+      "sha256": "18fcdc6a318a804fdbe6927fe5b3a8d9a711d0ab59792ea3e0a757e8d5730aba"
+    },
+    {
+      "path": "thesis/campaigns/worker-desktop-k3-orca-relayed-http-remaining-v1620/prefixes/resources.jsonl/000000303917-000000381197.chunk",
+      "bytes": 77280,
+      "sha256": "6078493916f81febcdc04da87a48a8b06225761f1512061616766a0cc829af48"
+    },
+    {
+      "path": "thesis/campaigns/worker-desktop-k3-orca-relayed-http-remaining-v1620/prefixes/resources.jsonl/000000381197-000000458477.chunk",
+      "bytes": 77280,
+      "sha256": "1b775b43b3d51fdf10ec011db1c657c70a4b090ec5aa8901fd6290cad4e21a66"
+    },
+    {
+      "path": "thesis/campaigns/worker-desktop-k3-orca-relayed-http-remaining-v1620/prefixes/resources.jsonl/000000458477-000000535757.chunk",
+      "bytes": 77280,
+      "sha256": "f9ee6ea6223852ad644c73e90df611978978d6ac724b8f793969acac297237b6"
+    },
+    {
+      "path": "thesis/campaigns/worker-desktop-k3-orca-relayed-http-remaining-v1620/prefixes/resources.jsonl/000000535757-000000613037.chunk",
+      "bytes": 77280,
+      "sha256": "bb80f64262be89f26f3cb2c71bdfe365f5271dac7eb285b7ce5b9e0e8cb1548f"
+    },
+    {
+      "path": "thesis/campaigns/worker-desktop-k3-orca-relayed-http-remaining-v1620/prefixes/resources.jsonl/000000613037-000000690317.chunk",
+      "bytes": 77280,
+      "sha256": "2fed6590592a9e8f1d04924533f42112d2041bffad5c8ab72f1758c56fbf7507"
+    },
+    {
+      "path": "thesis/campaigns/worker-desktop-k3-orca-relayed-http-remaining-v1620/prefixes/resources.jsonl/000000690317-000000767597.chunk",
+      "bytes": 77280,
+      "sha256": "13dc93236862841bf26efcf7735428c4ca4c8332749c3cfd18d09cebd7af1958"
+    },
+    {
+      "path": "thesis/campaigns/worker-desktop-k3-orca-relayed-http-remaining-v1620/prefixes/resources.jsonl/000000767597-000000844877.chunk",
+      "bytes": 77280,
+      "sha256": "45e549987cef6781505b13374f167426e587264349880c96195a9bbdd2737578"
+    },
+    {
+      "path": "thesis/campaigns/worker-desktop-k3-orca-relayed-http-remaining-v1620/prefixes/resources.jsonl/000000844877-000000922157.chunk",
+      "bytes": 77280,
+      "sha256": "516b85d78c0090388b27624dd93771e170fe5a81a3cfac190222a8366ded89ab"
+    },
+    {
+      "path": "thesis/campaigns/worker-desktop-k3-orca-relayed-http-remaining-v1620/prefixes/resources.jsonl/000000922157-000000999437.chunk",
+      "bytes": 77280,
+      "sha256": "863a41d39cfbe837b8a0c83d3207de58af17dc6b9ce356b81ba08071d1df21b5"
+    },
+    {
+      "path": "thesis/campaigns/worker-desktop-k3-orca-relayed-http-remaining-v1620/prefixes/resources.jsonl/000000999437-000001076717.chunk",
+      "bytes": 77280,
+      "sha256": "99c84c3dd61d9af4c60c560493954558a90ffe64090960d5932c35f60a420020"
+    },
+    {
+      "path": "thesis/campaigns/worker-desktop-k3-orca-relayed-http-remaining-v1620/prefixes/resources.jsonl/000001076717-000001153997.chunk",
+      "bytes": 77280,
+      "sha256": "4d9cbb620aedc63841d7dd15bf2a9c0c9f4d2c9016f4409fb67b940481ec9d64"
+    },
+    {
+      "path": "thesis/campaigns/worker-desktop-k3-orca-relayed-http-remaining-v1620/prefixes/resources.jsonl/000001153997-000001231279.chunk",
+      "bytes": 77282,
+      "sha256": "c9e0583b463074cecfbda6cf9c8e6a4f7176bb242357f61ceba37527d98fa4d9"
+    },
+    {
+      "path": "thesis/campaigns/worker-desktop-k3-orca-relayed-http-remaining-v1620/prefixes/resources.jsonl/000001231279-000001308619.chunk",
+      "bytes": 77340,
+      "sha256": "18492f3f9835192199aa66746f5561b2155f429c387e26545504d9d00d4eb31e"
+    },
+    {
+      "path": "thesis/campaigns/worker-desktop-k3-orca-relayed-http-remaining-v1620/prefixes/resources.jsonl/000001308619-000001385959.chunk",
+      "bytes": 77340,
+      "sha256": "a8353547564b1313ed0efefd6494398efadf00952f7b4ba2ea8a9a7eb6bdba9c"
+    },
+    {
+      "path": "thesis/campaigns/worker-desktop-k3-orca-relayed-http-remaining-v1620/prefixes/resources.jsonl/000001385959-000001452987.chunk",
+      "bytes": 67028,
+      "sha256": "48b831d830564158a94dcf60ae68dc2abe9956101b0df9f95652e53f62e7f08d"
+    },
+    {
+      "path": "thesis/campaigns/worker-desktop-k3-orca-relayed-http-remaining-v1620/prefixes/transport-diagnostics.jsonl/000000000000-000000000462.chunk",
+      "bytes": 462,
+      "sha256": "4e32eaaeae943a5084d27ee021f40808ff2f403639337426437216967abb3ac5"
+    },
+    {
+      "path": "thesis/campaigns/worker-desktop-k3-orca-relayed-http-remaining-v1620/prefixes/warmupFinalizer.private.log/000000000000-000000001076.chunk",
+      "bytes": 1076,
+      "sha256": "ffdd0e86e1acb29da85b5d3ad093e1dc68bee0b340875ee59903fd2b8464163b"
+    },
+    {
+      "path": "thesis/campaigns/worker-desktop-k3-orca-relayed-http-remaining-v1620/runtime/runtime-versions.json",
+      "bytes": 177,
+      "sha256": "4076ac508d5ac1c5b2f877d064744044d230713704d54d55229d221f5a31761b"
+    },
+    {
+      "path": "thesis/campaigns/worker-desktop-k3-orca-relayed-http-remaining-v1620/runtime/voice-stages.installed.json",
+      "bytes": 70,
+      "sha256": "1e9ac2c936de385f59de41553ac1ab7196dc33b5545fccf5611ea3494f2355df"
+    },
+    {
+      "path": "thesis/campaigns/worker-desktop-k3-orca-relayed-http-remaining-v1620/runtime/voice-stages.status.json",
+      "bytes": 129,
+      "sha256": "33092f425f332f5fd463fbc1b5a24197757503094adc77bc92d814f09735bb68"
+    },
+    {
+      "path": "thesis/campaigns/worker-desktop-k3-orca-relayed-http-remaining-v1620/snapshots/control-launch.json/80499324d7f3a706b2a7817b91064bd3de8d01d91234d40a6bfa0aa4937e256e.json",
+      "bytes": 5795,
+      "sha256": "80499324d7f3a706b2a7817b91064bd3de8d01d91234d40a6bfa0aa4937e256e"
+    },
+    {
+      "path": "thesis/campaigns/worker-desktop-k3-orca-relayed-http-remaining-v1620/snapshots/control-launch.json/8f747ef0094589da01cb324f4c4aee109dc52adfb3c96e7b5f4bae072464eca3.json",
+      "bytes": 5693,
+      "sha256": "8f747ef0094589da01cb324f4c4aee109dc52adfb3c96e7b5f4bae072464eca3"
+    },
+    {
+      "path": "thesis/campaigns/worker-desktop-k3-orca-relayed-http-remaining-v1620/snapshots/progress.json/003d99c0be9abe40daa8f03e459bc8f509ad59b760f6157ea3471e91b2dd1d11.json",
+      "bytes": 259,
+      "sha256": "003d99c0be9abe40daa8f03e459bc8f509ad59b760f6157ea3471e91b2dd1d11"
+    },
+    {
+      "path": "thesis/campaigns/worker-desktop-k3-orca-relayed-http-remaining-v1620/snapshots/progress.json/0ce2dd815a79e005bafe68f1e6e141f5a2c7a9089f986f875ec28d8fa656ad41.json",
+      "bytes": 218,
+      "sha256": "0ce2dd815a79e005bafe68f1e6e141f5a2c7a9089f986f875ec28d8fa656ad41"
+    },
+    {
+      "path": "thesis/campaigns/worker-desktop-k3-orca-relayed-http-remaining-v1620/snapshots/progress.json/0e730d9bd5d4f9dfe9d17195314710be927378906017c9d726b4039c7939e279.json",
+      "bytes": 269,
+      "sha256": "0e730d9bd5d4f9dfe9d17195314710be927378906017c9d726b4039c7939e279"
+    },
+    {
+      "path": "thesis/campaigns/worker-desktop-k3-orca-relayed-http-remaining-v1620/snapshots/progress.json/2e9b9020dfd88056696ac515678e5d5dfce79f75089347ab8df6d51813bc28e4.json",
+      "bytes": 259,
+      "sha256": "2e9b9020dfd88056696ac515678e5d5dfce79f75089347ab8df6d51813bc28e4"
+    },
+    {
+      "path": "thesis/campaigns/worker-desktop-k3-orca-relayed-http-remaining-v1620/snapshots/progress.json/3d02891d4bde42ab296fe7a6dff31ec5cdfe8e7cfd473c389ff8e18ba3563ad4.json",
+      "bytes": 269,
+      "sha256": "3d02891d4bde42ab296fe7a6dff31ec5cdfe8e7cfd473c389ff8e18ba3563ad4"
+    },
+    {
+      "path": "thesis/campaigns/worker-desktop-k3-orca-relayed-http-remaining-v1620/snapshots/progress.json/5ecc374fa8c8c9bb939bf47941fa9d1ba0e1116297cc6849734b16d2d1f004a2.json",
+      "bytes": 265,
+      "sha256": "5ecc374fa8c8c9bb939bf47941fa9d1ba0e1116297cc6849734b16d2d1f004a2"
+    },
+    {
+      "path": "thesis/campaigns/worker-desktop-k3-orca-relayed-http-remaining-v1620/snapshots/progress.json/7b482e12a4752facc951524b3792edf19b3647cf5e8f38e86529421bfeb7912f.json",
+      "bytes": 259,
+      "sha256": "7b482e12a4752facc951524b3792edf19b3647cf5e8f38e86529421bfeb7912f"
+    },
+    {
+      "path": "thesis/campaigns/worker-desktop-k3-orca-relayed-http-remaining-v1620/snapshots/progress.json/7d8d3a5e782e6356cf7a47fd349ef385c64f0829751462e0d1dae1a7578c3272.json",
+      "bytes": 269,
+      "sha256": "7d8d3a5e782e6356cf7a47fd349ef385c64f0829751462e0d1dae1a7578c3272"
+    },
+    {
+      "path": "thesis/campaigns/worker-desktop-k3-orca-relayed-http-remaining-v1620/snapshots/progress.json/81a39cff6a578efad9591c193c7a69de76c84775ca006d12d1e558d174c9a003.json",
+      "bytes": 269,
+      "sha256": "81a39cff6a578efad9591c193c7a69de76c84775ca006d12d1e558d174c9a003"
+    },
+    {
+      "path": "thesis/campaigns/worker-desktop-k3-orca-relayed-http-remaining-v1620/snapshots/progress.json/8d34fd70759537000b6fc1908ccfc49624e538d9a13705e4f34ba90d038ef41b.json",
+      "bytes": 270,
+      "sha256": "8d34fd70759537000b6fc1908ccfc49624e538d9a13705e4f34ba90d038ef41b"
+    },
+    {
+      "path": "thesis/campaigns/worker-desktop-k3-orca-relayed-http-remaining-v1620/snapshots/progress.json/aa2f9e63f13c5efe1556465d353a4c9f3e7361d28d3fd4cb48ed2796329a8ee3.json",
+      "bytes": 269,
+      "sha256": "aa2f9e63f13c5efe1556465d353a4c9f3e7361d28d3fd4cb48ed2796329a8ee3"
+    },
+    {
+      "path": "thesis/campaigns/worker-desktop-k3-orca-relayed-http-remaining-v1620/snapshots/progress.json/ac4e9405b44cc7eeedde647aaddbace616414beca92cd3e2e10384d0d06b80ba.json",
+      "bytes": 259,
+      "sha256": "ac4e9405b44cc7eeedde647aaddbace616414beca92cd3e2e10384d0d06b80ba"
+    },
+    {
+      "path": "thesis/campaigns/worker-desktop-k3-orca-relayed-http-remaining-v1620/snapshots/progress.json/b35481679e54019ebc08e7c9c3053b76a4417b3798e812f61fa983c1d72effa1.json",
+      "bytes": 265,
+      "sha256": "b35481679e54019ebc08e7c9c3053b76a4417b3798e812f61fa983c1d72effa1"
+    },
+    {
+      "path": "thesis/campaigns/worker-desktop-k3-orca-relayed-http-remaining-v1620/snapshots/progress.json/b5ff6719adc9a8e79f013b79bc5edb3e404b364d664e1b35e6edee908ac20b53.json",
+      "bytes": 267,
+      "sha256": "b5ff6719adc9a8e79f013b79bc5edb3e404b364d664e1b35e6edee908ac20b53"
+    },
+    {
+      "path": "thesis/campaigns/worker-desktop-k3-orca-relayed-http-remaining-v1620/snapshots/progress.json/d5471b7810994a70a08443683489896e71fedd46dcfea8c876f227578c19b9ec.json",
+      "bytes": 267,
+      "sha256": "d5471b7810994a70a08443683489896e71fedd46dcfea8c876f227578c19b9ec"
+    },
+    {
+      "path": "thesis/campaigns/worker-desktop-k3-orca-relayed-http-remaining-v1620/snapshots/progress.json/e925966956b4e2a5be7e15693185c83c0099822e6fe603e66b5a0a5874fba2f0.json",
+      "bytes": 265,
+      "sha256": "e925966956b4e2a5be7e15693185c83c0099822e6fe603e66b5a0a5874fba2f0"
+    },
+    {
+      "path": "thesis/campaigns/worker-desktop-k3-orca-relayed-http-remaining-v1620/snapshots/progress.json/eb8e5be9ab57baa6a6d064f34ec29adf08aa229b6bca926ec19381e8eb2206e0.json",
+      "bytes": 265,
+      "sha256": "eb8e5be9ab57baa6a6d064f34ec29adf08aa229b6bca926ec19381e8eb2206e0"
+    },
+    {
+      "path": "thesis/campaigns/worker-desktop-k3-orca-relayed-http-remaining-v1620/snapshots/progress.json/ee778c29f21198b8ead8f0dca9679d05e34c790dbd05e081b3368dc548c62a1c.json",
+      "bytes": 267,
+      "sha256": "ee778c29f21198b8ead8f0dca9679d05e34c790dbd05e081b3368dc548c62a1c"
+    },
+    {
+      "path": "thesis/campaigns/worker-desktop-k3-orca-relayed-http-remaining-v1620/snapshots/progress.json/ff513a66312d3e6be306ff8b8e57b88f00d6f2d3a14e08f8e814f50b369a4c7b.json",
+      "bytes": 265,
+      "sha256": "ff513a66312d3e6be306ff8b8e57b88f00d6f2d3a14e08f8e814f50b369a4c7b"
+    },
+    {
+      "path": "thesis/campaigns/worker-desktop-k3-orca-relayed-http-remaining-v1620/snapshots/summary.json/d1d29fe13c5d858d8c4e67727ef8d0cc1bc2f2c1adb2d3597955cf67435dc864.json",
+      "bytes": 20267,
+      "sha256": "d1d29fe13c5d858d8c4e67727ef8d0cc1bc2f2c1adb2d3597955cf67435dc864"
+    }
+  ],
+  "errors": []
+}

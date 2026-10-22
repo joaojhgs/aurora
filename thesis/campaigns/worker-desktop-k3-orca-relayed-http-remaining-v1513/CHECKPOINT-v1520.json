@@ -1,0 +1,30 @@
+{
+  "at": "2026-10-18T14:26:08.141163+00:00",
+  "status": "PREPARED387_NOT_LAUNCHED_EXACT_CONTROL_PENDING",
+  "nativeGoal": "01a112a5-d6bb-74e2-bf7c-ace73cb513b5",
+  "nativeStatus": "active",
+  "nativeSnapshot": "NATIVE-GOAL-v1518.json",
+  "currentOwner": "Original Root",
+  "monitorDispatch": "ctx_37b4d0a3c14f",
+  "requestId": "cdac7533-7309-4015-be6f-69bae4a8f0ee",
+  "requestState": "pending",
+  "requestLastRuntimeUpdate": "2026-10-18 13:57:48",
+  "sameStreamCursor": "47858",
+  "newOutputLinesAt142336": 0,
+  "oneSupportedSameIdRetry": true,
+  "freshResends": 0,
+  "successorModelRequests": 0,
+  "providerReservation": "HELD; no fresh provider liveness result returned",
+  "forward": {
+    "pid": 421717,
+    "startTicks": 104535394,
+    "state": "S"
+  },
+  "remainingMeasured": 387,
+  "priorAttempts": 513,
+  "priorCorrect": 512,
+  "priorFailed": 1,
+  "review": "Count/statistical review closed; only verification of two corrected operational deltas pending",
+  "nextAction": "Consume changed same-request/control capability receipt and original monitor final delta note. No new prep variant, edge tests, logs search or unchanged repeat. After recovery: actual same-provider resource/auth/native ordinary warmup admission only.",
+  "methodology": "thesis/methodology/owner-requirements-20261018-71257a5f.md"
+}

@@ -1,0 +1,120 @@
+{
+  "at": "2026-10-22T14:27:30.192065+00:00",
+  "classification": "PROGRESS_AND_VERIFIED_LIVE_WAIT",
+  "previousTurnClassification": "VERIFIED_WAIT: exact original requester live and completing cases; shared-capacity peak observed without assigning writer cause",
+  "specificLiveHandle": {
+    "pid": 462924,
+    "startTicks": 144596371,
+    "state": "S"
+  },
+  "current": {
+    "at": "2026-10-22T14:27:12.232944+00:00",
+    "companion": {
+      "measured": {
+        "attempted": 264,
+        "correct": 264,
+        "failed": 0,
+        "harnessErrorsIncludedInFailed": 0,
+        "incorrectIncludedInFailed": 0,
+        "offered": 264,
+        "planned": 640,
+        "timeouts": 0,
+        "unstarted": 376
+      },
+      "warmup": {
+        "attempted": 15,
+        "correct": 15,
+        "failed": 0,
+        "harnessErrorsIncludedInFailed": 0,
+        "incorrectIncludedInFailed": 0,
+        "offered": 15,
+        "planned": 15,
+        "timeouts": 0,
+        "unstarted": 0
+      }
+    },
+    "completePairedCapsules": 279,
+    "elapsedSeconds": 11721.994323365,
+    "lastIndex": 264,
+    "lastNativeParent": "b82da2582d86cdecc34e78271548a884",
+    "lastOrdinal": 279,
+    "manifestSha256": "3bfca19d2dd0a9eec3981eae256168a5badd9ac2bb58a270ff8a55df1d986cce",
+    "phase": "measured",
+    "pid": 462924,
+    "primary": {
+      "measured": {
+        "attempted": 264,
+        "correct": 264,
+        "failed": 0,
+        "harnessErrorsIncludedInFailed": 0,
+        "incorrectIncludedInFailed": 0,
+        "offered": 264,
+        "planned": 640,
+        "timeouts": 0,
+        "unstarted": 376
+      },
+      "warmup": {
+        "attempted": 15,
+        "correct": 15,
+        "failed": 0,
+        "harnessErrorsIncludedInFailed": 0,
+        "incorrectIncludedInFailed": 0,
+        "offered": 15,
+        "planned": 15,
+        "timeouts": 0,
+        "unstarted": 0
+      }
+    },
+    "status": "running"
+  },
+  "priorRetainedMeasuredPerStream": 260,
+  "conditionCorrectPerStream": {
+    "primary": 524,
+    "companion": 524
+  },
+  "terminalPresent": false,
+  "activeErrorPresent": false,
+  "freeBytes": 2178617344,
+  "diskFreeFloorBytes": 2147483648,
+  "mainSourceSettingsCountsClocksFloorChanged": false,
+  "newCompletedControlCustody": "control-link-receipts/20261022T142313.832224Z.json",
+  "newFilesLinked": 400,
+  "newBytesHashed": 2419989,
+  "oldFilesRehashed": 0,
+  "newPayloadAllocations": 0,
+  "newWorkersReviewsModelsBuildsOrDeviceCommands": 0,
+  "rootPhoneNotebookReads": 0,
+  "phoneOwner": "term_1f27be31-0284-4366-bb91-30fe538cd30e",
+  "sourceHandoff": "ebde+v2383 closed",
+  "jointWorkerStorageBudget": "JOINT-WORKER-STORAGE-BUDGET-v2477.json",
+  "sharedStorageAdmissionReplyPending": false,
+  "independentNotebookReadinessNotBlanketHeld": true,
+  "originalMonitorMailbox": "No new directive/budget reply. Changed resource event sent once to original monitor msg_1295c6d3b496 and same worker msg_d54462974343, accepted; no worker exit or writer cause inferred.",
+  "exactUnusedWebpackCachePermission": "PENDING; no deletion/reask/implicit approval",
+  "nextSutAction": "Keep Main original requester/custody first; after full condition terminal retrieve EOF/prove normal retirement/release and actual prepared-P2P admission. Phone same worker may continue authorized lane after existing native/cancellation/manifest gates under granted2MiB credit and18:21 hardstop, without Main-end dependency.",
+  "nextMaximumObservationUtc": "2026-10-22T14:32:30.192065+00:00",
+  "jointAdditionalCapacityNeededNowBytes": 304410624,
+  "phoneTrialQualification": "Monitor-reported embedded-GGUF-template cohort referenceMatched900=false, requester valid31788B WAV at6836.2ms,0measured; not matched900 or provider-native acceptance",
+  "mailAck": "delivery_c6f3fbb13940",
+  "headroomAboveFloorBytes": 31133696,
+  "capacityObservation": "CAPACITY-DELTA-v2476.json:13,651,968B decline14:04:47->14:06:28, then10,657,792B rebound by14:08:08; volatile peak cause UNATTRIBUTED, no Root deletion or experiment changes",
+  "storageOperationGuidance": "Avoid NEW unadmitted bulk transfer/ZIP/base64/extract peaks; retain existing raw/audio physically on approved repo paths, no worker/provider/session stop; prospective900 remains unadmitted by joint reserve",
+  "jointTotalOutstandingReservationBytes": 335544320,
+  "phoneWorkerMetadataStorageGateCleared": true,
+  "phoneMeasuredConditionAdmitted": false,
+  "phoneWorkerNewPhysicalCreditBytes": 2097152,
+  "phoneCreditSource": "Within existing64MiBshared-controls reserve; prior100MiB additional bulk envelope superseded",
+  "phoneAdmissionReceipt": "PHONE-LIMITED-WORKER-STORAGE-ADMISSION-v2477.json",
+  "phoneGuard": "Netnewphysical<=2MiB incl all owned metadata/temp/directory/copy peaks and onepilotWAV<=100KiB insidecredit; eachwrite free>2GiB+16MiB+nextpeak, else defer Workercopy and retain Notebookraw",
+  "phonePrimaryRawCustody": "Existing approved Notebook Aurora repo thesis, bounded48MiB proposed collection incl raw/WAV/stage/resource/frozeninputs/harness; second full Workerraw explicitlypending, not a blanket Main-endgate",
+  "phoneWorkerActualAcknowledgement": "msg_bf7a675f0e75; fresh physical baseline WORKER-LIMITED-ALLOCATION-v426.json and guards acknowledged; pilot ZIP58592B onepayload/noextraction",
+  "phoneNativePilotProof": "Original monitor msg_a31c56a6b2af independently CLOSED saved3native stage joins+sameopaqueclock+10payloadhashes+validWAV/RMS/sourceconfig once, no repeatproof needed",
+  "phoneRemainingGate": "Existing active-cancellation/control fault pending with same phone worker, then exact newmanifest and normal own-Ncapacity/native/cohort admission before authorized900; storage credit needs no further Root/user permission",
+  "phoneReferenceMatched900": false,
+  "phoneOwnerHardStopUtc": "2026-10-22T18:21:09.788710+00:00",
+  "rootAdmissionMessageIds": [
+    "msg_b70a5b5bbb2c",
+    "msg_116670c92086"
+  ],
+  "monitorRaceCorrection": "msg_d093fa8832b2 accepted; pendingallocation request superseded by actualgrant/workerACK"
+}

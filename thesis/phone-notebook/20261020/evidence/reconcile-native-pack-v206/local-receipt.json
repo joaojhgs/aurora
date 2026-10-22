@@ -1,0 +1,8 @@
+{
+  "bytes": 3906,
+  "copyOnly": true,
+  "custody": "Notebook result persisted and fsynced before relay; remote receipt in same output",
+  "localPath": "/home/developer/projects/aurora/thesis/phone-notebook/20261020/evidence/reconcile-native-pack-v206/result.json",
+  "remotePath": "/home/developer/projects/aurora/thesis/phone-notebook/20261020/evidence/reconcile-native-pack-v206.json",
+  "sha256": "456d35d5957a58ab98814d649cab6df16dd4aeefc908ef2f5be03fd4f3ec6771"
+}

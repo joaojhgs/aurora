@@ -1,0 +1,14 @@
+{
+  "owned_sha256": {
+    "apps/aurora-web/app/assistant-client.tsx": "9d5571da7fc21b99921ae7601b3cf1cd993e730581d014e19f8201162066bb96",
+    "packages/aurora-ui/src/assistant-view-types.ts": "3f129d205313eece70b3bb594f568f0511a2c38c43339d3ccf275b0e32db6dc2",
+    "packages/aurora-ui/src/assistant-view.tsx": "d244100fdd1db1a996f304b2555821807f6c1aa973d6660ef27ff762780033bb",
+    "packages/aurora-ui/src/use-assistant-view-coordination.ts": "6f2d63c3ae30dd9447e939a4caf2e4bffc3925613c44446fd33a74057cc33196",
+    "packages/aurora-ui/src/assistant-history-persistence.ts": "651033b8ea953397a046cfd000213b9bf66d6a1b0d32198df73fd49a8252bbe8",
+    "packages/aurora-ui/tests/native-assistant-view.test.tsx": "0f8fc23fa51d0a0cde010f5aa3a83c11609cdd6dee73799107c72b702ab5a957"
+  },
+  "test_readiness_delta_only": true,
+  "production_typecheck_closed": "v280b ui-types exit0/39.083s; unchanged exact5productionhashes",
+  "review_sha256": "2281648179990c0796f1fc7b02853ec6f260e68a11c5c49b0406f7f4e52bb5fc",
+  "unit_scope": "seeded LOAD/UI only; actualmainfreshsave/reopen required"
+}

@@ -1,0 +1,42 @@
+{
+  "at": "2026-10-16T15:05:54.797351+00:00",
+  "scope": "New production frontend build of reviewed repair; no native/runtime/model/benchmark/deployment claim",
+  "records": [
+    {
+      "source": ".git/aurora-handoff-import-20261006/desktop-local-frontend-v1087/ADMISSION.json",
+      "path": "ADMISSION.json",
+      "bytes": 3088,
+      "sha256": "9ac702545164f8ff5c0100b58b602636138a88f918de655efafeab7a94369b71"
+    },
+    {
+      "source": ".git/aurora-handoff-import-20261006/desktop-local-frontend-v1087/PROCESS.json",
+      "path": "PROCESS.json",
+      "bytes": 383,
+      "sha256": "81f9681b40ab5e0a607c2aeb1a2ff14ca530c8fd04722297a0ea4059be317e00"
+    },
+    {
+      "source": ".git/aurora-handoff-import-20261006/desktop-local-frontend-v1087/RESULT.json",
+      "path": "RESULT.json",
+      "bytes": 13583,
+      "sha256": "796cae0dbff51298c3e778cf8a9cc3ac692c4e0eb74d3b390d068a6e831fe617"
+    },
+    {
+      "source": ".git/aurora-handoff-import-20261006/desktop-local-frontend-v1087/ARTIFACT.json",
+      "path": "ARTIFACT.json",
+      "bytes": 570,
+      "sha256": "e08a6c7fce3b31c01cec38dcde35d6f42bcefe33021a3f6c89a4431efd80b2ac"
+    },
+    {
+      "source": ".git/aurora-handoff-import-20261006/desktop-local-frontend-v1087/build.log",
+      "path": "build.log",
+      "bytes": 12391,
+      "sha256": "a73ceb2fe61f2cfb8e25920a8dd785035e555bf95356341ddc79dd79a63394f1"
+    },
+    {
+      "source": ".git/aurora-handoff-import-20261006/desktop-local-frontend-v1087/frontend-production-v1087.tar.gz",
+      "path": "frontend-production-v1087.tar.gz",
+      "bytes": 2095771,
+      "sha256": "c01625b72498d4f0d46b2f53845b4707e7cae99e43c739f5657f53ec0fee4498"
+    }
+  ]
+}

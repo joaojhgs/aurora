@@ -1,0 +1,31 @@
+{
+  "owned_sha256": {
+    "scripts/experiments/assistant_local_api_pilot.py": "de351707df153a38c0b8d0fb5a2df411895c5e63868b32ae1f3ab5864552c93c",
+    "scripts/experiments/assistant_matched_input_hook.py": "1e342abe17092ac6b237564f51c31344e60f84fde8c1d1636b8876bd33a1f622",
+    "apps/aurora-web/app/browser-shell-runtime.tsx": "826371f243f68d8b5948ffc0cd0c02cd3a01b2b1f92265835728a2d9905e5fe0",
+    "tests/e2e/hosted_peer/hosted-peer-live-shell.spec.ts": "2c09714c11cd41a49aeed06f36635df2b54307a9e380e6a9ece9f1be87fce388",
+    "scripts/hosted_peer_e2e.sh": "887c545c60010c9ec3540fb59290ab72ba9a4bb3021e87e54a94d7b14497b78e"
+  },
+  "before_sha256": {
+    "scripts/experiments/assistant_local_api_pilot.py": "857730e1aee69c854718e5302da3bf010a9aa10ed9befd139437605b25356c3e",
+    "scripts/experiments/assistant_matched_input_hook.py": null,
+    "apps/aurora-web/app/browser-shell-runtime.tsx": "079bd1309a19f578d4c5c5cdbc69f033446290fa08fcf6db32d2bed528b1f9a4",
+    "tests/e2e/hosted_peer/hosted-peer-live-shell.spec.ts": "a257aa79f03423fa412ffa53099f124910c248a3c3591924e9e3688de0891b2b",
+    "scripts/hosted_peer_e2e.sh": "36d9e2907d9f19590f3552d2ea2aefad27cdb6f2c09d8e2cdfac748dccf0a267"
+  },
+  "source_review": "v291 approved; exact equivalent lint delta addendum v291b pending; no model before addendum",
+  "root_integration_only": true,
+  "preserved_other_wip": true,
+  "before_lint_source_sha256": {
+    "scripts/experiments/assistant_local_api_pilot.py": "443ea840263c4b24f38f51dc611f328da748080ba01babbaa61fa377888680cb",
+    "scripts/experiments/assistant_matched_input_hook.py": "7cdbc4dfb931e6db4774f2ec857535103c4ca3e9d9462f26e2e80bcd5297bace",
+    "apps/aurora-web/app/browser-shell-runtime.tsx": "826371f243f68d8b5948ffc0cd0c02cd3a01b2b1f92265835728a2d9905e5fe0",
+    "tests/e2e/hosted_peer/hosted-peer-live-shell.spec.ts": "2c09714c11cd41a49aeed06f36635df2b54307a9e380e6a9ece9f1be87fce388",
+    "scripts/hosted_peer_e2e.sh": "887c545c60010c9ec3540fb59290ab72ba9a4bb3021e87e54a94d7b14497b78e"
+  },
+  "lint_only_changes": [
+    "SIM102 equivalent short-circuit guard combination",
+    "SIM300 comparison operand order"
+  ],
+  "syntax_and_ruff_final": "passed"
+}

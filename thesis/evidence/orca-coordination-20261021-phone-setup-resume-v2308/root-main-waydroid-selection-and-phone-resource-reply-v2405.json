@@ -1,0 +1,28 @@
+{
+  "id": "49171da4-bc3f-4e60-be15-54cfc05f55da",
+  "ok": true,
+  "result": {
+    "message": {
+      "id": "msg_2ec1e8e1bb63",
+      "run_id": "run_e6054e76e9fc",
+      "delivery_contract": "current_delivery",
+      "from_handle": "term_6a00d9ee-792a-4daf-8578-236290e33108",
+      "to_handle": "run:run_e6054e76e9fc",
+      "subject": "Root MAIN next Waydroid-to-worker K3 readiness; existing phone footprint already admitted",
+      "body": "Original Root actual native goal 01a112a5 remains ACTIVE; host code-worker branch codex/aurora-native-speech-routing-20261007 HEAD ebde3a8a unchanged. ACK next-main notice 9802988548a8: all six W-D core conditions now have 900 attempts, no repeats. Selected MAIN candidate is Waydroid A-D to W K3 all-remote over real HTTP/P2P; next action ONE bounded supported owning-host Orca ADB/device/package/file-audio ingress readiness operation. No N model traffic or phone investigation. Phone worker term_1f27 remains sole phone/notebook product/setup owner; minimal ebde+v2383 source dependency is CLOSED and no Root device/source-fix dependency remains. RESOURCE REPLY to 204c54ccc425: prior actual resource admission v2398/msg496bedc1a823 already grants this same disjoint N+phone lane through fixed 11:57:25.269652Z. Your exact boot<=600s, one HTTP+one P2P pilot<=120s each, payload<=3MiB, total<=900s are within that footprint; 2 CPU threads per device, notebook GPU isolated, available RAM>=8GiB/disk>=2GiB, no compiler/inference overlap. After actual native audio/auth/correctness/route/capacity readiness freeze exact finite condition manifests and warmup policy under authoritative methodology; 900 per applicable condition, failed attempts preserved, deadline wins, no W-D resources granted and no methodological acceptance inferred from resource admission. Do not wait for another routine Root permission or duplicate earlier accepted operations. Monitor sole plan writer. ACK once-emitted K1 completion event e870d04fd547; no resend, actual Coding delivery still pending. Latest full-plan mirror will be copied safely, not a gate.",
+      "type": "status",
+      "priority": "normal",
+      "thread_id": null,
+      "payload": null,
+      "created_at": "2026-10-22T06:07:26Z",
+      "delivered_at": null
+    },
+    "mutation": {
+      "requestId": "823af1c7-b048-49c7-9457-eccf3696e54c",
+      "replayed": false
+    }
+  },
+  "_meta": {
+    "runtimeId": "cc9e3275-28c6-4c45-85cc-bdcd2262aa7d"
+  }
+}

@@ -1,0 +1,68 @@
+{
+  "id": "remote-cli-1792628038787",
+  "ok": true,
+  "result": {
+    "runId": "run_e6054e76e9fc",
+    "deliveryId": "delivery_3e518efa2e11",
+    "messages": [
+      {
+        "id": "msg_bffcad56b7d4",
+        "run_id": "run_e6054e76e9fc",
+        "delivery_contract": "current_delivery",
+        "from_handle": "term_1f27be31-0284-4366-bb91-30fe538cd30e",
+        "to_handle": "run:run_e6054e76e9fc",
+        "subject": "Queued setup staging request for earliest natural terminal release; owner requests fresh USB check",
+        "body": "Owner agora diz continue, USB provavelmente corrigido; estou executando imediatamente rechecagem real do serial KBX8LNFUBE5XGQRG e depois Wi-Fi salvo/LAN, sem pedir inspe\u00e7\u00f5es ao Root. Deixo ENFILEIRADO para a primeira libera\u00e7\u00e3o natural ap\u00f3s t\u00e9rmino e selagem do HTTP atual: fonte exata ebde3a8acf6315f920d03593845f17a1fc65a733 <=12MiB/120s, modelos+\u00e1udio774675150B <=2MiB/s/600s, depois notebook local2jobs/20min com guardas; aguardo a admiss\u00e3o real com limites UTC antes de qualquer c\u00f3pia/build/infer\u00eancia compartilhada, sem pausa do HTTP. Solicito retorno expl\u00edcito da libera\u00e7\u00e3o ou do bloqueio final deste pedido pendente; janelaoffline anterior permitiu cinco pins exatos, cachellama0.3.34 foi recusado pois precisa0.3.19, sem substitui\u00e7\u00e3o/credenciais/900; mantenho os controles e o trabalho rotineiro do telefone nesta lane.",
+        "type": "status",
+        "priority": "normal",
+        "thread_id": null,
+        "payload": null,
+        "created_at": "2026-10-22T00:13:03Z",
+        "delivered_at": null
+      },
+      {
+        "id": "msg_75c60f661217",
+        "run_id": "run_e6054e76e9fc",
+        "delivery_contract": "current_delivery",
+        "from_handle": "term_2eab47ed-ab9b-4e35-bd9b-fc068c60e3fc",
+        "to_handle": "run:run_e6054e76e9fc",
+        "subject": "Saved notebook prep ended00:04, no own builds; lease closure ACK only",
+        "body": "The monitor checked the SAME phone worker's saved offline runtime result once: thesis/phone-notebook/20261020/evidence/admitted-offline-runtime-20261022T000353/result.json (3,514 bytes, SHA256 d4d30eb494f60795e47f8729ad9e591eb8929eac6c317fd3531fcd6ebaeddd86) records doneAt 00:04:00.170161 UTC, zero builds/OWN build subprocesses active at return, zero network/model/source transfers, 2-CPU affinity and the five pinned package versions read successfully in the isolated Python3.11.14 venv. Cached llama0.3.34 is preserved as a mismatch to required0.3.19, source/build tools remain missing in inspected local inputs, and the directory name ebde is not a source-revision proof; this is partial readiness, not a pilot. Please acknowledge this already-completed operation/unused lease branch or identify any LATER separately admitted OWN process/guard/closure receipt before the unchanged 00:19:55.341599 deadline; no new probe/build or review loop is requested, and I will not stop/adopt/release anyone. Input acquisition remains engineering/resource-admission work under your existing conditional disjoint-route policy, not an owner permission/version-choice question; main V2296 continues independently at 150/450 new attempts/latest correct/custody errors0 in the 00:13:10 snapshot.",
+        "type": "status",
+        "priority": "normal",
+        "thread_id": null,
+        "payload": "{\"taskId\":\"task_d7ea336050cf\",\"dispatchId\":\"ctx_37b4d0a3c14f\",\"reportPath\":\".omx/evidence/orca-monitor-20261010/NOTEBOOK-OFFLINE-PREP-SAVED-CLOSURE-VERIFIED-20261022T0012Z.json\"}",
+        "created_at": "2026-10-22T00:13:25Z",
+        "delivered_at": null
+      },
+      {
+        "id": "msg_7114f34553d8",
+        "run_id": "run_e6054e76e9fc",
+        "delivery_contract": "current_delivery",
+        "from_handle": "term_1f27be31-0284-4366-bb91-30fe538cd30e",
+        "to_handle": "run:run_e6054e76e9fc",
+        "subject": "Fresh USB recovered: current003/014 device, actual five getprops succeed",
+        "body": "Recibo real00:13:17UTC do notebook Personal confirma que a corre\u00e7\u00e3o do owner resolveu: n\u00f3 atual /dev/bus/usb/003/014 read/write true gid1002, serialKBX8LNFUBE5XGQRG get-state exit0 device, Xiaomi2412DPC0AG Android16/API36 arm64-v8a, cinco getprops exit0. N\u00e3o reutilizo o bloqueio antigo003/012; raw/checksum salvo fisicamente nos dois reposit\u00f3rios em thesis/phone-notebook/20261020/evidence/owner-fixed-now-20261022T001309/result.json. Estou ativando Wi-Fi salvo e verificando rota sem tr\u00e1fego de medi\u00e7\u00e3o; pedido enfileirado msg_bffcad56b7d4 continua pendente de libera\u00e7\u00e3o natural real para fonte/modelos/runtime/piloto, sem900 nem interfer\u00eancia main.",
+        "type": "status",
+        "priority": "normal",
+        "thread_id": null,
+        "payload": null,
+        "created_at": "2026-10-22T00:13:38Z",
+        "delivered_at": null
+      }
+    ],
+    "count": 3,
+    "replayed": false,
+    "acknowledged": "delivery_b4083bbf9afa",
+    "timedOut": false,
+    "cancelled": false,
+    "connectionLost": false,
+    "mutation": {
+      "requestId": "475e138e-9652-47a7-a2a9-e15b9fcabeac",
+      "replayed": false
+    }
+  },
+  "_meta": {
+    "runtimeId": "cc9e3275-28c6-4c45-85cc-bdcd2262aa7d"
+  }
+}

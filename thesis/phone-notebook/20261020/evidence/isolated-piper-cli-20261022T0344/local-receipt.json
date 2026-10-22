@@ -1,0 +1,8 @@
+{
+  "bytes": 2001,
+  "copyOnly": true,
+  "custody": "Notebook result persisted and fsynced before relay; remote receipt in same output",
+  "localPath": "/home/developer/projects/aurora/thesis/phone-notebook/20261020/evidence/isolated-piper-cli-20261022T0344/result.json",
+  "remotePath": "/home/developer/projects/aurora/thesis/phone-notebook/20261020/evidence/isolated-piper-cli-20261022T0344.json",
+  "sha256": "d6c8931b17a56adb2d285c974af960794353386f6370eb3f6e5bd1049e278de8"
+}

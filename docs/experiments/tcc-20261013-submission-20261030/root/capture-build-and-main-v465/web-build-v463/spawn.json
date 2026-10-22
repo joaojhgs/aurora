@@ -1,0 +1,18 @@
+{
+  "at": "2026-10-15T00:56:44.177312+00:00",
+  "controllerPid": 2870376,
+  "root": "/home/developer/projects/aurora/.git/aurora-web-capture-v463",
+  "capSeconds": 300,
+  "sourcePacketFiles": {
+    "packages/aurora-ui/src/use-assistant-browser-capture.ts": {
+      "preimageSHA256": "f6d1d6e2f1d6d164e446271917bc8534f0e283be58a40ddabf845e4a66e069cd",
+      "sha256": "cef59aa2f2ddbc0774099ebcce27e92159734d9028ad56e09bf3ecb8efe57fd5"
+    },
+    "packages/aurora-voice-web/src/audio-worklet-source.ts": {
+      "preimageSHA256": "cd249ff9fc569da31c2cd2b1f556a8f1f779fc5b2cf36a786ace3632d686ed6c",
+      "sha256": "af88cb9a88bdc8887ac6edfcd26f4dc6bb59d75bec84a5da3418c9453b6bc643"
+    }
+  },
+  "measurementStarted": false,
+  "nativeWasmDependencyReplay": false
+}

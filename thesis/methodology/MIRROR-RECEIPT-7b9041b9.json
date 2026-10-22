@@ -1,0 +1,14 @@
+{
+  "at": "2026-10-20T05:56:21.789999+00:00",
+  "source": ".omx/evidence/orca-monitor-20261010/PLAN-AFTER-K2-TIMING-CLOSED-20261020T0555.md",
+  "destination": "thesis/methodology/owner-requirements-20261020-7b9041b9.md",
+  "bytes": 677179,
+  "sha256": "7b9041b983b05888be23f25f9d5ff744c8dcd0011c8826e5a22f5620a66814ac",
+  "priorBytes": 671800,
+  "exactPriorPrefix": true,
+  "appendBytes": 5379,
+  "completeCanonicalMirror": true,
+  "methodologyWriter": "Original monitor only",
+  "rootCopyOnly": true,
+  "sutCalls": 0
+}

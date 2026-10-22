@@ -1,0 +1,92 @@
+{
+  "at": "2026-10-15T07:57:00Z",
+  "run": "run_e6054e76e9fc",
+  "task": "task_d7ea336050cf",
+  "dispatch": "ctx_37b4d0a3c14f",
+  "nudgeMessageId": "msg_3d9914efd88e",
+  "rootAcknowledgement": {
+    "messageId": "msg_e0a20f1a0c7b",
+    "at": "2026-10-15T07:50:28Z",
+    "fullReadNudge": "msg_3d9914efd88e",
+    "assigned": true,
+    "existingLane": "Luna luna_android_offline_answer_v118",
+    "noNewWorker": true,
+    "sourceOnly": true,
+    "maxSeconds": 480,
+    "conservativeCloseoutCheckpoint": "2026-10-15T07:58:28Z",
+    "ownedFutureArtifact": ".git/aurora-handoff-import-20261006/product-voice-future-v533/voice-flow.mjs",
+    "target": "normal existing-profile production UI PTT; hashverified frozenWAV file-backed browser microphone; actualgetUserMedia errorname/message andredactedrequestfailures; ONEbounded futureattempt",
+    "excluded": [
+      "cachedtranscript/reply",
+      "demoSTT",
+      "JSprofileseeding",
+      "readaloudsubstitution",
+      "physicalmicclaim"
+    ],
+    "noRuntimeBrowserModelDeviceBuildTestNetworkTraffic": true,
+    "noDependencyIdentitySecurityChanges": true,
+    "noCurrentCampaignInputsChanged": true,
+    "closedV512V496FactsOnlyNoReReview": true,
+    "requiredReturn": "artifact/hash+exactunexecutedgap OR preciseunsupportedcapability within cap; no review/edgecasematrix",
+    "RootSoleFutureAdmissionAndExecution": true,
+    "originalRootFull13GoalActive": true,
+    "notRuntimeLaunchOrReadinessAcceptance": true
+  },
+  "latestMeasuredProgress": {
+    "messageId": "msg_3e43556809d2",
+    "at": "2026-10-15T07:53:49Z",
+    "observedAt": "2026-10-15T07:53:00Z",
+    "HTTP": {
+      "pids": [
+        2968233,
+        2968234
+      ],
+      "bothLive": true,
+      "measured": 111,
+      "warmups": 15,
+      "unattempted": 789,
+      "latestOutcomeOnly": "completed_correct",
+      "resources": {
+        "RAMavailableBytes": 2142183424,
+        "rootVolumeFreeBytes": 365756416,
+        "shmFreeBytes": 560439296,
+        "RSSkB": 1149208,
+        "sysfsErrno16Unknown": true
+      }
+    },
+    "CPU": {
+      "pids": [
+        2232517,
+        2232566
+      ],
+      "bothLive": true,
+      "measured": 291,
+      "warmups": 15,
+      "unattempted": 609,
+      "latestOutcomeOnly": "completed_correct",
+      "resources": {
+        "RAMavailableBytes": 4477747200,
+        "campaignVolumeFreeBytes": 10490490880,
+        "RSSkB": 1732932,
+        "counterErrors": []
+      }
+    },
+    "noTerminalOnEither": true,
+    "noFrozenSourceConfigInputModelCapChange": true,
+    "futureVoicePrep": {
+      "existingLuna": true,
+      "sourceOnly": true,
+      "within480sCap": true,
+      "RootConservativeCloseout": "2026-10-15T07:58:00Z"
+    },
+    "noRuntimeBuildBrowserDeviceOrNewWorker": true,
+    "nextRootObservation": "2026-10-15T07:58:00Z",
+    "full13GoalActive": true,
+    "crossDeviceMeasuredAllowed": false
+  },
+  "notBrowserOrModelExecution": true,
+  "noNewWorkers": true,
+  "noTestsByMonitor": true,
+  "monitorGoalActive": true,
+  "workerDoneSent": false
+}

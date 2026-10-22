@@ -1,0 +1,48 @@
+{
+  "at": "2026-10-18T22:58:29.971761+00:00",
+  "status": "FROZEN_RUN_CONTINUES_WITH_RECORDED_REPEATED_REPLY_PREDICATE_FAILURES",
+  "progress": {
+    "attempted": 39,
+    "measured_attempted": 24,
+    "planned_measured": 96,
+    "planned_warmups": 15,
+    "status": "stopped_system_failure",
+    "stop_reason": "transport_ambiguous",
+    "unattempted_measured": 72,
+    "warmups_attempted": 15
+  },
+  "outcomes": {
+    "completed_correct": 11,
+    "failed": 13
+  },
+  "partialQualityFailures": 12,
+  "timeoutFlags": 0,
+  "failureGlobalIndices": [
+    728,
+    729,
+    730,
+    731,
+    732,
+    733,
+    734,
+    735,
+    736,
+    737,
+    738,
+    739
+  ],
+  "failureReplyHashes": {
+    "a1b7eb2ee7a6aded8dda4e6cf30826f5afffb28a5597ee9389e91eb326d4e319": 12
+  },
+  "failureTranscriptHashes": {
+    "34b681e385feb3500c9e9849d30f5bac982716c4e4938cdb04c5fdc617cff624": 12
+  },
+  "failureReplyCharCounts": {
+    "31": 12
+  },
+  "frozenCorrectnessUnchanged": true,
+  "responseTextNotInspectedYet": true,
+  "causeUnknown": "Cannot distinguish formatting/content or persistent state from hashes; inspect saved provider history after natural windowseal. No new model call or mid-run change.",
+  "failedCaseOutputWav": "Not generated because failure before TTS, not lost evidence",
+  "noExtraPersonalCommands": true
+}

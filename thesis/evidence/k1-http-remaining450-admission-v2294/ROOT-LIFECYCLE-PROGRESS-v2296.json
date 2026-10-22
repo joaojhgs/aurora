@@ -1,0 +1,25 @@
+{
+  "at": "2026-10-21T21:41:03.170251+00:00",
+  "version": "V2296",
+  "status": "NEXT450_CLOCK_FROZEN_OLD_PROVIDER_RETIRED_EOF_CUSTODY_VERIFIED_NEW_PROVIDER_PREPARING",
+  "nativeGoalStatus": "active",
+  "goalBudget": null,
+  "conditionMeasuredAttempted": 450,
+  "conditionCorrect": 449,
+  "conditionFailed": 1,
+  "remainingMeasured": 450,
+  "nextIndices": [
+    451,
+    900
+  ],
+  "newEpochMeasuredObserved": 0,
+  "freshExcludedWarmupsObserved": 0,
+  "allocationReceipt": "thesis/evidence/k1-http-remaining450-admission-v2294/SESSION-ALLOCATION-v2296.json",
+  "sourceIndex": "thesis/evidence/k1-http-remaining450-admission-v2294/EXECUTION-SOURCE-INDEX-v2296.json",
+  "oldProviderRetired": true,
+  "oldProviderEofCustody": "thesis/campaigns/worker-desktop-k1-orca-relayed-http-first270-v2234/provider-eof-delta-v2296/CUSTODY.json",
+  "newProviderOperation": "k1-http-provider-prepare-v2296 accepted; reconcile existing receipt before next action",
+  "nextSutAction": "One finite new provider launch after actual preparation receipt, then15excludednativewarmups and451-900 only",
+  "phoneDelegated": true,
+  "newWorkers": 0
+}

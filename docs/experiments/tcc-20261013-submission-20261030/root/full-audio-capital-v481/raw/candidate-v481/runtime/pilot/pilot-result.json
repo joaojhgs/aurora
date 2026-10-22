@@ -1,0 +1,189 @@
+{
+  "candidate_manifest": {
+    "expected_reply_words": [
+      "paris"
+    ],
+    "reference_transcript_sha256": "34b681e385feb3500c9e9849d30f5bac982716c4e4938cdb04c5fdc617cff624",
+    "wav_sha256": "139fa0c34b6d18600ad9608fd2d11c9389cae2f5f548ce0f4f23b735b176f0b3"
+  },
+  "correctness": {
+    "all_expected": true,
+    "assistant_reply_matches_expected_words": true,
+    "transcript_matches_declared_task_words": true
+  },
+  "correlation": {
+    "correlation_id": "wav-flow-05d5e0dcb8374de4af7d7ce570cd8616",
+    "request_id": "wav-request-34c4e335bf90469fbeb6daa9c1ce0c19",
+    "scope": "one parent LocalBus flow; STT/TTS contracts themselves have no caller id fields",
+    "session_id": "wav-session-cc88ceed46424144a67f2b578f3fcd45"
+  },
+  "denominators": {
+    "attempted": 1,
+    "correct": 1,
+    "failed": 0,
+    "measured": 0,
+    "timeout": 0,
+    "warmup": 0
+  },
+  "expected_reply_words": [
+    "paris"
+  ],
+  "finished_monotonic_ns": 662395910836260,
+  "flow_duration_ms_excluding_setup_and_shutdown": 13512.828985,
+  "flow_ended_monotonic_ns": 662395526971135,
+  "flow_started_monotonic_ns": 662382014142150,
+  "flow_type": "prerecorded_wav_stt_assistant_tts_synthesis",
+  "input": {
+    "bytes": 153644,
+    "channels": 1,
+    "format": "wav",
+    "frames": 76800,
+    "sample_rate": 22050,
+    "sample_width_bytes": 2,
+    "sha256": "139fa0c34b6d18600ad9608fd2d11c9389cae2f5f548ce0f4f23b735b176f0b3"
+  },
+  "missing_metrics": [
+    "first_token",
+    "first_audio",
+    "playback_start",
+    "playback_end"
+  ],
+  "physical_microphone": false,
+  "physical_playback_or_audibility": false,
+  "provider_bindings_after": {
+    "configured_llm": {
+      "model_file": "Qwen3.5-0.8B-Q4_0.gguf",
+      "provider": "llama_cpp",
+      "settings": {
+        "chat_format": "chatml-function-calling",
+        "max_tokens": 128,
+        "min_p": 0.0,
+        "n_batch": 64,
+        "n_ctx": 4096,
+        "n_gpu_layers": 100,
+        "n_threads": 2,
+        "repeat_penalty": 1.0,
+        "seed": 42,
+        "temperature": 0.0,
+        "top_k": 1,
+        "top_p": 1.0
+      }
+    },
+    "transcription": {
+      "configured_compute_type": "int8",
+      "configured_device": "cpu",
+      "configured_model": "model",
+      "default_sample_rate": 16000,
+      "enabled": true,
+      "model_ready": true,
+      "model_type": {
+        "class": "WhisperModel",
+        "module": "faster_whisper.transcribe"
+      },
+      "service": "TranscriptionService"
+    },
+    "tts": {
+      "executable_file": "piper",
+      "expected_sample_rate": 22050,
+      "model_config_file": "en_US-ljspeech-medium.onnx.json",
+      "model_file": "en_US-ljspeech-medium.onnx",
+      "provider_id": "piper",
+      "provider_type": {
+        "class": "PiperTTSProvider",
+        "module": "app.services.tts.providers.piper"
+      },
+      "service": "TTSService",
+      "voice_revision": 1
+    }
+  },
+  "provider_bindings_before": {
+    "configured_llm": {
+      "model_file": "Qwen3.5-0.8B-Q4_0.gguf",
+      "provider": "llama_cpp",
+      "settings": {
+        "chat_format": "chatml-function-calling",
+        "max_tokens": 128,
+        "min_p": 0.0,
+        "n_batch": 64,
+        "n_ctx": 4096,
+        "n_gpu_layers": 100,
+        "n_threads": 2,
+        "repeat_penalty": 1.0,
+        "seed": 42,
+        "temperature": 0.0,
+        "top_k": 1,
+        "top_p": 1.0
+      }
+    },
+    "transcription": {
+      "configured_compute_type": "int8",
+      "configured_device": "cpu",
+      "configured_model": "model",
+      "default_sample_rate": 16000,
+      "enabled": true,
+      "model_ready": true,
+      "model_type": {
+        "class": "WhisperModel",
+        "module": "faster_whisper.transcribe"
+      },
+      "service": "TranscriptionService"
+    },
+    "tts": {
+      "executable_file": "piper",
+      "expected_sample_rate": 22050,
+      "model_config_file": "en_US-ljspeech-medium.onnx.json",
+      "model_file": "en_US-ljspeech-medium.onnx",
+      "provider_id": "piper",
+      "provider_type": {
+        "class": "PiperTTSProvider",
+        "module": "app.services.tts.providers.piper"
+      },
+      "service": "TTSService",
+      "voice_revision": 1
+    }
+  },
+  "reference_transcript_sha256": "34b681e385feb3500c9e9849d30f5bac982716c4e4938cdb04c5fdc617cff624",
+  "schema_version": "aurora.headless_full_audio_pilot.v1",
+  "setup_duration_ms": 9014.893017,
+  "shutdown": "completed",
+  "stages": {
+    "assistant": {
+      "duration_ms": 8401.700594,
+      "end_monotonic_ns": 662393774323779,
+      "metadata_error": false,
+      "response": "Paris",
+      "returned_correlation_id_matches": true,
+      "returned_request_id_matches": true,
+      "returned_session_id_matches": true,
+      "start_monotonic_ns": 662385372623185,
+      "status": "completed"
+    },
+    "stt": {
+      "duration_ms": 3357.917059,
+      "duration_ms_reported_by_service": 3482.9931972789113,
+      "end_monotonic_ns": 662385372316610,
+      "language": "en",
+      "model_used": "accurate",
+      "start_monotonic_ns": 662382014399551,
+      "status": "completed",
+      "transcript": "What is the capital of France? Answer with only the city name."
+    },
+    "tts": {
+      "audio_bytes": 31276,
+      "audio_file": "tts-output.wav",
+      "audio_sha256": "c45b4cc7d8e6edbc4722f4a87ffd235cc25a550cbe90c777cfe4863ef84dc430",
+      "channels": 1,
+      "duration_ms": 1563.726817,
+      "end_monotonic_ns": 662395338130348,
+      "format": "wav",
+      "frames": 15616,
+      "output_audio_duration_ms": 708.2086167800453,
+      "pcm_samples": 15616,
+      "sample_rate": 22050,
+      "start_monotonic_ns": 662393774403531,
+      "status": "completed"
+    }
+  },
+  "status": "completed",
+  "tts_output_kind": "synthesized_wav_bytes_only"
+}

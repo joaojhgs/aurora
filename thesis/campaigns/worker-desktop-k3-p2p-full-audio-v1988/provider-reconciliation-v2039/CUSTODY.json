@@ -1,0 +1,8 @@
+{
+  "at": "2026-10-20T23:53:06.045862+00:00",
+  "source": "/home/developer/projects/aurora/.git/aurora-handoff-import-20261006/read-k3-provider-reconcile-v2039-RESULT.json",
+  "bytes": 15976,
+  "sha256": "08f1e25e2fc53187bbd34c74964bc430236f84f94245baea78d94072c26d52a6",
+  "destination": "thesis/campaigns/worker-desktop-k3-p2p-full-audio-v1988/provider-reconciliation-v2039/RESULT.json",
+  "sutCalls": 0
+}

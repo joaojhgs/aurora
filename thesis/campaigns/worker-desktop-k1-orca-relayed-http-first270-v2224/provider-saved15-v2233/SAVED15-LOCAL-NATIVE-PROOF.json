@@ -1,0 +1,117 @@
+{
+  "status": "passed",
+  "planned_and_correct_warmups": 15,
+  "all_expected_predicates": true,
+  "native_stt_llm_spans": true,
+  "actual_stt_cpu_binding": true,
+  "actual_llm_cpu_binding": true,
+  "actual_piper_cpu_binding": false,
+  "actual_provider_record_sha256": "3cd3a1c7808ff8f991893d33c08c3095ebacad82d38a77cf75cfc6e2c2196055",
+  "warmup_cases": [
+    {
+      "harness_case_id": "audio-campaign-v2224-0001",
+      "correlation_id": "audio-campaign-5844f288e2de4fbb9d0f2a397d60125d",
+      "local_bus_stages_complete": true,
+      "native_spans_complete": true,
+      "correctness_complete": true
+    },
+    {
+      "harness_case_id": "audio-campaign-v2224-0002",
+      "correlation_id": "audio-campaign-31a5db42a6c64724a28b0f51e2d2d980",
+      "local_bus_stages_complete": true,
+      "native_spans_complete": true,
+      "correctness_complete": true
+    },
+    {
+      "harness_case_id": "audio-campaign-v2224-0003",
+      "correlation_id": "audio-campaign-6d14892c2c474effbfbba6a6a9d648b8",
+      "local_bus_stages_complete": true,
+      "native_spans_complete": true,
+      "correctness_complete": true
+    },
+    {
+      "harness_case_id": "audio-campaign-v2224-0004",
+      "correlation_id": "audio-campaign-d68d3c5f558949c8ad20958606dee3c9",
+      "local_bus_stages_complete": true,
+      "native_spans_complete": true,
+      "correctness_complete": true
+    },
+    {
+      "harness_case_id": "audio-campaign-v2224-0005",
+      "correlation_id": "audio-campaign-1e09804452024b38a0714a81f6894acb",
+      "local_bus_stages_complete": true,
+      "native_spans_complete": true,
+      "correctness_complete": true
+    },
+    {
+      "harness_case_id": "audio-campaign-v2224-0006",
+      "correlation_id": "audio-campaign-24be2f59252e49b89c052bbcda436faa",
+      "local_bus_stages_complete": true,
+      "native_spans_complete": true,
+      "correctness_complete": true
+    },
+    {
+      "harness_case_id": "audio-campaign-v2224-0007",
+      "correlation_id": "audio-campaign-09896a0d011147cf95979d467e4b05ba",
+      "local_bus_stages_complete": true,
+      "native_spans_complete": true,
+      "correctness_complete": true
+    },
+    {
+      "harness_case_id": "audio-campaign-v2224-0008",
+      "correlation_id": "audio-campaign-d540e9d2a73340c3bc751188d83e2f74",
+      "local_bus_stages_complete": true,
+      "native_spans_complete": true,
+      "correctness_complete": true
+    },
+    {
+      "harness_case_id": "audio-campaign-v2224-0009",
+      "correlation_id": "audio-campaign-d83a5edfce734210b852f25a341ba1e8",
+      "local_bus_stages_complete": true,
+      "native_spans_complete": true,
+      "correctness_complete": true
+    },
+    {
+      "harness_case_id": "audio-campaign-v2224-0010",
+      "correlation_id": "audio-campaign-760f7190a71c4b95b45a74f80cfbeb6f",
+      "local_bus_stages_complete": true,
+      "native_spans_complete": true,
+      "correctness_complete": true
+    },
+    {
+      "harness_case_id": "audio-campaign-v2224-0011",
+      "correlation_id": "audio-campaign-b92c830e40ff4905be9cf5b1bb931b64",
+      "local_bus_stages_complete": true,
+      "native_spans_complete": true,
+      "correctness_complete": true
+    },
+    {
+      "harness_case_id": "audio-campaign-v2224-0012",
+      "correlation_id": "audio-campaign-2a13f868e3414dac89281b4d6ed91981",
+      "local_bus_stages_complete": true,
+      "native_spans_complete": true,
+      "correctness_complete": true
+    },
+    {
+      "harness_case_id": "audio-campaign-v2224-0013",
+      "correlation_id": "audio-campaign-1b2667c8fed546e393576e76aea8c4a6",
+      "local_bus_stages_complete": true,
+      "native_spans_complete": true,
+      "correctness_complete": true
+    },
+    {
+      "harness_case_id": "audio-campaign-v2224-0014",
+      "correlation_id": "audio-campaign-0915a0404fae4a15a4dcd1a943587408",
+      "local_bus_stages_complete": true,
+      "native_spans_complete": true,
+      "correctness_complete": true
+    },
+    {
+      "harness_case_id": "audio-campaign-v2224-0015",
+      "correlation_id": "audio-campaign-bfea440f135d4256bc6014bc99ccd476",
+      "local_bus_stages_complete": true,
+      "native_spans_complete": true,
+      "correctness_complete": true
+    }
+  ]
+}

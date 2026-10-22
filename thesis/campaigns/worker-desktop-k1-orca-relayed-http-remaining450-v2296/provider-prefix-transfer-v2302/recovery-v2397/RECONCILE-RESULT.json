@@ -1,0 +1,17 @@
+{
+  "at": "2026-10-22T05:09:16.416238+00:00",
+  "parts": 218,
+  "total": 219,
+  "missing": [
+    184
+  ],
+  "newSends": 0,
+  "inferenceReruns": 0,
+  "readWindow": {
+    "nextCursor": "163602",
+    "returnedLineCount": 52,
+    "truncated": false
+  },
+  "originalReplySha256": "abdf87a72aa0b4c86d3d19811e8b407067b50e1894a47bda7525c30cc2ad0a6c",
+  "status": "FRAME_STILL_MISSING_PRESERVED"
+}

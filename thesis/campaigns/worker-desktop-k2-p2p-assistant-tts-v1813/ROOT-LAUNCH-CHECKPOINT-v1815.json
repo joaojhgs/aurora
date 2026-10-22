@@ -1,0 +1,155 @@
+{
+  "at": "2026-10-20T15:22:46.678946+00:00",
+  "status": "K2_REGISTERED_TASK_CONSENT_VERIFIED_REQUESTER_BACKEND_ACTUALLY_LAUNCHED",
+  "nativeGoalStatus": "active",
+  "manifestSha256": "fbc7d876c9bb804d8dc873cf468b619595639c080c3f5d21ad5665feb6a6852c",
+  "rootLaunch": {
+    "at": "2026-10-20T15:20:20.995052+00:00",
+    "conditionManifestSha256": "fbc7d876c9bb804d8dc873cf468b619595639c080c3f5d21ad5665feb6a6852c",
+    "controllerPid": 2803675,
+    "controllerStartTicks": 128808158,
+    "excludedWarmups": 15,
+    "measurementAdmitted": false,
+    "newWorker": false,
+    "plannedMeasured": 900,
+    "provider": {
+      "pid": 3938202,
+      "startTicks": 26503353,
+      "state": "S"
+    }
+  },
+  "backendPid": 2803694,
+  "helpers": {
+    "at": "2026-10-20T15:20:41.107178+00:00",
+    "helpers": {
+      "copier": {
+        "pid": 2803867,
+        "startTicks": 128810169
+      },
+      "finalizer": {
+        "pid": 2803868,
+        "startTicks": 128810169
+      }
+    },
+    "conditionManifestSha256": "fbc7d876c9bb804d8dc873cf468b619595639c080c3f5d21ad5665feb6a6852c"
+  },
+  "provider": {
+    "controller": {
+      "pid": 3938174,
+      "startTicks": 26503295,
+      "state": "S"
+    },
+    "receiver": {
+      "pid": 3938202,
+      "startTicks": 26503353,
+      "state": "S"
+    },
+    "manifestSha256": "d133ecead33bca857e64a5bee381b030f297155ab4e0e723eeb64fc16f4ce667",
+    "conservativeExpiryUtc": "2026-10-21T07:05:10.563606+00:00"
+  },
+  "taskConsent": {
+    "status": "NORMAL_EXISTING_TEST_PAIR_TASK_CONSENT_APPLIED_VERIFIED",
+    "peerId": "aurora-03a910366bf721d72a9ef481d2e08fbd",
+    "localStablePeerId": "aurora-276bb04e1276201922851f6a222110de",
+    "beforePermissions": [
+      "Gateway.GetRegistry",
+      "Gateway.GetMeshStatus",
+      "TTS.Synthesize",
+      "Orchestrator.ExternalUserInput"
+    ],
+    "afterPermissions": [
+      "Gateway.GetRegistry",
+      "Gateway.GetMeshStatus",
+      "TTS.Synthesize",
+      "Orchestrator.use"
+    ],
+    "reversePermissionsUnchanged": [
+      "Gateway.GetRegistry",
+      "Gateway.GetMeshStatus",
+      "TTS.Synthesize"
+    ],
+    "scope": "Only deployed required Orchestrator.use replaces unused method-name scope on same approved test pair",
+    "contract": {
+      "method": "Orchestrator.ExternalUserInput",
+      "requiredPermissions": [
+        "Orchestrator.use"
+      ],
+      "source": "/home/developer/projects/aurora/thesis/sources/personal-p2p-tts-wiring-v1706/source/app/services/orchestrator/service.py",
+      "sourceSha256": "0b77092091946b94130945b3bfb670a922a209b846d5ffe30e23f75b52f982f3",
+      "unusedMethodNamePermissionRemoved": "Orchestrator.ExternalUserInput"
+    },
+    "mutationMethod": "Auth.MeshUpdatePeerPermissions",
+    "mutationCalls": 1,
+    "newIdentity": false,
+    "newCredential": false,
+    "modelServicesStarted": [],
+    "modelCalls": 0,
+    "networkListenerStarted": false,
+    "directPermissionDBEdits": false,
+    "at": "2026-10-20T15:17:51.773246+00:00",
+    "host": "personal.skyron-server",
+    "previousProviderTerminal": {
+      "at": "2026-10-20T15:10:29.732936+00:00",
+      "controllerPid": 3929314,
+      "elapsedSeconds": 439.8040155079798,
+      "exitCode": 0,
+      "finishedAt": "2026-10-20T15:17:49.536916+00:00",
+      "host": "personal.skyron-server",
+      "manifestSha256": "9d941f672ff85f8825e4ff8a7134e7a0458f91d2afae5d16930f4b1989e7d291",
+      "measurementStartedByController": false,
+      "receiverAbsent": true,
+      "receiverPid": 3929330,
+      "receiverStartTicks": 26455069
+    },
+    "providerConfigUnchanged": true
+  },
+  "priorSetupEpochs": {
+    "1748": "0audio, prefix metadata mismatch retained",
+    "1796": "0audio, missing language consent retained",
+    "1807": "0audio, wrong method-name permission retained and corrected to deployed required scope"
+  },
+  "plannedMeasured": 900,
+  "plannedExcludedWarmups": 15,
+  "measurementAdmitted": false,
+  "cumulativeCap": {
+    "newOuterCapSeconds": 54000,
+    "originalCapSeconds": 57600,
+    "originalStartUtc": "2026-10-20T14:46:52.056334+00:00",
+    "priorElapsedSeconds": 1998.212548,
+    "providerAbsoluteDeadlineNotExtended": true
+  },
+  "K1": {
+    "attempted": 709,
+    "correct": 697,
+    "failed": 12,
+    "unattempted": 191
+  },
+  "copies": [
+    {
+      "path": "thesis/campaigns/worker-desktop-k2-p2p-assistant-tts-v1813/launch-metadata/requester-launch.json",
+      "bytes": 400,
+      "sha256": "5e71661ab3837f8a1e4bf3a591cc63cf79f02ad20716ff59799c47c909990d87"
+    },
+    {
+      "path": "thesis/campaigns/worker-desktop-k2-p2p-assistant-tts-v1813/launch-metadata/custody-finalizer-LAUNCH-v1815.json",
+      "bytes": 316,
+      "sha256": "75c11223afa3101527044a4a4c051ae60aef621c5eb66959747eed8efed7203d"
+    },
+    {
+      "path": "thesis/campaigns/worker-desktop-k2-p2p-assistant-tts-v1813/launch-metadata/provider-admission.json",
+      "bytes": 7181,
+      "sha256": "a614f5c6fe64720c3fbad15bc22d94a91a18ce26609da865cfe83de8dccddc47"
+    },
+    {
+      "path": "thesis/campaigns/worker-desktop-k2-p2p-assistant-tts-v1813/launch-metadata/k2-task-consent-control-v1811-RESULT.json",
+      "bytes": 1801,
+      "sha256": "f0163f96e26afe211f720cd6ac125f6778fac64d4482acbd537cfb0f3ff31f2b"
+    },
+    {
+      "path": "thesis/campaigns/worker-desktop-k2-p2p-assistant-tts-v1813/launch-metadata/k2-consented-provider-launch-v1812-RESULT.json",
+      "bytes": 600,
+      "sha256": "3826c962b6b85fd631367983629e004f8d232b0bf8ae17ce5b80dee284a1898b"
+    }
+  ],
+  "controlReservation": "Original Personal plain shell reserved ONLY current finalizer2803868/start128810169; no competing sends until actual result/cursor release"
+}

@@ -1,0 +1,335 @@
+{
+  "observedAt": "2026-10-17T20:21:57.721006+00:00",
+  "scope": "Bounded READ-ONLY local normal-repo V799/C06 directories, name-matched canonicalthesis files and known Root ZIP artifacts; no Personal access or whole-filesystem/cache/archive-content scan. A missing candidate here is not universal/global absence.",
+  "completeGlobalInventory": false,
+  "sourceMetadata": {
+    "docs/experiments/tcc-20261013-submission-20261030/root/browser-normal-ui-padded900-v799/REPORT.md": {
+      "bytes": 4096,
+      "sha256": "51d507bafa45abbdcef9505bb410508880c7013482f0e766d410dc1eec4158d5"
+    },
+    "docs/experiments/tcc-20261013-submission-20261030/root/native-desktop-sdk-audio900-v1068/RECOVERY-20261017.md": {
+      "bytes": 3169,
+      "sha256": "e281aaea8ccc831e8ed2d506d0e700a649646d23f692f9c1c46d1a655e132826"
+    },
+    "thesis/evidence/custody-index-v749.json": {
+      "bytes": 18397,
+      "sha256": "b37cb1fb3ed5fe1d4be0e0b9324831293aea432d13da98cf4f0c50a591114650"
+    }
+  },
+  "browser799": {
+    "knownHistoricalMeasured": {
+      "attempted": 900,
+      "strictCorrect": 889,
+      "strictIncorrect": 11,
+      "excludedWarmups": 15
+    },
+    "expectedOriginalArchive": {
+      "bytes": 130072923,
+      "sha256": "489404814e7667b4c85d371e9e2e895372dc075d1e310669593dff47b1f56e72",
+      "members": 2765,
+      "lastRecordedLocation": "/tmp/aurora-root-padded-browser900-v799/export-v888/aurora-browser-normal-ui-padded-full-audio-v799.zip",
+      "currentFullRawCustody": "UNKNOWN_UNRECOVERED; not proven irreversibly/global lost"
+    },
+    "knownLocalDirectory": {
+      "path": "docs/experiments/tcc-20261013-submission-20261030/root/browser-normal-ui-padded900-v799",
+      "exists": true,
+      "plainFiles": 6,
+      "fileBytes": 24753,
+      "audioFiles": [],
+      "archiveFiles": [],
+      "jsonlFiles": [],
+      "symlinkFilesExcludedFromPhysicalCopyClaim": [],
+      "fileInventory": [
+        {
+          "path": "docs/experiments/tcc-20261013-submission-20261030/root/browser-normal-ui-padded900-v799/FORMAT-DIAGNOSIS.json",
+          "bytes": 5553
+        },
+        {
+          "path": "docs/experiments/tcc-20261013-submission-20261030/root/browser-normal-ui-padded900-v799/FINALIZATION-CONTROL-RECEIPT.json",
+          "bytes": 5573
+        },
+        {
+          "path": "docs/experiments/tcc-20261013-submission-20261030/root/browser-normal-ui-padded900-v799/SOL-REVIEW-v949.md",
+          "bytes": 4646
+        },
+        {
+          "path": "docs/experiments/tcc-20261013-submission-20261030/root/browser-normal-ui-padded900-v799/REPORT.md",
+          "bytes": 4096
+        },
+        {
+          "path": "docs/experiments/tcc-20261013-submission-20261030/root/browser-normal-ui-padded900-v799/REVIEW-CUSTODY-v952.json",
+          "bytes": 499
+        },
+        {
+          "path": "docs/experiments/tcc-20261013-submission-20261030/root/browser-normal-ui-padded900-v799/AUDIT.json",
+          "bytes": 4386
+        }
+      ]
+    },
+    "retainedFormatDiagnosis": {
+      "path": "docs/experiments/tcc-20261013-submission-20261030/root/browser-normal-ui-padded900-v799/FORMAT-DIAGNOSIS.json",
+      "exists": true,
+      "bytes": 5553,
+      "sha256": "45f2df1a78cd523c3755c3d8d64ea614609e3aadb53ebd97bd6b0244024a1319",
+      "arrayFieldLengths": {
+        "recordedFormatCases": 11
+      }
+    },
+    "staleReportClaim": "REPORT still says originalraw/archivepreserved at old/tmp; originalRoot must append currentcustodycorrection retainingdatedsealhistory"
+  },
+  "c06v1068": {
+    "historicalOnly": {
+      "lastObservation": "2026-10-16T14:49:35Z",
+      "attempted": 273,
+      "completed": 272,
+      "planned": 900,
+      "excludedWarmups": 15
+    },
+    "finalOutcomeFinalDenominatorFullRawAudio": "UNKNOWN_UNRECOVERED",
+    "unrecoveredByteAndCaseFileCounts": "UNKNOWN; do not infer273lostfiles or627finalunattempted",
+    "knownLocalDirectory": {
+      "path": "docs/experiments/tcc-20261013-submission-20261030/root/native-desktop-sdk-audio900-v1068",
+      "exists": true,
+      "plainFiles": 21,
+      "fileBytes": 147368,
+      "audioFiles": [],
+      "archiveFiles": [],
+      "jsonlFiles": [],
+      "symlinkFilesExcludedFromPhysicalCopyClaim": [],
+      "fileInventory": [
+        {
+          "path": "docs/experiments/tcc-20261013-submission-20261030/root/native-desktop-sdk-audio900-v1068/RECOVERY-FIRST-READ-v1105.json",
+          "bytes": 515
+        },
+        {
+          "path": "docs/experiments/tcc-20261013-submission-20261030/root/native-desktop-sdk-audio900-v1068/WARMUP-GATE.json",
+          "bytes": 1086
+        },
+        {
+          "path": "docs/experiments/tcc-20261013-submission-20261030/root/native-desktop-sdk-audio900-v1068/CUSTODY-v1079.json",
+          "bytes": 447
+        },
+        {
+          "path": "docs/experiments/tcc-20261013-submission-20261030/root/native-desktop-sdk-audio900-v1068/CUSTODY-v1071.json",
+          "bytes": 1353
+        },
+        {
+          "path": "docs/experiments/tcc-20261013-submission-20261030/root/native-desktop-sdk-audio900-v1068/RECOVERY-RETIREMENT-AND-LOCATE-v1106.json",
+          "bytes": 4029
+        },
+        {
+          "path": "docs/experiments/tcc-20261013-submission-20261030/root/native-desktop-sdk-audio900-v1068/RECOVERY-STATE-v1110.json",
+          "bytes": 2191
+        },
+        {
+          "path": "docs/experiments/tcc-20261013-submission-20261030/root/native-desktop-sdk-audio900-v1068/RECOVERY-20261017.md",
+          "bytes": 3169
+        },
+        {
+          "path": "docs/experiments/tcc-20261013-submission-20261030/root/native-desktop-sdk-audio900-v1068/FROZEN-MANIFEST.json",
+          "bytes": 5762
+        },
+        {
+          "path": "docs/experiments/tcc-20261013-submission-20261030/root/native-desktop-sdk-audio900-v1068/CUSTODY-v1083.json",
+          "bytes": 437
+        },
+        {
+          "path": "docs/experiments/tcc-20261013-submission-20261030/root/native-desktop-sdk-audio900-v1068/controller-frozen-v1067.py",
+          "bytes": 65197
+        },
+        {
+          "path": "docs/experiments/tcc-20261013-submission-20261030/root/native-desktop-sdk-audio900-v1068/REPORT.md",
+          "bytes": 4277
+        },
+        {
+          "path": "docs/experiments/tcc-20261013-submission-20261030/root/native-desktop-sdk-audio900-v1068/SOURCE-REVIEW.md",
+          "bytes": 2409
+        },
+        {
+          "path": "docs/experiments/tcc-20261013-submission-20261030/root/native-desktop-sdk-audio900-v1068/RUNNING-v1083.json",
+          "bytes": 12796
+        },
+        {
+          "path": "docs/experiments/tcc-20261013-submission-20261030/root/native-desktop-sdk-audio900-v1068/RUNNING-v1079.json",
+          "bytes": 12796
+        },
+        {
+          "path": "docs/experiments/tcc-20261013-submission-20261030/root/native-desktop-sdk-audio900-v1068/RUNNING-v1070.json",
+          "bytes": 1362
+        },
+        {
+          "path": "docs/experiments/tcc-20261013-submission-20261030/root/native-desktop-sdk-audio900-v1068/RUNNING-v1075.json",
+          "bytes": 12807
+        },
+        {
+          "path": "docs/experiments/tcc-20261013-submission-20261030/root/native-desktop-sdk-audio900-v1068/RUNNING-v1085.json",
+          "bytes": 12809
+        },
+        {
+          "path": "docs/experiments/tcc-20261013-submission-20261030/root/native-desktop-sdk-audio900-v1068/CUSTODY-v1085.json",
+          "bytes": 437
+        },
+        {
+          "path": "docs/experiments/tcc-20261013-submission-20261030/root/native-desktop-sdk-audio900-v1068/COHORT-ADMISSION.json",
+          "bytes": 2283
+        },
+        {
+          "path": "docs/experiments/tcc-20261013-submission-20261030/root/native-desktop-sdk-audio900-v1068/CUSTODY-v1075.json",
+          "bytes": 444
+        },
+        {
+          "path": "docs/experiments/tcc-20261013-submission-20261030/root/native-desktop-sdk-audio900-v1068/LAUNCH.json",
+          "bytes": 762
+        }
+      ]
+    },
+    "retainedRunningSnapshots": {
+      "fileCount": 5,
+      "bytes": 52570,
+      "files": [
+        {
+          "path": "docs/experiments/tcc-20261013-submission-20261030/root/native-desktop-sdk-audio900-v1068/RUNNING-v1083.json",
+          "bytes": 12796
+        },
+        {
+          "path": "docs/experiments/tcc-20261013-submission-20261030/root/native-desktop-sdk-audio900-v1068/RUNNING-v1079.json",
+          "bytes": 12796
+        },
+        {
+          "path": "docs/experiments/tcc-20261013-submission-20261030/root/native-desktop-sdk-audio900-v1068/RUNNING-v1070.json",
+          "bytes": 1362
+        },
+        {
+          "path": "docs/experiments/tcc-20261013-submission-20261030/root/native-desktop-sdk-audio900-v1068/RUNNING-v1075.json",
+          "bytes": 12807
+        },
+        {
+          "path": "docs/experiments/tcc-20261013-submission-20261030/root/native-desktop-sdk-audio900-v1068/RUNNING-v1085.json",
+          "bytes": 12809
+        }
+      ]
+    }
+  },
+  "canonicalThesisNameMatchedFiles": [
+    {
+      "path": "thesis/harness/browser-ui-v799/stage_freeze.py",
+      "bytes": 25357,
+      "kind": "metadata_or_source_not_full_raw_claim"
+    },
+    {
+      "path": "thesis/harness/browser-ui-v799/expected-provider-identity.json",
+      "bytes": 735,
+      "kind": "metadata_or_source_not_full_raw_claim"
+    },
+    {
+      "path": "thesis/harness/browser-ui-v799/controller.py",
+      "bytes": 37040,
+      "kind": "metadata_or_source_not_full_raw_claim"
+    },
+    {
+      "path": "thesis/harness/browser-ui-v799/SOURCE-CUSTODY-v800.json",
+      "bytes": 2972,
+      "kind": "metadata_or_source_not_full_raw_claim"
+    },
+    {
+      "path": "thesis/harness/browser-ui-v799/bootstrap.py",
+      "bytes": 2219,
+      "kind": "metadata_or_source_not_full_raw_claim"
+    },
+    {
+      "path": "thesis/harness/browser-ui-v799/voice-flow.mjs",
+      "bytes": 60055,
+      "kind": "metadata_or_source_not_full_raw_claim"
+    },
+    {
+      "path": "thesis/harness/browser-ui-v799/gate.py",
+      "bytes": 6853,
+      "kind": "metadata_or_source_not_full_raw_claim"
+    },
+    {
+      "path": "thesis/harness/browser-ui-v799/README.md",
+      "bytes": 1391,
+      "kind": "metadata_or_source_not_full_raw_claim"
+    },
+    {
+      "path": "thesis/harness/browser-ui-v799/hook/bindings.py",
+      "bytes": 3596,
+      "kind": "metadata_or_source_not_full_raw_claim"
+    },
+    {
+      "path": "thesis/harness/browser-ui-v799/hook/observer.py",
+      "bytes": 12656,
+      "kind": "metadata_or_source_not_full_raw_claim"
+    },
+    {
+      "path": "thesis/harness/browser-ui-v799/hook/aurora_voice_telemetry_v430.py",
+      "bytes": 15228,
+      "kind": "metadata_or_source_not_full_raw_claim"
+    },
+    {
+      "path": "thesis/harness/browser-ui-v799-finalization-v896/post_terminal.py",
+      "bytes": 29427,
+      "kind": "metadata_or_source_not_full_raw_claim"
+    },
+    {
+      "path": "thesis/harness/browser-ui-v799-finalization-v896/SOURCE-CUSTODY-v898.json",
+      "bytes": 839,
+      "kind": "metadata_or_source_not_full_raw_claim"
+    },
+    {
+      "path": "thesis/harness/browser-ui-v799-finalization-v896/PREP.md",
+      "bytes": 3444,
+      "kind": "metadata_or_source_not_full_raw_claim"
+    },
+    {
+      "path": "thesis/methodology/CUSTODY-v799.json",
+      "bytes": 431,
+      "kind": "metadata_or_source_not_full_raw_claim"
+    }
+  ],
+  "existingNormalRepoRootZipArtifacts": {
+    "files": [
+      {
+        "path": "docs/experiments/tcc-20261013-submission-20261030/root/desktop-gpu-padded-http900-v692/aurora-desktop-gpu-padded-http900-v692.zip",
+        "bytes": 34691761,
+        "hash": "NOT_REREAD_DURING_ACTIVE_CAMPAIGN"
+      },
+      {
+        "path": "docs/experiments/tcc-20261013-submission-20261030/root/desktop-gpu-padded-local900-joined-v779/analysis-derived-results-v783.zip",
+        "bytes": 816890,
+        "hash": "NOT_REREAD_DURING_ACTIVE_CAMPAIGN"
+      },
+      {
+        "path": "docs/experiments/tcc-20261013-submission-20261030/root/desktop-gpu-padded-local900-v735/aurora-desktop-gpu-padded-local900-v735.zip",
+        "bytes": 10064090,
+        "hash": "NOT_REREAD_DURING_ACTIVE_CAMPAIGN"
+      },
+      {
+        "path": "docs/experiments/tcc-20261013-submission-20261030/root/worker-cpu-full-audio-local900-v491/aurora-worker-cpu-full-audio-local900-v491.zip",
+        "bytes": 33027484,
+        "hash": "NOT_REREAD_DURING_ACTIVE_CAMPAIGN"
+      },
+      {
+        "path": "docs/experiments/tcc-20261013-submission-20261030/root/desktop-gpu-padded-local900-v745/aurora-desktop-gpu-padded-local900-v745.zip",
+        "bytes": 22099986,
+        "hash": "NOT_REREAD_DURING_ACTIVE_CAMPAIGN"
+      },
+      {
+        "path": "docs/experiments/tcc-20261013-submission-20261030/root/worker-cpu-padded-local900-v737/aurora-worker-cpu-padded-local900-v737.zip",
+        "bytes": 32740359,
+        "hash": "NOT_REREAD_DURING_ACTIVE_CAMPAIGN"
+      }
+    ],
+    "count": 6,
+    "bytes": 133440570,
+    "scope": "stat-only; not a fresh complete-archive/content/hash validation"
+  },
+  "noSourceDataDeletedMovedOrModified": true,
+  "noTestOrNetworkRequestIssued": true,
+  "RootOwnsCanonicalCopyAndFullCustodyReconciliation": true,
+  "lineage": {
+    "runId": "run_e6054e76e9fc",
+    "taskId": "task_d7ea336050cf",
+    "dispatchId": "ctx_37b4d0a3c14f"
+  }
+}

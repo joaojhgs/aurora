@@ -1,0 +1,90 @@
+{
+  "at": "2026-10-22T12:48:19.644311+00:00",
+  "requester": {
+    "pid": 462924,
+    "startTicks": 144596371,
+    "state": "S"
+  },
+  "current": {
+    "at": "2026-10-22T12:48:12.890793+00:00",
+    "companion": {
+      "measured": {
+        "attempted": 123,
+        "correct": 123,
+        "failed": 0,
+        "harnessErrorsIncludedInFailed": 0,
+        "incorrectIncludedInFailed": 0,
+        "offered": 123,
+        "planned": 640,
+        "timeouts": 0,
+        "unstarted": 517
+      },
+      "warmup": {
+        "attempted": 15,
+        "correct": 15,
+        "failed": 0,
+        "harnessErrorsIncludedInFailed": 0,
+        "incorrectIncludedInFailed": 0,
+        "offered": 15,
+        "planned": 15,
+        "timeouts": 0,
+        "unstarted": 0
+      }
+    },
+    "completePairedCapsules": 138,
+    "elapsedSeconds": 5782.65181063,
+    "lastIndex": 123,
+    "lastNativeParent": "5aa974e7389dca89a62ad410f2ddee00",
+    "lastOrdinal": 138,
+    "manifestSha256": "3bfca19d2dd0a9eec3981eae256168a5badd9ac2bb58a270ff8a55df1d986cce",
+    "phase": "measured",
+    "pid": 462924,
+    "primary": {
+      "measured": {
+        "attempted": 123,
+        "correct": 123,
+        "failed": 0,
+        "harnessErrorsIncludedInFailed": 0,
+        "incorrectIncludedInFailed": 0,
+        "offered": 123,
+        "planned": 640,
+        "timeouts": 0,
+        "unstarted": 517
+      },
+      "warmup": {
+        "attempted": 15,
+        "correct": 15,
+        "failed": 0,
+        "harnessErrorsIncludedInFailed": 0,
+        "incorrectIncludedInFailed": 0,
+        "offered": 15,
+        "planned": 15,
+        "timeouts": 0,
+        "unstarted": 0
+      }
+    },
+    "status": "running"
+  },
+  "priorRetainedMeasuredPerStream": 260,
+  "combinedCorrectPerStream": {
+    "primary": 383,
+    "companion": 383
+  },
+  "terminalPresent": false,
+  "activeErrorPresent": false,
+  "freeBytes": 2292019200,
+  "nextMaximumObservationUtc": "2026-10-22T12:53:19.644311+00:00",
+  "mainSourceSettingsCountsClocksFloorChanged": false,
+  "turnClassification": "Main executable campaign continues unchanged; newly completed control raw linked once; already-reviewed PER291 factual plan correction adopted locally without product implementation or new tests/reviews",
+  "incrementalCustodyReceipt": "control-link-receipts/20261022T124705.671071Z.json",
+  "incrementalCustodyNewFiles": 748,
+  "incrementalCustodyNewBytesHashed": 4539835,
+  "oldVerifiedFilesRehashed": 0,
+  "newPayloadAllocations": 0,
+  "per291AdoptionReceipt": "thesis/goal-evidence/PER291-plan-adoption-20261022/ADOPTION-RECEIPT.json",
+  "per291AdoptedSha256": "9eb02adcf71417ec7532a50d972a717bb4d35b03325a4ea8ae40fd48c27dbf32",
+  "per291FormalComplete": false,
+  "exactUnusedWebpackCachePermission": "PENDING; no deletion or duplicate question",
+  "phone": "Sole existing worker term_1f27 owns preparation/repair; source handoff ebde+v2383 complete; no Root phone/Notebook operations or main gate",
+  "newWorkersTestsModelsOrAuthChanges": 0
+}

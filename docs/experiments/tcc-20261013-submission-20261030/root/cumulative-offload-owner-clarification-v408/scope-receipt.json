@@ -1,0 +1,61 @@
+{
+  "observed_at": "2026-10-14T15:28:50.701999+00:00",
+  "owner_clarification_message_id": "msg_2829bfde1e6e",
+  "root_full_read_delivery_ack": "delivery_f00d6c4cd4b3",
+  "root_explicit_ack_message_id": "msg_3ad3795ea8b4",
+  "native_thread": "01a112a5-d6bb-74e2-bf7c-ace73cb513b5",
+  "same_full_aggregate": true,
+  "ios_active_scope": "excluded_history_preserved",
+  "existing_text_cohort": {
+    "planned_measured": 900,
+    "reviewed_and_monitor_confirmed": 700,
+    "scope": "same-worker typed Assistant local Python, loopback HTTP API and hosted browser mesh control",
+    "speech_stage_sweep": false,
+    "cross_device_acceptance": false,
+    "source_change": "forbidden_until_frozen08_09_finish"
+  },
+  "future_cumulative_remote_stage_sets": [
+    [
+      "tts"
+    ],
+    [
+      "tts",
+      "llm"
+    ],
+    [
+      "tts",
+      "llm",
+      "stt"
+    ]
+  ],
+  "future_comparison_modes": [
+    "local_python_call",
+    "actual_http_api_gateway",
+    "production_authorized_p2p"
+  ],
+  "future_complete_pipeline_same_workload": true,
+  "stages_not_in_remote_set": "remain_local",
+  "actual_stage_provider_map": "required_for_every_stage",
+  "same_device_and_cross_device_eligible_sweeps": "required",
+  "weaker_device_equal_model_input_feasibility": "required_with_local_and_api_failures_retained",
+  "n_planned": null,
+  "sampling_allocation": "awaiting_owner_exact_total_across_matrix_vs_per_condition_answer",
+  "owner_async_question": "Asked in same Root thread:900 total across selected non-iOS cumulative/device matrix or900 per comparison condition; no dependent new sampling until answer",
+  "required_measurement": [
+    "clock_safe_correlated_requester_provider_stage_spans",
+    "discovery_setup_separate_from_warm_dispatch",
+    "queue_inference_render_history",
+    "stt_and_tts_first_audio_playback_when_applicable",
+    "per_device_resources",
+    "selected_ice_direct_relay_and_network_evidence",
+    "clock_domain_uncertainty_and_unknowns"
+  ],
+  "unsupported_claims": [
+    "pure_protocol_overhead_without_matched_compute_spans",
+    "promised_weak_device_speedup",
+    "same_host900_as_all_surface_acceptance",
+    "invented_wakeword_privacy_approval"
+  ],
+  "plan_writer": "original_monitor_only_pending_finalized_amendment_sha",
+  "new_workers_sessions_security_credentials_paid_providers_network_broadening": false
+}

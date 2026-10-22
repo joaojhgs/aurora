@@ -1,0 +1,48 @@
+{
+  "applicationSourceIdentity": "ebde3a8acf6315f920d03593845f17a1fc65a733 + source-closure-overlay-v2383 + android-bundled-model-rename-v1 + android-node-policy-initial-publication-v2 + android-finite-file-audio-v3 + android-finite-file-audio-v3a",
+  "buildDeadlineUtc": "2026-10-22T06:58:14.304552+00:00",
+  "buildPid": 240691,
+  "buildStartedAt": "2026-10-22T06:38:14.304546+00:00",
+  "canonicalAppPreserved": true,
+  "command": [
+    "node",
+    "apps/aurora-tauri/scripts/build-android-client-bundle.mjs",
+    "--kind",
+    "apk",
+    "--voice-live-test",
+    "--target",
+    "aarch64"
+  ],
+  "elapsedSeconds": 254.73395108800105,
+  "exit": 0,
+  "finishedAt": "2026-10-22T06:42:29.003090+00:00",
+  "log": "/home/developer/projects/aurora/thesis/phone-notebook/20261020/deployment/ebde3a8acf6315f920d03593845f17a1fc65a733/android-apk-build-v199/build.log",
+  "logSha256": "8a21bc01e7effe9240d44eb8674cd6c0e31e3520a8157c4e723d9e0e468a36aa",
+  "maxJobs": 2,
+  "maxOwnedTreeRssBytes": 8589934592,
+  "modelCalls": 0,
+  "ownBuildChildrenActive": false,
+  "ownedBuildTreeRssBytes": 1636044800,
+  "peakOwnedBuildTreeRssBytes": 4771020800,
+  "pid": 240676,
+  "resources": {
+    "at": "2026-10-22T06:42:23.969302+00:00",
+    "diskFreeBytes": 58351030272,
+    "load": [
+      6.67626953125,
+      3.95068359375,
+      3.06201171875
+    ],
+    "maxSensorC": 79.85,
+    "memAvailableBytes": 23249584128
+  },
+  "startTicks": "3168433",
+  "startedAt": "2026-10-22T06:38:14.269341+00:00",
+  "status": "ANDROID_VOICE_LIVE_APK_BUILT",
+  "targetedFileAudioTests": {
+    "priorAttempt": "android-apk-build-v186/file-audio-tests.log",
+    "status": "host dependency compilation exceeded180s; no tests executed; actual ARM64 compile and live native boundary required"
+  },
+  "temperaturePolicy": "observe_only_owner_correction",
+  "testApplicationId": "dev.aurora.desktop.phonenotebook"
+}

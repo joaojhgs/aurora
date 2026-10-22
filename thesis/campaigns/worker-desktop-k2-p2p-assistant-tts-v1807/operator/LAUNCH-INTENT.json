@@ -1,0 +1,10 @@
+{
+  "at": "2026-10-20T15:12:22.577029+00:00",
+  "conditionCapSeconds": 57600,
+  "manifestSha256": "5df0f670e88e15aee0b4f8836b78e85b35a446f318a6c6362bf846f795ac1712",
+  "maximumPopenCalls": 1,
+  "newWorker": false,
+  "outerCapSeconds": 55200,
+  "plannedMeasured": 900,
+  "providerAdmissionSha256": "d9be69ad1fb92ee68c3672793326bb36c2f23b44adc78704b017acf5b05395d4"
+}

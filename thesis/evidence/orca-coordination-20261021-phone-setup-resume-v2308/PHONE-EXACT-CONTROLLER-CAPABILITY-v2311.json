@@ -1,0 +1,38 @@
+{
+  "id": "remote-cli-1792621893841",
+  "ok": true,
+  "result": {
+    "runId": "run_e6054e76e9fc",
+    "deliveryId": "delivery_7f9d662fe362",
+    "messages": [
+      {
+        "id": "msg_e674a64f5cd9",
+        "run_id": "run_e6054e76e9fc",
+        "delivery_contract": "current_delivery",
+        "from_handle": "term_1f27be31-0284-4366-bb91-30fe538cd30e",
+        "to_handle": "run:run_e6054e76e9fc",
+        "subject": "Actual controller checks complete: USB serial known; no host route exposed",
+        "body": "Owner YES was applied, with no further permission loop. Actual POCO hardware USB serial is KBX8LNFUBE5XGQRG. Existing exposed ADB5037 inventory responds OKAY/empty; normal SDK selected get-state exits1 device not found. Server process metadata proves this exposed server is Personal Podman-owned; no host-wide ADB absence claim. Approved Personal Orca device proxy is empty, registered Personal notebook target is only the container, and approved desktop discovery has no notebook target; separate Root desktop targets were not used. Host list is forbidden from this SSH worker; no alternate existing host ADB endpoint/socket or approved device selector is exposed. Minimal owner information now needed is that existing nonsecret controller endpoint/socket or Orca selector, not another permission confirmation or USB dialog. Host-spawn/nsenter, keys, accounts, permissions, controller replacement and network changes were not used. Report and actual raw receipts are being copied to both hosts; main HTTP stays untouched.",
+        "type": "status",
+        "priority": "normal",
+        "thread_id": null,
+        "payload": null,
+        "created_at": "2026-10-21T22:31:27Z",
+        "delivered_at": null
+      }
+    ],
+    "count": 1,
+    "replayed": false,
+    "acknowledged": "delivery_75e9c923ccf6",
+    "timedOut": false,
+    "cancelled": false,
+    "connectionLost": false,
+    "mutation": {
+      "requestId": "e8890a3b-342c-4db4-bfcc-f910fff9a9d2",
+      "replayed": false
+    }
+  },
+  "_meta": {
+    "runtimeId": "cc9e3275-28c6-4c45-85cc-bdcd2262aa7d"
+  }
+}

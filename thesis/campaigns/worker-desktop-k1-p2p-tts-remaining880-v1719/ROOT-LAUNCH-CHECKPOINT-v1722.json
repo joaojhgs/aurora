@@ -1,0 +1,65 @@
+{
+  "at": "2026-10-20T04:36:52.499238+00:00",
+  "status": "ACTUAL_REMAINING880_LAUNCHED_NATIVE_WARMUP_ADMISSION_PENDING",
+  "nativeGoal": "01a112a5-d6bb-74e2-bf7c-ace73cb513b5",
+  "nativeGoalStatus": "active",
+  "run": "run_e6054e76e9fc",
+  "monitor": "task_d7ea336050cf/ctx_37b4d0a3c14f",
+  "branch": "codex/aurora-native-speech-routing-20261007",
+  "head": "cbac78fe3fb2b73100bfaa9dc198fb6bff689840",
+  "manifestSha256": "120dd99a4de0a242c30ebe4bb46d854ca77313c482a0c74f024edb624829a6e8",
+  "actors": [
+    {
+      "pid": 2360747,
+      "present": true,
+      "startTicks": 124937766,
+      "state": "S"
+    },
+    {
+      "pid": 2360768,
+      "present": true,
+      "startTicks": 124937952,
+      "state": "S"
+    },
+    {
+      "pid": 2361201,
+      "present": true,
+      "startTicks": 124942780,
+      "state": "S"
+    },
+    {
+      "pid": 2361202,
+      "present": true,
+      "startTicks": 124942780,
+      "state": "S"
+    }
+  ],
+  "providerReceiver": {
+    "pid": 3194394,
+    "startTicks": 22320527,
+    "manifestSha256": "245d1739111a7162287fcece91dc005958722e062a1e028613c3f85e21e3d339"
+  },
+  "closedPrior": {
+    "attempted": 20,
+    "correct": 19,
+    "failed": 1,
+    "seal": "thesis/campaigns/worker-desktop-k1-p2p-tts-v1711/terminal-v1716/seal/REQUESTER-SEAL.json"
+  },
+  "newEpoch": {
+    "globalFirst": 21,
+    "globalLast": 900,
+    "planned": 880,
+    "excludedWarmups": 15,
+    "progress": null,
+    "completedWarmupCases": 0,
+    "measuredAttempted": 0
+  },
+  "review": "Sol PASS63f613bb CLOSED",
+  "smoke": "4passed,0model/network calls CLOSED",
+  "configReadmission": "Pure standard startup migration exactly reproduces actual tree;03:41:27mtime predates first original warmup; existing secret values same; Root did not modify credentials or policy. Exact witnesses retained.",
+  "budget": "Actual2980.487895s prior INCLUDING recovery +68240snewouter =71220.487895<original72000; provider23:55:24UTC unchanged",
+  "personalControl": "Reserved exclusively for ONEnew finalizer native-prefix read after warmup15; no competing sends",
+  "nextGate": "All15correct fullaudio warmups +45actual native joins/exactpeer+ICE proof, then firstNEWmeasured21; source/config/failurepolicy remain frozen",
+  "fullMethodology": "thesis/methodology/owner-requirements-20261020-d91ff7ee.md",
+  "noExtraBaselineOrWorkers": true
+}

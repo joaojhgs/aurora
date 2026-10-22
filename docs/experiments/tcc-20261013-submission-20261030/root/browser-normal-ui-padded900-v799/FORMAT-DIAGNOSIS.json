@@ -1,0 +1,142 @@
+{
+  "at": "2026-10-16T07:16:17.402826+00:00",
+  "host": "personal.skyron-server",
+  "recordedFormatCases": [
+    {
+      "caseId": "browser-audio-v799-0905",
+      "outcome": "incorrect",
+      "terminalKind": "incorrect_reply",
+      "strictTranscript": true,
+      "transcriptSha256": "34b681e385feb3500c9e9849d30f5bac982716c4e4938cdb04c5fdc617cff624",
+      "replyChars": 31,
+      "replySha256": "a1b7eb2ee7a6aded8dda4e6cf30826f5afffb28a5597ee9389e91eb326d4e319",
+      "matchesFullSentence": true,
+      "exactParis": false,
+      "ttsRequestCount": 0
+    },
+    {
+      "caseId": "browser-audio-v799-0906",
+      "outcome": "incorrect",
+      "terminalKind": "incorrect_reply",
+      "strictTranscript": true,
+      "transcriptSha256": "34b681e385feb3500c9e9849d30f5bac982716c4e4938cdb04c5fdc617cff624",
+      "replyChars": 31,
+      "replySha256": "a1b7eb2ee7a6aded8dda4e6cf30826f5afffb28a5597ee9389e91eb326d4e319",
+      "matchesFullSentence": true,
+      "exactParis": false,
+      "ttsRequestCount": 0
+    },
+    {
+      "caseId": "browser-audio-v799-0907",
+      "outcome": "incorrect",
+      "terminalKind": "incorrect_reply",
+      "strictTranscript": true,
+      "transcriptSha256": "34b681e385feb3500c9e9849d30f5bac982716c4e4938cdb04c5fdc617cff624",
+      "replyChars": 31,
+      "replySha256": "a1b7eb2ee7a6aded8dda4e6cf30826f5afffb28a5597ee9389e91eb326d4e319",
+      "matchesFullSentence": true,
+      "exactParis": false,
+      "ttsRequestCount": 0
+    },
+    {
+      "caseId": "browser-audio-v799-0908",
+      "outcome": "incorrect",
+      "terminalKind": "incorrect_reply",
+      "strictTranscript": true,
+      "transcriptSha256": "34b681e385feb3500c9e9849d30f5bac982716c4e4938cdb04c5fdc617cff624",
+      "replyChars": 31,
+      "replySha256": "a1b7eb2ee7a6aded8dda4e6cf30826f5afffb28a5597ee9389e91eb326d4e319",
+      "matchesFullSentence": true,
+      "exactParis": false,
+      "ttsRequestCount": 0
+    },
+    {
+      "caseId": "browser-audio-v799-0909",
+      "outcome": "incorrect",
+      "terminalKind": "incorrect_reply",
+      "strictTranscript": true,
+      "transcriptSha256": "34b681e385feb3500c9e9849d30f5bac982716c4e4938cdb04c5fdc617cff624",
+      "replyChars": 31,
+      "replySha256": "a1b7eb2ee7a6aded8dda4e6cf30826f5afffb28a5597ee9389e91eb326d4e319",
+      "matchesFullSentence": true,
+      "exactParis": false,
+      "ttsRequestCount": 0
+    },
+    {
+      "caseId": "browser-audio-v799-0910",
+      "outcome": "incorrect",
+      "terminalKind": "incorrect_reply",
+      "strictTranscript": true,
+      "transcriptSha256": "34b681e385feb3500c9e9849d30f5bac982716c4e4938cdb04c5fdc617cff624",
+      "replyChars": 31,
+      "replySha256": "a1b7eb2ee7a6aded8dda4e6cf30826f5afffb28a5597ee9389e91eb326d4e319",
+      "matchesFullSentence": true,
+      "exactParis": false,
+      "ttsRequestCount": 0
+    },
+    {
+      "caseId": "browser-audio-v799-0911",
+      "outcome": "incorrect",
+      "terminalKind": "incorrect_reply",
+      "strictTranscript": true,
+      "transcriptSha256": "34b681e385feb3500c9e9849d30f5bac982716c4e4938cdb04c5fdc617cff624",
+      "replyChars": 31,
+      "replySha256": "a1b7eb2ee7a6aded8dda4e6cf30826f5afffb28a5597ee9389e91eb326d4e319",
+      "matchesFullSentence": true,
+      "exactParis": false,
+      "ttsRequestCount": 0
+    },
+    {
+      "caseId": "browser-audio-v799-0912",
+      "outcome": "incorrect",
+      "terminalKind": "incorrect_reply",
+      "strictTranscript": true,
+      "transcriptSha256": "34b681e385feb3500c9e9849d30f5bac982716c4e4938cdb04c5fdc617cff624",
+      "replyChars": 31,
+      "replySha256": "a1b7eb2ee7a6aded8dda4e6cf30826f5afffb28a5597ee9389e91eb326d4e319",
+      "matchesFullSentence": true,
+      "exactParis": false,
+      "ttsRequestCount": 0
+    },
+    {
+      "caseId": "browser-audio-v799-0913",
+      "outcome": "incorrect",
+      "terminalKind": "incorrect_reply",
+      "strictTranscript": true,
+      "transcriptSha256": "34b681e385feb3500c9e9849d30f5bac982716c4e4938cdb04c5fdc617cff624",
+      "replyChars": 31,
+      "replySha256": "a1b7eb2ee7a6aded8dda4e6cf30826f5afffb28a5597ee9389e91eb326d4e319",
+      "matchesFullSentence": true,
+      "exactParis": false,
+      "ttsRequestCount": 0
+    },
+    {
+      "caseId": "browser-audio-v799-0914",
+      "outcome": "incorrect",
+      "terminalKind": "incorrect_reply",
+      "strictTranscript": true,
+      "transcriptSha256": "34b681e385feb3500c9e9849d30f5bac982716c4e4938cdb04c5fdc617cff624",
+      "replyChars": 31,
+      "replySha256": "a1b7eb2ee7a6aded8dda4e6cf30826f5afffb28a5597ee9389e91eb326d4e319",
+      "matchesFullSentence": true,
+      "exactParis": false,
+      "ttsRequestCount": 0
+    },
+    {
+      "caseId": "browser-audio-v799-0915",
+      "outcome": "incorrect",
+      "terminalKind": "incorrect_reply",
+      "strictTranscript": true,
+      "transcriptSha256": "34b681e385feb3500c9e9849d30f5bac982716c4e4938cdb04c5fdc617cff624",
+      "replyChars": 31,
+      "replySha256": "a1b7eb2ee7a6aded8dda4e6cf30826f5afffb28a5597ee9389e91eb326d4e319",
+      "matchesFullSentence": true,
+      "exactParis": false,
+      "ttsRequestCount": 0
+    }
+  ],
+  "knownFullSentence": "The capital of France is Paris.",
+  "fullSentenceSha256": "a1b7eb2ee7a6aded8dda4e6cf30826f5afffb28a5597ee9389e91eb326d4e319",
+  "frozenPredicateAndOriginalLabelsUnchanged": true,
+  "classification": "Eleven original strict format failures: correct factual full sentence instead of requested city-only answer. Original outcomes/manifest/predicate and N889 full-flow quantiles unchanged; no repeat prescribed."
+}

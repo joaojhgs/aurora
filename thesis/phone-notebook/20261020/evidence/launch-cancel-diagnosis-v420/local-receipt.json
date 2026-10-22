@@ -1,0 +1,8 @@
+{
+  "bytes": 86,
+  "copyOnly": true,
+  "custody": "Notebook result persisted and fsynced before relay; remote receipt in same output",
+  "localPath": "/home/developer/projects/aurora/thesis/phone-notebook/20261020/evidence/launch-cancel-diagnosis-v420/result.json",
+  "remotePath": "/home/developer/projects/aurora/thesis/phone-notebook/20261020/evidence/launch-cancel-diagnosis-v420.json",
+  "sha256": "549622760ffca425ce05980a56738f2ead590c8ee22db55e6f576a9a9f57558d"
+}

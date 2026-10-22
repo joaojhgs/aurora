@@ -1,0 +1,54 @@
+{
+  "at": "2026-10-18T22:41:10.869480+00:00",
+  "status": "LIVE_REAL_AUDIO_ORDINARY_WARMUPS_SUCCEEDING_NATIVE_GATE_PENDING",
+  "progress": {
+    "attempted": 7,
+    "last_attempt_file": "attempts/attempt-0007-warmup.jsonl",
+    "last_attempt_status": "completed_correct",
+    "measured_attempted": 0,
+    "planned_measured": 96,
+    "planned_warmups": 15,
+    "status": "running",
+    "unattempted_measured": 96,
+    "warmups_attempted": 7
+  },
+  "processes": {
+    "controller": {
+      "pid": 1501375,
+      "startTicks": 114149321,
+      "state": "S"
+    },
+    "backend": {
+      "pid": 1501420,
+      "startTicks": 114149815,
+      "state": "S"
+    },
+    "copier": {
+      "pid": 1501376,
+      "startTicks": 114149322,
+      "state": "S"
+    },
+    "finalizer": {
+      "pid": 1501377,
+      "startTicks": 114149324,
+      "state": "S"
+    }
+  },
+  "physicalCustody": {
+    "updatedAt": "2026-10-18T22:40:13.434886+00:00",
+    "completedCases": 5,
+    "retainedFiles": 45,
+    "errors": []
+  },
+  "newNativeProofOrMeasurementClaimed": false,
+  "personalControl": "Reserved solely actual finalizer until proof/cursorrelease",
+  "noExtraTestsOrSourceChanges": true,
+  "originalRootNativeGoal": "ACTIVE same01a112...",
+  "originalMonitorNativeGoal": "ACTIVE same01a123ff... oneauthorizedresume701dba9d",
+  "old716AttemptsAnd2FailuresPreserved": true,
+  "nextWindowIndices": [
+    717,
+    812
+  ],
+  "stillRequiredAfterWindow": 88
+}

@@ -1,0 +1,14 @@
+{
+  "host": "personal.skyron-server",
+  "approvedRoute": "original Orca personal desktop terminal term_2e93af9c-1589-414b-8f92-17649f3c8069",
+  "remoteArchivePath": "/home/developer/projects/aurora/docs/experiments/tcc-20261013-submission-20261030/root/desktop-gpu-full-audio-http900-v497/aurora-desktop-gpu-full-audio-http900-v497.zip",
+  "archiveBytes": 35127102,
+  "archiveSHA256": "c0679cba9c544d029b5df45d5cb0a76a3b4045ffb2b23137df656a78c19b53cd",
+  "archiveManifestSHA256": "651260895cf864d92764bcd32852fea38622a1f6aa8c49a66afbb944d0b46725",
+  "localRawArchiveCopyExists": false,
+  "localReportPath": "docs/experiments/tcc-20261013-submission-20261030/root/desktop-gpu-full-audio-http900-v497/verification-v563.json",
+  "localReportSHA256": "f425c39771768ff16a20b90be9cffe43a076dcce4d768f7eba93a213b9dd0e9f",
+  "independentReviewPath": ".git/aurora-handoff-import-20261006/http-audio-seal-verify-v563/EVIDENCE-REVIEW.md",
+  "independentReviewScope": "local saved report and receipt consistency; not independent remote raw-ZIP audit",
+  "copiedReportByteExact": true
+}

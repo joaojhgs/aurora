@@ -1,0 +1,131 @@
+{
+  "artifactChecksumsSHA256": "602377f4382afe259fbe69e3de06f5d8ecf65872df3ac58a370fd56153d85c74",
+  "artifacts": {
+    "README.md": {
+      "bytes": 4278,
+      "sha256": "4b8f7fb1e754b656d992a36c8bded02f9c95d5011d82214d59467c2c51de0c32"
+    },
+    "analyze_saved_data.py": {
+      "bytes": 37148,
+      "sha256": "a7402b13c078bf1d9edb3fe3a1b460ebd1c28e05972bb156c0ad9316e57b3f8c"
+    },
+    "cohort-inventory.json": {
+      "bytes": 1109025,
+      "sha256": "0de03a39c22e9c97c3798e91eb296585187dfbf424ecc9b0f4f0f891f0cff0df"
+    },
+    "consolidated-results.md": {
+      "bytes": 22775,
+      "sha256": "87723165bc3b7c1bed51ef5f5e643bf3ea0c1927bb09df8272e6a9f1764270be"
+    },
+    "copy-checksum-source-dedup-manifest.json": {
+      "bytes": 6037478,
+      "sha256": "89ce71a6b5b65a8b19187c59e9ad031637a312c6c7fe865e0518653781390258"
+    },
+    "missing-data-classification.json": {
+      "bytes": 2836,
+      "sha256": "bae42e236886f00900378e8e80479cdd96c34932d4aa218081ee0d35a058f55e"
+    },
+    "missing-data-impact.md": {
+      "bytes": 7583,
+      "sha256": "14ba0cdcf4bcf1da4edc662d7eafcd642d082c6965d603e9828f7c5987796a3a"
+    },
+    "smoke/recovered-c06-observations.json": {
+      "bytes": 14595,
+      "sha256": "17cecdf6e07afd2088782213097cfc0ba6bf51c4874248eae6285eb8f146ae65"
+    },
+    "smoke/smoke-receipt.json": {
+      "bytes": 1573,
+      "sha256": "d50e64273d19a69f023fcbeed012134bbece1aa6899eae55b8a40b2a46d9d186"
+    },
+    "smoke/v491-reconciliation.json": {
+      "bytes": 4341,
+      "sha256": "aa61959a8113c250e3e561d28aa9712501fd715a70124140cecfc81c187113b3"
+    }
+  },
+  "auditorTerminal": "term_ce58b81d-c119-46dd-b816-6792a29065db",
+  "c06FinalDenominator": null,
+  "c06RecoveredOrdinals": [
+    104,
+    159,
+    218,
+    272
+  ],
+  "c06RecoveredUniqueMeasuredRows": 4,
+  "commits": 0,
+  "completedAt": "2026-10-17T22:30:14.008379+00:00",
+  "confirmedIrrecoverableItems": [],
+  "coordinatorTerminal": "term_6a00d9ee-792a-4daf-8578-236290e33108",
+  "deviceTests": 0,
+  "dispatchId": "ctx_dda469327d6f",
+  "duplicateRequestIdentities": [],
+  "exclusiveWriteScope": "thesis/audit/20261017-data-and-results/",
+  "goalStateMutations": 0,
+  "historicalMeshControlFamilies": 26,
+  "importedUniqueBytes": 50106693,
+  "independentlyVerifiedImportedObjects": 4523,
+  "latestRootMethodologyNotice": {
+    "evidence": "Root coordination notice; no scientific scope change, no analysis replay; audited input snapshot30.51 remains exact",
+    "path": "thesis/methodology/owner-requirements-20261017-7fac1bc3.md",
+    "section": "30.52",
+    "sha256": "7fac1bc3ef131352662abf2da3f17b761fe9236033b36b05ed954bc596984157"
+  },
+  "limitations": [
+    "V799 raw archive and C06 full/final population remain unlocated, not proven globally lost.",
+    "Orca retained-session search unavailable/disabled; Personal source access only through Root.",
+    "Current135case K1 requester snapshot differs from historical36case native population.",
+    "No product/mobile/physical-acoustic/generalization or full13 completion claim.",
+    "Optional per-request artifacts do not create a universal acceptance or rerun gate.",
+    "Repo-wide test/build/device checks excluded by audit-only resource scope; saved-data smoke and owned-file static checks passed."
+  ],
+  "methodologyOrCanonicalManifestEdits": 0,
+  "modelLoads": 0,
+  "monitorTerminal": "term_2eab47ed-ab9b-4e35-bd9b-fc068c60e3fc",
+  "newAgents": 0,
+  "newMeasurements": 0,
+  "normalizedIdentityLedgerRows": 8430,
+  "olderNativeK1Snapshot": {
+    "excludedWarmups": 15,
+    "measured": 36,
+    "providerSpanCoverage": "36/36; earlier12missing were custody lag"
+  },
+  "outcome": "succeeded",
+  "pendingOwnerBoundary": "Root reviews this audit and routes owner report; original monitor retains methodology and Root retains all execution reservations.",
+  "personalCommandsByAuditor": 0,
+  "personalEvidence": "actual Root-exported1830source-hashed timing projections; original full archives physically remain on Personal",
+  "postSettlement": "Retain all audit files; await coordinator ownership decision without polling or changing other sessions.",
+  "primaryAndCoverageEntries": 31,
+  "processesStoppedOrAdopted": 0,
+  "proposedOwnerReport": "All named families inventoried; seven audio raw/projection summaries reconciled, V491 original single900LocalCPU allocation established, four C06 historical observations recovered, V799 remains author-reported with raw unlocated, V1197 remains dated-INCOMPLETE; no new measurements or forced reruns.",
+  "publications": 0,
+  "pushes": 0,
+  "resourcePolicy": {
+    "importCapBytes": 134217728,
+    "maxPacedBulkBytesPerSecond": 4194304,
+    "minimumFreeBytes": 2147483648,
+    "observedFreeBytes": 6999277568
+  },
+  "runId": "run_e6054e76e9fc",
+  "savedDataSmoke": {
+    "exitCode": 0,
+    "invocations": 1,
+    "newMeasurements": 0,
+    "path": "smoke/smoke-receipt.json"
+  },
+  "schema": "aurora.audit.final-completion.v1",
+  "sourceRecords": 4656,
+  "taskId": "task_c626834bf1c6",
+  "v1197Snapshot": {
+    "at": "2026-10-17T22:15:24.539734+00:00",
+    "excludedWarmups": 15,
+    "measured": 135,
+    "status": "INCOMPLETE"
+  },
+  "v491OriginalAllocation": {
+    "conditions": 1,
+    "excludedWarmups": 15,
+    "measured": 900,
+    "mode": "LocalBus CPU",
+    "source": "smoke/v491-reconciliation.json"
+  },
+  "v799Evidence": "surviving author-reported aggregates and11-case diagnosis; full raw unlocated, irrecoverability not established"
+}

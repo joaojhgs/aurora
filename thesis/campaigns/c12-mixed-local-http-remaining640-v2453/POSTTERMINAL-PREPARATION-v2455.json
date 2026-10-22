@@ -1,0 +1,23 @@
+{
+  "at": "2026-10-22T11:16:26.814859+00:00",
+  "status": "FUTURE_POSTTERMINAL_COPY_AND_SAVED_ANALYSIS_PREPARED_NOT_EXECUTED",
+  "collector": {
+    "path": "thesis/harness/c12_terminal_delta_custody_v2455.py",
+    "sha256": "79448a0656fdfd047c7369693aa87f639e1e405b5705d0ce23ffe86e23340165",
+    "originalActors": [
+      462924,
+      2866664,
+      2866665
+    ],
+    "originalFinalDeadline": "2026-10-22T21:14:51.316179+00:00"
+  },
+  "analyzer": {
+    "path": "thesis/analysis/analyze_c12_saved_remaining640_v2455.py",
+    "sha256": "20234279339c2099610c0270a0307b020dab87b40583fd9c0115cfec57d0215c",
+    "plannedMeasuredPerStream": 640,
+    "parentRetainedPerStream": 260,
+    "poolPercentiles": false
+  },
+  "currentFrozenSourceEdited": false,
+  "newSutCalls": 0
+}

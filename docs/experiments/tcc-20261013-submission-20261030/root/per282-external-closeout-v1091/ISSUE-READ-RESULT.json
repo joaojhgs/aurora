@@ -1,0 +1,21 @@
+{
+  "at": "2026-10-16T15:21:51.456806+00:00",
+  "command": [
+    "multica",
+    "--debug",
+    "--workspace-id",
+    "8ba5e156-5ff4-4990-b201-7f5d435fdcef",
+    "issue",
+    "get",
+    "9e299a93-149e-46a9-bcf3-84d7c62b380d",
+    "--output",
+    "json"
+  ],
+  "exitCode": 1,
+  "httpStatusCodes": [
+    "502"
+  ],
+  "temporaryUnavailableMessagePresent": true,
+  "rawPrivateOnlyNotPublished": true,
+  "scope": "Exact previously authorized Personal/Aurora issue only; no auth/config/account/service change"
+}

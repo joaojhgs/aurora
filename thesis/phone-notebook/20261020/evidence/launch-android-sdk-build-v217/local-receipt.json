@@ -1,0 +1,8 @@
+{
+  "bytes": 301,
+  "copyOnly": true,
+  "custody": "Notebook result persisted and fsynced before relay; remote receipt in same output",
+  "localPath": "/home/developer/projects/aurora/thesis/phone-notebook/20261020/evidence/launch-android-sdk-build-v217/result.json",
+  "remotePath": "/home/developer/projects/aurora/thesis/phone-notebook/20261020/evidence/launch-android-sdk-build-v217.json",
+  "sha256": "bef53a6ad67ee3ad475e674d3569788b55e2dc095f1608b07af523f8e2ec5900"
+}

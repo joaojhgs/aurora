@@ -1,0 +1,171 @@
+{
+  "at": "2026-10-21T16:57:12.235850+00:00",
+  "status": "ACTUAL_K1_HTTP_MEASUREMENT_RESUMED_FIRST181_PHYSICALLY_RETAINED",
+  "rootGoalThread": "01a112a5-d6bb-74e2-bf7c-ace73cb513b5",
+  "nativeGoalStatus": "active",
+  "cohort": "V2234",
+  "manifestSha256": "11bbea3fc1e45e65da1ecb7b501aee77739870cb087d792e5bc5197f9b1027be",
+  "warmupsExcluded": {
+    "attempted": 15,
+    "correct": 15,
+    "failed": 0
+  },
+  "actualNativeWarmupStageJoins": 45,
+  "newEpochMeasured": {
+    "attempted": 3,
+    "correct": 3,
+    "failed": 0,
+    "planned": 270
+  },
+  "conditionCountsOnly": {
+    "attempted": 183,
+    "correct": 182,
+    "failed": 1,
+    "unattempted": 717,
+    "target": 900,
+    "poolingLatencyAcrossContexts": false
+  },
+  "firstMeasured": {
+    "conditionIndex": 181,
+    "harnessCaseId": "audio-campaign-v2234-0016",
+    "status": "completed_correct",
+    "flowDurationMs": 47681.862198,
+    "httpStatus": 200,
+    "remoteCorrelationPresent": true,
+    "allExpectedCorrectness": true,
+    "case": {
+      "path": "thesis/campaigns/worker-desktop-k1-orca-relayed-http-first270-v2234/attempts/attempt-0016-measured.jsonl",
+      "bytes": 4822,
+      "sha256": "d7ac7f01e1ea179c9a66966a7d01bbac058028ffcd8bea1a04fa3356254a7022"
+    },
+    "audio": {
+      "path": "thesis/campaigns/worker-desktop-k1-orca-relayed-http-first270-v2234/audio/13f6685cc97b990a6efafa60ea6f158c29522eaa6d4fc26ae7b5c52313e21456.wav",
+      "bytes": 32300,
+      "sha256": "13f6685cc97b990a6efafa60ea6f158c29522eaa6d4fc26ae7b5c52313e21456",
+      "wav": {
+        "channels": 1,
+        "sampleWidth": 2,
+        "sampleRate": 22050,
+        "frames": 16128
+      }
+    }
+  },
+  "nativeProof": {
+    "path": ".git/aurora-handoff-import-20261006/distributed-k1-orca-relayed-http-cell-v2234/campaign/receiver-warmup-proof.json",
+    "sha256": "6c4862f38b36ed7fd61595dcf2544300cfaf8adda3b7f259f825516a2981d814",
+    "actualRemoteCalls": 15,
+    "physicalReceiverInputs": [
+      {
+        "path": "thesis/campaigns/worker-desktop-k1-orca-relayed-http-first270-v2234/provider-warmup-source/voice-stages.jsonl",
+        "bytes": 72825,
+        "sha256": "6153da390a493ce3dace9a17150455893a52b14d3bfc66bae589d4177f0a2f62",
+        "sourceOffset": 72825,
+        "sourceThrough": 145650
+      },
+      {
+        "path": "thesis/campaigns/worker-desktop-k1-orca-relayed-http-first270-v2234/provider-warmup-source/actual-provider-bindings.jsonl",
+        "bytes": 11295,
+        "sha256": "9adce68942cef07b4962cad5c6cbededced24ff14575b8299c775ff86eb3cade",
+        "sourceOffset": 12116,
+        "sourceThrough": 23411
+      },
+      {
+        "path": "thesis/campaigns/worker-desktop-k1-orca-relayed-http-first270-v2234/provider-warmup-source/receiver-identity.json",
+        "bytes": 1373,
+        "sha256": "46cea26a99e5b8f9587363dcb7272be52c1a5e3dc922a0a76931c1886430c58d",
+        "sourceOffset": 0,
+        "sourceThrough": 1373
+      }
+    ]
+  },
+  "nativeBackends": {
+    "workerSTT": "CPU/int8_float32; actual constructors verified by unchanged localnativegate",
+    "workerLLM": "CPU/n_gpu_layers0; actual constructor/effective options verified by unchanged localnativegate",
+    "desktopTTS": "Piper CPU/useCudaFalse; actualnative windows/call arguments checked"
+  },
+  "nativeCapacity": {
+    "at": "2026-10-21T16:54:42.139581+00:00",
+    "status": "REMOTE_NATIVE_AND_CAPACITY_PROOF_READY_LOCAL_RUNNER_GATE_STILL_ENFORCED",
+    "warmups": 15,
+    "correct": 15,
+    "failed": 0,
+    "newMeasuredObserved": 0,
+    "observedWarmupP95Ms": 55736.2489304,
+    "estimator": "Hyndman-Fan Type7",
+    "forecastReferenceSeconds": 60.3053512957,
+    "remaining270ForecastSeconds": 20018.9338198068,
+    "availableWindows": {
+      "conditionConservativeRemainingSeconds": 23194.755334,
+      "providerRemainingMinus180Seconds": 20890.329073,
+      "rootRemainingMinus2400Seconds": 21685.092306,
+      "conditionAccountingRemainingMinus180Seconds": 25877.311833633998
+    },
+    "capacityAdmitted": true,
+    "receiver": {
+      "pid": 1440196,
+      "state": "S",
+      "startTicks": 35427408
+    },
+    "physicalSourceCopies": [
+      {
+        "path": "thesis/campaigns/worker-desktop-k1-orca-relayed-http-first270-v2234/provider-warmup-source/voice-stages.jsonl",
+        "bytes": 72825,
+        "sha256": "6153da390a493ce3dace9a17150455893a52b14d3bfc66bae589d4177f0a2f62",
+        "sourceOffset": 72825,
+        "sourceThrough": 145650
+      },
+      {
+        "path": "thesis/campaigns/worker-desktop-k1-orca-relayed-http-first270-v2234/provider-warmup-source/actual-provider-bindings.jsonl",
+        "bytes": 11295,
+        "sha256": "9adce68942cef07b4962cad5c6cbededced24ff14575b8299c775ff86eb3cade",
+        "sourceOffset": 12116,
+        "sourceThrough": 23411
+      },
+      {
+        "path": "thesis/campaigns/worker-desktop-k1-orca-relayed-http-first270-v2234/provider-warmup-source/receiver-identity.json",
+        "bytes": 1373,
+        "sha256": "46cea26a99e5b8f9587363dcb7272be52c1a5e3dc922a0a76931c1886430c58d",
+        "sourceOffset": 0,
+        "sourceThrough": 1373
+      }
+    ],
+    "localGate": "Requester runner independently enforces actual local STT/LLM binding/native proof before first181",
+    "newInferenceByFinalizer": 0,
+    "sameRemoteOperationSendCount": 1
+  },
+  "actors": [
+    {
+      "pid": 3751414,
+      "startTicks": 137933512,
+      "state": "S"
+    },
+    {
+      "pid": 3751426,
+      "startTicks": 137933748,
+      "state": "S"
+    },
+    {
+      "pid": 3751415,
+      "startTicks": 137933513,
+      "state": "S"
+    }
+  ],
+  "finalizerExitedNaturally": true,
+  "rootReadOnlyObserverExitedNormally": true,
+  "custody": {
+    "cases": 17,
+    "WAV": 17,
+    "sequence": 16,
+    "errors": []
+  },
+  "providerUnchanged": {
+    "pid": 1440196,
+    "startTicks": 35427408,
+    "manifestSha256": "950d449e3c337764a654ae4dd08c66623f50f96617615328be0cd8c54a4eaea2"
+  },
+  "rootDeadlineNotReset": "2026-10-21T23:36:07.231887+00:00",
+  "providerDeadlineNotExtended": "2026-10-21T22:45:52.468654+00:00",
+  "phoneNotGate": true,
+  "newWorkersOrReviewLoops": 0,
+  "remainingWork": "Continue same270block, then seal/actual saved native-resource analysis;450stillremain after270; fullmatrix/full13open"
+}

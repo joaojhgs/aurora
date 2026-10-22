@@ -1,0 +1,42 @@
+{
+  "summary.json": {
+    "bytes": 122379,
+    "sha256": "e0fd80e370938dda4ff38a4d6004ac3d74d3598b930f1da381c80f987cdc455e",
+    "source": ".git/aurora-handoff-import-20261006/distributed-k3-orca-relayed-http-cell-v1481/campaign/summary.json"
+  },
+  "progress.json": {
+    "bytes": 222,
+    "sha256": "100ec641ec96c4a9b3d4b13240507814bf40fbf0cbd655baf2df895eaf8e8fc7",
+    "source": ".git/aurora-handoff-import-20261006/distributed-k3-orca-relayed-http-cell-v1481/campaign/progress.json"
+  },
+  "control-launch.json": {
+    "bytes": 1317,
+    "sha256": "87146c2316ebf234c529b1e57635d3d199203f9069e41e3635f4e141791dd196",
+    "source": ".git/aurora-handoff-import-20261006/distributed-k3-orca-relayed-http-cell-v1481/control-launch.json"
+  },
+  "condition-frozen-v1481.json": {
+    "bytes": 14931,
+    "sha256": "54d51acdf8219b4e69f21cabb9d9fb1b402acf9826196dbdcea4fcfd15bddb25",
+    "source": ".git/aurora-handoff-import-20261006/distributed-k3-orca-relayed-launch-v1481/condition-frozen-v1481.json"
+  },
+  "config-reference.json": {
+    "bytes": 284,
+    "sha256": "d86621953f930eae0d1a6df8be685503aebbec40b6a8f81f1627b2888036cc23",
+    "source": ".git/aurora-handoff-import-20261006/distributed-k3-orca-relayed-launch-v1481/config-reference.json"
+  },
+  "CURRENT-at-terminal.json": {
+    "bytes": 1176648,
+    "sha256": "11b4d16582b25629424639c998a3e64b4ab2c27f3c830c6c965a6537b9740d06",
+    "source": "thesis/campaigns/worker-desktop-k3-orca-relayed-http-v1481/CURRENT.json"
+  },
+  "COPIER-RECEIPT-at-terminal.json": {
+    "bytes": 37469,
+    "sha256": "6e1bac28e11495c20c42311b86ef888856e2f6770d1c81d3aff311af5494c442",
+    "source": "thesis/campaigns/worker-desktop-k3-orca-relayed-http-v1481/receipts/000271.json"
+  },
+  "LOCAL-SOURCE-PREFIX-METADATA.json": {
+    "bytes": 333,
+    "sha256": "730c14f09406f11b315bd35f339c49595ff7ba45c07fa679f08f6f31d39a05b9",
+    "source": "metadata-only observation after exact requester/copier processes exited"
+  }
+}

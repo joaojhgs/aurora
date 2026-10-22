@@ -1,0 +1,27 @@
+{
+  "at": "2026-10-18T01:56:43.875699+00:00",
+  "sourceReceipt": ".git/aurora-handoff-import-20261006/v1435-original-monitor-liveness.json",
+  "sourceBytes": 8036,
+  "sourceSha256": "5baa0da3ddca869518b52ee476049ddc4ac36801ccff89307f7b6b0650a63d20",
+  "dispatchId": "ctx_37b4d0a3c14f",
+  "taskId": "task_d7ea336050cf",
+  "runId": "run_e6054e76e9fc",
+  "terminal": "term_2eab47ed-ab9b-4e35-bd9b-fc068c60e3fc",
+  "processIncarnation": "ssh:ssh-oci-coding-worker@@pty2:47ec4130-fe3d-49e5-91b0-384bab6e8b15:19:37e50d9c-6cf5-4e28-a63b-f2bc3eed5661",
+  "lastHeartbeatAt": "2026-10-18T01:51:09Z",
+  "observation": {
+    "status": "live",
+    "exactWorker": true,
+    "agentWait": null
+  },
+  "effectiveLaunch": {
+    "agent": "codex",
+    "model": "gpt-6.1-sol",
+    "effort": "xhigh"
+  },
+  "workerState": "ready",
+  "conclusion": "Exact original monitor live; older delivered heartbeat was not actual last heartbeat; scoped branch CLOSED",
+  "credentialValuesCopied": false,
+  "sutCalls": 0,
+  "lifecycleChanges": 0
+}

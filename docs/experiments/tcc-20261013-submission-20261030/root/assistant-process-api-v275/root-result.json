@@ -1,0 +1,13 @@
+{
+  "exit_code": 0,
+  "finished_at": "2026-10-14T03:23:20.849155+00:00",
+  "elapsed_seconds": 98.18127090402413,
+  "redis_cleanup_exit_code": 0,
+  "protected_private_after": {
+    "config.json": "32a0c6db8b9f6583a25d8506c7df6f8f670108fe0653c88a7068654f22714604",
+    ".env": "67267e15b0ce219244c7c7f9df73efa65d6942339a646c346fd8d80366c2d3c9"
+  },
+  "protected_private_files_unchanged": true,
+  "requests_available": true,
+  "scope": "same-host actual independently spawned Config/DB/Auth/Orchestrator/Gateway cold Gateway-only text Assistant over Redis; API-key SYSTEM, Auth token validation not exercised; no mobile/voice/clean stable tails"
+}

@@ -1,0 +1,26 @@
+{
+  "newMeasurements": 0,
+  "outputs": [
+    {
+      "bytes": 4619,
+      "path": "/home/developer/projects/aurora/thesis/campaigns/worker-desktop-k3-orca-relayed-http-remaining-v1620/terminal-v1637/requester-analysis-v1642/SUMMARY.json",
+      "sha256": "ffbd431f7e8754e540ed3b61c429fbb26d6b024b3c1b907e627f2a9f872c4ba8"
+    },
+    {
+      "bytes": 173538,
+      "path": "/home/developer/projects/aurora/thesis/campaigns/worker-desktop-k3-orca-relayed-http-remaining-v1620/terminal-v1637/requester-analysis-v1642/CASE-HISTORY.json",
+      "sha256": "768007319b4386f44b6379e50bdc41fba4d80d81125e37dc1f58a1c5651bcaa2"
+    },
+    {
+      "bytes": 10933,
+      "path": "/home/developer/projects/aurora/thesis/campaigns/worker-desktop-k3-orca-relayed-http-remaining-v1620/terminal-v1637/requester-analysis-v1642/SOURCE-IDENTITIES.json",
+      "sha256": "2c0cca20e0f0e841c34326500e3364bf34bcdf7430cd80abc3d8b9c9bbe8cd0e"
+    },
+    {
+      "bytes": 135052,
+      "path": "/home/developer/projects/aurora/thesis/campaigns/worker-desktop-k3-orca-relayed-http-remaining-v1620/terminal-v1637/requester-analysis-v1642/REQUESTER-CURRENT.snapshot.json",
+      "sha256": "40efc0bbe862572e675893d0e7cdd88dc7cba19a011e4a2b9c5599524e3544be"
+    }
+  ],
+  "sutCalls": 0
+}

@@ -1,0 +1,28 @@
+{
+  "id": "e3b944a5-bcc5-47e3-bf03-36d8386b0a08",
+  "ok": true,
+  "result": {
+    "message": {
+      "id": "msg_fcbd586e34d0",
+      "run_id": "run_e6054e76e9fc",
+      "delivery_contract": "current_delivery",
+      "from_handle": "term_6a00d9ee-792a-4daf-8578-236290e33108",
+      "to_handle": "dispatch:ctx_37b4d0a3c14f",
+      "subject": "C12 requester finite stop: recover sealed pair0261 before continuation",
+      "body": "Original Root ACTIVE same native goal. W requester281887 exited10:43:54Z at HTTP260/900 allcorrect, local259 verified + last result now recovered in sealed page0 receipt: local0261 correctness all_expected true with WAV hash. Failure is copy-control observation for pair0261 page01 (SEND accepted684f6337-fda8-4a7f-97aa-377dbf4dcca6;64 empty delta reads), not inference/correctness. Original D2555838/2555839 reservation retained pending actual process/output reconciliation; no STOP/new models/P2P/replay/full900 restart. Root retrieving existing sealed archive missing page through same plain terminal, then actual provider state and EOF custody. Prior counts and original master clocks preserved. Phone solely assigned worker. Monitor remains sole methodology writer; prospective remaining-index continuation may need amendment after actual retirement proof. Exact receipts in .git/aurora-handoff-import-20261006/c12-v2426-pair-0261-page-01-* and thesis/campaigns/c12-mixed-local-http-900-v2426/REQUESTER-TERMINAL.json.",
+      "type": "status",
+      "priority": "normal",
+      "thread_id": null,
+      "payload": null,
+      "created_at": "2026-10-22T10:56:27Z",
+      "delivered_at": null
+    },
+    "mutation": {
+      "requestId": "20ed2e8a-aec1-4a3b-8f8c-e0cf4d5d0240",
+      "replayed": false
+    }
+  },
+  "_meta": {
+    "runtimeId": "cc9e3275-28c6-4c45-85cc-bdcd2262aa7d"
+  }
+}

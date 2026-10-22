@@ -1,0 +1,3098 @@
+{
+  "observed_at": "2026-10-14T14:06:40.840101+00:00",
+  "authorization_message": "msg_a0263cd6eff1",
+  "scope": "contents_only_preserve_parent_directories",
+  "targets": [
+    {
+      "path": "/home/developer/projects/aurora/rust/target/debug/incremental",
+      "device": 2049,
+      "inode": 2371309,
+      "children": [
+        {
+          "name": "aurora_android_audio_spike-0p8a2e379kc0v",
+          "device": 2049,
+          "inode": 2395736,
+          "mode": 16893,
+          "mtime_ns": 1791428315890698276,
+          "type": "directory"
+        },
+        {
+          "name": "aurora_android_audio_spike-1t8bjdtxt60yv",
+          "device": 2049,
+          "inode": 2395781,
+          "mode": 16893,
+          "mtime_ns": 1791428316165700375,
+          "type": "directory"
+        },
+        {
+          "name": "aurora_cactus_installer_main_v95-0uf5i306bi5dn",
+          "device": 2049,
+          "inode": 2649617,
+          "mode": 16893,
+          "mtime_ns": 1791716533031565697,
+          "type": "directory"
+        },
+        {
+          "name": "aurora_contracts-01ui5g1zavpo2",
+          "device": 2049,
+          "inode": 2383084,
+          "mode": 16893,
+          "mtime_ns": 1791399024004450413,
+          "type": "directory"
+        },
+        {
+          "name": "aurora_contracts-038phh1ynyrs1",
+          "device": 2049,
+          "inode": 2385150,
+          "mode": 16893,
+          "mtime_ns": 1791398979609108599,
+          "type": "directory"
+        },
+        {
+          "name": "aurora_contracts-08iyoelchfx1g",
+          "device": 2049,
+          "inode": 2394879,
+          "mode": 16893,
+          "mtime_ns": 1791426582348433120,
+          "type": "directory"
+        },
+        {
+          "name": "aurora_contracts-09ameyy7mbe0g",
+          "device": 2049,
+          "inode": 2391191,
+          "mode": 16893,
+          "mtime_ns": 1791447229343360162,
+          "type": "directory"
+        },
+        {
+          "name": "aurora_contracts-0dtb6dfa9v0i9",
+          "device": 2049,
+          "inode": 2385082,
+          "mode": 16893,
+          "mtime_ns": 1791397386630671396,
+          "type": "directory"
+        },
+        {
+          "name": "aurora_contracts-0i6ddhaoi1mzk",
+          "device": 2049,
+          "inode": 2381568,
+          "mode": 16893,
+          "mtime_ns": 1791558294806146292,
+          "type": "directory"
+        },
+        {
+          "name": "aurora_contracts-0p741nmei87da",
+          "device": 2049,
+          "inode": 2362174,
+          "mode": 16893,
+          "mtime_ns": 1791406471013231573,
+          "type": "directory"
+        },
+        {
+          "name": "aurora_contracts-0pzuf92k8je0s",
+          "device": 2049,
+          "inode": 2359589,
+          "mode": 16893,
+          "mtime_ns": 1791447208073198553,
+          "type": "directory"
+        },
+        {
+          "name": "aurora_contracts-0s8z45x393x5f",
+          "device": 2049,
+          "inode": 2390951,
+          "mode": 16893,
+          "mtime_ns": 1791426392191966755,
+          "type": "directory"
+        },
+        {
+          "name": "aurora_contracts-0yg1j07gfpgkl",
+          "device": 2049,
+          "inode": 2361399,
+          "mode": 16893,
+          "mtime_ns": 1791406511576547285,
+          "type": "directory"
+        },
+        {
+          "name": "aurora_contracts-1dl3dvkkn6l18",
+          "device": 2049,
+          "inode": 3416476,
+          "mode": 16893,
+          "mtime_ns": 1791585575075483055,
+          "type": "directory"
+        },
+        {
+          "name": "aurora_contracts-1h87djcegr490",
+          "device": 2049,
+          "inode": 2390859,
+          "mode": 16893,
+          "mtime_ns": 1791672954323887511,
+          "type": "directory"
+        },
+        {
+          "name": "aurora_contracts-1hfnxcr1k1uqd",
+          "device": 2049,
+          "inode": 2372889,
+          "mode": 16893,
+          "mtime_ns": 1791558194878383827,
+          "type": "directory"
+        },
+        {
+          "name": "aurora_contracts-1ikjnb131jppo",
+          "device": 2049,
+          "inode": 2385963,
+          "mode": 16893,
+          "mtime_ns": 1791595709656500068,
+          "type": "directory"
+        },
+        {
+          "name": "aurora_contracts-1n0ma4cvbwym2",
+          "device": 2049,
+          "inode": 2365619,
+          "mode": 16893,
+          "mtime_ns": 1791558245586770759,
+          "type": "directory"
+        },
+        {
+          "name": "aurora_contracts-2311c5qbo0pyv",
+          "device": 2049,
+          "inode": 2360072,
+          "mode": 16893,
+          "mtime_ns": 1791569821464122468,
+          "type": "directory"
+        },
+        {
+          "name": "aurora_contracts-27e0ra02ggipi",
+          "device": 2049,
+          "inode": 2384272,
+          "mode": 16893,
+          "mtime_ns": 1791440628687693504,
+          "type": "directory"
+        },
+        {
+          "name": "aurora_contracts-29d4cghptmjd1",
+          "device": 2049,
+          "inode": 2363980,
+          "mode": 16893,
+          "mtime_ns": 1791558231426662714,
+          "type": "directory"
+        },
+        {
+          "name": "aurora_contracts-2by4gvm0yw1bw",
+          "device": 2049,
+          "inode": 2395511,
+          "mode": 16893,
+          "mtime_ns": 1791427378569537158,
+          "type": "directory"
+        },
+        {
+          "name": "aurora_contracts-2eyntxbbgsezr",
+          "device": 2049,
+          "inode": 3412278,
+          "mode": 16893,
+          "mtime_ns": 1791563627697922452,
+          "type": "directory"
+        },
+        {
+          "name": "aurora_contracts-2nan52x988k4c",
+          "device": 2049,
+          "inode": 2383288,
+          "mode": 16893,
+          "mtime_ns": 1791399040220575232,
+          "type": "directory"
+        },
+        {
+          "name": "aurora_contracts-2r2cjm2k9n3tf",
+          "device": 2049,
+          "inode": 2646791,
+          "mode": 16893,
+          "mtime_ns": 1791687485478561461,
+          "type": "directory"
+        },
+        {
+          "name": "aurora_contracts-2s6mbbrgt893w",
+          "device": 2049,
+          "inode": 2365914,
+          "mode": 16893,
+          "mtime_ns": 1791585512910023301,
+          "type": "directory"
+        },
+        {
+          "name": "aurora_contracts-3ga5nio6co71m",
+          "device": 2049,
+          "inode": 2385114,
+          "mode": 16893,
+          "mtime_ns": 1791398968938026418,
+          "type": "directory"
+        },
+        {
+          "name": "aurora_contracts-3nl1fu73ulw7d",
+          "device": 2049,
+          "inode": 2377244,
+          "mode": 16893,
+          "mtime_ns": 1791558207788482342,
+          "type": "directory"
+        },
+        {
+          "name": "aurora_contracts-3tyqej4lrivab",
+          "device": 2049,
+          "inode": 2368210,
+          "mode": 16893,
+          "mtime_ns": 1791398989819187222,
+          "type": "directory"
+        },
+        {
+          "name": "aurora_ios_audio_spike-0zqnd0sgf8fnw",
+          "device": 2049,
+          "inode": 2367466,
+          "mode": 16893,
+          "mtime_ns": 1791428315146692594,
+          "type": "directory"
+        },
+        {
+          "name": "aurora_ios_audio_spike-2sgz9jsncyqbz",
+          "device": 2049,
+          "inode": 2395678,
+          "mode": 16893,
+          "mtime_ns": 1791428315424694717,
+          "type": "directory"
+        },
+        {
+          "name": "aurora_local_inference-009r8r57d8yjy",
+          "device": 2049,
+          "inode": 2380305,
+          "mode": 16893,
+          "mtime_ns": 1791673120250436398,
+          "type": "directory"
+        },
+        {
+          "name": "aurora_local_inference-0d6lcv2hvx30w",
+          "device": 2049,
+          "inode": 2649748,
+          "mode": 16893,
+          "mtime_ns": 1791717099727884871,
+          "type": "directory"
+        },
+        {
+          "name": "aurora_local_inference-1psbexmswa8mw",
+          "device": 2049,
+          "inode": 2380301,
+          "mode": 16893,
+          "mtime_ns": 1791673120229187391,
+          "type": "directory"
+        },
+        {
+          "name": "aurora_local_inference-22ykubu5ohykq",
+          "device": 2049,
+          "inode": 2683729,
+          "mode": 16893,
+          "mtime_ns": 1791765351896377128,
+          "type": "directory"
+        },
+        {
+          "name": "aurora_local_inference-2ocjth8xrn8g3",
+          "device": 2049,
+          "inode": 2649065,
+          "mode": 16893,
+          "mtime_ns": 1791715041593186875,
+          "type": "directory"
+        },
+        {
+          "name": "aurora_local_inference-2wqb250cb38w7",
+          "device": 2049,
+          "inode": 2649345,
+          "mode": 16893,
+          "mtime_ns": 1791716365007284904,
+          "type": "directory"
+        },
+        {
+          "name": "aurora_local_inference-308gvazofpb1s",
+          "device": 2049,
+          "inode": 2649605,
+          "mode": 16893,
+          "mtime_ns": 1791716531977557663,
+          "type": "directory"
+        },
+        {
+          "name": "aurora_local_inference-3d9mzz4kncxml",
+          "device": 2049,
+          "inode": 2647063,
+          "mode": 16893,
+          "mtime_ns": 1791687546013024401,
+          "type": "directory"
+        },
+        {
+          "name": "aurora_mesh_authority-01ddnihw7yh4x",
+          "device": 2049,
+          "inode": 2394396,
+          "mode": 16893,
+          "mtime_ns": 1791427654699647960,
+          "type": "directory"
+        },
+        {
+          "name": "aurora_mesh_authority-050laxmbvf1b5",
+          "device": 2049,
+          "inode": 2366591,
+          "mode": 16893,
+          "mtime_ns": 1791558247350784219,
+          "type": "directory"
+        },
+        {
+          "name": "aurora_mesh_authority-0zvu0r9vzbm5d",
+          "device": 2049,
+          "inode": 2647035,
+          "mode": 16893,
+          "mtime_ns": 1791687538339965733,
+          "type": "directory"
+        },
+        {
+          "name": "aurora_mesh_authority-17rly1q6fiywn",
+          "device": 2049,
+          "inode": 3412701,
+          "mode": 16893,
+          "mtime_ns": 1791563637376995642,
+          "type": "directory"
+        },
+        {
+          "name": "aurora_mesh_authority-1k9urtjjr6ass",
+          "device": 2049,
+          "inode": 2386547,
+          "mode": 16893,
+          "mtime_ns": 1791401477060138658,
+          "type": "directory"
+        },
+        {
+          "name": "aurora_mesh_authority-20abckrrq2q2r",
+          "device": 2049,
+          "inode": 2382590,
+          "mode": 16893,
+          "mtime_ns": 1791558326036384554,
+          "type": "directory"
+        },
+        {
+          "name": "aurora_mesh_authority-2avarm2khfp5o",
+          "device": 2049,
+          "inode": 2364492,
+          "mode": 16893,
+          "mtime_ns": 1791558237668710343,
+          "type": "directory"
+        },
+        {
+          "name": "aurora_mesh_authority-2th8h28m6nat7",
+          "device": 2049,
+          "inode": 3417452,
+          "mode": 16893,
+          "mtime_ns": 1791585586633568534,
+          "type": "directory"
+        },
+        {
+          "name": "aurora_mesh_authority-3dcbp9eycscx4",
+          "device": 2049,
+          "inode": 2363752,
+          "mode": 16893,
+          "mtime_ns": 1791558209931498695,
+          "type": "directory"
+        },
+        {
+          "name": "aurora_mesh_authority-3ebrb1frml4j0",
+          "device": 2049,
+          "inode": 2386234,
+          "mode": 16893,
+          "mtime_ns": 1791401464147040048,
+          "type": "directory"
+        },
+        {
+          "name": "aurora_mesh_session-0wd2stq0y508e",
+          "device": 2049,
+          "inode": 2647045,
+          "mode": 16893,
+          "mtime_ns": 1791687538870969793,
+          "type": "directory"
+        },
+        {
+          "name": "aurora_mesh_session-1q8cxwycfn3d0",
+          "device": 2049,
+          "inode": 3412710,
+          "mode": 16893,
+          "mtime_ns": 1791563637582997200,
+          "type": "directory"
+        },
+        {
+          "name": "aurora_mesh_session-1xbpgeymxlukg",
+          "device": 2049,
+          "inode": 2381759,
+          "mode": 16893,
+          "mtime_ns": 1791558310268264257,
+          "type": "directory"
+        },
+        {
+          "name": "aurora_mesh_session-37ww7kdfmbia5",
+          "device": 2049,
+          "inode": 3417501,
+          "mode": 16893,
+          "mtime_ns": 1791585591388603701,
+          "type": "directory"
+        },
+        {
+          "name": "aurora_mesh_session-3e04zhysnpinx",
+          "device": 2049,
+          "inode": 2364052,
+          "mode": 16893,
+          "mtime_ns": 1791558232984674602,
+          "type": "directory"
+        },
+        {
+          "name": "aurora_mesh_session-3meepsfclrjwk",
+          "device": 2049,
+          "inode": 2367302,
+          "mode": 16893,
+          "mtime_ns": 1791558254305837286,
+          "type": "directory"
+        },
+        {
+          "name": "aurora_mesh_session-3qs1te88hkcdm",
+          "device": 2049,
+          "inode": 2363884,
+          "mode": 16893,
+          "mtime_ns": 1791558213173523434,
+          "type": "directory"
+        },
+        {
+          "name": "aurora_tauri_authority_text_evidence-0uxpt4dj1kjht",
+          "device": 2049,
+          "inode": 2394534,
+          "mode": 16893,
+          "mtime_ns": 1791427657779377374,
+          "type": "directory"
+        },
+        {
+          "name": "aurora_tauri_authority_text_evidence-2v151g9ycuvi1",
+          "device": 2049,
+          "inode": 2394500,
+          "mode": 16893,
+          "mtime_ns": 1791427657631670365,
+          "type": "directory"
+        },
+        {
+          "name": "aurora_tauri_generic_request_text_evidence-12atkrrw7ahoz",
+          "device": 2049,
+          "inode": 2394673,
+          "mode": 16893,
+          "mtime_ns": 1791427653194636459,
+          "type": "directory"
+        },
+        {
+          "name": "aurora_tauri_generic_request_text_evidence-1l78ojh9op84c",
+          "device": 2049,
+          "inode": 2394273,
+          "mode": 16893,
+          "mtime_ns": 1791427653073412812,
+          "type": "directory"
+        },
+        {
+          "name": "aurora_tauri_lib-0wltlfe4erzw2",
+          "device": 2049,
+          "inode": 3412733,
+          "mode": 16893,
+          "mtime_ns": 1791570762452176518,
+          "type": "directory"
+        },
+        {
+          "name": "aurora_tauri_lib-3ntpu3mii6jip",
+          "device": 2049,
+          "inode": 3417649,
+          "mode": 16893,
+          "mtime_ns": 1791465332523396944,
+          "type": "directory"
+        },
+        {
+          "name": "aurora_tauri_lib-3omsga631ve9w",
+          "device": 2049,
+          "inode": 3417554,
+          "mode": 16893,
+          "mtime_ns": 1791587768033852803,
+          "type": "directory"
+        },
+        {
+          "name": "aurora_tauri_lib-3puz838svpdip",
+          "device": 2049,
+          "inode": 2647073,
+          "mode": 16893,
+          "mtime_ns": 1791687564480165588,
+          "type": "directory"
+        },
+        {
+          "name": "aurora_tauri_response_json_helper_v1-0i3rlfq5jnxgk",
+          "device": 2049,
+          "inode": 2395559,
+          "mode": 16893,
+          "mtime_ns": 1791427382258565369,
+          "type": "directory"
+        },
+        {
+          "name": "aurora_tauri_response_json_helper_v1-0le9t8ww0v1bq",
+          "device": 2049,
+          "inode": 2394084,
+          "mode": 16893,
+          "mtime_ns": 1791427358891386668,
+          "type": "directory"
+        },
+        {
+          "name": "aurora_tauri_response_json_helper_v1-1ji1u2l9062hk",
+          "device": 2049,
+          "inode": 2395466,
+          "mode": 16893,
+          "mtime_ns": 1791427360101395922,
+          "type": "directory"
+        },
+        {
+          "name": "aurora_tauri_response_json_helper_v1-1mh0h3xeytojj",
+          "device": 2049,
+          "inode": 2394776,
+          "mode": 16893,
+          "mtime_ns": 1791427359230389261,
+          "type": "directory"
+        },
+        {
+          "name": "aurora_tauri_response_json_helper_v1-25jz6a5x153um",
+          "device": 2049,
+          "inode": 2395547,
+          "mode": 16893,
+          "mtime_ns": 1791427382139564459,
+          "type": "directory"
+        },
+        {
+          "name": "aurora_tauri_response_json_helper_v1-3v11zua5wws8z",
+          "device": 2049,
+          "inode": 2395497,
+          "mode": 16893,
+          "mtime_ns": 1791427360403398232,
+          "type": "directory"
+        },
+        {
+          "name": "aurora_voice_core-059snwzykzlv3",
+          "device": 2049,
+          "inode": 2360572,
+          "mode": 16893,
+          "mtime_ns": 1791572896410437011,
+          "type": "directory"
+        },
+        {
+          "name": "aurora_voice_core-0asqr1k3iob96",
+          "device": 2049,
+          "inode": 2390926,
+          "mode": 16893,
+          "mtime_ns": 1791672958401919524,
+          "type": "directory"
+        },
+        {
+          "name": "aurora_voice_core-0bji09fa61dy5",
+          "device": 2049,
+          "inode": 2362228,
+          "mode": 16893,
+          "mtime_ns": 1791406473126248027,
+          "type": "directory"
+        },
+        {
+          "name": "aurora_voice_core-0g21dhi8v8z0k",
+          "device": 2049,
+          "inode": 3480924,
+          "mode": 16893,
+          "mtime_ns": 1791595705647469599,
+          "type": "directory"
+        },
+        {
+          "name": "aurora_voice_core-0pepm2u73qhtp",
+          "device": 2049,
+          "inode": 2390891,
+          "mode": 16893,
+          "mtime_ns": 1791672957004908558,
+          "type": "directory"
+        },
+        {
+          "name": "aurora_voice_core-117lyr43ztvaw",
+          "device": 2049,
+          "inode": 2362204,
+          "mode": 16893,
+          "mtime_ns": 1791406471860238169,
+          "type": "directory"
+        },
+        {
+          "name": "aurora_voice_core-16uvrzgoywzcj",
+          "device": 2049,
+          "inode": 2390302,
+          "mode": 16893,
+          "mtime_ns": 1791447208866204578,
+          "type": "directory"
+        },
+        {
+          "name": "aurora_voice_core-19pjuxkisnblq",
+          "device": 2049,
+          "inode": 2390574,
+          "mode": 16893,
+          "mtime_ns": 1791743764054555911,
+          "type": "directory"
+        },
+        {
+          "name": "aurora_voice_core-19r2m5f0y82g1",
+          "device": 2049,
+          "inode": 2391466,
+          "mode": 16893,
+          "mtime_ns": 1791447230432368437,
+          "type": "directory"
+        },
+        {
+          "name": "aurora_voice_core-1ch6xrj5lub4j",
+          "device": 2049,
+          "inode": 2363968,
+          "mode": 16893,
+          "mtime_ns": 1791558232622671840,
+          "type": "directory"
+        },
+        {
+          "name": "aurora_voice_core-1lw74gy8wrgvr",
+          "device": 2049,
+          "inode": 3416922,
+          "mode": 16893,
+          "mtime_ns": 1791585576787495716,
+          "type": "directory"
+        },
+        {
+          "name": "aurora_voice_core-1pslmvkpo0muw",
+          "device": 2049,
+          "inode": 2361488,
+          "mode": 16893,
+          "mtime_ns": 1791406525350654419,
+          "type": "directory"
+        },
+        {
+          "name": "aurora_voice_core-1uia9obofn0g8",
+          "device": 2049,
+          "inode": 2395535,
+          "mode": 16893,
+          "mtime_ns": 1791427382067563908,
+          "type": "directory"
+        },
+        {
+          "name": "aurora_voice_core-29mulfhj33sqi",
+          "device": 2049,
+          "inode": 2395339,
+          "mode": 16893,
+          "mtime_ns": 1791426591611504420,
+          "type": "directory"
+        },
+        {
+          "name": "aurora_voice_core-2boka4u53oxia",
+          "device": 2049,
+          "inode": 2646891,
+          "mode": 16893,
+          "mtime_ns": 1791687506762724258,
+          "type": "directory"
+        },
+        {
+          "name": "aurora_voice_core-2nbq6jaeqgpn1",
+          "device": 2049,
+          "inode": 3412574,
+          "mode": 16893,
+          "mtime_ns": 1791570755352122876,
+          "type": "directory"
+        },
+        {
+          "name": "aurora_voice_core-313eqcs8i4xym",
+          "device": 2049,
+          "inode": 3412763,
+          "mode": 16893,
+          "mtime_ns": 1791583008280495409,
+          "type": "directory"
+        },
+        {
+          "name": "aurora_voice_core-382c27mwi1cm8",
+          "device": 2049,
+          "inode": 2361860,
+          "mode": 16893,
+          "mtime_ns": 1791406519898612018,
+          "type": "directory"
+        },
+        {
+          "name": "aurora_voice_core-3idc735qu2oqf",
+          "device": 2049,
+          "inode": 2381274,
+          "mode": 16893,
+          "mtime_ns": 1791558308461250471,
+          "type": "directory"
+        },
+        {
+          "name": "aurora_voice_core-3kp1bdoxajcnr",
+          "device": 2049,
+          "inode": 2377353,
+          "mode": 16893,
+          "mtime_ns": 1791558208763489782,
+          "type": "directory"
+        },
+        {
+          "name": "aurora_voice_core-3n6v1td3syvww",
+          "device": 2049,
+          "inode": 2394270,
+          "mode": 16893,
+          "mtime_ns": 1791426392828971677,
+          "type": "directory"
+        },
+        {
+          "name": "aurora_voice_core-3veydjkn1hhc7",
+          "device": 2049,
+          "inode": 2366117,
+          "mode": 16893,
+          "mtime_ns": 1791558246433777222,
+          "type": "directory"
+        },
+        {
+          "name": "aurora_voice_engine-00xfa138wutcc",
+          "device": 2049,
+          "inode": 2361675,
+          "mode": 16893,
+          "mtime_ns": 1791406517255591461,
+          "type": "directory"
+        },
+        {
+          "name": "aurora_voice_engine-0ki5wluae7tiv",
+          "device": 2049,
+          "inode": 2365910,
+          "mode": 16893,
+          "mtime_ns": 1791443327703585204,
+          "type": "directory"
+        },
+        {
+          "name": "aurora_voice_engine-0oslh0hxf16lk",
+          "device": 2049,
+          "inode": 2361992,
+          "mode": 16893,
+          "mtime_ns": 1791410956033244066,
+          "type": "directory"
+        },
+        {
+          "name": "aurora_voice_engine-0ow1t87lzdrq6",
+          "device": 2049,
+          "inode": 2395150,
+          "mode": 16893,
+          "mtime_ns": 1791426588679481853,
+          "type": "directory"
+        },
+        {
+          "name": "aurora_voice_engine-0pjowxjz2j2fa",
+          "device": 2049,
+          "inode": 2364504,
+          "mode": 16893,
+          "mtime_ns": 1791443506632946210,
+          "type": "directory"
+        },
+        {
+          "name": "aurora_voice_engine-0shzgnrc38ze5",
+          "device": 2049,
+          "inode": 2392983,
+          "mode": 16893,
+          "mtime_ns": 1791410972850372457,
+          "type": "directory"
+        },
+        {
+          "name": "aurora_voice_engine-0tfdir4fptnsr",
+          "device": 2049,
+          "inode": 2361142,
+          "mode": 16893,
+          "mtime_ns": 1791406476506274346,
+          "type": "directory"
+        },
+        {
+          "name": "aurora_voice_engine-0y8twgtg2ugjk",
+          "device": 2049,
+          "inode": 2389799,
+          "mode": 16893,
+          "mtime_ns": 1791441400959821877,
+          "type": "directory"
+        },
+        {
+          "name": "aurora_voice_engine-17h01dksxqv2r",
+          "device": 2049,
+          "inode": 2389774,
+          "mode": 16893,
+          "mtime_ns": 1791410964540309015,
+          "type": "directory"
+        },
+        {
+          "name": "aurora_voice_engine-1d1wkvk6btgrx",
+          "device": 2049,
+          "inode": 2389786,
+          "mode": 16893,
+          "mtime_ns": 1791410966236321963,
+          "type": "directory"
+        },
+        {
+          "name": "aurora_voice_engine-1dj2nik07i20h",
+          "device": 2049,
+          "inode": 2390039,
+          "mode": 16893,
+          "mtime_ns": 1791440650853863962,
+          "type": "directory"
+        },
+        {
+          "name": "aurora_voice_engine-1igjefs17uslx",
+          "device": 2049,
+          "inode": 2394081,
+          "mode": 16893,
+          "mtime_ns": 1791425023025527380,
+          "type": "directory"
+        },
+        {
+          "name": "aurora_voice_engine-1mwznqxds5wob",
+          "device": 2049,
+          "inode": 2646879,
+          "mode": 16893,
+          "mtime_ns": 1791687499807671063,
+          "type": "directory"
+        },
+        {
+          "name": "aurora_voice_engine-1vewib9vdmszr",
+          "device": 2049,
+          "inode": 2391005,
+          "mode": 16893,
+          "mtime_ns": 1791443397473115537,
+          "type": "directory"
+        },
+        {
+          "name": "aurora_voice_engine-233oldln1zqtd",
+          "device": 2049,
+          "inode": 2366095,
+          "mode": 16893,
+          "mtime_ns": 1791410958115259961,
+          "type": "directory"
+        },
+        {
+          "name": "aurora_voice_engine-24pahbyjlaru5",
+          "device": 2049,
+          "inode": 2395523,
+          "mode": 16893,
+          "mtime_ns": 1791427380849554594,
+          "type": "directory"
+        },
+        {
+          "name": "aurora_voice_engine-28f2jxk2etp6z",
+          "device": 2049,
+          "inode": 2362186,
+          "mode": 16893,
+          "mtime_ns": 1791406460591150402,
+          "type": "directory"
+        },
+        {
+          "name": "aurora_voice_engine-2b3dmz72yzof7",
+          "device": 2049,
+          "inode": 2393003,
+          "mode": 16893,
+          "mtime_ns": 1791410974401384298,
+          "type": "directory"
+        },
+        {
+          "name": "aurora_voice_engine-2d0ulb7g7jnkt",
+          "device": 2049,
+          "inode": 2377335,
+          "mode": 16893,
+          "mtime_ns": 1791443366135877274,
+          "type": "directory"
+        },
+        {
+          "name": "aurora_voice_engine-2kqrq1onkbk2o",
+          "device": 2049,
+          "inode": 2360942,
+          "mode": 16893,
+          "mtime_ns": 1791404679492417587,
+          "type": "directory"
+        },
+        {
+          "name": "aurora_voice_engine-2nk40a1en3dfs",
+          "device": 2049,
+          "inode": 2382692,
+          "mode": 16893,
+          "mtime_ns": 1791443615550775974,
+          "type": "directory"
+        },
+        {
+          "name": "aurora_voice_engine-2pgauc53sfg5u",
+          "device": 2049,
+          "inode": 2392971,
+          "mode": 16893,
+          "mtime_ns": 1791410970720356196,
+          "type": "directory"
+        },
+        {
+          "name": "aurora_voice_engine-3b6fhmnp1o137",
+          "device": 2049,
+          "inode": 2390252,
+          "mode": 16893,
+          "mtime_ns": 1791410961577286393,
+          "type": "directory"
+        },
+        {
+          "name": "aurora_voice_engine-3bkklctqvgg1g",
+          "device": 2049,
+          "inode": 2390875,
+          "mode": 16893,
+          "mtime_ns": 1791672935273737915,
+          "type": "directory"
+        },
+        {
+          "name": "aurora_voice_engine-3f1yjmiuj72ap",
+          "device": 2049,
+          "inode": 2391891,
+          "mode": 16893,
+          "mtime_ns": 1791406475320265111,
+          "type": "directory"
+        },
+        {
+          "name": "aurora_voice_engine-3g6p4srp2oqae",
+          "device": 2049,
+          "inode": 2360380,
+          "mode": 16893,
+          "mtime_ns": 1791451250048125736,
+          "type": "directory"
+        },
+        {
+          "name": "aurora_voice_engine-3jsyf1zr5x4ss",
+          "device": 2049,
+          "inode": 3416804,
+          "mode": 16893,
+          "mtime_ns": 1791453576481947999,
+          "type": "directory"
+        },
+        {
+          "name": "aurora_voice_engine-3s9ufqxbjry9y",
+          "device": 2049,
+          "inode": 3412478,
+          "mode": 16893,
+          "mtime_ns": 1791450718360029964,
+          "type": "directory"
+        },
+        {
+          "name": "aurora_voice_ios_bridge-08sb7jazwam7n",
+          "device": 2049,
+          "inode": 2390655,
+          "mode": 16893,
+          "mtime_ns": 1791585515000188159,
+          "type": "directory"
+        },
+        {
+          "name": "aurora_voice_ios_bridge-0uwohmj6f06wi",
+          "device": 2049,
+          "inode": 2363848,
+          "mode": 16893,
+          "mtime_ns": 1791558210094256937,
+          "type": "directory"
+        },
+        {
+          "name": "aurora_voice_ios_bridge-0yueqspa1edpu",
+          "device": 2049,
+          "inode": 2366843,
+          "mode": 16893,
+          "mtime_ns": 1791558250120805354,
+          "type": "directory"
+        },
+        {
+          "name": "aurora_voice_ios_bridge-1h6mj1qpqyt43",
+          "device": 2049,
+          "inode": 2647027,
+          "mode": 16893,
+          "mtime_ns": 1791687535116941089,
+          "type": "directory"
+        },
+        {
+          "name": "aurora_voice_ios_bridge-291awhcc41pzh",
+          "device": 2049,
+          "inode": 2364432,
+          "mode": 16893,
+          "mtime_ns": 1791558236502701446,
+          "type": "directory"
+        },
+        {
+          "name": "aurora_voice_ios_bridge-2h1p7lsa6958s",
+          "device": 2049,
+          "inode": 3412694,
+          "mode": 16893,
+          "mtime_ns": 1791570755689973548,
+          "type": "directory"
+        },
+        {
+          "name": "aurora_voice_ios_bridge-2jtybjgdj8yw7",
+          "device": 2049,
+          "inode": 2391554,
+          "mode": 16893,
+          "mtime_ns": 1791447230583369584,
+          "type": "directory"
+        },
+        {
+          "name": "aurora_voice_ios_bridge-2ldufu1xv5nqj",
+          "device": 2049,
+          "inode": 2382225,
+          "mode": 16893,
+          "mtime_ns": 1791558324573373392,
+          "type": "directory"
+        },
+        {
+          "name": "aurora_voice_ios_bridge-35p3y2qjugu53",
+          "device": 2049,
+          "inode": 3417429,
+          "mode": 16893,
+          "mtime_ns": 1791585582596459077,
+          "type": "directory"
+        },
+        {
+          "name": "aurora_voice_ios_bridge-3rs2cvys2pmb7",
+          "device": 2049,
+          "inode": 2390657,
+          "mode": 16893,
+          "mtime_ns": 1791447209015105709,
+          "type": "directory"
+        },
+        {
+          "name": "aurora_voice_native-04gqhfjk3lwnd",
+          "device": 2049,
+          "inode": 3417513,
+          "mode": 16893,
+          "mtime_ns": 1791587684609232288,
+          "type": "directory"
+        },
+        {
+          "name": "aurora_voice_native-05d2dis07wuc1",
+          "device": 2049,
+          "inode": 2391608,
+          "mode": 16893,
+          "mtime_ns": 1791447240555445363,
+          "type": "directory"
+        },
+        {
+          "name": "aurora_voice_native-05wb888vf6xi8",
+          "device": 2049,
+          "inode": 3475400,
+          "mode": 16893,
+          "mtime_ns": 1791585538596213267,
+          "type": "directory"
+        },
+        {
+          "name": "aurora_voice_native-0ckngnjvijtaw",
+          "device": 2049,
+          "inode": 2647056,
+          "mode": 16893,
+          "mtime_ns": 1791687544752014760,
+          "type": "directory"
+        },
+        {
+          "name": "aurora_voice_native-0il7bf0y0io46",
+          "device": 2049,
+          "inode": 2363992,
+          "mode": 16893,
+          "mtime_ns": 1791558219652572873,
+          "type": "directory"
+        },
+        {
+          "name": "aurora_voice_native-0u3cexdzifohw",
+          "device": 2049,
+          "inode": 2363872,
+          "mode": 16893,
+          "mtime_ns": 1791558212768520343,
+          "type": "directory"
+        },
+        {
+          "name": "aurora_voice_native-12ogkczh154hg",
+          "device": 2049,
+          "inode": 3477695,
+          "mode": 16893,
+          "mtime_ns": 1791578201062215014,
+          "type": "directory"
+        },
+        {
+          "name": "aurora_voice_native-2ceu0y39czsqt",
+          "device": 2049,
+          "inode": 2392161,
+          "mode": 16893,
+          "mtime_ns": 1791447212685233592,
+          "type": "directory"
+        },
+        {
+          "name": "aurora_voice_native-2cweauy7vswt1",
+          "device": 2049,
+          "inode": 2392212,
+          "mode": 16893,
+          "mtime_ns": 1791570723096879223,
+          "type": "directory"
+        },
+        {
+          "name": "aurora_voice_native-2vibqi9v1v82a",
+          "device": 2049,
+          "inode": 3417671,
+          "mode": 16893,
+          "mtime_ns": 1791578155337891429,
+          "type": "directory"
+        },
+        {
+          "name": "aurora_voice_native-39vfisd02fyrh",
+          "device": 2049,
+          "inode": 2367017,
+          "mode": 16893,
+          "mtime_ns": 1791558252727825246,
+          "type": "directory"
+        },
+        {
+          "name": "aurora_voice_native-3bo3rk44yxg98",
+          "device": 2049,
+          "inode": 3412724,
+          "mode": 16893,
+          "mtime_ns": 1791570757248137200,
+          "type": "directory"
+        },
+        {
+          "name": "aurora_voice_native-3edpp2sguq8mt",
+          "device": 2049,
+          "inode": 2392197,
+          "mode": 16893,
+          "mtime_ns": 1791447218693279240,
+          "type": "directory"
+        },
+        {
+          "name": "aurora_voice_native-3goqfx0gy55q0",
+          "device": 2049,
+          "inode": 2390708,
+          "mode": 16893,
+          "mtime_ns": 1791570745989052141,
+          "type": "directory"
+        },
+        {
+          "name": "aurora_voice_native-3j4qvh811iopr",
+          "device": 2049,
+          "inode": 2381006,
+          "mode": 16893,
+          "mtime_ns": 1791558274165988816,
+          "type": "directory"
+        },
+        {
+          "name": "aurora_voice_sherpa-08wqj9d39rhbt",
+          "device": 2049,
+          "inode": 2646988,
+          "mode": 16893,
+          "mtime_ns": 1791687528261888671,
+          "type": "directory"
+        },
+        {
+          "name": "aurora_voice_sherpa-0jtbwlrx83jmy",
+          "device": 2049,
+          "inode": 3477656,
+          "mode": 16893,
+          "mtime_ns": 1791585514855037686,
+          "type": "directory"
+        },
+        {
+          "name": "aurora_voice_sherpa-0l85oso1c8rx8",
+          "device": 2049,
+          "inode": 3412647,
+          "mode": 16893,
+          "mtime_ns": 1791570755532124236,
+          "type": "directory"
+        },
+        {
+          "name": "aurora_voice_sherpa-13y2kmhkos9ja",
+          "device": 2049,
+          "inode": 3481537,
+          "mode": 16893,
+          "mtime_ns": 1791595712280520011,
+          "type": "directory"
+        },
+        {
+          "name": "aurora_voice_sherpa-1645i1kyi7mpo",
+          "device": 2049,
+          "inode": 2367504,
+          "mode": 16893,
+          "mtime_ns": 1791558255791848625,
+          "type": "directory"
+        },
+        {
+          "name": "aurora_voice_sherpa-18rzp4bpkjd2u",
+          "device": 2049,
+          "inode": 3417328,
+          "mode": 16893,
+          "mtime_ns": 1791585582380537080,
+          "type": "directory"
+        },
+        {
+          "name": "aurora_voice_sherpa-20mglx3ltxcow",
+          "device": 2049,
+          "inode": 2364480,
+          "mode": 16893,
+          "mtime_ns": 1791558235763695807,
+          "type": "directory"
+        },
+        {
+          "name": "aurora_voice_sherpa-2fkal3nkmid4l",
+          "device": 2049,
+          "inode": 2382457,
+          "mode": 16893,
+          "mtime_ns": 1791558321882352862,
+          "type": "directory"
+        },
+        {
+          "name": "aurora_voice_sherpa-33fzc9ovpivfi",
+          "device": 2049,
+          "inode": 2364468,
+          "mode": 16893,
+          "mtime_ns": 1791558236288063648,
+          "type": "directory"
+        },
+        {
+          "name": "aurora_voice_sherpa_sys-0ek03sw486epg",
+          "device": 2049,
+          "inode": 2363824,
+          "mode": 16893,
+          "mtime_ns": 1791451846072972018,
+          "type": "directory"
+        },
+        {
+          "name": "aurora_voice_sherpa_sys-0eu6vbh6tbpgz",
+          "device": 2049,
+          "inode": 3417206,
+          "mode": 16893,
+          "mtime_ns": 1791453639540429971,
+          "type": "directory"
+        },
+        {
+          "name": "aurora_voice_sherpa_sys-0tq6e7cabjsjt",
+          "device": 2049,
+          "inode": 3481632,
+          "mode": 16893,
+          "mtime_ns": 1791598807523029957,
+          "type": "directory"
+        },
+        {
+          "name": "aurora_voice_sherpa_sys-1ea3tey3mclg4",
+          "device": 2049,
+          "inode": 3481628,
+          "mode": 16893,
+          "mtime_ns": 1791598807020026141,
+          "type": "directory"
+        },
+        {
+          "name": "aurora_voice_sherpa_sys-1ybew7y7oxhpd",
+          "device": 2049,
+          "inode": 2364408,
+          "mode": 16893,
+          "mtime_ns": 1791451878039206570,
+          "type": "directory"
+        },
+        {
+          "name": "aurora_voice_sherpa_sys-1z3s5c2lcqxke",
+          "device": 2049,
+          "inode": 2366950,
+          "mode": 16893,
+          "mtime_ns": 1791451898959430485,
+          "type": "directory"
+        },
+        {
+          "name": "aurora_voice_sherpa_sys-29yp8nx9v1e1z",
+          "device": 2049,
+          "inode": 2646962,
+          "mode": 16893,
+          "mtime_ns": 1791687521773839057,
+          "type": "directory"
+        },
+        {
+          "name": "aurora_voice_sherpa_sys-2wjghyo7qqn83",
+          "device": 2049,
+          "inode": 2381970,
+          "mode": 16893,
+          "mtime_ns": 1791451958684570879,
+          "type": "directory"
+        },
+        {
+          "name": "aurora_voice_sherpa_sys-3031x5mqs2332",
+          "device": 2049,
+          "inode": 3481523,
+          "mode": 16893,
+          "mtime_ns": 1791595684394308070,
+          "type": "directory"
+        },
+        {
+          "name": "aurora_voice_sherpa_sys-343qtoezkn9co",
+          "device": 2049,
+          "inode": 3412754,
+          "mode": 16893,
+          "mtime_ns": 1791577998277792363,
+          "type": "directory"
+        },
+        {
+          "name": "aurora_voice_sherpa_sys-3fu2wvushcz40",
+          "device": 2049,
+          "inode": 3412600,
+          "mode": 16893,
+          "mtime_ns": 1791450753746300478,
+          "type": "directory"
+        },
+        {
+          "name": "aurora_voice_testkit-0phtfafuc83ga",
+          "device": 2049,
+          "inode": 2364456,
+          "mode": 16893,
+          "mtime_ns": 1791558236023697791,
+          "type": "directory"
+        },
+        {
+          "name": "aurora_voice_testkit-0pni8orb5vxpe",
+          "device": 2049,
+          "inode": 2367559,
+          "mode": 16893,
+          "mtime_ns": 1791558256020850372,
+          "type": "directory"
+        },
+        {
+          "name": "aurora_voice_testkit-144g1okd8vx33",
+          "device": 2049,
+          "inode": 2382322,
+          "mode": 16893,
+          "mtime_ns": 1791558323104362185,
+          "type": "directory"
+        },
+        {
+          "name": "aurora_voice_testkit-1l1lmcl5gt78e",
+          "device": 2049,
+          "inode": 2364444,
+          "mode": 16893,
+          "mtime_ns": 1791558235330692503,
+          "type": "directory"
+        },
+        {
+          "name": "aurora_voice_wasm-0h6jok0aiqgz6",
+          "device": 2049,
+          "inode": 2364420,
+          "mode": 16893,
+          "mtime_ns": 1791558234615687048,
+          "type": "directory"
+        },
+        {
+          "name": "aurora_voice_wasm-0j3m0266defyi",
+          "device": 2049,
+          "inode": 2367386,
+          "mode": 16893,
+          "mtime_ns": 1791558254959842276,
+          "type": "directory"
+        },
+        {
+          "name": "aurora_voice_wasm-0vubco7wff5o5",
+          "device": 2049,
+          "inode": 2382062,
+          "mode": 16893,
+          "mtime_ns": 1791558320254340442,
+          "type": "directory"
+        },
+        {
+          "name": "aurora_voice_wasm-1rf7dcrtle8pr",
+          "device": 2049,
+          "inode": 2363896,
+          "mode": 16893,
+          "mtime_ns": 1791558214123467762,
+          "type": "directory"
+        },
+        {
+          "name": "build_script_build-03w8t5evcle76",
+          "device": 2049,
+          "inode": 2649638,
+          "mode": 16893,
+          "mtime_ns": 1791717092702831331,
+          "type": "directory"
+        },
+        {
+          "name": "build_script_build-0f22gzkn5321z",
+          "device": 2049,
+          "inode": 2646892,
+          "mode": 16893,
+          "mtime_ns": 1791687500895679385,
+          "type": "directory"
+        },
+        {
+          "name": "build_script_build-0fsciauxquwx5",
+          "device": 2049,
+          "inode": 2648913,
+          "mode": 16893,
+          "mtime_ns": 1791715030449101960,
+          "type": "directory"
+        },
+        {
+          "name": "build_script_build-0jz46jjw0hqe0",
+          "device": 2049,
+          "inode": 2380199,
+          "mode": 16893,
+          "mtime_ns": 1791673119397204684,
+          "type": "directory"
+        },
+        {
+          "name": "build_script_build-1layhyk4l3nq5",
+          "device": 2049,
+          "inode": 3481567,
+          "mode": 16893,
+          "mtime_ns": 1791598805887017548,
+          "type": "directory"
+        },
+        {
+          "name": "build_script_build-1nm437lkmhhui",
+          "device": 2049,
+          "inode": 3481161,
+          "mode": 16893,
+          "mtime_ns": 1791595683255299413,
+          "type": "directory"
+        },
+        {
+          "name": "build_script_build-1nqd2uqyck2r0",
+          "device": 2049,
+          "inode": 3412564,
+          "mode": 16893,
+          "mtime_ns": 1791450720417045690,
+          "type": "directory"
+        },
+        {
+          "name": "build_script_build-1q7p20x34rqk2",
+          "device": 2049,
+          "inode": 2366473,
+          "mode": 16893,
+          "mtime_ns": 1791327268635979049,
+          "type": "directory"
+        },
+        {
+          "name": "build_script_build-1v9jfzk9c18aw",
+          "device": 2049,
+          "inode": 3417503,
+          "mode": 16893,
+          "mtime_ns": 1791460550697294993,
+          "type": "directory"
+        },
+        {
+          "name": "build_script_build-1wmvf6vrkbpe5",
+          "device": 2049,
+          "inode": 2363208,
+          "mode": 16893,
+          "mtime_ns": 1791411352879318375,
+          "type": "directory"
+        },
+        {
+          "name": "build_script_build-22z0qh7r2wwyj",
+          "device": 2049,
+          "inode": 2649240,
+          "mode": 16893,
+          "mtime_ns": 1791716358795237550,
+          "type": "directory"
+        },
+        {
+          "name": "build_script_build-26iomsspoxwxo",
+          "device": 2049,
+          "inode": 2647010,
+          "mode": 16893,
+          "mtime_ns": 1791687534820938825,
+          "type": "directory"
+        },
+        {
+          "name": "build_script_build-2ee3xhzbimlqy",
+          "device": 2049,
+          "inode": 3417388,
+          "mode": 16893,
+          "mtime_ns": 1791586301067919082,
+          "type": "directory"
+        },
+        {
+          "name": "build_script_build-2ih2gv7tvkzsj",
+          "device": 2049,
+          "inode": 2649473,
+          "mode": 16893,
+          "mtime_ns": 1791716523172490547,
+          "type": "directory"
+        },
+        {
+          "name": "build_script_build-2tzocwyai8azm",
+          "device": 2049,
+          "inode": 2683620,
+          "mode": 16893,
+          "mtime_ns": 1791765343647314678,
+          "type": "directory"
+        },
+        {
+          "name": "build_script_build-2u67e8s22wfmw",
+          "device": 2049,
+          "inode": 3477584,
+          "mode": 16893,
+          "mtime_ns": 1791577993939762319,
+          "type": "directory"
+        },
+        {
+          "name": "build_script_build-30dy2vl32afnc",
+          "device": 2049,
+          "inode": 3412680,
+          "mode": 16893,
+          "mtime_ns": 1791564676270928651,
+          "type": "directory"
+        },
+        {
+          "name": "build_script_build-3chxfg6r0qq1d",
+          "device": 2049,
+          "inode": 3481098,
+          "mode": 16893,
+          "mtime_ns": 1791595552389304724,
+          "type": "directory"
+        },
+        {
+          "name": "build_script_build-3dz0ead0rlyxs",
+          "device": 2049,
+          "inode": 2646918,
+          "mode": 16893,
+          "mtime_ns": 1791687525550867940,
+          "type": "directory"
+        },
+        {
+          "name": "candidate_model_packs-10x92a2or4lfa",
+          "device": 2049,
+          "inode": 3477675,
+          "mode": 16893,
+          "mtime_ns": 1791578163090946193,
+          "type": "directory"
+        },
+        {
+          "name": "candidate_model_packs-1ygkxc8jktf5a",
+          "device": 2049,
+          "inode": 2392579,
+          "mode": 16893,
+          "mtime_ns": 1791570729169925093,
+          "type": "directory"
+        },
+        {
+          "name": "candidate_model_packs-269dsfgtv99a5",
+          "device": 2049,
+          "inode": 2392173,
+          "mode": 16893,
+          "mtime_ns": 1791447213566449527,
+          "type": "directory"
+        },
+        {
+          "name": "candidate_model_packs-2gxceys7q7oza",
+          "device": 2049,
+          "inode": 2380765,
+          "mode": 16893,
+          "mtime_ns": 1791558265539923002,
+          "type": "directory"
+        },
+        {
+          "name": "candidate_model_packs-3btvxjfcqdp0p",
+          "device": 2049,
+          "inode": 2363944,
+          "mode": 16893,
+          "mtime_ns": 1791558214605205118,
+          "type": "directory"
+        },
+        {
+          "name": "catalog_number_text-0lxmheychfxzw",
+          "device": 2049,
+          "inode": 2388812,
+          "mode": 16893,
+          "mtime_ns": 1791404024158440181,
+          "type": "directory"
+        },
+        {
+          "name": "catalog_number_text-1ci5ak2tsrajd",
+          "device": 2049,
+          "inode": 2367067,
+          "mode": 16893,
+          "mtime_ns": 1791411150208726016,
+          "type": "directory"
+        },
+        {
+          "name": "catalog_number_text-21vgljkk8xmd8",
+          "device": 2049,
+          "inode": 2362230,
+          "mode": 16893,
+          "mtime_ns": 1791406473311249468,
+          "type": "directory"
+        },
+        {
+          "name": "catalog_number_text-2gbd0co6cykg1",
+          "device": 2049,
+          "inode": 2389677,
+          "mode": 16893,
+          "mtime_ns": 1791406477320280684,
+          "type": "directory"
+        },
+        {
+          "name": "generated_contracts-06xvjp3id6wxe",
+          "device": 2049,
+          "inode": 2385126,
+          "mode": 16893,
+          "mtime_ns": 1791398969292397227,
+          "type": "directory"
+        },
+        {
+          "name": "generated_contracts-24y9n6ygw9hua",
+          "device": 2049,
+          "inode": 2383160,
+          "mode": 16893,
+          "mtime_ns": 1791399024505454269,
+          "type": "directory"
+        },
+        {
+          "name": "generated_contracts-28t7zbsxd6msa",
+          "device": 2049,
+          "inode": 2368229,
+          "mode": 16893,
+          "mtime_ns": 1791398994225221149,
+          "type": "directory"
+        },
+        {
+          "name": "generated_contracts-2ne31c6w0uymn",
+          "device": 2049,
+          "inode": 2363956,
+          "mode": 16893,
+          "mtime_ns": 1791558220138997704,
+          "type": "directory"
+        },
+        {
+          "name": "generated_contracts-3epj2autaf8z0",
+          "device": 2049,
+          "inode": 2381447,
+          "mode": 16893,
+          "mtime_ns": 1791558303946216025,
+          "type": "directory"
+        },
+        {
+          "name": "grant_management_recovery-154wmu3xsc46q",
+          "device": 2049,
+          "inode": 2364076,
+          "mode": 16893,
+          "mtime_ns": 1791558233085772254,
+          "type": "directory"
+        },
+        {
+          "name": "grant_management_recovery-30tbuc6xasml5",
+          "device": 2049,
+          "inode": 2381888,
+          "mode": 16893,
+          "mtime_ns": 1791558310667267301,
+          "type": "directory"
+        },
+        {
+          "name": "grant_management_recovery-3at21lubh5dwl",
+          "device": 2049,
+          "inode": 2386465,
+          "mode": 16893,
+          "mtime_ns": 1791401472026100216,
+          "type": "directory"
+        },
+        {
+          "name": "handoff_nullable_behavior-2rf0qqzbegffe",
+          "device": 2049,
+          "inode": 2384153,
+          "mode": 16893,
+          "mtime_ns": 1791395649787508265,
+          "type": "directory"
+        },
+        {
+          "name": "handoff_raw_feature_boundary-00q9n9vq0pel9",
+          "device": 2049,
+          "inode": 2383003,
+          "mode": 16893,
+          "mtime_ns": 1791393770700361325,
+          "type": "directory"
+        },
+        {
+          "name": "handoff_raw_feature_boundary-03skjpcyec7nf",
+          "device": 2049,
+          "inode": 2383354,
+          "mode": 16893,
+          "mtime_ns": 1791393829925799398,
+          "type": "directory"
+        },
+        {
+          "name": "handoff_raw_feature_boundary-20z4vkvvrexow",
+          "device": 2049,
+          "inode": 2361292,
+          "mode": 16893,
+          "mtime_ns": 1791365825702414958,
+          "type": "directory"
+        },
+        {
+          "name": "handoff_raw_feature_boundary-3o51h2otofh5a",
+          "device": 2049,
+          "inode": 2361091,
+          "mode": 16893,
+          "mtime_ns": 1791365817758354266,
+          "type": "directory"
+        },
+        {
+          "name": "json_text_catalogs-1ernhi1lrnw7d",
+          "device": 2049,
+          "inode": 2360945,
+          "mode": 16893,
+          "mtime_ns": 1791404680064421936,
+          "type": "directory"
+        },
+        {
+          "name": "json_text_catalogs-2cfahybeo0kes",
+          "device": 2049,
+          "inode": 2359563,
+          "mode": 16893,
+          "mtime_ns": 1791443608650723384,
+          "type": "directory"
+        },
+        {
+          "name": "json_text_catalogs-2gxm177mgguhd",
+          "device": 2049,
+          "inode": 2359423,
+          "mode": 16893,
+          "mtime_ns": 1791443503413921700,
+          "type": "directory"
+        },
+        {
+          "name": "json_text_catalogs-2k145kzbca74y",
+          "device": 2049,
+          "inode": 2361145,
+          "mode": 16893,
+          "mtime_ns": 1791406476720276012,
+          "type": "directory"
+        },
+        {
+          "name": "json_text_catalogs-2yni8g2u3s96b",
+          "device": 2049,
+          "inode": 2391879,
+          "mode": 16893,
+          "mtime_ns": 1791406473227248814,
+          "type": "directory"
+        },
+        {
+          "name": "live_cpal_audio-0fvdmqdsciejh",
+          "device": 2049,
+          "inode": 2363932,
+          "mode": 16893,
+          "mtime_ns": 1791558214812299859,
+          "type": "directory"
+        },
+        {
+          "name": "live_cpal_audio-0i89mv6retdy3",
+          "device": 2049,
+          "inode": 2367726,
+          "mode": 16893,
+          "mtime_ns": 1791558260575885127,
+          "type": "directory"
+        },
+        {
+          "name": "live_cpal_audio-1i8io1ubeehzb",
+          "device": 2049,
+          "inode": 3477685,
+          "mode": 16893,
+          "mtime_ns": 1791578155692893935,
+          "type": "directory"
+        },
+        {
+          "name": "live_cpal_audio-2655bhxlrma76",
+          "device": 2049,
+          "inode": 2392185,
+          "mode": 16893,
+          "mtime_ns": 1791447213797242041,
+          "type": "directory"
+        },
+        {
+          "name": "live_cpal_audio-3mqr29i9v5t4d",
+          "device": 2049,
+          "inode": 2392481,
+          "mode": 16893,
+          "mtime_ns": 1791570724086886701,
+          "type": "directory"
+        },
+        {
+          "name": "main_flow-0d6j4ocbic5em",
+          "device": 2049,
+          "inode": 2683741,
+          "mode": 16893,
+          "mtime_ns": 1791765352927384933,
+          "type": "directory"
+        },
+        {
+          "name": "main_flow-3g85ds6zoiwnq",
+          "device": 2049,
+          "inode": 2380318,
+          "mode": 16893,
+          "mtime_ns": 1791673120299956905,
+          "type": "directory"
+        },
+        {
+          "name": "native_kws_smoke-0r2ca16ne4r3h",
+          "device": 2049,
+          "inode": 2380869,
+          "mode": 16893,
+          "mtime_ns": 1791451928100384960,
+          "type": "directory"
+        },
+        {
+          "name": "native_kws_smoke-18m9ziij5nys3",
+          "device": 2049,
+          "inode": 2364028,
+          "mode": 16893,
+          "mtime_ns": 1791451863313839367,
+          "type": "directory"
+        },
+        {
+          "name": "native_kws_smoke-3ju6ssp4wrjz7",
+          "device": 2049,
+          "inode": 3481664,
+          "mode": 16893,
+          "mtime_ns": 1791598807783031929,
+          "type": "directory"
+        },
+        {
+          "name": "native_stt_smoke-06x8w8ytq7viz",
+          "device": 2049,
+          "inode": 3481642,
+          "mode": 16893,
+          "mtime_ns": 1791598807249027878,
+          "type": "directory"
+        },
+        {
+          "name": "native_stt_smoke-0xc8kuw6lmsz1",
+          "device": 2049,
+          "inode": 2364040,
+          "mode": 16893,
+          "mtime_ns": 1791451863278283534,
+          "type": "directory"
+        },
+        {
+          "name": "native_stt_smoke-1t0c3uh857d2k",
+          "device": 2049,
+          "inode": 2380886,
+          "mode": 16893,
+          "mtime_ns": 1791451928514102533,
+          "type": "directory"
+        },
+        {
+          "name": "native_vad_smoke-178fp0wq7ih8x",
+          "device": 2049,
+          "inode": 2364016,
+          "mode": 16893,
+          "mtime_ns": 1791451863130703642,
+          "type": "directory"
+        },
+        {
+          "name": "native_vad_smoke-2v2o2139ppmyt",
+          "device": 2049,
+          "inode": 3481652,
+          "mode": 16893,
+          "mtime_ns": 1791598807539030078,
+          "type": "directory"
+        },
+        {
+          "name": "native_vad_smoke-38fns6bvyygow",
+          "device": 2049,
+          "inode": 2380903,
+          "mode": 16893,
+          "mtime_ns": 1791451928310046488,
+          "type": "directory"
+        },
+        {
+          "name": "node_policy-1pi2g6xg897vl",
+          "device": 2049,
+          "inode": 2360697,
+          "mode": 16893,
+          "mtime_ns": 1791572897219443175,
+          "type": "directory"
+        },
+        {
+          "name": "node_policy-1zo9wv9dy4kzu",
+          "device": 2049,
+          "inode": 2359378,
+          "mode": 16893,
+          "mtime_ns": 1791558219838473411,
+          "type": "directory"
+        },
+        {
+          "name": "node_policy-2q6ww1fwunk8k",
+          "device": 2049,
+          "inode": 2390910,
+          "mode": 16893,
+          "mtime_ns": 1791673058653705508,
+          "type": "directory"
+        },
+        {
+          "name": "node_policy-2scjv8k79yg68",
+          "device": 2049,
+          "inode": 2362216,
+          "mode": 16893,
+          "mtime_ns": 1791406472027877354,
+          "type": "directory"
+        },
+        {
+          "name": "node_policy-36yfcv8c8fsb2",
+          "device": 2049,
+          "inode": 2361991,
+          "mode": 16893,
+          "mtime_ns": 1791406520489616615,
+          "type": "directory"
+        },
+        {
+          "name": "node_policy-3v463v443f2ia",
+          "device": 2049,
+          "inode": 2359554,
+          "mode": 16893,
+          "mtime_ns": 1791558288203095914,
+          "type": "directory"
+        },
+        {
+          "name": "nsr04_app_json150_helper-0qibob9gt2dm8",
+          "device": 2049,
+          "inode": 2396341,
+          "mode": 16893,
+          "mtime_ns": 1791429457534567238,
+          "type": "directory"
+        },
+        {
+          "name": "nsr04_app_json150_helper-2y67s54niwqsd",
+          "device": 2049,
+          "inode": 2396055,
+          "mode": 16893,
+          "mtime_ns": 1791429453235534149,
+          "type": "directory"
+        },
+        {
+          "name": "opaque_json-0gn1lw2z21k0s",
+          "device": 2049,
+          "inode": 2383087,
+          "mode": 16893,
+          "mtime_ns": 1791399029827495236,
+          "type": "directory"
+        },
+        {
+          "name": "opaque_json-1mdy8lb23bj37",
+          "device": 2049,
+          "inode": 2368213,
+          "mode": 16893,
+          "mtime_ns": 1791398990204190187,
+          "type": "directory"
+        },
+        {
+          "name": "opaque_json-1td708sqycuxs",
+          "device": 2049,
+          "inode": 2359574,
+          "mode": 16893,
+          "mtime_ns": 1791558299874184958,
+          "type": "directory"
+        },
+        {
+          "name": "opaque_json-32ktz12lyx4wo",
+          "device": 2049,
+          "inode": 2359393,
+          "mode": 16893,
+          "mtime_ns": 1791558219971575307,
+          "type": "directory"
+        },
+        {
+          "name": "opaque_json-3b41accyi7six",
+          "device": 2049,
+          "inode": 2385138,
+          "mode": 16893,
+          "mtime_ns": 1791398969105027704,
+          "type": "directory"
+        },
+        {
+          "name": "parity_corpus-00fxy3w7wqx80",
+          "device": 2049,
+          "inode": 2386238,
+          "mode": 16893,
+          "mtime_ns": 1791401468372072312,
+          "type": "directory"
+        },
+        {
+          "name": "parity_corpus-0w31heputwtgn",
+          "device": 2049,
+          "inode": 2364064,
+          "mode": 16893,
+          "mtime_ns": 1791558233306024454,
+          "type": "directory"
+        },
+        {
+          "name": "parity_corpus-3p080nhj7yuhz",
+          "device": 2049,
+          "inode": 2381776,
+          "mode": 16893,
+          "mtime_ns": 1791558316332310521,
+          "type": "directory"
+        },
+        {
+          "name": "phase_a-0wt0hdpa6oxrm",
+          "device": 2049,
+          "inode": 2396356,
+          "mode": 16893,
+          "mtime_ns": 1791429457887569955,
+          "type": "directory"
+        },
+        {
+          "name": "phase_a-16eptim1eqcjo",
+          "device": 2049,
+          "inode": 2396069,
+          "mode": 16893,
+          "mtime_ns": 1791429453577536781,
+          "type": "directory"
+        },
+        {
+          "name": "phase_b-0v2ocanexvvka",
+          "device": 2049,
+          "inode": 2396423,
+          "mode": 16893,
+          "mtime_ns": 1791429458715576328,
+          "type": "directory"
+        },
+        {
+          "name": "phase_b-3ubtxkq18iqpx",
+          "device": 2049,
+          "inode": 2396135,
+          "mode": 16893,
+          "mtime_ns": 1791429454450543501,
+          "type": "directory"
+        },
+        {
+          "name": "phase_request-1i5n8exon3var",
+          "device": 2049,
+          "inode": 2396220,
+          "mode": 16893,
+          "mtime_ns": 1791429455601552360,
+          "type": "directory"
+        },
+        {
+          "name": "phase_request-2md9nuj2t82lp",
+          "device": 2049,
+          "inode": 2396506,
+          "mode": 16893,
+          "mtime_ns": 1791429459964585942,
+          "type": "directory"
+        },
+        {
+          "name": "session_liveness-2udwb25mjwihk",
+          "device": 2049,
+          "inode": 2367657,
+          "mode": 16893,
+          "mtime_ns": 1791558256474853836,
+          "type": "directory"
+        },
+        {
+          "name": "session_liveness-3p9jw6o7xyxcv",
+          "device": 2049,
+          "inode": 2363920,
+          "mode": 16893,
+          "mtime_ns": 1791558214432936324,
+          "type": "directory"
+        },
+        {
+          "name": "vad_parity_driver-1w5jrsqjizvpr",
+          "device": 2049,
+          "inode": 2364004,
+          "mode": 16893,
+          "mtime_ns": 1791451863241080729,
+          "type": "directory"
+        },
+        {
+          "name": "vad_parity_driver-2egz8x5wpf3a3",
+          "device": 2049,
+          "inode": 2380920,
+          "mode": 16893,
+          "mtime_ns": 1791451927793333965,
+          "type": "directory"
+        },
+        {
+          "name": "wasm_core-2roz8o7dhvoix",
+          "device": 2049,
+          "inode": 2367640,
+          "mode": 16893,
+          "mtime_ns": 1791558256080850830,
+          "type": "directory"
+        },
+        {
+          "name": "wasm_core-30dyvlo9zyzp7",
+          "device": 2049,
+          "inode": 2363908,
+          "mode": 16893,
+          "mtime_ns": 1791558214170838044,
+          "type": "directory"
+        },
+        {
+          "name": "wasm_json_shape-0p6zkpj5arai5",
+          "device": 2049,
+          "inode": 2386448,
+          "mode": 16893,
+          "mtime_ns": 1791401471251094297,
+          "type": "directory"
+        },
+        {
+          "name": "wasm_json_shape-1oc4x4n2oi76k",
+          "device": 2049,
+          "inode": 2359444,
+          "mode": 16893,
+          "mtime_ns": 1791558233349290465,
+          "type": "directory"
+        },
+        {
+          "name": "wasm_json_shape-1qjpr7eda7odr",
+          "device": 2049,
+          "inode": 2359598,
+          "mode": 16893,
+          "mtime_ns": 1791558319510069644,
+          "type": "directory"
+        },
+        {
+          "name": "webrtc_dtls-1ks6uf0f0yj80",
+          "device": 2049,
+          "inode": 2647003,
+          "mode": 16893,
+          "mtime_ns": 1791687530572906343,
+          "type": "directory"
+        },
+        {
+          "name": "webrtc_dtls-1xjl2fr3xpszj",
+          "device": 2049,
+          "inode": 3412671,
+          "mode": 16893,
+          "mtime_ns": 1791450767114402671,
+          "type": "directory"
+        },
+        {
+          "name": "webrtc_dtls-2tse1wl4sopt2",
+          "device": 2049,
+          "inode": 3417346,
+          "mode": 16893,
+          "mtime_ns": 1791453673015685858,
+          "type": "directory"
+        }
+      ],
+      "child_count": 269
+    },
+    {
+      "path": "/home/developer/projects/aurora/rust/target/wasm32-unknown-unknown/debug/incremental",
+      "device": 2049,
+      "inode": 2386924,
+      "children": [
+        {
+          "name": "aurora_contracts-0no8nnkmpve4h",
+          "device": 2049,
+          "inode": 2388553,
+          "mode": 16893,
+          "mtime_ns": 1791558356968620529,
+          "type": "directory"
+        },
+        {
+          "name": "aurora_contracts-0onnunazkelf7",
+          "device": 2049,
+          "inode": 2383674,
+          "mode": 16893,
+          "mtime_ns": 1791395976821986050,
+          "type": "directory"
+        },
+        {
+          "name": "aurora_contracts-2o5bmzk4slcam",
+          "device": 2049,
+          "inode": 2382765,
+          "mode": 16893,
+          "mtime_ns": 1791411204502140218,
+          "type": "directory"
+        },
+        {
+          "name": "aurora_contracts-36d1bwx0tb7fl",
+          "device": 2049,
+          "inode": 2367910,
+          "mode": 16893,
+          "mtime_ns": 1791406558017908363,
+          "type": "directory"
+        },
+        {
+          "name": "aurora_contracts-3rm1usvv39ln7",
+          "device": 2049,
+          "inode": 2385781,
+          "mode": 16893,
+          "mtime_ns": 1791402648046982506,
+          "type": "directory"
+        },
+        {
+          "name": "aurora_mesh_authority-07mpvyhvd34sr",
+          "device": 2049,
+          "inode": 2385829,
+          "mode": 16893,
+          "mtime_ns": 1791402649392992717,
+          "type": "directory"
+        },
+        {
+          "name": "aurora_mesh_authority-0nezsf3bgj4sa",
+          "device": 2049,
+          "inode": 2383949,
+          "mode": 16893,
+          "mtime_ns": 1791395978804001069,
+          "type": "directory"
+        },
+        {
+          "name": "aurora_mesh_authority-10egj7fziwcc7",
+          "device": 2049,
+          "inode": 2385877,
+          "mode": 16893,
+          "mtime_ns": 1791402651472008489,
+          "type": "directory"
+        },
+        {
+          "name": "aurora_mesh_authority-22vyu73ftmpt9",
+          "device": 2049,
+          "inode": 2359632,
+          "mode": 16893,
+          "mtime_ns": 1791402688685290836,
+          "type": "directory"
+        },
+        {
+          "name": "aurora_mesh_authority-28yeryen49mf5",
+          "device": 2049,
+          "inode": 2383391,
+          "mode": 16893,
+          "mtime_ns": 1791402704693412319,
+          "type": "directory"
+        },
+        {
+          "name": "aurora_voice_core-10bgomidvtvwe",
+          "device": 2049,
+          "inode": 2367946,
+          "mode": 16893,
+          "mtime_ns": 1791406561479935265,
+          "type": "directory"
+        },
+        {
+          "name": "aurora_voice_core-25r9yqbmt1wx6",
+          "device": 2049,
+          "inode": 2389054,
+          "mode": 16893,
+          "mtime_ns": 1791558358100629165,
+          "type": "directory"
+        },
+        {
+          "name": "aurora_voice_core-35ct62jnwj5xs",
+          "device": 2049,
+          "inode": 2382789,
+          "mode": 16893,
+          "mtime_ns": 1791411207993166849,
+          "type": "directory"
+        },
+        {
+          "name": "aurora_voice_engine-0x29prloo6wbm",
+          "device": 2049,
+          "inode": 2388835,
+          "mode": 16893,
+          "mtime_ns": 1791443645948007690,
+          "type": "directory"
+        },
+        {
+          "name": "aurora_voice_engine-2xnekf3e62r82",
+          "device": 2049,
+          "inode": 2382777,
+          "mode": 16893,
+          "mtime_ns": 1791411206802157764,
+          "type": "directory"
+        },
+        {
+          "name": "aurora_voice_engine-357o59mr7f8h5",
+          "device": 2049,
+          "inode": 2367928,
+          "mode": 16893,
+          "mtime_ns": 1791406560246925684,
+          "type": "directory"
+        },
+        {
+          "name": "aurora_voice_wasm-2hcs1is3ezft1",
+          "device": 2049,
+          "inode": 2389181,
+          "mode": 16893,
+          "mtime_ns": 1791558358876635085,
+          "type": "directory"
+        },
+        {
+          "name": "aurora_voice_wasm-2vy70thdc5si6",
+          "device": 2049,
+          "inode": 2389458,
+          "mode": 16893,
+          "mtime_ns": 1791558361995658878,
+          "type": "directory"
+        },
+        {
+          "name": "grant_management_recovery-2yc5w6f8v27q9",
+          "device": 2049,
+          "inode": 2385853,
+          "mode": 16893,
+          "mtime_ns": 1791402649838162454,
+          "type": "directory"
+        },
+        {
+          "name": "handoff_raw_feature_boundary-02ibdlg5vkfgy",
+          "device": 2049,
+          "inode": 2383544,
+          "mode": 16893,
+          "mtime_ns": 1791395982880031956,
+          "type": "directory"
+        },
+        {
+          "name": "handoff_raw_feature_boundary-3a76tausi8ss1",
+          "device": 2049,
+          "inode": 2383545,
+          "mode": 16893,
+          "mtime_ns": 1791397022226909240,
+          "type": "directory"
+        },
+        {
+          "name": "handoff_serde_wasm_characterization-2m0td3z1ddkpa",
+          "device": 2049,
+          "inode": 2359639,
+          "mode": 16893,
+          "mtime_ns": 1791399227363014572,
+          "type": "directory"
+        },
+        {
+          "name": "handoff_wasm_json_public_boundary-38popibg6p1c8",
+          "device": 2049,
+          "inode": 2383534,
+          "mode": 16893,
+          "mtime_ns": 1791402717033505975,
+          "type": "directory"
+        },
+        {
+          "name": "parity_corpus-1mrqd11wyk1yz",
+          "device": 2049,
+          "inode": 2385841,
+          "mode": 16893,
+          "mtime_ns": 1791402649754119537,
+          "type": "directory"
+        },
+        {
+          "name": "wasm_core-226pkndp4u64d",
+          "device": 2049,
+          "inode": 2389327,
+          "mode": 16893,
+          "mtime_ns": 1791558359776641950,
+          "type": "directory"
+        },
+        {
+          "name": "wasm_json_shape-3k5xa0wm1fapj",
+          "device": 2049,
+          "inode": 2385865,
+          "mode": 16893,
+          "mtime_ns": 1791402649549814707,
+          "type": "directory"
+        },
+        {
+          "name": "wasm_json_shape-3kkpnh7k61zq4",
+          "device": 2049,
+          "inode": 2381965,
+          "mode": 16893,
+          "mtime_ns": 1791402706572426579,
+          "type": "directory"
+        }
+      ],
+      "child_count": 27
+    }
+  ],
+  "build_processes": [],
+  "open_references": [],
+  "process_access_gaps": [
+    {
+      "pid": 1,
+      "surface": "fd"
+    },
+    {
+      "pid": 2,
+      "surface": "fd"
+    },
+    {
+      "pid": 3,
+      "surface": "fd"
+    },
+    {
+      "pid": 4,
+      "surface": "fd"
+    },
+    {
+      "pid": 5,
+      "surface": "fd"
+    },
+    {
+      "pid": 6,
+      "surface": "fd"
+    },
+    {
+      "pid": 7,
+      "surface": "fd"
+    },
+    {
+      "pid": 8,
+      "surface": "fd"
+    },
+    {
+      "pid": 10,
+      "surface": "fd"
+    },
+    {
+      "pid": 13,
+      "surface": "fd"
+    },
+    {
+      "pid": 14,
+      "surface": "fd"
+    },
+    {
+      "pid": 15,
+      "surface": "fd"
+    },
+    {
+      "pid": 16,
+      "surface": "fd"
+    },
+    {
+      "pid": 17,
+      "surface": "fd"
+    },
+    {
+      "pid": 18,
+      "surface": "fd"
+    },
+    {
+      "pid": 19,
+      "surface": "fd"
+    },
+    {
+      "pid": 20,
+      "surface": "fd"
+    },
+    {
+      "pid": 21,
+      "surface": "fd"
+    },
+    {
+      "pid": 22,
+      "surface": "fd"
+    },
+    {
+      "pid": 23,
+      "surface": "fd"
+    },
+    {
+      "pid": 24,
+      "surface": "fd"
+    },
+    {
+      "pid": 26,
+      "surface": "fd"
+    },
+    {
+      "pid": 28,
+      "surface": "fd"
+    },
+    {
+      "pid": 29,
+      "surface": "fd"
+    },
+    {
+      "pid": 30,
+      "surface": "fd"
+    },
+    {
+      "pid": 31,
+      "surface": "fd"
+    },
+    {
+      "pid": 32,
+      "surface": "fd"
+    },
+    {
+      "pid": 33,
+      "surface": "fd"
+    },
+    {
+      "pid": 35,
+      "surface": "fd"
+    },
+    {
+      "pid": 36,
+      "surface": "fd"
+    },
+    {
+      "pid": 37,
+      "surface": "fd"
+    },
+    {
+      "pid": 38,
+      "surface": "fd"
+    },
+    {
+      "pid": 39,
+      "surface": "fd"
+    },
+    {
+      "pid": 40,
+      "surface": "fd"
+    },
+    {
+      "pid": 41,
+      "surface": "fd"
+    },
+    {
+      "pid": 42,
+      "surface": "fd"
+    },
+    {
+      "pid": 43,
+      "surface": "fd"
+    },
+    {
+      "pid": 44,
+      "surface": "fd"
+    },
+    {
+      "pid": 45,
+      "surface": "fd"
+    },
+    {
+      "pid": 46,
+      "surface": "fd"
+    },
+    {
+      "pid": 47,
+      "surface": "fd"
+    },
+    {
+      "pid": 48,
+      "surface": "fd"
+    },
+    {
+      "pid": 49,
+      "surface": "fd"
+    },
+    {
+      "pid": 50,
+      "surface": "fd"
+    },
+    {
+      "pid": 51,
+      "surface": "fd"
+    },
+    {
+      "pid": 52,
+      "surface": "fd"
+    },
+    {
+      "pid": 53,
+      "surface": "fd"
+    },
+    {
+      "pid": 54,
+      "surface": "fd"
+    },
+    {
+      "pid": 55,
+      "surface": "fd"
+    },
+    {
+      "pid": 56,
+      "surface": "fd"
+    },
+    {
+      "pid": 57,
+      "surface": "fd"
+    },
+    {
+      "pid": 58,
+      "surface": "fd"
+    },
+    {
+      "pid": 59,
+      "surface": "fd"
+    },
+    {
+      "pid": 60,
+      "surface": "fd"
+    },
+    {
+      "pid": 61,
+      "surface": "fd"
+    },
+    {
+      "pid": 62,
+      "surface": "fd"
+    },
+    {
+      "pid": 63,
+      "surface": "fd"
+    },
+    {
+      "pid": 64,
+      "surface": "fd"
+    },
+    {
+      "pid": 65,
+      "surface": "fd"
+    },
+    {
+      "pid": 66,
+      "surface": "fd"
+    },
+    {
+      "pid": 67,
+      "surface": "fd"
+    },
+    {
+      "pid": 68,
+      "surface": "fd"
+    },
+    {
+      "pid": 69,
+      "surface": "fd"
+    },
+    {
+      "pid": 70,
+      "surface": "fd"
+    },
+    {
+      "pid": 71,
+      "surface": "fd"
+    },
+    {
+      "pid": 72,
+      "surface": "fd"
+    },
+    {
+      "pid": 73,
+      "surface": "fd"
+    },
+    {
+      "pid": 74,
+      "surface": "fd"
+    },
+    {
+      "pid": 75,
+      "surface": "fd"
+    },
+    {
+      "pid": 76,
+      "surface": "fd"
+    },
+    {
+      "pid": 77,
+      "surface": "fd"
+    },
+    {
+      "pid": 78,
+      "surface": "fd"
+    },
+    {
+      "pid": 79,
+      "surface": "fd"
+    },
+    {
+      "pid": 80,
+      "surface": "fd"
+    },
+    {
+      "pid": 81,
+      "surface": "fd"
+    },
+    {
+      "pid": 82,
+      "surface": "fd"
+    },
+    {
+      "pid": 83,
+      "surface": "fd"
+    },
+    {
+      "pid": 84,
+      "surface": "fd"
+    },
+    {
+      "pid": 85,
+      "surface": "fd"
+    },
+    {
+      "pid": 86,
+      "surface": "fd"
+    },
+    {
+      "pid": 87,
+      "surface": "fd"
+    },
+    {
+      "pid": 88,
+      "surface": "fd"
+    },
+    {
+      "pid": 89,
+      "surface": "fd"
+    },
+    {
+      "pid": 90,
+      "surface": "fd"
+    },
+    {
+      "pid": 91,
+      "surface": "fd"
+    },
+    {
+      "pid": 92,
+      "surface": "fd"
+    },
+    {
+      "pid": 93,
+      "surface": "fd"
+    },
+    {
+      "pid": 94,
+      "surface": "fd"
+    },
+    {
+      "pid": 95,
+      "surface": "fd"
+    },
+    {
+      "pid": 96,
+      "surface": "fd"
+    },
+    {
+      "pid": 97,
+      "surface": "fd"
+    },
+    {
+      "pid": 98,
+      "surface": "fd"
+    },
+    {
+      "pid": 99,
+      "surface": "fd"
+    },
+    {
+      "pid": 100,
+      "surface": "fd"
+    },
+    {
+      "pid": 101,
+      "surface": "fd"
+    },
+    {
+      "pid": 102,
+      "surface": "fd"
+    },
+    {
+      "pid": 103,
+      "surface": "fd"
+    },
+    {
+      "pid": 104,
+      "surface": "fd"
+    },
+    {
+      "pid": 105,
+      "surface": "fd"
+    },
+    {
+      "pid": 106,
+      "surface": "fd"
+    },
+    {
+      "pid": 107,
+      "surface": "fd"
+    },
+    {
+      "pid": 109,
+      "surface": "fd"
+    },
+    {
+      "pid": 110,
+      "surface": "fd"
+    },
+    {
+      "pid": 111,
+      "surface": "fd"
+    },
+    {
+      "pid": 113,
+      "surface": "fd"
+    },
+    {
+      "pid": 125,
+      "surface": "fd"
+    },
+    {
+      "pid": 126,
+      "surface": "fd"
+    },
+    {
+      "pid": 191,
+      "surface": "fd"
+    },
+    {
+      "pid": 213,
+      "surface": "fd"
+    },
+    {
+      "pid": 214,
+      "surface": "fd"
+    },
+    {
+      "pid": 270,
+      "surface": "fd"
+    },
+    {
+      "pid": 290,
+      "surface": "fd"
+    },
+    {
+      "pid": 291,
+      "surface": "fd"
+    },
+    {
+      "pid": 292,
+      "surface": "fd"
+    },
+    {
+      "pid": 293,
+      "surface": "fd"
+    },
+    {
+      "pid": 336,
+      "surface": "fd"
+    },
+    {
+      "pid": 337,
+      "surface": "fd"
+    },
+    {
+      "pid": 425,
+      "surface": "fd"
+    },
+    {
+      "pid": 426,
+      "surface": "fd"
+    },
+    {
+      "pid": 533,
+      "surface": "fd"
+    },
+    {
+      "pid": 546,
+      "surface": "fd"
+    },
+    {
+      "pid": 560,
+      "surface": "fd"
+    },
+    {
+      "pid": 561,
+      "surface": "fd"
+    },
+    {
+      "pid": 565,
+      "surface": "fd"
+    },
+    {
+      "pid": 743,
+      "surface": "fd"
+    },
+    {
+      "pid": 922,
+      "surface": "fd"
+    },
+    {
+      "pid": 923,
+      "surface": "fd"
+    },
+    {
+      "pid": 925,
+      "surface": "fd"
+    },
+    {
+      "pid": 947,
+      "surface": "fd"
+    },
+    {
+      "pid": 950,
+      "surface": "fd"
+    },
+    {
+      "pid": 1013,
+      "surface": "fd"
+    },
+    {
+      "pid": 1026,
+      "surface": "fd"
+    },
+    {
+      "pid": 1067,
+      "surface": "fd"
+    },
+    {
+      "pid": 1273,
+      "surface": "fd"
+    },
+    {
+      "pid": 1275,
+      "surface": "fd"
+    },
+    {
+      "pid": 1369,
+      "surface": "fd"
+    },
+    {
+      "pid": 1455,
+      "surface": "fd"
+    },
+    {
+      "pid": 4671,
+      "surface": "fd"
+    },
+    {
+      "pid": 9754,
+      "surface": "fd"
+    },
+    {
+      "pid": 69536,
+      "surface": "fd"
+    },
+    {
+      "pid": 69547,
+      "surface": "fd"
+    },
+    {
+      "pid": 678201,
+      "surface": "fd"
+    },
+    {
+      "pid": 865832,
+      "surface": "fd"
+    },
+    {
+      "pid": 865857,
+      "surface": "fd"
+    },
+    {
+      "pid": 1528124,
+      "surface": "fd"
+    },
+    {
+      "pid": 1528478,
+      "surface": "fd"
+    },
+    {
+      "pid": 1531996,
+      "surface": "fd"
+    },
+    {
+      "pid": 1545393,
+      "surface": "fd"
+    },
+    {
+      "pid": 1554292,
+      "surface": "fd"
+    },
+    {
+      "pid": 1562612,
+      "surface": "fd"
+    },
+    {
+      "pid": 1564887,
+      "surface": "fd"
+    },
+    {
+      "pid": 1570564,
+      "surface": "fd"
+    },
+    {
+      "pid": 1577836,
+      "surface": "fd"
+    },
+    {
+      "pid": 1577970,
+      "surface": "fd"
+    },
+    {
+      "pid": 2994737,
+      "surface": "fd"
+    },
+    {
+      "pid": 2994738,
+      "surface": "fd"
+    },
+    {
+      "pid": 2994739,
+      "surface": "fd"
+    },
+    {
+      "pid": 2994741,
+      "surface": "fd"
+    },
+    {
+      "pid": 2994742,
+      "surface": "fd"
+    },
+    {
+      "pid": 2994743,
+      "surface": "fd"
+    },
+    {
+      "pid": 3089584,
+      "surface": "fd"
+    },
+    {
+      "pid": 3089585,
+      "surface": "fd"
+    },
+    {
+      "pid": 3098515,
+      "surface": "fd"
+    },
+    {
+      "pid": 3098902,
+      "surface": "fd"
+    },
+    {
+      "pid": 3098926,
+      "surface": "fd"
+    },
+    {
+      "pid": 3969744,
+      "surface": "fd"
+    },
+    {
+      "pid": 4062578,
+      "surface": "fd"
+    },
+    {
+      "pid": 4068287,
+      "surface": "fd"
+    }
+  ],
+  "campaign_processes": [
+    {
+      "pid": 1305953,
+      "state": "S",
+      "parent": 1,
+      "pgid": 1305953,
+      "start_ticks": 74126867
+    },
+    {
+      "pid": 1305954,
+      "state": "S",
+      "parent": 1305953,
+      "pgid": 1305953,
+      "start_ticks": 74126867
+    },
+    {
+      "pid": 1571122,
+      "state": "S",
+      "parent": 1305954,
+      "pgid": 1571122,
+      "start_ticks": 76450668
+    }
+  ],
+  "filesystem_before": {
+    "block_size": 4096,
+    "available_bytes": 2268590080,
+    "total_bytes": 109128826880,
+    "free_bytes": 2285367296
+  },
+  "candidate_check_passed": true,
+  "access_scope": "observed /proc process names and accessible fd symlinks; gaps retained, no universal all-host claim"
+}

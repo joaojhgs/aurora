@@ -1,0 +1,31 @@
+{
+  "message": "msg_94c064380fae",
+  "at": "2026-10-15T03:36:39Z",
+  "projectCopiesPublishedAt": "2026-10-15T03:31:45Z",
+  "v482": {
+    "semanticDiff": "ordinary product startup sanitizes test config credentials, fills unused branch defaults, canonicalizes en-US to en; active Llama/STT/TTS settings unchanged",
+    "bothPIDsAbsent": true,
+    "bothLocksFree": true,
+    "observedAt": "2026-10-15T03:33:32.205598Z",
+    "nAudio": 0,
+    "nMeasured": 0
+  },
+  "v484": {
+    "guardFix": "poststartup stable raw-config guard only after exact active-profile equality and documented language canonicalization; raw drift guard retained per attempt",
+    "sourceReview": "existing Sol diff review once; AST/F821 PASS",
+    "actualLaunchVerified": false
+  },
+  "cpu": {
+    "additionalPinnedPackages": {
+      "av": "16.0.1",
+      "huggingface-hub": "1.16.1",
+      "scipy": "1.15.1"
+    },
+    "samePiperAssetsAndWAVStaged": true,
+    "sourceSnapshotFiles": 399,
+    "sourceSnapshotReportedMB": 6.68,
+    "pinnedCoreHashesMatched": 13,
+    "modelsLoaded": false
+  },
+  "phase2MeasuredAllowed": false
+}

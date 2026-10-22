@@ -1,0 +1,3 @@
+The one fixture-compatible seeded LOAD/event case passed (9.133s): one passed and one unselected test. The earlier UI typing pass remains closed. This unit supports loading only; actual fresh save/New/reopen is accepted by V281, independently reviewed by V283. No extra unit save/event matrix was introduced.
+
+All original failed/corrected check histories and exact source integration hashes are retained. Private credential-bearing log lines are withheld with transformation counts; source/runtime acceptance remains bounded to the respective gate. No source change, build or rerun was performed by this export.

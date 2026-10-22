@@ -1,0 +1,12 @@
+{
+  "controlDeadline": "2026-10-22T07:05:00Z",
+  "explicitNewline": true,
+  "host": "ssh:ssh-sem-notebook-personal",
+  "incarnation": "328cd72f-c7ea-49ff-a2db-b9275b085037",
+  "remoteResult": "/home/developer/projects/aurora/thesis/phone-notebook/20261020/evidence/read-phone-file-audio-v204.json",
+  "rootAdmissionMessage": "owner-current-native-file-audio-one-case-progress-preserve-no-repeat",
+  "script": "scripts/read_phone_file_audio_v204.py",
+  "scriptSha256": "e33a644fda2e6b088c3d4d3fb3dfae2eb3538f2182b46a5bb45fc8ce793f7d35",
+  "singleSend": true,
+  "terminal": "term_a2ed5feb-7c92-48e4-bd88-d1b0e6737989"
+}

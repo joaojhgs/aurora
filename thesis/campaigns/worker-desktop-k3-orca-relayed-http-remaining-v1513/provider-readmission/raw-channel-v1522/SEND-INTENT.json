@@ -1,0 +1,8 @@
+{
+  "at": "2026-10-18T14:34:43.142370+00:00",
+  "command": "printf 'AURORA_RAW_CONTROL_RESULT_V1522\\n'\n",
+  "enterFlag": false,
+  "distinctFromPendingMetadata": true,
+  "maximumSendCount": 1,
+  "newModelRequests": 0
+}

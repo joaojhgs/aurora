@@ -1,0 +1,11 @@
+# Integrated K1 HTTP source preparation V822
+
+Source-only combination of the reviewed V802/V804 requester and V815 provider. No run is frozen or launched. The unchanged actual runner remains45d2c3f4; V430 hooks, strict audio/models/predicates,15 warmups/900 measured and caps remain unchanged. Startup binding admission is distinct from actual authenticated TTS proof after startup. Original source versions and reviews remain preserved.
+
+Before any new freeze, pin the inert V820 resource sampler in BOTH implementation sections (requester resourceSamplerSha256, provider resource_sampler_sha256). Each controller samples it once in its existing resource loop: own-clock host CPU ticks; child CPU/startticks and RSS/HWM/virtual memory/threads; aggregate interface counters; visible AMD device busy/VRAM counters. Missing counters remain null plus field/error/errno. Host/interface/GPU counters are aggregate context, not per-request or per-process network attribution. Existing memory/disk/raw guards are unchanged and remain authoritative.
+
+The K1 HTTP adapter explicitly disables inherited proxy routing so the existing credential goes only to the admitted direct origin; no system or network proxy configuration changes. It returns actual request payload bytes, but the unchanged runner does not persist that new field; no recorded payload-total claim is made. Timeout/ambiguity/redirect/correctness policy is unchanged. These unfrozen source changes need the narrow independent review and new exact manifest pins before ordinary warmup admission.
+
+Root still must stage fresh actual source/config/venv/runtime/model/file receipts, existing fixture credentials, approved private binding, physical retirement and lock/resource admission. Existing V799 and V737 are untouched; no service/listener/network/model/test/import action occurred in this preparation. Requester/proof and provider sources are retained separately because they execute on different physical hosts. No cross-device measurement is claimed.
+
+Resource scope limit: child CPU/RSS counters refer to the owned Python receiver/requester process. Short-lived external Piper subprocess CPU/peakRSS are not separately attributed by this sampler; host counters remain aggregate context. No missing counter is represented as zero usage.

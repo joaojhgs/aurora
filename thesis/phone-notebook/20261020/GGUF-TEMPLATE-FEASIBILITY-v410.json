@@ -1,0 +1,36 @@
+{
+  "at": "2026-10-22T13:42:51.141593+00:00",
+  "status": "FINITE_FEASIBILITY_UNMEASURED_DIFFERENT_FORMAT_COHORT",
+  "reason": "Fixed chatml-function-calling branch grammar defect repaired but actual model output still includes orphan reasoning/message protocol and violates city-only requirement",
+  "originalFailures": [
+    "evidence/read-first-continuation-pilot-v360/result.json",
+    "evidence/read-nonempty-reply-shape-v406/result.json"
+  ],
+  "modelAndBinaryRuntimeSubstituted": false,
+  "onlyRuntimeOptionChanged": {
+    "chat_format": {
+      "before": "chatml-function-calling",
+      "after": null,
+      "resolution": "embedded GGUF chat template"
+    }
+  },
+  "otherEffectiveOptionsUnchanged": {
+    "n_gpu_layers": 100,
+    "n_threads": 2,
+    "n_ctx": 4096,
+    "n_batch": 64,
+    "seed": 42,
+    "max_tokens": 128,
+    "temperature": 0,
+    "top_k": 1,
+    "top_p": 1,
+    "min_p": 0,
+    "repeat_penalty": 1
+  },
+  "referenceMatched900Eligibility": false,
+  "noChangedCohortPooling": true,
+  "sourceSha": "ebde3a8acf6315f920d03593845f17a1fc65a733",
+  "llmModelSha256": "57d1997790d1744fba5b40a7317df71ea5e2acee28c47e78f0cce39c0703f8cf",
+  "ownerHardStopUtc": "2026-10-22T18:21:09.788710+00:00",
+  "controllerSha256": "c61f5f781d9ae91eeb37b6602e3626dd3243ef27959156d6ca1b0fc1e765d783"
+}

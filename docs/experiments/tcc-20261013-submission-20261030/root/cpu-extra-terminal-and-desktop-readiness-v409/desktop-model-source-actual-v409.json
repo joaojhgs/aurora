@@ -1,0 +1,45 @@
+{
+  "benchmark_started": false,
+  "caps": {
+    "model_bytes": 563036064,
+    "model_download_seconds": 240,
+    "source_fetch_seconds": 45
+  },
+  "finished_at": "2026-10-14T16:34:39.709256+00:00",
+  "inference_started": false,
+  "kind": "aurora_root_gpu_model_source_readiness",
+  "model": {
+    "elapsed_seconds": 9.969099003006704,
+    "expected_bytes": 563036064,
+    "expected_sha256": "57d1997790d1744fba5b40a7317df71ea5e2acee28c47e78f0cce39c0703f8cf",
+    "original_url": "https://huggingface.co/ggml-org/Qwen3.5-0.8B-GGUF/resolve/9447f74101aeb4e93621884dfa36ee8effb8831b/Qwen3.5-0.8B-Q4_0.gguf",
+    "outcome": "exact_model_verified",
+    "partial_retained": false,
+    "path": "/tmp/aurora-root-gpu-primary-v409/models/Qwen3.5-0.8B-Q4_0.gguf",
+    "received_bytes": 563036064,
+    "received_sha256": "57d1997790d1744fba5b40a7317df71ea5e2acee28c47e78f0cce39c0703f8cf"
+  },
+  "recorded_at": "2026-10-14T16:34:29.702659+00:00",
+  "source": {
+    "command_argv": [
+      "git",
+      "fetch",
+      "--no-tags",
+      "--no-write-fetch-head",
+      "origin",
+      "5782746afba213f6b36907db2f09f0017625e218"
+    ],
+    "diagnostic_class": "missing_remote_object",
+    "elapsed_seconds": 1.130269819055684,
+    "exact_object_present": false,
+    "exit_code": 128,
+    "object_check_exit_code": 128,
+    "scope": "existing_origin_object_fetch_only_no_ref_checkout_index_mutation",
+    "stderr_bytes": 87,
+    "stderr_sha256": "db6b7e8509e70359bc6519ccc3080cd22e963058b6c506663d5cdc9c598a760b",
+    "stdout_bytes": 0,
+    "stdout_sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+  },
+  "source_commit_expected": "5782746afba213f6b36907db2f09f0017625e218",
+  "worktree_checkout_changed": false
+}

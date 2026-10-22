@@ -1,0 +1,21 @@
+{
+  "at": "2026-10-18T14:29:14.264738+00:00",
+  "status": "LOCAL_PREPARATION_AND_REVIEW_CLOSED_ONLY_EXISTING_ORCA_CAPABILITY_BLOCKS_EXECUTION",
+  "plannedMeasured": 387,
+  "priorAttempted": 513,
+  "priorOutcomes": {
+    "completed_correct": 512,
+    "failed": 1
+  },
+  "target": 900,
+  "newModelRequests": 0,
+  "launch": false,
+  "closureReport": "thesis/campaigns/worker-desktop-k3-orca-relayed-http-remaining-v1513/SOL-TARGETED-CORRECTION-CLOSURE.md",
+  "closureSha256": "4e4e50b0dc4970d0c6c0283e8e24532f79a4846e1862e1140fd98ceeb214cca4",
+  "currentBlocker": "terminal.send cdac7533-7309-4015-be6f-69bae4a8f0ee pending; one exact supported retry operation_unknown; zero output at47858. Owning-Orca recovery receipt not yet verified.",
+  "monitor": "ctx_37b4d0a3c14f",
+  "capabilityEscalation": "msg_2d6873cb3d8b",
+  "nativeGoal": "01a112a5-d6bb-74e2-bf7c-ace73cb513b5",
+  "nativeStatus": "active",
+  "futureAction": "Only consume changed original-run control/capability or profile information; no extra local variants/reviews/tests, unchanged PENDING reads or baseline repeats. Reconcile same pending operation before new command/admission."
+}

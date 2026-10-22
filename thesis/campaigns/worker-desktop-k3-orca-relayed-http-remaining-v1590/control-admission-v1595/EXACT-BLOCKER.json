@@ -1,0 +1,88 @@
+{
+  "at": "2026-10-18T18:12:19.870701+00:00",
+  "status": "V1590_PREPARED_NOT_LAUNCHED_EXISTING_CONTROL_WRITES_REJECTED",
+  "nativeGoal": "01a112a5-d6bb-74e2-bf7c-ace73cb513b5",
+  "nativeGoalStatus": "active",
+  "run": "run_e6054e76e9fc",
+  "rootTerminal": "term_6a00d9ee-792a-4daf-8578-236290e33108",
+  "monitorDispatch": "ctx_37b4d0a3c14f",
+  "desktopTarget": "ssh:ssh-1786238480967-semdev",
+  "existingControlTerminal": "term_d5651d8d-58e2-4b38-85e2-51c668cc933c",
+  "existingControlIncarnation": "034ff933-61a3-4c74-b5ad-98a75e8ac21c",
+  "verifiedMetadata": {
+    "connected": true,
+    "writable": true,
+    "orphaned": false,
+    "agentIdentity": null
+  },
+  "actualSendRejections": [
+    {
+      "requestId": "8357569b-3463-4576-951a-0c975a3b4cc2",
+      "commandBytes": 16808,
+      "code": "terminal_not_writable",
+      "accepted": false
+    },
+    {
+      "requestId": "b3e29dd0-3f85-444a-a865-a37495190408",
+      "commandBytes": 3894,
+      "code": "terminal_not_writable",
+      "accepted": false
+    }
+  ],
+  "secondOperation": "Changed operation derives exact namespace-only reader from already-staged SHA0382 source; not repeat of rejected code blob and no SUT traffic",
+  "noProvenGeneralizedCause": true,
+  "lastActualSuccessfulPersonalRead": {
+    "at": "2026-10-18T18:01:36.661449+00:00",
+    "cursor": "56949",
+    "allThreeOriginalProviderProcessesLive": true
+  },
+  "lastActualHttpHealth": {
+    "at": "2026-10-18T18:03:56.243118+00:00",
+    "status": 200,
+    "modelRequests": 0
+  },
+  "notClaimed": "Desktop absence, provider exit, permission/credential deficit, payload-size limit or historical transport cause",
+  "noMoreSendRetriesWithoutChangedCapability": true,
+  "supportedInstalledCatalog": "Normal public301-command catalog has terminal show/read/send but no SSH reconnect/restore control; no owning-host manager capability invoked",
+  "requiredCapability": "Restore working writes to this SAME existing plain shell through owning Orca supported runtime controls, preserving its incarnation/workspace/provider/reservation. No new terminal/agent/target, reset, credentials or security changes. Fresh resource/reader staging proof then guarded firstordinarywarmup, not blind measured rerun.",
+  "sourceReady": "FINITE-DIAGNOSTIC-ADMISSION-r2.json",
+  "review": "Original monitor narrow observability review pending",
+  "pendingMeasured": 184,
+  "previousMeasuredAttempts": 716,
+  "previousMeasuredCorrect": 714,
+  "previousMeasuredFailures": 2,
+  "v1573Measured": 0,
+  "v1573ExcludedWarmupFailures": 1,
+  "copies": [
+    {
+      "source": ".git/aurora-handoff-import-20261006/v1591-same-provider-firstwarmup-diagnostic-readmission-SHOW-FENCE.json",
+      "path": "thesis/campaigns/worker-desktop-k3-orca-relayed-http-remaining-v1590/control-admission-v1595/v1591-same-provider-firstwarmup-diagnostic-readmission-SHOW-FENCE.json",
+      "bytes": 1296,
+      "sha256": "6424c9ba78e6c91ff401500e66aa90f114b57212ad5b5060bafbd5cdf50338d0"
+    },
+    {
+      "source": ".git/aurora-handoff-import-20261006/v1591-same-provider-firstwarmup-diagnostic-readmission-SEND.json",
+      "path": "thesis/campaigns/worker-desktop-k3-orca-relayed-http-remaining-v1590/control-admission-v1595/v1591-same-provider-firstwarmup-diagnostic-readmission-SEND.json",
+      "bytes": 234,
+      "sha256": "2144aaecd067fd27588c776a26bf1075eee1cfd9a96a50c210d4873d3131a010"
+    },
+    {
+      "source": ".git/aurora-handoff-import-20261006/v1593-original-personal-control-show.json",
+      "path": "thesis/campaigns/worker-desktop-k3-orca-relayed-http-remaining-v1590/control-admission-v1595/v1593-original-personal-control-show.json",
+      "bytes": 1296,
+      "sha256": "874d9c0dad8698492e71237db3d04a297522e3ba94b9d2bd8488dc121a11daa9"
+    },
+    {
+      "source": ".git/aurora-handoff-import-20261006/v1593-short-staged-reader-derivation-readmission-SHOW-FENCE.json",
+      "path": "thesis/campaigns/worker-desktop-k3-orca-relayed-http-remaining-v1590/control-admission-v1595/v1593-short-staged-reader-derivation-readmission-SHOW-FENCE.json",
+      "bytes": 1296,
+      "sha256": "a17d6cd972d017bdaa65cdc27bdee49089d720f20603c36d3003fdb712a54c82"
+    },
+    {
+      "source": ".git/aurora-handoff-import-20261006/v1593-short-staged-reader-derivation-readmission-SEND.json",
+      "path": "thesis/campaigns/worker-desktop-k3-orca-relayed-http-remaining-v1590/control-admission-v1595/v1593-short-staged-reader-derivation-readmission-SEND.json",
+      "bytes": 234,
+      "sha256": "7884d5c53dee8e88313056bbb43ed838db6713a8e5caf9f386b81275c3350157"
+    }
+  ]
+}

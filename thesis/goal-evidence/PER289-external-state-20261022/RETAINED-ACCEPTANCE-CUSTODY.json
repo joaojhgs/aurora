@@ -1,0 +1,51 @@
+{
+  "at": "2026-10-22T12:13:32.645707+00:00",
+  "copies": [
+    {
+      "source": ".omx/evidence/receiving-session-20261006/PER289-OWN-TECHNICAL-ACCEPTANCE-SOL-V78.md",
+      "destination": "thesis/goal-evidence/PER289-external-state-20261022/retained-acceptance/PER289-OWN-TECHNICAL-ACCEPTANCE-SOL-V78.md",
+      "bytes": 7209,
+      "sha256": "d9ff0181b18501c18b6717e9511eb418863f0e0881b9c3cd8ef3cd71232fc279"
+    },
+    {
+      "source": ".omx/evidence/receiving-session-20261006/PER289-EXACT-PACKAGE-QA-V102.md",
+      "destination": "thesis/goal-evidence/PER289-external-state-20261022/retained-acceptance/PER289-EXACT-PACKAGE-QA-V102.md",
+      "bytes": 5728,
+      "sha256": "548d2764d1c218a983f2b73db646984ac09f27c60c89b6af55e9c3c01d659764"
+    },
+    {
+      "source": ".omx/evidence/receiving-session-20261006/PER289-LOCAL-ARCHITECTURE-V102.md",
+      "destination": "thesis/goal-evidence/PER289-external-state-20261022/retained-acceptance/PER289-LOCAL-ARCHITECTURE-V102.md",
+      "bytes": 3813,
+      "sha256": "495ba3e2c27e98d3b5201b65f2feb4f5dd3373f34008d0c6b7bef5233829e6b6"
+    },
+    {
+      "source": ".omx/evidence/receiving-session-20261006/PER289-STACKED-CONFIG-DELIVERY-V78.json",
+      "destination": "thesis/goal-evidence/PER289-external-state-20261022/retained-acceptance/PER289-STACKED-CONFIG-DELIVERY-V78.json",
+      "bytes": 6995,
+      "sha256": "e9a00ce6f39a8c54ddb0f4fe3904f45330b052d4461b067d001dd20c6330f1cf"
+    },
+    {
+      "source": ".omx/evidence/receiving-session-20261006/PER289-ARCHIVE-FOUNDATION-CHECKPOINT-V1.json",
+      "destination": "thesis/goal-evidence/PER289-external-state-20261022/retained-acceptance/PER289-ARCHIVE-FOUNDATION-CHECKPOINT-V1.json",
+      "bytes": 14385,
+      "sha256": "de4b19828217ec7104cdd698e270672d38e32545839e6e1463e311ac5a544b78"
+    },
+    {
+      "source": ".omx/evidence/receiving-session-20261006/PER289-SEARCH-CHECKPOINT-V1.json",
+      "destination": "thesis/goal-evidence/PER289-external-state-20261022/retained-acceptance/PER289-SEARCH-CHECKPOINT-V1.json",
+      "bytes": 4566,
+      "sha256": "0a9d7430cc91df36ee881b0ce02ecf29d87218c0efe950647b54ef4cc61c1761"
+    },
+    {
+      "source": ".omx/evidence/receiving-session-20261006/ANDROID-ARCHIVE-DATA-MAIN-V1.json",
+      "destination": "thesis/goal-evidence/PER289-external-state-20261022/retained-acceptance/ANDROID-ARCHIVE-DATA-MAIN-V1.json",
+      "bytes": 2196,
+      "sha256": "4ab7836933363831d135c757ae5ce1574679c461d3beb00e10a8af88c96da338"
+    }
+  ],
+  "bytes": 44892,
+  "status": "EXACT_RETAINED_ACCEPTANCE_COPIED_NOT_NEW_TEST_OR_REVIEW",
+  "preserveOriginals": true,
+  "currentMainHeld": false
+}

@@ -1,0 +1,12 @@
+{
+  "at": "2026-10-20T14:07:12.345365+00:00",
+  "verdict": "PASS",
+  "scope": "Only already-reviewed runner/controller/receiver-proof operational mapping; existing workload/model/correctness/policy scopes remain closed.",
+  "diffSha256": "6b079b538e56e887d7c462ee7fc67905fa6bbfaf947be478570a4fe858047ccd",
+  "report": "thesis/harness/distributed-k1-mesh-remaining191-v1779/review/P2P-K1-V1779-REMAINING191-MECHANICAL-REVIEW-20261020T135734Z.md",
+  "reportBytes": 3900,
+  "reportSha256": "98fd13b928716648776f197c901b7026b229685cf54493b3b7d4fb7752c8c005",
+  "reviewerTask": "task_d7ea336050cf",
+  "reviewerDispatch": "ctx_37b4d0a3c14f",
+  "messageId": "msg_8c12a2cc8eeb"
+}

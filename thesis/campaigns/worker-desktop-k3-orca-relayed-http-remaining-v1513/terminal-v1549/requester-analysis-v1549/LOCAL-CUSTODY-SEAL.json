@@ -1,0 +1,74 @@
+{
+  "at": "2026-10-18T16:42:59.300077+00:00",
+  "scope": "Requester terminal partial custody; provider resource log remains live",
+  "frozenManifestSha256": "b19c10d9aad4f9a2261d7eac5b52c258315eea94db256a411e66981e6a45d4a4",
+  "currentSnapshotSha256": "378420b4a5c0edf2a41fb670687233af6463064138f8f090c3d37f0ab9460895",
+  "verifiedFileCount": 807,
+  "verifiedPayloadBytes": 17498814,
+  "verifiedCases": 218,
+  "verifiedUniqueWavs": 217,
+  "localPrefixCoverage": {
+    "actual-provider-bindings.jsonl": {
+      "copiedBytes": 847,
+      "chunkCount": 1,
+      "closedSourceEofCovered": true,
+      "additionalClosedTailBytes": 0,
+      "originalIncompleteFlagPreserved": true
+    },
+    "backend.private.log": {
+      "copiedBytes": 42966,
+      "chunkCount": 5,
+      "closedSourceEofCovered": true,
+      "additionalClosedTailBytes": 0,
+      "originalIncompleteFlagPreserved": true
+    },
+    "controller.private.log": {
+      "copiedBytes": 0,
+      "chunkCount": 0,
+      "closedSourceEofCovered": true,
+      "additionalClosedTailBytes": 0,
+      "originalIncompleteFlagPreserved": true
+    },
+    "proof-collection.private.log": {
+      "copiedBytes": 122,
+      "chunkCount": 1,
+      "closedSourceEofCovered": true,
+      "additionalClosedTailBytes": 0,
+      "originalIncompleteFlagPreserved": true
+    },
+    "requesterCopier.private.log": {
+      "copiedBytes": 55875,
+      "chunkCount": 113,
+      "closedSourceEofCovered": true,
+      "additionalClosedTailBytes": 441,
+      "originalIncompleteFlagPreserved": true
+    },
+    "resources.jsonl": {
+      "copiedBytes": 8644964,
+      "chunkCount": 112,
+      "closedSourceEofCovered": true,
+      "additionalClosedTailBytes": 0,
+      "originalIncompleteFlagPreserved": true
+    },
+    "voice-stages.jsonl": {
+      "copiedBytes": 0,
+      "chunkCount": 0,
+      "closedSourceEofCovered": true,
+      "additionalClosedTailBytes": 0,
+      "originalIncompleteFlagPreserved": true
+    },
+    "warmupFinalizer.private.log": {
+      "copiedBytes": 1077,
+      "chunkCount": 1,
+      "closedSourceEofCovered": true,
+      "additionalClosedTailBytes": 0,
+      "originalIncompleteFlagPreserved": true
+    }
+  },
+  "copierErrors": [],
+  "controllerExitCode": 1,
+  "controllerFinishedAt": "2026-10-18T16:37:22.852547+00:00",
+  "requesterAndCopierRetiredAtCapture": true,
+  "full900Complete": false,
+  "full13Complete": false
+}

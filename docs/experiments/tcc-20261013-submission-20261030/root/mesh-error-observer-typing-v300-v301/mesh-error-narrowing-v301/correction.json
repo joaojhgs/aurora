@@ -1,0 +1,7 @@
+{
+  "before_sha256": "b4253ce9d9cd3d868e4a5e78c011dd838ec67671070932349b6545ed9b1a249e",
+  "after_sha256": "213de9ff068097abb3b54cc643409f2873ab6a10c56195ae915025cafec094eb",
+  "change": "after early update.error break, remove unreachable optional error code access and retain unknown for null-error failure update",
+  "prior_v300_outcome": "typecheck failed before any model request",
+  "other_sources_unchanged": true
+}

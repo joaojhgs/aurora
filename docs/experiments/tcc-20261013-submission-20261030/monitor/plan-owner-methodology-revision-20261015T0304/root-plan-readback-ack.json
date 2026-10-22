@@ -1,0 +1,13 @@
+{
+  "message": "msg_a3c5b9703a92",
+  "at": "2026-10-15T03:12:40Z",
+  "delivery": "delivery_9a997e481dbe",
+  "section": "30.15",
+  "lines": 1670,
+  "newLinesRead": 27,
+  "sha256": "0d3ac30d285999d882125033101727d6ea3f8ee5e723fde6e1053ce2b50c71e1",
+  "prior1643PrefixUnchanged": true,
+  "priorSHA256": "47272b6b3acd9da36bbbbe2665d2e47d09224a7d280f7d357d3a737bc6789019",
+  "diffSHA256": "dc7fead37c1a1344b01411d9f90579122fde1fe8d0a58f73e5880f5151cf9df9",
+  "receiptAndFullDiffRead": true
+}

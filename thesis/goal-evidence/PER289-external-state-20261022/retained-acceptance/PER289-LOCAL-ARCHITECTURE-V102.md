@@ -1,0 +1,19 @@
+# PER-289 local architecture acceptance — V102
+
+**APPROVE local Stage 1 architecture readiness for the combined frozen package only:** archive PR175 `14df693f0d3f00aa7468ec7be8f64438fec014da` plus linked product PR177 `727eb72e3c32cedbd4134bed6d110215f4d4a3cf`. Both heads are required. This independent audit follows the actual `/tmp/aurora-per289-exact-package-qa-v102.md` local QA APPROVE; it is not the named external Aurora architect's acknowledgement.
+
+Read the authoritative intake, supplied top-level guidance, Tauri guidance, documentation index/ambient contract, V78 technical acceptance and stacked-config delivery reports, and Root's actual V102 readiness/mapping JSON. Closed source continuity and retained tests are reused without reopening source reviews, matrices, or prerequisites.
+
+Architecture findings:
+
+- **Separate typed scoped archive: PASS.** Exact archive-head `records.zod.ts` defines transcript sessions and ordered segments separately from conversation/messages, with profile/node scope, lifecycle and provenance. `repositories.ts` exposes dedicated typed create/start/append/finalize/recovery/list/delete/retention operations, bounded query/collection limits and replay results; no arbitrary SQL product API.
+- **Privacy: PASS.** Exact schema requires encrypted `textEnvelope`, bounded timestamp/sequence fields and optional speaker metadata. Native storage persists the envelope rather than plaintext. Retained accepted V78/QA evidence establishes deterministic record/field/profile/node AAD and encryption across the closed backends. Raw audio is outside archive content and this delivery; no audio retention is accepted here.
+- **Native ownership: PASS.** Exact archive `local_data_native.rs` retains typed `NativeTranscriptArchiveWrite` create/append/finalize and the native selected-profile writer independent of renderer lifecycle. Its retained source test covers renderer close and refusal to recreate a cleared database. Archive writes need neither Assistant messages nor Orchestrator/TTS. This foundation boundary does not claim real capture.
+- **One Rust configuration authority: PASS.** Exact product `node_policy.rs` defaults enabled/ambient/notification to false, explicitly separates saved policy from capability/permission/capture, checks revision conflicts and increments CAS revisions. `native_node_config.rs` retains the confirmed-profile coordinator and authorized read/CAS; product `lib.rs` registers that boundary. The unchanged 13-row mapping preserves the accepted policy owner, rather than adding an archive-side duplicate.
+- **Explicit stack dependency: PASS.** Read-only ancestry confirms archive175 precedes product727. Archive's node-config lacks backgroundTranscription; the accepted linked PR177 supplies scope5. V78 delivery mapping plus V102 unchanged entries establish combined delivery, not standalone PR175 completeness.
+
+Root records seven exact archive workflows SUCCESS and product frontend 22 steps PASS; no executable validation was run here. GitNexus is unavailable: graph evidence UNKNOWN; exact Git objects and retained acceptance suffice.
+
+Runtime update supersedes QA's live-iOS wording: D563 iOS38141121637/job114475031186 CLOSED FAILED at14:04:41, 35stepsPASS, first-primary retained once; speech_readiness_timeout preceded PCM/model/Assistant, preferences/profile restored and audio deleted. Luna investigation remains active. Android38145097194/job114486672917 remains live, compilation19PASS at14:07. Neither grants runtime acceptance. PER290/PER288 capture, final aesthetics, actual named QA→architect acknowledgement/tracker linkage remain EXTERNAL OPEN; no protected-branch readiness or whole-goal completion follows.
+
+Only this private report was written; no canonical mutation, execution, network, publication or delegation.

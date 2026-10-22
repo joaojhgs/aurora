@@ -1,0 +1,12 @@
+{
+  "controlDeadline": "2026-10-22T09:05:00Z",
+  "explicitNewline": true,
+  "host": "ssh:ssh-sem-notebook-personal",
+  "incarnation": "328cd72f-c7ea-49ff-a2db-b9275b085037",
+  "remoteResult": "/home/developer/projects/aurora/thesis/phone-notebook/20261020/evidence/reconcile-http-auth-and-stop-v253.json",
+  "rootAdmissionMessage": "owner-authenticated-route-boundary-normal-owned-service-retirement-if-actual-auth-disabled",
+  "script": "scripts/reconcile_http_auth_and_stop_v253.py",
+  "scriptSha256": "84308e93a3ca373c9d363112161d19fb1c8ff7368d3fd1c64560abaf09c868f3",
+  "singleSend": true,
+  "terminal": "term_a2ed5feb-7c92-48e4-bd88-d1b0e6737989"
+}

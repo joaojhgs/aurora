@@ -1,0 +1,66 @@
+{
+  "startedAt": "2026-10-14T23:30:04.732518+00:00",
+  "controllerPid": 2844085,
+  "capSeconds": 600,
+  "voiceAttemptsAdded": 0,
+  "measurementStarted": false,
+  "globalBuildLockHeld": true,
+  "changes": "build-only webpack cache disabled, standalone packaging disabled, one build worker; production app/SDK/UI sources unchanged",
+  "priorFailurePreserved": true,
+  "beforeRelocation": {
+    "homeFree": 62193664,
+    "shmFree": 1074397184,
+    "memAvailable": 3806695424
+  },
+  "cacheRelocation": {
+    "from": "/home/developer/projects/aurora/.git/aurora-web-product-v448/webpack-cache",
+    "to": "/dev/shm/aurora-root-accurate-base-v443/preserved-webpack-cache-v448",
+    "preservedAllFileBytes": 400502030,
+    "files": [
+      {
+        "path": ".previewinfo",
+        "bytes": 262,
+        "sha256": "08cb4e988dc05b942e7904f400e1928a85813d459680936262818d29ade0df27"
+      },
+      {
+        "path": ".rscinfo",
+        "bytes": 102,
+        "sha256": "3ea17d515c00bd0f03368ed1f38c8fd9e9769b3747fd8520995f31a83acf5b28"
+      },
+      {
+        "path": "webpack/server-production/index.pack_",
+        "bytes": 69151650,
+        "sha256": "0e1923b16fdfe0e2c6ba893604b54d07a7116f3b25a7ff33018b031d7b20e257"
+      },
+      {
+        "path": "webpack/server-production/0.pack_",
+        "bytes": 331350016,
+        "sha256": "88a0146587833f378624f1b41ec5ab730c6e383e57c095563116e3e866221121"
+      }
+    ],
+    "hashesVerifiedBeforeAndAfter": true,
+    "noArtifactDiscarded": true
+  },
+  "buildConfig": {
+    "path": "/home/developer/projects/aurora/.git/aurora-web-product-v448/source/apps/aurora-web/next.config.mjs",
+    "originalSHA256": "7311ab8b4705b640856579c1a42a71d6f4a42927e39405a3dfc129b3ac9c5e86",
+    "newSHA256": "1bf3295f877ab9335a3384476f18522a9f6d917c7908f2948bf37aed7b95f7ae",
+    "privateCopyOnly": true
+  },
+  "childPid": 2844105,
+  "command": [
+    "/home/developer/.asdf/installs/nodejs/24.19.0/bin/node",
+    "/home/developer/projects/aurora/.git/aurora-web-product-v448/source/apps/aurora-web/node_modules/next/dist/bin/next",
+    "build",
+    "--webpack"
+  ],
+  "initialHomeFree": 462721024,
+  "initialShmFree": 673886208,
+  "initialMemAvailable": 3403755520,
+  "exitCode": 1,
+  "finishedAt": "2026-10-14T23:31:09.861506+00:00",
+  "elapsedSeconds": 65.23067913693376,
+  "finalHomeFree": 462688256,
+  "finalShmFree": 649027584,
+  "finalMemAvailable": 2917330944
+}

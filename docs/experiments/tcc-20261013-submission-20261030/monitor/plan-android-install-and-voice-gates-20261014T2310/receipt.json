@@ -1,0 +1,36 @@
+{
+  "at": "2026-10-14T23:11:17.244718+00:00",
+  "objective": "tcc:20261013:submission-20261030",
+  "canonical_plan": "/home/developer/Documents/Obsidian Vault Origin/5-full-notes/faculdade/tcc/future-work-test-requirements.md",
+  "writer_terminal": "term_2eab47ed-ab9b-4e35-bd9b-fc068c60e3fc",
+  "run": "run_e6054e76e9fc",
+  "task": "task_d7ea336050cf",
+  "dispatch": "ctx_37b4d0a3c14f",
+  "guide_lineage": "hermes:42a80e3a07e6d612ba5a491a74f42ff98a0098e316694808df506ddf430cb7d4",
+  "before_lines": 1456,
+  "after_lines": 1477,
+  "before_sha256": "7f9f7575f5ab0c87ca7e14729026caf3f3d820c1a44750dc7f0646c235490b82",
+  "after_sha256": "5c4346ad27dd4d72c9ed2b65154e4da6d84d8b55d030fafda4f7627c605417d8",
+  "diff_sha256": "b72c15a29eef66f7dfec1649b9e9fe47013e8a6bab1e74d4a6af5f63ff8ee247",
+  "source_receipts": [
+    "msg_06bd0a096724",
+    "msg_0fdcc9ced253",
+    "msg_0a7f3856c322",
+    "msg_cac0d708e059"
+  ],
+  "checks": {
+    "exact_original_prefix_preserved": true,
+    "exact_append_only": true,
+    "no_ios_active_added": true,
+    "900_per_new_condition_retained": true,
+    "whole_gpu_false": true,
+    "phase2_false": true,
+    "apk_hash_exact": true,
+    "n1_not_percentiles": true,
+    "no_new_validation_run": true
+  },
+  "root_readback_verified": true,
+  "runtime_validation_by_monitor": false,
+  "root_ack_message": "msg_817ee2bf5271",
+  "root_ack_at": "2026-10-14T23:13:31Z"
+}

@@ -1,0 +1,141 @@
+{
+  "analysisSourceSha256": "f7bf9fc7d0c9772f1238d9525d216eca8a2cedd206b186b0792286d0d3b60117",
+  "at": "2026-10-18T23:21:12.915297+00:00",
+  "budget": {
+    "actualChargeSeconds": 1121.5566352849999,
+    "capSeconds": 57600,
+    "conditionSeconds": 1104.201375728,
+    "cumulativeUsedSeconds": 24715.685852618004,
+    "priorUsedSeconds": 23594.129217333004,
+    "remainingSeconds": 32884.314147382,
+    "setupSeconds": 17.104950936,
+    "shutdownSeconds": 0.250308621
+  },
+  "cohort": "aurora-worker-desktop-k3-orca-relayed-http-stt-llm-tts-remaining-v1620",
+  "conditionCountsOnly": {
+    "combinedAttempted": 740,
+    "combinedCorrect": 725,
+    "combinedFailed": 15,
+    "nextUnattemptedIndex": 741,
+    "priorAttempted": 716,
+    "priorCorrect": 714,
+    "priorFailed": 2,
+    "target": 900,
+    "unattempted": 160
+  },
+  "excludedWarmups": {
+    "attempted": 15,
+    "correct": 15,
+    "failedOrInterrupted": 0,
+    "incorrect": 0,
+    "outcomes": {
+      "completed_correct": 15
+    },
+    "timeouts": 0
+  },
+  "failureCodes": {
+    "assistant_reply_predicate_failed": 12,
+    "transport_ambiguous": 1
+  },
+  "flowMetricsMs": {
+    "allObservedAttemptsIncludingPartialFailures": {
+      "denominator": 24,
+      "p50_ms": 25530.8294735,
+      "p90_ms": 31459.3131286,
+      "p95_ms": 31946.16397845
+    },
+    "completedCorrect": {
+      "denominator": 11,
+      "p50_ms": 30361.644802,
+      "p90_ms": 31998.645717,
+      "p95_ms": 32039.2865055
+    },
+    "qualityFailureObservedPartial": {
+      "denominator": 12,
+      "p50_ms": 22354.418881999998,
+      "p90_ms": 24127.0430963,
+      "p95_ms": 25396.51702705
+    },
+    "transportFailureObservedPartial": {
+      "denominator": 1,
+      "p50_ms": 21181.986253,
+      "p90_ms": 21181.986253,
+      "p95_ms": 21181.986253
+    }
+  },
+  "frozenManifestSha256": "4f1a09e7ac7dedeaeae6c1bef5a364d4a007e9249aec74f20a0b63b6375a6279",
+  "measured": {
+    "attempted": 24,
+    "correct": 11,
+    "failedOrInterrupted": 13,
+    "incorrect": 0,
+    "outcomes": {
+      "completed_correct": 11,
+      "failed": 13
+    },
+    "partialQualityFailure": 12,
+    "timeoutFlagAbsent": 0,
+    "timeouts": 0,
+    "transportFailure": 1
+  },
+  "missingStagePolicy": "TTS was not reached for13 failures. Missing assistant response correlation on transport failure is not force-joined by wall time/order.",
+  "nativeMeasuredSpans": "UNKNOWN pending original Personal provider raw-prefix retrieval; the 45 warmup native joins prove admission only.",
+  "newMeasurements": 0,
+  "populationPolicy": "Warmups excluded. Failed partial durations are not successful end-to-end latency. No epoch percentile pooling. Eleven successes are a small conditional population, not a 900-request acceptance result.",
+  "quantileMethod": "Hyndman-Fan Type 7: h=(n-1)*p; linear interpolation; milliseconds",
+  "quantileSourceSha256": "b8fc433bae6e941bd8829df1fa65a5df42af94f2a45d1f3e7174aca8767a7932",
+  "replyQuality": "All12 retain strict one-word failures; exact hash identifies a factual full-sentence response, not raw server-body recovery or proven model/runtime cause.",
+  "requesterStageMetricsMs": {
+    "assistant": {
+      "allObservedCallsIncludingFailures": {
+        "denominator": 24,
+        "p50_ms": 12072.2501415,
+        "p90_ms": 13226.6405566,
+        "p95_ms": 14129.880233799999
+      },
+      "completedClientCalls": {
+        "denominator": 23,
+        "p50_ms": 12139.697435,
+        "p90_ms": 13339.429285400001,
+        "p95_ms": 14163.1080862
+      }
+    },
+    "stt": {
+      "allObservedCallsIncludingFailures": {
+        "denominator": 24,
+        "p50_ms": 10199.30475,
+        "p90_ms": 10524.2382051,
+        "p95_ms": 10999.841970899999
+      },
+      "completedClientCalls": {
+        "denominator": 24,
+        "p50_ms": 10199.30475,
+        "p90_ms": 10524.2382051,
+        "p95_ms": 10999.841970899999
+      }
+    },
+    "tts": {
+      "allObservedCallsIncludingFailures": {
+        "denominator": 11,
+        "p50_ms": 8086.160638,
+        "p90_ms": 9054.285673,
+        "p95_ms": 9311.8443695
+      },
+      "completedClientCalls": {
+        "denominator": 11,
+        "p50_ms": 8086.160638,
+        "p90_ms": 9054.285673,
+        "p95_ms": 9311.8443695
+      }
+    }
+  },
+  "resources": {
+    "perStageResourceAttribution": "PENDING saved provider delta",
+    "providerCurrentState": "UNKNOWN",
+    "requesterRetainedBytes": 1452987
+  },
+  "schema": "aurora.k3.requester-terminal-analysis.v1",
+  "sharedDistributionSourceSha256": "4a406dd330e2396d38a6ce3b8b5a38362a7727058aff644d0232bdff54474608",
+  "status": "TERMINAL_PARTIAL_24_OF_96",
+  "sutCalls": 0
+}

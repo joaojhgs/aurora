@@ -1,0 +1,82 @@
+{
+  "at": "2026-10-20T22:48:25.187914+00:00",
+  "status": "SAVED_NATIVE_PROOF_RECONCILIATION_PASS_NOT_LIVE_ADMISSION",
+  "modelCalls": 0,
+  "oldFrozenManifestUnchanged": true,
+  "oldRawUnchanged": true,
+  "analysisSourceSha256": "5f010b519a23b048a4cb878201469088d93eecab137b03537971dccc02913fd0",
+  "historicalFrozenReceiverProofSha256": "e79c973003ac9be1e8579e0ebf3316c2c7a58a646f18fc98e01155807c3963a8",
+  "historicalSourcePinDiffersExplicitly": true,
+  "historicalCohortSha256": "87a55395a0e9e297974a944d9727040cf3c47e4802d6b2bd080181248ef903ba",
+  "liveGatePublished": false,
+  "calls": 45,
+  "warmupQualification": {
+    "policy": {
+      "qualification": "first_15_completed_correct_full_audio_flows",
+      "target_correct": 15,
+      "maximum_distinct_attempts": 30,
+      "maximum_consecutive_preaccept_rejections": 3,
+      "continuable_failure": "preaccept_capability_changed",
+      "failed_attempt_retry": false,
+      "measured_attempts": 900,
+      "measured_retry": false,
+      "all_warmup_attempts_and_failures_retained": true
+    },
+    "attempted_excluded": 18,
+    "completed_correct_excluded": 15,
+    "failed_preaccept_excluded": 3,
+    "qualified_ordinals": [
+      2,
+      3,
+      4,
+      6,
+      7,
+      8,
+      10,
+      11,
+      12,
+      13,
+      14,
+      15,
+      16,
+      17,
+      18
+    ],
+    "failed_ordinals": [
+      1,
+      5,
+      9
+    ],
+    "all_raw_case_sha256": {
+      "attempt-0001-warmup.jsonl": "fd8e7417428844acd993eb222d479b6dcf206fd511a57a890ec3544035fb9e14",
+      "attempt-0002-warmup.jsonl": "067b5d62db38874e0c94e1c076ce0bf7d2657c9ef647651b36bec426a4e58569",
+      "attempt-0003-warmup.jsonl": "4fb4c9ae4ab3f4e2786460de27e3b5fd03b1001e811d9aed7fe0ad84c06628f9",
+      "attempt-0004-warmup.jsonl": "78c1d30a4c0cd56569c762c1b81cd1c89ba2b1eaf18b5e45eace6b140d2810de",
+      "attempt-0005-warmup.jsonl": "b971e96ef78d9afc4eaf368020cb954ec9a48748c035c3879b91cf2d62af8315",
+      "attempt-0006-warmup.jsonl": "91f06115030bdba4fdb24eab4257a15ec7130260d2fca0402ca5854430eba71a",
+      "attempt-0007-warmup.jsonl": "d652931ddaadf66a2a43c08fcbf5b09e0eb6deeaa0933985185e7e9da0fe74c2",
+      "attempt-0008-warmup.jsonl": "6649f3a612f9253282d9f44a41674a9f2d4268df997e01c8e27d9b25d8feb98e",
+      "attempt-0009-warmup.jsonl": "f27f6b301ebac0b9ed458407260888c8b0be245805605fd5c54b26ae243e8d22",
+      "attempt-0010-warmup.jsonl": "ea96ca963b235d0e632c93f833ae0f3dd80a8d0956058aba90a5c41fe274454d",
+      "attempt-0011-warmup.jsonl": "6f1f065db604357dbbc380a82b2eaadb626c080d5dc66a0597fac77849c57f0e",
+      "attempt-0012-warmup.jsonl": "bbd72aa20f852be9dc61a4a14e216c767671de39d1eac582a48830dde875d521",
+      "attempt-0013-warmup.jsonl": "cfa9fb5cf893c247294284eb3bb5223a6fe924e190343155c51fe0a00bd3700b",
+      "attempt-0014-warmup.jsonl": "dd6f5daa220b28a29fe8f3653e9e4f66c78f12c7fea54ec3fc323c43b27279a7",
+      "attempt-0015-warmup.jsonl": "14920fb84e8bd4bbcc9bd0e4814c730d3bc55846cce71674d3504f017b2062f0",
+      "attempt-0016-warmup.jsonl": "ef3d6a9ae1b3657a52b19d697cbbc93a8a37b2cddff4b4787353119204e98b24",
+      "attempt-0017-warmup.jsonl": "faf8b02c59e7e37226be7d31472ec4960e2da43093bb90288251a12f185b5b84",
+      "attempt-0018-warmup.jsonl": "33b4489e5e16b49168c1e91d423259c334f737acb590ba0f4de5fe9d3f1d0cb1"
+    }
+  },
+  "routeGate": {
+    "status": "passed",
+    "route_rows": 45,
+    "retained_route_rows": 48,
+    "mesh_call_rows": 90,
+    "retained_mesh_call_rows": 96,
+    "route_observations_sha256": "7bef6366e571c57d4edbe8862f98626fc9bc98e8ee9a84ac1df5a16f0bf8e4b9",
+    "route_sink_status_sha256": "edb6be9e14e16394f655b6e32d0109e0834155402a1351bc8790c65e1ddd6705",
+    "continuous_route_stability_claimed": false,
+    "snapshot_scope": "before_after_snapshots_all_pc_transports_no_pair_id_no_continuous_stability"
+  }
+}

@@ -1,0 +1,21 @@
+{
+  "attempts": 1,
+  "capSeconds": 420,
+  "copiedDBSHA256": "911f10f5808a312ad7712daefab7b47a404966ae58a14c7e95090408fc40d52e",
+  "crossDeviceMeasuredAllowed": false,
+  "driverExitCode": 0,
+  "driverSHA256": "9f9d51cdf0fe36212ae3863661f3c42496b6e41219bc1c46cddd15e1dfbb49b3",
+  "elapsedSeconds": 65.10181326698512,
+  "finishedAt": "2026-10-15T17:42:27.708572+00:00",
+  "frozenHTTPManifestSHA256": "886d2fade5b14da2fccf272d272c6164479a86e81371ad1afdb738b7d0de1eea",
+  "measuredRequests": 0,
+  "outcome": "passed",
+  "pilotLaunchedAt": "2026-10-15T17:41:36.581181+00:00",
+  "pilotManifestSHA256": "35d56a4e833d8d385b0a20252c45b983a8d03bfbe8cbafcefa854e8b5f4b226f",
+  "pilotVoiceMaximumRequests": 1,
+  "readyAt": "2026-10-15T17:41:36.579195+00:00",
+  "retainedDBSHA256Before": "911f10f5808a312ad7712daefab7b47a404966ae58a14c7e95090408fc40d52e",
+  "scope": "one normal UI login and single-play file microphone to STT to visible LLM to normal Read aloud and valid output audio; physical capture/acoustic playback unverified",
+  "startedAt": "2026-10-15T17:41:22.606831+00:00",
+  "warmupRequests": 0
+}

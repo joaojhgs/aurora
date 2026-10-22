@@ -1,0 +1,84 @@
+{
+  "schema": "aurora.thesis.manual-cpu-source-custody.v756",
+  "at": "2026-10-15T23:50:13.116303+00:00",
+  "status": "SOL_SOURCE_APPROVED_PARTIAL_MANUAL_ADAPTER",
+  "previousRecord": {
+    "path": "thesis/harness/python-cpu-v1/SOURCE-CUSTODY-v747.json",
+    "bytes": 2821,
+    "sha256": "9327d0bb82e2c414a779a22bfba932e9f156b202a55d3a102b12347b0d23edca"
+  },
+  "entries": [
+    {
+      "path": "thesis/setup_cpu.py",
+      "bytes": 14457,
+      "sha256": "c2327cd442e677f6ff9f6cf5dce3e2f2122c02f018106ed61fd0eddfefe6a9c5"
+    },
+    {
+      "path": "thesis/launch_cpu.py",
+      "bytes": 2288,
+      "sha256": "d6274ecdd99ba0e884766cfd607a203ad77c67180b3e0801d85e9f3b874357ab"
+    },
+    {
+      "path": "thesis/harness/python-cpu-v1/controller.py",
+      "bytes": 22268,
+      "sha256": "08edc4aa73bcf4ebf666cf3c5145085d7a89b47fbb759f8f868be84993725535"
+    },
+    {
+      "path": "thesis/harness/python-cpu-v1/runner.py",
+      "bytes": 54617,
+      "sha256": "7a4b01b357e235fdc70c8ad6d80f5254d854b145d529b3e464759da2b498146d"
+    },
+    {
+      "path": "thesis/harness/python-cpu-v1/bootstrap.py",
+      "bytes": 1677,
+      "sha256": "f5427da01815047ea886cf867147bd0175a187d1dda2c2bbc0fc905209d755d7"
+    },
+    {
+      "path": "thesis/harness/python-cpu-v1/bindings.py",
+      "bytes": 3230,
+      "sha256": "52182f956b34788ecbfbbb241c8243ff88baebe2874e3605791793777ed0dc91"
+    },
+    {
+      "path": "thesis/harness/python-cpu-v1/hook/observer.py",
+      "bytes": 11873,
+      "sha256": "784cc4bffc0d6824bbe378d17a7f632d587ca0a315896b048b2ebef727082df5"
+    },
+    {
+      "path": "thesis/harness/python-cpu-v1/hook/aurora_voice_telemetry_v430.py",
+      "bytes": 11584,
+      "sha256": "8129ffe7591a47a0107ede53b101aead9fc1f58b92f0c0c4203176cc7608325d"
+    },
+    {
+      "path": "thesis/models/weight-lock-v1.json",
+      "bytes": 1482,
+      "sha256": "dd690b04bba5f798ae581eb1b5cb73fd37ba010cf95d618c7b0d487c79292d50"
+    },
+    {
+      "path": "thesis/profiles/padded-capital-v1.json",
+      "bytes": 2813,
+      "sha256": "ab954e3b9b8e989bc5954d62b675f60b393a6f657459e1f8e0038221c1c1d110"
+    }
+  ],
+  "review": {
+    "path": "thesis/validation/manual-cpu-source-review-v754.md",
+    "bytes": 4486,
+    "sha256": "44f076bb335dc5175fada2905ecbdaa89342e38e041f698ccdd7858061437102"
+  },
+  "actualAdmissionRefusals": {
+    "path": "thesis/validation/manual-cpu-admission-v753.json",
+    "bytes": 3439,
+    "sha256": "e004992cc32564cd368257a55742ff5e224f88a3e41a5a949890a6430b37a22c"
+  },
+  "admissionReceiptQualification": "Setup/controller hashes in the negative receipt precede subsequent source-reviewed cache-dir/Piper-pin additions. Same refusal-prefix behavior; no repeated checks claimed.",
+  "newMeasuredRequests": 0,
+  "fullPositiveSetupExecuted": false,
+  "runtimeExecuted": false,
+  "unchangedLiveFrozenPaths": true,
+  "missing": [
+    "full positive setup and normal warmup runtime validation on idle admitted resources",
+    "complete environment/native build source and flags",
+    "remaining model retrieval/license inventory",
+    "other platform launchers/full historical inventory"
+  ],
+  "scope": "Six harness files plus two manual entrypoints, weight/profile pins; not a new benchmark, full environment equivalence or whole-goal acceptance"
+}

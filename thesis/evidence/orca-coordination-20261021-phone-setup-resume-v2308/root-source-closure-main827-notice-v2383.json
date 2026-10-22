@@ -1,0 +1,28 @@
+{
+  "id": "f3ede607-d594-4591-81bf-f65926240cc1",
+  "ok": true,
+  "result": {
+    "message": {
+      "id": "msg_9a65d7918944",
+      "run_id": "run_e6054e76e9fc",
+      "delivery_contract": "current_delivery",
+      "from_handle": "term_6a00d9ee-792a-4daf-8578-236290e33108",
+      "to_handle": "dispatch:ctx_37b4d0a3c14f",
+      "subject": "Root back main827/900; minimal existing untracked module closure handed toworker",
+      "body": "Actual03:45:46Z V2296 original3Wactors live, frozen9adb unchanged,current377/450correct/global827attempts826correct1preservedfailure73remaining,392physicalcaseWAV0copyerrors3038420992Bfree. Nativegoal remains ACTIVE/unbudgeted; Root checkpoint ROOT-VERIFIED-WAIT-v2383.json and CURRENT updated,nextbound03:50:46Z/earlieractualterminal-error-resourceguard. Read existingphoneworker msg82362f7b2ad0: exactAPK TS2307 missing desktop-file-audio-e2e module. Minimal Rootsourceintegration found preexistinguntracked11119B file SHA48b6fc597996536ead4439bca2024a3b3a4f5c6d1ad4c64f8a5d68f84a05c522 absentfromebdeGitarchive; importer equalscommit. Copy-only explicit sourceoverlay physically thesis/evidence/source-sync-ebde-runtime-v2340/source-closure-overlay-v2383/MANIFEST.json2141B SHA6fb03ee20bc4bed033b3edf49ef48d952583710cebfa34cbd81ffdeb928c0f87 plus exactsourceunder source/apps/aurora-tauri/src/desktop-file-audio-e2e.ts. Existingworker receivedone<=32KiB/32KiBps/30s sourcecopy admission via existingNotebookcontrol; immutableold1959source/failure preserved,newdeploymentmust record ebde+overlay, no historicalsource relabel. Root no Gitindex/refwrite/build/device/notebookread or frozenmainmodification. Workerowns allremainingprep; Root immediatelyreturned main. This is sourceclosure, not newmeasurement/gate or completionclaim; no newrevieworRootphoneinvestigation requested. Owner K1 finalseal/release notification remains pendingcanonicaldedup.",
+      "type": "status",
+      "priority": "normal",
+      "thread_id": null,
+      "payload": null,
+      "created_at": "2026-10-22T03:46:06Z",
+      "delivered_at": null
+    },
+    "mutation": {
+      "requestId": "397b0d8f-7798-473f-8f41-c1a8cdafb03d",
+      "replayed": false
+    }
+  },
+  "_meta": {
+    "runtimeId": "cc9e3275-28c6-4c45-85cc-bdcd2262aa7d"
+  }
+}

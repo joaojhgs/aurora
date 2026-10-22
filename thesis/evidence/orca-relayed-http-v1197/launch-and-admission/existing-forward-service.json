@@ -1,0 +1,13 @@
+{
+  "observedIn": "v1191 systemctl+ss actual command output",
+  "name": "orca-network-aurora-tts.service",
+  "mainPid": 421717,
+  "activeState": "active",
+  "subState": "running",
+  "nRestarts": 0,
+  "startedAt": "2026-10-17T19:54:53Z",
+  "listenAddress": "127.0.0.1",
+  "listenPort": 18000,
+  "existingForwardOnly": true,
+  "createdByRootThisTurn": false
+}

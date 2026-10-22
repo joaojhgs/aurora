@@ -1,0 +1,210 @@
+{
+  "at": "2026-10-18T06:53:40.263017+00:00",
+  "state": "K2_TERMINAL_REQUESTER_SEALED_PROVIDER_FINALIZATION_PENDING",
+  "cohort": "V1264",
+  "measurementCollectionComplete": true,
+  "allRequestsCorrect": false,
+  "measured": {
+    "attempted": 900,
+    "completed_correct": 797,
+    "completed_incorrect": 0,
+    "failed_or_interrupted": 103,
+    "planned": 900,
+    "timeouts": 0,
+    "unattempted": 0
+  },
+  "warmups": {
+    "attempted": 15,
+    "completed_correct": 15,
+    "completed_incorrect": 0,
+    "failed_or_interrupted": 0,
+    "planned": 15,
+    "timeouts": 0,
+    "unattempted": 0
+  },
+  "failureClassification": {
+    "count": 103,
+    "firstMeasuredCase": 798,
+    "code": "assistant_reply_predicate_failed",
+    "stage": "assistant",
+    "cause": "UNKNOWN; not inferred as model-quality versus runtime failure",
+    "audioAbsentForFailedCases": "No output was produced because the predicate stopped each case before explicit TTS; not missing retained audio."
+  },
+  "caseCopies": 915,
+  "audioFiles": 812,
+  "missingPhysicalPaths": [],
+  "controllerExitCode": 1,
+  "controllerStartedAt": "2026-10-17T23:34:32.675867+00:00",
+  "controllerFinishedAt": "2026-10-18T06:48:13.987269+00:00",
+  "requesterShutdownCompleted": true,
+  "originalProcessGroups": {
+    "588011": [],
+    "588053": [],
+    "588276": []
+  },
+  "requesterPrefixes": {
+    "actual-provider-bindings.jsonl": {
+      "endByte": 845,
+      "sourceBytes": 845,
+      "completeBytes": true,
+      "originalCopierIncompleteFlag": true,
+      "immutableChunkCount": 2
+    },
+    "resources.jsonl": {
+      "endByte": 33537078,
+      "sourceBytes": 33537078,
+      "completeBytes": true,
+      "originalCopierIncompleteFlag": true,
+      "immutableChunkCount": 434
+    },
+    "voice-stages.jsonl": {
+      "endByte": 6213765,
+      "sourceBytes": 6213765,
+      "completeBytes": true,
+      "originalCopierIncompleteFlag": true,
+      "immutableChunkCount": 431
+    }
+  },
+  "requesterCopierSnapshotAt": "2026-10-18T06:48:54.457988+00:00",
+  "requesterCopierReceipt": "thesis/campaigns/worker-desktop-k2-orca-relayed-http-v1264/receipts/000434.json",
+  "sourceFrozenManifestSha256": "b15a49adffc5aaa43b426563d5776fa384c92f58e339030b69cb3877e98f2399",
+  "goalPlanSha256": "7c5333454d3175758d9daa8b898ff865a6059f1cfc4cec4481160315526b60f1",
+  "records": [
+    {
+      "source": ".git/aurora-handoff-import-20261006/distributed-k2-orca-relayed-http-cell-v1264/campaign/summary.json",
+      "destination": "thesis/campaigns/worker-desktop-k2-orca-relayed-http-v1264/terminal-v1465/summary.json",
+      "bytes": 210006,
+      "sha256": "abb5424860371fc379eb492845779ca2adb52a2efa3cc7719a07b7b6bee2af5c"
+    },
+    {
+      "source": ".git/aurora-handoff-import-20261006/distributed-k2-orca-relayed-http-cell-v1264/campaign/progress.json",
+      "destination": "thesis/campaigns/worker-desktop-k2-orca-relayed-http-v1264/terminal-v1465/progress.json",
+      "bytes": 217,
+      "sha256": "bd6cd5b3320bb2f35db636fa6702d930af1ac5601525566ae8b13f48bc58a9b7"
+    },
+    {
+      "source": ".git/aurora-handoff-import-20261006/distributed-k2-orca-relayed-http-cell-v1264/control-launch.json",
+      "destination": "thesis/campaigns/worker-desktop-k2-orca-relayed-http-v1264/terminal-v1465/control-launch.json",
+      "bytes": 1224,
+      "sha256": "fcbb4208cc5ae6e098a51fe8b3523bf7658e4611a5131b4a65c284ec99e3fbdd"
+    },
+    {
+      "source": "thesis/campaigns/worker-desktop-k2-orca-relayed-http-v1264/CURRENT.json",
+      "destination": "thesis/campaigns/worker-desktop-k2-orca-relayed-http-v1264/terminal-v1465/REQUESTER-CURRENT.json",
+      "bytes": 2257065,
+      "sha256": "71ec3b1ac69c01d7c097772f2e54088b513f728cb1be97bec050e85964287ac2"
+    },
+    {
+      "source": "thesis/campaigns/worker-desktop-k2-orca-relayed-http-v1264/receipts/000434.json",
+      "destination": "thesis/campaigns/worker-desktop-k2-orca-relayed-http-v1264/terminal-v1465/REQUESTER-CUSTODY-RECEIPT.json",
+      "bytes": 114482,
+      "sha256": "8f25e40efe39c5550c334378673495f629b9e350761f0547bbae0093b92ff50a"
+    }
+  ],
+  "outcomeCountProvenance": {
+    "previousObservation": "thesis/campaigns/worker-desktop-k2-orca-relayed-http-v1264/ROOT-OBSERVATION-v1464.json",
+    "previousMeasured": 892,
+    "newImmutableCaseRowsRead": 8,
+    "finalRows": [
+      {
+        "measured": 893,
+        "status": "failed",
+        "failure": {
+          "code": "assistant_reply_predicate_failed",
+          "stage": "assistant"
+        },
+        "timeout": false
+      },
+      {
+        "measured": 894,
+        "status": "failed",
+        "failure": {
+          "code": "assistant_reply_predicate_failed",
+          "stage": "assistant"
+        },
+        "timeout": false
+      },
+      {
+        "measured": 895,
+        "status": "failed",
+        "failure": {
+          "code": "assistant_reply_predicate_failed",
+          "stage": "assistant"
+        },
+        "timeout": false
+      },
+      {
+        "measured": 896,
+        "status": "failed",
+        "failure": {
+          "code": "assistant_reply_predicate_failed",
+          "stage": "assistant"
+        },
+        "timeout": false
+      },
+      {
+        "measured": 897,
+        "status": "failed",
+        "failure": {
+          "code": "assistant_reply_predicate_failed",
+          "stage": "assistant"
+        },
+        "timeout": false
+      },
+      {
+        "measured": 898,
+        "status": "failed",
+        "failure": {
+          "code": "assistant_reply_predicate_failed",
+          "stage": "assistant"
+        },
+        "timeout": false
+      },
+      {
+        "measured": 899,
+        "status": "failed",
+        "failure": {
+          "code": "assistant_reply_predicate_failed",
+          "stage": "assistant"
+        },
+        "timeout": false
+      },
+      {
+        "measured": 900,
+        "status": "failed",
+        "failure": {
+          "code": "assistant_reply_predicate_failed",
+          "stage": "assistant"
+        },
+        "timeout": false
+      }
+    ],
+    "copierCaseMetadataCountsMatch": true,
+    "controllerSummaryCountsMatch": true
+  },
+  "controllerReportedCorrectFullFlowMilliseconds": {
+    "n": 797,
+    "estimator": "Hyndman-Fan Type7",
+    "percentiles": {
+      "p50": 28967.940839,
+      "p90": 31730.1032776,
+      "p95": 33246.1032976,
+      "p99": 36026.479362
+    },
+    "provenance": "controller-reported; correlated terminal saved-data analysis remains pending"
+  },
+  "providerFinalization": {
+    "status": "PENDING",
+    "lastRootCoverageChain": "thesis/evidence/orca-relayed-http-v1197/provider-transfer-delta-v1402/COVERAGE-CHAIN.json",
+    "lastRootRawFiles": 541,
+    "lastRootRawBytes": 93627933,
+    "requires": "Matching terminal provider snapshot, incremental physical custody and correlated saved-data analysis; no baseline recopy."
+  },
+  "copierOriginalFlags": "Original incomplete flags preserved; Root independently checked full byte coverage after all three original requester process groups became empty.",
+  "diskFreeBefore": 6551937024,
+  "diskFreeAfter": 6549336064,
+  "freeFloorBytes": 2147483648,
+  "newSutRequestsOrReplays": 0,
+  "providerReservation": "Original provider/forward ownership retained; no stop/restart or new route.",
+  "scope": "900 measured collection complete with failures; requester bytes sealed. Does not claim full provider correlation, P2P, all surfaces, product correctness or aggregate-goal completion."
+}

@@ -1,0 +1,35 @@
+{
+  "id": "2250c67b-148a-4717-b3bf-ee15bc73187c",
+  "ok": true,
+  "result": {
+    "message": {
+      "id": "msg_130802a842bb",
+      "run_id": "run_e6054e76e9fc",
+      "delivery_contract": "current_delivery",
+      "from_handle": "term_6a00d9ee-792a-4daf-8578-236290e33108",
+      "to_handle": "term_1f27be31-0284-4366-bb91-30fe538cd30e",
+      "subject": "Exactebde source package READY; bounded transfer admitted NOW, no campaign-end hold",
+      "body": "Consumed direct-public correction dc95b90137ee/c4cfcd2fdc53/8861e09e02cc. Independent exact public pinned model and llama0.3.19 notebook prep proceeds under owner authorization NOW; old shared774675150B queue unneeded. Root SOURCE artifact ready locally in thesis/evidence/source-sync-ebde-runtime-v2340/: aurora-ebde3a8a-runtime.tar.gz12017639B SHA2564489e655cd3b949303ca49be9d8fe52df2c31dd11676ec0ed4ea9ac28fd62c9f; SOURCE-FILE-INVENTORY.json.gz114458B SHA8939411a36fc6d6b09b48099ad388a70e09c24269996609669e4fbb6e0342bd6 and ARCHIVE-RECEIPT.json3835B, total12135932B. Gzip tarPAX commit verified exactebde3a8acf6315f920d03593845f17a1fc65a733. Runtime/build-source subset explicitly omits tests/docs/screenshots/orchestration/scientific evidence; source inventory lists all selected git blobs/omissions, no runtime edits or index/refs writes. Actual bounded SOURCE-TRANSFER-ADMISSION-v2341.json grants ONE existing approved Orca file/control copy: eligible00:51:07.881437Z, absoluteend01:01:07.881437Z, active<=120s, total<=12MiB, payload<=256KiB/s and wire<=512KiB/s, one stream, own capacity guards/dirtywork preserved. Receiver verifies exact length/SHA/commit/member safety and inventory rawSHA88c7330effe93499e9c673921e9b12c90c54db53e572885f34bbd40644c8d47b; use owned immutable deployment only, no Gitwriter/newcredential/forward/sharedmodelcopy. Do not infer transfer complete: send real accepted handle then receiver receipt or exact cap/route blocker; no uncertain retry. Fresh remote exactbranch query exit2/no matchingref, no publication claimed. Root immediately returns main639/900,189newcorrect0errors; do not request Root phone investigation. Notebook independent2job prep remains your lane; no900/night without actual ownerSTART/readiness.",
+      "type": "status",
+      "priority": "normal",
+      "thread_id": null,
+      "payload": null,
+      "created_at": "2026-10-22T00:51:27Z",
+      "delivered_at": null
+    },
+    "warnings": [
+      {
+        "code": "legacy_terminal_recipient",
+        "recipient": "term_1f27be31-0284-4366-bb91-30fe538cd30e",
+        "message": "term_1f27be31-0284-4366-bb91-30fe538cd30e is a live terminal-only mailbox. Delivery is not durable after that terminal closes; prefer run:<id> or dispatch:<id>."
+      }
+    ],
+    "mutation": {
+      "requestId": "1f72b7aa-92bd-4468-b8be-3692446818d4",
+      "replayed": false
+    }
+  },
+  "_meta": {
+    "runtimeId": "cc9e3275-28c6-4c45-85cc-bdcd2262aa7d"
+  }
+}

@@ -1,0 +1,31 @@
+{
+  "at": "2026-10-17T16:39:48.502675+00:00",
+  "host": "code-worker",
+  "scope": "One fresh transport-only admission after owner-reported recovery and observed Desktop tailnet interface/listeners; no HTTP/model/request replay or configuration change",
+  "target": "100.64.0.3",
+  "probes": [
+    {
+      "port": 22,
+      "timeoutSeconds": 3,
+      "connected": false,
+      "errorType": "ConnectionRefusedError",
+      "errno": 111,
+      "error": "[Errno 111] Connection refused",
+      "elapsedMs": 1.5332510229200125
+    },
+    {
+      "port": 8000,
+      "timeoutSeconds": 3,
+      "connected": false,
+      "errorType": "ConnectionRefusedError",
+      "errno": 111,
+      "error": "[Errno 111] Connection refused",
+      "elapsedMs": 0.05708099342882633
+    }
+  ],
+  "route": {
+    "exitCode": 0,
+    "output": "[{\"dst\":\"100.64.0.3\",\"gateway\":\"10.0.2.1\",\"dev\":\"enp0s6\",\"prefsrc\":\"10.0.2.123\",\"flags\":[],\"uid\":1002,\"cache\":[]}]\n",
+    "error": ""
+  }
+}

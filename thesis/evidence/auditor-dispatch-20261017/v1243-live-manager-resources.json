@@ -1,0 +1,11 @@
+{
+  "id": "local",
+  "ok": false,
+  "error": {
+    "code": "invalid_argument",
+    "message": "Manager service credential is not configured"
+  },
+  "_meta": {
+    "runtimeId": null
+  }
+}

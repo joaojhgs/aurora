@@ -1,0 +1,83 @@
+{
+  "status": "SOURCE_ONLY_NOT_LAUNCHED",
+  "files": [
+    {
+      "name": "aurora_voice_telemetry_v430.py",
+      "bytes": 11584,
+      "sha256": "8129ffe7591a47a0107ede53b101aead9fc1f58b92f0c0c4203176cc7608325d",
+      "parentSha256": "8129ffe7591a47a0107ede53b101aead9fc1f58b92f0c0c4203176cc7608325d"
+    },
+    {
+      "name": "bindings.py",
+      "bytes": 3230,
+      "sha256": "52182f956b34788ecbfbbb241c8243ff88baebe2874e3605791793777ed0dc91",
+      "parentSha256": "52182f956b34788ecbfbbb241c8243ff88baebe2874e3605791793777ed0dc91"
+    },
+    {
+      "name": "bootstrap.py",
+      "bytes": 1950,
+      "sha256": "05303915a1617a3fbc163017902fa084e687257d7b0af9bc692877d08a6a3b7e",
+      "parentSha256": "05303915a1617a3fbc163017902fa084e687257d7b0af9bc692877d08a6a3b7e"
+    },
+    {
+      "name": "candidate-input.wav",
+      "bytes": 219794,
+      "sha256": "da0ecc4ad0885746ab6e716585473917ab2b543a505bf0db09ebacfaa7943cbb",
+      "parentSha256": "da0ecc4ad0885746ab6e716585473917ab2b543a505bf0db09ebacfaa7943cbb"
+    },
+    {
+      "name": "candidate-manifest.json",
+      "bytes": 220,
+      "sha256": "ce75b965ee5879ebece6ea7dfe133441547d20ccf89ecd5d66ea510bd9645e60",
+      "parentSha256": "ce75b965ee5879ebece6ea7dfe133441547d20ccf89ecd5d66ea510bd9645e60"
+    },
+    {
+      "name": "controller.py",
+      "bytes": 18158,
+      "sha256": "b4c0d83357fd8ef8c02cc9770d033ff2faf212f30d78aa6f3db8f48dc4950544",
+      "parentSha256": "ada49340e64d3f9069c88b4329389d907c6a484291451297ff67658726a2ffc8"
+    },
+    {
+      "name": "observer.py",
+      "bytes": 11873,
+      "sha256": "784cc4bffc0d6824bbe378d17a7f632d587ca0a315896b048b2ebef727082df5",
+      "parentSha256": "784cc4bffc0d6824bbe378d17a7f632d587ca0a315896b048b2ebef727082df5"
+    },
+    {
+      "name": "receiver_proof.py",
+      "bytes": 11030,
+      "sha256": "c119c60af14f4498c9789cca011983c2bb783f85a7f1958d1243cc739c5f1df4",
+      "parentSha256": "aed9bd0f6109f8ab97c8b4eba8c3809bf1d865c9cba05999b52769f2862d857d"
+    },
+    {
+      "name": "resource_sample.py",
+      "bytes": 7475,
+      "sha256": "8f62ec378e74036d4539d9159e3caf29b8fd7a9115de1ab0f482dfd58b6e1857",
+      "parentSha256": "8f62ec378e74036d4539d9159e3caf29b8fd7a9115de1ab0f482dfd58b6e1857"
+    },
+    {
+      "name": "runner.py",
+      "bytes": 66655,
+      "sha256": "b8a6f4e93da8fd72afa873f1e4f0ca0b4c8372c5459cbfa31b970cfe043f69f3",
+      "parentSha256": "45d2c3f4df7353c2fc162c6986d125096b64216a76575a8a1d5bae4e5c154b0f"
+    },
+    {
+      "name": "source-inventory.json",
+      "bytes": 58216,
+      "sha256": "96ec8e3e14233520d4cd469c4177264a193d05cf26b4b512d91d98f16bbb7dee",
+      "parentSha256": "96ec8e3e14233520d4cd469c4177264a193d05cf26b4b512d91d98f16bbb7dee"
+    },
+    {
+      "name": "tts_http_adapter.py",
+      "bytes": 6700,
+      "sha256": "87c1d1b6a3e959034a03709f052500d1f9f71902a76def9a366f8f3593f848e9",
+      "parentSha256": "29ad1e394257720eb1cad16f67a20f7e637f3fe354bbe16c462723853e5ee9a5"
+    }
+  ],
+  "parentManifestSha256": "6bc65cf5cc3c4eddb90b80b0764a01e6a9fc4afbed66f33c731e3ab58528e101",
+  "allocationPath": "thesis/campaigns/worker-desktop-paired-http-p2p-v1376/owner-authorized-pairing-v1533/K1-REMAINING720-SESSION-ALLOCATION-v1550.json",
+  "allocationSha256": "796e630ee45a8da6d4c6a15735a4d5a9d613da9b53f229b061774bc7d3067ff9",
+  "newModelRequests": 0,
+  "newNetworkRequests": 0,
+  "noProviderReservationClaimed": true
+}

@@ -1,0 +1,82 @@
+{
+  "at": "2026-10-22T08:39:57.071958+00:00",
+  "classification": "PROGRESS_RESOURCE_INVENTORY_AND_OWNER_SCOPE_QUESTION; VERIFIED_WAIT_ON_LIVE_CAMPAIGN",
+  "requester": {
+    "pid": 281887,
+    "startTicks": 143363140,
+    "state": "S"
+  },
+  "actualCurrent": {
+    "at": "2026-10-22T08:39:53.444515+00:00",
+    "companion": {
+      "measured": {
+        "attempted": 79,
+        "correct": 79,
+        "failed": 0,
+        "harnessErrorsIncludedInFailed": 0,
+        "incorrectIncludedInFailed": 0,
+        "offered": 79,
+        "planned": 900,
+        "timeouts": 0,
+        "unstarted": 821
+      },
+      "warmup": {
+        "attempted": 1,
+        "correct": 1,
+        "failed": 0,
+        "harnessErrorsIncludedInFailed": 0,
+        "incorrectIncludedInFailed": 0,
+        "offered": 1,
+        "planned": 1,
+        "timeouts": 0,
+        "unstarted": 0
+      }
+    },
+    "completePairedCapsules": 80,
+    "elapsedSeconds": 3216.07402206,
+    "lastIndex": 79,
+    "lastNativeParent": "8346272cfd034898d3a32e5f4955ff25",
+    "lastOrdinal": 80,
+    "manifestSha256": "316d4cc09adc44d0104dca8ac1f2a966347588ffef37bc2fa809ec14fd5efff8",
+    "phase": "measured",
+    "pid": 281887,
+    "primary": {
+      "measured": {
+        "attempted": 79,
+        "correct": 79,
+        "failed": 0,
+        "harnessErrorsIncludedInFailed": 0,
+        "incorrectIncludedInFailed": 0,
+        "offered": 79,
+        "planned": 900,
+        "timeouts": 0,
+        "unstarted": 821
+      },
+      "warmup": {
+        "attempted": 1,
+        "correct": 1,
+        "failed": 0,
+        "harnessErrorsIncludedInFailed": 0,
+        "incorrectIncludedInFailed": 0,
+        "offered": 1,
+        "planned": 1,
+        "timeouts": 0,
+        "unstarted": 0
+      }
+    },
+    "status": "running"
+  },
+  "nextMaximumCheck": "2026-10-22T08:44:57.071958+00:00",
+  "earlierCheck": "Actual terminal/failure/stale progress/storage alarm or owner response",
+  "storageQuestion": "PENDING; elapsed time is not authorization; do not reask or delete",
+  "candidatePath": "/home/developer/projects/aurora/apps/aurora-web/.next/cache/webpack",
+  "candidateAllocatedBytes": 935297024,
+  "candidateManifest": "thesis/evidence/storage-capacity-v2437/CANDIDATE.json",
+  "candidateManifestSha256": "f53a7bd443be8c6d780c8b4f170690bfc5d50c9118f217bfd98b1434e24cd88d",
+  "processAdmission": "thesis/evidence/storage-capacity-v2437/PROCESS-ADMISSION.json",
+  "authorizationBoundary": "Owner prior cleanup ONLY two Rust incremental caches; No other cleanup. New scope question issued once through native async UI, pending actual owner answer.",
+  "monitorReceipt": "root-c12-storage-candidate-owner-pending-v2437.json accepted existing original monitor route; no external delivery inferred",
+  "noDeletionsOrNewSutCalls": true,
+  "sameNativeGoal": "01a112a5-d6bb-74e2-bf7c-ace73cb513b5 ACTIVE/unbudgeted",
+  "phone": "Sole existing task worker; Root no phone/notebook reads or commands"
+}

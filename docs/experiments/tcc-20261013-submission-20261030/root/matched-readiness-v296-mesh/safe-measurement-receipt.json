@@ -1,0 +1,49 @@
+{
+  "private_report_sha256": "f6b506ae93367f54514c9e8947e489604420a7899e7c3d9b1ddcc21c6214d588",
+  "safe_rows": [
+    {
+      "condition": "browser-webrtc-mesh",
+      "workload": "orbit-exact-v1",
+      "attempt": 1,
+      "warmupCount": 0,
+      "outcome": "completed_exact",
+      "requestId": "82803eda-79ff-4cd6-a1c9-0c26a5bbf266",
+      "sessionId": "4dc55ab4-79d8-4a40-92de-47df470bf0aa",
+      "correlationId": "82803eda-79ff-4cd6-a1c9-0c26a5bbf266",
+      "messageId": "82803eda-79ff-4cd6-a1c9-0c26a5bbf266",
+      "modelLabel": "Qwen3.5-0.8B-Q4_0.gguf",
+      "exactResponse": true,
+      "completionCount": 1,
+      "completionKind": "fallback",
+      "updateKinds": [
+        "connecting",
+        "fallback"
+      ],
+      "requesterDispatchToTypedCompletionMs": 42207,
+      "errorCode": null
+    },
+    {
+      "condition": "browser-webrtc-mesh",
+      "workload": "orbit-exact-v1",
+      "attempt": 2,
+      "warmupCount": 0,
+      "outcome": "completed_mismatch",
+      "requestId": null,
+      "sessionId": null,
+      "correlationId": null,
+      "messageId": null,
+      "modelLabel": null,
+      "exactResponse": false,
+      "completionCount": 1,
+      "completionKind": "fallback",
+      "updateKinds": [
+        "fallback"
+      ],
+      "requesterDispatchToTypedCompletionMs": 156,
+      "errorCode": null
+    }
+  ],
+  "errors": [
+    "Error: expect(received).toBe(expected) // Object.is equality\n\nExpected: \"completed_exact\"\nReceived: \"completed_mismatch\"\n\n  103 |       body: JSON.stringify(safeRow),\n  104 |     })\n> 105 |     expect(row.outcome).toBe('completed_exact')\n      |                         ^\n  106 |     expect(row.requestId).toBeTruthy()\n  107 |     expect(row.sessionId).toBeTruthy()\n  108 |     expect(row.correlationId).toBe(row.requestId)\n    at /home/developer/projects/aurora/tests/e2e/hosted_peer/hosted-peer-live-shell.spec.ts:105:25"
+  ]
+}

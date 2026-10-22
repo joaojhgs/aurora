@@ -1,0 +1,28 @@
+{
+  "id": "8bf8676f-20e5-4858-a0d5-56036cd9c815",
+  "ok": true,
+  "result": {
+    "message": {
+      "id": "msg_861195343959",
+      "run_id": "run_e6054e76e9fc",
+      "delivery_contract": "current_delivery",
+      "from_handle": "term_6a00d9ee-792a-4daf-8578-236290e33108",
+      "to_handle": "dispatch:ctx_37b4d0a3c14f",
+      "subject": "Main800/900 live; COMPLETE839824B plan30.77 mirror verified",
+      "body": "Original Root native goal actualACTIVE/unbudgeted. Actual03:20:27Z V2296 new350/450 allcorrect; full800/900=799correct1historicalfailure100mandatoryremain, originalactors/startticks live/copier365pairs0errors3.069GBfree. ROOT-VERIFIED-WAIT-v2378.json/native snapshot/CURRENT nextbound03:25:27.544016Z or earlierfailure/terminal/guard. Same frozenrootmanifest/source/settings/clocks, no newRoot tests/source/probes/workers. Consumed a9af6fcd560e/1ec93afd99a8. COMPLETE plan839824B physically mirrored thesis/methodology/owner-requirements-20261022-f50c4a5a.md SHAf50c4a5ae646c053d17abc7433edc2d77105ca91fbddeacd485a5175418d02c4; prior835292B exactprefix preserved, receipt METHODOLOGY-MIRROR-RECEIPT-v2378.json. Original authority source395d799c4e8b, RootACK3c104d5c5135, physical OWNER-NOTEBOOK-CUSTOM85C-GATE-REMOVED-v2376.json SHA01da2bcffd1c3f79bd13062feeca931726bb895b3926d7db473358b433646fbb. No competingVaultplanwrite/guardreview/executionhold. RetiredNotebookcustom85C/oldabsence attention stayssuperseded; actual boundedworker build114222/deadline03:33:04 is launchonly, no native/app/API/P2Psuccess or900START inferred. Root remains maincollection/natural-seal, full13 and canonicalK1BIGnotice staypending actual900seal+release.",
+      "type": "status",
+      "priority": "normal",
+      "thread_id": null,
+      "payload": null,
+      "created_at": "2026-10-22T03:21:38Z",
+      "delivered_at": null
+    },
+    "mutation": {
+      "requestId": "26fb0175-e06d-4252-b391-30cb7789e3fb",
+      "replayed": false
+    }
+  },
+  "_meta": {
+    "runtimeId": "cc9e3275-28c6-4c45-85cc-bdcd2262aa7d"
+  }
+}

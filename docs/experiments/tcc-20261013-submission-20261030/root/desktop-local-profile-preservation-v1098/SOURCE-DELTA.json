@@ -1,0 +1,17 @@
+{
+  "at": "2026-10-16T15:44:49.199395+00:00",
+  "files": [
+    {
+      "path": "apps/aurora-tauri/src/aurora-client.ts",
+      "beforeSha256": "9d87cab15f19343b6e0174cb835ed28d99d8ed6d8f7ca1483f7191af73fbb076",
+      "afterSha256": "b54392ff9c883d061a736c5fc8d90bedfe070cda7a5a7e29f096f6bd39a92b0a"
+    },
+    {
+      "path": "apps/aurora-tauri/src/offline-profile-main.test.ts",
+      "beforeSha256": "9d3f724b36217b920b8dd321ab08e000d0549eb70591e5c4392164c5240785f3",
+      "afterSha256": "3ab2a4c61e47c98e61bf17deff4a1ac7b585985768e4a5f52d792f7d3a11e3c3"
+    }
+  ],
+  "productionSourceMatchesSol1094": true,
+  "testOnlyPostReviewAdjustment": "Seed existing canonical stored primaryLanguage pt-br instead of pt-BR; no predicate or product normalization change."
+}

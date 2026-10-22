@@ -1,0 +1,60 @@
+{
+  "diskAfter": {
+    "free": 4248842240,
+    "total": 109128826880,
+    "used": 104863207424
+  },
+  "diskBefore": {
+    "free": 4248842240,
+    "total": 109128826880,
+    "used": 104863207424
+  },
+  "errors": [],
+  "expectedConditionSha256": "b7cefab662f5c199408dc5e8ae8ecbd6516d3f294845d4f08762ddb7264217a3",
+  "finishedAt": "2026-10-20T21:06:52.924789+00:00",
+  "newFiles": [],
+  "pendingStatic": [
+    "/home/developer/projects/aurora/.git/aurora-handoff-import-20261006/distributed-k3-mesh-launch-v1915/warmup-finalizer-result.json",
+    "/home/developer/projects/aurora/.git/aurora-handoff-import-20261006/distributed-k3-mesh-cell-v1915/campaign/remote-warmup-proof.json",
+    "/home/developer/projects/aurora/.git/aurora-handoff-import-20261006/distributed-k3-mesh-launch-v1915/operator-launch.json",
+    "/home/developer/projects/aurora/.git/aurora-handoff-import-20261006/distributed-k3-mesh-launch-v1915/requesterCopier-launch.json",
+    "/home/developer/projects/aurora/.git/aurora-handoff-import-20261006/distributed-k3-mesh-launch-v1915/warmupFinalizer-launch.json",
+    "/home/developer/projects/aurora/.git/aurora-handoff-import-20261006/distributed-k3-mesh-launch-v1915/proof-collection-request.json",
+    "/home/developer/projects/aurora/.git/aurora-handoff-import-20261006/distributed-k3-mesh-cell-v1915/runtime-versions.json",
+    "/home/developer/projects/aurora/.git/aurora-handoff-import-20261006/distributed-k3-mesh-cell-v1915/voice-stages.installed.json",
+    "/home/developer/projects/aurora/.git/aurora-handoff-import-20261006/distributed-k3-mesh-cell-v1915/voice-stages.status.json",
+    "/home/developer/projects/aurora/.git/aurora-handoff-import-20261006/distributed-k3-mesh-cell-v1915/mesh-route-runtime-pins.json",
+    "/home/developer/projects/aurora/.git/aurora-handoff-import-20261006/distributed-k3-mesh-cell-v1915/voice-stages.jsonl",
+    "/home/developer/projects/aurora/.git/aurora-handoff-import-20261006/distributed-k3-mesh-cell-v1915/actual-provider-bindings.jsonl",
+    "/home/developer/projects/aurora/.git/aurora-handoff-import-20261006/distributed-k3-mesh-cell-v1915/resources.jsonl",
+    "/home/developer/projects/aurora/.git/aurora-handoff-import-20261006/distributed-k3-mesh-cell-v1915/requester-mesh-calls.jsonl",
+    "/home/developer/projects/aurora/.git/aurora-handoff-import-20261006/distributed-k3-mesh-cell-v1915/mesh-route-observations.jsonl"
+  ],
+  "physicalPayloadBytes": 510825,
+  "possibleConfound": "Concurrent custody reads/writes; keep all affected measurements.",
+  "prefixes": {
+    "controller.private.log": {
+      "chunks": [
+        "thesis/campaigns/worker-desktop-k3-p2p-full-audio-v1915/prefixes/controller.private.log/000000000000-000000000514.chunk"
+      ],
+      "endByte": 514,
+      "incomplete": true,
+      "inode": 1928624,
+      "observedAt": "2026-10-20T21:06:52.924725+00:00",
+      "sourceObservedBytes": 514
+    }
+  },
+  "previousReceipt": "thesis/campaigns/worker-desktop-k3-p2p-full-audio-v1915/receipts/000002.json",
+  "progressObservation": {
+    "note": "Copier observation only; no request denominator inferred",
+    "status": "awaiting_progress"
+  },
+  "providerCoverage": "Separate P2P Assistant+TTS provider custody; actual per-host prefix coverage must be joined explicitly.",
+  "reservedFreeBytes": 2147483648,
+  "retainedAudioBlobs": 0,
+  "retainedCases": 0,
+  "schema": "aurora.physical-custody-checkpoint.v1",
+  "sequence": 3,
+  "startedAt": "2026-10-20T21:06:52.922812+00:00",
+  "sutCalls": 0
+}

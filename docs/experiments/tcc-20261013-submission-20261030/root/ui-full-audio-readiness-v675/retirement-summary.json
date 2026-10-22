@@ -1,0 +1,19 @@
+{
+  "allOwnedProcessesAbsent": true,
+  "at": "2026-10-15T17:43:47.523141+00:00",
+  "driverExitCode": 0,
+  "locks": {
+    "/tmp/aurora-desktop-gpu-baseline.lock": "observed_free_then_released",
+    "/tmp/aurora-global-build.lock": "observed_free_then_released"
+  },
+  "noProcessesTerminatedByRetirement": true,
+  "originalDBSHA256": "911f10f5808a312ad7712daefab7b47a404966ae58a14c7e95090408fc40d52e",
+  "resources": {
+    "memAvailable": 12632547328,
+    "rootFree": 135794688,
+    "shmFree": 3044438016
+  },
+  "terminalSHA256": "d4efe15c7007e1c7342dc8f014862a8e051f29f058ab918266b6db2c056e46d8",
+  "voiceFlowOutcome": "passed",
+  "voiceFlowSHA256": "096d142e087227f4c99762466b4e6a7e2c780e94455534ce11cedfa415bc1de0"
+}

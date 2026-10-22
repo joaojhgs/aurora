@@ -1,0 +1,17 @@
+{
+  "id": "msg_cd32103140d5",
+  "at": "2026-10-15T02:50:49Z",
+  "respondsToMonitorQuestion": "msg_601c032ace2a",
+  "nativeOwnerQuestionRaisedIn": "original Root thread",
+  "mechanism": "actual request_user_input_async, submission accepted",
+  "options": [
+    "Authorize ONE separately manifested stronger-STT condition; same WAV/task/model across CPU-GPU, preserve originalfailure",
+    "Keep fixed model and record failed condition"
+  ],
+  "ownerAnswerReceived": false,
+  "approvalEstablished": false,
+  "noDuplicateQuestions": true,
+  "modelFixtureMethodUnchanged": true,
+  "executionHeldPendingAnswer": true,
+  "phase2MeasuredAllowed": false
+}

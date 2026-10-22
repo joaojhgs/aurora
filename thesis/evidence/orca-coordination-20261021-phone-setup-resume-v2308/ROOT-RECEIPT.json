@@ -1,0 +1,20 @@
+{
+  "at": "2026-10-21T22:13:11.124562+00:00",
+  "sourceReceipt": ".git/aurora-handoff-import-20261006/root-http-v2296-mail-v2308.json",
+  "retainedMailboxReceipt": "thesis/evidence/orca-coordination-20261021-phone-setup-resume-v2308/ORIGINAL-RUN-MAIL.json",
+  "bytes": 6282,
+  "sha256": "6d805022b71d08a43451f7145561a1fd8dd5ee53e15deeff03cfee50b820538a",
+  "delivery": "delivery_f43ba2c27906",
+  "consumedMessages": [
+    "msg_3ebbf6b7e5f3",
+    "msg_c67d36b35b2c",
+    "msg_3503972b3847",
+    "msg_2d651d243a64"
+  ],
+  "scope": "Coordination-only custody. Phone worker reports direct-owner resume on same existing terminal; Root grants no new authority and performs no phone/notebook operations. Settled original Dispatch stays fenced; no new worker, task adoption or lifecycle mutation.",
+  "existingPhoneWorker": "term_1f27be31-0284-4366-bb91-30fe538cd30e",
+  "reportedPersonalControlOnly": "term_a2ed5feb-7c92-48e4-bd88-d1b0e6737989",
+  "mainCampaign": "V2296 exact existing worker-desktop HTTP continuing",
+  "nativeGoal": "01a112a5-d6bb-74e2-bf7c-ace73cb513b5",
+  "monitorFirst451Review": "msg_3ebbf6b7e5f3 CLOSED; no repeated admission/review gate"
+}

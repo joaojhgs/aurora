@@ -1,0 +1,27 @@
+{
+  "scope": "Physical metadata/liveness receipt only; not a new native warmup or data export",
+  "providerSnapshotAt": "2026-10-18T10:00:49.180316+00:00",
+  "providerCustodyPath": "/home/developer/projects/aurora/thesis/campaigns/worker-desktop-k3-orca-relayed-http-v1413/provider",
+  "retainedFiles": 333,
+  "physicalPayloadBytes": 33534580,
+  "providerAndCopierExactProcessesLive": true,
+  "configAndManifestUnchanged": true,
+  "copierErrors": [],
+  "files": {
+    "SEND.json": {
+      "bytes": 882,
+      "sha256": "02c6027a2b1ca239ba3ca4ac66f7ccfc2e08d35814c6199b841eb80e62a174ee"
+    },
+    "RESULT.json": {
+      "bytes": 2007,
+      "sha256": "9a11c8be702b327cc6487d9a3a965e27fcf851aef1830a19618930bfdb207496"
+    },
+    "SHOW-FENCE.json": {
+      "bytes": 1311,
+      "sha256": "06af737bd953a563ac0d4b330f59babd8530239363830d1c0260e548a7438c7e"
+    }
+  },
+  "latestPersonalCursor": "33508",
+  "newSutCalls": 0,
+  "settingsLifecycleChanges": 0
+}

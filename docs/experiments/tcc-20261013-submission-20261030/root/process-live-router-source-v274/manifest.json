@@ -1,0 +1,16 @@
+{
+  "gate": "one changed late mounted-route regression and static source checks only",
+  "objective": "tcc:20261013:submission-20261030",
+  "serial_owner": "same original Aurora Root01a112a5",
+  "files_sha256": {
+    "checks.json": "4fdc949b1a665f2d2a98b8062b6372e05f78fe673cd4cb0a82bd29a318d7ca4c",
+    "integration.json": "c7695c6f93fc668d3bfa03286f1fee46443467cbb740d6a531dc56244dbb7ee3",
+    "junit.xml": "b634e6152904888268eea337dcb37b99bd30cd680f0c7d9b06d494d4bd544fcc",
+    "sol-review.md": "186888b1b257758cc0918896791fd65c5ce2b8cc3bf224908d3055b9d837dddc",
+    "ruff.log": "82b3e6a6c090a57601d22943bd23fca9218d1031dbe5a7b754092f9a156b4f18",
+    "one-late-route-dispatch-regression.log": "b627c949025b414829f1e10462f846020b2ff8da3d3a4606ea8f23d36892b2ac",
+    "source/app/services/gateway/fastapi_app.py": "319469ee90ab706eaf5066bcde9f3f65b69b2894a4054c4bfe07190b25f6e94b",
+    "source/tests/unit/gateway/test_fastapi_dynamic_routes.py": "b614fa92186ee74d0979b23c05041930ff90f67a92c246171c1a9d094478f76b"
+  },
+  "repeated_closed_checks": false
+}

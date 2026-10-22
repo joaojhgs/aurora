@@ -1,0 +1,46 @@
+{
+  "at": "2026-10-18T07:01:49.125821+00:00",
+  "status": "COMPLETE_SAME_ACCEPTED_READ_NO_RESEND",
+  "result": "thesis/evidence/orca-relayed-http-v1197/provider-terminal-admission-v1466/RESULT.json",
+  "terminal": "term_d5651d8d-58e2-4b38-85e2-51c668cc933c",
+  "incarnation": "034ff933-61a3-4c74-b5ad-98a75e8ac21c",
+  "host": "ssh:ssh-1786238480967-semdev",
+  "sendRequestId": "e037607d-30b6-4bd3-a17c-8743f3302da1",
+  "nextCursor": "15051",
+  "helperInitialWindow": "incomplete at15047; same original stream read recovered both result parts, command never resent",
+  "records": [
+    {
+      "source": ".git/aurora-handoff-import-20261006/v1466-provider-terminal-admission-RESULT.json",
+      "destination": "thesis/evidence/orca-relayed-http-v1197/provider-terminal-admission-v1466/RESULT.json",
+      "bytes": 2492,
+      "sha256": "5f8c6fadb1bf1fa04af67704e55986c7ad55d2b58c27049193aad9b24c327d8c"
+    },
+    {
+      "source": ".git/aurora-handoff-import-20261006/v1466-provider-terminal-admission-command.txt",
+      "destination": "thesis/evidence/orca-relayed-http-v1197/provider-terminal-admission-v1466/command.txt",
+      "bytes": 55606,
+      "sha256": "aab862278c1596a5c7f6dc08961961761c0829f320e63f8aef862277c5f27dc2"
+    },
+    {
+      "source": ".git/aurora-handoff-import-20261006/v1466-provider-terminal-admission-SEND.json",
+      "destination": "thesis/evidence/orca-relayed-http-v1197/provider-terminal-admission-v1466/SEND.json",
+      "bytes": 883,
+      "sha256": "61fbc8a1162b16618247fb4387f4f50d07a613bd16aa239d118b0bd2f327bc1c"
+    },
+    {
+      "source": ".git/aurora-handoff-import-20261006/v1466-provider-terminal-admission-SHOW-FENCE.json",
+      "destination": "thesis/evidence/orca-relayed-http-v1197/provider-terminal-admission-v1466/SHOW-FENCE.json",
+      "bytes": 1322,
+      "sha256": "07c9cc1d5ef039966623e3938ae125a26f6a8415d22a3192a956e9b62ff02dd7"
+    },
+    {
+      "source": ".git/aurora-handoff-import-20261006/v1466-terminal-admission-reconcile-read-1.json",
+      "destination": "thesis/evidence/orca-relayed-http-v1197/provider-terminal-admission-v1466/RECONCILED-READ.json",
+      "bytes": 4927,
+      "sha256": "426a487f94609494519e277266dcc49e37b76eb8023cc4d3027885787375411f"
+    }
+  ],
+  "sutCalls": 0,
+  "newAgents": 0,
+  "rawDataExported": false
+}

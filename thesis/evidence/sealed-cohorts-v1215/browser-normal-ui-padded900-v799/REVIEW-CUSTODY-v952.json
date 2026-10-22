@@ -1,0 +1,10 @@
+{
+  "at": "2026-10-16T07:37:41.785360+00:00",
+  "source": ".git/aurora-handoff-import-20261006/browser-sealed-result-review-v949/SOL-REVIEW.md",
+  "canonical": "docs/experiments/tcc-20261013-submission-20261030/root/browser-normal-ui-padded900-v799/SOL-REVIEW-v949.md",
+  "sha256": "00ab2ad1758916ed726e1b8b73e836f9b3737da58ce3d9d92b6beb666c5ce5a0",
+  "bytes": 4646,
+  "verdict": "APPROVE bounded factual report/record consistency only",
+  "zipAuditRepeated": false,
+  "archiveTransferred": false
+}

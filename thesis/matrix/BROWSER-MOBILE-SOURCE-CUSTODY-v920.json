@@ -1,0 +1,11 @@
+{
+  "at": "2026-10-16T05:21:16.732855+00:00",
+  "source": ".git/aurora-handoff-import-20261006/browser-mobile-surface-capability-prep-v916/REPORT.md",
+  "canonical": "thesis/matrix/browser-mobile-surface-source-capabilities-v916.md",
+  "bytes": 11033,
+  "sha256": "e9c041e27e31d1e1273de64e4178a441f79269db11cba7275c4df8f769ba3933",
+  "review": "thesis/validation/browser-mobile-surface-source-review-v919.md",
+  "reviewSHA256": "73861bb8533d2fec868f8bae00fb51757e1021372b35043d664cc9464ecd9930",
+  "scope": "Source capability report only, source APPROVE919 closes915 factual R1; no new condition/count/waiver/first-HTTP gate",
+  "runtimeOrTestsExecuted": false
+}

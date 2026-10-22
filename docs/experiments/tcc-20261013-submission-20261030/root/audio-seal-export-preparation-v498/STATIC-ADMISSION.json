@@ -1,0 +1,15 @@
+{
+  "version": "V498 source only",
+  "at": "2026-10-15T04:53:17.477080+00:00",
+  "python": "3.11.17",
+  "astParse": "PASS",
+  "privateSourcePath": ".git/aurora-handoff-import-20261006/audio-seal-export-v498/export.py",
+  "privateSourceBytes": 15125,
+  "privateSourceSHA256": "5ee718ed05f77fb058fb3593b955eaeed62d50160bbc775cbd3e55dcce534cc6",
+  "sourceContentsWithheld": "private fixture scanner literals; source remains at exact private path",
+  "independentReviewSHA256": "698a89192346f2cfe172f0f0216b875a59eab7cd07c733ac25460ecb6ccdcf24",
+  "harnessImported": false,
+  "collectionExecuted": false,
+  "liveRawArtifactsReadByPreparation": false,
+  "testOrModelRequests": 0
+}

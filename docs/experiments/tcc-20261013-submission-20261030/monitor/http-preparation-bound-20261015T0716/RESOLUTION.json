@@ -1,0 +1,110 @@
+{
+  "at": "2026-10-15T07:44:23Z",
+  "run": "run_e6054e76e9fc",
+  "task": "task_d7ea336050cf",
+  "dispatch": "ctx_37b4d0a3c14f",
+  "originalQuestion": "msg_9525f463f8d4",
+  "explicitRootReply": {
+    "messageId": "msg_1a57fbdbce37",
+    "at": "2026-10-15T07:40:38Z",
+    "explicitReplyTo": [
+      "msg_9525f463f8d4",
+      "msg_926708cb6f1f"
+    ],
+    "helperClosed": true,
+    "helperSHA256": "e50459a8a245dc774d7ebb0df21705c94f6992d7c1a81862bd5994776001c8b3",
+    "SolApprovalSHA256": "b97c36711476467dad1c8005f70d88b77d8a41394e418dffc826724e46bc160c",
+    "HTTP": {
+      "observedAt": "2026-10-15T07:37:02Z",
+      "controllerPID": 2968233,
+      "pythonPID": 2968234,
+      "bothLive": true,
+      "warmupsAttempted": 15,
+      "measuredAttempted": 22,
+      "nPlanned": 900,
+      "unattempted": 878,
+      "latestOutcomeOnly": "completed_correct",
+      "fullCurrentOutcomesAggregated": false,
+      "actualGPUOffload25of25": true,
+      "sixVersionsMatch": true,
+      "frozenManifestSHA256": "886d2fade5b14da2fccf272d272c6164479a86e81371ad1afdb738b7d0de1eea",
+      "resources": {
+        "RAMavailableBytes": 2155544576,
+        "rootVolumeFreeBytes": 377114624,
+        "shmFreeBytes": 560439296,
+        "sysfsErrno16UnknownNotInferenceFailure": true
+      },
+      "outerDeadline": "2026-10-15T11:02:55.869637Z"
+    },
+    "CPU": {
+      "observedAt": "2026-10-15T07:36:58Z",
+      "pids": [
+        2232517,
+        2232566
+      ],
+      "bothLive": true,
+      "measuredAttempted": 270,
+      "nPlanned": 900,
+      "warmups": 15,
+      "latestOutcomeOnly": "completed_correct",
+      "RAMavailableBytes": 4776759296,
+      "volumeFreeBytes": 10498654208,
+      "outerDeadline": "2026-10-15T20:04:53Z"
+    },
+    "originalRootNativeGoal": {
+      "thread": "01a112a5-d6bb-74e2-bf7c-ace73cb513b5",
+      "actualGetGoalActiveConfirmed": true,
+      "budget": null,
+      "full13Retained": true
+    },
+    "nextBoundedAction": "same-PID progress/resources, then ONE natural-terminal retirement/seal",
+    "noHelperRestartNewReviewMatrixModelOrWorkers": true,
+    "productUIVoiceAndRemainingSurfaceGatesOpen": true,
+    "crossDeviceMeasuredAllowed": false,
+    "canonicalPlanMonitorOwned": true
+  },
+  "inspectedReceipts": {
+    "readAt": "2026-10-15T07:39:55Z",
+    "launch": {
+      "path": ".git/aurora-handoff-import-20261006/http-actual-launch-v528.json",
+      "bytes": 793,
+      "sha256": "d5a58a9c164f3745a28a3a85306cec8d812881ff9e2f970c60d8e7e49ffe1722"
+    },
+    "firstProgress": {
+      "path": ".git/aurora-handoff-import-20261006/http-first-full-audio-progress-v528.json",
+      "bytes": 1434,
+      "sha256": "854432d17882d1de04c688f58aabbf6feef0f6e3c276962c395513015968c8c6",
+      "at": "2026-10-15T07:32:05.689051Z",
+      "pidsBothLive": true,
+      "excludedWarmupAttempts": 9,
+      "measured": 0,
+      "lastAttemptOnlyCorrect": true,
+      "allWarmupAggregation": false,
+      "actualGPUOffload25of25": true,
+      "actualGPU": "AMD Radeon RX7600 Vulkan0 RADV NAVI33",
+      "GPUCounterUnavailableEBUSY16NotInferenceFailure": true
+    },
+    "admission": {
+      "path": ".git/aurora-handoff-import-20261006/http-condition-root-admission-v527.json",
+      "bytes": 1853,
+      "sha256": "3b6aa43ea2e9722cff2a810ae06d727095c525e9df25f10bae54e13e6b1a59e8",
+      "at": "2026-10-15T07:26:59.779188Z",
+      "allowedConfigChanges": [
+        "loopbackport",
+        "matchingCORSorigin",
+        "sameexistingisolatedfixture"
+      ],
+      "sharedPythonVersion": "3.11.11",
+      "sameModelAudioVersionsSettings": true,
+      "oldPIDsAbsentAndLocksExclusivelyAvailable": true
+    },
+    "sameFrozenManifestAcrossReceipts": "886d2fade5b14da2fccf272d272c6164479a86e81371ad1afdb738b7d0de1eea",
+    "fullFrozenManifestIndependentlyRead": false,
+    "sensitiveFieldsWithheld": true,
+    "noRawBackendLogReadOrPrinted": true,
+    "noTestsOrRestart": true
+  },
+  "monitorGoalActive": true,
+  "workerDoneSent": false,
+  "noTestsByMonitor": true
+}

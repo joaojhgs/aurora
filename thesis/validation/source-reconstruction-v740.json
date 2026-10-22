@@ -1,0 +1,53 @@
+{
+  "at": "2026-10-15T22:37:04.042612+00:00",
+  "scope": "Offline reconstruction of new portable source patch, not a service/model/test campaign",
+  "newMeasuredRequests": 0,
+  "modelsOrServicesLoaded": false,
+  "productionTreeModified": false,
+  "baseRevision": "cbac78fe3fb2b73100bfaa9dc198fb6bff689840",
+  "overlaySHA256": "2f84818f311f6f95db0c7d05da214e37253e7a9e2e8157a9fac138d847fa1bdb",
+  "changedFiles": [
+    "app/services/config/config_defaults.json",
+    "app/services/config/config_schema.json",
+    "app/services/gateway/fastapi_app.py",
+    "app/services/gateway/route_generator.py",
+    "app/services/gateway/webrtc/rpc.py",
+    "app/services/gateway/webrtc/rtc_client.py",
+    "app/services/orchestrator/service.py",
+    "app/services/stt_transcription/service.py",
+    "app/services/supervisor.py",
+    "app/shared/config/keys.py",
+    "app/shared/config/models.py",
+    "app/shared/services/process_launcher.py"
+  ],
+  "unchangedBaseFiles": 388,
+  "commands": [
+    {
+      "argv": [
+        "git",
+        "apply",
+        "--check",
+        "/home/developer/projects/aurora/thesis/source/production-overlay-v1.patch"
+      ],
+      "cwd": "temporary plain file collection; no Git repo/worktree created",
+      "exitCode": 0,
+      "stdout": "",
+      "stderr": ""
+    },
+    {
+      "argv": [
+        "git",
+        "apply",
+        "/home/developer/projects/aurora/thesis/source/production-overlay-v1.patch"
+      ],
+      "cwd": "temporary plain file collection; no Git repo/worktree created",
+      "exitCode": 0,
+      "stdout": "",
+      "stderr": ""
+    }
+  ],
+  "status": "passed",
+  "changedFilesReconstructedAndHashVerified": 12,
+  "all400FilesReconstructable": true,
+  "durationSeconds": 0.05249535699840635
+}

@@ -1,0 +1,981 @@
+{
+  "admissions": [
+    {
+      "at": "2026-10-17T22:18:45.791467+00:00",
+      "freeBytes": 7031132160,
+      "importBudgetBytes": 134217728,
+      "importedBefore": 47974334,
+      "label": "bounded_mesh_rows_mobile_readiness_and_native_observations",
+      "plannedImportBytes": 2170705,
+      "rateBytesPerSecond": 4194304
+    }
+  ],
+  "at": "2026-10-17T22:18:46.932067+00:00",
+  "fsyncAtomicDestinations": true,
+  "importedUniqueBytes": 48931006,
+  "noNewMeasurements": true,
+  "records": [
+    {
+      "bytes": 98800,
+      "capturedAt": "2026-10-17T22:18:45.793762+00:00",
+      "destination": "thesis/audit/20261017-data-and-results/imports/objects/b1bfa008775013ef1fd3d178a033289066d3f359daa15ff17e6bba8aedd2bbc2",
+      "duplicateContent": true,
+      "kind": "copied_saved_input",
+      "sha256": "b1bfa008775013ef1fd3d178a033289066d3f359daa15ff17e6bba8aedd2bbc2",
+      "source": "docs/experiments/tcc-20261013-submission-20261030/root/matched-main-campaign-6ce98ae97d594d9fafcd1ff9ad4b9b1c/cells/01-local-only/requests.jsonl",
+      "sourceMtimeNs": 1791997393875154285
+    },
+    {
+      "bytes": 99010,
+      "capturedAt": "2026-10-17T22:18:45.795076+00:00",
+      "destination": "thesis/audit/20261017-data-and-results/imports/objects/4550463315d2a34e2d95f3dfb555c4d75f7a540ca192640d6a02de0fe0776b39",
+      "duplicateContent": true,
+      "kind": "copied_saved_input",
+      "sha256": "4550463315d2a34e2d95f3dfb555c4d75f7a540ca192640d6a02de0fe0776b39",
+      "source": "docs/experiments/tcc-20261013-submission-20261030/root/matched-main-campaign-6ce98ae97d594d9fafcd1ff9ad4b9b1c/cells/02-api/requests.jsonl",
+      "sourceMtimeNs": 1791997393921297359
+    },
+    {
+      "bytes": 42023,
+      "capturedAt": "2026-10-17T22:18:45.807116+00:00",
+      "destination": "thesis/audit/20261017-data-and-results/imports/objects/07b46ee957bc7452955a4546f3137cccc006155ad27da0aea4ddc362ef948d5d",
+      "duplicateContent": false,
+      "kind": "copied_saved_input",
+      "sha256": "07b46ee957bc7452955a4546f3137cccc006155ad27da0aea4ddc362ef948d5d",
+      "source": "docs/experiments/tcc-20261013-submission-20261030/root/matched-main-campaign-6ce98ae97d594d9fafcd1ff9ad4b9b1c/cells/03-mesh/mesh-records.jsonl",
+      "sourceMtimeNs": 1791997393985482691
+    },
+    {
+      "bytes": 99010,
+      "capturedAt": "2026-10-17T22:18:45.808592+00:00",
+      "destination": "thesis/audit/20261017-data-and-results/imports/objects/a581da30801319172e040fbcc521c2f9dda737a6e7dc408c6cb63439b7d5a678",
+      "duplicateContent": true,
+      "kind": "copied_saved_input",
+      "sha256": "a581da30801319172e040fbcc521c2f9dda737a6e7dc408c6cb63439b7d5a678",
+      "source": "docs/experiments/tcc-20261013-submission-20261030/root/matched-main-campaign-6ce98ae97d594d9fafcd1ff9ad4b9b1c/cells/04-api/requests.jsonl",
+      "sourceMtimeNs": 1791997394006146650
+    },
+    {
+      "bytes": 42014,
+      "capturedAt": "2026-10-17T22:18:45.845621+00:00",
+      "destination": "thesis/audit/20261017-data-and-results/imports/objects/8b4d813fb077105730fb9effaa017fe140b39649be8377c7d47e7831400c67b6",
+      "duplicateContent": false,
+      "kind": "copied_saved_input",
+      "sha256": "8b4d813fb077105730fb9effaa017fe140b39649be8377c7d47e7831400c67b6",
+      "source": "docs/experiments/tcc-20261013-submission-20261030/root/matched-main-campaign-6ce98ae97d594d9fafcd1ff9ad4b9b1c/cells/05-mesh/mesh-records.jsonl",
+      "sourceMtimeNs": 1791997394067298479
+    },
+    {
+      "bytes": 98800,
+      "capturedAt": "2026-10-17T22:18:45.847209+00:00",
+      "destination": "thesis/audit/20261017-data-and-results/imports/objects/83781442ec38f7da50ae732f21decc5fa9cb5a2a7d688e173d9ef39dd7a984c0",
+      "duplicateContent": true,
+      "kind": "copied_saved_input",
+      "sha256": "83781442ec38f7da50ae732f21decc5fa9cb5a2a7d688e173d9ef39dd7a984c0",
+      "source": "docs/experiments/tcc-20261013-submission-20261030/root/matched-main-campaign-6ce98ae97d594d9fafcd1ff9ad4b9b1c/cells/06-local-only/requests.jsonl",
+      "sourceMtimeNs": 1791997394080606861
+    },
+    {
+      "bytes": 42014,
+      "capturedAt": "2026-10-17T22:18:45.852710+00:00",
+      "destination": "thesis/audit/20261017-data-and-results/imports/objects/d51feac2bf8fcc307d9319904ae38a83e89fc426c651194a6c4e0c6293d926bc",
+      "duplicateContent": false,
+      "kind": "copied_saved_input",
+      "sha256": "d51feac2bf8fcc307d9319904ae38a83e89fc426c651194a6c4e0c6293d926bc",
+      "source": "docs/experiments/tcc-20261013-submission-20261030/root/matched-main-campaign-6ce98ae97d594d9fafcd1ff9ad4b9b1c/cells/07-mesh/mesh-records.jsonl",
+      "sourceMtimeNs": 1791997394140560521
+    },
+    {
+      "bytes": 98800,
+      "capturedAt": "2026-10-17T22:18:45.854053+00:00",
+      "destination": "thesis/audit/20261017-data-and-results/imports/objects/814346201324340f42485c623823276a24403ddc9c3886df6271a2068301aba2",
+      "duplicateContent": true,
+      "kind": "copied_saved_input",
+      "sha256": "814346201324340f42485c623823276a24403ddc9c3886df6271a2068301aba2",
+      "source": "docs/experiments/tcc-20261013-submission-20261030/root/matched-main-campaign-6ce98ae97d594d9fafcd1ff9ad4b9b1c/cells/08-local-only/requests.jsonl",
+      "sourceMtimeNs": 1791997394154336667
+    },
+    {
+      "bytes": 99010,
+      "capturedAt": "2026-10-17T22:18:45.855292+00:00",
+      "destination": "thesis/audit/20261017-data-and-results/imports/objects/a12550cadac115b1110e0ca0239bfb54ebdf8f7dcc4b8eaa2af1b876bfd5cf68",
+      "duplicateContent": true,
+      "kind": "copied_saved_input",
+      "sha256": "a12550cadac115b1110e0ca0239bfb54ebdf8f7dcc4b8eaa2af1b876bfd5cf68",
+      "source": "docs/experiments/tcc-20261013-submission-20261030/root/matched-main-campaign-6ce98ae97d594d9fafcd1ff9ad4b9b1c/cells/09-api/requests.jsonl",
+      "sourceMtimeNs": 1791997394192179917
+    },
+    {
+      "bytes": 98800,
+      "capturedAt": "2026-10-17T22:18:45.856661+00:00",
+      "destination": "thesis/audit/20261017-data-and-results/imports/objects/b1bfa008775013ef1fd3d178a033289066d3f359daa15ff17e6bba8aedd2bbc2",
+      "duplicateContent": true,
+      "kind": "copied_saved_input",
+      "sha256": "b1bfa008775013ef1fd3d178a033289066d3f359daa15ff17e6bba8aedd2bbc2",
+      "source": "docs/experiments/tcc-20261013-submission-20261030/root/matched-main-campaign-v319/cell-01-local-only/requests.jsonl",
+      "sourceMtimeNs": 1791966510609390446
+    },
+    {
+      "bytes": 99010,
+      "capturedAt": "2026-10-17T22:18:45.858036+00:00",
+      "destination": "thesis/audit/20261017-data-and-results/imports/objects/4550463315d2a34e2d95f3dfb555c4d75f7a540ca192640d6a02de0fe0776b39",
+      "duplicateContent": true,
+      "kind": "copied_saved_input",
+      "sha256": "4550463315d2a34e2d95f3dfb555c4d75f7a540ca192640d6a02de0fe0776b39",
+      "source": "docs/experiments/tcc-20261013-submission-20261030/root/matched-main-campaign-v319/cell-02-api/requests.jsonl",
+      "sourceMtimeNs": 1791970196286758834
+    },
+    {
+      "bytes": 42023,
+      "capturedAt": "2026-10-17T22:18:45.859477+00:00",
+      "destination": "thesis/audit/20261017-data-and-results/imports/objects/07b46ee957bc7452955a4546f3137cccc006155ad27da0aea4ddc362ef948d5d",
+      "duplicateContent": true,
+      "kind": "copied_saved_input",
+      "sha256": "07b46ee957bc7452955a4546f3137cccc006155ad27da0aea4ddc362ef948d5d",
+      "source": "docs/experiments/tcc-20261013-submission-20261030/root/matched-main-campaign-v319/cell-03-mesh/mesh-records.jsonl",
+      "sourceMtimeNs": 1791974356088049428
+    },
+    {
+      "bytes": 99010,
+      "capturedAt": "2026-10-17T22:18:45.861028+00:00",
+      "destination": "thesis/audit/20261017-data-and-results/imports/objects/a581da30801319172e040fbcc521c2f9dda737a6e7dc408c6cb63439b7d5a678",
+      "duplicateContent": true,
+      "kind": "copied_saved_input",
+      "sha256": "a581da30801319172e040fbcc521c2f9dda737a6e7dc408c6cb63439b7d5a678",
+      "source": "docs/experiments/tcc-20261013-submission-20261030/root/matched-main-campaign-v319/cell-04-api/requests.jsonl",
+      "sourceMtimeNs": 1791978080268083433
+    },
+    {
+      "bytes": 42014,
+      "capturedAt": "2026-10-17T22:18:45.862755+00:00",
+      "destination": "thesis/audit/20261017-data-and-results/imports/objects/8b4d813fb077105730fb9effaa017fe140b39649be8377c7d47e7831400c67b6",
+      "duplicateContent": true,
+      "kind": "copied_saved_input",
+      "sha256": "8b4d813fb077105730fb9effaa017fe140b39649be8377c7d47e7831400c67b6",
+      "source": "docs/experiments/tcc-20261013-submission-20261030/root/matched-main-campaign-v319/cell-05-mesh/mesh-records.jsonl",
+      "sourceMtimeNs": 1791982316813324595
+    },
+    {
+      "bytes": 98800,
+      "capturedAt": "2026-10-17T22:18:45.864865+00:00",
+      "destination": "thesis/audit/20261017-data-and-results/imports/objects/83781442ec38f7da50ae732f21decc5fa9cb5a2a7d688e173d9ef39dd7a984c0",
+      "duplicateContent": true,
+      "kind": "copied_saved_input",
+      "sha256": "83781442ec38f7da50ae732f21decc5fa9cb5a2a7d688e173d9ef39dd7a984c0",
+      "source": "docs/experiments/tcc-20261013-submission-20261030/root/matched-main-campaign-v319/cell-06-local-only/requests.jsonl",
+      "sourceMtimeNs": 1791985839504024319
+    },
+    {
+      "bytes": 42014,
+      "capturedAt": "2026-10-17T22:18:45.870228+00:00",
+      "destination": "thesis/audit/20261017-data-and-results/imports/objects/d51feac2bf8fcc307d9319904ae38a83e89fc426c651194a6c4e0c6293d926bc",
+      "duplicateContent": true,
+      "kind": "copied_saved_input",
+      "sha256": "d51feac2bf8fcc307d9319904ae38a83e89fc426c651194a6c4e0c6293d926bc",
+      "source": "docs/experiments/tcc-20261013-submission-20261030/root/matched-main-campaign-v319/cell-07-mesh/mesh-records.jsonl",
+      "sourceMtimeNs": 1791990120568929398
+    },
+    {
+      "bytes": 98800,
+      "capturedAt": "2026-10-17T22:18:45.871830+00:00",
+      "destination": "thesis/audit/20261017-data-and-results/imports/objects/814346201324340f42485c623823276a24403ddc9c3886df6271a2068301aba2",
+      "duplicateContent": true,
+      "kind": "copied_saved_input",
+      "sha256": "814346201324340f42485c623823276a24403ddc9c3886df6271a2068301aba2",
+      "source": "docs/experiments/tcc-20261013-submission-20261030/root/matched-main-campaign-v319/cell-08-local-only/requests.jsonl",
+      "sourceMtimeNs": 1791994025483730007
+    },
+    {
+      "bytes": 1882,
+      "capturedAt": "2026-10-17T22:18:45.956650+00:00",
+      "destination": "thesis/audit/20261017-data-and-results/imports/objects/6733d650eedb70fdf6e728f354dbe9a845605682e85c945163a4c28c9a723b71",
+      "duplicateContent": false,
+      "kind": "copied_saved_input",
+      "sha256": "6733d650eedb70fdf6e728f354dbe9a845605682e85c945163a4c28c9a723b71",
+      "source": "docs/experiments/tcc-20261013-submission-20261030/root/matched-readiness-v291-local-only/requests.jsonl",
+      "sourceMtimeNs": 1791953905760728661
+    },
+    {
+      "bytes": 1886,
+      "capturedAt": "2026-10-17T22:18:46.153703+00:00",
+      "destination": "thesis/audit/20261017-data-and-results/imports/objects/c22caa5ac8c3ec3f1c140bf72bdd6e5f8cb98c63cece6b0ba9d9b4783eb1d90a",
+      "duplicateContent": false,
+      "kind": "copied_saved_input",
+      "sha256": "c22caa5ac8c3ec3f1c140bf72bdd6e5f8cb98c63cece6b0ba9d9b4783eb1d90a",
+      "source": "docs/experiments/tcc-20261013-submission-20261030/root/matched-readiness-v292-api/requests.jsonl",
+      "sourceMtimeNs": 1791954010785861305
+    },
+    {
+      "bytes": 731,
+      "capturedAt": "2026-10-17T22:18:46.158154+00:00",
+      "destination": "thesis/audit/20261017-data-and-results/imports/objects/a47c45fc676ffe38e1a6ed1b39ad85578f6183ee5d6a4a20a02ecd7b46fdae67",
+      "duplicateContent": false,
+      "kind": "copied_saved_input",
+      "sha256": "a47c45fc676ffe38e1a6ed1b39ad85578f6183ee5d6a4a20a02ecd7b46fdae67",
+      "source": "docs/experiments/tcc-20261013-submission-20261030/root/matched-readiness-v293-mesh/case-history.jsonl",
+      "sourceMtimeNs": 1791954779513756576
+    },
+    {
+      "bytes": 702,
+      "capturedAt": "2026-10-17T22:18:46.163178+00:00",
+      "destination": "thesis/audit/20261017-data-and-results/imports/objects/7a26246304eda30a9cb5aea4bc0725dbaf8a69e38237337f42dfcd35766bda0a",
+      "duplicateContent": false,
+      "kind": "copied_saved_input",
+      "sha256": "7a26246304eda30a9cb5aea4bc0725dbaf8a69e38237337f42dfcd35766bda0a",
+      "source": "docs/experiments/tcc-20261013-submission-20261030/root/mesh-incomplete-main-v259/case-history.jsonl",
+      "sourceMtimeNs": 1791943697425977451
+    },
+    {
+      "bytes": 173,
+      "capturedAt": "2026-10-17T22:18:46.168580+00:00",
+      "destination": "thesis/audit/20261017-data-and-results/imports/objects/846406d185c7238d7574a1c7c1fa873e7b541245294fb2f381e68ebb1f74b7e2",
+      "duplicateContent": false,
+      "kind": "copied_saved_input",
+      "sha256": "846406d185c7238d7574a1c7c1fa873e7b541245294fb2f381e68ebb1f74b7e2",
+      "source": "docs/experiments/tcc-20261013-submission-20261030/root/mesh-main-v261/case-history.jsonl",
+      "sourceMtimeNs": 1791946516456903355
+    },
+    {
+      "bytes": 948,
+      "capturedAt": "2026-10-17T22:18:46.173278+00:00",
+      "destination": "thesis/audit/20261017-data-and-results/imports/objects/904ca44a1f52ad8ef84879d25fbc50a8eb712416be7693a4da4cfbe6923068a0",
+      "duplicateContent": false,
+      "kind": "copied_saved_input",
+      "sha256": "904ca44a1f52ad8ef84879d25fbc50a8eb712416be7693a4da4cfbe6923068a0",
+      "source": "docs/experiments/tcc-20261013-submission-20261030/root/mesh-main-v273/case-history.jsonl",
+      "sourceMtimeNs": 1791949338778350070
+    },
+    {
+      "bytes": 838,
+      "capturedAt": "2026-10-17T22:18:46.177879+00:00",
+      "destination": "thesis/audit/20261017-data-and-results/imports/objects/6a26f53d1a1116bb6dd45da8b87b227781250c9608f212ce41a2f61c30c98201",
+      "duplicateContent": false,
+      "kind": "copied_saved_input",
+      "sha256": "6a26f53d1a1116bb6dd45da8b87b227781250c9608f212ce41a2f61c30c98201",
+      "source": "docs/experiments/tcc-20261013-submission-20261030/root/mesh-main-v281/case-history.jsonl",
+      "sourceMtimeNs": 1791952643348481737
+    },
+    {
+      "bytes": 560,
+      "capturedAt": "2026-10-17T22:18:46.181980+00:00",
+      "destination": "thesis/audit/20261017-data-and-results/imports/objects/c20593bcbfd95633525cb7883659ab51849dcd1337f9e305eebfe9491a17ffca",
+      "duplicateContent": false,
+      "kind": "copied_saved_input",
+      "sha256": "c20593bcbfd95633525cb7883659ab51849dcd1337f9e305eebfe9491a17ffca",
+      "source": "docs/experiments/tcc-20261013-submission-20261030/root/mesh-selection-v257-v258/case-history.jsonl",
+      "sourceMtimeNs": 1791942657695807168
+    },
+    {
+      "bytes": 510,
+      "capturedAt": "2026-10-17T22:18:46.187029+00:00",
+      "destination": "thesis/audit/20261017-data-and-results/imports/objects/b2f77029570354e233e4d96614286bf8a30708ecfd6c61abbf0c2fbb2d8a9aed",
+      "duplicateContent": false,
+      "kind": "copied_saved_input",
+      "sha256": "b2f77029570354e233e4d96614286bf8a30708ecfd6c61abbf0c2fbb2d8a9aed",
+      "source": "docs/experiments/tcc-20261013-submission-20261030/root/mesh-startup-v255-v256/case-history.jsonl",
+      "sourceMtimeNs": 1791942187739232929
+    },
+    {
+      "bytes": 631,
+      "capturedAt": "2026-10-17T22:18:46.191246+00:00",
+      "destination": "thesis/audit/20261017-data-and-results/imports/objects/cf2939eb1abe816603481aa7332435145c21fbe18edb8a5a401e04e4f8dab0cb",
+      "duplicateContent": false,
+      "kind": "copied_saved_input",
+      "sha256": "cf2939eb1abe816603481aa7332435145c21fbe18edb8a5a401e04e4f8dab0cb",
+      "source": "docs/experiments/tcc-20261013-submission-20261030/root/native-normal-ui-main-v1060/MANIFEST.json",
+      "sourceMtimeNs": 1792157785523913894
+    },
+    {
+      "bytes": 4652,
+      "capturedAt": "2026-10-17T22:18:46.205499+00:00",
+      "destination": "thesis/audit/20261017-data-and-results/imports/objects/211cda253e682b88beb5c6926f5aaa18886d652e6a844253094a6903bf0d7c47",
+      "duplicateContent": false,
+      "kind": "copied_saved_input",
+      "sha256": "211cda253e682b88beb5c6926f5aaa18886d652e6a844253094a6903bf0d7c47",
+      "source": "docs/experiments/tcc-20261013-submission-20261030/root/native-normal-ui-main-v1060/PROFILE-BOUNDARY.md",
+      "sourceMtimeNs": 1792159611214334214
+    },
+    {
+      "bytes": 1477,
+      "capturedAt": "2026-10-17T22:18:46.212001+00:00",
+      "destination": "thesis/audit/20261017-data-and-results/imports/objects/d855bade3a57ecbd5eead95544a250dd9f225c0490064d9ab9813f69301b5c16",
+      "duplicateContent": false,
+      "kind": "copied_saved_input",
+      "sha256": "d855bade3a57ecbd5eead95544a250dd9f225c0490064d9ab9813f69301b5c16",
+      "source": "docs/experiments/tcc-20261013-submission-20261030/root/native-normal-ui-main-v1060/REPORT.md",
+      "sourceMtimeNs": 1792157785523975854
+    },
+    {
+      "bytes": 6597,
+      "capturedAt": "2026-10-17T22:18:46.219188+00:00",
+      "destination": "thesis/audit/20261017-data-and-results/imports/objects/6e0ac40fc6e03ec5d8a0d942ab605fabecde5436e3a5f23629f77bac521bfd24",
+      "duplicateContent": false,
+      "kind": "copied_saved_input",
+      "sha256": "6e0ac40fc6e03ec5d8a0d942ab605fabecde5436e3a5f23629f77bac521bfd24",
+      "source": "docs/experiments/tcc-20261013-submission-20261030/root/native-normal-ui-main-v1060/SOURCE-DIAGNOSIS.md",
+      "sourceMtimeNs": 1792159611214233293
+    },
+    {
+      "bytes": 2952,
+      "capturedAt": "2026-10-17T22:18:46.225526+00:00",
+      "destination": "thesis/audit/20261017-data-and-results/imports/objects/7c6a68c9e76bf7528bcfbc7d41e4e1f07c00743792cf6e67a5d417604e6771c1",
+      "duplicateContent": false,
+      "kind": "copied_saved_input",
+      "sha256": "7c6a68c9e76bf7528bcfbc7d41e4e1f07c00743792cf6e67a5d417604e6771c1",
+      "source": "docs/experiments/tcc-20261013-submission-20261030/root/native-normal-ui-main-v1060/TERMINAL.json",
+      "sourceMtimeNs": 1792157785523373570
+    },
+    {
+      "bytes": 1186,
+      "capturedAt": "2026-10-17T22:18:46.232677+00:00",
+      "destination": "thesis/audit/20261017-data-and-results/imports/objects/f51fb62fdc6ffb52597e562192213a224b7f9512291920a990db286cadccf83b",
+      "duplicateContent": false,
+      "kind": "copied_saved_input",
+      "sha256": "f51fb62fdc6ffb52597e562192213a224b7f9512291920a990db286cadccf83b",
+      "source": "docs/experiments/tcc-20261013-submission-20261030/root/native-normal-ui-main-v1060/saved-window.json",
+      "sourceMtimeNs": 1792157785523457650
+    },
+    {
+      "bytes": 765,
+      "capturedAt": "2026-10-17T22:18:46.240589+00:00",
+      "destination": "thesis/audit/20261017-data-and-results/imports/objects/e61e8b8b1bf9ee4929c044f74552b9f80501a6420a56f53b13eb0dcc05f87e9c",
+      "duplicateContent": false,
+      "kind": "copied_saved_input",
+      "sha256": "e61e8b8b1bf9ee4929c044f74552b9f80501a6420a56f53b13eb0dcc05f87e9c",
+      "source": "docs/experiments/tcc-20261013-submission-20261030/root/native-normal-ui-main-v1060/summary.json",
+      "sourceMtimeNs": 1792157785523569731
+    },
+    {
+      "bytes": 4463,
+      "capturedAt": "2026-10-17T22:18:46.245851+00:00",
+      "destination": "thesis/audit/20261017-data-and-results/imports/objects/fe98d8afd756ffa87f3a5f0d8929756ee82da78b1f2219a239148daae7282efa",
+      "duplicateContent": false,
+      "kind": "copied_saved_input",
+      "sha256": "fe98d8afd756ffa87f3a5f0d8929756ee82da78b1f2219a239148daae7282efa",
+      "source": "docs/experiments/tcc-20261013-submission-20261030/root/typed-product-main-v460/README.md",
+      "sourceMtimeNs": 1792024631949392874
+    },
+    {
+      "bytes": 9384,
+      "capturedAt": "2026-10-17T22:18:46.251273+00:00",
+      "destination": "thesis/audit/20261017-data-and-results/imports/objects/2019418f919e95456d79181185d68d6e6f57ba88e3781a28b9183d97680d0903",
+      "duplicateContent": false,
+      "kind": "copied_saved_input",
+      "sha256": "2019418f919e95456d79181185d68d6e6f57ba88e3781a28b9183d97680d0903",
+      "source": "docs/experiments/tcc-20261013-submission-20261030/root/typed-product-main-v460/manifest.json",
+      "sourceMtimeNs": 1792024455098248027
+    },
+    {
+      "bytes": 1084,
+      "capturedAt": "2026-10-17T22:18:46.256465+00:00",
+      "destination": "thesis/audit/20261017-data-and-results/imports/objects/77e574e9c4c4ffc1f62efeb7565388322bd861a9bbdabe40fe1e8b945d6d077d",
+      "duplicateContent": false,
+      "kind": "copied_saved_input",
+      "sha256": "77e574e9c4c4ffc1f62efeb7565388322bd861a9bbdabe40fe1e8b945d6d077d",
+      "source": "docs/experiments/tcc-20261013-submission-20261030/root/typed-product-main-v460/retained-input-alignment-v458.json",
+      "sourceMtimeNs": 1792024455076250576
+    },
+    {
+      "bytes": 755,
+      "capturedAt": "2026-10-17T22:18:46.261175+00:00",
+      "destination": "thesis/audit/20261017-data-and-results/imports/objects/8158f66ffc631549d7bea877695cb6eb440258e208869b4d45e5a33e434413a1",
+      "duplicateContent": false,
+      "kind": "copied_saved_input",
+      "sha256": "8158f66ffc631549d7bea877695cb6eb440258e208869b4d45e5a33e434413a1",
+      "source": "docs/experiments/tcc-20261013-submission-20261030/root/typed-product-main-v460/retirement-v459.json",
+      "sourceMtimeNs": 1792024455076402458
+    },
+    {
+      "bytes": 535,
+      "capturedAt": "2026-10-17T22:18:46.265638+00:00",
+      "destination": "thesis/audit/20261017-data-and-results/imports/objects/17951589b5c05eab63453448ada57bc4247747b8fccd448940c1b05ee8a6e9f2",
+      "duplicateContent": false,
+      "kind": "copied_saved_input",
+      "sha256": "17951589b5c05eab63453448ada57bc4247747b8fccd448940c1b05ee8a6e9f2",
+      "source": "docs/experiments/tcc-20261013-submission-20261030/root/typed-product-main-v460/typed-v457/driver-progress.json",
+      "sourceMtimeNs": 1792024455076614939
+    },
+    {
+      "bytes": 2438,
+      "capturedAt": "2026-10-17T22:18:46.270301+00:00",
+      "destination": "thesis/audit/20261017-data-and-results/imports/objects/d143b0cdba7611314325c8a00275104d584c8b4d4a774caa26e5846785aab1b9",
+      "duplicateContent": false,
+      "kind": "copied_saved_input",
+      "sha256": "d143b0cdba7611314325c8a00275104d584c8b4d4a774caa26e5846785aab1b9",
+      "source": "docs/experiments/tcc-20261013-submission-20261030/root/typed-product-main-v460/typed-v457/driver-spawn.json",
+      "sourceMtimeNs": 1792024455076759380
+    },
+    {
+      "bytes": 643,
+      "capturedAt": "2026-10-17T22:18:46.327444+00:00",
+      "destination": "thesis/audit/20261017-data-and-results/imports/objects/5f564eeb0388cd4f16438e83a4edd4601799c39a988ed86db062f8d36ae85f20",
+      "duplicateContent": false,
+      "kind": "copied_saved_input",
+      "sha256": "5f564eeb0388cd4f16438e83a4edd4601799c39a988ed86db062f8d36ae85f20",
+      "source": "docs/experiments/tcc-20261013-submission-20261030/root/typed-product-main-v460/typed-v457/driver-terminal.json",
+      "sourceMtimeNs": 1792024455076872981
+    },
+    {
+      "bytes": 1915,
+      "capturedAt": "2026-10-17T22:18:46.358048+00:00",
+      "destination": "thesis/audit/20261017-data-and-results/imports/objects/f609c0e9811269adf538edb7fd48b321ef894bf885104d5f9909f020c05bb1eb",
+      "duplicateContent": false,
+      "kind": "copied_saved_input",
+      "sha256": "f609c0e9811269adf538edb7fd48b321ef894bf885104d5f9909f020c05bb1eb",
+      "source": "docs/experiments/tcc-20261013-submission-20261030/root/typed-product-main-v460/typed-v457/ready.json",
+      "sourceMtimeNs": 1792024455076984462
+    },
+    {
+      "bytes": 1840,
+      "capturedAt": "2026-10-17T22:18:46.364415+00:00",
+      "destination": "thesis/audit/20261017-data-and-results/imports/objects/bc8eb8de73e7b56f899b76a8d1a1b44a47e370b11004afbbc7aa8a47e5c50f6d",
+      "duplicateContent": false,
+      "kind": "copied_saved_input",
+      "sha256": "bc8eb8de73e7b56f899b76a8d1a1b44a47e370b11004afbbc7aa8a47e5c50f6d",
+      "source": "docs/experiments/tcc-20261013-submission-20261030/root/typed-product-main-v460/typed-v457/runtime/launch.json",
+      "sourceMtimeNs": 1792024455077213384
+    },
+    {
+      "bytes": 2050,
+      "capturedAt": "2026-10-17T22:18:46.374198+00:00",
+      "destination": "thesis/audit/20261017-data-and-results/imports/objects/724a8e71ad26f3f25813c198bfa3bc40614228ec1a037d0bcb0ac89a4c160fdf",
+      "duplicateContent": false,
+      "kind": "copied_saved_input",
+      "sha256": "724a8e71ad26f3f25813c198bfa3bc40614228ec1a037d0bcb0ac89a4c160fdf",
+      "source": "docs/experiments/tcc-20261013-submission-20261030/root/typed-product-main-v460/typed-v457/runtime/terminal.json",
+      "sourceMtimeNs": 1792024455077327785
+    },
+    {
+      "bytes": 121,
+      "capturedAt": "2026-10-17T22:18:46.389678+00:00",
+      "destination": "thesis/audit/20261017-data-and-results/imports/objects/0dd9f9ac840913f2ac587437cdc55321063fb31b3a48df72bd40b3e825feeccc",
+      "duplicateContent": false,
+      "kind": "copied_saved_input",
+      "sha256": "0dd9f9ac840913f2ac587437cdc55321063fb31b3a48df72bd40b3e825feeccc",
+      "source": "docs/experiments/tcc-20261013-submission-20261030/root/typed-product-main-v460/typed-v457/runtime/voice-stages.installed.json",
+      "sourceMtimeNs": 1792024455077430586
+    },
+    {
+      "bytes": 132,
+      "capturedAt": "2026-10-17T22:18:46.413594+00:00",
+      "destination": "thesis/audit/20261017-data-and-results/imports/objects/1e366543f29a7e627d5fc2ad406df9817b554c0540881c6aa2cdbf142034900f",
+      "duplicateContent": false,
+      "kind": "copied_saved_input",
+      "sha256": "1e366543f29a7e627d5fc2ad406df9817b554c0540881c6aa2cdbf142034900f",
+      "source": "docs/experiments/tcc-20261013-submission-20261030/root/typed-product-main-v460/typed-v457/runtime/voice-stages.status.json",
+      "sourceMtimeNs": 1792024455077688828
+    },
+    {
+      "bytes": 693,
+      "capturedAt": "2026-10-17T22:18:46.433034+00:00",
+      "destination": "thesis/audit/20261017-data-and-results/imports/objects/a24702ed178cb207c7a238970f388c3f6336885d58ac03c0b6dbcbbdea61169d",
+      "duplicateContent": false,
+      "kind": "copied_saved_input",
+      "sha256": "a24702ed178cb207c7a238970f388c3f6336885d58ac03c0b6dbcbbdea61169d",
+      "source": "docs/experiments/tcc-20261013-submission-20261030/root/typed-product-main-v460/typed-v457/runtime-manifest.json",
+      "sourceMtimeNs": 1792024455077086823
+    },
+    {
+      "bytes": 455,
+      "capturedAt": "2026-10-17T22:18:46.442640+00:00",
+      "destination": "thesis/audit/20261017-data-and-results/imports/objects/b4e9393cb033da4482d78eac2633d7e2ad0d980292abf86e5b3a2ec5c4e8f7bc",
+      "duplicateContent": false,
+      "kind": "copied_saved_input",
+      "sha256": "b4e9393cb033da4482d78eac2633d7e2ad0d980292abf86e5b3a2ec5c4e8f7bc",
+      "source": "docs/experiments/tcc-20261013-submission-20261030/root/typed-product-main-v460/typed-v457/source-guard.json",
+      "sourceMtimeNs": 1792024455077793308
+    },
+    {
+      "bytes": 444,
+      "capturedAt": "2026-10-17T22:18:46.448550+00:00",
+      "destination": "thesis/audit/20261017-data-and-results/imports/objects/852adadde276cf87e35adc2ac547a0737542bd5fd8fad2731275c55d7f8c9b28",
+      "duplicateContent": false,
+      "kind": "copied_saved_input",
+      "sha256": "852adadde276cf87e35adc2ac547a0737542bd5fd8fad2731275c55d7f8c9b28",
+      "source": "docs/experiments/tcc-20261013-submission-20261030/root/typed-product-main-v460/typed-v457/spawn.json",
+      "sourceMtimeNs": 1792024455077895429
+    },
+    {
+      "bytes": 2194,
+      "capturedAt": "2026-10-17T22:18:46.453191+00:00",
+      "destination": "thesis/audit/20261017-data-and-results/imports/objects/a5b3c99f5646ad05a99b557cbe99e65e348de94ba18b26a592f98510098ad38f",
+      "duplicateContent": false,
+      "kind": "copied_saved_input",
+      "sha256": "a5b3c99f5646ad05a99b557cbe99e65e348de94ba18b26a592f98510098ad38f",
+      "source": "docs/experiments/tcc-20261013-submission-20261030/root/typed-product-main-v460/typed-v457/terminal.json",
+      "sourceMtimeNs": 1792024455078004990
+    },
+    {
+      "bytes": 1111,
+      "capturedAt": "2026-10-17T22:18:46.458761+00:00",
+      "destination": "thesis/audit/20261017-data-and-results/imports/objects/ed4eacd5397e467f3ef67e45aa2ef245eba41b71922692592dd78a51c8dbf204",
+      "duplicateContent": false,
+      "kind": "copied_saved_input",
+      "sha256": "ed4eacd5397e467f3ef67e45aa2ef245eba41b71922692592dd78a51c8dbf204",
+      "source": "docs/experiments/tcc-20261013-submission-20261030/root/typed-product-main-v460/typed-v457/ui-case/result.json",
+      "sourceMtimeNs": 1792024455078630595
+    },
+    {
+      "bytes": 38006,
+      "capturedAt": "2026-10-17T22:18:46.463836+00:00",
+      "destination": "thesis/audit/20261017-data-and-results/imports/objects/9f33213e8794c0dab137c20389fb466822ecfd054c3ac43465e72f592c8ef59c",
+      "duplicateContent": false,
+      "kind": "copied_saved_input",
+      "sha256": "9f33213e8794c0dab137c20389fb466822ecfd054c3ac43465e72f592c8ef59c",
+      "source": "docs/experiments/tcc-20261013-submission-20261030/root/typed-product-main-v460/typed-v457/ui-case/safe-projection.json",
+      "sourceMtimeNs": 1792024455078874157
+    },
+    {
+      "bytes": 535,
+      "capturedAt": "2026-10-17T22:18:46.470211+00:00",
+      "destination": "thesis/audit/20261017-data-and-results/imports/objects/520819fda81ea0511a5d78669829635b6c21f5694c23c6d94df9c653d8810a24",
+      "duplicateContent": false,
+      "kind": "copied_saved_input",
+      "sha256": "520819fda81ea0511a5d78669829635b6c21f5694c23c6d94df9c653d8810a24",
+      "source": "docs/experiments/tcc-20261013-submission-20261030/root/typed-product-main-v460/typed-v459/driver-progress.json",
+      "sourceMtimeNs": 1792024455079031718
+    },
+    {
+      "bytes": 802,
+      "capturedAt": "2026-10-17T22:18:46.482039+00:00",
+      "destination": "thesis/audit/20261017-data-and-results/imports/objects/8a731b3d85165f139bea977127d3c5f95c35d432ac2977cd0f4bc869591591c8",
+      "duplicateContent": false,
+      "kind": "copied_saved_input",
+      "sha256": "8a731b3d85165f139bea977127d3c5f95c35d432ac2977cd0f4bc869591591c8",
+      "source": "docs/experiments/tcc-20261013-submission-20261030/root/typed-product-main-v460/typed-v459/driver-spawn.json",
+      "sourceMtimeNs": 1792024455079143279
+    },
+    {
+      "bytes": 643,
+      "capturedAt": "2026-10-17T22:18:46.489268+00:00",
+      "destination": "thesis/audit/20261017-data-and-results/imports/objects/c009418ac1b3e8199e54c772fa6eb8049162223b16dd635fcf37dcb19d7e949e",
+      "duplicateContent": false,
+      "kind": "copied_saved_input",
+      "sha256": "c009418ac1b3e8199e54c772fa6eb8049162223b16dd635fcf37dcb19d7e949e",
+      "source": "docs/experiments/tcc-20261013-submission-20261030/root/typed-product-main-v460/typed-v459/driver-terminal.json",
+      "sourceMtimeNs": 1792024455079243160
+    },
+    {
+      "bytes": 1037,
+      "capturedAt": "2026-10-17T22:18:46.502572+00:00",
+      "destination": "thesis/audit/20261017-data-and-results/imports/objects/94a3b8aa0c1057f5f07751dbddff2470292915142727676a5558c0d2b0609561",
+      "duplicateContent": false,
+      "kind": "copied_saved_input",
+      "sha256": "94a3b8aa0c1057f5f07751dbddff2470292915142727676a5558c0d2b0609561",
+      "source": "docs/experiments/tcc-20261013-submission-20261030/root/typed-product-main-v460/typed-v459/manifest.json",
+      "sourceMtimeNs": 1792024455079343560
+    },
+    {
+      "bytes": 1915,
+      "capturedAt": "2026-10-17T22:18:46.512945+00:00",
+      "destination": "thesis/audit/20261017-data-and-results/imports/objects/9c581058cfee1e3888b143c17d608f6a10cc47ac285c951eaf485f26bc633ff7",
+      "duplicateContent": false,
+      "kind": "copied_saved_input",
+      "sha256": "9c581058cfee1e3888b143c17d608f6a10cc47ac285c951eaf485f26bc633ff7",
+      "source": "docs/experiments/tcc-20261013-submission-20261030/root/typed-product-main-v460/typed-v459/ready.json",
+      "sourceMtimeNs": 1792024455079447721
+    },
+    {
+      "bytes": 1840,
+      "capturedAt": "2026-10-17T22:18:46.519435+00:00",
+      "destination": "thesis/audit/20261017-data-and-results/imports/objects/ddc0706808e8ae537b889b5711ce00e94811f7d3fa2a0518109cf0f827be8fc5",
+      "duplicateContent": false,
+      "kind": "copied_saved_input",
+      "sha256": "ddc0706808e8ae537b889b5711ce00e94811f7d3fa2a0518109cf0f827be8fc5",
+      "source": "docs/experiments/tcc-20261013-submission-20261030/root/typed-product-main-v460/typed-v459/runtime/launch.json",
+      "sourceMtimeNs": 1792024455079679763
+    },
+    {
+      "bytes": 2050,
+      "capturedAt": "2026-10-17T22:18:46.541044+00:00",
+      "destination": "thesis/audit/20261017-data-and-results/imports/objects/37e56c7044d7e64a957425f3b17df027d4df370efca676ef1e2b3e9813d3689c",
+      "duplicateContent": false,
+      "kind": "copied_saved_input",
+      "sha256": "37e56c7044d7e64a957425f3b17df027d4df370efca676ef1e2b3e9813d3689c",
+      "source": "docs/experiments/tcc-20261013-submission-20261030/root/typed-product-main-v460/typed-v459/runtime/terminal.json",
+      "sourceMtimeNs": 1792024455079906685
+    },
+    {
+      "bytes": 121,
+      "capturedAt": "2026-10-17T22:18:46.551677+00:00",
+      "destination": "thesis/audit/20261017-data-and-results/imports/objects/d13415b6d106f3f9ab03243ccc7a052471f904d7d089ee0e65d7ee77b701f408",
+      "duplicateContent": false,
+      "kind": "copied_saved_input",
+      "sha256": "d13415b6d106f3f9ab03243ccc7a052471f904d7d089ee0e65d7ee77b701f408",
+      "source": "docs/experiments/tcc-20261013-submission-20261030/root/typed-product-main-v460/typed-v459/runtime/voice-stages.installed.json",
+      "sourceMtimeNs": 1792024455080091206
+    },
+    {
+      "bytes": 132,
+      "capturedAt": "2026-10-17T22:18:46.553596+00:00",
+      "destination": "thesis/audit/20261017-data-and-results/imports/objects/1e366543f29a7e627d5fc2ad406df9817b554c0540881c6aa2cdbf142034900f",
+      "duplicateContent": true,
+      "kind": "copied_saved_input",
+      "sha256": "1e366543f29a7e627d5fc2ad406df9817b554c0540881c6aa2cdbf142034900f",
+      "source": "docs/experiments/tcc-20261013-submission-20261030/root/typed-product-main-v460/typed-v459/runtime/voice-stages.status.json",
+      "sourceMtimeNs": 1792024455080444169
+    },
+    {
+      "bytes": 455,
+      "capturedAt": "2026-10-17T22:18:46.568566+00:00",
+      "destination": "thesis/audit/20261017-data-and-results/imports/objects/740fb2470b78400a8d9cc08f4f27b8e43bc9c0918b235cd5e127dd1e5032528e",
+      "duplicateContent": false,
+      "kind": "copied_saved_input",
+      "sha256": "740fb2470b78400a8d9cc08f4f27b8e43bc9c0918b235cd5e127dd1e5032528e",
+      "source": "docs/experiments/tcc-20261013-submission-20261030/root/typed-product-main-v460/typed-v459/source-guard.json",
+      "sourceMtimeNs": 1792024455080649730
+    },
+    {
+      "bytes": 444,
+      "capturedAt": "2026-10-17T22:18:46.574319+00:00",
+      "destination": "thesis/audit/20261017-data-and-results/imports/objects/803d1b4ce663e323c6e4721e295e8f04ea16fcaadd16a04439bb321236c43193",
+      "duplicateContent": false,
+      "kind": "copied_saved_input",
+      "sha256": "803d1b4ce663e323c6e4721e295e8f04ea16fcaadd16a04439bb321236c43193",
+      "source": "docs/experiments/tcc-20261013-submission-20261030/root/typed-product-main-v460/typed-v459/spawn.json",
+      "sourceMtimeNs": 1792024455080770811
+    },
+    {
+      "bytes": 2194,
+      "capturedAt": "2026-10-17T22:18:46.582391+00:00",
+      "destination": "thesis/audit/20261017-data-and-results/imports/objects/e48ee3532c92b02e72e4cc5091064a33f070a673ab304cfbb725a8638aaafa92",
+      "duplicateContent": false,
+      "kind": "copied_saved_input",
+      "sha256": "e48ee3532c92b02e72e4cc5091064a33f070a673ab304cfbb725a8638aaafa92",
+      "source": "docs/experiments/tcc-20261013-submission-20261030/root/typed-product-main-v460/typed-v459/terminal.json",
+      "sourceMtimeNs": 1792024455080882532
+    },
+    {
+      "bytes": 2856,
+      "capturedAt": "2026-10-17T22:18:46.590329+00:00",
+      "destination": "thesis/audit/20261017-data-and-results/imports/objects/e92c23357a763d07dac6c18cc807393ab8947f91cfebdef62a61896c76432678",
+      "duplicateContent": false,
+      "kind": "copied_saved_input",
+      "sha256": "e92c23357a763d07dac6c18cc807393ab8947f91cfebdef62a61896c76432678",
+      "source": "docs/experiments/tcc-20261013-submission-20261030/root/typed-product-main-v460/typed-v459/ui-case/private/in-context-primary.json",
+      "sourceMtimeNs": 1792024455095950929
+    },
+    {
+      "bytes": 1110,
+      "capturedAt": "2026-10-17T22:18:46.602575+00:00",
+      "destination": "thesis/audit/20261017-data-and-results/imports/objects/207eff4c8aefd23f98e818446e88af72795bedc330dee9daf13a10cfc88591e2",
+      "duplicateContent": false,
+      "kind": "copied_saved_input",
+      "sha256": "207eff4c8aefd23f98e818446e88af72795bedc330dee9daf13a10cfc88591e2",
+      "source": "docs/experiments/tcc-20261013-submission-20261030/root/typed-product-main-v460/typed-v459/ui-case/result.json",
+      "sourceMtimeNs": 1792024455097942305
+    },
+    {
+      "bytes": 30947,
+      "capturedAt": "2026-10-17T22:18:46.610373+00:00",
+      "destination": "thesis/audit/20261017-data-and-results/imports/objects/383ebfc9aee1ba218315cfc0effec10b6e9786ccda1e06f0170de6199350cf3b",
+      "duplicateContent": false,
+      "kind": "copied_saved_input",
+      "sha256": "383ebfc9aee1ba218315cfc0effec10b6e9786ccda1e06f0170de6199350cf3b",
+      "source": "docs/experiments/tcc-20261013-submission-20261030/root/typed-product-main-v460/typed-v459/ui-case/safe-projection.json",
+      "sourceMtimeNs": 1792024455098114066
+    },
+    {
+      "bytes": 2611,
+      "capturedAt": "2026-10-17T22:18:46.617255+00:00",
+      "destination": "thesis/audit/20261017-data-and-results/imports/objects/3f891936f394f40308fa13cda101d82a01c6b716820c80df19d7f7d6e6e72a32",
+      "duplicateContent": false,
+      "kind": "copied_saved_input",
+      "sha256": "3f891936f394f40308fa13cda101d82a01c6b716820c80df19d7f7d6e6e72a32",
+      "source": "docs/experiments/tcc-20261013-submission-20261030/root/typed-product-main-v462/README.md",
+      "sourceMtimeNs": 1792025377170886946
+    },
+    {
+      "bytes": 11410,
+      "capturedAt": "2026-10-17T22:18:46.626231+00:00",
+      "destination": "thesis/audit/20261017-data-and-results/imports/objects/922b0ae743cff3e699052adfba1d652731db4e15108169298fcbc746ea3cbfe6",
+      "duplicateContent": false,
+      "kind": "copied_saved_input",
+      "sha256": "922b0ae743cff3e699052adfba1d652731db4e15108169298fcbc746ea3cbfe6",
+      "source": "docs/experiments/tcc-20261013-submission-20261030/root/typed-product-main-v462/manifest.json",
+      "sourceMtimeNs": 1792025346081116505
+    },
+    {
+      "bytes": 770,
+      "capturedAt": "2026-10-17T22:18:46.639669+00:00",
+      "destination": "thesis/audit/20261017-data-and-results/imports/objects/00d500cd386d0e55d3b805272a5b2a4cccb5d842a467c03e27d6816c15c02d7c",
+      "duplicateContent": false,
+      "kind": "copied_saved_input",
+      "sha256": "00d500cd386d0e55d3b805272a5b2a4cccb5d842a467c03e27d6816c15c02d7c",
+      "source": "docs/experiments/tcc-20261013-submission-20261030/root/typed-product-main-v462/retirement-v461.json",
+      "sourceMtimeNs": 1792025346081264266
+    },
+    {
+      "bytes": 535,
+      "capturedAt": "2026-10-17T22:18:46.650176+00:00",
+      "destination": "thesis/audit/20261017-data-and-results/imports/objects/9a5624bd262ba60adeec35ab77795bf74e09dcbe71e6eac672ffd207e18ad011",
+      "duplicateContent": false,
+      "kind": "copied_saved_input",
+      "sha256": "9a5624bd262ba60adeec35ab77795bf74e09dcbe71e6eac672ffd207e18ad011",
+      "source": "docs/experiments/tcc-20261013-submission-20261030/root/typed-product-main-v462/typed-v461/driver-progress.json",
+      "sourceMtimeNs": 1792025346081398587
+    },
+    {
+      "bytes": 791,
+      "capturedAt": "2026-10-17T22:18:46.657616+00:00",
+      "destination": "thesis/audit/20261017-data-and-results/imports/objects/d09d3929c38013e3d6e384c30904de70b82601c84d4e02c5aad80d4737d7fb7a",
+      "duplicateContent": false,
+      "kind": "copied_saved_input",
+      "sha256": "d09d3929c38013e3d6e384c30904de70b82601c84d4e02c5aad80d4737d7fb7a",
+      "source": "docs/experiments/tcc-20261013-submission-20261030/root/typed-product-main-v462/typed-v461/driver-spawn.json",
+      "sourceMtimeNs": 1792025346081523468
+    },
+    {
+      "bytes": 644,
+      "capturedAt": "2026-10-17T22:18:46.663614+00:00",
+      "destination": "thesis/audit/20261017-data-and-results/imports/objects/fb1cb58ebe0732860400a717ce9f317587e9aef32fc0139c45ae3036e9e3fe19",
+      "duplicateContent": false,
+      "kind": "copied_saved_input",
+      "sha256": "fb1cb58ebe0732860400a717ce9f317587e9aef32fc0139c45ae3036e9e3fe19",
+      "source": "docs/experiments/tcc-20261013-submission-20261030/root/typed-product-main-v462/typed-v461/driver-terminal.json",
+      "sourceMtimeNs": 1792025346081642229
+    },
+    {
+      "bytes": 1081,
+      "capturedAt": "2026-10-17T22:18:46.677980+00:00",
+      "destination": "thesis/audit/20261017-data-and-results/imports/objects/2d8f10de1af6da71c2b8c4897537d6f4f4a407467cf68f774add9f5324c69261",
+      "duplicateContent": false,
+      "kind": "copied_saved_input",
+      "sha256": "2d8f10de1af6da71c2b8c4897537d6f4f4a407467cf68f774add9f5324c69261",
+      "source": "docs/experiments/tcc-20261013-submission-20261030/root/typed-product-main-v462/typed-v461/manifest.json",
+      "sourceMtimeNs": 1792025346081746230
+    },
+    {
+      "bytes": 1915,
+      "capturedAt": "2026-10-17T22:18:46.687984+00:00",
+      "destination": "thesis/audit/20261017-data-and-results/imports/objects/1ac3912644819f022ab50d17b2211ac565f67d395dda7e79ed2ae31c98f438a3",
+      "duplicateContent": false,
+      "kind": "copied_saved_input",
+      "sha256": "1ac3912644819f022ab50d17b2211ac565f67d395dda7e79ed2ae31c98f438a3",
+      "source": "docs/experiments/tcc-20261013-submission-20261030/root/typed-product-main-v462/typed-v461/ready.json",
+      "sourceMtimeNs": 1792025346081842791
+    },
+    {
+      "bytes": 1840,
+      "capturedAt": "2026-10-17T22:18:46.695692+00:00",
+      "destination": "thesis/audit/20261017-data-and-results/imports/objects/6668fe033246f19c0a74770c0af89dd116ee3ae7a6559a55a69ea891ace6c27e",
+      "duplicateContent": false,
+      "kind": "copied_saved_input",
+      "sha256": "6668fe033246f19c0a74770c0af89dd116ee3ae7a6559a55a69ea891ace6c27e",
+      "source": "docs/experiments/tcc-20261013-submission-20261030/root/typed-product-main-v462/typed-v461/runtime/launch.json",
+      "sourceMtimeNs": 1792025346081959752
+    },
+    {
+      "bytes": 2050,
+      "capturedAt": "2026-10-17T22:18:46.701167+00:00",
+      "destination": "thesis/audit/20261017-data-and-results/imports/objects/e09235a5e0a8b072baa9d3ad09e331852972cc617da33f6fc3a27fd6c64f0710",
+      "duplicateContent": false,
+      "kind": "copied_saved_input",
+      "sha256": "e09235a5e0a8b072baa9d3ad09e331852972cc617da33f6fc3a27fd6c64f0710",
+      "source": "docs/experiments/tcc-20261013-submission-20261030/root/typed-product-main-v462/typed-v461/runtime/terminal.json",
+      "sourceMtimeNs": 1792025346082060752
+    },
+    {
+      "bytes": 121,
+      "capturedAt": "2026-10-17T22:18:46.705862+00:00",
+      "destination": "thesis/audit/20261017-data-and-results/imports/objects/14b1649725cce7d73d28608cd524eb86ccfd46d5fdd6bc15924b4740839e28bb",
+      "duplicateContent": false,
+      "kind": "copied_saved_input",
+      "sha256": "14b1649725cce7d73d28608cd524eb86ccfd46d5fdd6bc15924b4740839e28bb",
+      "source": "docs/experiments/tcc-20261013-submission-20261030/root/typed-product-main-v462/typed-v461/runtime/voice-stages.installed.json",
+      "sourceMtimeNs": 1792025346082153753
+    },
+    {
+      "bytes": 134,
+      "capturedAt": "2026-10-17T22:18:46.711849+00:00",
+      "destination": "thesis/audit/20261017-data-and-results/imports/objects/57a712904a87115665bbbc39813a8b70e2267c6a04b072d4fee740a3e85755a2",
+      "duplicateContent": false,
+      "kind": "copied_saved_input",
+      "sha256": "57a712904a87115665bbbc39813a8b70e2267c6a04b072d4fee740a3e85755a2",
+      "source": "docs/experiments/tcc-20261013-submission-20261030/root/typed-product-main-v462/typed-v461/runtime/voice-stages.status.json",
+      "sourceMtimeNs": 1792025346082363675
+    },
+    {
+      "bytes": 455,
+      "capturedAt": "2026-10-17T22:18:46.720083+00:00",
+      "destination": "thesis/audit/20261017-data-and-results/imports/objects/36b74b39527f9d747d826ff36c2579c939eb874094437797fcb5c75342ebd5cc",
+      "duplicateContent": false,
+      "kind": "copied_saved_input",
+      "sha256": "36b74b39527f9d747d826ff36c2579c939eb874094437797fcb5c75342ebd5cc",
+      "source": "docs/experiments/tcc-20261013-submission-20261030/root/typed-product-main-v462/typed-v461/source-guard.json",
+      "sourceMtimeNs": 1792025346082453515
+    },
+    {
+      "bytes": 444,
+      "capturedAt": "2026-10-17T22:18:46.724711+00:00",
+      "destination": "thesis/audit/20261017-data-and-results/imports/objects/f760d5d728d2b3d4a22aab52505f7872ace032ea0f17c5f87e61417470e37180",
+      "duplicateContent": false,
+      "kind": "copied_saved_input",
+      "sha256": "f760d5d728d2b3d4a22aab52505f7872ace032ea0f17c5f87e61417470e37180",
+      "source": "docs/experiments/tcc-20261013-submission-20261030/root/typed-product-main-v462/typed-v461/spawn.json",
+      "sourceMtimeNs": 1792025346082608676
+    },
+    {
+      "bytes": 2194,
+      "capturedAt": "2026-10-17T22:18:46.766725+00:00",
+      "destination": "thesis/audit/20261017-data-and-results/imports/objects/5e1363d15c443a1e53a8bf4d77ebc2f020c02e832095387290fc2ee4979358e7",
+      "duplicateContent": false,
+      "kind": "copied_saved_input",
+      "sha256": "5e1363d15c443a1e53a8bf4d77ebc2f020c02e832095387290fc2ee4979358e7",
+      "source": "docs/experiments/tcc-20261013-submission-20261030/root/typed-product-main-v462/typed-v461/terminal.json",
+      "sourceMtimeNs": 1792025346082722997
+    },
+    {
+      "bytes": 1250,
+      "capturedAt": "2026-10-17T22:18:46.772580+00:00",
+      "destination": "thesis/audit/20261017-data-and-results/imports/objects/c6d1bbcefd2942306a139ffa48ab8166e6854f6578f7cac9d47e0c24116af475",
+      "duplicateContent": false,
+      "kind": "copied_saved_input",
+      "sha256": "c6d1bbcefd2942306a139ffa48ab8166e6854f6578f7cac9d47e0c24116af475",
+      "source": "docs/experiments/tcc-20261013-submission-20261030/root/typed-product-main-v462/typed-v461/ui-case/result.json",
+      "sourceMtimeNs": 1792025346100203050
+    },
+    {
+      "bytes": 48261,
+      "capturedAt": "2026-10-17T22:18:46.780562+00:00",
+      "destination": "thesis/audit/20261017-data-and-results/imports/objects/700de101cbf0b833e7ea036de3d6f5081ad1012885b22ddc1f99e313bef12b8c",
+      "duplicateContent": false,
+      "kind": "copied_saved_input",
+      "sha256": "700de101cbf0b833e7ea036de3d6f5081ad1012885b22ddc1f99e313bef12b8c",
+      "source": "docs/experiments/tcc-20261013-submission-20261030/root/typed-product-main-v462/typed-v461/ui-case/safe-projection.json",
+      "sourceMtimeNs": 1792025346100369171
+    },
+    {
+      "bytes": 381651,
+      "capturedAt": "2026-10-17T22:18:46.793888+00:00",
+      "destination": "thesis/audit/20261017-data-and-results/imports/objects/57cc19cf74a526cc37e58a63c429c0ea06fd7e2e8e5db50e51da4c5fd3ae524f",
+      "duplicateContent": false,
+      "kind": "copied_saved_input",
+      "sha256": "57cc19cf74a526cc37e58a63c429c0ea06fd7e2e8e5db50e51da4c5fd3ae524f",
+      "source": "thesis/evidence/orca-relayed-http-v1197/analysis-v1290/CASE-HISTORY.json",
+      "sourceMtimeNs": 1792273430037454354
+    },
+    {
+      "bytes": 1022,
+      "capturedAt": "2026-10-17T22:18:46.800620+00:00",
+      "destination": "thesis/audit/20261017-data-and-results/imports/objects/bccd56095f541718dce111f99d111e0dd19677644a520ed396dadc6c0e02c4b8",
+      "duplicateContent": false,
+      "kind": "copied_saved_input",
+      "sha256": "bccd56095f541718dce111f99d111e0dd19677644a520ed396dadc6c0e02c4b8",
+      "source": "thesis/evidence/orca-relayed-http-v1197/analysis-v1290/CUSTODY.json",
+      "sourceMtimeNs": 1792273430060397408
+    },
+    {
+      "bytes": 411,
+      "capturedAt": "2026-10-17T22:18:46.850616+00:00",
+      "destination": "thesis/audit/20261017-data-and-results/imports/objects/fb3b80942037faec3c09ae6e221d4c2570c1f12047350490cd779eee8689e341",
+      "duplicateContent": false,
+      "kind": "copied_saved_input",
+      "sha256": "fb3b80942037faec3c09ae6e221d4c2570c1f12047350490cd779eee8689e341",
+      "source": "thesis/evidence/orca-relayed-http-v1197/analysis-v1290/DOC-LINKS.json",
+      "sourceMtimeNs": 1792273589227450654
+    },
+    {
+      "bytes": 141868,
+      "capturedAt": "2026-10-17T22:18:46.864293+00:00",
+      "destination": "thesis/audit/20261017-data-and-results/imports/objects/b935287895f99765e8a6b082df64a8bb9ad5eb3377820c7f50799c958083bd4f",
+      "duplicateContent": false,
+      "kind": "copied_saved_input",
+      "sha256": "b935287895f99765e8a6b082df64a8bb9ad5eb3377820c7f50799c958083bd4f",
+      "source": "thesis/evidence/orca-relayed-http-v1197/analysis-v1290/REQUESTER-CURRENT.snapshot.json",
+      "sourceMtimeNs": 1792273430049214643
+    },
+    {
+      "bytes": 2550,
+      "capturedAt": "2026-10-17T22:18:46.869748+00:00",
+      "destination": "thesis/audit/20261017-data-and-results/imports/objects/5d0d7e7c268cd3489fd27ceadbd9c88e97cc846d10c4c01f4b559d37aa6d61bb",
+      "duplicateContent": false,
+      "kind": "copied_saved_input",
+      "sha256": "5d0d7e7c268cd3489fd27ceadbd9c88e97cc846d10c4c01f4b559d37aa6d61bb",
+      "source": "thesis/evidence/orca-relayed-http-v1197/analysis-v1290/SOL-SOURCE-REVIEW.json",
+      "sourceMtimeNs": 1792273716957435071
+    },
+    {
+      "bytes": 35105,
+      "capturedAt": "2026-10-17T22:18:46.875195+00:00",
+      "destination": "thesis/audit/20261017-data-and-results/imports/objects/7b5b9d537350baf33925c32daf697af863a8636dede9886467db653c280cd7d6",
+      "duplicateContent": false,
+      "kind": "copied_saved_input",
+      "sha256": "7b5b9d537350baf33925c32daf697af863a8636dede9886467db653c280cd7d6",
+      "source": "thesis/evidence/orca-relayed-http-v1197/analysis-v1290/SOURCE-IDENTITIES.json",
+      "sourceMtimeNs": 1792273430044884610
+    },
+    {
+      "bytes": 15768,
+      "capturedAt": "2026-10-17T22:18:46.881948+00:00",
+      "destination": "thesis/audit/20261017-data-and-results/imports/objects/35d4e790fbcfb0e3537e6a833d9533499594d4c2bbc3f2dab535d19391bdfe10",
+      "duplicateContent": false,
+      "kind": "copied_saved_input",
+      "sha256": "35d4e790fbcfb0e3537e6a833d9533499594d4c2bbc3f2dab535d19391bdfe10",
+      "source": "thesis/evidence/orca-relayed-http-v1197/analysis-v1290/SUMMARY.json",
+      "sourceMtimeNs": 1792273430019697978
+    },
+    {
+      "bytes": 2571,
+      "capturedAt": "2026-10-17T22:18:46.891556+00:00",
+      "destination": "thesis/audit/20261017-data-and-results/imports/objects/389d03a509f359faaa363ea0922118326dd04e6b004b6e3091a12da48bb22b2f",
+      "duplicateContent": false,
+      "kind": "copied_saved_input",
+      "sha256": "389d03a509f359faaa363ea0922118326dd04e6b004b6e3091a12da48bb22b2f",
+      "source": "thesis/evidence/orca-relayed-http-v1197/analysis-v1290/VALIDATION.json",
+      "sourceMtimeNs": 1792273716971982341
+    },
+    {
+      "bytes": 5253,
+      "capturedAt": "2026-10-17T22:18:46.897662+00:00",
+      "destination": "thesis/audit/20261017-data-and-results/imports/objects/8839d9e39c0427d46541c912ee57ac5b23ead89de98e7286f701d17c7957937d",
+      "duplicateContent": false,
+      "kind": "copied_saved_input",
+      "sha256": "8839d9e39c0427d46541c912ee57ac5b23ead89de98e7286f701d17c7957937d",
+      "source": "thesis/evidence/sealed-cohorts-v1215/PERSONAL-ARCHIVE-INDEX-v1326.json",
+      "sourceMtimeNs": 1792275398665237069
+    },
+    {
+      "bytes": 686,
+      "capturedAt": "2026-10-17T22:18:46.905067+00:00",
+      "destination": "thesis/audit/20261017-data-and-results/imports/objects/1232482e7135d4934b169c46f5c72a4674b9f6530f474e6943dbb1fe4cdad0fd",
+      "duplicateContent": false,
+      "kind": "copied_saved_input",
+      "sha256": "1232482e7135d4934b169c46f5c72a4674b9f6530f474e6943dbb1fe4cdad0fd",
+      "source": "thesis/validation/android-orca-relay-preparation-v1315/CUSTODY.json",
+      "sourceMtimeNs": 1792274883376906173
+    },
+    {
+      "bytes": 10493,
+      "capturedAt": "2026-10-17T22:18:46.915863+00:00",
+      "destination": "thesis/audit/20261017-data-and-results/imports/objects/640c13028b76dabedbd0d5c2bb1e0fc34a2abf298cfe08626323d8d7d6caf2ec",
+      "duplicateContent": false,
+      "kind": "copied_saved_input",
+      "sha256": "640c13028b76dabedbd0d5c2bb1e0fc34a2abf298cfe08626323d8d7d6caf2ec",
+      "source": "thesis/validation/android-orca-relay-preparation-v1315/GUIDE-RECEIPT.json",
+      "sourceMtimeNs": 1792274883359923364
+    },
+    {
+      "bytes": 4781,
+      "capturedAt": "2026-10-17T22:18:46.921091+00:00",
+      "destination": "thesis/audit/20261017-data-and-results/imports/objects/23dcca33eb23d2a07e96d1813b0eb1a75cb00f053f3604a0c4d01feca24ffdf0",
+      "duplicateContent": false,
+      "kind": "copied_saved_input",
+      "sha256": "23dcca33eb23d2a07e96d1813b0eb1a75cb00f053f3604a0c4d01feca24ffdf0",
+      "source": "thesis/validation/android-orca-relay-preparation-v1315/PREPARATION.json",
+      "sourceMtimeNs": 1792274883365779649
+    },
+    {
+      "bytes": 10254,
+      "capturedAt": "2026-10-17T22:18:46.932038+00:00",
+      "destination": "thesis/audit/20261017-data-and-results/imports/objects/4de175839cbcfbe01d5e87069510592cfcfa06cf832c12adb06a3a3ca9de724e",
+      "duplicateContent": false,
+      "kind": "copied_saved_input",
+      "sha256": "4de175839cbcfbe01d5e87069510592cfcfa06cf832c12adb06a3a3ca9de724e",
+      "source": "thesis/validation/android-orca-relay-preparation-v1315/SKILL.md",
+      "sourceMtimeNs": 1792274883326739793
+    }
+  ],
+  "schema": "aurora.audit.custody.v1",
+  "sourceReadBytes": 2170705
+}

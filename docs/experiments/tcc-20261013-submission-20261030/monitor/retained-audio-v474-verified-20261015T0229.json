@@ -1,0 +1,12 @@
+{
+  "status": "Current bounded check",
+  "observedAt": "2026-10-15T02:28:08.514067+00:00",
+  "package": "docs/experiments/tcc-20261013-submission-20261030/root/retained-audio-main-v474",
+  "manifestSha256": "026b96eb6cf070b266e971234abb75da5bf5af953b17d2a8a457814af5223868",
+  "membersVerified": 44,
+  "readmeSha256": "a980b0fb9e5b5eca8fcb1e6aa1686043d08c2a09494c4270dbb501d28ef12572",
+  "scope": "Existing saved-answer TTS/software-playback readiness only; NO full audio-STT-LLM-TTS acceptance; provider unknown; no modelcall/test/replay",
+  "verification": "One hash/byte comparison of existing44listedmembers",
+  "rootMessage": "msg_34a853d8a91a",
+  "phase2MeasuredAllowed": false
+}

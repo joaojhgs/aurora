@@ -1,0 +1,74 @@
+[
+  {
+    "path": "mesh-main-v257/stdout.log",
+    "original_sha256": "c561ddc3bd446390d3e06b7fc6cdc79b8e8cbd65e670d3b23d71c4b573393680",
+    "export_sha256": "c561ddc3bd446390d3e06b7fc6cdc79b8e8cbd65e670d3b23d71c4b573393680",
+    "transformation": "byte-identical"
+  },
+  {
+    "path": "mesh-main-v257/stderr.log",
+    "original_sha256": "13f16f7f7a7382fe59565ca58a4a93b9472578a12857e70ff1989bacb3a5a436",
+    "export_sha256": "13f16f7f7a7382fe59565ca58a4a93b9472578a12857e70ff1989bacb3a5a436",
+    "transformation": "byte-identical"
+  },
+  {
+    "path": "mesh-main-v257/root-manifest.json",
+    "original_sha256": "7de1aa66d7274169480cb21c432557fc6e230f950341589f179f178860f34772",
+    "export_sha256": "70b25032f003ff18e27bfa407cdfadf605638b0893ae46a3595f73f611d4b3ec",
+    "transformation": "omit private config/env hashes"
+  },
+  {
+    "path": "mesh-main-v257/root-result.json",
+    "original_sha256": "a203f8617a5120c6c4b8ecf86685ac6da447d23adfbbc2a3d07201077f093c73",
+    "export_sha256": "1773537b36cd2d966c094587b59b6404c134d22079ddf7fa5578aa053c969fbf",
+    "transformation": "omit private config/env hashes"
+  },
+  {
+    "path": "mesh-main-v257/tsconfig-cleanup.json",
+    "original_sha256": "a5866a350d877ad399b71ae51b43227a80416a46839e468218480255885df5ac",
+    "export_sha256": "a5866a350d877ad399b71ae51b43227a80416a46839e468218480255885df5ac",
+    "transformation": "byte-identical"
+  },
+  {
+    "path": "mesh-main-v257/artifacts/python-service.log",
+    "original_sha256": "ac080d3c3eb9f9b8b0ee15ab7f3e724a4c844c6715b25272c9508fb0d6c74123",
+    "export_sha256": "2757ba6e8833a3c9c6d51bc1fbc34703551509b234a551eb5fa89aedd61aa045",
+    "transformation": "conservative complete credential-field line redaction: 3 lines"
+  },
+  {
+    "path": "mesh-main-v257/artifacts/web-ui.log",
+    "original_sha256": "391935ee9771e1e31bdfdb053dd77c00b919ce15b6b0de7ffbcf6fc2a5d1eb67",
+    "export_sha256": "391935ee9771e1e31bdfdb053dd77c00b919ce15b6b0de7ffbcf6fc2a5d1eb67",
+    "transformation": "byte-identical"
+  },
+  {
+    "path": "mesh-main-v257/artifacts/playwright-results/.last-run.json",
+    "original_sha256": "e22df5d0991eb28c09093b1e678b3fa8cd1fab48185d38e67cf79fb6e63ad5ea",
+    "export_sha256": "e22df5d0991eb28c09093b1e678b3fa8cd1fab48185d38e67cf79fb6e63ad5ea",
+    "transformation": "byte-identical"
+  },
+  {
+    "path": "mesh-selection-v258/stdout.log",
+    "original_sha256": "97f0e631d5975f87d598f36b6d25d9182245cf6c3872012f2882f381044a3298",
+    "export_sha256": "97f0e631d5975f87d598f36b6d25d9182245cf6c3872012f2882f381044a3298",
+    "transformation": "byte-identical"
+  },
+  {
+    "path": "mesh-selection-v258/stderr.log",
+    "original_sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+    "export_sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+    "transformation": "byte-identical"
+  },
+  {
+    "path": "mesh-selection-v258/browser-executable.log",
+    "original_sha256": "767fa00b9922a8de43c8849a4df0b75ee419b0cb62298388405ff5d65c1ed078",
+    "export_sha256": "767fa00b9922a8de43c8849a4df0b75ee419b0cb62298388405ff5d65c1ed078",
+    "transformation": "byte-identical"
+  },
+  {
+    "path": "mesh-selection-v258/result.json",
+    "original_sha256": "7e12cd5072f3516716d56be4bf128c671eecdeb8e0cb5c530216588e06b4d51d",
+    "export_sha256": "7e12cd5072f3516716d56be4bf128c671eecdeb8e0cb5c530216588e06b4d51d",
+    "transformation": "byte-identical"
+  }
+]

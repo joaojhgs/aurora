@@ -1,0 +1,25 @@
+{
+  "at": "2026-10-17T20:14:01.766440+00:00",
+  "basis": "completed ordinary excluded warmup E2E worker-clock durations; conditional pacing estimate only, no extra pilot or measured latency population",
+  "warmupsObserved": 7,
+  "warmupFlowSeconds": [
+    55.552106994,
+    57.934489399,
+    54.805857428,
+    45.390296457999995,
+    51.75627844500001,
+    56.478125229,
+    49.243870626
+  ],
+  "meanWarmupFlowSeconds": 53.023003511285715,
+  "remainingExcludedWarmups": 8,
+  "plannedMeasured": 900,
+  "assumedProofCollectionSeconds": 20,
+  "conditionalMeasuredStartUTC": "2026-10-17T20:21:25.950468+00:00",
+  "conditionalFinishUTC": "2026-10-18T09:36:46.653628+00:00",
+  "existingProviderOuterDeadlineUTC": "2026-10-18T09:58:36.115743+00:00",
+  "conditionalCalendarMarginSeconds": 1309.462115,
+  "predictionNotGuarantee": true,
+  "noProviderDeadlineExtensionOrCountChange": true,
+  "calendarSchedulingNotCrossHostPerformanceLatency": true
+}

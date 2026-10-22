@@ -1,0 +1,46 @@
+{
+  "at": "2026-10-22T10:59:01.251651+00:00",
+  "status": "LAST_PAIR_SEALED_BYTES_AND_ALL_MEMBERS_RECOVERED",
+  "httpMeasuredAttempted": 260,
+  "httpMeasuredCorrect": 260,
+  "localMeasuredAttempted": 260,
+  "localMeasuredCorrect": 260,
+  "remainingPerStream": 640,
+  "caseOrdinalsIncludingOneCurrentWarmup": 261,
+  "archiveBytes": 43222,
+  "archiveSha256": "529f1adc89e0d6bcd302d1618a5c4983e2f5622dd8b293c3beb28885cf7d246c",
+  "members": 9,
+  "audio": {
+    "bytes": 31276,
+    "sha256": "a7b14d0883f1405132f5ee5f5f4edb4b0437169ae7b0129a10717d6ccaf05dfc",
+    "frames": 15616,
+    "channels": 1,
+    "sampleRate": 22050
+  },
+  "originalProviderActorsAlive": [
+    {
+      "pid": 2555838,
+      "expectedStartTicks": 41063526,
+      "exists": true,
+      "state": "S",
+      "actualStartTicks": 41063526,
+      "originalIdentityAlive": true
+    },
+    {
+      "pid": 2555839,
+      "expectedStartTicks": 41063588,
+      "exists": true,
+      "state": "S",
+      "actualStartTicks": 41063588,
+      "originalIdentityAlive": true
+    }
+  ],
+  "localProducerStopped": {
+    "at": "2026-10-22T10:51:33.857899+00:00",
+    "reason": "finite_no_pair_arrival",
+    "lastOrdinal": 261
+  },
+  "newInference": 0,
+  "sourceSettingsChanged": false,
+  "originalInterruptedTerminalNotOverwritten": true
+}

@@ -1,0 +1,37 @@
+{
+  "at": "2026-10-17T17:23:07.098047+00:00",
+  "records": [
+    {
+      "path": "AUTH-BINDING-PROVENANCE.json",
+      "bytes": 617,
+      "sha256": "263ac965ba212943d741793ecc0cd70f535ab7023e0f3fb373800726288fa466"
+    },
+    {
+      "path": "REPORT.md",
+      "bytes": 4635,
+      "sha256": "37dbbe2246294b470b8d45b371698213fb15f4e8f64e31064203c6be89b98f5c"
+    },
+    {
+      "path": "RESTORATION-LAUNCH.json",
+      "bytes": 409,
+      "sha256": "112d94f7db1730253222b561ea5810bee54603a622bd2c3b23cbd5308849e8a2"
+    },
+    {
+      "path": "RESTORATION-PROGRESS.json",
+      "bytes": 8689,
+      "sha256": "559d221e428c50649560b03e1d6f87b4a3ebe26f087a8517c62ddb7fcb9515dc"
+    },
+    {
+      "path": "SOURCE-STAGED.json",
+      "bytes": 3563,
+      "sha256": "a50c18252bc36aa3d0899a330a4dd7fd9c69856db318125e2d64e4cbd2517600"
+    },
+    {
+      "path": "UNFROZEN-OPERATOR-READY.json",
+      "bytes": 446,
+      "sha256": "846395c5d134a9bac336a8921b0901f75b714068c7fbb9b0ee47f31688744a57"
+    }
+  ],
+  "credentialValuesExported": false,
+  "measuredAttempts": 0
+}

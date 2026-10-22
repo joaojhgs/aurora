@@ -1,0 +1,71 @@
+{
+  "at": "2026-10-20T16:20:23.346149+00:00",
+  "nativeGoalThread": "01a112a5-d6bb-74e2-bf7c-ace73cb513b5",
+  "nativeGoalStatus": "active",
+  "status": "FROZEN_K2_900_MEASURED_RUNNING",
+  "progressObservation": {
+    "attempted": 65,
+    "last_attempt_file": "attempts/attempt-0065-measured.jsonl",
+    "last_attempt_status": "completed_correct",
+    "measured_attempted": 50,
+    "planned_measured": 900,
+    "planned_warmups": 15,
+    "status": "running",
+    "unattempted_measured": 850,
+    "warmups_attempted": 15
+  },
+  "rawCompletedMeasured": 50,
+  "rawMeasuredOutcomes": {
+    "completed_correct": 50
+  },
+  "processes": {
+    "2830732": {
+      "present": true,
+      "startTicks": 129050331,
+      "state": "S",
+      "expectedStartTicks": 129050331
+    },
+    "2830763": {
+      "present": true,
+      "startTicks": 129050436,
+      "state": "S",
+      "expectedStartTicks": 129050436
+    },
+    "2831081": {
+      "present": true,
+      "startTicks": 129052325,
+      "state": "S",
+      "expectedStartTicks": 129052325
+    }
+  },
+  "conditionManifestSha256": "a653d60065616e34844d956d1ed47038aa94f3ff876c36bf3a98e904ca838641",
+  "custody": {
+    "updatedAt": "2026-10-20T16:20:06.051012+00:00",
+    "receipt": "thesis/campaigns/worker-desktop-k2-p2p-assistant-tts-v1826/receipts/000020.json",
+    "receiptSha256": "e8be9e8404644714572d9adf8942e74d34f538a7e2a50ddb44a78e9ae53def0a",
+    "physicalPayloadBytes": 5395410,
+    "retainedCases": 64,
+    "retainedAudioBlobs": 64,
+    "errors": [],
+    "diskAfter": {
+      "free": 4486565888,
+      "total": 109128826880,
+      "used": 104625483776
+    }
+  },
+  "monitorEvidence": {
+    "path": "thesis/campaigns/worker-desktop-k2-p2p-assistant-tts-v1826/MONITOR-MEASUREMENT-RESUMED-VERIFIED-20261020T1609Z.json",
+    "bytes": 5700,
+    "sha256": "89753004a5b5def69b04bd95355a4e91e89a8743b328f62073f98be59510c880"
+  },
+  "ownerResumptionAlert": {
+    "alreadySentOnceByOriginalMonitor": true,
+    "messageId": "msg_44b9a0618c24",
+    "requestId": "75e2912a-e12f-4c25-9109-2c274be21336",
+    "codingOwnerDeliveryAcknowledgement": "UNVERIFIED_NO_DUPLICATE_ALERT_SENT"
+  },
+  "executionChanges": false,
+  "newWorkers": false,
+  "newInferenceOutsideFrozenCondition": false,
+  "nextGate": "Continue same frozen 900 to natural terminal boundary, then seal requester/provider raw data and perform saved-data stage/resource joins. K1 191 remaining and wider matrix stay open."
+}

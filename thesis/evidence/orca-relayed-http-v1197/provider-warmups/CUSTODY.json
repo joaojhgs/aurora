@@ -1,0 +1,55 @@
+{
+  "at": "2026-10-17T20:20:35.349277+00:00",
+  "packetPath": "/home/developer/projects/aurora/.git/aurora-handoff-import-20261006/v1198-actual15-receiver-custody-RESULT.json",
+  "packetSha256": "8c7a22cef2845d6819d9447b54cbbe891a66022dc79f0bbdec6e1e00f93a20d0",
+  "files": [
+    {
+      "originalPath": "/home/developer/projects/aurora/.git/aurora-handoff-import-20261006/distributed-k1-http-provider-v1126/runtime/voice-stages.jsonl",
+      "receivedPath": "/home/developer/projects/aurora/.git/aurora-handoff-import-20261006/distributed-k1-orca-relayed-launch-v1197/receiver-warmup-custody/voice-stages.jsonl",
+      "bytes": 74174,
+      "originalSha256": "8f58bab62de625463ea6cedcffd590c96756be65e7f01c7cd379bfef3cc177e0",
+      "receivedSha256": "8f58bab62de625463ea6cedcffd590c96756be65e7f01c7cd379bfef3cc177e0"
+    },
+    {
+      "originalPath": "/home/developer/projects/aurora/.git/aurora-handoff-import-20261006/distributed-k1-http-provider-v1126/runtime/actual-provider-bindings.jsonl",
+      "receivedPath": "/home/developer/projects/aurora/.git/aurora-handoff-import-20261006/distributed-k1-orca-relayed-launch-v1197/receiver-warmup-custody/actual-provider-bindings.jsonl",
+      "bytes": 12787,
+      "originalSha256": "344a8b1af4073674771b2aed5e4bc351cf069ca4caa0c5d67e696dbc43c826f0",
+      "receivedSha256": "344a8b1af4073674771b2aed5e4bc351cf069ca4caa0c5d67e696dbc43c826f0"
+    },
+    {
+      "originalPath": "/home/developer/projects/aurora/.git/aurora-handoff-import-20261006/distributed-k1-http-provider-v1126/runtime/receiver-identity.json",
+      "receivedPath": "/home/developer/projects/aurora/.git/aurora-handoff-import-20261006/distributed-k1-orca-relayed-launch-v1197/receiver-warmup-custody/receiver-identity.json",
+      "bytes": 1434,
+      "originalSha256": "bf934ac3e83f57e5732c631c5c106496ed8a7359aef1b4b2b5442cae586a7300",
+      "receivedSha256": "bf934ac3e83f57e5732c631c5c106496ed8a7359aef1b4b2b5442cae586a7300"
+    },
+    {
+      "originalPath": "/home/developer/projects/aurora/.git/aurora-handoff-import-20261006/distributed-k1-http-provider-v1126/input/provider-manifest.json",
+      "receivedPath": "/home/developer/projects/aurora/.git/aurora-handoff-import-20261006/distributed-k1-orca-relayed-launch-v1197/receiver-warmup-custody/provider-frozen-manifest.json",
+      "bytes": 11597,
+      "originalSha256": "450ee5af677a229e93f75c093e4e5ee3135c25b223f0d73f713f0c31f56c4cae",
+      "receivedSha256": "450ee5af677a229e93f75c093e4e5ee3135c25b223f0d73f713f0c31f56c4cae"
+    },
+    {
+      "originalPath": "/home/developer/projects/aurora/.git/aurora-handoff-import-20261006/distributed-k1-http-provider-v1126/input/admission-v1126.json",
+      "receivedPath": "/home/developer/projects/aurora/.git/aurora-handoff-import-20261006/distributed-k1-orca-relayed-launch-v1197/receiver-warmup-custody/provider-admission.json",
+      "bytes": 1217,
+      "originalSha256": "005e1b9e8a04d98e0e7bb9d8f69a244806657583e44cf9b35f6bfa78a8267a3e",
+      "receivedSha256": "005e1b9e8a04d98e0e7bb9d8f69a244806657583e44cf9b35f6bfa78a8267a3e"
+    },
+    {
+      "originalPath": "/home/developer/projects/aurora/.git/aurora-handoff-import-20261006/distributed-k1-http-provider-v1126/input/actual-provider-files-v1126.json",
+      "receivedPath": "/home/developer/projects/aurora/.git/aurora-handoff-import-20261006/distributed-k1-orca-relayed-launch-v1197/receiver-warmup-custody/provider-actual-files.json",
+      "bytes": 1611,
+      "originalSha256": "799e2098820d5dd287afc443121edd73455ad30ab5a7163f3099874f5a95b7cf",
+      "receivedSha256": "799e2098820d5dd287afc443121edd73455ad30ab5a7163f3099874f5a95b7cf"
+    },
+    {
+      "scope": "actual15 correlated warmup intervals only; full original binding file preserved",
+      "selectedPath": "/home/developer/projects/aurora/.git/aurora-handoff-import-20261006/distributed-k1-orca-relayed-launch-v1197/receiver-warmup-custody/actual-provider-bindings-selected15.jsonl",
+      "selectedSha256": "13064b6348ce14bc61f3f5b6135491e01eff14d815825854918f35258fbc75c4",
+      "selectedRows": 30
+    }
+  ]
+}

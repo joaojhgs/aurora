@@ -1,0 +1,62 @@
+{
+  "at": "2026-10-22T11:03:27.695017+00:00",
+  "companion": {
+    "measured": {
+      "attempted": 260,
+      "correct": 260,
+      "failed": 0,
+      "harnessErrorsIncludedInFailed": 0,
+      "incorrectIncludedInFailed": 0,
+      "offered": 260,
+      "planned": 900,
+      "timeouts": 0,
+      "unstarted": 640
+    },
+    "warmup": {
+      "attempted": 1,
+      "correct": 1,
+      "failed": 0,
+      "harnessErrorsIncludedInFailed": 0,
+      "incorrectIncludedInFailed": 0,
+      "offered": 1,
+      "planned": 1,
+      "timeouts": 0,
+      "unstarted": 0
+    }
+  },
+  "completePairedCapsules": 261,
+  "elapsedSeconds": 10509.661208736,
+  "lastIndex": 260,
+  "lastNativeParent": "56a32989fc3c4f0a266b96fc56de233b",
+  "lastOrdinal": 261,
+  "manifestSha256": "316d4cc09adc44d0104dca8ac1f2a966347588ffef37bc2fa809ec14fd5efff8",
+  "phase": "measured",
+  "pid": 281887,
+  "primary": {
+    "measured": {
+      "attempted": 260,
+      "correct": 260,
+      "failed": 0,
+      "harnessErrorsIncludedInFailed": 0,
+      "incorrectIncludedInFailed": 0,
+      "offered": 260,
+      "planned": 900,
+      "timeouts": 0,
+      "unstarted": 640
+    },
+    "warmup": {
+      "attempted": 1,
+      "correct": 1,
+      "failed": 0,
+      "harnessErrorsIncludedInFailed": 0,
+      "incorrectIncludedInFailed": 0,
+      "offered": 1,
+      "planned": 1,
+      "timeouts": 0,
+      "unstarted": 0
+    }
+  },
+  "status": "INTERRUPTED_COPY_FAILURE_LAST_PAIR_RECOVERED",
+  "reconciledFrom": "ROOT-PAIR-0261-RECOVERED-v2448.json",
+  "originalRunningCurrentUnmodified": true
+}

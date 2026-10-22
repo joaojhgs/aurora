@@ -1,0 +1,56 @@
+{
+  "adbMeasurementTransport": false,
+  "apkSha256": "1aaabb06746a70247562040a265a4efa6b80dcc4dc8f1fb25a0fb9da881025d6",
+  "appPid": "25389",
+  "at": "2026-10-22T07:15:06.997849+00:00",
+  "batteryAfter": {
+    "AC powered": "false",
+    "USB powered": "true",
+    "health": "2",
+    "level": "80",
+    "status": "2",
+    "temperature": "291"
+  },
+  "batteryBefore": {
+    "AC powered": "false",
+    "USB powered": "true",
+    "health": "2",
+    "level": "80",
+    "status": "2",
+    "temperature": "286"
+  },
+  "deadlineUtc": "2026-10-22T07:23:55.083217+00:00",
+  "elapsedSeconds": 290.148179085998,
+  "finishedAt": "2026-10-22T07:19:57.147078+00:00",
+  "input": {
+    "avVersion": "16.0.1",
+    "entrypointFormat": "pcm_s16le",
+    "entrypointRateHz": 16000,
+    "fasterWhisperVersion": "1.1.1",
+    "normalization": "production faster_whisper.audio.decode_audio(PyAV) to16k float32 then rint*32768/clip/LEint16; setup before phone timing",
+    "numpyVersion": "2.2.6",
+    "pcmBytes": 159456,
+    "pcmSha256": "1d5147ec00b8582ffeeb2d6a196cfab6e713cc33c9beea9212e7bc91eeed8fbf",
+    "sampleCount": 79728,
+    "sourceChannels": 1,
+    "sourceFrames": 109875,
+    "sourceSampleRateHz": 22050,
+    "sourceWavSha256": "da0ecc4ad0885746ab6e716585473917ab2b543a505bf0db09ebacfaa7943cbb"
+  },
+  "maxPilotFlows": 1,
+  "maximumSeconds": 520,
+  "measuredCases": 0,
+  "nativeResultPath": "/home/developer/projects/aurora/thesis/phone-notebook/20261020/deployment/ebde3a8acf6315f920d03593845f17a1fc65a733/phone-file-audio-v213/native.json",
+  "nativeResultSha256": "7c973be3b65419d897bf5e51eee06b9271effe2e8d845db9892414eccc1fa5a8",
+  "nativeSessionClosed": true,
+  "nodeExit": 0,
+  "nodePid": 254830,
+  "notebookInference": false,
+  "phoneMemoryBefore": {
+    "MemAvailable": 2999775232,
+    "MemTotal": 11861921792
+  },
+  "sourceIdentity": "ebde3a8acf6315f920d03593845f17a1fc65a733 + source-closure-overlay-v2383 + android-bundled-model-rename-v1 + android-node-policy-initial-publication-v2 + android-finite-file-audio-v3 + android-finite-file-audio-v3a",
+  "startedAt": "2026-10-22T07:15:15.083207+00:00",
+  "status": "ACTUAL_LOCAL_PHONE_FILE_AUDIO_TO_VALID_WAV"
+}

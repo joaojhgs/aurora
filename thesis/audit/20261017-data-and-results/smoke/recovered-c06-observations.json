@@ -1,0 +1,410 @@
+{
+  "c06-app900-v1058-measured-0104": {
+    "row": {
+      "actualPiperCallReturned": true,
+      "audioValid": true,
+      "caseId": "c06-app900-v1058-measured-0104",
+      "clientCorrelationId": null,
+      "clientCorrelationReason": "native telemetry correlation remains null; SDK returned stage IDs are stored separately",
+      "completed": true,
+      "elapsedMonotonicNs": 10623781720,
+      "finishedMonotonicNs": 788675792288475,
+      "flowDurationMs": 10498.000000000233,
+      "llmSpanPresent": true,
+      "nativeRecorderConsistentWithBackend": true,
+      "nativeRecorderProcessIds": [
+        "9ab74cef3e9247fc83f50a18e9a1736f",
+        "9ab74cef3e9247fc83f50a18e9a1736f",
+        "9ab74cef3e9247fc83f50a18e9a1736f"
+      ],
+      "nativeSdkCorrelationMatches": {
+        "assistant": null,
+        "stt": null,
+        "tts": null
+      },
+      "nativeStageRows": 20,
+      "nativeStages": {
+        "llm": {
+          "clockDomain": "python_process_monotonic",
+          "correlationId": "e1e4690ca00869b0e685644d92e57675",
+          "durationNs": 280252125,
+          "endMonotonicNs": 788674036881714,
+          "present": true,
+          "receiverPid": "3643793",
+          "recorderProcessId": "9ab74cef3e9247fc83f50a18e9a1736f",
+          "spanId": "4988f309863741fbb0a88c6bbe74825d",
+          "startMonotonicNs": 788673756629589
+        },
+        "stt": {
+          "clockDomain": "python_process_monotonic",
+          "correlationId": "abf0682493b976b543fbe503f7fea25f",
+          "durationNs": 3211770417,
+          "endMonotonicNs": 788668486838704,
+          "present": true,
+          "receiverPid": "3643793",
+          "recorderProcessId": "9ab74cef3e9247fc83f50a18e9a1736f",
+          "spanId": "12ca72e891ca4134914e62981c0c872d",
+          "startMonotonicNs": 788665275068287
+        },
+        "tts": {
+          "clockDomain": "python_process_monotonic",
+          "correlationId": "8e5789d0a09ec15f99534ed21fb19dc6",
+          "durationNs": 1645454878,
+          "endMonotonicNs": 788675697667209,
+          "present": true,
+          "receiverPid": "3643793",
+          "recorderProcessId": "9ab74cef3e9247fc83f50a18e9a1736f",
+          "spanId": "f4fc6246fce748179cd8f7459606e40c",
+          "startMonotonicNs": 788674052212331
+        }
+      },
+      "ordinal": 104,
+      "outcome": "completed_correct",
+      "phase": "measured",
+      "providerBindingByteWindow": {
+        "end": 75237,
+        "sha256": "df2079a7e64f098aaa3194fe1d49cb00f48ce727d60f00de3aa0994a41ab1d98",
+        "start": 74621
+      },
+      "runId": "c06-app900-v1058-measured-0104-1792160356713423209",
+      "schema": "aurora.c06.native-file-audio-attempt.v1058",
+      "sdkCorrelationIds": {
+        "assistant": null,
+        "stt": null,
+        "tts": null
+      },
+      "sdkCorrelationSeenBefore": false,
+      "sdkCorrelationUniqueWithinCase": true,
+      "sdkDurationsMs": {
+        "assistant": 5486,
+        "stt": 3345,
+        "tts": 1659
+      },
+      "stageByteWindow": {
+        "end": 1969444,
+        "sha256": "421c61d49274036346dda15fd6d4944fbf934b0e552851ae96d4f3832b0ee037",
+        "start": 1952912
+      },
+      "startedMonotonicNs": 788665168507426,
+      "sttSpanPresent": true,
+      "timeout": false,
+      "ttsSpanPresent": true
+    },
+    "sources": [
+      {
+        "locator": "$.lastAttempt",
+        "source": "docs/experiments/tcc-20261013-submission-20261030/root/native-desktop-sdk-audio900-v1068/RUNNING-v1075.json"
+      },
+      {
+        "locator": "$.lastAttempt",
+        "source": "thesis/evidence/sealed-cohorts-v1215/native-desktop-sdk-audio900-v1068/RUNNING-v1075.json"
+      }
+    ]
+  },
+  "c06-app900-v1058-measured-0159": {
+    "row": {
+      "actualPiperCallReturned": true,
+      "audioValid": true,
+      "caseId": "c06-app900-v1058-measured-0159",
+      "clientCorrelationId": null,
+      "clientCorrelationReason": "native telemetry correlation remains null; SDK returned stage IDs are stored separately",
+      "completed": true,
+      "elapsedMonotonicNs": 10406182526,
+      "finishedMonotonicNs": 789267684714270,
+      "flowDurationMs": 10241,
+      "llmSpanPresent": true,
+      "nativeRecorderConsistentWithBackend": true,
+      "nativeRecorderProcessIds": [
+        "9ab74cef3e9247fc83f50a18e9a1736f",
+        "9ab74cef3e9247fc83f50a18e9a1736f",
+        "9ab74cef3e9247fc83f50a18e9a1736f"
+      ],
+      "nativeSdkCorrelationMatches": {
+        "assistant": null,
+        "stt": null,
+        "tts": null
+      },
+      "nativeStageRows": 20,
+      "nativeStages": {
+        "llm": {
+          "clockDomain": "python_process_monotonic",
+          "correlationId": "8c18705ac15d1191619e6f5518e2a47a",
+          "durationNs": 253330913,
+          "endMonotonicNs": 789265985114602,
+          "present": true,
+          "receiverPid": "3643793",
+          "recorderProcessId": "9ab74cef3e9247fc83f50a18e9a1736f",
+          "spanId": "e1295e025c5443d1a29c42885aecb1af",
+          "startMonotonicNs": 789265731783689
+        },
+        "stt": {
+          "clockDomain": "python_process_monotonic",
+          "correlationId": "e1b1247104fb36b4392f2b34f53a71ea",
+          "durationNs": 3306081882,
+          "endMonotonicNs": 789260690284785,
+          "present": true,
+          "receiverPid": "3643793",
+          "recorderProcessId": "9ab74cef3e9247fc83f50a18e9a1736f",
+          "spanId": "8828179bf7674c5a891dd7ecc6fc99f6",
+          "startMonotonicNs": 789257384202903
+        },
+        "tts": {
+          "clockDomain": "python_process_monotonic",
+          "correlationId": "0289e7c5fd5e739de8297283c25e5873",
+          "durationNs": 1536237214,
+          "endMonotonicNs": 789267555257374,
+          "present": true,
+          "receiverPid": "3643793",
+          "recorderProcessId": "9ab74cef3e9247fc83f50a18e9a1736f",
+          "spanId": "9bd9dddb62874584b34ee652875943ad",
+          "startMonotonicNs": 789266019020160
+        }
+      },
+      "ordinal": 159,
+      "outcome": "completed_correct",
+      "phase": "measured",
+      "providerBindingByteWindow": {
+        "end": 109117,
+        "sha256": "1cfcf5b2cd240c61247c46797b64c38178bf123f1424e39940749baafee93a50",
+        "start": 108501
+      },
+      "runId": "c06-app900-v1058-measured-0159-1792160948823504586",
+      "schema": "aurora.c06.native-file-audio-attempt.v1058",
+      "sdkCorrelationIds": {
+        "assistant": null,
+        "stt": null,
+        "tts": null
+      },
+      "sdkCorrelationSeenBefore": false,
+      "sdkCorrelationUniqueWithinCase": true,
+      "sdkDurationsMs": {
+        "assistant": 5318,
+        "stt": 3366,
+        "tts": 1551
+      },
+      "stageByteWindow": {
+        "end": 2878704,
+        "sha256": "b6c9699b24c4a8feae8d9134792674e5f87b9d0a4aa8d0a7755841508c6dc1e8",
+        "start": 2862172
+      },
+      "startedMonotonicNs": 789257278531965,
+      "sttSpanPresent": true,
+      "timeout": false,
+      "ttsSpanPresent": true
+    },
+    "sources": [
+      {
+        "locator": "$.lastAttempt",
+        "source": "docs/experiments/tcc-20261013-submission-20261030/root/native-desktop-sdk-audio900-v1068/RUNNING-v1079.json"
+      },
+      {
+        "locator": "$.lastAttempt",
+        "source": "thesis/evidence/sealed-cohorts-v1215/native-desktop-sdk-audio900-v1068/RUNNING-v1079.json"
+      }
+    ]
+  },
+  "c06-app900-v1058-measured-0218": {
+    "row": {
+      "actualPiperCallReturned": true,
+      "audioValid": true,
+      "caseId": "c06-app900-v1058-measured-0218",
+      "clientCorrelationId": null,
+      "clientCorrelationReason": "native telemetry correlation remains null; SDK returned stage IDs are stored separately",
+      "completed": true,
+      "elapsedMonotonicNs": 10896991474,
+      "finishedMonotonicNs": 789905427903159,
+      "flowDurationMs": 10593,
+      "llmSpanPresent": true,
+      "nativeRecorderConsistentWithBackend": true,
+      "nativeRecorderProcessIds": [
+        "9ab74cef3e9247fc83f50a18e9a1736f",
+        "9ab74cef3e9247fc83f50a18e9a1736f",
+        "9ab74cef3e9247fc83f50a18e9a1736f"
+      ],
+      "nativeSdkCorrelationMatches": {
+        "assistant": null,
+        "stt": null,
+        "tts": null
+      },
+      "nativeStageRows": 20,
+      "nativeStages": {
+        "llm": {
+          "clockDomain": "python_process_monotonic",
+          "correlationId": "772a2b27ced901dd42ed9be946b0ae3d",
+          "durationNs": 397605998,
+          "endMonotonicNs": 789903622629638,
+          "present": true,
+          "receiverPid": "3643793",
+          "recorderProcessId": "9ab74cef3e9247fc83f50a18e9a1736f",
+          "spanId": "e77288b8b521439ab9e8f2e458b259dd",
+          "startMonotonicNs": 789903225023640
+        },
+        "stt": {
+          "clockDomain": "python_process_monotonic",
+          "correlationId": "50f3946255d12344656706c4c14e9690",
+          "durationNs": 3444552526,
+          "endMonotonicNs": 789898076701535,
+          "present": true,
+          "receiverPid": "3643793",
+          "recorderProcessId": "9ab74cef3e9247fc83f50a18e9a1736f",
+          "spanId": "0cf2be2d9ae24608857cfbf0946c5ded",
+          "startMonotonicNs": 789894632149009
+        },
+        "tts": {
+          "clockDomain": "python_process_monotonic",
+          "correlationId": "db03518c5380f78937f245612fb84c3d",
+          "durationNs": 1512370415,
+          "endMonotonicNs": 789905157849356,
+          "present": true,
+          "receiverPid": "3643793",
+          "recorderProcessId": "9ab74cef3e9247fc83f50a18e9a1736f",
+          "spanId": "2617ecc227c04701b831dd52dd68dc13",
+          "startMonotonicNs": 789903645478941
+        }
+      },
+      "ordinal": 218,
+      "outcome": "completed_correct",
+      "phase": "measured",
+      "providerBindingByteWindow": {
+        "end": 145461,
+        "sha256": "bf332dd3a9b3aa3ca127239ba17ef7b7c3d36de9754312f77a01b7d149c674d4",
+        "start": 144845
+      },
+      "runId": "c06-app900-v1058-measured-0218-1792161586075843045",
+      "schema": "aurora.c06.native-file-audio-attempt.v1058",
+      "sdkCorrelationIds": {
+        "assistant": null,
+        "stt": null,
+        "tts": null
+      },
+      "sdkCorrelationSeenBefore": false,
+      "sdkCorrelationUniqueWithinCase": true,
+      "sdkDurationsMs": {
+        "assistant": 5561,
+        "stt": 3491,
+        "tts": 1532
+      },
+      "stageByteWindow": {
+        "end": 3854092,
+        "sha256": "5d70a9ad1dc234846b9b6c5060ec40c803fc84a86d0e469bbb2c12c2e4941c86",
+        "start": 3837560
+      },
+      "startedMonotonicNs": 789894530912387,
+      "sttSpanPresent": true,
+      "timeout": false,
+      "ttsSpanPresent": true
+    },
+    "sources": [
+      {
+        "locator": "$.lastAttempt",
+        "source": "docs/experiments/tcc-20261013-submission-20261030/root/native-desktop-sdk-audio900-v1068/RUNNING-v1083.json"
+      },
+      {
+        "locator": "$.lastAttempt",
+        "source": "thesis/evidence/sealed-cohorts-v1215/native-desktop-sdk-audio900-v1068/RUNNING-v1083.json"
+      }
+    ]
+  },
+  "c06-app900-v1058-measured-0272": {
+    "row": {
+      "actualPiperCallReturned": true,
+      "audioValid": true,
+      "caseId": "c06-app900-v1058-measured-0272",
+      "clientCorrelationId": null,
+      "clientCorrelationReason": "native telemetry correlation remains null; SDK returned stage IDs are stored separately",
+      "completed": true,
+      "elapsedMonotonicNs": 10384401190,
+      "finishedMonotonicNs": 790481894587165,
+      "flowDurationMs": 10317.999999999534,
+      "llmSpanPresent": true,
+      "nativeRecorderConsistentWithBackend": true,
+      "nativeRecorderProcessIds": [
+        "9ab74cef3e9247fc83f50a18e9a1736f",
+        "9ab74cef3e9247fc83f50a18e9a1736f",
+        "9ab74cef3e9247fc83f50a18e9a1736f"
+      ],
+      "nativeSdkCorrelationMatches": {
+        "assistant": null,
+        "stt": null,
+        "tts": null
+      },
+      "nativeStageRows": 20,
+      "nativeStages": {
+        "llm": {
+          "clockDomain": "python_process_monotonic",
+          "correlationId": "8784bad37f1546c7356ca8c65a51c1cd",
+          "durationNs": 271756774,
+          "endMonotonicNs": 790480276210213,
+          "present": true,
+          "receiverPid": "3643793",
+          "recorderProcessId": "9ab74cef3e9247fc83f50a18e9a1736f",
+          "spanId": "7899f23cc55a456181a4e2ec93fd1396",
+          "startMonotonicNs": 790480004453439
+        },
+        "stt": {
+          "clockDomain": "python_process_monotonic",
+          "correlationId": "867bbed06ae0ed6716ce1d19f2037647",
+          "durationNs": 3365351576,
+          "endMonotonicNs": 790474963653761,
+          "present": true,
+          "receiverPid": "3643793",
+          "recorderProcessId": "9ab74cef3e9247fc83f50a18e9a1736f",
+          "spanId": "49bf1896b54241f887e052c57947b4c1",
+          "startMonotonicNs": 790471598302185
+        },
+        "tts": {
+          "clockDomain": "python_process_monotonic",
+          "correlationId": "2554740b251de1a9a5bfb5f76f8d08ca",
+          "durationNs": 1563708479,
+          "endMonotonicNs": 790481866048917,
+          "present": true,
+          "receiverPid": "3643793",
+          "recorderProcessId": "9ab74cef3e9247fc83f50a18e9a1736f",
+          "spanId": "e6c5e7065f0a4f9896ea695b0dd9c636",
+          "startMonotonicNs": 790480302340438
+        }
+      },
+      "ordinal": 272,
+      "outcome": "completed_correct",
+      "phase": "measured",
+      "providerBindingByteWindow": {
+        "end": 178725,
+        "sha256": "8cd820cde731d27bfda154ffa3fbfbe6b36e326aacfdf542c56733ce3d0f1dbb",
+        "start": 178109
+      },
+      "runId": "c06-app900-v1058-measured-0272-1792162163055111816",
+      "schema": "aurora.c06.native-file-audio-attempt.v1058",
+      "sdkCorrelationIds": {
+        "assistant": null,
+        "stt": null,
+        "tts": null
+      },
+      "sdkCorrelationSeenBefore": false,
+      "sdkCorrelationUniqueWithinCase": true,
+      "sdkDurationsMs": {
+        "assistant": 5329,
+        "stt": 3404,
+        "tts": 1578
+      },
+      "stageByteWindow": {
+        "end": 4746820,
+        "sha256": "c2ac3aefa452102bef285159b6b31177b56e2a6d6a6eb02f8d6cc3a3a1748021",
+        "start": 4730288
+      },
+      "startedMonotonicNs": 790471510186306,
+      "sttSpanPresent": true,
+      "timeout": false,
+      "ttsSpanPresent": true
+    },
+    "sources": [
+      {
+        "locator": "$.lastAttempt",
+        "source": "docs/experiments/tcc-20261013-submission-20261030/root/native-desktop-sdk-audio900-v1068/RUNNING-v1085.json"
+      },
+      {
+        "locator": "$.lastAttempt",
+        "source": "thesis/evidence/sealed-cohorts-v1215/native-desktop-sdk-audio900-v1068/RUNNING-v1085.json"
+      }
+    ]
+  }
+}

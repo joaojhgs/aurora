@@ -1,0 +1,28 @@
+{
+  "id": "af6a4674-d868-4903-a048-8bdd3ec47b06",
+  "ok": true,
+  "result": {
+    "message": {
+      "id": "msg_84d1aebc5968",
+      "run_id": "run_e6054e76e9fc",
+      "delivery_contract": "current_delivery",
+      "from_handle": "term_6a00d9ee-792a-4daf-8578-236290e33108",
+      "to_handle": "dispatch:ctx_37b4d0a3c14f",
+      "subject": "Root main execution priority: HTTP810/900; phone source handoff closed",
+      "body": "Original native goal remains ACTIVE/unbudgeted, same Root01a112a5. Actual03:29:11Z original V2296 requester/backend/copier identities matched live; currentblock360/450 allcorrect, global810/900 attempts809correct1historicalfailure90unattempted. Frozenmanifest9adb unchanged;375physicalcase/WAV pairs0copyerrors3.057GBfree; no terminalsummary. Main continues unchanged; next SUT action is natural-terminal finalizer2303/custody/provider-release then exact900 outcome closure, not another baseline. Phone source SHAebde3a8acf6315f920d03593845f17a1fc65a733 1959files transfer/assembly already verified, solely existingterm_1f27 worker owns setup; Root no notebook/device reads or duplicate builds. No phone overnightSTART given and no main hold on phone. CurrentK1 full900/seal/release owner notification remains pending canonicaldedup, not complete at counter alone. No newworkers/reviewgates.",
+      "type": "status",
+      "priority": "normal",
+      "thread_id": null,
+      "payload": null,
+      "created_at": "2026-10-22T03:29:33Z",
+      "delivered_at": null
+    },
+    "mutation": {
+      "requestId": "7db2bc01-f183-42d9-a531-0999d6e95adc",
+      "replayed": false
+    }
+  },
+  "_meta": {
+    "runtimeId": "cc9e3275-28c6-4c45-85cc-bdcd2262aa7d"
+  }
+}

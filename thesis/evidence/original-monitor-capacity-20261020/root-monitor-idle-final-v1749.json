@@ -1,0 +1,38 @@
+{
+  "id": "2a4226fa-bffc-457d-bf1c-34d461e9ab7a",
+  "ok": true,
+  "result": {
+    "terminal": {
+      "handle": "term_2eab47ed-ab9b-4e35-bd9b-fc068c60e3fc",
+      "status": "running",
+      "tail": [
+        "\u203a Continue this SAME original Aurora monitor session/Run run_e6054e76e9fc, Tas\u2026",
+        "  \u2514     \"runtimeId\": \"cc9e3275-28c6-4c45-85cc-bdcd2262aa7d\"",
+        "      }",
+        "    }",
+        "    + 19 lines (ctrl+t to expand)",
+        "\u2022 Mailbox read and acknowledged; Root notified through msg_fb2e8e869ab4.",
+        "  \u2022 K1: verified 277/900, 270 correct, 7 failed, still running.",
+        "  \u2022 K2 copier review: closed sound; report saved (.omx/evidence/orca-monitor-",
+        "    20261010/P2P-K2-V1748-COPIER-ARTIFACT-MAP-REVIEW-20261020T0802.md).",
+        "  \u2022 Monitor native goal: still blocked. This turn succeeded without another",
+        "    capacity error. No resume command, model change, tests or probes were",
+        "    issued.",
+        "  Worked for 6m 52s \u2022 08:02",
+        "\u203a Ask Codex to do anything",
+        "  GPT-6.1-Sol xhigh \u00b7 ~/projects/aurora \u00b7 Report \u2026 Goal stalled (/goal resume)",
+        "  ? for shortcuts                                      \u26a0 1 warning \u00b7 f2 to view"
+      ],
+      "truncated": true,
+      "limited": false,
+      "oldestCursor": "0",
+      "nextCursor": "0",
+      "latestCursor": "0",
+      "returnedLineCount": 16,
+      "source": "screen"
+    }
+  },
+  "_meta": {
+    "runtimeId": "cc9e3275-28c6-4c45-85cc-bdcd2262aa7d"
+  }
+}

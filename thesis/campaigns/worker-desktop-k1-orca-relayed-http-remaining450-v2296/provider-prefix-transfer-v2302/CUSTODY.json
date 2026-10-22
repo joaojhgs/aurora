@@ -1,0 +1,1200 @@
+{
+  "startedAt": "2026-10-22T05:17:05.831661+00:00",
+  "status": "complete_verified_provider_prefix_archive",
+  "export": {
+    "at": "2026-10-22T04:58:21.496867+00:00",
+    "status": "k1_http_provider_after_requester_terminal_fixed_prefix",
+    "providerManifestSha256": "0f4a4bf0e7638b63b8d046331e1e7393e4f108f406802f0e4f0d543feca5ffa2",
+    "epochManifestSha256": "9adbf9ba3a7ec0948a087edad3655cf94ee344b3a2371a78d15f188f44150d42",
+    "actors": [
+      {
+        "pid": 1820862,
+        "startTicks": 37439756,
+        "state": "S"
+      },
+      {
+        "pid": 1820863,
+        "startTicks": 37439818,
+        "state": "S"
+      }
+    ],
+    "providerRetired": false,
+    "reservationPreserved": true,
+    "nativeSpansAtBoundary": 930,
+    "openNativeSpansAtBoundary": 0,
+    "rawPayloadBytes": 116132016,
+    "requesterTerminal": {
+      "at": "2026-10-22T04:58:12.365245+00:00",
+      "status": "REQUESTER_TERMINAL_AND_PHYSICAL_CUSTODY_SEALED",
+      "manifestSha256": "9adbf9ba3a7ec0948a087edad3655cf94ee344b3a2371a78d15f188f44150d42",
+      "requesterActorsAbsent": true,
+      "requesterActors": [
+        {
+          "pid": 3965950,
+          "expectedStartTicks": 139740362,
+          "state": "ABSENT"
+        },
+        {
+          "pid": 3965978,
+          "expectedStartTicks": 139740616,
+          "state": "ABSENT"
+        },
+        {
+          "pid": 3965951,
+          "expectedStartTicks": 139740363,
+          "state": "ABSENT"
+        }
+      ],
+      "epochMeasured": {
+        "attempted": 450,
+        "correct": 450,
+        "failed": 0,
+        "incorrect": 0,
+        "timeouts": 0,
+        "planned": 450,
+        "unattempted": 0
+      },
+      "conditionCountsOnly": {
+        "attempted": 900,
+        "correct": 899,
+        "failed": 1,
+        "incorrect": 0,
+        "unattempted": 0,
+        "target": 900
+      },
+      "failureCodes": {},
+      "excludedWarmups": 15,
+      "caseRecords": 465,
+      "actualWAV": 465,
+      "verifiedFiles": 3109,
+      "verifiedBytes": 57157775,
+      "snapshotSha256": "2c145d404460de3879d6f4c65b321566be6693359cb17c391557fdcc6c02b7ac",
+      "sourceCheckpointSha256": "c60fc1590c30e197049da0461866451b8119db63838d0e611abe36331a0c9522",
+      "requesterNativeResourcePrefixEOF": [
+        {
+          "name": "voice-stages.jsonl",
+          "bytes": 5463285,
+          "sourceEOFVerified": true
+        },
+        {
+          "name": "actual-provider-bindings.jsonl",
+          "bytes": 2143,
+          "sourceEOFVerified": true
+        },
+        {
+          "name": "resources.jsonl",
+          "bytes": 33397127,
+          "sourceEOFVerified": true
+        }
+      ],
+      "controllerExitCode": 0,
+      "terminalStatus": "completed_all_correct",
+      "terminalStopReason": null,
+      "newInference": 0,
+      "nativeGoalMutations": 0,
+      "noLatencyPooling": true
+    },
+    "originalFilesPreserved": true,
+    "archiveContainsPhysicalCopies": true,
+    "sutCalls": 0,
+    "epochMeasuredAttempted": 450,
+    "conditionMeasuredAttempted": 900,
+    "conditionRemaining": 0,
+    "providerDeadlineNotExtendedUtc": "2026-10-21T22:45:52.468654+00:00",
+    "rootDeadlineNotResetUtc": "2026-10-21T23:36:07.231887+00:00",
+    "nativeCoverageScope": "Current V2296 correlations only; prefix also contains previous readiness calls. No cross-host clock subtraction.",
+    "host": "personal.skyron-server",
+    "archive": "/home/developer/projects/aurora/thesis/campaigns/worker-desktop-k1-http-provider-v2296/provider-checkpoint-v2301/provider-prefix-v2301.tar.gz",
+    "bytes": 6871434,
+    "sha256": "3a22bd10761d9fa54755d319b4ef86fb8c7319da906b4716fb2bb1f67f7e19dc",
+    "sealSha256": "ac73dafcfc45a051797e394b981feacbb09f7932422aedda7197ae75fa1e5720",
+    "files": 16,
+    "elapsedSeconds": 1.886985085962806
+  },
+  "copiedBytes": 6871434,
+  "operation": null,
+  "pages": [
+    {
+      "offset": 0,
+      "bytes": 98304,
+      "sha256": "b90499e33397f9105a0a58e1ed15e0ac134ef1095e2573da4d327c81c75886e7",
+      "nextCursor": "161622",
+      "receipt": "k1-prefix-v2302-provider-page-0000-RESULT.json"
+    },
+    {
+      "offset": 98304,
+      "bytes": 98304,
+      "sha256": "a4e1300b70aa47b2b7ab656d10e73075b569688229727badff5231ac738a9e6b",
+      "nextCursor": "161842",
+      "receipt": "k1-prefix-v2302-provider-page-0001-RESULT.json"
+    },
+    {
+      "offset": 196608,
+      "bytes": 98304,
+      "sha256": "58d2d0549f16f74e44a011e9658d10179af8ee49e9eec3db033d395b3ece77de",
+      "nextCursor": "162062",
+      "receipt": "k1-prefix-v2302-provider-page-0002-RESULT.json"
+    },
+    {
+      "offset": 294912,
+      "bytes": 98304,
+      "sha256": "2cca14df27fd04a6b47def5e5a93302d62efedd61dceb332590e3fb2595e9472",
+      "nextCursor": "162282",
+      "receipt": "k1-prefix-v2302-provider-page-0003-RESULT.json"
+    },
+    {
+      "offset": 393216,
+      "bytes": 98304,
+      "sha256": "ad127afd12ecbc1deb29ff15fa676fa8f467a1f353ceb509329913900de0e52e",
+      "nextCursor": "162502",
+      "receipt": "k1-prefix-v2302-provider-page-0004-RESULT.json"
+    },
+    {
+      "offset": 491520,
+      "bytes": 98304,
+      "sha256": "1c4b203a1e1f85a0702c3937f86cd0a60ecc9a32f00e18dad54360acff60bf23",
+      "nextCursor": "162722",
+      "receipt": "k1-prefix-v2302-provider-page-0005-RESULT.json"
+    },
+    {
+      "offset": 589824,
+      "bytes": 98304,
+      "sha256": "41fa273e119b6b4b040a57c9b09eeab48223b62d9b9a58169c4024dfd61140f0",
+      "nextCursor": "162942",
+      "receipt": "k1-prefix-v2302-provider-page-0006-RESULT.json"
+    },
+    {
+      "offset": 688128,
+      "bytes": 98304,
+      "sha256": "cd0b08068fae86fc7009627038719ff756d04b201e1a9c0f9ddf300d88f21363",
+      "nextCursor": "163162",
+      "receipt": "k1-prefix-v2302-provider-page-0007-RESULT.json"
+    },
+    {
+      "offset": 786432,
+      "bytes": 98304,
+      "sha256": "510373518d2e0d12e91603321be0b67f786029a33a1d1a8ca66ddd5572d25fae",
+      "nextCursor": "163382",
+      "receipt": "k1-prefix-v2302-provider-page-0008-RESULT.json"
+    },
+    {
+      "offset": 884736,
+      "bytes": 98304,
+      "sha256": "c959591efe1571f4c61bcd65a246d039b19df16edba352862e1bf952f2507826",
+      "receipt": "thesis/campaigns/worker-desktop-k1-orca-relayed-http-remaining450-v2296/provider-prefix-transfer-v2302/recovery-v2397/RECOVERED-PAGE9-RECEIPT.json",
+      "recoveredAcceptedOutput": true
+    },
+    {
+      "offset": 983040,
+      "bytes": 49152,
+      "sha256": "39d17041d8c533ba8575f37b1ff4a3620c15fc056ad6d0fc43da51f1edd2b8fd",
+      "nextCursor": "163717",
+      "receipt": "thesis/campaigns/worker-desktop-k1-orca-relayed-http-remaining450-v2296/provider-prefix-transfer-v2302/recovery-v2397/receipts/k1-prefix-v2397-provider-offset-000983040-RESULT.json"
+    },
+    {
+      "offset": 1032192,
+      "bytes": 49152,
+      "sha256": "f323ffb7c70bdddea1353a8a64caa0a5bc84e4be4b5d8c43c4d059e432c8bd8a",
+      "nextCursor": "163828",
+      "receipt": "thesis/campaigns/worker-desktop-k1-orca-relayed-http-remaining450-v2296/provider-prefix-transfer-v2302/recovery-v2397/receipts/k1-prefix-v2397-provider-offset-001032192-RESULT.json"
+    },
+    {
+      "offset": 1081344,
+      "bytes": 49152,
+      "sha256": "a27b7d04e1e76ae78d4f4ced4a577781dcfc6714c272923e2c41be6eb542f9f1",
+      "nextCursor": "163939",
+      "receipt": "thesis/campaigns/worker-desktop-k1-orca-relayed-http-remaining450-v2296/provider-prefix-transfer-v2302/recovery-v2397/receipts/k1-prefix-v2397-provider-offset-001081344-RESULT.json"
+    },
+    {
+      "offset": 1130496,
+      "bytes": 49152,
+      "sha256": "fe7427e19cbf9950f9a2d6ed66f6bc0973593125ad7b9e1757409a5ede5c973a",
+      "nextCursor": "164050",
+      "receipt": "thesis/campaigns/worker-desktop-k1-orca-relayed-http-remaining450-v2296/provider-prefix-transfer-v2302/recovery-v2397/receipts/k1-prefix-v2397-provider-offset-001130496-RESULT.json"
+    },
+    {
+      "offset": 1179648,
+      "bytes": 49152,
+      "sha256": "ef0af9361ce8e98047923afabed5b289413fa9752e5050384cfbc13dff8a2663",
+      "nextCursor": "164161",
+      "receipt": "thesis/campaigns/worker-desktop-k1-orca-relayed-http-remaining450-v2296/provider-prefix-transfer-v2302/recovery-v2397/receipts/k1-prefix-v2397-provider-offset-001179648-RESULT.json"
+    },
+    {
+      "offset": 1228800,
+      "bytes": 49152,
+      "sha256": "f40df5ee9c0cfcecc3260b030d0dbea78123b78408dd999b69ef54bc2ea72ddc",
+      "nextCursor": "164272",
+      "receipt": "thesis/campaigns/worker-desktop-k1-orca-relayed-http-remaining450-v2296/provider-prefix-transfer-v2302/recovery-v2397/receipts/k1-prefix-v2397-provider-offset-001228800-RESULT.json"
+    },
+    {
+      "offset": 1277952,
+      "bytes": 49152,
+      "sha256": "0061d892025e48eab1647b5014cfe57f2fa35508291626465e2e5a40fdc0e197",
+      "nextCursor": "164383",
+      "receipt": "thesis/campaigns/worker-desktop-k1-orca-relayed-http-remaining450-v2296/provider-prefix-transfer-v2302/recovery-v2397/receipts/k1-prefix-v2397-provider-offset-001277952-RESULT.json"
+    },
+    {
+      "offset": 1327104,
+      "bytes": 49152,
+      "sha256": "3f7a1691fd46d64b561ff104f777f9ecfe19284206e16333db567508e0670008",
+      "nextCursor": "164494",
+      "receipt": "thesis/campaigns/worker-desktop-k1-orca-relayed-http-remaining450-v2296/provider-prefix-transfer-v2302/recovery-v2397/receipts/k1-prefix-v2397-provider-offset-001327104-RESULT.json"
+    },
+    {
+      "offset": 1376256,
+      "bytes": 49152,
+      "sha256": "d9e07bab5986be21c19ac06d98ae8ad7c19f5bbd5099259b54378262ce4003ab",
+      "nextCursor": "164605",
+      "receipt": "thesis/campaigns/worker-desktop-k1-orca-relayed-http-remaining450-v2296/provider-prefix-transfer-v2302/recovery-v2397/receipts/k1-prefix-v2397-provider-offset-001376256-RESULT.json"
+    },
+    {
+      "offset": 1425408,
+      "bytes": 49152,
+      "sha256": "0823b6d1f49002825c10fdeb1c7ceb198f8560fe55d3b2fc9bab9c15f2348084",
+      "nextCursor": "164716",
+      "receipt": "thesis/campaigns/worker-desktop-k1-orca-relayed-http-remaining450-v2296/provider-prefix-transfer-v2302/recovery-v2397/receipts/k1-prefix-v2397-provider-offset-001425408-RESULT.json"
+    },
+    {
+      "offset": 1474560,
+      "bytes": 49152,
+      "sha256": "04682ef8bde5549811db48c963c2d8d382ad75e8da9637098abb1cfe394d4f8e",
+      "nextCursor": "164827",
+      "receipt": "thesis/campaigns/worker-desktop-k1-orca-relayed-http-remaining450-v2296/provider-prefix-transfer-v2302/recovery-v2397/receipts/k1-prefix-v2397-provider-offset-001474560-RESULT.json"
+    },
+    {
+      "offset": 1523712,
+      "bytes": 49152,
+      "sha256": "11ca28d260950f02b3974b5f52b13294a5a3a33be615946cc1d11b64d2bbe40f",
+      "nextCursor": "164938",
+      "receipt": "thesis/campaigns/worker-desktop-k1-orca-relayed-http-remaining450-v2296/provider-prefix-transfer-v2302/recovery-v2397/receipts/k1-prefix-v2397-provider-offset-001523712-RESULT.json"
+    },
+    {
+      "offset": 1572864,
+      "bytes": 49152,
+      "sha256": "ab624d585cef3cb0303d48de7af9cba19cc4bf942f0a266de784045929d19bfe",
+      "nextCursor": "165049",
+      "receipt": "thesis/campaigns/worker-desktop-k1-orca-relayed-http-remaining450-v2296/provider-prefix-transfer-v2302/recovery-v2397/receipts/k1-prefix-v2397-provider-offset-001572864-RESULT.json"
+    },
+    {
+      "offset": 1622016,
+      "bytes": 49152,
+      "sha256": "b06c3828dbbe00c545307a275b2d7ed10f3b293331184ab34376a7c004cfd488",
+      "nextCursor": "165160",
+      "receipt": "thesis/campaigns/worker-desktop-k1-orca-relayed-http-remaining450-v2296/provider-prefix-transfer-v2302/recovery-v2397/receipts/k1-prefix-v2397-provider-offset-001622016-RESULT.json"
+    },
+    {
+      "offset": 1671168,
+      "bytes": 49152,
+      "sha256": "f23566cc9d4e8860957227230ad31c72df8020378e6b9780290fc9281830f13f",
+      "nextCursor": "165271",
+      "receipt": "thesis/campaigns/worker-desktop-k1-orca-relayed-http-remaining450-v2296/provider-prefix-transfer-v2302/recovery-v2397/receipts/k1-prefix-v2397-provider-offset-001671168-RESULT.json"
+    },
+    {
+      "offset": 1720320,
+      "bytes": 49152,
+      "sha256": "ea1349309f15296986a37bc4e6d80670f6e83412e56002c078bfd215df14c0bc",
+      "nextCursor": "165382",
+      "receipt": "thesis/campaigns/worker-desktop-k1-orca-relayed-http-remaining450-v2296/provider-prefix-transfer-v2302/recovery-v2397/receipts/k1-prefix-v2397-provider-offset-001720320-RESULT.json"
+    },
+    {
+      "offset": 1769472,
+      "bytes": 49152,
+      "sha256": "9f65ae816271ddf47f5f1515f875218cd93067fcbed210faebc271679bc9cf1e",
+      "nextCursor": "165493",
+      "receipt": "thesis/campaigns/worker-desktop-k1-orca-relayed-http-remaining450-v2296/provider-prefix-transfer-v2302/recovery-v2397/receipts/k1-prefix-v2397-provider-offset-001769472-RESULT.json"
+    },
+    {
+      "offset": 1818624,
+      "bytes": 49152,
+      "sha256": "46568bc7a7634ee226dcbb7eec5824ccc14233de57ef77b9a0a87302fbb1cba9",
+      "nextCursor": "165604",
+      "receipt": "thesis/campaigns/worker-desktop-k1-orca-relayed-http-remaining450-v2296/provider-prefix-transfer-v2302/recovery-v2397/receipts/k1-prefix-v2397-provider-offset-001818624-RESULT.json"
+    },
+    {
+      "offset": 1867776,
+      "bytes": 49152,
+      "sha256": "d595d031ab27a71a8458692efb45899fcd158a164334b4b8741faa74e16742fd",
+      "nextCursor": "165715",
+      "receipt": "thesis/campaigns/worker-desktop-k1-orca-relayed-http-remaining450-v2296/provider-prefix-transfer-v2302/recovery-v2397/receipts/k1-prefix-v2397-provider-offset-001867776-RESULT.json"
+    },
+    {
+      "offset": 1916928,
+      "bytes": 49152,
+      "sha256": "9b65aedba8f215e6f2bf31648de7382b3937fbc776e81bebcd5e29a1d903b27d",
+      "nextCursor": "165826",
+      "receipt": "thesis/campaigns/worker-desktop-k1-orca-relayed-http-remaining450-v2296/provider-prefix-transfer-v2302/recovery-v2397/receipts/k1-prefix-v2397-provider-offset-001916928-RESULT.json"
+    },
+    {
+      "offset": 1966080,
+      "bytes": 49152,
+      "sha256": "4e44a551245317491f1bfacbcb952b518591440b0c8044cbea51f3bbf15e13c2",
+      "nextCursor": "165937",
+      "receipt": "thesis/campaigns/worker-desktop-k1-orca-relayed-http-remaining450-v2296/provider-prefix-transfer-v2302/recovery-v2397/receipts/k1-prefix-v2397-provider-offset-001966080-RESULT.json"
+    },
+    {
+      "offset": 2015232,
+      "bytes": 49152,
+      "sha256": "8d7c86c2747581a862814b6d2f4fddc3b49bc096e1d6f451bfe42fd91a33ac8a",
+      "nextCursor": "166048",
+      "receipt": "thesis/campaigns/worker-desktop-k1-orca-relayed-http-remaining450-v2296/provider-prefix-transfer-v2302/recovery-v2397/receipts/k1-prefix-v2397-provider-offset-002015232-RESULT.json"
+    },
+    {
+      "offset": 2064384,
+      "bytes": 49152,
+      "sha256": "ce7779840ef2efb184d2a3f4466f6f7219325ff1e95bc70853f00c57fdb8a5a7",
+      "nextCursor": "166159",
+      "receipt": "thesis/campaigns/worker-desktop-k1-orca-relayed-http-remaining450-v2296/provider-prefix-transfer-v2302/recovery-v2397/receipts/k1-prefix-v2397-provider-offset-002064384-RESULT.json"
+    },
+    {
+      "offset": 2113536,
+      "bytes": 49152,
+      "sha256": "9e2623168fc9e5660fb38f17653325c21a36d72bb420389c08e055bfa270b86d",
+      "nextCursor": "166270",
+      "receipt": "thesis/campaigns/worker-desktop-k1-orca-relayed-http-remaining450-v2296/provider-prefix-transfer-v2302/recovery-v2397/receipts/k1-prefix-v2397-provider-offset-002113536-RESULT.json"
+    },
+    {
+      "offset": 2162688,
+      "bytes": 49152,
+      "sha256": "2ef4d23fe81092a65e5595ff1e7c1fc2441d890f1b5cc4f56a3d822394c5e9ad",
+      "nextCursor": "166381",
+      "receipt": "thesis/campaigns/worker-desktop-k1-orca-relayed-http-remaining450-v2296/provider-prefix-transfer-v2302/recovery-v2397/receipts/k1-prefix-v2397-provider-offset-002162688-RESULT.json"
+    },
+    {
+      "offset": 2211840,
+      "bytes": 49152,
+      "sha256": "78a23c7ac80783119993939e63a4697cf3cd1b309fb2e2bcb46cae045386c373",
+      "nextCursor": "166492",
+      "receipt": "thesis/campaigns/worker-desktop-k1-orca-relayed-http-remaining450-v2296/provider-prefix-transfer-v2302/recovery-v2397/receipts/k1-prefix-v2397-provider-offset-002211840-RESULT.json"
+    },
+    {
+      "offset": 2260992,
+      "bytes": 49152,
+      "sha256": "8257bc1b8c699bbd2a3f4439a6932ed2bfdc8563644e924a257e1cd49f8c7fe6",
+      "nextCursor": "166603",
+      "receipt": "thesis/campaigns/worker-desktop-k1-orca-relayed-http-remaining450-v2296/provider-prefix-transfer-v2302/recovery-v2397/receipts/k1-prefix-v2397-provider-offset-002260992-RESULT.json"
+    },
+    {
+      "offset": 2310144,
+      "bytes": 49152,
+      "sha256": "5fd6a25ea42c9744f70eae9e99e10eecce7052b8b26d3e349eaa44b31c9f4276",
+      "nextCursor": "166714",
+      "receipt": "thesis/campaigns/worker-desktop-k1-orca-relayed-http-remaining450-v2296/provider-prefix-transfer-v2302/recovery-v2397/receipts/k1-prefix-v2397-provider-offset-002310144-RESULT.json"
+    },
+    {
+      "offset": 2359296,
+      "bytes": 49152,
+      "sha256": "3acec0fed20f4a8d03d16564772ed52636cbf6abaf71b12475bcdc3f06dce7c7",
+      "nextCursor": "166825",
+      "receipt": "thesis/campaigns/worker-desktop-k1-orca-relayed-http-remaining450-v2296/provider-prefix-transfer-v2302/recovery-v2397/receipts/k1-prefix-v2397-provider-offset-002359296-RESULT.json"
+    },
+    {
+      "offset": 2408448,
+      "bytes": 49152,
+      "sha256": "2f2ca6dbbfa568317cb0d5b4e9293de47581eab7c8b17ffa7e4d7dfbffc884b7",
+      "nextCursor": "166936",
+      "receipt": "thesis/campaigns/worker-desktop-k1-orca-relayed-http-remaining450-v2296/provider-prefix-transfer-v2302/recovery-v2397/receipts/k1-prefix-v2397-provider-offset-002408448-RESULT.json"
+    },
+    {
+      "offset": 2457600,
+      "bytes": 49152,
+      "sha256": "3aa40c6175ca52fe0277a3dc297f7d48b65e63484af6407280ba1ccd6906865f",
+      "nextCursor": "167047",
+      "receipt": "thesis/campaigns/worker-desktop-k1-orca-relayed-http-remaining450-v2296/provider-prefix-transfer-v2302/recovery-v2397/receipts/k1-prefix-v2397-provider-offset-002457600-RESULT.json"
+    },
+    {
+      "offset": 2506752,
+      "bytes": 49152,
+      "sha256": "d915f1adefb79199e9c314b33bd576f6a0f3f18ccca13804986240a0bea72f73",
+      "nextCursor": "167158",
+      "receipt": "thesis/campaigns/worker-desktop-k1-orca-relayed-http-remaining450-v2296/provider-prefix-transfer-v2302/recovery-v2397/receipts/k1-prefix-v2397-provider-offset-002506752-RESULT.json"
+    },
+    {
+      "offset": 2555904,
+      "bytes": 49152,
+      "sha256": "9f650aaaa9c3787a76ba73ff7b809778904f225b378c49b74c8b7e82ddd16171",
+      "nextCursor": "167269",
+      "receipt": "thesis/campaigns/worker-desktop-k1-orca-relayed-http-remaining450-v2296/provider-prefix-transfer-v2302/recovery-v2397/receipts/k1-prefix-v2397-provider-offset-002555904-RESULT.json"
+    },
+    {
+      "offset": 2605056,
+      "bytes": 49152,
+      "sha256": "2f23dfffef049ee6f89f289b75005c22f7b59bf8fc3b6fd2ff4d6ce870541fc3",
+      "nextCursor": "167380",
+      "receipt": "thesis/campaigns/worker-desktop-k1-orca-relayed-http-remaining450-v2296/provider-prefix-transfer-v2302/recovery-v2397/receipts/k1-prefix-v2397-provider-offset-002605056-RESULT.json"
+    },
+    {
+      "offset": 2654208,
+      "bytes": 49152,
+      "sha256": "ae62df6ec2b82e4505e881cdaf3ebe25a8138164647756a6262170c7959dc391",
+      "nextCursor": "167491",
+      "receipt": "thesis/campaigns/worker-desktop-k1-orca-relayed-http-remaining450-v2296/provider-prefix-transfer-v2302/recovery-v2397/receipts/k1-prefix-v2397-provider-offset-002654208-RESULT.json"
+    },
+    {
+      "offset": 2703360,
+      "bytes": 49152,
+      "sha256": "af6a7a13ad84909227170d639f1d27c8f31507866f252cfeaac154f170919b3d",
+      "nextCursor": "167602",
+      "receipt": "thesis/campaigns/worker-desktop-k1-orca-relayed-http-remaining450-v2296/provider-prefix-transfer-v2302/recovery-v2397/receipts/k1-prefix-v2397-provider-offset-002703360-RESULT.json"
+    },
+    {
+      "offset": 2752512,
+      "bytes": 49152,
+      "sha256": "55142548ec255ff96517fae394f918a335c930a236536dcdda4e6ea1948ce90c",
+      "nextCursor": "167713",
+      "receipt": "thesis/campaigns/worker-desktop-k1-orca-relayed-http-remaining450-v2296/provider-prefix-transfer-v2302/recovery-v2397/receipts/k1-prefix-v2397-provider-offset-002752512-RESULT.json"
+    },
+    {
+      "offset": 2801664,
+      "bytes": 49152,
+      "sha256": "d22bb533fc014df984cd5338a16eaf91acf6df33f95cf01da01028f1502deb0a",
+      "nextCursor": "167824",
+      "receipt": "thesis/campaigns/worker-desktop-k1-orca-relayed-http-remaining450-v2296/provider-prefix-transfer-v2302/recovery-v2397/receipts/k1-prefix-v2397-provider-offset-002801664-RESULT.json"
+    },
+    {
+      "offset": 2850816,
+      "bytes": 49152,
+      "sha256": "085f151e33adc500da8d6f05d667a93ecf46af7e2684887a18c424bda01ad2dc",
+      "nextCursor": "167935",
+      "receipt": "thesis/campaigns/worker-desktop-k1-orca-relayed-http-remaining450-v2296/provider-prefix-transfer-v2302/recovery-v2397/receipts/k1-prefix-v2397-provider-offset-002850816-RESULT.json"
+    },
+    {
+      "offset": 2899968,
+      "bytes": 49152,
+      "sha256": "4c9a06e3f180ebd09a453491abcddeeb4f3733fd5fa99323607f256dd589c0db",
+      "nextCursor": "168046",
+      "receipt": "thesis/campaigns/worker-desktop-k1-orca-relayed-http-remaining450-v2296/provider-prefix-transfer-v2302/recovery-v2397/receipts/k1-prefix-v2397-provider-offset-002899968-RESULT.json"
+    },
+    {
+      "offset": 2949120,
+      "bytes": 49152,
+      "sha256": "03c9da7e0d76eac83ea10c558dcc6b6d9046573c8f6c0d4c9fde2d114145717e",
+      "nextCursor": "168157",
+      "receipt": "thesis/campaigns/worker-desktop-k1-orca-relayed-http-remaining450-v2296/provider-prefix-transfer-v2302/recovery-v2397/receipts/k1-prefix-v2397-provider-offset-002949120-RESULT.json"
+    },
+    {
+      "offset": 2998272,
+      "bytes": 49152,
+      "sha256": "dd693c0e5b8525d54272ef94a9c3d07e67ec772984a3708cf82d8408d289434a",
+      "nextCursor": "168268",
+      "receipt": "thesis/campaigns/worker-desktop-k1-orca-relayed-http-remaining450-v2296/provider-prefix-transfer-v2302/recovery-v2397/receipts/k1-prefix-v2397-provider-offset-002998272-RESULT.json"
+    },
+    {
+      "offset": 3047424,
+      "bytes": 49152,
+      "sha256": "744f8386aa4457811c4a14e7c5d96bc6a7d238fc3558c60ee4585d72c19d14b9",
+      "nextCursor": "168379",
+      "receipt": "thesis/campaigns/worker-desktop-k1-orca-relayed-http-remaining450-v2296/provider-prefix-transfer-v2302/recovery-v2397/receipts/k1-prefix-v2397-provider-offset-003047424-RESULT.json"
+    },
+    {
+      "offset": 3096576,
+      "bytes": 49152,
+      "sha256": "2a5113c2b9a2838f309a86ab6785a268a63733c470f756dc8780ea58ab2e8a67",
+      "nextCursor": "168490",
+      "receipt": "thesis/campaigns/worker-desktop-k1-orca-relayed-http-remaining450-v2296/provider-prefix-transfer-v2302/recovery-v2397/receipts/k1-prefix-v2397-provider-offset-003096576-RESULT.json"
+    },
+    {
+      "offset": 3145728,
+      "bytes": 49152,
+      "sha256": "5e33cf6d2de224e6850cde20022cd5cf066dd1c4d48fa71f7325206d2bbfa291",
+      "nextCursor": "168601",
+      "receipt": "thesis/campaigns/worker-desktop-k1-orca-relayed-http-remaining450-v2296/provider-prefix-transfer-v2302/recovery-v2397/receipts/k1-prefix-v2397-provider-offset-003145728-RESULT.json"
+    },
+    {
+      "offset": 3194880,
+      "bytes": 49152,
+      "sha256": "ca412076cf81afaccaba1d33a0eefbb62f2291dc337e4e53d2521cf615edc4e8",
+      "nextCursor": "168712",
+      "receipt": "thesis/campaigns/worker-desktop-k1-orca-relayed-http-remaining450-v2296/provider-prefix-transfer-v2302/recovery-v2397/receipts/k1-prefix-v2397-provider-offset-003194880-RESULT.json"
+    },
+    {
+      "offset": 3244032,
+      "bytes": 49152,
+      "sha256": "072c4b3b067bba8ca46ab738c1d42e504865b95e5537475f18ce1311e2885ec4",
+      "nextCursor": "168823",
+      "receipt": "thesis/campaigns/worker-desktop-k1-orca-relayed-http-remaining450-v2296/provider-prefix-transfer-v2302/recovery-v2397/receipts/k1-prefix-v2397-provider-offset-003244032-RESULT.json"
+    },
+    {
+      "offset": 3293184,
+      "bytes": 49152,
+      "sha256": "746818eec1b9cd643e63caee6099f3473843287dc683eab849134cedf7143c58",
+      "nextCursor": "168934",
+      "receipt": "thesis/campaigns/worker-desktop-k1-orca-relayed-http-remaining450-v2296/provider-prefix-transfer-v2302/recovery-v2397/receipts/k1-prefix-v2397-provider-offset-003293184-RESULT.json"
+    },
+    {
+      "offset": 3342336,
+      "bytes": 49152,
+      "sha256": "d7a13cd7c614d859a6a84656d2e98fabda57a8536d43a512426bc753fcb28e0f",
+      "nextCursor": "169045",
+      "receipt": "thesis/campaigns/worker-desktop-k1-orca-relayed-http-remaining450-v2296/provider-prefix-transfer-v2302/recovery-v2397/receipts/k1-prefix-v2397-provider-offset-003342336-RESULT.json"
+    },
+    {
+      "offset": 3391488,
+      "bytes": 49152,
+      "sha256": "9bd90cffae7daa8f7751ffb85581e46c30720c4e3f645a5e19a5bf3f8843a679",
+      "nextCursor": "169156",
+      "receipt": "thesis/campaigns/worker-desktop-k1-orca-relayed-http-remaining450-v2296/provider-prefix-transfer-v2302/recovery-v2397/receipts/k1-prefix-v2397-provider-offset-003391488-RESULT.json"
+    },
+    {
+      "offset": 3440640,
+      "bytes": 49152,
+      "sha256": "f985f554f464b1f3c2727d6b696419fcddddea26b44ed04cbc72ee0eefd3d72b",
+      "nextCursor": "169267",
+      "receipt": "thesis/campaigns/worker-desktop-k1-orca-relayed-http-remaining450-v2296/provider-prefix-transfer-v2302/recovery-v2397/receipts/k1-prefix-v2397-provider-offset-003440640-RESULT.json"
+    },
+    {
+      "offset": 3489792,
+      "bytes": 49152,
+      "sha256": "3c6c8be5e3da9168bf2e62fcae0ef45c11b266a4bc143e04e57fd276f819ab38",
+      "nextCursor": "169378",
+      "receipt": "thesis/campaigns/worker-desktop-k1-orca-relayed-http-remaining450-v2296/provider-prefix-transfer-v2302/recovery-v2397/receipts/k1-prefix-v2397-provider-offset-003489792-RESULT.json"
+    },
+    {
+      "offset": 3538944,
+      "bytes": 49152,
+      "sha256": "ce2a2fbfba01afe994fe16f95a36ae8fa86d444f23bb7af216885ee2b70863eb",
+      "nextCursor": "169489",
+      "receipt": "thesis/campaigns/worker-desktop-k1-orca-relayed-http-remaining450-v2296/provider-prefix-transfer-v2302/recovery-v2397/receipts/k1-prefix-v2397-provider-offset-003538944-RESULT.json"
+    },
+    {
+      "offset": 3588096,
+      "bytes": 49152,
+      "sha256": "fef4affebfe813d0ed1dff2eea54fe3a4effcb12383cad79808ee5e0a9d76952",
+      "nextCursor": "169600",
+      "receipt": "thesis/campaigns/worker-desktop-k1-orca-relayed-http-remaining450-v2296/provider-prefix-transfer-v2302/recovery-v2397/receipts/k1-prefix-v2397-provider-offset-003588096-RESULT.json"
+    },
+    {
+      "offset": 3637248,
+      "bytes": 49152,
+      "sha256": "1d702e192b11490ab4f53e58726074ebc3e2bd0ec563ee5b176722282e2ff25e",
+      "nextCursor": "169711",
+      "receipt": "thesis/campaigns/worker-desktop-k1-orca-relayed-http-remaining450-v2296/provider-prefix-transfer-v2302/recovery-v2397/receipts/k1-prefix-v2397-provider-offset-003637248-RESULT.json"
+    },
+    {
+      "offset": 3686400,
+      "bytes": 49152,
+      "sha256": "713112cff34b6667658dbc432a6ace27520ea4e4b4778d4015109d6468de40c4",
+      "nextCursor": "169822",
+      "receipt": "thesis/campaigns/worker-desktop-k1-orca-relayed-http-remaining450-v2296/provider-prefix-transfer-v2302/recovery-v2397/receipts/k1-prefix-v2397-provider-offset-003686400-RESULT.json"
+    },
+    {
+      "offset": 3735552,
+      "bytes": 49152,
+      "sha256": "6edb10f4d31b768724cc0145e5012c4e1aa58ad07020fe33922835dd1c7b8cf8",
+      "nextCursor": "169933",
+      "receipt": "thesis/campaigns/worker-desktop-k1-orca-relayed-http-remaining450-v2296/provider-prefix-transfer-v2302/recovery-v2397/receipts/k1-prefix-v2397-provider-offset-003735552-RESULT.json"
+    },
+    {
+      "offset": 3784704,
+      "bytes": 49152,
+      "sha256": "a51d392c335c0d9463526a7f012df3ddee67c22da9ea58cba94ee5b9655c7ad2",
+      "nextCursor": "170044",
+      "receipt": "thesis/campaigns/worker-desktop-k1-orca-relayed-http-remaining450-v2296/provider-prefix-transfer-v2302/recovery-v2397/receipts/k1-prefix-v2397-provider-offset-003784704-RESULT.json"
+    },
+    {
+      "offset": 3833856,
+      "bytes": 49152,
+      "sha256": "79d48cb08c1e75ff9fba9fad254d908f4be8c22ac0ab3b3f1613ebc8c5717fea",
+      "nextCursor": "170155",
+      "receipt": "thesis/campaigns/worker-desktop-k1-orca-relayed-http-remaining450-v2296/provider-prefix-transfer-v2302/recovery-v2397/receipts/k1-prefix-v2397-provider-offset-003833856-RESULT.json"
+    },
+    {
+      "offset": 3883008,
+      "bytes": 49152,
+      "sha256": "b84f3914a157262a2fb6fc5d0613a9a9197bab060a4de0740f038bd924dd32f0",
+      "nextCursor": "170266",
+      "receipt": "thesis/campaigns/worker-desktop-k1-orca-relayed-http-remaining450-v2296/provider-prefix-transfer-v2302/recovery-v2397/receipts/k1-prefix-v2397-provider-offset-003883008-RESULT.json"
+    },
+    {
+      "offset": 3932160,
+      "bytes": 49152,
+      "sha256": "562d9a28ac737fcdd2c0bece87caf145895c9e8a7b9929e116042c5bf29813fb",
+      "nextCursor": "170377",
+      "receipt": "thesis/campaigns/worker-desktop-k1-orca-relayed-http-remaining450-v2296/provider-prefix-transfer-v2302/recovery-v2397/receipts/k1-prefix-v2397-provider-offset-003932160-RESULT.json"
+    },
+    {
+      "offset": 3981312,
+      "bytes": 49152,
+      "sha256": "7e2985a950e95ec1f5dc5c91bb9d0d0a35972a64c410301944238c51165d98b6",
+      "nextCursor": "170488",
+      "receipt": "thesis/campaigns/worker-desktop-k1-orca-relayed-http-remaining450-v2296/provider-prefix-transfer-v2302/recovery-v2397/receipts/k1-prefix-v2397-provider-offset-003981312-RESULT.json"
+    },
+    {
+      "offset": 4030464,
+      "bytes": 49152,
+      "sha256": "bb1afd25fdabcd4759e5240de04c6673b40f07577fe99b767a7eea5f98e1d54a",
+      "nextCursor": "170599",
+      "receipt": "thesis/campaigns/worker-desktop-k1-orca-relayed-http-remaining450-v2296/provider-prefix-transfer-v2302/recovery-v2397/receipts/k1-prefix-v2397-provider-offset-004030464-RESULT.json"
+    },
+    {
+      "offset": 4079616,
+      "bytes": 49152,
+      "sha256": "9caff00ded7d35e278fe31808ed86d71e8756033f547a2585c2cad1dada769e1",
+      "nextCursor": "170710",
+      "receipt": "thesis/campaigns/worker-desktop-k1-orca-relayed-http-remaining450-v2296/provider-prefix-transfer-v2302/recovery-v2397/receipts/k1-prefix-v2397-provider-offset-004079616-RESULT.json"
+    },
+    {
+      "offset": 4128768,
+      "bytes": 49152,
+      "sha256": "3cae3251d5552e1e0cf80037e433397ece9836f5d69ae1767113e47666edac09",
+      "nextCursor": "170821",
+      "receipt": "thesis/campaigns/worker-desktop-k1-orca-relayed-http-remaining450-v2296/provider-prefix-transfer-v2302/recovery-v2397/receipts/k1-prefix-v2397-provider-offset-004128768-RESULT.json"
+    },
+    {
+      "offset": 4177920,
+      "bytes": 49152,
+      "sha256": "06d304f680b9d60689984ac56a77802f4b47e1127f45d1944825b95c3a81c106",
+      "nextCursor": "170932",
+      "receipt": "thesis/campaigns/worker-desktop-k1-orca-relayed-http-remaining450-v2296/provider-prefix-transfer-v2302/recovery-v2397/receipts/k1-prefix-v2397-provider-offset-004177920-RESULT.json"
+    },
+    {
+      "offset": 4227072,
+      "bytes": 49152,
+      "sha256": "0f3bea62bde5c7afc8b25331c010b39326333c9f6bc5ecb5f9b6e2dfed886e36",
+      "nextCursor": "171043",
+      "receipt": "thesis/campaigns/worker-desktop-k1-orca-relayed-http-remaining450-v2296/provider-prefix-transfer-v2302/recovery-v2397/receipts/k1-prefix-v2397-provider-offset-004227072-RESULT.json"
+    },
+    {
+      "offset": 4276224,
+      "bytes": 49152,
+      "sha256": "305fad595e858f0fb8a4449d509aea3378eff76e1c805ed7f7a4e88b118dec4e",
+      "nextCursor": "171154",
+      "receipt": "thesis/campaigns/worker-desktop-k1-orca-relayed-http-remaining450-v2296/provider-prefix-transfer-v2302/recovery-v2397/receipts/k1-prefix-v2397-provider-offset-004276224-RESULT.json"
+    },
+    {
+      "offset": 4325376,
+      "bytes": 49152,
+      "sha256": "c7b11710c284af9fa13afb6366ed0a84c4d4d7f4cb9cdcfe80451a65286c073c",
+      "nextCursor": "171265",
+      "receipt": "thesis/campaigns/worker-desktop-k1-orca-relayed-http-remaining450-v2296/provider-prefix-transfer-v2302/recovery-v2397/receipts/k1-prefix-v2397-provider-offset-004325376-RESULT.json"
+    },
+    {
+      "offset": 4374528,
+      "bytes": 49152,
+      "sha256": "0cfcbed7553256401b740be58c465b77be4e1465f56696725e0e71d1cdff5fff",
+      "nextCursor": "171376",
+      "receipt": "thesis/campaigns/worker-desktop-k1-orca-relayed-http-remaining450-v2296/provider-prefix-transfer-v2302/recovery-v2397/receipts/k1-prefix-v2397-provider-offset-004374528-RESULT.json"
+    },
+    {
+      "offset": 4423680,
+      "bytes": 49152,
+      "sha256": "a9455f4ee036fb2236228c91d92457c9a0ce649c1845d3c3d3a04ea070c8a296",
+      "nextCursor": "171487",
+      "receipt": "thesis/campaigns/worker-desktop-k1-orca-relayed-http-remaining450-v2296/provider-prefix-transfer-v2302/recovery-v2397/receipts/k1-prefix-v2397-provider-offset-004423680-RESULT.json"
+    },
+    {
+      "offset": 4472832,
+      "bytes": 49152,
+      "sha256": "fd43db9abdbcae2a8ed8a43d1d51471355ed92a9f0dd214517aa02e6c26e714c",
+      "nextCursor": "171598",
+      "receipt": "thesis/campaigns/worker-desktop-k1-orca-relayed-http-remaining450-v2296/provider-prefix-transfer-v2302/recovery-v2397/receipts/k1-prefix-v2397-provider-offset-004472832-RESULT.json"
+    },
+    {
+      "offset": 4521984,
+      "bytes": 49152,
+      "sha256": "a9ecff93ff33c1fc3171adc45f1a20dcac6b9e38c914109adbafecdd060457f9",
+      "nextCursor": "171709",
+      "receipt": "thesis/campaigns/worker-desktop-k1-orca-relayed-http-remaining450-v2296/provider-prefix-transfer-v2302/recovery-v2397/receipts/k1-prefix-v2397-provider-offset-004521984-RESULT.json"
+    },
+    {
+      "offset": 4571136,
+      "bytes": 49152,
+      "sha256": "a3e4c6a832421870e8b85a1b847f37d4392dcef1186e8c17557050a2cf4fae94",
+      "nextCursor": "171820",
+      "receipt": "thesis/campaigns/worker-desktop-k1-orca-relayed-http-remaining450-v2296/provider-prefix-transfer-v2302/recovery-v2397/receipts/k1-prefix-v2397-provider-offset-004571136-RESULT.json"
+    },
+    {
+      "offset": 4620288,
+      "bytes": 49152,
+      "sha256": "57a8649f30b18f59678d992a7bbdede50b667bdea7fca5e5dfbe67cb7b85649f",
+      "nextCursor": "171931",
+      "receipt": "thesis/campaigns/worker-desktop-k1-orca-relayed-http-remaining450-v2296/provider-prefix-transfer-v2302/recovery-v2397/receipts/k1-prefix-v2397-provider-offset-004620288-RESULT.json"
+    },
+    {
+      "offset": 4669440,
+      "bytes": 49152,
+      "sha256": "154edc2985b4bb4283f1efb3de79fa8a0a4c8b1aa9ba5453a6931dd1e0de5233",
+      "nextCursor": "172042",
+      "receipt": "thesis/campaigns/worker-desktop-k1-orca-relayed-http-remaining450-v2296/provider-prefix-transfer-v2302/recovery-v2397/receipts/k1-prefix-v2397-provider-offset-004669440-RESULT.json"
+    },
+    {
+      "offset": 4718592,
+      "bytes": 49152,
+      "sha256": "364630296410a10bbed7ca4bcaf5635dfd5898101d86fa644c0dad17e2deaf19",
+      "nextCursor": "172153",
+      "receipt": "thesis/campaigns/worker-desktop-k1-orca-relayed-http-remaining450-v2296/provider-prefix-transfer-v2302/recovery-v2397/receipts/k1-prefix-v2397-provider-offset-004718592-RESULT.json"
+    },
+    {
+      "offset": 4767744,
+      "bytes": 49152,
+      "sha256": "219bc01b512588b52ac9777b1ce5a143a092b9a55fb8dda10af5ecef3ee6786b",
+      "nextCursor": "172264",
+      "receipt": "thesis/campaigns/worker-desktop-k1-orca-relayed-http-remaining450-v2296/provider-prefix-transfer-v2302/recovery-v2397/receipts/k1-prefix-v2397-provider-offset-004767744-RESULT.json"
+    },
+    {
+      "offset": 4816896,
+      "bytes": 49152,
+      "sha256": "b8924d228ce612343a16490152d94fcd9461ccf0301c5fdde08533f755869342",
+      "nextCursor": "172375",
+      "receipt": "thesis/campaigns/worker-desktop-k1-orca-relayed-http-remaining450-v2296/provider-prefix-transfer-v2302/recovery-v2397/receipts/k1-prefix-v2397-provider-offset-004816896-RESULT.json"
+    },
+    {
+      "offset": 4866048,
+      "bytes": 49152,
+      "sha256": "49cc924a4aa38d7f7eed411de4070a15f3df92a31f823b15fac4bff1677ce384",
+      "nextCursor": "172486",
+      "receipt": "thesis/campaigns/worker-desktop-k1-orca-relayed-http-remaining450-v2296/provider-prefix-transfer-v2302/recovery-v2397/receipts/k1-prefix-v2397-provider-offset-004866048-RESULT.json"
+    },
+    {
+      "offset": 4915200,
+      "bytes": 49152,
+      "sha256": "7d6f87a5276e6e18e0e15057d223907a9214dbe05706924c0fe30b3fad29925a",
+      "nextCursor": "172597",
+      "receipt": "thesis/campaigns/worker-desktop-k1-orca-relayed-http-remaining450-v2296/provider-prefix-transfer-v2302/recovery-v2397/receipts/k1-prefix-v2397-provider-offset-004915200-RESULT.json"
+    },
+    {
+      "offset": 4964352,
+      "bytes": 49152,
+      "sha256": "8f17a5459a68e136782bc032cb30522ce95c694ce2b24b8c7099291cfd01c61f",
+      "nextCursor": "172708",
+      "receipt": "thesis/campaigns/worker-desktop-k1-orca-relayed-http-remaining450-v2296/provider-prefix-transfer-v2302/recovery-v2397/receipts/k1-prefix-v2397-provider-offset-004964352-RESULT.json"
+    },
+    {
+      "offset": 5013504,
+      "bytes": 49152,
+      "sha256": "3c27ff8c4069799b3bc2e0ee7223cdcb4833fdc3c9bec5131835816a887045e3",
+      "nextCursor": "172819",
+      "receipt": "thesis/campaigns/worker-desktop-k1-orca-relayed-http-remaining450-v2296/provider-prefix-transfer-v2302/recovery-v2397/receipts/k1-prefix-v2397-provider-offset-005013504-RESULT.json"
+    },
+    {
+      "offset": 5062656,
+      "bytes": 49152,
+      "sha256": "d85d2effd844be46fba4b6beee8a82315b40c18b31fdd2a9ba4b456f905d3558",
+      "nextCursor": "172930",
+      "receipt": "thesis/campaigns/worker-desktop-k1-orca-relayed-http-remaining450-v2296/provider-prefix-transfer-v2302/recovery-v2397/receipts/k1-prefix-v2397-provider-offset-005062656-RESULT.json"
+    },
+    {
+      "offset": 5111808,
+      "bytes": 49152,
+      "sha256": "d0d2721f9144027fba0377abc00b865bec4e82bba79dd2cf90a4cc55d82b7036",
+      "nextCursor": "173041",
+      "receipt": "thesis/campaigns/worker-desktop-k1-orca-relayed-http-remaining450-v2296/provider-prefix-transfer-v2302/recovery-v2397/receipts/k1-prefix-v2397-provider-offset-005111808-RESULT.json"
+    },
+    {
+      "offset": 5160960,
+      "bytes": 49152,
+      "sha256": "e6dfcb9ca7f337bd1804382d4501094c021b9af10f4efb922fa31a5f7370d8d8",
+      "nextCursor": "173152",
+      "receipt": "thesis/campaigns/worker-desktop-k1-orca-relayed-http-remaining450-v2296/provider-prefix-transfer-v2302/recovery-v2397/receipts/k1-prefix-v2397-provider-offset-005160960-RESULT.json"
+    },
+    {
+      "offset": 5210112,
+      "bytes": 49152,
+      "sha256": "a466029cf1d827cef26c738625d830cf2c7d7839afe6dfb162103728eb4a54ba",
+      "nextCursor": "173263",
+      "receipt": "thesis/campaigns/worker-desktop-k1-orca-relayed-http-remaining450-v2296/provider-prefix-transfer-v2302/recovery-v2397/receipts/k1-prefix-v2397-provider-offset-005210112-RESULT.json"
+    },
+    {
+      "offset": 5259264,
+      "bytes": 49152,
+      "sha256": "0273ceed5ba10411b61dc332944cf343672fdd28fbda9093975cf5060b1c1456",
+      "nextCursor": "173374",
+      "receipt": "thesis/campaigns/worker-desktop-k1-orca-relayed-http-remaining450-v2296/provider-prefix-transfer-v2302/recovery-v2397/receipts/k1-prefix-v2397-provider-offset-005259264-RESULT.json"
+    },
+    {
+      "offset": 5308416,
+      "bytes": 49152,
+      "sha256": "ecad0d10200c1745862628ff7383113276ac7eb5e0002a98c263246f62cb293e",
+      "nextCursor": "173485",
+      "receipt": "thesis/campaigns/worker-desktop-k1-orca-relayed-http-remaining450-v2296/provider-prefix-transfer-v2302/recovery-v2397/receipts/k1-prefix-v2397-provider-offset-005308416-RESULT.json"
+    },
+    {
+      "offset": 5357568,
+      "bytes": 49152,
+      "sha256": "99e63d72a696ed9c3a28f7ae54d5f0113e10f04e4e471fe9656b7b63488d212b",
+      "nextCursor": "173596",
+      "receipt": "thesis/campaigns/worker-desktop-k1-orca-relayed-http-remaining450-v2296/provider-prefix-transfer-v2302/recovery-v2397/receipts/k1-prefix-v2397-provider-offset-005357568-RESULT.json"
+    },
+    {
+      "offset": 5406720,
+      "bytes": 49152,
+      "sha256": "437fd9430595c3b0454f818f51839097f5cfb20a8c97485dca8ae0b8a6580f09",
+      "nextCursor": "173707",
+      "receipt": "thesis/campaigns/worker-desktop-k1-orca-relayed-http-remaining450-v2296/provider-prefix-transfer-v2302/recovery-v2397/receipts/k1-prefix-v2397-provider-offset-005406720-RESULT.json"
+    },
+    {
+      "offset": 5455872,
+      "bytes": 49152,
+      "sha256": "637f51e9361558fbfeebf45f98fb19ede3f81b8be1ab667cc67dd08efb3354c1",
+      "nextCursor": "173818",
+      "receipt": "thesis/campaigns/worker-desktop-k1-orca-relayed-http-remaining450-v2296/provider-prefix-transfer-v2302/recovery-v2397/receipts/k1-prefix-v2397-provider-offset-005455872-RESULT.json"
+    },
+    {
+      "offset": 5505024,
+      "bytes": 49152,
+      "sha256": "f0cd99467b88cadfc41410e52c802f87996d780455215710d3c8e2409cc97c84",
+      "nextCursor": "173929",
+      "receipt": "thesis/campaigns/worker-desktop-k1-orca-relayed-http-remaining450-v2296/provider-prefix-transfer-v2302/recovery-v2397/receipts/k1-prefix-v2397-provider-offset-005505024-RESULT.json"
+    },
+    {
+      "offset": 5554176,
+      "bytes": 49152,
+      "sha256": "688e9c74525473dc687a292823da0e2b1e897e6a4e8d4e60bcb799f99325c922",
+      "nextCursor": "174040",
+      "receipt": "thesis/campaigns/worker-desktop-k1-orca-relayed-http-remaining450-v2296/provider-prefix-transfer-v2302/recovery-v2397/receipts/k1-prefix-v2397-provider-offset-005554176-RESULT.json"
+    },
+    {
+      "offset": 5603328,
+      "bytes": 49152,
+      "sha256": "b7ef09cbb04469e3c3c6c747ea53529c190228ffef3db33b52627086403bbb79",
+      "nextCursor": "174151",
+      "receipt": "thesis/campaigns/worker-desktop-k1-orca-relayed-http-remaining450-v2296/provider-prefix-transfer-v2302/recovery-v2397/receipts/k1-prefix-v2397-provider-offset-005603328-RESULT.json"
+    },
+    {
+      "offset": 5652480,
+      "bytes": 49152,
+      "sha256": "838c5c774fbf3d2fb3e85a7a88f3e46aa61b304e2ef17ec8d76a57fe4efe2b13",
+      "nextCursor": "174262",
+      "receipt": "thesis/campaigns/worker-desktop-k1-orca-relayed-http-remaining450-v2296/provider-prefix-transfer-v2302/recovery-v2397/receipts/k1-prefix-v2397-provider-offset-005652480-RESULT.json"
+    },
+    {
+      "offset": 5701632,
+      "bytes": 49152,
+      "sha256": "814f58a702af084cccc53b9afb0802c8ab8ec1709bacea8069051df7f0af70a3",
+      "nextCursor": "174373",
+      "receipt": "thesis/campaigns/worker-desktop-k1-orca-relayed-http-remaining450-v2296/provider-prefix-transfer-v2302/recovery-v2397/receipts/k1-prefix-v2397-provider-offset-005701632-RESULT.json"
+    },
+    {
+      "offset": 5750784,
+      "bytes": 49152,
+      "sha256": "7c9e22304d70b03eb8af4c87fb14e2715d519733a72e2a8a71493d32dc5cbd1d",
+      "nextCursor": "174484",
+      "receipt": "thesis/campaigns/worker-desktop-k1-orca-relayed-http-remaining450-v2296/provider-prefix-transfer-v2302/recovery-v2397/receipts/k1-prefix-v2397-provider-offset-005750784-RESULT.json"
+    },
+    {
+      "offset": 5799936,
+      "bytes": 49152,
+      "sha256": "e1469e0f5fb0d7306faa5027633d905443465664cdce5530266d0a68c30901bd",
+      "nextCursor": "174595",
+      "receipt": "thesis/campaigns/worker-desktop-k1-orca-relayed-http-remaining450-v2296/provider-prefix-transfer-v2302/recovery-v2397/receipts/k1-prefix-v2397-provider-offset-005799936-RESULT.json"
+    },
+    {
+      "offset": 5849088,
+      "bytes": 49152,
+      "sha256": "ba792278c940bc69c2a2952ab34a7a7492b235da36e1a3449a799ddc7d192f80",
+      "nextCursor": "174706",
+      "receipt": "thesis/campaigns/worker-desktop-k1-orca-relayed-http-remaining450-v2296/provider-prefix-transfer-v2302/recovery-v2397/receipts/k1-prefix-v2397-provider-offset-005849088-RESULT.json"
+    },
+    {
+      "offset": 5898240,
+      "bytes": 49152,
+      "sha256": "6bd5df2acfc8749a4ff612adb7092b0ff631ee7f1feb125875baa565ff87610a",
+      "nextCursor": "174817",
+      "receipt": "thesis/campaigns/worker-desktop-k1-orca-relayed-http-remaining450-v2296/provider-prefix-transfer-v2302/recovery-v2397/receipts/k1-prefix-v2397-provider-offset-005898240-RESULT.json"
+    },
+    {
+      "offset": 5947392,
+      "bytes": 49152,
+      "sha256": "615e83c81c5773688732d17dbfdad7df9cf9b3fb65cd50e4a7d2d966e13a2251",
+      "nextCursor": "174928",
+      "receipt": "thesis/campaigns/worker-desktop-k1-orca-relayed-http-remaining450-v2296/provider-prefix-transfer-v2302/recovery-v2397/receipts/k1-prefix-v2397-provider-offset-005947392-RESULT.json"
+    },
+    {
+      "offset": 5996544,
+      "bytes": 49152,
+      "sha256": "c27138c0830187588e440c2ca02f4461119216a1ae2628f5e4e376b0ced99ddd",
+      "nextCursor": "175039",
+      "receipt": "thesis/campaigns/worker-desktop-k1-orca-relayed-http-remaining450-v2296/provider-prefix-transfer-v2302/recovery-v2397/receipts/k1-prefix-v2397-provider-offset-005996544-RESULT.json"
+    },
+    {
+      "offset": 6045696,
+      "bytes": 49152,
+      "sha256": "32244c3ff8e87b36227a466e4d03609e8478994d5e2c5686869ba17e883d0b84",
+      "nextCursor": "175150",
+      "receipt": "thesis/campaigns/worker-desktop-k1-orca-relayed-http-remaining450-v2296/provider-prefix-transfer-v2302/recovery-v2397/receipts/k1-prefix-v2397-provider-offset-006045696-RESULT.json"
+    },
+    {
+      "offset": 6094848,
+      "bytes": 49152,
+      "sha256": "b9f55e4499c08a0c624d0d7450b590b74be79ef51536302fdc7f8c6b61f04847",
+      "nextCursor": "175261",
+      "receipt": "thesis/campaigns/worker-desktop-k1-orca-relayed-http-remaining450-v2296/provider-prefix-transfer-v2302/recovery-v2397/receipts/k1-prefix-v2397-provider-offset-006094848-RESULT.json"
+    },
+    {
+      "offset": 6144000,
+      "bytes": 49152,
+      "sha256": "d6bacc53d2e18d90035fccf71aed49444afda3fdee5b8b233217a9839f4829ea",
+      "nextCursor": "175372",
+      "receipt": "thesis/campaigns/worker-desktop-k1-orca-relayed-http-remaining450-v2296/provider-prefix-transfer-v2302/recovery-v2397/receipts/k1-prefix-v2397-provider-offset-006144000-RESULT.json"
+    },
+    {
+      "offset": 6193152,
+      "bytes": 49152,
+      "sha256": "38d3fe8d50e4a1e0c2e3341610f4f1cdaa00a32b3cd21b86c89fe195a89e64d7",
+      "nextCursor": "175483",
+      "receipt": "thesis/campaigns/worker-desktop-k1-orca-relayed-http-remaining450-v2296/provider-prefix-transfer-v2302/recovery-v2397/receipts/k1-prefix-v2397-provider-offset-006193152-RESULT.json"
+    },
+    {
+      "offset": 6242304,
+      "bytes": 49152,
+      "sha256": "37513e7becc2a8d4801200a2749d78272969fdeeb5760eca1943ebcf90bd2778",
+      "nextCursor": "175594",
+      "receipt": "thesis/campaigns/worker-desktop-k1-orca-relayed-http-remaining450-v2296/provider-prefix-transfer-v2302/recovery-v2397/receipts/k1-prefix-v2397-provider-offset-006242304-RESULT.json"
+    },
+    {
+      "offset": 6291456,
+      "bytes": 49152,
+      "sha256": "7a2b62c6223581594b8c6a55d1c63bf762d8c3bc8e2e398f8874f21c4f0f02c4",
+      "nextCursor": "175705",
+      "receipt": "thesis/campaigns/worker-desktop-k1-orca-relayed-http-remaining450-v2296/provider-prefix-transfer-v2302/recovery-v2397/receipts/k1-prefix-v2397-provider-offset-006291456-RESULT.json"
+    },
+    {
+      "offset": 6340608,
+      "bytes": 49152,
+      "sha256": "50849c8440415c67e27cb4008777b680b3f0d390e6b40da3fd80e14b90cf845a",
+      "nextCursor": "175816",
+      "receipt": "thesis/campaigns/worker-desktop-k1-orca-relayed-http-remaining450-v2296/provider-prefix-transfer-v2302/recovery-v2397/receipts/k1-prefix-v2397-provider-offset-006340608-RESULT.json"
+    },
+    {
+      "offset": 6389760,
+      "bytes": 49152,
+      "sha256": "e8c8cd6056d4d663e5fe5b95524f7549d378d6e58e624a1fe883c8cf5877a9ef",
+      "nextCursor": "175927",
+      "receipt": "thesis/campaigns/worker-desktop-k1-orca-relayed-http-remaining450-v2296/provider-prefix-transfer-v2302/recovery-v2397/receipts/k1-prefix-v2397-provider-offset-006389760-RESULT.json"
+    },
+    {
+      "offset": 6438912,
+      "bytes": 49152,
+      "sha256": "d37a3ab32bd0a31a73224ad8501afb954ddeab4385f30d81e43096ba07c7a675",
+      "nextCursor": "176038",
+      "receipt": "thesis/campaigns/worker-desktop-k1-orca-relayed-http-remaining450-v2296/provider-prefix-transfer-v2302/recovery-v2397/receipts/k1-prefix-v2397-provider-offset-006438912-RESULT.json"
+    },
+    {
+      "offset": 6488064,
+      "bytes": 49152,
+      "sha256": "1f243b21180f96e73d82b649e41d6bd084bf99e68390638ad5b7b84c238e7a20",
+      "nextCursor": "176149",
+      "receipt": "thesis/campaigns/worker-desktop-k1-orca-relayed-http-remaining450-v2296/provider-prefix-transfer-v2302/recovery-v2397/receipts/k1-prefix-v2397-provider-offset-006488064-RESULT.json"
+    },
+    {
+      "offset": 6537216,
+      "bytes": 49152,
+      "sha256": "0d8b64fdbdcad0a43f803f7023b48c8f4effaf903e97e3ebb47ecc53c42a58ad",
+      "nextCursor": "176260",
+      "receipt": "thesis/campaigns/worker-desktop-k1-orca-relayed-http-remaining450-v2296/provider-prefix-transfer-v2302/recovery-v2397/receipts/k1-prefix-v2397-provider-offset-006537216-RESULT.json"
+    },
+    {
+      "offset": 6586368,
+      "bytes": 49152,
+      "sha256": "a53a991b83e36e785be32dd3927eaee79fb6375de3af73fd99f8c062eebd5e4d",
+      "nextCursor": "176371",
+      "receipt": "thesis/campaigns/worker-desktop-k1-orca-relayed-http-remaining450-v2296/provider-prefix-transfer-v2302/recovery-v2397/receipts/k1-prefix-v2397-provider-offset-006586368-RESULT.json"
+    },
+    {
+      "offset": 6635520,
+      "bytes": 49152,
+      "sha256": "7e33628e776c319a80f5f718d12af50534582997eb98d8de850e2a7e87a2ebb4",
+      "nextCursor": "176482",
+      "receipt": "thesis/campaigns/worker-desktop-k1-orca-relayed-http-remaining450-v2296/provider-prefix-transfer-v2302/recovery-v2397/receipts/k1-prefix-v2397-provider-offset-006635520-RESULT.json"
+    },
+    {
+      "offset": 6684672,
+      "bytes": 49152,
+      "sha256": "df3949c40e7727b1ff22df0eb9d3f172e40ac1e1fae9162f95edfe939172146e",
+      "nextCursor": "176593",
+      "receipt": "thesis/campaigns/worker-desktop-k1-orca-relayed-http-remaining450-v2296/provider-prefix-transfer-v2302/recovery-v2397/receipts/k1-prefix-v2397-provider-offset-006684672-RESULT.json"
+    },
+    {
+      "offset": 6733824,
+      "bytes": 49152,
+      "sha256": "33196df6139875f783158d6de1d6c37cfd2c10bb758d013951ab5b4fc461e0fa",
+      "nextCursor": "176704",
+      "receipt": "thesis/campaigns/worker-desktop-k1-orca-relayed-http-remaining450-v2296/provider-prefix-transfer-v2302/recovery-v2397/receipts/k1-prefix-v2397-provider-offset-006733824-RESULT.json"
+    },
+    {
+      "offset": 6782976,
+      "bytes": 49152,
+      "sha256": "da6f94bdfed4a2f94aec55ce93f5de5eedd78c319f895d40d3dfa1134329f555",
+      "nextCursor": "176815",
+      "receipt": "thesis/campaigns/worker-desktop-k1-orca-relayed-http-remaining450-v2296/provider-prefix-transfer-v2302/recovery-v2397/receipts/k1-prefix-v2397-provider-offset-006782976-RESULT.json"
+    },
+    {
+      "offset": 6832128,
+      "bytes": 39306,
+      "sha256": "6dab35ff95a4f4937036cc93c4150b18b93a4940c5f70dce53fd24750e6a8ff2",
+      "nextCursor": "176904",
+      "receipt": "thesis/campaigns/worker-desktop-k1-orca-relayed-http-remaining450-v2296/provider-prefix-transfer-v2302/recovery-v2397/receipts/k1-prefix-v2397-provider-offset-006832128-RESULT.json"
+    }
+  ],
+  "outerSeconds": 1200,
+  "pageBytes": 49152,
+  "originalTransportState": {
+    "path": "thesis/campaigns/worker-desktop-k1-orca-relayed-http-remaining450-v2296/provider-prefix-transfer-v2302/recovery-v2397/ORIGINAL-INCOMPLETE-STATE.json",
+    "sha256": "d5312484168de1c3a7fe67bd9462e53ca124eeabee9ef6066ff91dbea6ae0c9f",
+    "partialSha256": "424e02c0a5cab412459aa11c9f919b33956e57b237d59b9ebe525edf7fda1207",
+    "originalOuterSeconds": 600,
+    "errorClass": "TimeoutExpired",
+    "error": "Command '['/home/developer/projects/aurora/.git/aurora-handoff-import-20261006/cpu-audio-campaign-v491/env/bin/python', '/home/developer/projects/aurora/thesis/harness/orca_copy_control_raw_read_v1652.py', 'k1-prefix-v2302-provider-page-0009', '/home/developer/projects/aurora/thesis/campaigns/worker-desktop-k1-orca-relayed-http-remaining450-v2296/provider-prefix-transfer-v2302/commands/k1-prefix-v2302-provider-page-0009.txt', 'K1_PREFIX_V2302_PROVIDER_PAGE_0009']' timed out after 90 seconds"
+  },
+  "recoveryReason": "One missing terminal frame; recovered exact page9 fragment, then smaller read-only copy pages",
+  "sutCalls": 0,
+  "newAgents": 0,
+  "newProviderExport": 0,
+  "noMeasurementInputsOrClocksChanged": true,
+  "clockMetadataClarification": {
+    "legacyExporterDeadlineLabelsAreHistorical": true,
+    "actualProviderDeadlineUtc": "2026-10-22T08:31:16.563152+00:00",
+    "actualRootDeadlineUtc": "2026-10-22T09:39:28.033312+00:00",
+    "allocationReceipt": "thesis/evidence/k1-http-remaining450-admission-v2294/SESSION-ALLOCATION-v2296.json",
+    "allocationSha256": "e0bf68319b9ba7355a33cbde67ed57acf174b277c34fdb08f7e103d81cefb311",
+    "oldExportAndAllRawPreserved": true
+  },
+  "updatedAt": "2026-10-22T05:27:24.076480+00:00",
+  "archiveVerified": {
+    "path": "thesis/campaigns/worker-desktop-k1-orca-relayed-http-remaining450-v2296/provider-prefix-transfer-v2302/provider-prefix-v2301.tar.gz",
+    "bytes": 6871434,
+    "sha256": "3a22bd10761d9fa54755d319b4ef86fb8c7319da906b4716fb2bb1f67f7e19dc"
+  },
+  "files": [
+    {
+      "member": "raw/provider-manifest.json",
+      "bytes": 12012,
+      "sha256": "0f4a4bf0e7638b63b8d046331e1e7393e4f108f406802f0e4f0d543feca5ffa2",
+      "custody": "verified member of physical retained archive"
+    },
+    {
+      "member": "raw/controller-launch.json",
+      "bytes": 302,
+      "sha256": "746ac2058d0e87b96f3e35a46ede6cc3810d5aecb5dc8f17b2d6f15823e8b812",
+      "custody": "verified member of physical retained archive"
+    },
+    {
+      "member": "raw/receiver-identity.json",
+      "bytes": 1373,
+      "sha256": "7e48f6c187888b6b777b3052eed4b537cce524a46577aee71e449f66d68f8e11",
+      "custody": "verified member of physical retained archive"
+    },
+    {
+      "member": "raw/assistant-identity.json",
+      "bytes": 1418,
+      "sha256": "30eb5b38c0c3bb0ef27e0424fa8a3311c4eca14d73e7ad71f6dbb0445b914cb9",
+      "custody": "verified member of physical retained archive"
+    },
+    {
+      "member": "raw/stt-identity.json",
+      "bytes": 1400,
+      "sha256": "5808d854f505988d11687b91c4e1e93b130cd3a50de61e750b08ce2fc148654e",
+      "custody": "verified member of physical retained archive"
+    },
+    {
+      "member": "raw/runtime-versions.json",
+      "bytes": 211,
+      "sha256": "6ec5f9ef9da05eb0c3b0e06970f8163bba8f1955ed23123736c99f3088d51e4a",
+      "custody": "verified member of physical retained archive"
+    },
+    {
+      "member": "raw/ACTUAL-FILES-v2296.json",
+      "bytes": 2184,
+      "sha256": "ecd663bad521036b0a68328c9c283f1c623ee7c70342ac29053782fb8b95496a",
+      "custody": "verified member of physical retained archive"
+    },
+    {
+      "member": "raw/PREPARATION-v2296.json",
+      "bytes": 13349,
+      "sha256": "69d11632dd853d569fac697b73bc243a33da365d78638cc336a3fa06a22afb31",
+      "custody": "verified member of physical retained archive"
+    },
+    {
+      "member": "raw/ROOT-ADMISSION-v2296.json",
+      "bytes": 13443,
+      "sha256": "8dc18bd932f4e32897dd13595d8a0f548abaa43886e0f98361b7055c511be60d",
+      "custody": "verified member of physical retained archive"
+    },
+    {
+      "member": "raw/ROOT-LAUNCH-v2296.json",
+      "bytes": 274,
+      "sha256": "fe2c042df3552fc3e24944edc6529b9256113f86effbef170ac4e078a13f6803",
+      "custody": "verified member of physical retained archive"
+    },
+    {
+      "member": "raw/ROOT-LAUNCH-INTENT-v2296.json",
+      "bytes": 187,
+      "sha256": "9f81c3b18814cbbf9d95bda72a851cb10d0b6ed19a12290ff251b700824d5cb6",
+      "custody": "verified member of physical retained archive"
+    },
+    {
+      "member": "raw/STATUS.json",
+      "bytes": 161093,
+      "sha256": "83e7a96355dc380bfee589ca9b28e113317f35d7c8ce521c28b45ad7aacbcd8e",
+      "custody": "verified member of physical retained archive"
+    },
+    {
+      "member": "raw/voice-stages.jsonl",
+      "bytes": 2257575,
+      "sha256": "f1fe37525b65dfc4947c6a8f5ff8ebbfea6700373863b40c9d12dfd4485ce08d",
+      "custody": "verified member of physical retained archive"
+    },
+    {
+      "member": "raw/actual-provider-bindings.jsonl",
+      "bytes": 350966,
+      "sha256": "87191eeed764faf59ce73d029f98b2f5445fdc2d05ce59b0f95d806a7203d6fd",
+      "custody": "verified member of physical retained archive"
+    },
+    {
+      "member": "raw/resources.jsonl",
+      "bytes": 113316229,
+      "sha256": "226c98f80e50992558f71d2fa87a978c7fc770f961e6695e127843275e07518e",
+      "custody": "verified member of physical retained archive"
+    },
+    {
+      "member": "raw/binding-guard-diagnostic.jsonl",
+      "bytes": 0,
+      "sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+      "custody": "verified member of physical retained archive"
+    },
+    {
+      "member": "PROVIDER-PREFIX-SEAL.json",
+      "bytes": 9881,
+      "sha256": "ac73dafcfc45a051797e394b981feacbb09f7932422aedda7197ae75fa1e5720",
+      "custody": "verified member of physical retained archive"
+    }
+  ],
+  "finishedAt": "2026-10-22T05:27:24.076430+00:00",
+  "rawFiles": 16,
+  "rawPayloadBytes": 116132016,
+  "originalRawPreserved": true,
+  "duplicateUncompressedBytes": 115926143,
+  "analysisExtraction": [
+    {
+      "path": "thesis/campaigns/worker-desktop-k1-orca-relayed-http-remaining450-v2296/provider-prefix-transfer-v2302/extracted/raw/voice-stages.jsonl",
+      "bytes": 2257575,
+      "sha256": "f1fe37525b65dfc4947c6a8f5ff8ebbfea6700373863b40c9d12dfd4485ce08d"
+    },
+    {
+      "path": "thesis/campaigns/worker-desktop-k1-orca-relayed-http-remaining450-v2296/provider-prefix-transfer-v2302/extracted/raw/actual-provider-bindings.jsonl",
+      "bytes": 350966,
+      "sha256": "87191eeed764faf59ce73d029f98b2f5445fdc2d05ce59b0f95d806a7203d6fd"
+    },
+    {
+      "path": "thesis/campaigns/worker-desktop-k1-orca-relayed-http-remaining450-v2296/provider-prefix-transfer-v2302/extracted/raw/resources.jsonl",
+      "bytes": 113316229,
+      "sha256": "226c98f80e50992558f71d2fa87a978c7fc770f961e6695e127843275e07518e"
+    },
+    {
+      "path": "thesis/campaigns/worker-desktop-k1-orca-relayed-http-remaining450-v2296/provider-prefix-transfer-v2302/extracted/raw/receiver-identity.json",
+      "bytes": 1373,
+      "sha256": "7e48f6c187888b6b777b3052eed4b537cce524a46577aee71e449f66d68f8e11"
+    }
+  ],
+  "analysisExtractionPurpose": "Only four saved-data analyzer inputs; no models/config/env/DB/credentials copied",
+  "requesterActorsAbsent": true,
+  "providerRetired": false,
+  "reservationPreserved": true,
+  "epochMeasured": 450,
+  "conditionMeasured": 900,
+  "conditionRemaining": 0,
+  "diskAfter": {
+    "total": 109128826880,
+    "used": 106298818560,
+    "free": 2813231104
+  }
+}

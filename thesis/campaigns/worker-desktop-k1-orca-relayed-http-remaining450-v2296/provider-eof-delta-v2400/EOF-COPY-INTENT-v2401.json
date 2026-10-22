@@ -1,0 +1,16 @@
+{
+  "at": "2026-10-22T05:43:34.169767+00:00",
+  "kind": "COPY_ALREADY_RETIRED_PROVIDER_EOF_DELTA_ONLY",
+  "command": [
+    "/home/developer/projects/aurora/.git/aurora-handoff-import-20261006/cpu-audio-campaign-v491/env/bin/python",
+    "-u",
+    "/home/developer/projects/aurora/thesis/harness/transfer_k1_http_provider_eof_delta_v2401.py"
+  ],
+  "sourceSha256": "23161310d553763359c1c3d9c5aecb1d3c85b8b37e729e64923749f386fa99fd",
+  "archiveBytes": 670362,
+  "archiveSha256": "252799b425f284ecd66c79718405bf3bc51d28f0b4e616906fda5052f87cc6d2",
+  "pageBytes": 49152,
+  "maximumLaunches": 1,
+  "inferenceReruns": 0,
+  "newSignals": 0
+}

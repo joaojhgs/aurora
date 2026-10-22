@@ -1,0 +1,25 @@
+{
+  "schema": "aurora.owner.availability.v1",
+  "recordedAt": "2026-10-22T05:03:20.263104+00:00",
+  "authority": "direct owner message in existing phone setup session",
+  "startUtc": "2026-10-22T04:57:25.269652Z",
+  "endUtc": "2026-10-22T11:57:25.269652Z",
+  "durationSeconds": 25200,
+  "explicitStartSignal": true,
+  "conditionalAutomaticStart": true,
+  "conditions": [
+    "actual native route/model/correctness/cancellation readiness",
+    "qualified unchanged cohort",
+    "resource noninterference"
+  ],
+  "includesSetupPilotCollection": true,
+  "automaticExtensionAllowed": false,
+  "priority": [
+    "K2",
+    "K3",
+    "K1",
+    "LOCAL"
+  ],
+  "urgentUpdateConsentProofRequired": true,
+  "approvalMessage": "direct-owner-existing-session-20261022T045725.269652Z"
+}

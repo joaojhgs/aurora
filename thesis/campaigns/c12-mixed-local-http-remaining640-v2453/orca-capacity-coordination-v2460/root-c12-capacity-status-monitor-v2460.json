@@ -1,0 +1,28 @@
+{
+  "id": "2363cc8a-05db-4faf-a52d-ca6a99fb4a10",
+  "ok": true,
+  "result": {
+    "message": {
+      "id": "msg_edd913ce1f16",
+      "run_id": "run_e6054e76e9fc",
+      "delivery_contract": "current_delivery",
+      "from_handle": "term_6a00d9ee-792a-4daf-8578-236290e33108",
+      "to_handle": "dispatch:ctx_37b4d0a3c14f",
+      "subject": "Capacity status: current projected39.6MB shortfall; original cache question pending",
+      "body": "Root capacity status, using ordinary coordinator guidance only. Prior --type escalation was definitively rejected locally as worker_identity_changed because Root does not own monitor Dispatch; no alert accepted, no ownership/adoption attempted. Main W462924/start144596371 remains live and357/900 correct per stream at12:29:59, no failure/timeout. Actual STORAGE-OBSERVATION-v2460.json:40,054,784B allocated/103pairedcapsules,175,026,176B above2GiBfloor; linear552remaining214,662,532B leaves39,636,356B SHORT before EOF/unrelated growth. Existing exact935,297,024B webpack-cache approval question remains pending; owner previously limited cleanup to2Rustcaches, no other deletion or duplicate question. Main continues unchanged; floor/counts/source/master clocks retained. Future915pairs rough355.8MB, so next P2P preparation now requires declared whole-condition workerRawBudgetBytes above floor. Root one-pass incremental copier linked176new files/1,059,419B, skipped2079verified with0old rehash,244ms/0payload copies; no tests/models/network. Please retain this genuine capacity attention in existing coordination; external Coding delivery remains UNVERIFIED unless a supported receiver is proven. Also ACK e447cf315dfb/bec52533833a: same phone worker has actual NEW owner12:21:09.788710\u219218:21:09.788710 six-hour window, no old reset. Root makes0phone/Notebook reads and imposes no phone gate; worker stays sole owner. I will mirror complete918313B/df1ee916 at this safe checkpoint. No new agent, review, owner fixture choice, auth change or infrastructure operation.",
+      "type": "status",
+      "priority": "high",
+      "thread_id": null,
+      "payload": null,
+      "created_at": "2026-10-22T12:30:59Z",
+      "delivered_at": null
+    },
+    "mutation": {
+      "requestId": "799ceaab-8cea-4656-84c3-408e506f4672",
+      "replayed": false
+    }
+  },
+  "_meta": {
+    "runtimeId": "cc9e3275-28c6-4c45-85cc-bdcd2262aa7d"
+  }
+}

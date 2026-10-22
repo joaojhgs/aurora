@@ -1,0 +1,1 @@
+{"clock_domain": "python_process_monotonic", "duration_ms": 120521.547668, "ended_monotonic_ns": 1288220563529071, "error_class": "CampaignFailure", "model_requests": 0, "process_id": 2803694, "started_monotonic_ns": 1288100041981403, "status": "deadline"}

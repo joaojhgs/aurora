@@ -1,0 +1,16 @@
+{
+  "at": "2026-10-21T02:59:36.450077+00:00",
+  "pid": 3333678,
+  "startTicks": 133003703,
+  "kind": "requesterCopier",
+  "maximumLaunches": 1,
+  "args": [
+    "python3",
+    "/home/developer/projects/aurora/thesis/harness/custody_k1_mesh_requester_v2153.py",
+    "--follow",
+    "--condition-sha256",
+    "d753203e4a53f12ed983a98d776a811d241d0d6bc6061b28e3c1480a077a17d3"
+  ],
+  "sutCallsByAuxiliary": 0,
+  "conditionSha256": "d753203e4a53f12ed983a98d776a811d241d0d6bc6061b28e3c1480a077a17d3"
+}

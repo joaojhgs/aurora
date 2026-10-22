@@ -1,0 +1,11 @@
+{
+  "at": "2026-10-18T22:32:31.992946+00:00",
+  "role": "Root custody utility only; no Codex/Orca worker or SUT",
+  "pid": 1494270,
+  "expectedStartTicks": 114092674,
+  "terminalSourceSummary": "failed_preflight_or_setup/0warmups/0measurements",
+  "retirementReason": "Old copier follows awaiting_progress forever when preflight produced summary without progress; same saved source drain required",
+  "modelRequests": 0,
+  "signal": "SIGINT exact proved Root utility after SUT retirement",
+  "retired": true
+}

@@ -1,0 +1,36 @@
+{
+  "at": "2026-10-22T01:09:24.320464+00:00",
+  "state": "PUBLIC_PINNED_ACQUISITION_RUNNING_NATIVE_NOT_READY",
+  "phone": {
+    "serial": "KBX8LNFUBE5XGQRG",
+    "currentState": "device not found",
+    "inventory": [],
+    "observedAt": "2026-10-22T01:02:14.811256+00:00",
+    "authorizationDialogObserved": false
+  },
+  "models": {
+    "descriptor": "DIRECT-PUBLIC-DOWNLOAD.json",
+    "actualDownloadedAt010551": {
+      "QwenPartialBytes": 73859072,
+      "WhisperPartialBytes": 73924608,
+      "configShaVerified": true
+    },
+    "workerDesktopModelTransferBytes": 0
+  },
+  "source": {
+    "sha": "ebde3a8acf6315f920d03593845f17a1fc65a733",
+    "remoteSha": null,
+    "sourceCopyBytes": 0,
+    "receiverPrepared": true,
+    "renewalRequest": "msg_f29918a89743"
+  },
+  "cpuTemperatureC": 92.375,
+  "buildPilotStopC": 85,
+  "fileOnlyStopC": 95,
+  "modelCalls": 0,
+  "pilotCases": 0,
+  "overnightCases": 0,
+  "ownerStartUtc": null,
+  "ownerEndUtc": null,
+  "mainCampaignUntouched": true
+}

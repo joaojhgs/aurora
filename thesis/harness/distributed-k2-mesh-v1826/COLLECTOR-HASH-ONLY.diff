@@ -1,0 +1,11 @@
+--- old-collector
++++ same-collector-new-generator-pin
+@@ -20,7 +20,7 @@
+ 
+ REPO = Path('/home/developer/projects/aurora')
+ HANDOFF = REPO / '.git/aurora-handoff-import-20261006'
+-PROOF_SHA = '4aea2ab1d0687ca8fdae48486dad0dd532967ee1428bc624f525cb8e43344dbb'
++PROOF_SHA = '3bb4af79cf2579023c0f1ff2025f69367717d49db7d09831c682c1bf52fc441f'
+ 
+ 
+ def sha(data):

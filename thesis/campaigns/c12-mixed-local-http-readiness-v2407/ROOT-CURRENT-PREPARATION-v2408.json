@@ -1,0 +1,22 @@
+{
+  "at": "2026-10-22T06:21:59.634691+00:00",
+  "nativeGoal": "01a112a5-d6bb-74e2-bf7c-ace73cb513b5",
+  "status": "active",
+  "mainCondition": "C12 mixed desktop local + worker Orca-relayed HTTP K3, concurrency2",
+  "state": "EXACT_INPUT_RESTORED_NEW_FINITE_PROVIDER_PREPARATION_ISSUED_ACTUAL_LAUNCH_PENDING",
+  "measured": 0,
+  "readinessFlowsAdmittedMaximum": {
+    "desktop-local": 1,
+    "worker-http": 1
+  },
+  "requestCapSeconds": 180,
+  "allocationDeadlineUtc": "2026-10-22T06:47:13.434835+00:00",
+  "phoneOwner": "term_1f27be31-0284-4366-bb91-30fe538cd30e",
+  "phoneRootInvestigation": false,
+  "closedWorkerDesktopCoreConditions": 6,
+  "closedCoreTargetEach": 900,
+  "waydroid": "Actual approved binding unresolved, device absence not inferred",
+  "modelAudioConfigChanged": false,
+  "inputCopyReceipt": "thesis/campaigns/c12-mixed-local-http-readiness-v2407/EXACT-INPUT-COPY-RECEIPT-v2408.json",
+  "previousPreparationFailurePreserved": true
+}

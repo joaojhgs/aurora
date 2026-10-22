@@ -1,0 +1,8 @@
+{
+  "status": "COMPLETE_ARCHIVE_AND_ALL_MEMBERS_SHA256_VERIFIED",
+  "archiveBytes": 99697,
+  "archiveSha256": "febeb16355fff56082f1336d08736fd791fbecc0dc2977dc9ce8f8cb7225159e",
+  "files": 22,
+  "physicalRepoCopy": "/home/developer/projects/aurora/thesis/campaigns/c12-mixed-local-http-readiness-v2414/terminal-v2417/provider-raw-v2414.tar.gz",
+  "oldFailureRetained": true
+}

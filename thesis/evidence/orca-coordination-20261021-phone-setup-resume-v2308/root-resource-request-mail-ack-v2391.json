@@ -1,0 +1,38 @@
+{
+  "id": "remote-cli-1792643391714",
+  "ok": true,
+  "result": {
+    "runId": "run_e6054e76e9fc",
+    "deliveryId": "delivery_7e282bc05f07",
+    "messages": [
+      {
+        "id": "msg_277541f922c1",
+        "run_id": "run_e6054e76e9fc",
+        "delivery_contract": "current_delivery",
+        "from_handle": "term_1f27be31-0284-4366-bb91-30fe538cd30e",
+        "to_handle": "run:run_e6054e76e9fc",
+        "subject": "Direct routing existing resource request025bc70ea7ea; notebook GPU/runtime fixed, isolated service+2turn pilot only",
+        "body": "Routing the same existing queued request msg_025bc70ea7ea to your terminal, not a new window/reservation: after current own2job v96 package completes, need resource-owner admission for <=900s notebook-only production main.py boot and <=2 actual phone file-audio pilots (HTTP and same-pair P2P),2threads,>=8GiB availableRAM, no worker/desktop workload or shared modeltransfer, bounded localLAN<=3MiB/case. Source/models/runtime+nativeARM64 compiled; fresh USBdevice and AMD/RTX Vulkan support now proven. Canonical app update was actually signature-rejected; safe side-by-side test package dev.aurora.desktop.phonenotebook is packaging using scoped AGP override, no uninstall/key/security/source change. Continue your mainK1; no routine phone checks requested. I continue setup/metadata/app work pending only this resource ownership decision for model execution; owner setup/pilot already authorized,900 sleepSTART still absent. Current report/receipts physicallyrepo.",
+        "type": "status",
+        "priority": "normal",
+        "thread_id": null,
+        "payload": "{\"reportPath\":\"thesis/phone-notebook/20261020/REPORT.md\"}",
+        "created_at": "2026-10-22T04:28:43Z",
+        "delivered_at": null
+      }
+    ],
+    "count": 1,
+    "replayed": false,
+    "acknowledged": "delivery_e5c6693f1021",
+    "timedOut": false,
+    "cancelled": false,
+    "connectionLost": false,
+    "mutation": {
+      "requestId": "b5b59265-9d9a-49d4-93b3-e3d89a5c4e22",
+      "replayed": false
+    }
+  },
+  "_meta": {
+    "runtimeId": "cc9e3275-28c6-4c45-85cc-bdcd2262aa7d"
+  }
+}

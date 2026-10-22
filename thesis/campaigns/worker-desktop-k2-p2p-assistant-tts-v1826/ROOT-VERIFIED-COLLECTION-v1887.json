@@ -1,0 +1,132 @@
+{
+  "at": "2026-10-20T19:25:31.743095+00:00",
+  "localObservationAt": "2026-10-20T19:24:40Z",
+  "classification": "verified_wait",
+  "nativeGoalThread": "01a112a5-d6bb-74e2-bf7c-ace73cb513b5",
+  "nativeGoalStatus": "active",
+  "fullAggregatePreserved": true,
+  "observation": {
+    "progress": {
+      "attempted": 720,
+      "last_attempt_file": "attempts/attempt-0720-measured.jsonl",
+      "last_attempt_status": "completed_correct",
+      "measured_attempted": 705,
+      "planned_measured": 900,
+      "planned_warmups": 15,
+      "status": "running",
+      "unattempted_measured": 195,
+      "warmups_attempted": 15
+    },
+    "outcomes": {
+      "completed_correct": 694,
+      "failed": 11
+    },
+    "failureKinds": {
+      "preaccept_capability_changed": 11
+    },
+    "maxRecordedConsecutiveRejections": 1,
+    "partialQualityIncorrect": 0,
+    "processes": [
+      {
+        "pid": 2830732,
+        "startTicks": 129050331,
+        "state": "S",
+        "identityMatches": true
+      },
+      {
+        "pid": 2830763,
+        "startTicks": 129050436,
+        "state": "R",
+        "identityMatches": true
+      },
+      {
+        "pid": 2831081,
+        "startTicks": 129052325,
+        "state": "S",
+        "identityMatches": true
+      }
+    ],
+    "custodyAt": "2026-10-20T19:24:01.028731+00:00",
+    "copiedCases": 717,
+    "copiedAudio": 706,
+    "copyErrors": [],
+    "diskFree": 4310904832
+  },
+  "sourceAndProviderUnchanged": true,
+  "newTestsOrRuns": false,
+  "retainedFailureEvidence": "thesis/campaigns/worker-desktop-k2-p2p-assistant-tts-v1826/ROOT-PREACCEPT-OUTCOMES-v1847.json",
+  "independentMonitorEvidence": {
+    "path": "thesis/campaigns/worker-desktop-k2-p2p-assistant-tts-v1826/MONITOR-PREACCEPT-OUTCOMES-20261020T1700Z.json",
+    "bytes": 2058,
+    "sha256": "e4b34a43c7651f376815d18a0416715d767c5b18e4a0b745b1638bc48b57acd6"
+  },
+  "ledgerAnnotation": {
+    "path": "thesis/campaigns/worker-desktop-k2-p2p-assistant-tts-v1826/ULTRAGOAL-PREACCEPT-OUTCOMES-v1849.json",
+    "accepted": true,
+    "planSummary": {
+      "total": 13,
+      "pending": 11,
+      "inProgress": 1,
+      "complete": 1,
+      "failed": 0,
+      "reviewBlocked": 0,
+      "historicalReviewBlocked": 0,
+      "needsUserDecision": 0,
+      "superseded": 0,
+      "steeringBlocked": 0,
+      "aggregateComplete": false,
+      "artifactComplete": false,
+      "activeGoalId": "G001-per-278-ui-state-real-time-plan-p1-t"
+    }
+  },
+  "eventWaitReceipts": [
+    ".git/aurora-handoff-import-20261006/root-event-wait-v1885-01.json",
+    ".git/aurora-handoff-import-20261006/root-event-wait-v1885-02.json",
+    ".git/aurora-handoff-import-20261006/root-event-wait-v1885-03.json",
+    ".git/aurora-handoff-import-20261006/root-event-wait-v1885-04.json",
+    ".git/aurora-handoff-import-20261006/root-event-wait-v1886-01.json",
+    ".git/aurora-handoff-import-20261006/root-event-wait-v1886-02.json",
+    ".git/aurora-handoff-import-20261006/root-event-wait-v1886-03.json",
+    ".git/aurora-handoff-import-20261006/root-event-wait-v1886-04.json",
+    ".git/aurora-handoff-import-20261006/root-event-wait-v1886-05.json",
+    ".git/aurora-handoff-import-20261006/root-event-wait-v1886-06.json"
+  ],
+  "supervisionCadence": {
+    "boundedMailboxWaitMs": 50000,
+    "localProcessAndCustodyCheckApproxSeconds": 300,
+    "processEveryWholeDeliveryBeforeExactAck": true,
+    "ackMayDeliverNewMessages": true,
+    "immediateTerminalOrErrorHandling": true,
+    "avoid": "minute-by-minute LLM restatements; no new watchdogs/workers/tests/source changes/gates"
+  },
+  "nextGate": "Same frozen K2 900 natural terminal boundary then requester/provider EOF custody and saved-data native/resource/correctness summaries. No replacement of failed measured attempts; K1 191 and wider matrix OPEN.",
+  "lastReadMonitorHeartbeat": "msg_8bb8341f3efd",
+  "newFailuresSincePriorCheckpoint": 0,
+  "sourceOrSettingsChangesMade": false,
+  "additionalFailureEvidence": {
+    "kind": "Independent original Sol monitor verified saved data; no new inference or test",
+    "messageId": "msg_face76b9e6a7",
+    "messagePhysicalPath": "thesis/campaigns/worker-desktop-k2-p2p-assistant-tts-v1826/MONITOR-ADDITIONAL-PREACCEPT-OUTCOMES-20261020T1728Z.json",
+    "messageBytes": 2003,
+    "messageSha256": "b807890e3ec0b432506041bbeb61eec4868a38cdff67f52a35b127d2bda2dac2",
+    "failures": [
+      {
+        "measuredIndex": 283,
+        "path": "thesis/campaigns/worker-desktop-k2-p2p-assistant-tts-v1826/attempts/attempt-0298-measured.jsonl",
+        "bytes": 5183,
+        "sha256": "b7e609ac59922a64575da4d642ab0cc26da24042cfd717d8b3acda55fe95874a"
+      },
+      {
+        "measuredIndex": 288,
+        "path": "thesis/campaigns/worker-desktop-k2-p2p-assistant-tts-v1826/attempts/attempt-0303-measured.jsonl",
+        "bytes": 5181,
+        "sha256": "5a1439653b9af28599cb3e944f6679e8fd8f12cdf4edff0d5cf4becf6fd00c8b"
+      }
+    ],
+    "classification": "Same explicit TTS preaccept capability_changed rejection, no timeout, correct STT and assistant answer; consecutive rejection count1 each. No audio expected for rejected requests. Receiver predicate cause remains unknown.",
+    "unchangedPolicy": "Retain failures in denominator; next distinct measured index without retry/fallback; hard stop at3 consecutive."
+  },
+  "retainedFailureEvidenceScope": "Earlier receipts cover first observed subsets. Complete current failed denominator is in observation and physical campaign attempts, with all raw failures preserved.",
+  "failureClassificationSource": "Aggregate inspection of saved measured rows only; unchanged frozen runtime policy. No new test, inference, receiver-cause diagnosis or source change.",
+  "lastMailboxAckReceipt": ".git/aurora-handoff-import-20261006/root-event-wait-v1886-06.json"
+}

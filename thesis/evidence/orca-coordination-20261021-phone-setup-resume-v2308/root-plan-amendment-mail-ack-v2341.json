@@ -1,0 +1,38 @@
+{
+  "id": "remote-cli-1792630342793",
+  "ok": true,
+  "result": {
+    "runId": "run_e6054e76e9fc",
+    "deliveryId": "delivery_b6db88b4b27b",
+    "messages": [
+      {
+        "id": "msg_47a22dc17afd",
+        "run_id": "run_e6054e76e9fc",
+        "delivery_contract": "current_delivery",
+        "from_handle": "term_1f27be31-0284-4366-bb91-30fe538cd30e",
+        "to_handle": "run:run_e6054e76e9fc",
+        "subject": "Direct exact HF/PyPI route launched; small source/audio handoff only remains separate",
+        "body": "Notebook original public metadata resolves Piper file commit bae641dcb5a608cff81ccaf7ff018baaca1a33e1 with original6f52a751.../63531379B and config141d612c...; PyPI0.3.19sdist59043951B SHA6816e4a0a74ae9a356e7a0546e13147543f01f695c86a28d940e4b86519acf13, no substitution. Initial ownjob preserved guardfailure atNotebookACPI86C; resumed low-CPU file-only acquisition with stop<=90C/OScriticalminus10,build+pilot85C unchanged,2affinitycores,RAM15GB/disk101GB,1MiB/saggregate,1200sdeadline; no benchmark/modelcall/mainpath. Notebook git ls-remote exactfeaturebranch exit2(no ref), dirtypaths preserved, no fetch/pull/indexwrite or credentialchange; please handle source-only exactebde archive<=12MiB/120s plus fixedWAV219794B separately now rather than774MB/fullcampaign gate, returning actualarchivepath/hash/copywindow, remoteSHAremainsunknown.",
+        "type": "status",
+        "priority": "normal",
+        "thread_id": null,
+        "payload": null,
+        "created_at": "2026-10-22T00:49:59Z",
+        "delivered_at": null
+      }
+    ],
+    "count": 1,
+    "replayed": false,
+    "acknowledged": "delivery_ecc9a74cd0fd",
+    "timedOut": false,
+    "cancelled": false,
+    "connectionLost": false,
+    "mutation": {
+      "requestId": "e3751557-7535-4631-8d2e-0c7c7670e4ff",
+      "replayed": false
+    }
+  },
+  "_meta": {
+    "runtimeId": "cc9e3275-28c6-4c45-85cc-bdcd2262aa7d"
+  }
+}

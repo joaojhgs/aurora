@@ -1,0 +1,64 @@
+{
+  "observed_at": "2026-10-14T17:06:18.940656+00:00",
+  "run": "run_e6054e76e9fc",
+  "task": "task_d7ea336050cf",
+  "dispatch": "ctx_37b4d0a3c14f",
+  "phase1_cpu": {
+    "campaign": "6ce98ae97d594d9fafcd1ff9ad4b9b1c",
+    "execution_state": "natural_terminal_exit0",
+    "finished_at": "2026-10-14T17:01:15.602941Z",
+    "actual_result_sha256": "a20af8228918ee5bd192ac36be36184da465488621646528aeb7f9a1434238d5",
+    "original_allocation_preserved": true,
+    "measured_total": 900,
+    "measured_per_route": 300,
+    "warmups_excluded": 45,
+    "independently_reviewed_measured": 800,
+    "final09_review": "pending",
+    "whole_seal_analyzer": "pending",
+    "wrapper_exit_separately_recovered": false,
+    "scope": "EXTRA CPU-loaded same-host typed-request control; not staged full-matrix900percondition"
+  },
+  "phase1_gpu": {
+    "physical_device": "AMD Radeon RX7600,8GB-class",
+    "backend_compile": "completed_exit0",
+    "backend_device_init": "selectedRX7600/supporttrue; no model loaded",
+    "exact_model_sha256": "57d1997790d1744fba5b40a7317df71ea5e2acee28c47e78f0cce39c0703f8cf",
+    "model_exact_bytes": 563036064,
+    "runtime_base_actual_git_object": "c0f4c0013cea5bb11ef81297194d0dc142a47bc4",
+    "root_expected_runtime_version": "5782746afba213f6b36907db2f09f0017625e218",
+    "root578_git_object_present": false,
+    "minimal_overlay_transport": "Rootscreen actual37772bytes/13frames complete; finalapply/tree21hashreceiptpending",
+    "receiver_runtime_equivalence": "pending",
+    "dependency_alignment": "pending",
+    "full_joined_stage_telemetry": "pending; absent fields unknown",
+    "gpu_model_offload_and_process_utilization": "pending",
+    "physical_resource_acquisition_release": "pending",
+    "primary_measured_launch_verified": false,
+    "primary900percondition_terminal_seal": null
+  },
+  "barrier_ready": false,
+  "cross_device_measured_launch_allowed": false,
+  "new_approved_conditions": {
+    "n_measured_planned": 900,
+    "warmups": "additional excluded",
+    "scope": "each applicable non-iOS surface/requester-provider/local HTTP or cumulativeP2Pcondition, separatepercentiles",
+    "cumulative_remote_stages": [
+      [
+        "tts"
+      ],
+      [
+        "tts",
+        "llm"
+      ],
+      [
+        "tts",
+        "llm",
+        "stt"
+      ]
+    ]
+  },
+  "phase2": "only after BOTH phase1 campaign terminal/seals; declared mixed local+mesh contention scenarios permitted then",
+  "authoritative_plan": "/home/developer/Documents/Obsidian Vault Origin/5-full-notes/faculdade/tcc/future-work-test-requirements.md",
+  "authoritative_plan_sha256": "b7efb40b33ae4ea952569706c97bb1dbe7583351e009d882213afed409f4a189",
+  "old_barrier_snapshot_preserved": "non-ios-full-matrix-20261014T1520/dual-completion-barrier.json at15:42"
+}

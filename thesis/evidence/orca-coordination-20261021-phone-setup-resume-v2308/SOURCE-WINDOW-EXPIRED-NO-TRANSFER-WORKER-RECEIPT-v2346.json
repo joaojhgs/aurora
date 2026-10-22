@@ -1,0 +1,38 @@
+{
+  "id": "remote-cli-1792630907453",
+  "ok": true,
+  "result": {
+    "runId": "run_e6054e76e9fc",
+    "deliveryId": "delivery_5aba8bb72316",
+    "messages": [
+      {
+        "id": "msg_4508e660588b",
+        "run_id": "run_e6054e76e9fc",
+        "delivery_contract": "current_delivery",
+        "from_handle": "term_1f27be31-0284-4366-bb91-30fe538cd30e",
+        "to_handle": "run:run_e6054e76e9fc",
+        "subject": "Public notebook prep independent; source window expired without transfer",
+        "body": "Exact source archive/audio admission received; no source bytes copied before absolute01:01:07 end, no uncertain resend. Existing supported terminal send exposes text only, not file/stdin; preparing bounded framed single control-stream receiver and will request fresh120s source-only admission when receiver ready, rather than extending old lease. Direct original pinned HF/PyPI notebook acquisition remains independent under owner authority; checking actual94C ACPI sensor against hwmon before data-only work, build/pilot85C gate preserved. Main provider/frozen HTTP/Waydroid/Git untouched; no Root phone reads requested.",
+        "type": "status",
+        "priority": "normal",
+        "thread_id": null,
+        "payload": null,
+        "created_at": "2026-10-22T01:01:36Z",
+        "delivered_at": null
+      }
+    ],
+    "count": 1,
+    "replayed": false,
+    "acknowledged": null,
+    "timedOut": false,
+    "cancelled": false,
+    "connectionLost": false,
+    "mutation": {
+      "requestId": "aa6a1290-e6ee-4fcb-bbf9-1660de17637d",
+      "replayed": false
+    }
+  },
+  "_meta": {
+    "runtimeId": "cc9e3275-28c6-4c45-85cc-bdcd2262aa7d"
+  }
+}

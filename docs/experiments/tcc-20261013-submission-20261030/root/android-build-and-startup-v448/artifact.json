@@ -1,0 +1,64 @@
+{
+  "status": "current bounded check",
+  "source": {
+    "base_commit": "c0f4c0013cea5bb11ef81297194d0dc142a47bc4",
+    "worker_HEAD": "cbac78fe3fb2b73100bfaa9dc198fb6bff689840",
+    "overlays": [
+      {
+        "path": "packages/aurora-ui/src/assistant-history-persistence.ts",
+        "base_sha256": "9736ce8a07581649c4552c1299173950df78dfda8d0431f317cf5648a5340428",
+        "sha256": "651033b8ea953397a046cfd000213b9bf66d6a1b0d32198df73fd49a8252bbe8"
+      },
+      {
+        "path": "packages/aurora-ui/src/assistant-view-types.ts",
+        "base_sha256": "72e14582c0ecda07ed98da7c188cc2bbd313ec2108225c0b7d1f672d54f9323c",
+        "sha256": "3f129d205313eece70b3bb594f568f0511a2c38c43339d3ccf275b0e32db6dc2"
+      },
+      {
+        "path": "packages/aurora-ui/src/assistant-view.tsx",
+        "base_sha256": "36e54790d389f10838f674cb7289e459d6c85226e7a21fe75e0023043240c329",
+        "sha256": "d244100fdd1db1a996f304b2555821807f6c1aa973d6660ef27ff762780033bb"
+      },
+      {
+        "path": "packages/aurora-ui/src/use-assistant-foreground-turn.ts",
+        "base_sha256": "f6cdee7b6efaadf7f21d9fb7bfc6af54fd1e462d7fb935c14c16795f6050c0ff",
+        "sha256": "dae3bdf7ab9baaeffd8d9ae0339b7200e520ec5f0c64e1bdb461d967e85fdcbb"
+      },
+      {
+        "path": "packages/aurora-ui/src/use-assistant-view-coordination.ts",
+        "base_sha256": "edfafa310ec3cb784a8843988bd7de8e75749a068f70fee0925cfbd18504c9ac",
+        "sha256": "6f2d63c3ae30dd9447e939a4caf2e4bffc3925613c44446fd33a74057cc33196"
+      },
+      {
+        "path": "packages/aurora-sdk/src/generated-contracts.ts",
+        "base_sha256": "00a65a8f3a46ebe22e8c2a24da5e3a3448a7c9b5893e3829e82ec4e1191ec6ba",
+        "sha256": "696fc4fa11d095655718da263951d3a4c1aa69c5bbfe67d4b1b1ae01d867f3b7"
+      }
+    ],
+    "SDKSourceReviewSHA256": "b53c617f00d44875df659f6d4cdc812d5010f9390ad4470c973a5949f7cb5b19",
+    "SDKFocusedTests": "8passed/2.23s; typecheckexit0",
+    "oldFrozenSourcesModified": false,
+    "modelsCopied": false
+  },
+  "apk": {
+    "bytes": 194968469,
+    "sha256": "e031b391a29740d00e4e6177d56e0e8ea34dc1abf5f9f01e60d2d572265f791e"
+  },
+  "abi": "x86_64",
+  "nativeFeatures": "android-voice-live-test",
+  "buildProfile": {
+    "debugSymbols": 0,
+    "strip": "debuginfo",
+    "incremental": false,
+    "jobs": 1
+  },
+  "tauriNDK": "27.2.12479018",
+  "nativeLlamaNDK": "27.0.12077973",
+  "exactCIParity": false,
+  "APKRuntimeAccepted": false,
+  "rawBuildLog": {
+    "bytes": 167487,
+    "sha256": "3ad97884f5f87a3fb632da1a71a3d01dd46b7bf1657939a4b4fd737c70c7ca6c",
+    "retainedPrivate": true
+  }
+}

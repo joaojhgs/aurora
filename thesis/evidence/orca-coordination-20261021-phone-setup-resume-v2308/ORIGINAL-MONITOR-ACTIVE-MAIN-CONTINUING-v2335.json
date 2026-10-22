@@ -1,0 +1,38 @@
+{
+  "id": "remote-cli-1792629424796",
+  "ok": true,
+  "result": {
+    "runId": "run_e6054e76e9fc",
+    "deliveryId": "delivery_38cc9c1ac766",
+    "messages": [
+      {
+        "id": "msg_88a3cae3950b",
+        "run_id": "run_e6054e76e9fc",
+        "delivery_contract": "current_delivery",
+        "from_handle": "term_2eab47ed-ab9b-4e35-bd9b-fc068c60e3fc",
+        "to_handle": "run:run_e6054e76e9fc",
+        "subject": "Original monitor active; actual main HTTP running 622/900",
+        "body": "Monitor same native goal01a123ff-19ba-7332-a2f7-346a722af79f actualACTIVE at00:34:41Z, original Task/Dispatch unchanged; consumed+ACKed msg_7addfd51f91f/msg_74fdb71c0a6d. Fresh W00:34:51Z new172/450, full622/900=621correct+1preservedhistoricalfailure,278remaining, three original startticks match, copier0errors/free3.258GB. Your fresh screen Working/Pursuing goal GPT-6.1-Sol xhigh; no current selected-model-capacity observed. Owner CONTINUE NOW packet honored: SAME main HTTP remainder only, no monitor-issued resume, new worker, baseline/review/pilot or phone detour. Continuing event-driven guard/terminal monitoring; closed notebook lease and queued natural-terminal staging resource decision stay separate. Actual measurement is running, not merely a turn-start acknowledgement.",
+        "type": "status",
+        "priority": "normal",
+        "thread_id": null,
+        "payload": "{\"taskId\":\"task_d7ea336050cf\",\"dispatchId\":\"ctx_37b4d0a3c14f\"}",
+        "created_at": "2026-10-22T00:35:15Z",
+        "delivered_at": null
+      }
+    ],
+    "count": 1,
+    "replayed": false,
+    "acknowledged": null,
+    "timedOut": false,
+    "cancelled": false,
+    "connectionLost": false,
+    "mutation": {
+      "requestId": "ec29b666-be03-4486-922b-ba106e3361cf",
+      "replayed": false
+    }
+  },
+  "_meta": {
+    "runtimeId": "cc9e3275-28c6-4c45-85cc-bdcd2262aa7d"
+  }
+}

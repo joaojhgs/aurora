@@ -1,0 +1,72 @@
+{
+  "schema_version": 1,
+  "private_originals_retained": true,
+  "files": [
+    {
+      "path": "assistant-main-v245/root-manifest.json",
+      "original_sha256": "ec59ec468f31da64518da401664706f923ab7587b5e2fcda0ddd5921a6599cc0",
+      "export_sha256": "42c344e63513eb8b591d1bdccaa85c843df3edd87c94c458e8a50e242ec26da1",
+      "transform": "Private configuration/environment hashes withheld; unchanged boolean retained in result."
+    },
+    {
+      "path": "assistant-main-v245/root-result.json",
+      "original_sha256": "527fee4710e7769525e06390a4ef9cb78ed6e6522c297ccbbe21a2d553e3f2f9",
+      "export_sha256": "16e110a87a1701d98bb126ccac9e2f1908e6b828260c9b02da9c5f8cc56d8733",
+      "transform": "Private configuration/environment hashes withheld; unchanged boolean retained in result."
+    },
+    {
+      "path": "assistant-main-v245/stdout.log",
+      "original_sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+      "export_sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+      "transform": "Only generated test-bootstrap Password log value redacted; 0 lines. Complete log otherwise retained."
+    },
+    {
+      "path": "assistant-main-v245/stderr.log",
+      "original_sha256": "a07cd57390e96b68b7ddf7e4b26ec3a50ae60d2ef9c0e58070babd1b0fba99cb",
+      "export_sha256": "a07cd57390e96b68b7ddf7e4b26ec3a50ae60d2ef9c0e58070babd1b0fba99cb",
+      "transform": "none"
+    },
+    {
+      "path": "assistant-main-v246/root-manifest.json",
+      "original_sha256": "630401db17d6b9cd2c119158b8324ed695a4e58cdc1b9904dffee928571cf384",
+      "export_sha256": "37be217a147dda44591fd897d3d9f03880cef79ff91b4e0800ae9a80c053419d",
+      "transform": "Private configuration/environment hashes withheld; unchanged boolean retained in result."
+    },
+    {
+      "path": "assistant-main-v246/root-result.json",
+      "original_sha256": "78afb817114c0b437dac12e4e77458e1c838969e8c4fd7081331cf4518ee0e9a",
+      "export_sha256": "98d64daf41ea10709b0b7d297a43f04a39310e47bc180aef12862f0defa5a5a8",
+      "transform": "Private configuration/environment hashes withheld; unchanged boolean retained in result."
+    },
+    {
+      "path": "assistant-main-v246/stdout.log",
+      "original_sha256": "e020a5820f08794eb87653de75440fab0ad95a7611b7f92bf3ffbd6e688bff10",
+      "export_sha256": "8743dbc93f43455cdcd97864423a186776448ae73759c11f73541fe15be696af",
+      "transform": "Only generated test-bootstrap Password log value redacted; 1 lines. Complete log otherwise retained."
+    },
+    {
+      "path": "assistant-main-v246/stderr.log",
+      "original_sha256": "343a0c313a34b96384bfc3d3d876967801a9a37d4c1c5b06e0abf26113d20839",
+      "export_sha256": "343a0c313a34b96384bfc3d3d876967801a9a37d4c1c5b06e0abf26113d20839",
+      "transform": "none"
+    },
+    {
+      "path": "assistant-main-v246/requests.jsonl",
+      "original_sha256": "1e816f480b1bbe6ee4d227dd4759034fe03d397041ae9d4b6d367aafcf970969",
+      "export_sha256": "1e816f480b1bbe6ee4d227dd4759034fe03d397041ae9d4b6d367aafcf970969",
+      "transform": "none"
+    },
+    {
+      "path": "assistant-main-v246/requests.jsonl.manifest.json",
+      "original_sha256": "bf9d70d5adff6bd9aaaa559e1e584056f5f1c10d19758d5a855f6bba30aeff8f",
+      "export_sha256": "bf9d70d5adff6bd9aaaa559e1e584056f5f1c10d19758d5a855f6bba30aeff8f",
+      "transform": "none"
+    },
+    {
+      "path": "assistant-main-v246/requests.jsonl.cleanup.json",
+      "original_sha256": "b520a0441c3f52026bcd3f44fdcd6bc0f737d8f220ed62460b82564c81af2c63",
+      "export_sha256": "b520a0441c3f52026bcd3f44fdcd6bc0f737d8f220ed62460b82564c81af2c63",
+      "transform": "none"
+    }
+  ]
+}

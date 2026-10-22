@@ -1,0 +1,3589 @@
+{
+  "run": "run_e6054e76e9fc",
+  "task": "task_d7ea336050cf",
+  "dispatch": "ctx_37b4d0a3c14f",
+  "collectedAtUtc": "2026-10-14T20:43Z",
+  "complete": true,
+  "pages": [
+    {
+      "receipt": "46143f82-6426-40f2-8614-6fe6bf50156c",
+      "limit": 100,
+      "total": 129,
+      "hasMore": true,
+      "nextCursor": "eyJ2ZXJzaW9uIjoyLCJzbmFwc2hvdCI6eyJkYXRhYmFzZUlkIjoxNTZ9LCJhZnRlciI6eyJjcmVhdGVkQXQiOiIyMDI2LTEwLTEwIDA1OjUwOjM4IiwiZGlzcGF0Y2hJZCI6ImN0eF81Mjk5YmZiNjMxZWIiLCJkYXRhYmFzZUlkIjo1NX19"
+    },
+    {
+      "receipt": "ff84f7a7-2c75-4fd5-9ef4-b29431ef73d4",
+      "limit": 100,
+      "total": 129,
+      "hasMore": false,
+      "nextCursor": null
+    }
+  ],
+  "counts": {
+    "retained": 76,
+    "released": 53
+  },
+  "liveness": {
+    "unverifiable": 75,
+    "exited": 53,
+    "live": 1
+  },
+  "records": [
+    {
+      "dispatchId": "ctx_b1f2fdd31fb4",
+      "taskId": "task_95d6d38b668f",
+      "runId": "run_e6054e76e9fc",
+      "terminal": "term_1f5290ec-4f77-4b75-b7f0-a79b6874d420",
+      "workerState": "failed",
+      "dispatchStatus": "failed",
+      "terminalState": "retained",
+      "host": {
+        "kind": "local",
+        "id": "local"
+      },
+      "workspace": {
+        "id": "314e7b89-8f19-4535-9443-22b342aedff7::/home/developer/projects/aurora",
+        "kind": "folder_or_worktree"
+      },
+      "provider": null,
+      "liveness": {
+        "verdict": "unverifiable",
+        "reason": "missing_status"
+      },
+      "evidence": {
+        "durable": true,
+        "liveStatus": "unavailable",
+        "lastObservedAt": null
+      }
+    },
+    {
+      "dispatchId": "ctx_b9ec1865f3b5",
+      "taskId": "task_95d6d38b668f",
+      "runId": "run_e6054e76e9fc",
+      "terminal": "term_1f5290ec-4f77-4b75-b7f0-a79b6874d420",
+      "workerState": "failed",
+      "dispatchStatus": "failed",
+      "terminalState": "released",
+      "host": {
+        "kind": "remote",
+        "id": "ssh-oci-coding-worker"
+      },
+      "workspace": {
+        "id": "314e7b89-8f19-4535-9443-22b342aedff7::/home/developer/projects/aurora",
+        "kind": "folder_or_worktree"
+      },
+      "provider": null,
+      "liveness": {
+        "verdict": "exited",
+        "source": "resource_release"
+      },
+      "evidence": {
+        "durable": true,
+        "liveStatus": "unavailable",
+        "lastObservedAt": null
+      }
+    },
+    {
+      "dispatchId": "ctx_82522fb95815",
+      "taskId": "task_56718ff80fb2",
+      "runId": "run_e6054e76e9fc",
+      "terminal": "term_e7b4bb88-37bc-4067-9234-9679d8b8ff54",
+      "workerState": "succeeded",
+      "dispatchStatus": "completed",
+      "terminalState": "released",
+      "host": {
+        "kind": "remote",
+        "id": "ssh-oci-coding-worker"
+      },
+      "workspace": {
+        "id": "314e7b89-8f19-4535-9443-22b342aedff7::/home/developer/projects/aurora",
+        "kind": "folder_or_worktree"
+      },
+      "provider": null,
+      "liveness": {
+        "verdict": "exited",
+        "source": "resource_release"
+      },
+      "evidence": {
+        "durable": true,
+        "liveStatus": "unavailable",
+        "lastObservedAt": null
+      }
+    },
+    {
+      "dispatchId": "ctx_42020faa087f",
+      "taskId": "task_165f7cb8092b",
+      "runId": "run_e6054e76e9fc",
+      "terminal": "term_e7b4bb88-37bc-4067-9234-9679d8b8ff54",
+      "workerState": "succeeded",
+      "dispatchStatus": "completed",
+      "terminalState": "retained",
+      "host": {
+        "kind": "local",
+        "id": "local"
+      },
+      "workspace": {
+        "id": "314e7b89-8f19-4535-9443-22b342aedff7::/home/developer/projects/aurora",
+        "kind": "folder_or_worktree"
+      },
+      "provider": null,
+      "liveness": {
+        "verdict": "unverifiable",
+        "reason": "missing_status"
+      },
+      "evidence": {
+        "durable": true,
+        "liveStatus": "unavailable",
+        "lastObservedAt": null
+      }
+    },
+    {
+      "dispatchId": "ctx_ae7f02b404f6",
+      "taskId": "task_beea6b2620c7",
+      "runId": "run_e6054e76e9fc",
+      "terminal": "term_e7b4bb88-37bc-4067-9234-9679d8b8ff54",
+      "workerState": "succeeded",
+      "dispatchStatus": "completed",
+      "terminalState": "retained",
+      "host": {
+        "kind": "local",
+        "id": "local"
+      },
+      "workspace": {
+        "id": "314e7b89-8f19-4535-9443-22b342aedff7::/home/developer/projects/aurora",
+        "kind": "folder_or_worktree"
+      },
+      "provider": null,
+      "liveness": {
+        "verdict": "unverifiable",
+        "reason": "missing_status"
+      },
+      "evidence": {
+        "durable": true,
+        "liveStatus": "unavailable",
+        "lastObservedAt": null
+      }
+    },
+    {
+      "dispatchId": "ctx_24061f13cc80",
+      "taskId": "task_c29e1cc10200",
+      "runId": "run_e6054e76e9fc",
+      "terminal": "term_68d11cbe-608f-403c-88f1-c150ecdea12e",
+      "workerState": "succeeded",
+      "dispatchStatus": "completed",
+      "terminalState": "released",
+      "host": {
+        "kind": "remote",
+        "id": "ssh-oci-coding-worker"
+      },
+      "workspace": {
+        "id": "314e7b89-8f19-4535-9443-22b342aedff7::/home/developer/projects/aurora",
+        "kind": "folder_or_worktree"
+      },
+      "provider": null,
+      "liveness": {
+        "verdict": "exited",
+        "source": "resource_release"
+      },
+      "evidence": {
+        "durable": true,
+        "liveStatus": "unavailable",
+        "lastObservedAt": null
+      }
+    },
+    {
+      "dispatchId": "ctx_15e99f7d8b3c",
+      "taskId": "task_f1285dabcd88",
+      "runId": "run_e6054e76e9fc",
+      "terminal": "term_e6748a85-fc1e-4756-8d20-4abdc7a6bd49",
+      "workerState": "succeeded",
+      "dispatchStatus": "completed",
+      "terminalState": "released",
+      "host": {
+        "kind": "remote",
+        "id": "ssh-oci-coding-worker"
+      },
+      "workspace": {
+        "id": "314e7b89-8f19-4535-9443-22b342aedff7::/home/developer/projects/aurora",
+        "kind": "folder_or_worktree"
+      },
+      "provider": null,
+      "liveness": {
+        "verdict": "exited",
+        "source": "resource_release"
+      },
+      "evidence": {
+        "durable": true,
+        "liveStatus": "unavailable",
+        "lastObservedAt": null
+      }
+    },
+    {
+      "dispatchId": "ctx_9bf537378a23",
+      "taskId": "task_57adc8fc3309",
+      "runId": "run_e6054e76e9fc",
+      "terminal": "term_68d11cbe-608f-403c-88f1-c150ecdea12e",
+      "workerState": "succeeded",
+      "dispatchStatus": "completed",
+      "terminalState": "retained",
+      "host": {
+        "kind": "local",
+        "id": "local"
+      },
+      "workspace": {
+        "id": "314e7b89-8f19-4535-9443-22b342aedff7::/home/developer/projects/aurora",
+        "kind": "folder_or_worktree"
+      },
+      "provider": null,
+      "liveness": {
+        "verdict": "unverifiable",
+        "reason": "missing_status"
+      },
+      "evidence": {
+        "durable": true,
+        "liveStatus": "unavailable",
+        "lastObservedAt": null
+      }
+    },
+    {
+      "dispatchId": "ctx_18563688c139",
+      "taskId": "task_2d222b0592ae",
+      "runId": "run_e6054e76e9fc",
+      "terminal": "term_e6748a85-fc1e-4756-8d20-4abdc7a6bd49",
+      "workerState": "failed",
+      "dispatchStatus": "failed",
+      "terminalState": "retained",
+      "host": {
+        "kind": "local",
+        "id": "local"
+      },
+      "workspace": {
+        "id": "314e7b89-8f19-4535-9443-22b342aedff7::/home/developer/projects/aurora",
+        "kind": "folder_or_worktree"
+      },
+      "provider": null,
+      "liveness": {
+        "verdict": "unverifiable",
+        "reason": "missing_status"
+      },
+      "evidence": {
+        "durable": true,
+        "liveStatus": "unavailable",
+        "lastObservedAt": null
+      }
+    },
+    {
+      "dispatchId": "ctx_6f131600ac0e",
+      "taskId": "task_b5587404f37d",
+      "runId": "run_e6054e76e9fc",
+      "terminal": "term_68d11cbe-608f-403c-88f1-c150ecdea12e",
+      "workerState": "succeeded",
+      "dispatchStatus": "completed",
+      "terminalState": "retained",
+      "host": {
+        "kind": "local",
+        "id": "local"
+      },
+      "workspace": {
+        "id": "314e7b89-8f19-4535-9443-22b342aedff7::/home/developer/projects/aurora",
+        "kind": "folder_or_worktree"
+      },
+      "provider": null,
+      "liveness": {
+        "verdict": "unverifiable",
+        "reason": "missing_status"
+      },
+      "evidence": {
+        "durable": true,
+        "liveStatus": "unavailable",
+        "lastObservedAt": null
+      }
+    },
+    {
+      "dispatchId": "ctx_efae007b2306",
+      "taskId": "task_04f05f468133",
+      "runId": "run_e6054e76e9fc",
+      "terminal": "term_c7f77b2a-e996-4749-97e4-7fc94a178191",
+      "workerState": "succeeded",
+      "dispatchStatus": "completed",
+      "terminalState": "released",
+      "host": {
+        "kind": "remote",
+        "id": "ssh-oci-coding-worker"
+      },
+      "workspace": {
+        "id": "314e7b89-8f19-4535-9443-22b342aedff7::/home/developer/projects/aurora",
+        "kind": "folder_or_worktree"
+      },
+      "provider": null,
+      "liveness": {
+        "verdict": "exited",
+        "source": "resource_release"
+      },
+      "evidence": {
+        "durable": true,
+        "liveStatus": "unavailable",
+        "lastObservedAt": null
+      }
+    },
+    {
+      "dispatchId": "ctx_e455b277cc10",
+      "taskId": "task_04f05f468133",
+      "runId": "run_e6054e76e9fc",
+      "terminal": "term_59f43ba5-2d8d-48d4-a982-3c41171c2e5a",
+      "workerState": "failed",
+      "dispatchStatus": "failed",
+      "terminalState": "released",
+      "host": {
+        "kind": "remote",
+        "id": "ssh-oci-coding-worker"
+      },
+      "workspace": {
+        "id": "314e7b89-8f19-4535-9443-22b342aedff7::/home/developer/projects/aurora",
+        "kind": "folder_or_worktree"
+      },
+      "provider": null,
+      "liveness": {
+        "verdict": "exited",
+        "source": "resource_release"
+      },
+      "evidence": {
+        "durable": true,
+        "liveStatus": "unavailable",
+        "lastObservedAt": null
+      }
+    },
+    {
+      "dispatchId": "ctx_feb89a8b4282",
+      "taskId": "task_bba7c2551717",
+      "runId": "run_e6054e76e9fc",
+      "terminal": "term_c5b5604c-a45c-427d-9bb4-9b88eb88f8e8",
+      "workerState": "succeeded",
+      "dispatchStatus": "completed",
+      "terminalState": "released",
+      "host": {
+        "kind": "remote",
+        "id": "ssh-oci-coding-worker"
+      },
+      "workspace": {
+        "id": "314e7b89-8f19-4535-9443-22b342aedff7::/home/developer/projects/aurora",
+        "kind": "folder_or_worktree"
+      },
+      "provider": null,
+      "liveness": {
+        "verdict": "exited",
+        "source": "resource_release"
+      },
+      "evidence": {
+        "durable": true,
+        "liveStatus": "unavailable",
+        "lastObservedAt": null
+      }
+    },
+    {
+      "dispatchId": "ctx_48e1a6da4d44",
+      "taskId": "task_65938fc3e9a0",
+      "runId": "run_e6054e76e9fc",
+      "terminal": "term_23dfe9ac-9752-4334-a098-b6f2a19e845b",
+      "workerState": "succeeded",
+      "dispatchStatus": "completed",
+      "terminalState": "released",
+      "host": {
+        "kind": "remote",
+        "id": "ssh-oci-coding-worker"
+      },
+      "workspace": {
+        "id": "314e7b89-8f19-4535-9443-22b342aedff7::/home/developer/projects/aurora",
+        "kind": "folder_or_worktree"
+      },
+      "provider": null,
+      "liveness": {
+        "verdict": "exited",
+        "source": "resource_release"
+      },
+      "evidence": {
+        "durable": true,
+        "liveStatus": "unavailable",
+        "lastObservedAt": null
+      }
+    },
+    {
+      "dispatchId": "ctx_3b6b4dde08d9",
+      "taskId": "task_11cdc367ae62",
+      "runId": "run_e6054e76e9fc",
+      "terminal": "term_c5b5604c-a45c-427d-9bb4-9b88eb88f8e8",
+      "workerState": "succeeded",
+      "dispatchStatus": "completed",
+      "terminalState": "retained",
+      "host": {
+        "kind": "local",
+        "id": "local"
+      },
+      "workspace": {
+        "id": "314e7b89-8f19-4535-9443-22b342aedff7::/home/developer/projects/aurora",
+        "kind": "folder_or_worktree"
+      },
+      "provider": null,
+      "liveness": {
+        "verdict": "unverifiable",
+        "reason": "missing_status"
+      },
+      "evidence": {
+        "durable": true,
+        "liveStatus": "unavailable",
+        "lastObservedAt": null
+      }
+    },
+    {
+      "dispatchId": "ctx_b10e010545aa",
+      "taskId": "task_970c93097fe4",
+      "runId": "run_e6054e76e9fc",
+      "terminal": "term_366b2f3b-f58f-41cc-9bdc-045dcca47713",
+      "workerState": "succeeded",
+      "dispatchStatus": "completed",
+      "terminalState": "released",
+      "host": {
+        "kind": "remote",
+        "id": "ssh-oci-coding-worker"
+      },
+      "workspace": {
+        "id": "314e7b89-8f19-4535-9443-22b342aedff7::/home/developer/projects/aurora",
+        "kind": "folder_or_worktree"
+      },
+      "provider": null,
+      "liveness": {
+        "verdict": "exited",
+        "source": "resource_release"
+      },
+      "evidence": {
+        "durable": true,
+        "liveStatus": "unavailable",
+        "lastObservedAt": null
+      }
+    },
+    {
+      "dispatchId": "ctx_24a30d07c0c7",
+      "taskId": "task_b6953e48169b",
+      "runId": "run_e6054e76e9fc",
+      "terminal": "term_dacd2cd3-439e-4478-857d-6e512f2cf821",
+      "workerState": "succeeded",
+      "dispatchStatus": "completed",
+      "terminalState": "released",
+      "host": {
+        "kind": "remote",
+        "id": "ssh-oci-coding-worker"
+      },
+      "workspace": {
+        "id": "314e7b89-8f19-4535-9443-22b342aedff7::/home/developer/projects/aurora",
+        "kind": "folder_or_worktree"
+      },
+      "provider": null,
+      "liveness": {
+        "verdict": "exited",
+        "source": "resource_release"
+      },
+      "evidence": {
+        "durable": true,
+        "liveStatus": "unavailable",
+        "lastObservedAt": null
+      }
+    },
+    {
+      "dispatchId": "ctx_9a512fafcdfc",
+      "taskId": "task_fbb7620c9130",
+      "runId": "run_e6054e76e9fc",
+      "terminal": "term_dacd2cd3-439e-4478-857d-6e512f2cf821",
+      "workerState": "succeeded",
+      "dispatchStatus": "completed",
+      "terminalState": "retained",
+      "host": {
+        "kind": "local",
+        "id": "local"
+      },
+      "workspace": {
+        "id": "314e7b89-8f19-4535-9443-22b342aedff7::/home/developer/projects/aurora",
+        "kind": "folder_or_worktree"
+      },
+      "provider": null,
+      "liveness": {
+        "verdict": "unverifiable",
+        "reason": "missing_status"
+      },
+      "evidence": {
+        "durable": true,
+        "liveStatus": "unavailable",
+        "lastObservedAt": null
+      }
+    },
+    {
+      "dispatchId": "ctx_9ed57c0ed39a",
+      "taskId": "task_a775a2d55a97",
+      "runId": "run_e6054e76e9fc",
+      "terminal": "term_3dac7213-f49d-4845-8602-6efb5794566e",
+      "workerState": "failed",
+      "dispatchStatus": "failed",
+      "terminalState": "released",
+      "host": {
+        "kind": "remote",
+        "id": "ssh-oci-coding-worker"
+      },
+      "workspace": {
+        "id": "314e7b89-8f19-4535-9443-22b342aedff7::/home/developer/projects/aurora",
+        "kind": "folder_or_worktree"
+      },
+      "provider": null,
+      "liveness": {
+        "verdict": "exited",
+        "source": "resource_release"
+      },
+      "evidence": {
+        "durable": true,
+        "liveStatus": "unavailable",
+        "lastObservedAt": null
+      }
+    },
+    {
+      "dispatchId": "ctx_e551fdbaf5d1",
+      "taskId": "task_c87d92f427c2",
+      "runId": "run_e6054e76e9fc",
+      "terminal": "term_dacd2cd3-439e-4478-857d-6e512f2cf821",
+      "workerState": "succeeded",
+      "dispatchStatus": "completed",
+      "terminalState": "retained",
+      "host": {
+        "kind": "local",
+        "id": "local"
+      },
+      "workspace": {
+        "id": "314e7b89-8f19-4535-9443-22b342aedff7::/home/developer/projects/aurora",
+        "kind": "folder_or_worktree"
+      },
+      "provider": null,
+      "liveness": {
+        "verdict": "unverifiable",
+        "reason": "missing_status"
+      },
+      "evidence": {
+        "durable": true,
+        "liveStatus": "unavailable",
+        "lastObservedAt": null
+      }
+    },
+    {
+      "dispatchId": "ctx_ac8c97de41b2",
+      "taskId": "task_c87d92f427c2",
+      "runId": "run_e6054e76e9fc",
+      "terminal": "term_b01fa99c-7f97-4c37-89c2-6ce924325639",
+      "workerState": "failed",
+      "dispatchStatus": "failed",
+      "terminalState": "released",
+      "host": {
+        "kind": "remote",
+        "id": "ssh-oci-coding-worker"
+      },
+      "workspace": {
+        "id": "314e7b89-8f19-4535-9443-22b342aedff7::/home/developer/projects/aurora",
+        "kind": "folder_or_worktree"
+      },
+      "provider": null,
+      "liveness": {
+        "verdict": "exited",
+        "source": "resource_release"
+      },
+      "evidence": {
+        "durable": true,
+        "liveStatus": "unavailable",
+        "lastObservedAt": null
+      }
+    },
+    {
+      "dispatchId": "ctx_1af4d8e8287e",
+      "taskId": "task_f3b291a66585",
+      "runId": "run_e6054e76e9fc",
+      "terminal": "term_67f6fc8c-8c46-400c-bb57-c7189f942dc8",
+      "workerState": "succeeded",
+      "dispatchStatus": "completed",
+      "terminalState": "released",
+      "host": {
+        "kind": "remote",
+        "id": "ssh-oci-coding-worker"
+      },
+      "workspace": {
+        "id": "314e7b89-8f19-4535-9443-22b342aedff7::/home/developer/projects/aurora",
+        "kind": "folder_or_worktree"
+      },
+      "provider": null,
+      "liveness": {
+        "verdict": "exited",
+        "source": "resource_release"
+      },
+      "evidence": {
+        "durable": true,
+        "liveStatus": "unavailable",
+        "lastObservedAt": null
+      }
+    },
+    {
+      "dispatchId": "ctx_e273e8854777",
+      "taskId": "task_832140f3226f",
+      "runId": "run_e6054e76e9fc",
+      "terminal": "term_67f6fc8c-8c46-400c-bb57-c7189f942dc8",
+      "workerState": "succeeded",
+      "dispatchStatus": "completed",
+      "terminalState": "retained",
+      "host": {
+        "kind": "local",
+        "id": "local"
+      },
+      "workspace": {
+        "id": "314e7b89-8f19-4535-9443-22b342aedff7::/home/developer/projects/aurora",
+        "kind": "folder_or_worktree"
+      },
+      "provider": null,
+      "liveness": {
+        "verdict": "unverifiable",
+        "reason": "missing_status"
+      },
+      "evidence": {
+        "durable": true,
+        "liveStatus": "unavailable",
+        "lastObservedAt": null
+      }
+    },
+    {
+      "dispatchId": "ctx_1a4ef5df13d6",
+      "taskId": "task_67d4e0e9c12d",
+      "runId": "run_e6054e76e9fc",
+      "terminal": "term_872c8931-5af6-4d6f-ab17-6ecae7888f44",
+      "workerState": "succeeded",
+      "dispatchStatus": "completed",
+      "terminalState": "released",
+      "host": {
+        "kind": "remote",
+        "id": "ssh-oci-coding-worker"
+      },
+      "workspace": {
+        "id": "314e7b89-8f19-4535-9443-22b342aedff7::/home/developer/projects/aurora",
+        "kind": "folder_or_worktree"
+      },
+      "provider": null,
+      "liveness": {
+        "verdict": "exited",
+        "source": "resource_release"
+      },
+      "evidence": {
+        "durable": true,
+        "liveStatus": "unavailable",
+        "lastObservedAt": null
+      }
+    },
+    {
+      "dispatchId": "ctx_82dd5df0eb59",
+      "taskId": "task_bbe8cc98fcf0",
+      "runId": "run_e6054e76e9fc",
+      "terminal": "term_489cee43-4e04-4e50-9712-836c1c492504",
+      "workerState": "failed",
+      "dispatchStatus": "failed",
+      "terminalState": "released",
+      "host": {
+        "kind": "remote",
+        "id": "ssh-oci-coding-worker"
+      },
+      "workspace": {
+        "id": "314e7b89-8f19-4535-9443-22b342aedff7::/home/developer/projects/aurora/.git/aurora-lanes/product-native-service-20261009T131300Z",
+        "kind": "folder_or_worktree"
+      },
+      "provider": null,
+      "liveness": {
+        "verdict": "exited",
+        "source": "resource_release"
+      },
+      "evidence": {
+        "durable": true,
+        "liveStatus": "unavailable",
+        "lastObservedAt": null
+      }
+    },
+    {
+      "dispatchId": "ctx_b93d5bb6ade2",
+      "taskId": "task_48be581fdaf1",
+      "runId": "run_e6054e76e9fc",
+      "terminal": "term_d1e20d23-36da-4699-bc33-5aec16560bbb",
+      "workerState": "failed",
+      "dispatchStatus": "failed",
+      "terminalState": "released",
+      "host": {
+        "kind": "remote",
+        "id": "ssh-oci-coding-worker"
+      },
+      "workspace": {
+        "id": "314e7b89-8f19-4535-9443-22b342aedff7::/home/developer/projects/aurora/.git/aurora-lanes/lint",
+        "kind": "folder_or_worktree"
+      },
+      "provider": null,
+      "liveness": {
+        "verdict": "exited",
+        "source": "resource_release"
+      },
+      "evidence": {
+        "durable": true,
+        "liveStatus": "unavailable",
+        "lastObservedAt": null
+      }
+    },
+    {
+      "dispatchId": "ctx_09c05f6a5cef",
+      "taskId": "task_48be581fdaf1",
+      "runId": "run_e6054e76e9fc",
+      "terminal": "term_1a71870e-0b5b-4c81-a6ef-1fa0041220c1",
+      "workerState": "failed",
+      "dispatchStatus": "failed",
+      "terminalState": "released",
+      "host": {
+        "kind": "remote",
+        "id": "ssh-oci-coding-worker"
+      },
+      "workspace": {
+        "id": "314e7b89-8f19-4535-9443-22b342aedff7::/home/developer/projects/aurora/.git/aurora-lanes/lint",
+        "kind": "folder_or_worktree"
+      },
+      "provider": null,
+      "liveness": {
+        "verdict": "exited",
+        "source": "resource_release"
+      },
+      "evidence": {
+        "durable": true,
+        "liveStatus": "unavailable",
+        "lastObservedAt": null
+      }
+    },
+    {
+      "dispatchId": "ctx_43902710f024",
+      "taskId": "task_910235e13f07",
+      "runId": "run_e6054e76e9fc",
+      "terminal": "term_3e52ea7e-bca1-4a46-b2c9-8637306c32e4",
+      "workerState": "succeeded",
+      "dispatchStatus": "completed",
+      "terminalState": "released",
+      "host": {
+        "kind": "remote",
+        "id": "ssh-oci-coding-worker"
+      },
+      "workspace": {
+        "id": "314e7b89-8f19-4535-9443-22b342aedff7::/home/developer/projects/aurora/.git/aurora-lanes/product-native-service-20261009T131300Z",
+        "kind": "folder_or_worktree"
+      },
+      "provider": null,
+      "liveness": {
+        "verdict": "exited",
+        "source": "resource_release"
+      },
+      "evidence": {
+        "durable": true,
+        "liveStatus": "unavailable",
+        "lastObservedAt": null
+      }
+    },
+    {
+      "dispatchId": "ctx_c363f9330356",
+      "taskId": "task_d13a1726816e",
+      "runId": "run_e6054e76e9fc",
+      "terminal": "term_bb02c20f-3b55-4f16-a33a-5e030b652eef",
+      "workerState": "succeeded",
+      "dispatchStatus": "completed",
+      "terminalState": "released",
+      "host": {
+        "kind": "remote",
+        "id": "ssh-oci-coding-worker"
+      },
+      "workspace": {
+        "id": "314e7b89-8f19-4535-9443-22b342aedff7::/home/developer/projects/aurora/.git/aurora-lanes/product-native-handler-20261009T131300Z",
+        "kind": "folder_or_worktree"
+      },
+      "provider": null,
+      "liveness": {
+        "verdict": "exited",
+        "source": "resource_release"
+      },
+      "evidence": {
+        "durable": true,
+        "liveStatus": "unavailable",
+        "lastObservedAt": null
+      }
+    },
+    {
+      "dispatchId": "ctx_f52d0756ef2e",
+      "taskId": "task_11cbcc3f8746",
+      "runId": "run_e6054e76e9fc",
+      "terminal": "term_3e52ea7e-bca1-4a46-b2c9-8637306c32e4",
+      "workerState": "succeeded",
+      "dispatchStatus": "completed",
+      "terminalState": "retained",
+      "host": {
+        "kind": "local",
+        "id": "local"
+      },
+      "workspace": {
+        "id": "314e7b89-8f19-4535-9443-22b342aedff7::/home/developer/projects/aurora/.git/aurora-lanes/product-native-service-20261009T131300Z",
+        "kind": "folder_or_worktree"
+      },
+      "provider": null,
+      "liveness": {
+        "verdict": "unverifiable",
+        "reason": "missing_status"
+      },
+      "evidence": {
+        "durable": true,
+        "liveStatus": "unavailable",
+        "lastObservedAt": null
+      }
+    },
+    {
+      "dispatchId": "ctx_a9c8ac7031c1",
+      "taskId": "task_3571a4c0590d",
+      "runId": "run_e6054e76e9fc",
+      "terminal": "term_3e52ea7e-bca1-4a46-b2c9-8637306c32e4",
+      "workerState": "succeeded",
+      "dispatchStatus": "completed",
+      "terminalState": "retained",
+      "host": {
+        "kind": "local",
+        "id": "local"
+      },
+      "workspace": {
+        "id": "314e7b89-8f19-4535-9443-22b342aedff7::/home/developer/projects/aurora/.git/aurora-lanes/product-native-service-20261009T131300Z",
+        "kind": "folder_or_worktree"
+      },
+      "provider": null,
+      "liveness": {
+        "verdict": "unverifiable",
+        "reason": "missing_status"
+      },
+      "evidence": {
+        "durable": true,
+        "liveStatus": "unavailable",
+        "lastObservedAt": null
+      }
+    },
+    {
+      "dispatchId": "ctx_15f6de95e59f",
+      "taskId": "task_a0c1eaa9d22d",
+      "runId": "run_e6054e76e9fc",
+      "terminal": "term_3e52ea7e-bca1-4a46-b2c9-8637306c32e4",
+      "workerState": "succeeded",
+      "dispatchStatus": "completed",
+      "terminalState": "retained",
+      "host": {
+        "kind": "local",
+        "id": "local"
+      },
+      "workspace": {
+        "id": "314e7b89-8f19-4535-9443-22b342aedff7::/home/developer/projects/aurora/.git/aurora-lanes/product-native-service-20261009T131300Z",
+        "kind": "folder_or_worktree"
+      },
+      "provider": null,
+      "liveness": {
+        "verdict": "unverifiable",
+        "reason": "missing_status"
+      },
+      "evidence": {
+        "durable": true,
+        "liveStatus": "unavailable",
+        "lastObservedAt": null
+      }
+    },
+    {
+      "dispatchId": "ctx_cf64b44793e3",
+      "taskId": "task_11cbcc3f8746",
+      "runId": "run_e6054e76e9fc",
+      "terminal": "term_5d300563-7ba8-4a01-babd-bc083e7814c5",
+      "workerState": "failed",
+      "dispatchStatus": "failed",
+      "terminalState": "released",
+      "host": {
+        "kind": "remote",
+        "id": "ssh-oci-coding-worker"
+      },
+      "workspace": {
+        "id": "314e7b89-8f19-4535-9443-22b342aedff7::/home/developer/projects/aurora/.git/aurora-lanes/product-native-handler-20261009T131300Z",
+        "kind": "folder_or_worktree"
+      },
+      "provider": null,
+      "liveness": {
+        "verdict": "exited",
+        "source": "resource_release"
+      },
+      "evidence": {
+        "durable": true,
+        "liveStatus": "unavailable",
+        "lastObservedAt": null
+      }
+    },
+    {
+      "dispatchId": "ctx_563a1672fa4b",
+      "taskId": "task_1d3d7bf3a899",
+      "runId": "run_e6054e76e9fc",
+      "terminal": "term_ad33fdfe-44ba-45e4-b286-1d9e974033a2",
+      "workerState": "succeeded",
+      "dispatchStatus": "completed",
+      "terminalState": "released",
+      "host": {
+        "kind": "remote",
+        "id": "ssh-oci-coding-worker"
+      },
+      "workspace": {
+        "id": "314e7b89-8f19-4535-9443-22b342aedff7::/home/developer/projects/aurora",
+        "kind": "folder_or_worktree"
+      },
+      "provider": null,
+      "liveness": {
+        "verdict": "exited",
+        "source": "resource_release"
+      },
+      "evidence": {
+        "durable": true,
+        "liveStatus": "unavailable",
+        "lastObservedAt": null
+      }
+    },
+    {
+      "dispatchId": "ctx_9fec3e2318a4",
+      "taskId": "task_ee2111428c2f",
+      "runId": "run_e6054e76e9fc",
+      "terminal": "term_ad33fdfe-44ba-45e4-b286-1d9e974033a2",
+      "workerState": "succeeded",
+      "dispatchStatus": "completed",
+      "terminalState": "retained",
+      "host": {
+        "kind": "local",
+        "id": "local"
+      },
+      "workspace": {
+        "id": "314e7b89-8f19-4535-9443-22b342aedff7::/home/developer/projects/aurora",
+        "kind": "folder_or_worktree"
+      },
+      "provider": null,
+      "liveness": {
+        "verdict": "unverifiable",
+        "reason": "missing_status"
+      },
+      "evidence": {
+        "durable": true,
+        "liveStatus": "unavailable",
+        "lastObservedAt": null
+      }
+    },
+    {
+      "dispatchId": "ctx_ac9717e3f847",
+      "taskId": "task_ee2111428c2f",
+      "runId": "run_e6054e76e9fc",
+      "terminal": "term_274d07e1-bf56-4b33-bfad-78973ba480ed",
+      "workerState": "failed",
+      "dispatchStatus": "failed",
+      "terminalState": "released",
+      "host": {
+        "kind": "remote",
+        "id": "ssh-oci-coding-worker"
+      },
+      "workspace": {
+        "id": "314e7b89-8f19-4535-9443-22b342aedff7::/home/developer/projects/aurora",
+        "kind": "folder_or_worktree"
+      },
+      "provider": null,
+      "liveness": {
+        "verdict": "exited",
+        "source": "resource_release"
+      },
+      "evidence": {
+        "durable": true,
+        "liveStatus": "unavailable",
+        "lastObservedAt": null
+      }
+    },
+    {
+      "dispatchId": "ctx_e18b691071e1",
+      "taskId": "task_08642607d254",
+      "runId": "run_e6054e76e9fc",
+      "terminal": "term_339d40c9-2069-403b-b0cf-67e59870a54b",
+      "workerState": "succeeded",
+      "dispatchStatus": "completed",
+      "terminalState": "released",
+      "host": {
+        "kind": "remote",
+        "id": "ssh-oci-coding-worker"
+      },
+      "workspace": {
+        "id": "314e7b89-8f19-4535-9443-22b342aedff7::/home/developer/projects/aurora/.git/aurora-lanes/product-native-service-20261009T131300Z",
+        "kind": "folder_or_worktree"
+      },
+      "provider": null,
+      "liveness": {
+        "verdict": "exited",
+        "source": "resource_release"
+      },
+      "evidence": {
+        "durable": true,
+        "liveStatus": "unavailable",
+        "lastObservedAt": null
+      }
+    },
+    {
+      "dispatchId": "ctx_7d321a088e7e",
+      "taskId": "task_c1be71b3bb0b",
+      "runId": "run_e6054e76e9fc",
+      "terminal": "term_339d40c9-2069-403b-b0cf-67e59870a54b",
+      "workerState": "succeeded",
+      "dispatchStatus": "completed",
+      "terminalState": "retained",
+      "host": {
+        "kind": "local",
+        "id": "local"
+      },
+      "workspace": {
+        "id": "314e7b89-8f19-4535-9443-22b342aedff7::/home/developer/projects/aurora/.git/aurora-lanes/product-native-service-20261009T131300Z",
+        "kind": "folder_or_worktree"
+      },
+      "provider": null,
+      "liveness": {
+        "verdict": "unverifiable",
+        "reason": "missing_status"
+      },
+      "evidence": {
+        "durable": true,
+        "liveStatus": "unavailable",
+        "lastObservedAt": null
+      }
+    },
+    {
+      "dispatchId": "ctx_280618f6e603",
+      "taskId": "task_35790124b7a3",
+      "runId": "run_e6054e76e9fc",
+      "terminal": "term_339d40c9-2069-403b-b0cf-67e59870a54b",
+      "workerState": "succeeded",
+      "dispatchStatus": "completed",
+      "terminalState": "retained",
+      "host": {
+        "kind": "local",
+        "id": "local"
+      },
+      "workspace": {
+        "id": "314e7b89-8f19-4535-9443-22b342aedff7::/home/developer/projects/aurora/.git/aurora-lanes/product-native-service-20261009T131300Z",
+        "kind": "folder_or_worktree"
+      },
+      "provider": null,
+      "liveness": {
+        "verdict": "unverifiable",
+        "reason": "missing_status"
+      },
+      "evidence": {
+        "durable": true,
+        "liveStatus": "unavailable",
+        "lastObservedAt": null
+      }
+    },
+    {
+      "dispatchId": "ctx_e2645dd18a4e",
+      "taskId": "task_403215b6b4df",
+      "runId": "run_e6054e76e9fc",
+      "terminal": "term_339d40c9-2069-403b-b0cf-67e59870a54b",
+      "workerState": "succeeded",
+      "dispatchStatus": "completed",
+      "terminalState": "retained",
+      "host": {
+        "kind": "local",
+        "id": "local"
+      },
+      "workspace": {
+        "id": "314e7b89-8f19-4535-9443-22b342aedff7::/home/developer/projects/aurora/.git/aurora-lanes/product-native-service-20261009T131300Z",
+        "kind": "folder_or_worktree"
+      },
+      "provider": null,
+      "liveness": {
+        "verdict": "unverifiable",
+        "reason": "missing_status"
+      },
+      "evidence": {
+        "durable": true,
+        "liveStatus": "unavailable",
+        "lastObservedAt": null
+      }
+    },
+    {
+      "dispatchId": "ctx_d9486a01c094",
+      "taskId": "task_008ef312ff7e",
+      "runId": "run_e6054e76e9fc",
+      "terminal": "term_dbb6fa45-fb38-49ae-9117-55eab71a447e",
+      "workerState": "succeeded",
+      "dispatchStatus": "completed",
+      "terminalState": "released",
+      "host": {
+        "kind": "remote",
+        "id": "ssh-oci-coding-worker"
+      },
+      "workspace": {
+        "id": "314e7b89-8f19-4535-9443-22b342aedff7::/home/developer/projects/aurora",
+        "kind": "folder_or_worktree"
+      },
+      "provider": null,
+      "liveness": {
+        "verdict": "exited",
+        "source": "resource_release"
+      },
+      "evidence": {
+        "durable": true,
+        "liveStatus": "unavailable",
+        "lastObservedAt": null
+      }
+    },
+    {
+      "dispatchId": "ctx_4128f84dfb94",
+      "taskId": "task_6be4a89afdf4",
+      "runId": "run_e6054e76e9fc",
+      "terminal": "term_339d40c9-2069-403b-b0cf-67e59870a54b",
+      "workerState": "succeeded",
+      "dispatchStatus": "completed",
+      "terminalState": "retained",
+      "host": {
+        "kind": "local",
+        "id": "local"
+      },
+      "workspace": {
+        "id": "314e7b89-8f19-4535-9443-22b342aedff7::/home/developer/projects/aurora/.git/aurora-lanes/product-native-service-20261009T131300Z",
+        "kind": "folder_or_worktree"
+      },
+      "provider": null,
+      "liveness": {
+        "verdict": "unverifiable",
+        "reason": "missing_status"
+      },
+      "evidence": {
+        "durable": true,
+        "liveStatus": "unavailable",
+        "lastObservedAt": null
+      }
+    },
+    {
+      "dispatchId": "ctx_7ae905127388",
+      "taskId": "task_239ea26d64df",
+      "runId": "run_e6054e76e9fc",
+      "terminal": "term_339d40c9-2069-403b-b0cf-67e59870a54b",
+      "workerState": "succeeded",
+      "dispatchStatus": "completed",
+      "terminalState": "retained",
+      "host": {
+        "kind": "local",
+        "id": "local"
+      },
+      "workspace": {
+        "id": "314e7b89-8f19-4535-9443-22b342aedff7::/home/developer/projects/aurora/.git/aurora-lanes/product-native-service-20261009T131300Z",
+        "kind": "folder_or_worktree"
+      },
+      "provider": null,
+      "liveness": {
+        "verdict": "unverifiable",
+        "reason": "missing_status"
+      },
+      "evidence": {
+        "durable": true,
+        "liveStatus": "unavailable",
+        "lastObservedAt": null
+      }
+    },
+    {
+      "dispatchId": "ctx_af141bd0a784",
+      "taskId": "task_6ce54aeec163",
+      "runId": "run_e6054e76e9fc",
+      "terminal": "term_08b13955-eec3-44c3-b143-6c5ecd8fc2ac",
+      "workerState": "succeeded",
+      "dispatchStatus": "completed",
+      "terminalState": "retained",
+      "host": {
+        "kind": "remote",
+        "id": "ssh-oci-coding-worker"
+      },
+      "workspace": {
+        "id": "314e7b89-8f19-4535-9443-22b342aedff7::/home/developer/projects/aurora",
+        "kind": "folder_or_worktree"
+      },
+      "provider": null,
+      "liveness": {
+        "verdict": "unverifiable",
+        "reason": "missing_status"
+      },
+      "evidence": {
+        "durable": true,
+        "liveStatus": "unavailable",
+        "lastObservedAt": null
+      }
+    },
+    {
+      "dispatchId": "ctx_9112d3427fdf",
+      "taskId": "task_c328ccdd6f91",
+      "runId": "run_e6054e76e9fc",
+      "terminal": "term_08b13955-eec3-44c3-b143-6c5ecd8fc2ac",
+      "workerState": "succeeded",
+      "dispatchStatus": "completed",
+      "terminalState": "retained",
+      "host": {
+        "kind": "local",
+        "id": "local"
+      },
+      "workspace": {
+        "id": "314e7b89-8f19-4535-9443-22b342aedff7::/home/developer/projects/aurora",
+        "kind": "folder_or_worktree"
+      },
+      "provider": null,
+      "liveness": {
+        "verdict": "unverifiable",
+        "reason": "missing_status"
+      },
+      "evidence": {
+        "durable": true,
+        "liveStatus": "unavailable",
+        "lastObservedAt": null
+      }
+    },
+    {
+      "dispatchId": "ctx_f68da870bbc3",
+      "taskId": "task_2adba334c79e",
+      "runId": "run_e6054e76e9fc",
+      "terminal": "term_5a7a5fc2-18ab-46d5-a87c-0259450ac4f6",
+      "workerState": "succeeded",
+      "dispatchStatus": "completed",
+      "terminalState": "released",
+      "host": {
+        "kind": "remote",
+        "id": "ssh-oci-coding-worker"
+      },
+      "workspace": {
+        "id": "314e7b89-8f19-4535-9443-22b342aedff7::/home/developer/projects/aurora/.git/aurora-lanes/product-native-service-20261009T131300Z",
+        "kind": "folder_or_worktree"
+      },
+      "provider": null,
+      "liveness": {
+        "verdict": "exited",
+        "source": "resource_release"
+      },
+      "evidence": {
+        "durable": true,
+        "liveStatus": "unavailable",
+        "lastObservedAt": null
+      }
+    },
+    {
+      "dispatchId": "ctx_306b129084f5",
+      "taskId": "task_753c01f4588d",
+      "runId": "run_e6054e76e9fc",
+      "terminal": "term_ee21f8e2-93f9-4d12-9c1e-f7e30ec64a0b",
+      "workerState": "succeeded",
+      "dispatchStatus": "completed",
+      "terminalState": "released",
+      "host": {
+        "kind": "remote",
+        "id": "ssh-oci-coding-worker"
+      },
+      "workspace": {
+        "id": "314e7b89-8f19-4535-9443-22b342aedff7::/home/developer/projects/aurora/.git/aurora-lanes/product-native-handler-20261009T131300Z",
+        "kind": "folder_or_worktree"
+      },
+      "provider": null,
+      "liveness": {
+        "verdict": "exited",
+        "source": "resource_release"
+      },
+      "evidence": {
+        "durable": true,
+        "liveStatus": "unavailable",
+        "lastObservedAt": null
+      }
+    },
+    {
+      "dispatchId": "ctx_83ed82afdd8f",
+      "taskId": "task_09bb7343ac19",
+      "runId": "run_e6054e76e9fc",
+      "terminal": "term_ee21f8e2-93f9-4d12-9c1e-f7e30ec64a0b",
+      "workerState": "abandoned",
+      "dispatchStatus": "failed",
+      "terminalState": "retained",
+      "host": {
+        "kind": "local",
+        "id": "local"
+      },
+      "workspace": {
+        "id": "314e7b89-8f19-4535-9443-22b342aedff7::/home/developer/projects/aurora/.git/aurora-lanes/product-native-handler-20261009T131300Z",
+        "kind": "folder_or_worktree"
+      },
+      "provider": null,
+      "liveness": {
+        "verdict": "unverifiable",
+        "reason": "missing_status"
+      },
+      "evidence": {
+        "durable": true,
+        "liveStatus": "unavailable",
+        "lastObservedAt": null
+      }
+    },
+    {
+      "dispatchId": "ctx_8d65ea97ba6b",
+      "taskId": "task_3d2054d5b8b0",
+      "runId": "run_e6054e76e9fc",
+      "terminal": "term_ee21f8e2-93f9-4d12-9c1e-f7e30ec64a0b",
+      "workerState": "succeeded",
+      "dispatchStatus": "completed",
+      "terminalState": "retained",
+      "host": {
+        "kind": "local",
+        "id": "local"
+      },
+      "workspace": {
+        "id": "314e7b89-8f19-4535-9443-22b342aedff7::/home/developer/projects/aurora/.git/aurora-lanes/product-native-handler-20261009T131300Z",
+        "kind": "folder_or_worktree"
+      },
+      "provider": null,
+      "liveness": {
+        "verdict": "unverifiable",
+        "reason": "missing_status"
+      },
+      "evidence": {
+        "durable": true,
+        "liveStatus": "unavailable",
+        "lastObservedAt": null
+      }
+    },
+    {
+      "dispatchId": "ctx_92deda8018e4",
+      "taskId": "task_ae18c6b24575",
+      "runId": "run_e6054e76e9fc",
+      "terminal": "term_ee21f8e2-93f9-4d12-9c1e-f7e30ec64a0b",
+      "workerState": "succeeded",
+      "dispatchStatus": "completed",
+      "terminalState": "retained",
+      "host": {
+        "kind": "local",
+        "id": "local"
+      },
+      "workspace": {
+        "id": "314e7b89-8f19-4535-9443-22b342aedff7::/home/developer/projects/aurora/.git/aurora-lanes/product-native-handler-20261009T131300Z",
+        "kind": "folder_or_worktree"
+      },
+      "provider": null,
+      "liveness": {
+        "verdict": "unverifiable",
+        "reason": "missing_status"
+      },
+      "evidence": {
+        "durable": true,
+        "liveStatus": "unavailable",
+        "lastObservedAt": null
+      }
+    },
+    {
+      "dispatchId": "ctx_b0f3ab5337b6",
+      "taskId": "task_c9515e7102f7",
+      "runId": "run_e6054e76e9fc",
+      "terminal": "term_ee21f8e2-93f9-4d12-9c1e-f7e30ec64a0b",
+      "workerState": "succeeded",
+      "dispatchStatus": "completed",
+      "terminalState": "retained",
+      "host": {
+        "kind": "local",
+        "id": "local"
+      },
+      "workspace": {
+        "id": "314e7b89-8f19-4535-9443-22b342aedff7::/home/developer/projects/aurora/.git/aurora-lanes/product-native-handler-20261009T131300Z",
+        "kind": "folder_or_worktree"
+      },
+      "provider": null,
+      "liveness": {
+        "verdict": "unverifiable",
+        "reason": "missing_status"
+      },
+      "evidence": {
+        "durable": true,
+        "liveStatus": "unavailable",
+        "lastObservedAt": null
+      }
+    },
+    {
+      "dispatchId": "ctx_404b151dcd02",
+      "taskId": "task_f41d71d9f071",
+      "runId": "run_e6054e76e9fc",
+      "terminal": "term_ee21f8e2-93f9-4d12-9c1e-f7e30ec64a0b",
+      "workerState": "abandoned",
+      "dispatchStatus": "failed",
+      "terminalState": "retained",
+      "host": {
+        "kind": "local",
+        "id": "local"
+      },
+      "workspace": {
+        "id": "314e7b89-8f19-4535-9443-22b342aedff7::/home/developer/projects/aurora/.git/aurora-lanes/product-native-handler-20261009T131300Z",
+        "kind": "folder_or_worktree"
+      },
+      "provider": null,
+      "liveness": {
+        "verdict": "unverifiable",
+        "reason": "missing_status"
+      },
+      "evidence": {
+        "durable": true,
+        "liveStatus": "unavailable",
+        "lastObservedAt": null
+      }
+    },
+    {
+      "dispatchId": "ctx_c7bc994db52c",
+      "taskId": "task_359085de865e",
+      "runId": "run_e6054e76e9fc",
+      "terminal": "term_9ccb4124-ffd6-4d0f-b564-87a54e76e8c5",
+      "workerState": "failed",
+      "dispatchStatus": "failed",
+      "terminalState": "released",
+      "host": {
+        "kind": "remote",
+        "id": "ssh-oci-coding-worker"
+      },
+      "workspace": {
+        "id": "314e7b89-8f19-4535-9443-22b342aedff7::/home/developer/projects/aurora/.git/aurora-lanes/product-native-service-20261009T131300Z",
+        "kind": "folder_or_worktree"
+      },
+      "provider": null,
+      "liveness": {
+        "verdict": "exited",
+        "source": "resource_release"
+      },
+      "evidence": {
+        "durable": true,
+        "liveStatus": "unavailable",
+        "lastObservedAt": null
+      }
+    },
+    {
+      "dispatchId": "ctx_66c235deed12",
+      "taskId": "task_4855c0766678",
+      "runId": "run_e6054e76e9fc",
+      "terminal": "term_ee21f8e2-93f9-4d12-9c1e-f7e30ec64a0b",
+      "workerState": "failed",
+      "dispatchStatus": "failed",
+      "terminalState": "retained",
+      "host": {
+        "kind": "local",
+        "id": "local"
+      },
+      "workspace": {
+        "id": "314e7b89-8f19-4535-9443-22b342aedff7::/home/developer/projects/aurora/.git/aurora-lanes/product-native-handler-20261009T131300Z",
+        "kind": "folder_or_worktree"
+      },
+      "provider": null,
+      "liveness": {
+        "verdict": "unverifiable",
+        "reason": "missing_status"
+      },
+      "evidence": {
+        "durable": true,
+        "liveStatus": "unavailable",
+        "lastObservedAt": null
+      }
+    },
+    {
+      "dispatchId": "ctx_4177b0968099",
+      "taskId": "task_b2065264ebac",
+      "runId": "run_e6054e76e9fc",
+      "terminal": "term_ee21f8e2-93f9-4d12-9c1e-f7e30ec64a0b",
+      "workerState": "succeeded",
+      "dispatchStatus": "completed",
+      "terminalState": "retained",
+      "host": {
+        "kind": "local",
+        "id": "local"
+      },
+      "workspace": {
+        "id": "314e7b89-8f19-4535-9443-22b342aedff7::/home/developer/projects/aurora/.git/aurora-lanes/product-native-handler-20261009T131300Z",
+        "kind": "folder_or_worktree"
+      },
+      "provider": null,
+      "liveness": {
+        "verdict": "unverifiable",
+        "reason": "missing_status"
+      },
+      "evidence": {
+        "durable": true,
+        "liveStatus": "unavailable",
+        "lastObservedAt": null
+      }
+    },
+    {
+      "dispatchId": "ctx_1fe9a32dfddf",
+      "taskId": "task_2dc3027a3295",
+      "runId": "run_e6054e76e9fc",
+      "terminal": "term_ee21f8e2-93f9-4d12-9c1e-f7e30ec64a0b",
+      "workerState": "succeeded",
+      "dispatchStatus": "completed",
+      "terminalState": "retained",
+      "host": {
+        "kind": "local",
+        "id": "local"
+      },
+      "workspace": {
+        "id": "314e7b89-8f19-4535-9443-22b342aedff7::/home/developer/projects/aurora/.git/aurora-lanes/product-native-handler-20261009T131300Z",
+        "kind": "folder_or_worktree"
+      },
+      "provider": null,
+      "liveness": {
+        "verdict": "unverifiable",
+        "reason": "missing_status"
+      },
+      "evidence": {
+        "durable": true,
+        "liveStatus": "unavailable",
+        "lastObservedAt": null
+      }
+    },
+    {
+      "dispatchId": "ctx_b48df4c6e5c0",
+      "taskId": "task_f7901bb6f8a6",
+      "runId": "run_e6054e76e9fc",
+      "terminal": "term_ee21f8e2-93f9-4d12-9c1e-f7e30ec64a0b",
+      "workerState": "succeeded",
+      "dispatchStatus": "completed",
+      "terminalState": "retained",
+      "host": {
+        "kind": "local",
+        "id": "local"
+      },
+      "workspace": {
+        "id": "314e7b89-8f19-4535-9443-22b342aedff7::/home/developer/projects/aurora/.git/aurora-lanes/product-native-handler-20261009T131300Z",
+        "kind": "folder_or_worktree"
+      },
+      "provider": null,
+      "liveness": {
+        "verdict": "unverifiable",
+        "reason": "missing_status"
+      },
+      "evidence": {
+        "durable": true,
+        "liveStatus": "unavailable",
+        "lastObservedAt": null
+      }
+    },
+    {
+      "dispatchId": "ctx_5c66e5ea619d",
+      "taskId": "task_7776a0bf30c1",
+      "runId": "run_e6054e76e9fc",
+      "terminal": "term_e27239bf-0008-45d9-b584-95c7ecd1748e",
+      "workerState": "failed",
+      "dispatchStatus": "failed",
+      "terminalState": "released",
+      "host": {
+        "kind": "remote",
+        "id": "ssh-oci-coding-worker"
+      },
+      "workspace": {
+        "id": "314e7b89-8f19-4535-9443-22b342aedff7::/home/developer/projects/aurora/.git/aurora-lanes/product-native-service-20261009T131300Z",
+        "kind": "folder_or_worktree"
+      },
+      "provider": null,
+      "liveness": {
+        "verdict": "exited",
+        "source": "resource_release"
+      },
+      "evidence": {
+        "durable": true,
+        "liveStatus": "unavailable",
+        "lastObservedAt": null
+      }
+    },
+    {
+      "dispatchId": "ctx_30e2be51786f",
+      "taskId": "task_194f25f3e811",
+      "runId": "run_e6054e76e9fc",
+      "terminal": "term_ee21f8e2-93f9-4d12-9c1e-f7e30ec64a0b",
+      "workerState": "succeeded",
+      "dispatchStatus": "completed",
+      "terminalState": "retained",
+      "host": {
+        "kind": "local",
+        "id": "local"
+      },
+      "workspace": {
+        "id": "314e7b89-8f19-4535-9443-22b342aedff7::/home/developer/projects/aurora/.git/aurora-lanes/product-native-handler-20261009T131300Z",
+        "kind": "folder_or_worktree"
+      },
+      "provider": null,
+      "liveness": {
+        "verdict": "unverifiable",
+        "reason": "missing_status"
+      },
+      "evidence": {
+        "durable": true,
+        "liveStatus": "unavailable",
+        "lastObservedAt": null
+      }
+    },
+    {
+      "dispatchId": "ctx_dab0f12b1f05",
+      "taskId": "task_9a7fc50696ea",
+      "runId": "run_e6054e76e9fc",
+      "terminal": "term_ee21f8e2-93f9-4d12-9c1e-f7e30ec64a0b",
+      "workerState": "succeeded",
+      "dispatchStatus": "completed",
+      "terminalState": "retained",
+      "host": {
+        "kind": "local",
+        "id": "local"
+      },
+      "workspace": {
+        "id": "314e7b89-8f19-4535-9443-22b342aedff7::/home/developer/projects/aurora/.git/aurora-lanes/product-native-handler-20261009T131300Z",
+        "kind": "folder_or_worktree"
+      },
+      "provider": null,
+      "liveness": {
+        "verdict": "unverifiable",
+        "reason": "missing_status"
+      },
+      "evidence": {
+        "durable": true,
+        "liveStatus": "unavailable",
+        "lastObservedAt": null
+      }
+    },
+    {
+      "dispatchId": "ctx_9dacb36766d8",
+      "taskId": "task_d42ce4e32d0e",
+      "runId": "run_e6054e76e9fc",
+      "terminal": "term_ee21f8e2-93f9-4d12-9c1e-f7e30ec64a0b",
+      "workerState": "succeeded",
+      "dispatchStatus": "completed",
+      "terminalState": "retained",
+      "host": {
+        "kind": "local",
+        "id": "local"
+      },
+      "workspace": {
+        "id": "314e7b89-8f19-4535-9443-22b342aedff7::/home/developer/projects/aurora/.git/aurora-lanes/product-native-handler-20261009T131300Z",
+        "kind": "folder_or_worktree"
+      },
+      "provider": null,
+      "liveness": {
+        "verdict": "unverifiable",
+        "reason": "missing_status"
+      },
+      "evidence": {
+        "durable": true,
+        "liveStatus": "unavailable",
+        "lastObservedAt": null
+      }
+    },
+    {
+      "dispatchId": "ctx_f0c3fb7a749c",
+      "taskId": "task_d74af97d4359",
+      "runId": "run_e6054e76e9fc",
+      "terminal": "term_ee21f8e2-93f9-4d12-9c1e-f7e30ec64a0b",
+      "workerState": "succeeded",
+      "dispatchStatus": "completed",
+      "terminalState": "retained",
+      "host": {
+        "kind": "local",
+        "id": "local"
+      },
+      "workspace": {
+        "id": "314e7b89-8f19-4535-9443-22b342aedff7::/home/developer/projects/aurora/.git/aurora-lanes/product-native-handler-20261009T131300Z",
+        "kind": "folder_or_worktree"
+      },
+      "provider": null,
+      "liveness": {
+        "verdict": "unverifiable",
+        "reason": "missing_status"
+      },
+      "evidence": {
+        "durable": true,
+        "liveStatus": "unavailable",
+        "lastObservedAt": null
+      }
+    },
+    {
+      "dispatchId": "ctx_0a8a40007d89",
+      "taskId": "task_e0f006c2e671",
+      "runId": "run_e6054e76e9fc",
+      "terminal": "term_ee21f8e2-93f9-4d12-9c1e-f7e30ec64a0b",
+      "workerState": "succeeded",
+      "dispatchStatus": "completed",
+      "terminalState": "retained",
+      "host": {
+        "kind": "local",
+        "id": "local"
+      },
+      "workspace": {
+        "id": "314e7b89-8f19-4535-9443-22b342aedff7::/home/developer/projects/aurora/.git/aurora-lanes/product-native-handler-20261009T131300Z",
+        "kind": "folder_or_worktree"
+      },
+      "provider": null,
+      "liveness": {
+        "verdict": "unverifiable",
+        "reason": "missing_status"
+      },
+      "evidence": {
+        "durable": true,
+        "liveStatus": "unavailable",
+        "lastObservedAt": null
+      }
+    },
+    {
+      "dispatchId": "ctx_00e11727c344",
+      "taskId": "task_6a94aff8b009",
+      "runId": "run_e6054e76e9fc",
+      "terminal": "term_ee21f8e2-93f9-4d12-9c1e-f7e30ec64a0b",
+      "workerState": "succeeded",
+      "dispatchStatus": "completed",
+      "terminalState": "retained",
+      "host": {
+        "kind": "local",
+        "id": "local"
+      },
+      "workspace": {
+        "id": "314e7b89-8f19-4535-9443-22b342aedff7::/home/developer/projects/aurora/.git/aurora-lanes/product-native-handler-20261009T131300Z",
+        "kind": "folder_or_worktree"
+      },
+      "provider": null,
+      "liveness": {
+        "verdict": "unverifiable",
+        "reason": "missing_status"
+      },
+      "evidence": {
+        "durable": true,
+        "liveStatus": "unavailable",
+        "lastObservedAt": null
+      }
+    },
+    {
+      "dispatchId": "ctx_142c45cae1ab",
+      "taskId": "task_df4a64a9515e",
+      "runId": "run_e6054e76e9fc",
+      "terminal": "term_ee21f8e2-93f9-4d12-9c1e-f7e30ec64a0b",
+      "workerState": "succeeded",
+      "dispatchStatus": "completed",
+      "terminalState": "retained",
+      "host": {
+        "kind": "local",
+        "id": "local"
+      },
+      "workspace": {
+        "id": "314e7b89-8f19-4535-9443-22b342aedff7::/home/developer/projects/aurora/.git/aurora-lanes/product-native-handler-20261009T131300Z",
+        "kind": "folder_or_worktree"
+      },
+      "provider": null,
+      "liveness": {
+        "verdict": "unverifiable",
+        "reason": "missing_status"
+      },
+      "evidence": {
+        "durable": true,
+        "liveStatus": "unavailable",
+        "lastObservedAt": null
+      }
+    },
+    {
+      "dispatchId": "ctx_d1a2ee4303c5",
+      "taskId": "task_9c0947941c3e",
+      "runId": "run_e6054e76e9fc",
+      "terminal": "term_ee21f8e2-93f9-4d12-9c1e-f7e30ec64a0b",
+      "workerState": "succeeded",
+      "dispatchStatus": "completed",
+      "terminalState": "retained",
+      "host": {
+        "kind": "local",
+        "id": "local"
+      },
+      "workspace": {
+        "id": "314e7b89-8f19-4535-9443-22b342aedff7::/home/developer/projects/aurora/.git/aurora-lanes/product-native-handler-20261009T131300Z",
+        "kind": "folder_or_worktree"
+      },
+      "provider": null,
+      "liveness": {
+        "verdict": "unverifiable",
+        "reason": "missing_status"
+      },
+      "evidence": {
+        "durable": true,
+        "liveStatus": "unavailable",
+        "lastObservedAt": null
+      }
+    },
+    {
+      "dispatchId": "ctx_ff70bc4a228b",
+      "taskId": "task_b9da089125bd",
+      "runId": "run_e6054e76e9fc",
+      "terminal": "term_ee21f8e2-93f9-4d12-9c1e-f7e30ec64a0b",
+      "workerState": "failed",
+      "dispatchStatus": "failed",
+      "terminalState": "retained",
+      "host": {
+        "kind": "local",
+        "id": "local"
+      },
+      "workspace": {
+        "id": "314e7b89-8f19-4535-9443-22b342aedff7::/home/developer/projects/aurora/.git/aurora-lanes/product-native-handler-20261009T131300Z",
+        "kind": "folder_or_worktree"
+      },
+      "provider": null,
+      "liveness": {
+        "verdict": "unverifiable",
+        "reason": "missing_status"
+      },
+      "evidence": {
+        "durable": true,
+        "liveStatus": "unavailable",
+        "lastObservedAt": null
+      }
+    },
+    {
+      "dispatchId": "ctx_f972bc70e9a0",
+      "taskId": "task_dfd7558582e4",
+      "runId": "run_e6054e76e9fc",
+      "terminal": "term_ee21f8e2-93f9-4d12-9c1e-f7e30ec64a0b",
+      "workerState": "succeeded",
+      "dispatchStatus": "completed",
+      "terminalState": "retained",
+      "host": {
+        "kind": "local",
+        "id": "local"
+      },
+      "workspace": {
+        "id": "314e7b89-8f19-4535-9443-22b342aedff7::/home/developer/projects/aurora/.git/aurora-lanes/product-native-handler-20261009T131300Z",
+        "kind": "folder_or_worktree"
+      },
+      "provider": null,
+      "liveness": {
+        "verdict": "unverifiable",
+        "reason": "missing_status"
+      },
+      "evidence": {
+        "durable": true,
+        "liveStatus": "unavailable",
+        "lastObservedAt": null
+      }
+    },
+    {
+      "dispatchId": "ctx_ab86e2ccdba6",
+      "taskId": "task_9283317b92a2",
+      "runId": "run_e6054e76e9fc",
+      "terminal": "term_ee21f8e2-93f9-4d12-9c1e-f7e30ec64a0b",
+      "workerState": "succeeded",
+      "dispatchStatus": "completed",
+      "terminalState": "retained",
+      "host": {
+        "kind": "local",
+        "id": "local"
+      },
+      "workspace": {
+        "id": "314e7b89-8f19-4535-9443-22b342aedff7::/home/developer/projects/aurora/.git/aurora-lanes/product-native-handler-20261009T131300Z",
+        "kind": "folder_or_worktree"
+      },
+      "provider": null,
+      "liveness": {
+        "verdict": "unverifiable",
+        "reason": "missing_status"
+      },
+      "evidence": {
+        "durable": true,
+        "liveStatus": "unavailable",
+        "lastObservedAt": null
+      }
+    },
+    {
+      "dispatchId": "ctx_7c4289c3b78f",
+      "taskId": "task_5a30d3e6302d",
+      "runId": "run_e6054e76e9fc",
+      "terminal": "term_ee21f8e2-93f9-4d12-9c1e-f7e30ec64a0b",
+      "workerState": "succeeded",
+      "dispatchStatus": "completed",
+      "terminalState": "retained",
+      "host": {
+        "kind": "local",
+        "id": "local"
+      },
+      "workspace": {
+        "id": "314e7b89-8f19-4535-9443-22b342aedff7::/home/developer/projects/aurora/.git/aurora-lanes/product-native-handler-20261009T131300Z",
+        "kind": "folder_or_worktree"
+      },
+      "provider": null,
+      "liveness": {
+        "verdict": "unverifiable",
+        "reason": "missing_status"
+      },
+      "evidence": {
+        "durable": true,
+        "liveStatus": "unavailable",
+        "lastObservedAt": null
+      }
+    },
+    {
+      "dispatchId": "ctx_fc103a790868",
+      "taskId": "task_62f3b42e3101",
+      "runId": "run_e6054e76e9fc",
+      "terminal": "term_ee21f8e2-93f9-4d12-9c1e-f7e30ec64a0b",
+      "workerState": "succeeded",
+      "dispatchStatus": "completed",
+      "terminalState": "retained",
+      "host": {
+        "kind": "local",
+        "id": "local"
+      },
+      "workspace": {
+        "id": "314e7b89-8f19-4535-9443-22b342aedff7::/home/developer/projects/aurora/.git/aurora-lanes/product-native-handler-20261009T131300Z",
+        "kind": "folder_or_worktree"
+      },
+      "provider": null,
+      "liveness": {
+        "verdict": "unverifiable",
+        "reason": "missing_status"
+      },
+      "evidence": {
+        "durable": true,
+        "liveStatus": "unavailable",
+        "lastObservedAt": null
+      }
+    },
+    {
+      "dispatchId": "ctx_95c27ffc29e2",
+      "taskId": "task_9661a070d737",
+      "runId": "run_e6054e76e9fc",
+      "terminal": "term_ee21f8e2-93f9-4d12-9c1e-f7e30ec64a0b",
+      "workerState": "succeeded",
+      "dispatchStatus": "completed",
+      "terminalState": "retained",
+      "host": {
+        "kind": "local",
+        "id": "local"
+      },
+      "workspace": {
+        "id": "314e7b89-8f19-4535-9443-22b342aedff7::/home/developer/projects/aurora/.git/aurora-lanes/product-native-handler-20261009T131300Z",
+        "kind": "folder_or_worktree"
+      },
+      "provider": null,
+      "liveness": {
+        "verdict": "unverifiable",
+        "reason": "missing_status"
+      },
+      "evidence": {
+        "durable": true,
+        "liveStatus": "unavailable",
+        "lastObservedAt": null
+      }
+    },
+    {
+      "dispatchId": "ctx_69dc1ab4a5be",
+      "taskId": "task_1631105b9a5f",
+      "runId": "run_e6054e76e9fc",
+      "terminal": "term_ee21f8e2-93f9-4d12-9c1e-f7e30ec64a0b",
+      "workerState": "succeeded",
+      "dispatchStatus": "completed",
+      "terminalState": "retained",
+      "host": {
+        "kind": "local",
+        "id": "local"
+      },
+      "workspace": {
+        "id": "314e7b89-8f19-4535-9443-22b342aedff7::/home/developer/projects/aurora/.git/aurora-lanes/product-native-handler-20261009T131300Z",
+        "kind": "folder_or_worktree"
+      },
+      "provider": null,
+      "liveness": {
+        "verdict": "unverifiable",
+        "reason": "missing_status"
+      },
+      "evidence": {
+        "durable": true,
+        "liveStatus": "unavailable",
+        "lastObservedAt": null
+      }
+    },
+    {
+      "dispatchId": "ctx_cdb3d4f6c526",
+      "taskId": "task_1f860a895c73",
+      "runId": "run_e6054e76e9fc",
+      "terminal": "term_ee21f8e2-93f9-4d12-9c1e-f7e30ec64a0b",
+      "workerState": "succeeded",
+      "dispatchStatus": "completed",
+      "terminalState": "retained",
+      "host": {
+        "kind": "local",
+        "id": "local"
+      },
+      "workspace": {
+        "id": "314e7b89-8f19-4535-9443-22b342aedff7::/home/developer/projects/aurora/.git/aurora-lanes/product-native-handler-20261009T131300Z",
+        "kind": "folder_or_worktree"
+      },
+      "provider": null,
+      "liveness": {
+        "verdict": "unverifiable",
+        "reason": "missing_status"
+      },
+      "evidence": {
+        "durable": true,
+        "liveStatus": "unavailable",
+        "lastObservedAt": null
+      }
+    },
+    {
+      "dispatchId": "ctx_cf51c4946760",
+      "taskId": "task_43e0945d5ec2",
+      "runId": "run_e6054e76e9fc",
+      "terminal": "term_ee21f8e2-93f9-4d12-9c1e-f7e30ec64a0b",
+      "workerState": "succeeded",
+      "dispatchStatus": "completed",
+      "terminalState": "retained",
+      "host": {
+        "kind": "local",
+        "id": "local"
+      },
+      "workspace": {
+        "id": "314e7b89-8f19-4535-9443-22b342aedff7::/home/developer/projects/aurora/.git/aurora-lanes/product-native-handler-20261009T131300Z",
+        "kind": "folder_or_worktree"
+      },
+      "provider": null,
+      "liveness": {
+        "verdict": "unverifiable",
+        "reason": "missing_status"
+      },
+      "evidence": {
+        "durable": true,
+        "liveStatus": "unavailable",
+        "lastObservedAt": null
+      }
+    },
+    {
+      "dispatchId": "ctx_4a48f163e1c0",
+      "taskId": "task_43e0945d5ec2",
+      "runId": "run_e6054e76e9fc",
+      "terminal": "term_8f807d6a-cb54-49db-8465-b8ef64dd4b08",
+      "workerState": "failed",
+      "dispatchStatus": "failed",
+      "terminalState": "released",
+      "host": {
+        "kind": "remote",
+        "id": "ssh-oci-coding-worker"
+      },
+      "workspace": {
+        "id": "314e7b89-8f19-4535-9443-22b342aedff7::/home/developer/projects/aurora",
+        "kind": "folder_or_worktree"
+      },
+      "provider": null,
+      "liveness": {
+        "verdict": "exited",
+        "source": "resource_release"
+      },
+      "evidence": {
+        "durable": true,
+        "liveStatus": "unavailable",
+        "lastObservedAt": null
+      }
+    },
+    {
+      "dispatchId": "ctx_0abfc335604d",
+      "taskId": "task_b18f2da70170",
+      "runId": "run_e6054e76e9fc",
+      "terminal": "term_ee21f8e2-93f9-4d12-9c1e-f7e30ec64a0b",
+      "workerState": "succeeded",
+      "dispatchStatus": "completed",
+      "terminalState": "retained",
+      "host": {
+        "kind": "local",
+        "id": "local"
+      },
+      "workspace": {
+        "id": "314e7b89-8f19-4535-9443-22b342aedff7::/home/developer/projects/aurora/.git/aurora-lanes/product-native-handler-20261009T131300Z",
+        "kind": "folder_or_worktree"
+      },
+      "provider": null,
+      "liveness": {
+        "verdict": "unverifiable",
+        "reason": "missing_status"
+      },
+      "evidence": {
+        "durable": true,
+        "liveStatus": "unavailable",
+        "lastObservedAt": null
+      }
+    },
+    {
+      "dispatchId": "ctx_738e3ea89e39",
+      "taskId": "task_c02a9456c5c8",
+      "runId": "run_e6054e76e9fc",
+      "terminal": "term_ee21f8e2-93f9-4d12-9c1e-f7e30ec64a0b",
+      "workerState": "succeeded",
+      "dispatchStatus": "completed",
+      "terminalState": "retained",
+      "host": {
+        "kind": "local",
+        "id": "local"
+      },
+      "workspace": {
+        "id": "314e7b89-8f19-4535-9443-22b342aedff7::/home/developer/projects/aurora/.git/aurora-lanes/product-native-handler-20261009T131300Z",
+        "kind": "folder_or_worktree"
+      },
+      "provider": null,
+      "liveness": {
+        "verdict": "unverifiable",
+        "reason": "missing_status"
+      },
+      "evidence": {
+        "durable": true,
+        "liveStatus": "unavailable",
+        "lastObservedAt": null
+      }
+    },
+    {
+      "dispatchId": "ctx_d0dd13adb7f5",
+      "taskId": "task_932edf2b17f9",
+      "runId": "run_e6054e76e9fc",
+      "terminal": "term_ee21f8e2-93f9-4d12-9c1e-f7e30ec64a0b",
+      "workerState": "succeeded",
+      "dispatchStatus": "completed",
+      "terminalState": "retained",
+      "host": {
+        "kind": "local",
+        "id": "local"
+      },
+      "workspace": {
+        "id": "314e7b89-8f19-4535-9443-22b342aedff7::/home/developer/projects/aurora/.git/aurora-lanes/product-native-handler-20261009T131300Z",
+        "kind": "folder_or_worktree"
+      },
+      "provider": null,
+      "liveness": {
+        "verdict": "unverifiable",
+        "reason": "missing_status"
+      },
+      "evidence": {
+        "durable": true,
+        "liveStatus": "unavailable",
+        "lastObservedAt": null
+      }
+    },
+    {
+      "dispatchId": "ctx_c0681946960f",
+      "taskId": "task_a6fae5928293",
+      "runId": "run_e6054e76e9fc",
+      "terminal": "term_ee21f8e2-93f9-4d12-9c1e-f7e30ec64a0b",
+      "workerState": "succeeded",
+      "dispatchStatus": "completed",
+      "terminalState": "retained",
+      "host": {
+        "kind": "local",
+        "id": "local"
+      },
+      "workspace": {
+        "id": "314e7b89-8f19-4535-9443-22b342aedff7::/home/developer/projects/aurora/.git/aurora-lanes/product-native-handler-20261009T131300Z",
+        "kind": "folder_or_worktree"
+      },
+      "provider": null,
+      "liveness": {
+        "verdict": "unverifiable",
+        "reason": "missing_status"
+      },
+      "evidence": {
+        "durable": true,
+        "liveStatus": "unavailable",
+        "lastObservedAt": null
+      }
+    },
+    {
+      "dispatchId": "ctx_f06ef9e87408",
+      "taskId": "task_354b882c6e7d",
+      "runId": "run_e6054e76e9fc",
+      "terminal": "term_ee21f8e2-93f9-4d12-9c1e-f7e30ec64a0b",
+      "workerState": "succeeded",
+      "dispatchStatus": "completed",
+      "terminalState": "retained",
+      "host": {
+        "kind": "local",
+        "id": "local"
+      },
+      "workspace": {
+        "id": "314e7b89-8f19-4535-9443-22b342aedff7::/home/developer/projects/aurora/.git/aurora-lanes/product-native-handler-20261009T131300Z",
+        "kind": "folder_or_worktree"
+      },
+      "provider": null,
+      "liveness": {
+        "verdict": "unverifiable",
+        "reason": "missing_status"
+      },
+      "evidence": {
+        "durable": true,
+        "liveStatus": "unavailable",
+        "lastObservedAt": null
+      }
+    },
+    {
+      "dispatchId": "ctx_429cff015be2",
+      "taskId": "task_821680234878",
+      "runId": "run_e6054e76e9fc",
+      "terminal": "term_ee21f8e2-93f9-4d12-9c1e-f7e30ec64a0b",
+      "workerState": "succeeded",
+      "dispatchStatus": "completed",
+      "terminalState": "retained",
+      "host": {
+        "kind": "local",
+        "id": "local"
+      },
+      "workspace": {
+        "id": "314e7b89-8f19-4535-9443-22b342aedff7::/home/developer/projects/aurora/.git/aurora-lanes/product-native-handler-20261009T131300Z",
+        "kind": "folder_or_worktree"
+      },
+      "provider": null,
+      "liveness": {
+        "verdict": "unverifiable",
+        "reason": "missing_status"
+      },
+      "evidence": {
+        "durable": true,
+        "liveStatus": "unavailable",
+        "lastObservedAt": null
+      }
+    },
+    {
+      "dispatchId": "ctx_fb3070231214",
+      "taskId": "task_354b882c6e7d",
+      "runId": "run_e6054e76e9fc",
+      "terminal": "term_c506038e-d0c6-42e3-b9a1-39f0bfedd846",
+      "workerState": "failed",
+      "dispatchStatus": "failed",
+      "terminalState": "released",
+      "host": {
+        "kind": "remote",
+        "id": "ssh-oci-coding-worker"
+      },
+      "workspace": {
+        "id": "314e7b89-8f19-4535-9443-22b342aedff7::/home/developer/projects/aurora/.git/aurora-lanes/product-native-service-20261009T131300Z",
+        "kind": "folder_or_worktree"
+      },
+      "provider": null,
+      "liveness": {
+        "verdict": "exited",
+        "source": "resource_release"
+      },
+      "evidence": {
+        "durable": true,
+        "liveStatus": "unavailable",
+        "lastObservedAt": null
+      }
+    },
+    {
+      "dispatchId": "ctx_4c2dbe57ca7e",
+      "taskId": "task_81d0e4f1ca0b",
+      "runId": "run_e6054e76e9fc",
+      "terminal": "term_ee21f8e2-93f9-4d12-9c1e-f7e30ec64a0b",
+      "workerState": "succeeded",
+      "dispatchStatus": "completed",
+      "terminalState": "retained",
+      "host": {
+        "kind": "local",
+        "id": "local"
+      },
+      "workspace": {
+        "id": "314e7b89-8f19-4535-9443-22b342aedff7::/home/developer/projects/aurora/.git/aurora-lanes/product-native-handler-20261009T131300Z",
+        "kind": "folder_or_worktree"
+      },
+      "provider": null,
+      "liveness": {
+        "verdict": "unverifiable",
+        "reason": "missing_status"
+      },
+      "evidence": {
+        "durable": true,
+        "liveStatus": "unavailable",
+        "lastObservedAt": null
+      }
+    },
+    {
+      "dispatchId": "ctx_13489e2c244e",
+      "taskId": "task_12896478bc1a",
+      "runId": "run_e6054e76e9fc",
+      "terminal": "term_ee21f8e2-93f9-4d12-9c1e-f7e30ec64a0b",
+      "workerState": "succeeded",
+      "dispatchStatus": "completed",
+      "terminalState": "retained",
+      "host": {
+        "kind": "local",
+        "id": "local"
+      },
+      "workspace": {
+        "id": "314e7b89-8f19-4535-9443-22b342aedff7::/home/developer/projects/aurora/.git/aurora-lanes/product-native-handler-20261009T131300Z",
+        "kind": "folder_or_worktree"
+      },
+      "provider": null,
+      "liveness": {
+        "verdict": "unverifiable",
+        "reason": "missing_status"
+      },
+      "evidence": {
+        "durable": true,
+        "liveStatus": "unavailable",
+        "lastObservedAt": null
+      }
+    },
+    {
+      "dispatchId": "ctx_8f420a7406a4",
+      "taskId": "task_1dd9bd4ceb6a",
+      "runId": "run_e6054e76e9fc",
+      "terminal": "term_ee21f8e2-93f9-4d12-9c1e-f7e30ec64a0b",
+      "workerState": "succeeded",
+      "dispatchStatus": "completed",
+      "terminalState": "retained",
+      "host": {
+        "kind": "local",
+        "id": "local"
+      },
+      "workspace": {
+        "id": "314e7b89-8f19-4535-9443-22b342aedff7::/home/developer/projects/aurora/.git/aurora-lanes/product-native-handler-20261009T131300Z",
+        "kind": "folder_or_worktree"
+      },
+      "provider": null,
+      "liveness": {
+        "verdict": "unverifiable",
+        "reason": "missing_status"
+      },
+      "evidence": {
+        "durable": true,
+        "liveStatus": "unavailable",
+        "lastObservedAt": null
+      }
+    },
+    {
+      "dispatchId": "ctx_a671686a8b83",
+      "taskId": "task_81d0e4f1ca0b",
+      "runId": "run_e6054e76e9fc",
+      "terminal": "term_ee21f8e2-93f9-4d12-9c1e-f7e30ec64a0b",
+      "workerState": "failed",
+      "dispatchStatus": "failed",
+      "terminalState": "retained",
+      "host": {
+        "kind": "local",
+        "id": "local"
+      },
+      "workspace": {
+        "id": "314e7b89-8f19-4535-9443-22b342aedff7::/home/developer/projects/aurora/.git/aurora-lanes/product-native-handler-20261009T131300Z",
+        "kind": "folder_or_worktree"
+      },
+      "provider": null,
+      "liveness": {
+        "verdict": "unverifiable",
+        "reason": "missing_status"
+      },
+      "evidence": {
+        "durable": true,
+        "liveStatus": "unavailable",
+        "lastObservedAt": null
+      }
+    },
+    {
+      "dispatchId": "ctx_bbf3c2670c48",
+      "taskId": "task_70100c6795e2",
+      "runId": "run_e6054e76e9fc",
+      "terminal": "term_ee21f8e2-93f9-4d12-9c1e-f7e30ec64a0b",
+      "workerState": "succeeded",
+      "dispatchStatus": "completed",
+      "terminalState": "retained",
+      "host": {
+        "kind": "local",
+        "id": "local"
+      },
+      "workspace": {
+        "id": "314e7b89-8f19-4535-9443-22b342aedff7::/home/developer/projects/aurora/.git/aurora-lanes/product-native-handler-20261009T131300Z",
+        "kind": "folder_or_worktree"
+      },
+      "provider": null,
+      "liveness": {
+        "verdict": "unverifiable",
+        "reason": "missing_status"
+      },
+      "evidence": {
+        "durable": true,
+        "liveStatus": "unavailable",
+        "lastObservedAt": null
+      }
+    },
+    {
+      "dispatchId": "ctx_ed17d8400438",
+      "taskId": "task_943c094a1572",
+      "runId": "run_e6054e76e9fc",
+      "terminal": "term_ee21f8e2-93f9-4d12-9c1e-f7e30ec64a0b",
+      "workerState": "succeeded",
+      "dispatchStatus": "completed",
+      "terminalState": "retained",
+      "host": {
+        "kind": "local",
+        "id": "local"
+      },
+      "workspace": {
+        "id": "314e7b89-8f19-4535-9443-22b342aedff7::/home/developer/projects/aurora/.git/aurora-lanes/product-native-handler-20261009T131300Z",
+        "kind": "folder_or_worktree"
+      },
+      "provider": null,
+      "liveness": {
+        "verdict": "unverifiable",
+        "reason": "missing_status"
+      },
+      "evidence": {
+        "durable": true,
+        "liveStatus": "unavailable",
+        "lastObservedAt": null
+      }
+    },
+    {
+      "dispatchId": "ctx_2c3d83e7c180",
+      "taskId": "task_943c094a1572",
+      "runId": "run_e6054e76e9fc",
+      "terminal": "term_436e1f73-355a-43d2-ad04-cf9614656168",
+      "workerState": "failed",
+      "dispatchStatus": "failed",
+      "terminalState": "released",
+      "host": {
+        "kind": "remote",
+        "id": "ssh-oci-coding-worker"
+      },
+      "workspace": {
+        "id": "314e7b89-8f19-4535-9443-22b342aedff7::/home/developer/projects/aurora/.git/aurora-lanes/product-native-service-20261009T131300Z",
+        "kind": "folder_or_worktree"
+      },
+      "provider": null,
+      "liveness": {
+        "verdict": "exited",
+        "source": "resource_release"
+      },
+      "evidence": {
+        "durable": true,
+        "liveStatus": "unavailable",
+        "lastObservedAt": null
+      }
+    },
+    {
+      "dispatchId": "ctx_369c552c929c",
+      "taskId": "task_993a437c50fb",
+      "runId": "run_e6054e76e9fc",
+      "terminal": "term_ee21f8e2-93f9-4d12-9c1e-f7e30ec64a0b",
+      "workerState": "succeeded",
+      "dispatchStatus": "completed",
+      "terminalState": "retained",
+      "host": {
+        "kind": "local",
+        "id": "local"
+      },
+      "workspace": {
+        "id": "314e7b89-8f19-4535-9443-22b342aedff7::/home/developer/projects/aurora/.git/aurora-lanes/product-native-handler-20261009T131300Z",
+        "kind": "folder_or_worktree"
+      },
+      "provider": null,
+      "liveness": {
+        "verdict": "unverifiable",
+        "reason": "missing_status"
+      },
+      "evidence": {
+        "durable": true,
+        "liveStatus": "unavailable",
+        "lastObservedAt": null
+      }
+    },
+    {
+      "dispatchId": "ctx_44bed432cd42",
+      "taskId": "task_993a437c50fb",
+      "runId": "run_e6054e76e9fc",
+      "terminal": "term_ee21f8e2-93f9-4d12-9c1e-f7e30ec64a0b",
+      "workerState": "failed",
+      "dispatchStatus": "failed",
+      "terminalState": "retained",
+      "host": {
+        "kind": "local",
+        "id": "local"
+      },
+      "workspace": {
+        "id": "314e7b89-8f19-4535-9443-22b342aedff7::/home/developer/projects/aurora/.git/aurora-lanes/product-native-handler-20261009T131300Z",
+        "kind": "folder_or_worktree"
+      },
+      "provider": null,
+      "liveness": {
+        "verdict": "unverifiable",
+        "reason": "missing_status"
+      },
+      "evidence": {
+        "durable": true,
+        "liveStatus": "unavailable",
+        "lastObservedAt": null
+      }
+    },
+    {
+      "dispatchId": "ctx_f8ad5c0dd614",
+      "taskId": "task_943c094a1572",
+      "runId": "run_e6054e76e9fc",
+      "terminal": "term_efcb81cb-62d9-4635-9299-7f89579418cd",
+      "workerState": "failed",
+      "dispatchStatus": "failed",
+      "terminalState": "released",
+      "host": {
+        "kind": "remote",
+        "id": "ssh-oci-coding-worker"
+      },
+      "workspace": {
+        "id": "314e7b89-8f19-4535-9443-22b342aedff7::/home/developer/projects/aurora/.git/aurora-lanes/product-native-service-20261009T131300Z",
+        "kind": "folder_or_worktree"
+      },
+      "provider": null,
+      "liveness": {
+        "verdict": "exited",
+        "source": "resource_release"
+      },
+      "evidence": {
+        "durable": true,
+        "liveStatus": "unavailable",
+        "lastObservedAt": null
+      }
+    },
+    {
+      "dispatchId": "ctx_109163bb0676",
+      "taskId": "task_98c3d895e97b",
+      "runId": "run_e6054e76e9fc",
+      "terminal": "term_70c389d8-9845-4b05-b7fc-1b85f699c9bc",
+      "workerState": "succeeded",
+      "dispatchStatus": "completed",
+      "terminalState": "released",
+      "host": {
+        "kind": "remote",
+        "id": "ssh-oci-coding-worker"
+      },
+      "workspace": {
+        "id": "314e7b89-8f19-4535-9443-22b342aedff7::/home/developer/projects/aurora/.git/aurora-lanes/product-native-service-20261009T131300Z",
+        "kind": "folder_or_worktree"
+      },
+      "provider": null,
+      "liveness": {
+        "verdict": "exited",
+        "source": "resource_release"
+      },
+      "evidence": {
+        "durable": true,
+        "liveStatus": "unavailable",
+        "lastObservedAt": null
+      }
+    },
+    {
+      "dispatchId": "ctx_a27f1e8a6349",
+      "taskId": "task_ca5ce2f92fbd",
+      "runId": "run_e6054e76e9fc",
+      "terminal": "term_70c389d8-9845-4b05-b7fc-1b85f699c9bc",
+      "workerState": "succeeded",
+      "dispatchStatus": "completed",
+      "terminalState": "retained",
+      "host": {
+        "kind": "local",
+        "id": "local"
+      },
+      "workspace": {
+        "id": "314e7b89-8f19-4535-9443-22b342aedff7::/home/developer/projects/aurora/.git/aurora-lanes/product-native-service-20261009T131300Z",
+        "kind": "folder_or_worktree"
+      },
+      "provider": null,
+      "liveness": {
+        "verdict": "unverifiable",
+        "reason": "missing_status"
+      },
+      "evidence": {
+        "durable": true,
+        "liveStatus": "unavailable",
+        "lastObservedAt": null
+      }
+    },
+    {
+      "dispatchId": "ctx_ea6120c3c5ca",
+      "taskId": "task_cb9c639bf8ac",
+      "runId": "run_e6054e76e9fc",
+      "terminal": "term_f9a77b0b-c641-4bbf-a0b5-69932240729d",
+      "workerState": "failed",
+      "dispatchStatus": "failed",
+      "terminalState": "released",
+      "host": {
+        "kind": "remote",
+        "id": "ssh-oci-coding-worker"
+      },
+      "workspace": {
+        "id": "314e7b89-8f19-4535-9443-22b342aedff7::/home/developer/projects/aurora/.git/aurora-lanes/product-native-service-20261009T131300Z",
+        "kind": "folder_or_worktree"
+      },
+      "provider": null,
+      "liveness": {
+        "verdict": "exited",
+        "source": "resource_release"
+      },
+      "evidence": {
+        "durable": true,
+        "liveStatus": "unavailable",
+        "lastObservedAt": null
+      }
+    },
+    {
+      "dispatchId": "ctx_ea8f1d2027c1",
+      "taskId": "task_cb9c639bf8ac",
+      "runId": "run_e6054e76e9fc",
+      "terminal": "term_7fcc3966-09b2-4f79-ad55-a59ecbb59999",
+      "workerState": "failed",
+      "dispatchStatus": "failed",
+      "terminalState": "retained",
+      "host": {
+        "kind": "local",
+        "id": "local"
+      },
+      "workspace": {
+        "id": "314e7b89-8f19-4535-9443-22b342aedff7::/home/developer/projects/aurora/.git/aurora-lanes/lint",
+        "kind": "folder_or_worktree"
+      },
+      "provider": null,
+      "liveness": {
+        "verdict": "unverifiable",
+        "reason": "missing_status"
+      },
+      "evidence": {
+        "durable": true,
+        "liveStatus": "unavailable",
+        "lastObservedAt": null
+      }
+    },
+    {
+      "dispatchId": "ctx_7b9265d16722",
+      "taskId": "task_cb9c639bf8ac",
+      "runId": "run_e6054e76e9fc",
+      "terminal": "term_7fcc3966-09b2-4f79-ad55-a59ecbb59999",
+      "workerState": "failed",
+      "dispatchStatus": "failed",
+      "terminalState": "released",
+      "host": {
+        "kind": "remote",
+        "id": "ssh-oci-coding-worker"
+      },
+      "workspace": {
+        "id": "314e7b89-8f19-4535-9443-22b342aedff7::/home/developer/projects/aurora/.git/aurora-lanes/lint",
+        "kind": "folder_or_worktree"
+      },
+      "provider": null,
+      "liveness": {
+        "verdict": "exited",
+        "source": "resource_release"
+      },
+      "evidence": {
+        "durable": true,
+        "liveStatus": "unavailable",
+        "lastObservedAt": null
+      }
+    },
+    {
+      "dispatchId": "ctx_6d1a5f6e2980",
+      "taskId": "task_88d3f5ae24ae",
+      "runId": "run_e6054e76e9fc",
+      "terminal": "term_ef0e5862-cbee-42a6-962d-80b59e47ee23",
+      "workerState": "succeeded",
+      "dispatchStatus": "completed",
+      "terminalState": "released",
+      "host": {
+        "kind": "remote",
+        "id": "ssh-oci-coding-worker"
+      },
+      "workspace": {
+        "id": "314e7b89-8f19-4535-9443-22b342aedff7::/home/developer/projects/aurora/.git/aurora-lanes/product-native-handler-20261009T131300Z",
+        "kind": "folder_or_worktree"
+      },
+      "provider": null,
+      "liveness": {
+        "verdict": "exited",
+        "source": "resource_release"
+      },
+      "evidence": {
+        "durable": true,
+        "liveStatus": "unavailable",
+        "lastObservedAt": null
+      }
+    },
+    {
+      "dispatchId": "ctx_5299bfb631eb",
+      "taskId": "task_2662a8668c01",
+      "runId": "run_e6054e76e9fc",
+      "terminal": "term_e82af8ae-60e1-4a99-a389-ed8fecfcfce7",
+      "workerState": "succeeded",
+      "dispatchStatus": "completed",
+      "terminalState": "released",
+      "host": {
+        "kind": "remote",
+        "id": "ssh-oci-coding-worker"
+      },
+      "workspace": {
+        "id": "314e7b89-8f19-4535-9443-22b342aedff7::/home/developer/projects/aurora/.git/aurora-lanes/product-native-service-20261009T131300Z",
+        "kind": "folder_or_worktree"
+      },
+      "provider": null,
+      "liveness": {
+        "verdict": "exited",
+        "source": "resource_release"
+      },
+      "evidence": {
+        "durable": true,
+        "liveStatus": "unavailable",
+        "lastObservedAt": null
+      }
+    },
+    {
+      "dispatchId": "ctx_1c7010efd1a4",
+      "taskId": "task_8357fddb3c9e",
+      "runId": "run_e6054e76e9fc",
+      "terminal": "term_ef0e5862-cbee-42a6-962d-80b59e47ee23",
+      "workerState": "succeeded",
+      "dispatchStatus": "completed",
+      "terminalState": "retained",
+      "host": {
+        "kind": "local",
+        "id": "local"
+      },
+      "workspace": {
+        "id": "314e7b89-8f19-4535-9443-22b342aedff7::/home/developer/projects/aurora/.git/aurora-lanes/product-native-handler-20261009T131300Z",
+        "kind": "folder_or_worktree"
+      },
+      "provider": null,
+      "liveness": {
+        "verdict": "unverifiable",
+        "reason": "missing_status"
+      },
+      "evidence": {
+        "durable": true,
+        "liveStatus": "unavailable",
+        "lastObservedAt": null
+      }
+    },
+    {
+      "dispatchId": "ctx_01aaf3d41309",
+      "taskId": "task_25fe3ae22774",
+      "runId": "run_e6054e76e9fc",
+      "terminal": "term_fb989718-d78a-444c-8cdd-c10479534d16",
+      "workerState": "succeeded",
+      "dispatchStatus": "completed",
+      "terminalState": "released",
+      "host": {
+        "kind": "remote",
+        "id": "ssh-oci-coding-worker"
+      },
+      "workspace": {
+        "id": "314e7b89-8f19-4535-9443-22b342aedff7::/home/developer/projects/aurora/.git/aurora-lanes/product-native-service-20261009T131300Z",
+        "kind": "folder_or_worktree"
+      },
+      "provider": null,
+      "liveness": {
+        "verdict": "exited",
+        "source": "resource_release"
+      },
+      "evidence": {
+        "durable": true,
+        "liveStatus": "unavailable",
+        "lastObservedAt": null
+      }
+    },
+    {
+      "dispatchId": "ctx_ea1b6524c309",
+      "taskId": "task_98d5acefb7d7",
+      "runId": "run_e6054e76e9fc",
+      "terminal": "term_755165e3-2d37-4ec6-bc1e-d5d69056bda4",
+      "workerState": "succeeded",
+      "dispatchStatus": "completed",
+      "terminalState": "released",
+      "host": {
+        "kind": "remote",
+        "id": "ssh-oci-coding-worker"
+      },
+      "workspace": {
+        "id": "314e7b89-8f19-4535-9443-22b342aedff7::/home/developer/projects/aurora/.git/aurora-lanes/lint",
+        "kind": "folder_or_worktree"
+      },
+      "provider": null,
+      "liveness": {
+        "verdict": "exited",
+        "source": "resource_release"
+      },
+      "evidence": {
+        "durable": true,
+        "liveStatus": "unavailable",
+        "lastObservedAt": null
+      }
+    },
+    {
+      "dispatchId": "ctx_c95e9e382062",
+      "taskId": "task_169bd95d4f71",
+      "runId": "run_e6054e76e9fc",
+      "terminal": "term_755165e3-2d37-4ec6-bc1e-d5d69056bda4",
+      "workerState": "succeeded",
+      "dispatchStatus": "completed",
+      "terminalState": "retained",
+      "host": {
+        "kind": "local",
+        "id": "local"
+      },
+      "workspace": {
+        "id": "314e7b89-8f19-4535-9443-22b342aedff7::/home/developer/projects/aurora/.git/aurora-lanes/lint",
+        "kind": "folder_or_worktree"
+      },
+      "provider": null,
+      "liveness": {
+        "verdict": "unverifiable",
+        "reason": "missing_status"
+      },
+      "evidence": {
+        "durable": true,
+        "liveStatus": "unavailable",
+        "lastObservedAt": null
+      }
+    },
+    {
+      "dispatchId": "ctx_29a3acaa42b6",
+      "taskId": "task_ec181cf2fbdf",
+      "runId": "run_e6054e76e9fc",
+      "terminal": "term_fb989718-d78a-444c-8cdd-c10479534d16",
+      "workerState": "succeeded",
+      "dispatchStatus": "completed",
+      "terminalState": "retained",
+      "host": {
+        "kind": "local",
+        "id": "local"
+      },
+      "workspace": {
+        "id": "314e7b89-8f19-4535-9443-22b342aedff7::/home/developer/projects/aurora/.git/aurora-lanes/product-native-service-20261009T131300Z",
+        "kind": "folder_or_worktree"
+      },
+      "provider": null,
+      "liveness": {
+        "verdict": "unverifiable",
+        "reason": "missing_status"
+      },
+      "evidence": {
+        "durable": true,
+        "liveStatus": "unavailable",
+        "lastObservedAt": null
+      }
+    },
+    {
+      "dispatchId": "ctx_0a9ce503a9c6",
+      "taskId": "task_90b28111648c",
+      "runId": "run_e6054e76e9fc",
+      "terminal": "term_fb989718-d78a-444c-8cdd-c10479534d16",
+      "workerState": "succeeded",
+      "dispatchStatus": "completed",
+      "terminalState": "retained",
+      "host": {
+        "kind": "local",
+        "id": "local"
+      },
+      "workspace": {
+        "id": "314e7b89-8f19-4535-9443-22b342aedff7::/home/developer/projects/aurora/.git/aurora-lanes/product-native-service-20261009T131300Z",
+        "kind": "folder_or_worktree"
+      },
+      "provider": null,
+      "liveness": {
+        "verdict": "unverifiable",
+        "reason": "missing_status"
+      },
+      "evidence": {
+        "durable": true,
+        "liveStatus": "unavailable",
+        "lastObservedAt": null
+      }
+    },
+    {
+      "dispatchId": "ctx_a13c027c2b9c",
+      "taskId": "task_ec181cf2fbdf",
+      "runId": "run_e6054e76e9fc",
+      "terminal": "term_85d130a0-3ec6-4ee3-91ec-0b40be9d803a",
+      "workerState": "failed",
+      "dispatchStatus": "failed",
+      "terminalState": "released",
+      "host": {
+        "kind": "remote",
+        "id": "ssh-oci-coding-worker"
+      },
+      "workspace": {
+        "id": "314e7b89-8f19-4535-9443-22b342aedff7::/home/developer/projects/aurora/.git/aurora-lanes/product-native-handler-20261009T131300Z",
+        "kind": "folder_or_worktree"
+      },
+      "provider": null,
+      "liveness": {
+        "verdict": "exited",
+        "source": "resource_release"
+      },
+      "evidence": {
+        "durable": true,
+        "liveStatus": "unavailable",
+        "lastObservedAt": null
+      }
+    },
+    {
+      "dispatchId": "ctx_9090d3b45921",
+      "taskId": "task_ec181cf2fbdf",
+      "runId": "run_e6054e76e9fc",
+      "terminal": "term_6915a8cf-45e9-48b5-b67a-42dfae297e57",
+      "workerState": "failed",
+      "dispatchStatus": "failed",
+      "terminalState": "released",
+      "host": {
+        "kind": "remote",
+        "id": "ssh-oci-coding-worker"
+      },
+      "workspace": {
+        "id": "314e7b89-8f19-4535-9443-22b342aedff7::/home/developer/projects/aurora/.git/aurora-lanes/product-native-handler-20261009T131300Z",
+        "kind": "folder_or_worktree"
+      },
+      "provider": null,
+      "liveness": {
+        "verdict": "exited",
+        "source": "resource_release"
+      },
+      "evidence": {
+        "durable": true,
+        "liveStatus": "unavailable",
+        "lastObservedAt": null
+      }
+    },
+    {
+      "dispatchId": "ctx_95743e474c91",
+      "taskId": "task_f1ebe371782e",
+      "runId": "run_e6054e76e9fc",
+      "terminal": "term_0af5b639-2d45-42ef-8120-19e15de65ab4",
+      "workerState": "succeeded",
+      "dispatchStatus": "completed",
+      "terminalState": "released",
+      "host": {
+        "kind": "remote",
+        "id": "ssh-oci-coding-worker"
+      },
+      "workspace": {
+        "id": "314e7b89-8f19-4535-9443-22b342aedff7::/home/developer/projects/aurora/.git/aurora-lanes/lint",
+        "kind": "folder_or_worktree"
+      },
+      "provider": null,
+      "liveness": {
+        "verdict": "exited",
+        "source": "resource_release"
+      },
+      "evidence": {
+        "durable": true,
+        "liveStatus": "unavailable",
+        "lastObservedAt": null
+      }
+    },
+    {
+      "dispatchId": "ctx_39b619d70742",
+      "taskId": "task_79f18b6683ba",
+      "runId": "run_e6054e76e9fc",
+      "terminal": "term_0af5b639-2d45-42ef-8120-19e15de65ab4",
+      "workerState": "succeeded",
+      "dispatchStatus": "completed",
+      "terminalState": "retained",
+      "host": {
+        "kind": "local",
+        "id": "local"
+      },
+      "workspace": {
+        "id": "314e7b89-8f19-4535-9443-22b342aedff7::/home/developer/projects/aurora/.git/aurora-lanes/lint",
+        "kind": "folder_or_worktree"
+      },
+      "provider": null,
+      "liveness": {
+        "verdict": "unverifiable",
+        "reason": "missing_status"
+      },
+      "evidence": {
+        "durable": true,
+        "liveStatus": "unavailable",
+        "lastObservedAt": null
+      }
+    },
+    {
+      "dispatchId": "ctx_4a9e841da6bc",
+      "taskId": "task_d90af2ef8229",
+      "runId": "run_e6054e76e9fc",
+      "terminal": "term_879551c2-0bab-4fca-98d2-c1e2da2044f6",
+      "workerState": "succeeded",
+      "dispatchStatus": "completed",
+      "terminalState": "released",
+      "host": {
+        "kind": "remote",
+        "id": "ssh-oci-coding-worker"
+      },
+      "workspace": {
+        "id": "314e7b89-8f19-4535-9443-22b342aedff7::/home/developer/projects/aurora/.git/aurora-lanes/product-native-service-20261009T131300Z",
+        "kind": "folder_or_worktree"
+      },
+      "provider": null,
+      "liveness": {
+        "verdict": "exited",
+        "source": "resource_release"
+      },
+      "evidence": {
+        "durable": true,
+        "liveStatus": "unavailable",
+        "lastObservedAt": null
+      }
+    },
+    {
+      "dispatchId": "ctx_3b4778e8ea52",
+      "taskId": "task_d90af2ef8229",
+      "runId": "run_e6054e76e9fc",
+      "terminal": "term_b88bc616-f3a7-451c-af00-36fd40dce86d",
+      "workerState": "failed",
+      "dispatchStatus": "failed",
+      "terminalState": "released",
+      "host": {
+        "kind": "remote",
+        "id": "ssh-oci-coding-worker"
+      },
+      "workspace": {
+        "id": "314e7b89-8f19-4535-9443-22b342aedff7::/home/developer/projects/aurora/.git/aurora-lanes/product-native-service-20261009T131300Z",
+        "kind": "folder_or_worktree"
+      },
+      "provider": null,
+      "liveness": {
+        "verdict": "exited",
+        "source": "resource_release"
+      },
+      "evidence": {
+        "durable": true,
+        "liveStatus": "unavailable",
+        "lastObservedAt": null
+      }
+    },
+    {
+      "dispatchId": "ctx_d8830b63c4fc",
+      "taskId": "task_3d9ac631ac01",
+      "runId": "run_e6054e76e9fc",
+      "terminal": "term_99320a9d-1dee-4dd8-a434-b60a2b9a8b15",
+      "workerState": "succeeded",
+      "dispatchStatus": "completed",
+      "terminalState": "released",
+      "host": {
+        "kind": "remote",
+        "id": "ssh-oci-coding-worker"
+      },
+      "workspace": {
+        "id": "314e7b89-8f19-4535-9443-22b342aedff7::/home/developer/projects/aurora/.git/aurora-lanes/product-native-handler-20261009T131300Z",
+        "kind": "folder_or_worktree"
+      },
+      "provider": null,
+      "liveness": {
+        "verdict": "exited",
+        "source": "resource_release"
+      },
+      "evidence": {
+        "durable": true,
+        "liveStatus": "unavailable",
+        "lastObservedAt": null
+      }
+    },
+    {
+      "dispatchId": "ctx_bc0c7a84aa72",
+      "taskId": "task_3d9ac631ac01",
+      "runId": "run_e6054e76e9fc",
+      "terminal": "term_79be10a4-c95c-4621-9554-7b9b081c9906",
+      "workerState": "failed",
+      "dispatchStatus": "failed",
+      "terminalState": "released",
+      "host": {
+        "kind": "remote",
+        "id": "ssh-oci-coding-worker"
+      },
+      "workspace": {
+        "id": "314e7b89-8f19-4535-9443-22b342aedff7::/home/developer/projects/aurora/.git/aurora-lanes/product-native-handler-20261009T131300Z",
+        "kind": "folder_or_worktree"
+      },
+      "provider": null,
+      "liveness": {
+        "verdict": "exited",
+        "source": "resource_release"
+      },
+      "evidence": {
+        "durable": true,
+        "liveStatus": "unavailable",
+        "lastObservedAt": null
+      }
+    },
+    {
+      "dispatchId": "ctx_06633bd0535e",
+      "taskId": "task_0188fcefbe9d",
+      "runId": "run_e6054e76e9fc",
+      "terminal": "term_22b7bc52-9691-4f21-945a-694bd41fc289",
+      "workerState": "succeeded",
+      "dispatchStatus": "completed",
+      "terminalState": "released",
+      "host": {
+        "kind": "remote",
+        "id": "ssh-oci-coding-worker"
+      },
+      "workspace": {
+        "id": "314e7b89-8f19-4535-9443-22b342aedff7::/home/developer/projects/aurora/.git/aurora-lanes/lint",
+        "kind": "folder_or_worktree"
+      },
+      "provider": null,
+      "liveness": {
+        "verdict": "exited",
+        "source": "resource_release"
+      },
+      "evidence": {
+        "durable": true,
+        "liveStatus": "unavailable",
+        "lastObservedAt": null
+      }
+    },
+    {
+      "dispatchId": "ctx_08dde97f59ba",
+      "taskId": "task_b0122388f365",
+      "runId": "run_e6054e76e9fc",
+      "terminal": "term_22b7bc52-9691-4f21-945a-694bd41fc289",
+      "workerState": "succeeded",
+      "dispatchStatus": "completed",
+      "terminalState": "retained",
+      "host": {
+        "kind": "local",
+        "id": "local"
+      },
+      "workspace": {
+        "id": "314e7b89-8f19-4535-9443-22b342aedff7::/home/developer/projects/aurora/.git/aurora-lanes/lint",
+        "kind": "folder_or_worktree"
+      },
+      "provider": null,
+      "liveness": {
+        "verdict": "unverifiable",
+        "reason": "missing_status"
+      },
+      "evidence": {
+        "durable": true,
+        "liveStatus": "unavailable",
+        "lastObservedAt": null
+      }
+    },
+    {
+      "dispatchId": "ctx_39164c6720c0",
+      "taskId": "task_5731c004dc96",
+      "runId": "run_e6054e76e9fc",
+      "terminal": "term_e0919121-93cb-4cf8-9b68-eaa3e328f988",
+      "workerState": "succeeded",
+      "dispatchStatus": "completed",
+      "terminalState": "released",
+      "host": {
+        "kind": "remote",
+        "id": "ssh-oci-coding-worker"
+      },
+      "workspace": {
+        "id": "314e7b89-8f19-4535-9443-22b342aedff7::/home/developer/projects/aurora/.git/aurora-lanes/product-native-handler-20261009T131300Z",
+        "kind": "folder_or_worktree"
+      },
+      "provider": null,
+      "liveness": {
+        "verdict": "exited",
+        "source": "resource_release"
+      },
+      "evidence": {
+        "durable": true,
+        "liveStatus": "unavailable",
+        "lastObservedAt": null
+      }
+    },
+    {
+      "dispatchId": "ctx_ae5008655499",
+      "taskId": "task_14015f9c24c6",
+      "runId": "run_e6054e76e9fc",
+      "terminal": "term_d07c8a5c-7041-4b11-9d06-1c92d0cafe47",
+      "workerState": "succeeded",
+      "dispatchStatus": "completed",
+      "terminalState": "released",
+      "host": {
+        "kind": "remote",
+        "id": "ssh-oci-coding-worker"
+      },
+      "workspace": {
+        "id": "314e7b89-8f19-4535-9443-22b342aedff7::/home/developer/projects/aurora/.git/aurora-lanes/product-native-service-20261009T131300Z",
+        "kind": "folder_or_worktree"
+      },
+      "provider": null,
+      "liveness": {
+        "verdict": "exited",
+        "source": "resource_release"
+      },
+      "evidence": {
+        "durable": true,
+        "liveStatus": "unavailable",
+        "lastObservedAt": null
+      }
+    },
+    {
+      "dispatchId": "ctx_f04283cf05ee",
+      "taskId": "task_b01053f95910",
+      "runId": "run_e6054e76e9fc",
+      "terminal": "term_e0919121-93cb-4cf8-9b68-eaa3e328f988",
+      "workerState": "succeeded",
+      "dispatchStatus": "completed",
+      "terminalState": "retained",
+      "host": {
+        "kind": "local",
+        "id": "local"
+      },
+      "workspace": {
+        "id": "314e7b89-8f19-4535-9443-22b342aedff7::/home/developer/projects/aurora/.git/aurora-lanes/product-native-handler-20261009T131300Z",
+        "kind": "folder_or_worktree"
+      },
+      "provider": null,
+      "liveness": {
+        "verdict": "unverifiable",
+        "reason": "missing_status"
+      },
+      "evidence": {
+        "durable": true,
+        "liveStatus": "unavailable",
+        "lastObservedAt": null
+      }
+    },
+    {
+      "dispatchId": "ctx_add7b691ab69",
+      "taskId": "task_2562072b0f12",
+      "runId": "run_e6054e76e9fc",
+      "terminal": "term_d07c8a5c-7041-4b11-9d06-1c92d0cafe47",
+      "workerState": "succeeded",
+      "dispatchStatus": "completed",
+      "terminalState": "retained",
+      "host": {
+        "kind": "local",
+        "id": "local"
+      },
+      "workspace": {
+        "id": "314e7b89-8f19-4535-9443-22b342aedff7::/home/developer/projects/aurora/.git/aurora-lanes/product-native-service-20261009T131300Z",
+        "kind": "folder_or_worktree"
+      },
+      "provider": null,
+      "liveness": {
+        "verdict": "unverifiable",
+        "reason": "missing_status"
+      },
+      "evidence": {
+        "durable": true,
+        "liveStatus": "unavailable",
+        "lastObservedAt": null
+      }
+    },
+    {
+      "dispatchId": "ctx_86de018e2a6e",
+      "taskId": "task_b4cd3d4e19c7",
+      "runId": "run_e6054e76e9fc",
+      "terminal": "term_e0919121-93cb-4cf8-9b68-eaa3e328f988",
+      "workerState": "succeeded",
+      "dispatchStatus": "completed",
+      "terminalState": "retained",
+      "host": {
+        "kind": "local",
+        "id": "local"
+      },
+      "workspace": {
+        "id": "314e7b89-8f19-4535-9443-22b342aedff7::/home/developer/projects/aurora/.git/aurora-lanes/product-native-handler-20261009T131300Z",
+        "kind": "folder_or_worktree"
+      },
+      "provider": null,
+      "liveness": {
+        "verdict": "unverifiable",
+        "reason": "missing_status"
+      },
+      "evidence": {
+        "durable": true,
+        "liveStatus": "unavailable",
+        "lastObservedAt": null
+      }
+    },
+    {
+      "dispatchId": "ctx_16f34cc9f93d",
+      "taskId": "task_10a677fca8e0",
+      "runId": "run_e6054e76e9fc",
+      "terminal": "term_22b7bc52-9691-4f21-945a-694bd41fc289",
+      "workerState": "succeeded",
+      "dispatchStatus": "completed",
+      "terminalState": "retained",
+      "host": {
+        "kind": "local",
+        "id": "local"
+      },
+      "workspace": {
+        "id": "314e7b89-8f19-4535-9443-22b342aedff7::/home/developer/projects/aurora/.git/aurora-lanes/lint",
+        "kind": "folder_or_worktree"
+      },
+      "provider": null,
+      "liveness": {
+        "verdict": "unverifiable",
+        "reason": "missing_status"
+      },
+      "evidence": {
+        "durable": true,
+        "liveStatus": "unavailable",
+        "lastObservedAt": null
+      }
+    },
+    {
+      "dispatchId": "ctx_99f4285129d8",
+      "taskId": "task_7f8254bf3a67",
+      "runId": "run_e6054e76e9fc",
+      "terminal": "term_e0919121-93cb-4cf8-9b68-eaa3e328f988",
+      "workerState": "succeeded",
+      "dispatchStatus": "completed",
+      "terminalState": "retained",
+      "host": {
+        "kind": "local",
+        "id": "local"
+      },
+      "workspace": {
+        "id": "314e7b89-8f19-4535-9443-22b342aedff7::/home/developer/projects/aurora/.git/aurora-lanes/product-native-handler-20261009T131300Z",
+        "kind": "folder_or_worktree"
+      },
+      "provider": null,
+      "liveness": {
+        "verdict": "unverifiable",
+        "reason": "missing_status"
+      },
+      "evidence": {
+        "durable": true,
+        "liveStatus": "unavailable",
+        "lastObservedAt": null
+      }
+    },
+    {
+      "dispatchId": "ctx_2a55baa27f8c",
+      "taskId": "task_4c1c30d5580f",
+      "runId": "run_e6054e76e9fc",
+      "terminal": "term_d07c8a5c-7041-4b11-9d06-1c92d0cafe47",
+      "workerState": "succeeded",
+      "dispatchStatus": "completed",
+      "terminalState": "retained",
+      "host": {
+        "kind": "local",
+        "id": "local"
+      },
+      "workspace": {
+        "id": "314e7b89-8f19-4535-9443-22b342aedff7::/home/developer/projects/aurora/.git/aurora-lanes/product-native-service-20261009T131300Z",
+        "kind": "folder_or_worktree"
+      },
+      "provider": null,
+      "liveness": {
+        "verdict": "unverifiable",
+        "reason": "missing_status"
+      },
+      "evidence": {
+        "durable": true,
+        "liveStatus": "unavailable",
+        "lastObservedAt": null
+      }
+    },
+    {
+      "dispatchId": "ctx_37b4d0a3c14f",
+      "taskId": "task_d7ea336050cf",
+      "runId": "run_e6054e76e9fc",
+      "terminal": "term_2eab47ed-ab9b-4e35-bd9b-fc068c60e3fc",
+      "workerState": "ready",
+      "dispatchStatus": "dispatched",
+      "terminalState": "retained",
+      "host": {
+        "kind": "remote",
+        "id": "ssh-oci-coding-worker"
+      },
+      "workspace": {
+        "id": "314e7b89-8f19-4535-9443-22b342aedff7::/home/developer/projects/aurora",
+        "kind": "folder_or_worktree"
+      },
+      "provider": {
+        "id": "codex",
+        "model": "gpt-6.1-sol"
+      },
+      "liveness": {
+        "verdict": "live",
+        "observedAt": 1792010549022,
+        "source": "agent_status"
+      },
+      "evidence": {
+        "durable": true,
+        "liveStatus": "fresh",
+        "lastObservedAt": 1792010549022
+      }
+    },
+    {
+      "dispatchId": "ctx_5038dd9c932e",
+      "taskId": "task_7f8254bf3a67",
+      "runId": "run_e6054e76e9fc",
+      "terminal": "term_a5943e6f-ebd2-406f-8ccb-8a5d48c4e48b",
+      "workerState": "failed",
+      "dispatchStatus": "failed",
+      "terminalState": "released",
+      "host": {
+        "kind": "remote",
+        "id": "ssh-oci-coding-worker"
+      },
+      "workspace": {
+        "id": "314e7b89-8f19-4535-9443-22b342aedff7::/home/developer/projects/aurora/.git/aurora-lanes/product-native-handler-20261009T131300Z",
+        "kind": "folder_or_worktree"
+      },
+      "provider": null,
+      "liveness": {
+        "verdict": "exited",
+        "source": "resource_release"
+      },
+      "evidence": {
+        "durable": true,
+        "liveStatus": "unavailable",
+        "lastObservedAt": null
+      }
+    },
+    {
+      "dispatchId": "ctx_070b1c8b7ea4",
+      "taskId": "task_4c1c30d5580f",
+      "runId": "run_e6054e76e9fc",
+      "terminal": "term_e4bf1031-6bd8-4f8d-ae81-dd992697119e",
+      "workerState": "failed",
+      "dispatchStatus": "failed",
+      "terminalState": "released",
+      "host": {
+        "kind": "remote",
+        "id": "ssh-oci-coding-worker"
+      },
+      "workspace": {
+        "id": "314e7b89-8f19-4535-9443-22b342aedff7::/home/developer/projects/aurora/.git/aurora-lanes/product-native-service-20261009T131300Z",
+        "kind": "folder_or_worktree"
+      },
+      "provider": null,
+      "liveness": {
+        "verdict": "exited",
+        "source": "resource_release"
+      },
+      "evidence": {
+        "durable": true,
+        "liveStatus": "unavailable",
+        "lastObservedAt": null
+      }
+    },
+    {
+      "dispatchId": "ctx_9a2b5bce7eea",
+      "taskId": "task_d7ea336050cf",
+      "runId": "run_e6054e76e9fc",
+      "terminal": "term_4f0947f9-9f4b-47f1-872f-fd0495d51783",
+      "workerState": "failed",
+      "dispatchStatus": "failed",
+      "terminalState": "released",
+      "host": {
+        "kind": "remote",
+        "id": "ssh-oci-coding-worker"
+      },
+      "workspace": {
+        "id": "314e7b89-8f19-4535-9443-22b342aedff7::/home/developer/projects/aurora",
+        "kind": "folder_or_worktree"
+      },
+      "provider": null,
+      "liveness": {
+        "verdict": "exited",
+        "source": "resource_release"
+      },
+      "evidence": {
+        "durable": true,
+        "liveStatus": "unavailable",
+        "lastObservedAt": null
+      }
+    },
+    {
+      "dispatchId": "ctx_d0d23422b291",
+      "taskId": "task_d7ea336050cf",
+      "runId": "run_e6054e76e9fc",
+      "terminal": "term_276a3e36-1d15-44bb-beb7-f714d30e1796",
+      "workerState": "failed",
+      "dispatchStatus": "failed",
+      "terminalState": "released",
+      "host": {
+        "kind": "remote",
+        "id": "ssh-oci-coding-worker"
+      },
+      "workspace": {
+        "id": "314e7b89-8f19-4535-9443-22b342aedff7::/home/developer/projects/aurora",
+        "kind": "folder_or_worktree"
+      },
+      "provider": null,
+      "liveness": {
+        "verdict": "exited",
+        "source": "resource_release"
+      },
+      "evidence": {
+        "durable": true,
+        "liveStatus": "unavailable",
+        "lastObservedAt": null
+      }
+    }
+  ],
+  "workerRead": {
+    "receipt": "261a27d9-9de9-4070-adad-ff7f0ff86a93",
+    "dispatch": "ctx_37b4d0a3c14f",
+    "source": "transcript",
+    "status": {
+      "worker": "ready",
+      "terminal": "running",
+      "liveness": "live"
+    },
+    "sourceExact": true,
+    "contentComplete": false,
+    "clipping": [
+      "message_limit_or_scan_window"
+    ],
+    "provider": {
+      "id": "codex",
+      "model": "gpt-6.1-sol"
+    },
+    "liveness": {
+      "verdict": "live",
+      "observedAt": 1792010569415,
+      "source": "agent_status"
+    }
+  },
+  "root": {
+    "receipt": "62e22ea1-c49f-4e90-8c43-2c9ebf5dd301",
+    "terminal": "term_6a00d9ee-792a-4daf-8578-236290e33108",
+    "status": "running",
+    "activity": "preserves final300 epoch; actual runner+controller terminal gate before export; fullvoice separateunfinished",
+    "modelEffortDisplayed": "GPT-6.1-Sol xhigh"
+  },
+  "lastDatedGPUReceipt": {
+    "actual_at": "2026-10-14T20:35:45.475935Z",
+    "runner_pid": 2749456,
+    "runner_start": 63725869,
+    "runner_parent": 2749455,
+    "controller_pid": 2707431,
+    "route": "api",
+    "epoch": 3,
+    "measured": 211,
+    "warmups": 5,
+    "correct": 216,
+    "closed_api_measured": 600,
+    "closed_api_warmups": 10,
+    "closed_api_epochs": 2,
+    "api_total_measured": 811,
+    "closed_local_measured": 900,
+    "closed_local_warmups": 15,
+    "closed_local_epochs": 3,
+    "local900_condition_closed": true,
+    "api_started": true,
+    "both_pids_present": true,
+    "started": "2026-10-14T20:15:50.235441Z",
+    "active_epoch_deadline": "2026-10-14T21:10:50.235441Z",
+    "active_outer_deadline": "2026-10-14T21:11:40.235441Z",
+    "overall_deadline": "2026-10-14T23:32:39.837483Z",
+    "source_message": "msg_abf75ab2b1f4",
+    "source": null,
+    "source_sha256": null,
+    "gpu_full_individual_finished": false,
+    "dual_barrier": false,
+    "next_observe": "naturalterminal or2026-10-14T20:45Z",
+    "source_terminal": "term_6a00d9ee-792a-4daf-8578-236290e33108",
+    "source_receipt": "010ad4d5-5bde-433c-aa63-cda41f6d91cb"
+  },
+  "interpretation": "Only original monitor verifiedlive in complete sameRunworkerlist; Root/nativehelpers separate. No newlydispatchedworkers. Unverifiable is not exit/absence. No stop/release/adoption/source/test operation bymonitor. Post-terminal raw privacy guard active.",
+  "nextFleetUtc": "2026-10-14T21:13Z"
+}
+

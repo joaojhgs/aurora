@@ -1,0 +1,26 @@
+{
+  "at": "2026-10-19T23:25:31.849733+00:00",
+  "originalRootGoal": "01a112a5-d6bb-74e2-bf7c-ace73cb513b5",
+  "rootActualNativeStatus": "active",
+  "originalMonitorGoal": "01a123ff-19ba-7332-a2f7-346a722af79f",
+  "monitorActualNativeStatus": "active",
+  "monitorActualGetSnapshot": "thesis/evidence/orca-desktop-recovery-20261019T2321/ORIGINAL-MONITOR-NATIVE-ACTIVE-v1648.json",
+  "monitorActualGetSnapshotSha256": "685611a33ed09acdd640e8b7cf0264285b75b44a31c6cf8b6104feedf4169d70",
+  "monitorResumeRequest": "175e4a6b-5e1f-408f-bc88-6f2f3f30c9da",
+  "monitorResumeSendCount": 1,
+  "monitorResumeStages": [
+    "input_accepted",
+    "turn_started"
+  ],
+  "pendingResume": false,
+  "actualPersonalCommand": "d390101e-3f12-4e05-9427-58ab54839a6e",
+  "actualPersonalResult": "REJECTED terminal_not_writable; NOTexecuted; no resend",
+  "exactFailureReceipt": "thesis/evidence/orca-desktop-recovery-20261019T2321/ACTUAL-RECOVERY-CHECK-REJECTED-v1646.json",
+  "oldProviderDeadlineExpired": true,
+  "providerLivenessOrRetirement": "UNKNOWN; no read command executed",
+  "providerReservationRenewal": false,
+  "newModelsOrTestsOrWorkers": 0,
+  "freshRootBlockedAuditTurns": 1,
+  "full13Complete": false,
+  "nextExecutionDependency": "Owning Orca restore normal writes to SAME existing Personal terminal/incarnation; then first reconcile original provider/process/results/expired admission and retrieve saved raw delta before any new inference."
+}

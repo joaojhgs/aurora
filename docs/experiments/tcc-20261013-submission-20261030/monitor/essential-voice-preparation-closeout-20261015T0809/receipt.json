@@ -1,0 +1,92 @@
+{
+  "at": "2026-10-15T08:09:00Z",
+  "run": "run_e6054e76e9fc",
+  "task": "task_d7ea336050cf",
+  "dispatch": "ctx_37b4d0a3c14f",
+  "originalRootGoal": "01a112a5-d6bb-74e2-bf7c-ace73cb513b5",
+  "nudge": "msg_3d9914efd88e",
+  "RootAck": "msg_e0a20f1a0c7b",
+  "finalRootReceipt": {
+    "messageId": "msg_72bdb8cc2ddd",
+    "at": "2026-10-15T08:00:45Z",
+    "closedSourceTask": true,
+    "existingLunaDeliveredWithinCap": true,
+    "RootOneMissedAwaitIntegrationFix": true,
+    "SolFixOnlyClosureApprovedExactHash": true,
+    "artifact": {
+      "path": ".git/aurora-handoff-import-20261006/product-voice-future-v533/voice-flow.mjs",
+      "bytes": 19632,
+      "sha256": "360da0977025a7daf7a315c1e1c90a42ee23bfb2be650c8eb17d985be16bdb8e",
+      "mode": "0600",
+      "NodeSyntaxCheck": "PASS",
+      "matchesMonitorPreviouslyObservedMetadata": true
+    },
+    "closeoutPath": ".git/aurora-handoff-import-20261006/product-voice-future-v533/source-closeout-v534.json",
+    "admittedSourceScope": "hashverified file-backedbrowsermic/normalUInewconversationPTTstop -> realSTT -> visibleLLM only",
+    "strictTranscriptAndParisReplyPredicates": true,
+    "requiresExistingSavedApprovedChromeProfilePriorConsent": true,
+    "diagnosticAttemptInspectionAndCleanupBounded": true,
+    "sourceOnlyNoExecution": true,
+    "unknowns": [
+      "realSDK/profilebindingnotadmitted",
+      "TTSvalidaudio",
+      "TTS/stagecorrelation",
+      "physicalaudio",
+      "native"
+    ],
+    "notFullAudioAcceptance": true,
+    "nextRootGate": "after HTTPnatural seal, existing-approvedorigin/profile/backend+resourceadmission then ONEboundedpilot",
+    "noReopenSourceHelper": true,
+    "HTTP": {
+      "at": "2026-10-15T07:57:00Z",
+      "bothOriginalLive": true,
+      "measured": 137,
+      "warmups": 15,
+      "unattempted": 763,
+      "latestOutcomeOnly": "completed_correct",
+      "RAMavailableBytes": 2165121024,
+      "rootVolumeFreeBytes": 354107392,
+      "shmFreeBytes": 560439296
+    },
+    "CPU": {
+      "at": "2026-10-15T07:57:00Z",
+      "bothOriginalLive": true,
+      "measured": 298,
+      "warmups": 15,
+      "unattempted": 602,
+      "latestOutcomeOnly": "completed_correct",
+      "RAMavailableBytes": 4695425024,
+      "campaignVolumeFreeBytes": 10487730176
+    },
+    "RootNativeOriginalGoalActiveUnbudgeted": true,
+    "full13Unchanged": true,
+    "noMeasuredCrossDeviceBeforeAllIndividualAudioSurfaceSeals": true
+  },
+  "closeoutVerification": {
+    "path": ".git/aurora-handoff-import-20261006/product-voice-future-v533/source-closeout-v534.json",
+    "bytes": 1380,
+    "sha256": "c0fbb4b32463697f7b7068905a53590610b197ddb318e5ba74a970e5c28b4198",
+    "RootCreatedAt": "2026-10-15T08:00:15.247345Z",
+    "fullRead": true,
+    "artifactSHA256Matches": "360da0977025a7daf7a315c1e1c90a42ee23bfb2be650c8eb17d985be16bdb8e",
+    "RootNodeSyntaxPassAndSolExactHashApproval": true,
+    "executed": false,
+    "sourceOnlyScope": [
+      "file-backedbrowsermicrophone",
+      "realSTT",
+      "visibleLLM"
+    ],
+    "remaining": [
+      "realSDK/providerandapprovedprofilebinding",
+      "TTSvalidaudioandstagecorrelation",
+      "physicalmicrophone/playback",
+      "native/mobile"
+    ],
+    "RootOneBoundedPilotAfterHTTPNaturalSealAndAdmission": true,
+    "noReOpenSourceHelper": true
+  },
+  "noExecutionOrSourceReReviewByMonitor": true,
+  "noNewWorkers": true,
+  "monitorGoalActive": true,
+  "workerDoneSent": false
+}

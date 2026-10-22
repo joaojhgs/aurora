@@ -1,0 +1,43 @@
+{
+  "at": "2026-10-18T17:43:03.793592+00:00",
+  "classification": "UNADMITTED_SETUP_HARNESS_PIN_FAILURE_NOT_MODEL_FAILURE",
+  "cohort": "V1562",
+  "frozenManifestSha256": "f5381b6f24422bd61a4a41b3a561c7be8bd7f20bd05dcf7bff6caf67cf1a5426",
+  "excludedCorrectWarmups": 15,
+  "measured": 0,
+  "unattemptedMeasured": 184,
+  "gateStopReason": "remote_stage_proof_deadline",
+  "staleCollectorPin": "40ac64685ffb078b9d9aa983916d20df9c218badc40ae46b29c7398e4a0d259f",
+  "correctFrozenProofSourcePin": "7f835922ac407f8e39363967192968f309b5dd6d873052aa736de47e5eaca8c2",
+  "savedActualNativeJoinsRecovered": 45,
+  "newSutCallsForRecovery": 0,
+  "runtimeResurrectedOrOldProofPublished": false,
+  "retiredOriginalProcesses": [
+    {
+      "pid": 1343280,
+      "originalStartTicks": 112272114,
+      "originalProcessRetired": true
+    },
+    {
+      "pid": 1343339,
+      "originalStartTicks": 112273198,
+      "originalProcessRetired": true
+    },
+    {
+      "pid": 1343281,
+      "originalStartTicks": 112272115,
+      "originalProcessRetired": true
+    },
+    {
+      "pid": 1343282,
+      "originalStartTicks": 112272116,
+      "originalProcessRetired": true
+    }
+  ],
+  "setupDurationChargedSeconds": 652.5055120009999,
+  "newCumulativeUsedConditionSeconds": 23516.074452657,
+  "cumulativeConditionCapSeconds": 57600,
+  "prior716MeasuredAttemptsAnd2FailuresUnchanged": true,
+  "personalControlReleasedCursor": "56875",
+  "noSourceManifestOrSettingsChangedDuringFrozenRun": true
+}

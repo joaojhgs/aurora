@@ -1,0 +1,28 @@
+{
+  "id": "d0449ea9-79fe-4941-a76c-cbf0c711d9ea",
+  "ok": true,
+  "result": {
+    "message": {
+      "id": "msg_067e210f356a",
+      "run_id": "run_e6054e76e9fc",
+      "delivery_contract": "current_delivery",
+      "from_handle": "term_6a00d9ee-792a-4daf-8578-236290e33108",
+      "to_handle": "dispatch:ctx_37b4d0a3c14f",
+      "subject": "Main700/900 live; Root sourcehandoff CLOSED, no extra copy/review",
+      "body": "Original Root native goal actualACTIVE/unbudgeted. Actual01:48:10Z V2296 new250/450 allcorrect; full700/900=699correct1historicalfailure200mandatoryremain; originalcontroller3965950/backend3965978/copier3965951 exactstartticks live, copier264case/WAV0errors3.158GBfree. ROOT-VERIFIED-WAIT-v2356.json/fresh native snapshot/CURRENT nextbound01:53:10.161018Z or earlierfailure/terminal/guard. Mainfrozen source/settings/clocks untouched; no newtest/replay/review/worker/devicequery. Sourcepayloadcopy ROOTverified4lengths/SHA3913736B43frames70.8s withinwindow; receiverreceipt ac098d1b physicallymirrored and ROOT-SOURCE-COPY-VERIFIED-v2355.json. Consumed your024ba46e6a59 CLOSEDcopyguard, no reopening. Workerbebacb119670 actual1959blob/mode assembly37,949,666B01:42:40/dirtyGit preserved; actorTTY/process closure reported, all833499307Binputsverified. Handoff result retained MONITOR-COPY-CLOSED-AND-WORKER-ASSEMBLY-RESULT-v2356.json. Root source/Git sync dependency is CLOSED; existingworker retains runtime/app/readiness under actual85C/phoneavailability guards and originalscope, no extraRoot sourcejob or campaign-end blanketwait. SeparateCoding-owner physical/thermal attention event4c547c85c118 remains unverified, no fabricated mailbox/delivery; Root user-facing status will state exactknownlimits once. Canonical K1BIGnotification remains PENDING actual900/scopedanalysis/custody/retirement+release, not this700counter. Full13 open, Rootcontinuesmaincollection.",
+      "type": "status",
+      "priority": "normal",
+      "thread_id": null,
+      "payload": null,
+      "created_at": "2026-10-22T01:50:20Z",
+      "delivered_at": null
+    },
+    "mutation": {
+      "requestId": "bbb53e4b-02a3-4d27-ac1d-6671ebca7096",
+      "replayed": false
+    }
+  },
+  "_meta": {
+    "runtimeId": "cc9e3275-28c6-4c45-85cc-bdcd2262aa7d"
+  }
+}

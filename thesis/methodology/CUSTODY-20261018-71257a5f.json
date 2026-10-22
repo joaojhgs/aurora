@@ -1,0 +1,16 @@
+{
+  "at": "2026-10-18T14:19:36.385040+00:00",
+  "status": "COMPLETE_CANONICAL_FULL_PLAN_30_55_PHYSICAL_COPY",
+  "source": ".omx/evidence/orca-monitor-20261010/authoritative-plan-30.55-20261018T141346942784Z-after.md",
+  "destination": "thesis/methodology/owner-requirements-20261018-71257a5f.md",
+  "bytes": 572088,
+  "sha256": "71257a5f21339c77726dd67121bfe3d2b77f104cf54156b15c4ca0fb5a6533c2",
+  "previousCanonical": "thesis/methodology/owner-requirements-20261018-2d81ca2a.md",
+  "previousBytes": 557225,
+  "previousPrefixPreserved": true,
+  "sourceWriter": "Original monitor",
+  "destinationWriter": "Original Root",
+  "newRuntimeRequests": 0,
+  "freeBytesBefore": 5937864704,
+  "freeBytesAfter": 5937291264
+}

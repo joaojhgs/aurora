@@ -1,0 +1,62 @@
+{
+  "at": "2026-10-20T01:49:41.052936+00:00",
+  "status": "SAVED_FINAL_CONTROL_SNAPSHOT_HAS_EXACT_PEER_SELECTED_DIRECT_UDP_ROUTE",
+  "source": "thesis/campaigns/worker-desktop-normal-pair-v1663/PERSONAL-FINAL-STATUS-v1668.json",
+  "sourceBytes": 7849,
+  "sourceSha256": "c54f0dc8cc26b186e9f5df6e00a0d47df98ca50ae3feb50f8c566ceadd8eeaee",
+  "historicalControlPid": 2960427,
+  "sourceFinalStatusAt": "2026-10-20T00:18:44.200237+00:00",
+  "historicalControlRetired": true,
+  "observedRoute": {
+    "sampled_monotonic_ns": 211042649468148,
+    "clock_domain": "python.monotonic_ns:pid:2960427",
+    "pid": 2960427,
+    "peer_id_sha256": "557ac4a75a8f44d5afcb0babca83e79600fe2317f3f896fcb12c49a826d63614",
+    "session_peer_id_sha256": "cabba5bf892ec88ea54d3ce461f704d89750b7f9a992b5c04c5829402f81b6bd",
+    "peer_connection_instance_sha256": "7257775d05f801b63fe60aa346cf6bba055c21d5638a4185569b69a531f04ea7",
+    "status": "selected_nominated_pair_observed",
+    "selected_pairs": [
+      {
+        "component": 1,
+        "ice_transport_ordinal": 1,
+        "pair_state": "succeeded",
+        "nominated": true,
+        "local_candidate_type": "host",
+        "remote_candidate_type": "srflx",
+        "local_protocol": "udp",
+        "remote_protocol": "udp",
+        "path_class": "direct"
+      }
+    ]
+  },
+  "stablePeerHashMatchesDiagnostic": true,
+  "signalingSessionHashMatchesDiagnostic": true,
+  "trust": [
+    {
+      "peerIdSha256": "557ac4a75a8f44d5afcb0babca83e79600fe2317f3f896fcb12c49a826d63614",
+      "inboundStatus": "approved",
+      "outboundStatus": "approved",
+      "inboundPermissions": [
+        "Gateway.GetRegistry",
+        "Gateway.GetMeshStatus",
+        "TTS.Synthesize"
+      ],
+      "outboundPermissions": [
+        "Gateway.GetRegistry",
+        "Gateway.GetMeshStatus",
+        "TTS.Synthesize"
+      ]
+    }
+  ],
+  "workerRouteObservation": "NOT INSTRUMENTED in that control window",
+  "newRuntimeRequests": 0,
+  "sourceEdits": 0,
+  "causeCorrection": "Earlier intermediate exact_peer_connection_missing/UNKNOWN claim was stale after final saved snapshot; no observer defect established and no patch or control re-run required",
+  "evidenceLimit": "One historical nominated-pair snapshot at Personal endpoint; not continuous route stability, current liveness, model-service route admission, per-request actual P2P measurement or throughput",
+  "remainingActualAdmission": [
+    "Fresh actual paired-model provider/service catalog and normal-authority eligibility",
+    "Existing exact-peer typed MeshBus TTS requester binding",
+    "Actual new call route plus native model correlation in ordinary readiness/warmups",
+    "Frozen matched condition source/models/runtime/resources/counts and finite caps before900measured"
+  ]
+}

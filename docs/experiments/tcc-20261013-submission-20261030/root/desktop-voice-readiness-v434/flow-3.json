@@ -1,0 +1,69 @@
+{
+  "at": "2026-10-14T21:45:40.251273+00:00",
+  "host": "personal.skyron-server",
+  "pilotPid": 2787815,
+  "pilotPidPresent": false,
+  "backendPid": 2786324,
+  "backendPidPresent": true,
+  "expectedWorkloadSHA256": "0335716ce5d0bb172a4cbe675b4752f0ab1fd661db179a1793b2c3a1a6f30dfe",
+  "resultBytes": 2175,
+  "result": {
+    "backend_config_sha256": "3a5a17bf1ffb310146131400ea7fce9f9d6a0fc049405c8252391a37d8baaad4",
+    "clock_domain": "browser.performance",
+    "elapsed_ms": 845.7,
+    "failure_code": "full_voice_stage_failed",
+    "input_audio_sha256": "2f6361506708d0a3065a339d168c9db5412e343683dd9b4080471d8948bf82ae",
+    "outcome": "failed",
+    "schema_version": "aurora.production_full_voice_pilot_result.v1",
+    "session_id": "75d3c6b5-2084-4eba-9b59-0a40ed74e7df",
+    "stages": [
+      {
+        "clock_domain": "browser.performance",
+        "duration_ms": 20.6,
+        "ended_ms": 285.7,
+        "outcome": "completed",
+        "session_id_present": true,
+        "stage": "session_create",
+        "stage_attempt_id": "bc602108-fec5-4a1c-8796-8aaedc327995",
+        "started_ms": 265.1
+      },
+      {
+        "channels": 1,
+        "clock_domain": "browser.performance",
+        "duration_ms": 797,
+        "ended_ms": 1082.8,
+        "expected_normalized_transcript_sha256": "0678fa1c7a18a8cfaa248f06053bffdb2057516958fe3a6c86e2c625c457c973",
+        "input_audio_sha256": "2f6361506708d0a3065a339d168c9db5412e343683dd9b4080471d8948bf82ae",
+        "model_used": "realtime",
+        "normalized_transcript_match": false,
+        "normalized_transcript_sha256": "c695272c62ef09ddecac511dfe33a2713bdcf0d57608517906a5e088064ec139",
+        "outcome": "predicate_failed",
+        "parent_session_id_present": true,
+        "sample_rate": 22050,
+        "stage": "stt_transcribe",
+        "stage_attempt_id": "572f6431-c1c4-4a25-a487-18efcb3f98c9",
+        "started_ms": 285.8,
+        "transcript_sha256": "92e847fc22f5457e712e0e0fd816b0bef2d77b70a364aad23824f5e0c374b872"
+      },
+      {
+        "assistant_generation_settings_sha256": "f4cf841be947416a1b8428d372c2018993e0e76d7eed021b6e395c68eec0e046",
+        "assistant_model_metadata_match": false,
+        "clock_domain": "browser.performance",
+        "correlation_id": "862323a4-0b71-4d51-9b3c-f40b20d08e95",
+        "duration_ms": 24.4,
+        "ended_ms": 1109.7,
+        "expected_answer_match": false,
+        "input_transcript_sha256": "92e847fc22f5457e712e0e0fd816b0bef2d77b70a364aad23824f5e0c374b872",
+        "outcome": "predicate_failed",
+        "parent_session_id_present": true,
+        "request_id": "e85f6b54-fcd9-4517-9271-958d9d043a1e",
+        "response_sha256": "511b1c8154b4f7098319aca9dab3f51c589aed6a54577d141781873960252d13",
+        "stage": "orchestrator_external_user_input",
+        "stage_attempt_id": "e85f6b54-fcd9-4517-9271-958d9d043a1e",
+        "started_ms": 1085.3
+      }
+    ],
+    "workload_manifest_sha256": "0335716ce5d0bb172a4cbe675b4752f0ab1fd661db179a1793b2c3a1a6f30dfe"
+  },
+  "resultSHA256": "ff9ae92dfb7f42966fb2aa312766ed1cb81e0dae11b1beb10e07cd5da5e7b459"
+}

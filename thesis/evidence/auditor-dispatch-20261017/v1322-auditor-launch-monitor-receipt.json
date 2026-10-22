@@ -1,0 +1,28 @@
+{
+  "id": "22f60a2a-b198-44ac-a31e-5c456e541170",
+  "ok": true,
+  "result": {
+    "message": {
+      "id": "msg_74500f42fbd4",
+      "run_id": "run_e6054e76e9fc",
+      "delivery_contract": "current_delivery",
+      "from_handle": "term_6a00d9ee-792a-4daf-8578-236290e33108",
+      "to_handle": "dispatch:ctx_37b4d0a3c14f",
+      "subject": "Actual auditor launched once: Task/Dispatch/terminal and exclusive file claim",
+      "body": "ACTUAL launch succeeded via normal orchestration worker-start after owner CLI bug fix. Original stable request15142b33-da95-45c7-b9fd-6303d9cb3d61 replayed false; same original Run. Task task_c626834bf1c6 -> Dispatch ctx_dda469327d6f; terminal term_ce58b81d-c119-46dd-b816-6792a29065db; prompt processIncarnation81a53f3a-88d2-4976-a141-8b1a21766b8b (terminal incarnation being verified separately). state ready/stage input_accepted/turnStart observed. Requested AND EFFECTIVE Codex gpt-6.1-sol/xhigh. Existing exact workspace reused; no setup/new worktree/root/goal/credentials/forward. Receipt physically thesis/evidence/auditor-dispatch-20261017/WORKER-START-v1320.json; admission ADMISSION-v1320.json. Exclusive auditor files thesis/audit/20261017-data-and-results/ only; saved-data inventory/loss impact/all-results/reproducible single saved-data smoke, no benchmarks/builds/inference/device/application traffic or commits. Initial128MiB imports,4MiB/s IO,2GiB floor, remote windows through Root. Original monitor remains sole methodology writer; Root sole execution/reservations. K1 just observed133/900+15warmups running, latest completed_correct, no terminal summary. Please convey actual receipt to Coding through established route; audit accepted input is not completed audit. UI discoverability warning does not negate observed running turn; no focus or relaunch needed.",
+      "type": "status",
+      "priority": "normal",
+      "thread_id": null,
+      "payload": null,
+      "created_at": "2026-10-17T22:13:42Z",
+      "delivered_at": null
+    },
+    "mutation": {
+      "requestId": "4a99d832-b0d4-4ff2-869b-ca473f627145",
+      "replayed": false
+    }
+  },
+  "_meta": {
+    "runtimeId": "cc9e3275-28c6-4c45-85cc-bdcd2262aa7d"
+  }
+}

@@ -1,0 +1,122 @@
+{
+  "at": "2026-10-16T09:53:07.612903+00:00",
+  "host": "code-worker",
+  "scope": "bounded transport diagnosis after actual first distributed warmup failed; no inference/auth/credential/config change",
+  "commands": [
+    {
+      "argv": [
+        "ip",
+        "-j",
+        "route",
+        "get",
+        "100.64.0.3"
+      ],
+      "exitCode": 0,
+      "result": [
+        {
+          "dst": "100.64.0.3",
+          "gateway": "10.0.2.1",
+          "dev": "enp0s6",
+          "prefsrc": "10.0.2.123",
+          "flags": [],
+          "uid": 1002,
+          "cache": []
+        }
+      ]
+    },
+    {
+      "argv": [
+        "ip",
+        "-j",
+        "address",
+        "show"
+      ],
+      "exitCode": 0,
+      "result": [
+        {
+          "ifindex": 1,
+          "ifname": "lo",
+          "flags": [
+            "LOOPBACK",
+            "UP",
+            "LOWER_UP"
+          ],
+          "mtu": 65536,
+          "qdisc": "noqueue",
+          "operstate": "UNKNOWN",
+          "group": "default",
+          "txqlen": 1000,
+          "link_type": "loopback",
+          "address": "00:00:00:00:00:00",
+          "broadcast": "00:00:00:00:00:00",
+          "addr_info": [
+            {
+              "family": "inet",
+              "local": "127.0.0.1",
+              "prefixlen": 8,
+              "scope": "host",
+              "label": "lo",
+              "valid_life_time": 4294967295,
+              "preferred_life_time": 4294967295
+            },
+            {
+              "family": "inet6",
+              "local": "::1",
+              "prefixlen": 128,
+              "scope": "host",
+              "noprefixroute": true,
+              "valid_life_time": 4294967295,
+              "preferred_life_time": 4294967295
+            }
+          ]
+        },
+        {
+          "ifindex": 2,
+          "ifname": "enp0s6",
+          "flags": [
+            "BROADCAST",
+            "MULTICAST",
+            "UP",
+            "LOWER_UP"
+          ],
+          "mtu": 9000,
+          "qdisc": "fq_codel",
+          "operstate": "UP",
+          "group": "default",
+          "txqlen": 1000,
+          "link_type": "ether",
+          "address": "02:00:17:00:b4:00",
+          "broadcast": "ff:ff:ff:ff:ff:ff",
+          "addr_info": [
+            {
+              "family": "inet",
+              "local": "10.0.2.123",
+              "prefixlen": 24,
+              "metric": 100,
+              "broadcast": "10.0.2.255",
+              "scope": "global",
+              "dynamic": true,
+              "label": "enp0s6",
+              "valid_life_time": 75325,
+              "preferred_life_time": 75325
+            },
+            {
+              "family": "inet6",
+              "local": "fe80::17ff:fe00:b400",
+              "prefixlen": 64,
+              "scope": "link",
+              "valid_life_time": 4294967295,
+              "preferred_life_time": 4294967295
+            }
+          ]
+        }
+      ]
+    }
+  ],
+  "tcp": {
+    "connected": false,
+    "errorClass": "ConnectionRefusedError",
+    "errno": 111,
+    "error": "[Errno 111] Connection refused"
+  }
+}

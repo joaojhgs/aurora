@@ -1,0 +1,117 @@
+{
+  "schema": "aurora.notebook.matched-input-preparation.v1",
+  "at": "2026-10-20T07:34:29.650863+00:00",
+  "status": "SAVED_INPUT_PROVENANCE_PREPARED_NO_ACQUISITION_OR_BUILD",
+  "assets": [
+    {
+      "bytes": 563036064,
+      "path": "/home/developer/projects/aurora/.artifacts/local-inference/models/Qwen3.5-0.8B-Q4_0.gguf",
+      "sha256": "57d1997790d1744fba5b40a7317df71ea5e2acee28c47e78f0cce39c0703f8cf",
+      "name": "Qwen3.5-0.8B-Q4_0.gguf",
+      "acquisition": "Existing exact retained copy or pinned public upstream at admitted window",
+      "pinnedUrl": "https://huggingface.co/ggml-org/Qwen3.5-0.8B-GGUF/resolve/9447f74101aeb4e93621884dfa36ee8effb8831b/Qwen3.5-0.8B-Q4_0.gguf"
+    },
+    {
+      "bytes": 2309,
+      "path": "/home/developer/.cache/huggingface/hub/models--Systran--faster-whisper-base/snapshots/ebe41f70d5b6dfa9166e2c581c45c9c0cfc57b66/config.json",
+      "sha256": "56a6d8110d311f19c8f0471e562832c7527f146b567275bfca59fcf7c184da9a",
+      "name": "whisper-base/config.json",
+      "pinnedUrl": "https://huggingface.co/Systran/faster-whisper-base/resolve/ebe41f70d5b6dfa9166e2c581c45c9c0cfc57b66/config.json"
+    },
+    {
+      "bytes": 145217532,
+      "path": "/home/developer/.cache/huggingface/hub/models--Systran--faster-whisper-base/snapshots/ebe41f70d5b6dfa9166e2c581c45c9c0cfc57b66/model.bin",
+      "sha256": "d01c3014881c9c6f3133c182f3d2887eb6ca1c789a7538c5c007196857a0a6a9",
+      "name": "whisper-base/model.bin",
+      "pinnedUrl": "https://huggingface.co/Systran/faster-whisper-base/resolve/ebe41f70d5b6dfa9166e2c581c45c9c0cfc57b66/model.bin"
+    },
+    {
+      "bytes": 2203239,
+      "path": "/home/developer/.cache/huggingface/hub/models--Systran--faster-whisper-base/snapshots/ebe41f70d5b6dfa9166e2c581c45c9c0cfc57b66/tokenizer.json",
+      "sha256": "fb7b63191e9bb045082c79fd742a3106a12c99513ab30df4a0d47fa6cb6fd0ab",
+      "name": "whisper-base/tokenizer.json",
+      "pinnedUrl": "https://huggingface.co/Systran/faster-whisper-base/resolve/ebe41f70d5b6dfa9166e2c581c45c9c0cfc57b66/tokenizer.json"
+    },
+    {
+      "bytes": 459861,
+      "path": "/home/developer/.cache/huggingface/hub/models--Systran--faster-whisper-base/snapshots/ebe41f70d5b6dfa9166e2c581c45c9c0cfc57b66/vocabulary.txt",
+      "sha256": "34ce3fe1c5041027b3f8d42912270993f986dbc4bb34cf27f951e34a1e453913",
+      "name": "whisper-base/vocabulary.txt",
+      "pinnedUrl": "https://huggingface.co/Systran/faster-whisper-base/resolve/ebe41f70d5b6dfa9166e2c581c45c9c0cfc57b66/vocabulary.txt"
+    },
+    {
+      "bytes": 63531379,
+      "path": "/home/developer/projects/aurora/.git/aurora-handoff-import-20261006/cpu-full-audio-v483/models/en_US-ljspeech-medium.onnx",
+      "sha256": "6f52a751e2349abe7a76735eb09dc1875298c77ea2342ffd2fef79ff81b87f22",
+      "name": "en_US-ljspeech-medium.onnx",
+      "acquisition": "Copy exact existing retained licensed model/config at admitted window; no invented URL"
+    },
+    {
+      "bytes": 4972,
+      "path": "/home/developer/projects/aurora/.git/aurora-handoff-import-20261006/cpu-full-audio-v483/models/en_US-ljspeech-medium.onnx.json",
+      "sha256": "141d612cc0a95ed7efc1ca936b845c2364967f2e9217c5dbfcf69fc4d6c65860",
+      "name": "en_US-ljspeech-medium.onnx.json",
+      "acquisition": "Copy exact existing retained licensed model/config at admitted window; no invented URL"
+    }
+  ],
+  "totalModelAndAuxiliaryBytes": 774455356,
+  "audio": {
+    "path": "thesis/harness/distributed-k2-mesh-v1731/candidate-input.wav",
+    "bytes": 219794,
+    "sha256": "da0ecc4ad0885746ab6e716585473917ab2b543a505bf0db09ebacfaa7943cbb",
+    "actualPhysicalCopyVerified": true
+  },
+  "referenceRuntime": {
+    "packages": {
+      "ctranslate2": "4.7.1",
+      "faster-whisper": "1.1.1",
+      "llama-cpp-python": "0.3.19",
+      "numpy": "2.2.6",
+      "onnxruntime": "1.20.1",
+      "piper-tts": "1.2.0"
+    },
+    "compiledBackend": "Original restoration source explicitly builds llama-cpp-python0.3.19 from source with GGML_VULKAN=ON and GGML_NATIVE=OFF, two compile jobs, user-local tools; version equality alone is not matching acceleration proof.",
+    "originalCompilerCapSeconds": 900,
+    "originalTotalRecoveryCapSeconds": 2100,
+    "newNotebookExecutionCaps": "Not yet admitted; original recovery is preserved reference source, not a notebook launch command.",
+    "actualNotebookLoadedBackend": "UNPROVEN",
+    "configuration": {
+      "chat_format": "chatml-function-calling",
+      "max_tokens": 128,
+      "min_p": 0.0,
+      "model_path": "/home/developer/projects/aurora/.git/aurora-handoff-import-20261006/k1-provider-recovery-v1120/models/Qwen3.5-0.8B-Q4_0.gguf",
+      "n_batch": 64,
+      "n_ctx": 4096,
+      "n_gpu_layers": 100,
+      "n_threads": 2,
+      "repeat_penalty": 1.0,
+      "seed": 42,
+      "temperature": 0.0,
+      "top_k": 1,
+      "top_p": 1.0,
+      "verbose": true
+    }
+  },
+  "savedSourceCopies": [
+    {
+      "source": ".git/aurora-handoff-import-20261006/provider-recovery-v1120.py",
+      "copy": "thesis/evidence/personal-notebook-readiness-20261020/matched-input-preparation-v1746/provider-recovery-v1120.py",
+      "bytes": 9478,
+      "sha256": "532d4e64623247cc46e88289aefbdc9190fcdde1aa15259cbe00525322f9ca4b"
+    },
+    {
+      "source": "thesis/campaigns/worker-desktop-k2-orca-relayed-http-v1264/runtime-admission-v1383/v1382-k2-existing-gpu-config-RESULT.json",
+      "copy": "thesis/evidence/personal-notebook-readiness-20261020/matched-input-preparation-v1746/v1382-k2-existing-gpu-config-RESULT.json",
+      "bytes": 1839,
+      "sha256": "dc74f2a27818543ee0d1f1e0dfad69cd01de96051a770521e529828a6c036633"
+    }
+  ],
+  "existingQualifiedSource": "thesis/sources/python-audio-p2p-tts-wiring-v1706/source",
+  "next": "At first natural serial resource window, acquire exact inputs with bounded ordinary tools under existing Personal identity and isolated runtime, recording new source/native ABI/backend/hardware proofs. K2 retains next serial execution; notebook acquisition does not hold K2. If genuine existing network resource separation is supplied sooner, Root may admit noninterfering preparation. No repeated cache/proxy probes.",
+  "newModelCalls": 0,
+  "newNetworkRequests": 0,
+  "remoteTransfers": 0,
+  "installsOrBuilds": 0,
+  "newWorkers": 0,
+  "credentialSecurityOrDriverChanges": 0
+}

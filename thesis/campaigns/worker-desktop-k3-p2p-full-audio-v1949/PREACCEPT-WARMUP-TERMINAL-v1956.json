@@ -1,0 +1,52 @@
+{
+  "at": "2026-10-20T22:05:15.769088+00:00",
+  "status": "TERMINAL_KNOWN_STRUCTURED_PREACCEPT_DURING_WARMUP",
+  "warmupsAttemptedExcluded": 13,
+  "correctFullAudio": 12,
+  "failed": 1,
+  "failedStage": "tts",
+  "failedCode": "preaccept_capability_changed",
+  "failedTranscriptionAndAnswerCorrect": true,
+  "timeouts": 0,
+  "measured": 0,
+  "unattemptedMeasured": 900,
+  "actors": [
+    {
+      "pid": 3116126,
+      "absent": true
+    },
+    {
+      "pid": 3116250,
+      "absent": true
+    },
+    {
+      "pid": 3116127,
+      "absent": true
+    },
+    {
+      "pid": 3116128,
+      "absent": true
+    }
+  ],
+  "trace": {
+    "accepted_rows": 39,
+    "complete": true,
+    "dropped_rows": 0,
+    "invalid_rows": 0,
+    "max_row_bytes": 32768,
+    "max_rows": 2761,
+    "max_total_bytes": 67108864,
+    "oversize_rows": 0,
+    "queue_capacity": 256,
+    "quota_rows": 0,
+    "schema": "aurora.mesh_route_observation_sink.v1",
+    "state": "closed",
+    "writer_error_class": null,
+    "written_bytes": 64341,
+    "written_rows": 39
+  },
+  "historicalBindingMismatchField": "UNKNOWN; generic rejection does not identify the exact binding revision field",
+  "allOriginalsPreserved": true,
+  "next": "ONE finite same-runtime normal fresh peer-session admission only; no further unchanged replays if repeated",
+  "replacement": "thesis/campaigns/worker-desktop-k3-p2p-full-audio-v1957/"
+}

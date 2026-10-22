@@ -1,0 +1,11 @@
+{
+  "message": "msg_9eab94858421",
+  "at": "2026-10-15T00:28:14Z",
+  "delivery": "delivery_61f7af6448c9",
+  "lines": 1522,
+  "sha256": "f5a7bcd6aed3078fb2e0de0421d4a45742e2201f14f0b18b0bfbe17b308ef6fb",
+  "fullread_added_lines": 19,
+  "exact_before_prefix1503_hash2e3bdbc": true,
+  "receipt_diff_verified": true,
+  "no_doc_triggered_tests": true
+}

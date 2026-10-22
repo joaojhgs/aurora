@@ -1,0 +1,190 @@
+{
+  "at": "2026-10-22T06:18:52.206314+00:00",
+  "source": "ebde3a8acf6315f920d03593845f17a1fc65a733 + source-closure-overlay-v2383 + android-bundled-model-rename-v1 + android-node-policy-initial-publication-v2",
+  "phone": "KBX8LNFUBE5XGQRG",
+  "package": "dev.aurora.desktop.phonenotebook",
+  "apkSha256": "549f760f5ceec5bce629a075f4e28df1ed74da4e503be0d15407ff7f3e4bd662",
+  "summary": "Implemented, compiled, installed and actual physical phone load/generate/cancel validated; native full voice and routes unvalidated",
+  "notebookInferenceDoesNotProvePhoneInference": true,
+  "phoneLocalInferencePassed": true,
+  "proofs": [
+    {
+      "stage": "Catalog and fixed model",
+      "status": "IMPLEMENTED_IN_PINNED_SOURCE",
+      "path": "apps/aurora-tauri/src-tauri/src/lib.rs",
+      "line": 9735,
+      "detail": "chat-qwen3-0b8: exact Qwen3.5-0.8B Q4_0, fixed public revision and hash,4096context/512catalog max tokens"
+    },
+    {
+      "stage": "Packaged native engine",
+      "status": "BUILT_AND_INSTALLED_NOT_RUNTIME_VALIDATED",
+      "path": "apps/aurora-tauri/src-tauri/Cargo.toml",
+      "line": 78,
+      "detail": "Android enables native-llamacpp; APK build provenance records pinned0.4.1 ARM64 static libraries, source b29c606e28a01b1bc8c1351026a0fa6e616bf6c4; real install receipt v104"
+    },
+    {
+      "stage": "Download and integrity",
+      "status": "IMPLEMENTED_NOT_PHONE_EXERCISED",
+      "path": "apps/aurora-tauri/src-tauri/src/native_local_inference.rs",
+      "line": 561,
+      "detail": "Production catalog-only HTTPS download, fixed byte length/SHA and app-private storage; no phone Qwen model load proof yet"
+    },
+    {
+      "stage": "Profile authorization and commands",
+      "status": "IMPLEMENTED_REGISTERED_NOT_LIVE_QUERIED",
+      "path": "apps/aurora-tauri/src-tauri/src/native_local_inference.rs",
+      "line": 278,
+      "detail": "Active v2 mesh-node/lightweight-ts profile and local-inference capability required; catalog/status/download/session/create/complete/cancel/reset/destroy registered in lib.rs9881-9899"
+    },
+    {
+      "stage": "GGUF load/generate",
+      "status": "IMPLEMENTED_COMPILED_NOT_PHONE_EXERCISED",
+      "path": "rust/crates/aurora-local-inference/src/lib.rs",
+      "line": 1223,
+      "detail": "Serialized Rust worker uses C FFI for GGUF\u2192packagedllama.cpp. Android JNI LiteRT is separate and is not substituted for the exact Qwen GGUF."
+    },
+    {
+      "stage": "Effective phone backend",
+      "status": "SOURCE_FIXED_CPU_RUNTIME_UNOBSERVED",
+      "path": "rust/crates/aurora-local-inference/native/bridge.cpp",
+      "line": 172,
+      "detail": "n_gpu_layers=0; default2threads; n_ctx from catalog4096; n_batch512/n_ubatch256. This is a phone CPU cohort, not notebook Vulkan100layer evidence."
+    },
+    {
+      "stage": "Cancellation",
+      "status": "IMPLEMENTED_NOT_PHONE_VALIDATED",
+      "path": "rust/crates/aurora-local-inference/native/bridge.cpp",
+      "line": 252,
+      "detail": "Atomic cancel token and llama_set_abort_callback plus prefill/token-loop checks; Tauri success alone does not prove cancellation settled."
+    },
+    {
+      "stage": "Startup blocker",
+      "status": "ACTUAL_REPRODUCED_CAUSE_FIX_PREPARED",
+      "path": "rust/crates/aurora-local-inference/src/lib.rs",
+      "line": 404,
+      "detail": "Mandatory bundledNeedle2 install uses hard_link, denied by actual Android app sandbox. Five-byte scoped reproducer v116; one-file verified atomic-rename repair prepared."
+    }
+  ],
+  "matrix": [
+    {
+      "condition": "LOCAL_BASELINE",
+      "local": [
+        "stt",
+        "llm",
+        "tts"
+      ],
+      "remote": [],
+      "requiresLocalPhoneLlm": true,
+      "eligibility": "UNVERIFIED_FULL_NATIVE_FILE_AUDIO_AND_ROUTE",
+      "phoneLocalLlmQualified": true
+    },
+    {
+      "condition": "K1_HTTP_AND_P2P",
+      "local": [
+        "stt",
+        "llm"
+      ],
+      "remote": [
+        "tts"
+      ],
+      "requiresLocalPhoneLlm": true,
+      "eligibility": "UNVERIFIED_FULL_NATIVE_FILE_AUDIO_AND_ROUTE",
+      "phoneLocalLlmQualified": true
+    },
+    {
+      "condition": "K2_HTTP_AND_P2P",
+      "local": [
+        "stt"
+      ],
+      "remote": [
+        "llm",
+        "tts"
+      ],
+      "requiresLocalPhoneLlm": false,
+      "eligibility": "UNVERIFIED_FULL_NATIVE_FILE_AUDIO_AND_ROUTE",
+      "phoneLocalLlmQualified": true
+    },
+    {
+      "condition": "K3_HTTP_AND_P2P",
+      "local": [],
+      "remote": [
+        "stt",
+        "llm",
+        "tts"
+      ],
+      "requiresLocalPhoneLlm": false,
+      "eligibility": "UNVERIFIED_FULL_NATIVE_FILE_AUDIO_AND_ROUTE",
+      "phoneLocalLlmQualified": true
+    }
+  ],
+  "phoneProviderRole": "NOT_QUALIFIED_NOT_FORCED",
+  "ownerHistoricalOnnxSttTtsValidation": "Owner says previously personally validated; current APK/catalog/exact asset proof still to be observed",
+  "cloudFallbackAllowed": false,
+  "overnightAuthorized": false,
+  "liveUpdate": {
+    "at": "2026-10-22T06:03:30.933157+00:00",
+    "status": "SECOND_REPAIR_NORMAL_UPDATE_VERIFIED_NATIVE_POLICY_AND_LLM_PROBE_RUNNING",
+    "sourceIdentity": "ebde3a8acf6315f920d03593845f17a1fc65a733 + source-closure-overlay-v2383 + android-bundled-model-rename-v1 + android-node-policy-initial-publication-v2",
+    "apkSha256": "549f760f5ceec5bce629a075f4e28df1ed74da4e503be0d15407ff7f3e4bd662",
+    "sameSigningCertificateSha256": "57bee2b41e922fd1ee2fb08e1839ec3d423d78cc361afc22e2f1d11672293963",
+    "actualUpdateReceipt": "evidence/read-policy-update-v175/result.json",
+    "nativePhoneLlmEnginesExposed": true,
+    "phoneQwenBytes": 563036064,
+    "phoneQwenSha256": "57d1997790d1744fba5b40a7317df71ea5e2acee28c47e78f0cce39c0703f8cf",
+    "phoneQwenPhysicalCopyReceipt": "evidence/reconcile-usb-model-v157/result.json",
+    "successfulNativePhoneModelLoads": 0,
+    "successfulNativePhoneGenerationCalls": 0,
+    "nativeAudioPilotCalls": 0,
+    "measuredCases": 0,
+    "sourceV1Failure": "Native node policy initial publication failed; session_create unsupported_feature beforeload",
+    "rootSharedResourceDecisionRequest": "msg_204c54ccc425",
+    "ownerConditionalAutoStartAuthorized": true,
+    "hardStopUtc": "2026-10-22T11:57:25.269652Z"
+  },
+  "currentQualification": {
+    "schema": "aurora.phone.local_llm.qualification.v1",
+    "at": "2026-10-22T06:05:03.489719+00:00",
+    "receipt": "evidence/read-phone-llm-v177/result.json",
+    "receiptSha256": "f5ecd48d58b01d397ad9bc3c2458d20212d00b2964401d783dd27ea63dc291ba",
+    "phone": "KBX8LNFUBE5XGQRG",
+    "apkSha256": "549f760f5ceec5bce629a075f4e28df1ed74da4e503be0d15407ff7f3e4bd662",
+    "sourceIdentity": "ebde3a8acf6315f920d03593845f17a1fc65a733 + source-closure-overlay-v2383 + android-bundled-model-rename-v1 + android-node-policy-initial-publication-v2",
+    "engine": "llamacpp",
+    "engineVersion": "0.4.1",
+    "accelerator": "cpu",
+    "nativePolicyRevision": 1,
+    "contextTokens": 4096,
+    "modelSha256": "57d1997790d1744fba5b40a7317df71ea5e2acee28c47e78f0cce39c0703f8cf",
+    "modelId": "chat-qwen3-0b8",
+    "modelBytes": 563036064,
+    "initialIntegrityAndLoadMs": 55244.669042,
+    "fixedQuestionResponse": {
+      "content": "Paris",
+      "type": "message"
+    },
+    "generationMs": 3267.0683590000044,
+    "exactCorrectness": true,
+    "cancellation": {
+      "qualified": true,
+      "sameRequestId": true,
+      "terminalAfterCancellationIssued": true,
+      "nativeTerminal": {
+        "error": {
+          "code": "unavailable_service",
+          "message": "The offline answer was stopped."
+        },
+        "ok": false
+      },
+      "nativeSessionDestroyed": true,
+      "initialProbeClassification": false,
+      "classificationCorrection": "Original probe expected a different error code; pinned native Cancelled maps to unavailable_service with exact stopped message. Correlated raw stop and destroy suffice, no repeat inference."
+    },
+    "measuredCases": 0,
+    "nativeGenerationAttempts": 2,
+    "phoneSttTtsQualified": false,
+    "fullNativeFileAudioQualified": false,
+    "httpP2pQualified": false,
+    "noPoolingWithNotebookBackend": true
+  },
+  "priorAuditHistory": "evidence/status-reconciliation-v185/PHONE-LOCAL-LLM-AUDIT-20261022.json"
+}

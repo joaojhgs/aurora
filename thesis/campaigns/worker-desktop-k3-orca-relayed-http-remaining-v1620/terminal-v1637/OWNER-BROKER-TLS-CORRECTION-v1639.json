@@ -1,0 +1,110 @@
+{
+  "observedAt": "2026-10-18T23:11:58.976032+00:00",
+  "lineage": {
+    "run": "run_e6054e76e9fc",
+    "task": "task_d7ea336050cf",
+    "dispatch": "ctx_37b4d0a3c14f",
+    "root": "term_6a00d9ee-792a-4daf-8578-236290e33108",
+    "rootIncarnation": "fe7e63c7-d260-465f-b37e-f6fc78f8a1af",
+    "monitor": "term_2eab47ed-ab9b-4e35-bd9b-fc068c60e3fc",
+    "nativeMonitorGoal": "01a123ff-19ba-7332-a2f7-346a722af79f",
+    "nativeMonitorStatus": "active"
+  },
+  "newOwnerEvidence": {
+    "reportedSource": "Coding fresh worker check supplied by owner",
+    "observedAt": "2026-10-18T23:05:54Z",
+    "endpoint": "broker.emqx.io:8084",
+    "connectedIPv4": "44.232.241.40",
+    "tcp": "connected",
+    "verifiedTLS": "passed",
+    "credentialsSent": false,
+    "mqttNegotiationPairingConsent": "UNVERIFIED",
+    "monitorRepeatedNetworkProbe": false
+  },
+  "actualTestStatus": {
+    "campaign": "thesis/campaigns/worker-desktop-k3-orca-relayed-http-remaining-v1620/",
+    "launchedAt": "2026-10-18T22:37:12.627482Z",
+    "finishedAt": "2026-10-18T22:56:07.228281Z",
+    "status": "stopped_system_failure/transport_ambiguous",
+    "warmupsExcluded": 15,
+    "warmupsCorrect": 15,
+    "nativeWarmupJoins": 45,
+    "measuredAttempted": 24,
+    "correct": 11,
+    "replyPredicateFailures": 12,
+    "transportFailures": 1,
+    "timeoutFlags": 0,
+    "actorsAbsentVerifiedAt": "2026-10-18T23:00:37Z",
+    "currentMeasurementRunning": false,
+    "cumulativeCountsOnly": {
+      "attempted": 740,
+      "correct": 725,
+      "failed": 15,
+      "stillRequired": 160
+    },
+    "noPercentilePooling": true,
+    "failure": "http.client.RemoteDisconnected during assistant; underlying cause UNKNOWN",
+    "priorTerminalEvidence": ".omx/evidence/orca-monitor-20261010/V1620-TERMINAL24-REMOTE-DISCONNECTED-20261018T2301.json"
+  },
+  "controlBlocker": {
+    "operation": "v1635 bounded postterminal saved-reply/native/server-state diagnosis SEND",
+    "requestId": "f2f7472f-e005-46ec-9eb9-715187e69291",
+    "accepted": false,
+    "error": "terminal_not_writable",
+    "commandBytes": 7839,
+    "terminal": "term_d5651d8d-58e2-4b38-85e2-51c668cc933c",
+    "incarnation": "034ff933-61a3-4c74-b5ad-98a75e8ac21c",
+    "sourceReceipt": ".git/aurora-handoff-import-20261006/v1635-v1620-postterminal-saved-diagnosis-SEND.json",
+    "diagnosisExecuted": false,
+    "currentProviderLiveness": "UNKNOWN",
+    "rootFallback": "Root msg_f1a3762e849c reports one bounded existing authenticated DB.GetMessages read of synthetic failed session via original approved forward; result not yet verified"
+  },
+  "intervention": {
+    "message": "msg_41b1f19d07dc",
+    "requestId": "98755257-f837-4c93-944d-0ea90b946c81",
+    "destination": "run:run_e6054e76e9fc",
+    "rootAcknowledgement": "PENDING",
+    "requested": [
+      "Publish actual stopped state and exact rejected SEND in CURRENT.md; stale header still22:45 healthy at23:11",
+      "Reconcile existing same control/receipt through supported owning-Orca recovery; no blind resend/replacement",
+      "One normal existing-room MQTT negotiation/pair/task-scoped feature-consent check once actual control is usable, no nonexistent prior-store gate",
+      "Preserve all per-epoch failures, current provider/data/reservations; no benchmark restart/full replay"
+    ],
+    "rootReplyReadAndAcknowledged": {
+      "message": "msg_f1a3762e849c",
+      "createdAt": "2026-10-18T23:08:08Z",
+      "delivery": "delivery_d00f4e6fc47a"
+    }
+  },
+  "finiteChecklist": {
+    "done": [
+      "Old K3 epochs716attempts714correct2fail preserved",
+      "V1620 naturally stopped24attempts11correct13fail; no interruption",
+      "New broker TCP+verifiedTLS owner evidence relayed promptly; no repeated refusal probe"
+    ],
+    "remaining": [
+      "Root terminal seal/cost/provider custody/current-index reconciliation",
+      "Actual saved synthetic31-character reply/error diagnosis; do not infer model quality from hash",
+      "Supported same-control writer recovery or exact owning-Orca capability/action blocker",
+      "One actual authorized MQTT negotiation/pair/feature consent and actual ICE/native path evidence",
+      "Only admitted continuation of160K3remaining and720K1remaining; no new900 replay"
+    ],
+    "distributedAcceptanceUnchanged": "HTTP/P2P paired K1 TTS-only, K2 LLM+TTS, K3 STT+LLM+TTS900 measured per applicable condition; Android/multi-provider full scope retained, no iOS",
+    "eta": "UNKNOWN until current provider/control/application route and admission pass"
+  },
+  "authoritativePlan": {
+    "vault": "/home/developer/Documents/Obsidian Vault Origin/5-full-notes/faculdade/tcc/future-work-test-requirements.md",
+    "repositoryMirror": "thesis/methodology/owner-requirements-20261018-cff17279.md",
+    "sha256": "cff1727938cd30e143359935568871b3298df56569962e05ce7111b775b3c9fd",
+    "amendmentRequiredForOperationalStop": false
+  },
+  "safety": {
+    "newWorkers": 0,
+    "modelCallsByMonitor": 0,
+    "providerRestarts": 0,
+    "directPersonalWritesByMonitor": 0,
+    "productSourceEdits": 0,
+    "commits": 0,
+    "securityChanges": 0
+  }
+}

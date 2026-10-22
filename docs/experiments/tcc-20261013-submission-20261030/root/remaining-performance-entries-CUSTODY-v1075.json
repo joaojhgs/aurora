@@ -1,0 +1,9 @@
+{
+  "at": "2026-10-16T14:25:06.563877+00:00",
+  "source": ".omx/evidence/orca-monitor-20261010/REMAINING-PERFORMANCE-CELLS-20261016T1326.md",
+  "destination": "docs/experiments/tcc-20261013-submission-20261030/root/remaining-performance-entries-monitor-20261016T1326.md",
+  "bytes": 8478,
+  "sha256": "66173aed771a6473da78b3c6eee5bc7b306183b4b4e38b661e09dae9a35c7110",
+  "author": "Original Orca monitor sole methodology writer",
+  "scope": "Exact immutable13:26 execution reconciliation; later C06 counts updated only in CURRENT.md/RUNNING-v1075.json; no plan revision or new gate."
+}

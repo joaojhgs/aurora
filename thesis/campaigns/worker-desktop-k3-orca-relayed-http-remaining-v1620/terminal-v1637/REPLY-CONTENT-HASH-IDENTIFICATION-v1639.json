@@ -1,0 +1,85 @@
+{
+  "at": "2026-10-18T23:15:04.550164+00:00",
+  "status": "EXACT_CANDIDATE_TEXT_MATCHES_ALL12_RETAINED_UTF8_REPLY_HASHES",
+  "content": "The capital of France is Paris.",
+  "chars": 31,
+  "sha256": "a1b7eb2ee7a6aded8dda4e6cf30826f5afffb28a5597ee9389e91eb326d4e319",
+  "observedCaseIndices": [
+    728,
+    729,
+    730,
+    731,
+    732,
+    733,
+    734,
+    735,
+    736,
+    737,
+    738,
+    739
+  ],
+  "observedRows": [
+    {
+      "case": "audio-campaign-v1620-0027",
+      "responseSha256": "a1b7eb2ee7a6aded8dda4e6cf30826f5afffb28a5597ee9389e91eb326d4e319",
+      "chars": 31
+    },
+    {
+      "case": "audio-campaign-v1620-0028",
+      "responseSha256": "a1b7eb2ee7a6aded8dda4e6cf30826f5afffb28a5597ee9389e91eb326d4e319",
+      "chars": 31
+    },
+    {
+      "case": "audio-campaign-v1620-0029",
+      "responseSha256": "a1b7eb2ee7a6aded8dda4e6cf30826f5afffb28a5597ee9389e91eb326d4e319",
+      "chars": 31
+    },
+    {
+      "case": "audio-campaign-v1620-0030",
+      "responseSha256": "a1b7eb2ee7a6aded8dda4e6cf30826f5afffb28a5597ee9389e91eb326d4e319",
+      "chars": 31
+    },
+    {
+      "case": "audio-campaign-v1620-0031",
+      "responseSha256": "a1b7eb2ee7a6aded8dda4e6cf30826f5afffb28a5597ee9389e91eb326d4e319",
+      "chars": 31
+    },
+    {
+      "case": "audio-campaign-v1620-0032",
+      "responseSha256": "a1b7eb2ee7a6aded8dda4e6cf30826f5afffb28a5597ee9389e91eb326d4e319",
+      "chars": 31
+    },
+    {
+      "case": "audio-campaign-v1620-0033",
+      "responseSha256": "a1b7eb2ee7a6aded8dda4e6cf30826f5afffb28a5597ee9389e91eb326d4e319",
+      "chars": 31
+    },
+    {
+      "case": "audio-campaign-v1620-0034",
+      "responseSha256": "a1b7eb2ee7a6aded8dda4e6cf30826f5afffb28a5597ee9389e91eb326d4e319",
+      "chars": 31
+    },
+    {
+      "case": "audio-campaign-v1620-0035",
+      "responseSha256": "a1b7eb2ee7a6aded8dda4e6cf30826f5afffb28a5597ee9389e91eb326d4e319",
+      "chars": 31
+    },
+    {
+      "case": "audio-campaign-v1620-0036",
+      "responseSha256": "a1b7eb2ee7a6aded8dda4e6cf30826f5afffb28a5597ee9389e91eb326d4e319",
+      "chars": 31
+    },
+    {
+      "case": "audio-campaign-v1620-0037",
+      "responseSha256": "a1b7eb2ee7a6aded8dda4e6cf30826f5afffb28a5597ee9389e91eb326d4e319",
+      "chars": 31
+    },
+    {
+      "case": "audio-campaign-v1620-0038",
+      "responseSha256": "a1b7eb2ee7a6aded8dda4e6cf30826f5afffb28a5597ee9389e91eb326d4e319",
+      "chars": 31
+    }
+  ],
+  "provenance": "One fixed-task answer candidate constructed locally and UTF8-hashed; exact retained hash+length match for all12. Server raw response body was not retrieved; no new inference or historical measurement fabricated.",
+  "conclusion": "The same complete factual sentence violates the frozen one-word answer requirement. All12 remain failed strict instruction-format predicates; predicates unchanged. Cause of format/state transition remains unproved."
+}

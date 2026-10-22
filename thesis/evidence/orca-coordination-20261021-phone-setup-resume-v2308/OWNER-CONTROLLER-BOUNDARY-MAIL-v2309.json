@@ -1,0 +1,68 @@
+{
+  "id": "remote-cli-1792621075181",
+  "ok": true,
+  "result": {
+    "runId": "run_e6054e76e9fc",
+    "deliveryId": "delivery_20df077ccde3",
+    "messages": [
+      {
+        "id": "msg_73f3ad71a071",
+        "run_id": "run_e6054e76e9fc",
+        "delivery_contract": "current_delivery",
+        "from_handle": "term_1f27be31-0284-4366-bb91-30fe538cd30e",
+        "to_handle": "run:run_e6054e76e9fc",
+        "subject": "USB exact boundary sent to owner; independent runtime inventory continues",
+        "body": "The approved device proxy still returns no devices after notebook reconnection. I reported directly that POCO X7 Pro is physically attached but Personal Podman has no read/write access to its USB node, and asked only whether an existing Personal host ADB controller may be checked/reused without account, permission or key changes. No phone authorization-dialog action is asserted because ADB cannot reach it. Fresh named notebook assets/runtime inventory is executing independently; no source/model transfer, native build or inference touches current HTTP resources. Source sync remains exact approved local archive ebde3a8a with remote SHA unknown; any future asset/runtime download needs a disjoint resource decision, not Root phone work.",
+        "type": "status",
+        "priority": "normal",
+        "thread_id": null,
+        "payload": null,
+        "created_at": "2026-10-21T22:13:48Z",
+        "delivered_at": null
+      },
+      {
+        "id": "msg_723431ec5681",
+        "run_id": "run_e6054e76e9fc",
+        "delivery_contract": "current_delivery",
+        "from_handle": "term_1f27be31-0284-4366-bb91-30fe538cd30e",
+        "to_handle": "run:run_e6054e76e9fc",
+        "subject": "Fresh USB report saved; no lifecycle reopen needed for direct owner work",
+        "body": "ACK Root msg_62834c96b742: continuing as direct-owner ordinary work on this existing terminal, with no old heartbeat, second worker_done, adopted Dispatch or duplicate worker. Current report and ACTUAL-READINESS-20261021.json record real USB hardware/access evidence, not synthetic readiness. Immediate boundary is Personal Podman denial on the attached POCO USB node; owner response about existing Personal host controller reuse is pending. Fresh eight named asset/audio paths and four llama cache roots are absent; five packages match, llama runtime missing, notebook19.3GBavailable/101.2GBfree. No app/native pilot, model call, source archive, install, download or heavy transfer occurred. A future exact asset acquisition/runtime window remains a resource ownership decision and does not gate or pause the unchanged main HTTP run.",
+        "type": "status",
+        "priority": "normal",
+        "thread_id": null,
+        "payload": null,
+        "created_at": "2026-10-21T22:15:39Z",
+        "delivered_at": null
+      },
+      {
+        "id": "msg_082b4f8f89ec",
+        "run_id": "run_e6054e76e9fc",
+        "delivery_contract": "current_delivery",
+        "from_handle": "term_1f27be31-0284-4366-bb91-30fe538cd30e",
+        "to_handle": "run:run_e6054e76e9fc",
+        "subject": "Owner/controller authority decision only: reuse existing Personal host ADB?",
+        "body": "One genuine USB controller ownership boundary remains, not a request for Root phone checks or an HTTP pause. POCO X7 Pro is physically attached, but the approved Personal Podman UID cannot read/write its USB node and the approved Orca device proxy exposes no phone. The direct owner question is whether this existing lane may check/reuse an already-authorized ADB controller in the notebook Personal HOST environment, without changing accounts, USB permissions, groups, keys, privilege, drivers or network; current authorization is limited to the Personal container. If owner approval is relayed through Coding, I can perform the bounded controller checks myself and report actual USB serial/ABI/app state; otherwise that boundary remains closed. Do not start another controller or worker, change permissions, or perform the device checks on my behalf. No phone dialog action is currently known because ADB cannot reach it. Current actual report/metadata and exact execution receipts are copied to both repositories under resumption-20261021-v1.",
+        "type": "question",
+        "priority": "normal",
+        "thread_id": null,
+        "payload": null,
+        "created_at": "2026-10-21T22:17:26Z",
+        "delivered_at": null
+      }
+    ],
+    "count": 3,
+    "replayed": false,
+    "acknowledged": null,
+    "timedOut": false,
+    "cancelled": false,
+    "connectionLost": false,
+    "mutation": {
+      "requestId": "ce798f74-d2bb-4e6e-bd1c-ddac6f09c490",
+      "replayed": false
+    }
+  },
+  "_meta": {
+    "runtimeId": "cc9e3275-28c6-4c45-85cc-bdcd2262aa7d"
+  }
+}

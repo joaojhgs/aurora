@@ -1,0 +1,60 @@
+{
+  "schema": "aurora.phone_notebook.resource_handoff_queue.v1",
+  "status": "SOURCE_COPY_ASSEMBLY_AND_PUBLIC_INPUTS_COMPLETED_NO_SHARED_STAGE_WAIT",
+  "ownerRequest": "continue now should be fix, finish setup; no900untilsleepstart",
+  "rootRequestMessage": "msg_e667cdd018cc",
+  "createdAtUtc": "2026-10-22T00:13:03Z",
+  "monitorNotificationMessage": "msg_30f288b3477a",
+  "monitorNotificationAtUtc": "2026-10-22T00:17:05Z",
+  "usbRecoveryMessage": "msg_7114f34553d8",
+  "savedWifiSuccessMessage": "msg_2b55c7cce4ff",
+  "source": {
+    "exactLocalCommit": "ebde3a8acf6315f920d03593845f17a1fc65a733",
+    "remoteSha": null,
+    "maxBytes": 12582912,
+    "maxSeconds": 120,
+    "copyRequest": {
+      "totalBytesIncludingFixedWav": 3913736,
+      "maximumActiveSeconds": 120,
+      "maxConcurrentStreams": 1,
+      "maxPayloadBytesPerSecond": 131072,
+      "maxWireBytesPerSecond": 262144,
+      "frameBytes": 98048,
+      "frames": 43,
+      "receiverPrepared": true,
+      "actualSourceBytesReceived": 3913736,
+      "renewedAdmission": "SOURCE-DELTA-TRANSFER-ADMISSION-v2353.json",
+      "manifest": "source-delta-v28/DELTA-MANIFEST.json",
+      "actualOutcome": "SOURCE_FILES_RECEIVED_HASH_VERIFIED",
+      "actualFinishedAt": "2026-10-22T01:39:31.816741+00:00",
+      "actualElapsedSeconds": 70.80041577600059,
+      "sourceAssembled": true
+    }
+  },
+  "assets": {
+    "exactBytesExcludingAudio": 774455356,
+    "sharedWorkerTransferRequired": false,
+    "directPublicAuthority": "Owner latest explicit original pinned HF/PyPI acquisition NOW",
+    "stateDescriptor": "DIRECT-PUBLIC-DOWNLOAD.json",
+    "status": "VERIFIED_ALL_PINNED_PUBLIC_ASSETS"
+  },
+  "notebookWork": {
+    "maxJobs": 2,
+    "maxSeconds": 1200,
+    "noModelRuntimeSubstitution": true
+  },
+  "releaseTrigger": "Obsolete campaign-end/shared774MBgate superseded by explicit owner public notebook download authorization",
+  "actualUtcTransferWindow": {
+    "state": "OLD_WINDOW_EXPIRED_UNUSED",
+    "endUtc": "2026-10-22T01:01:07.881437+00:00",
+    "actualSourceBytes": 0
+  },
+  "currentActualReply": "msg_c1295c378e94",
+  "sourceOrModelTransferStarted": true,
+  "pilotStarted": false,
+  "ownerSleepStartSignal": null,
+  "noMainInterruption": true,
+  "settledDispatchReused": false,
+  "updatedAtUtc": "2026-10-22T01:45:13.048015+00:00",
+  "nextSourceRequest": "msg_f29918a89743"
+}

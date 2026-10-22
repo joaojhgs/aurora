@@ -1,0 +1,28 @@
+{
+  "at": "2026-10-17T20:53:40.395757+00:00",
+  "scope": "One saved main-flow replay plus correct/incorrect/timeout denominator check; no workload or archive/audio/model re-audit",
+  "replayedRequestRows": 51,
+  "retainedMeasured": 36,
+  "excludedWarmups": 15,
+  "priorDerivedMetricsAndCaseHistoryPreserved": true,
+  "requesterNativeSTTandLLMCoverage": 36,
+  "providerNativeTTSServiceAndModelCoverage": 24,
+  "providerMissingInOlderPrefix": 12,
+  "missingMeansModelFailure": false,
+  "phaseCounterMainCheck": {
+    "attempted": 3,
+    "outcomes": {
+      "completed_correct": 1,
+      "completed_incorrect": 1,
+      "timed_out": 1
+    },
+    "correct": 1,
+    "incorrect": 1,
+    "failedOrInterrupted": 1,
+    "timeouts": 1
+  },
+  "newMeasurements": 0,
+  "sutCalls": 0,
+  "sourceSha256": "12036a7eeb51b5954a0061872222f029925d024158c9bd36b3e337d8191eadc5",
+  "initialPathFailurePreserved": "thesis/validation/k1-saved-analysis-v1238/INITIAL-PATH-ERROR.json"
+}

@@ -1,0 +1,37 @@
+{
+  "host": "personal.skyron-server",
+  "at": "2026-10-16T03:40:40.410076+00:00",
+  "scope": "Existing owned V692 fixture config metadata only; no key values, mutations, runtime or network",
+  "files": [
+    {
+      "path": "/tmp/aurora-root-padded-http900-v692/input/launch-config.json",
+      "exists": true,
+      "symlink": false,
+      "sha256": "9040579459ec1415a5b0b59833f59327803e48d277f630f20aeb07c8e9061844",
+      "authEnabled": true,
+      "apiKeyCount": 1,
+      "apiKeyFingerprints": [
+        "31a57e5c47a06a2327840b9a624fe8274f0d536749cebf14a9aa9f0aca87e962"
+      ],
+      "gatewayApiNonsecret": {
+        "host": "127.0.0.1",
+        "port": 37335,
+        "request_timeout_s": 180.0
+      }
+    },
+    {
+      "path": "/tmp/aurora-root-padded-http900-v692/runtime/config.json",
+      "exists": true,
+      "symlink": false,
+      "sha256": "4cc4e5d07c2bca8a9458bf4a6448a40b02b801d7fa31ef569ba95d2ef1c44434",
+      "authEnabled": true,
+      "apiKeyCount": 0,
+      "apiKeyFingerprints": [],
+      "gatewayApiNonsecret": {
+        "host": "127.0.0.1",
+        "port": 37335,
+        "request_timeout_s": 180.0
+      }
+    }
+  ]
+}

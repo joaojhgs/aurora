@@ -1,0 +1,12 @@
+{
+  "at": "2026-10-18T14:15:04.573666+00:00",
+  "status": "PASS_ONE_LOCK_HANDOFF_MAIN_FLOW",
+  "parentClosesWithoutUnlock": true,
+  "contenderBlockedWhileChildOwnsLease": true,
+  "leaseAcquirableAfterChildRetires": true,
+  "childExit": 0,
+  "stdout": "CHILD_OWNS_SAME_LOCK\n",
+  "stderr": "",
+  "appOrModelRequests": 0,
+  "scope": "Dedicated saved artifact lock only, not production global lock; inherited-FD mechanism validation."
+}

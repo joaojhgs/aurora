@@ -1,0 +1,135 @@
+{
+  "at": "2026-10-22T09:46:37.654635+00:00",
+  "status": "STATIC_COMPONENTS_PREPARED_NOT_LAUNCH_READY",
+  "conditionId": "C12-P2P-K3-DLOCAL",
+  "sourceDirectory": "/home/developer/projects/aurora/thesis/harness/c12-p2p-k3-dlocal-v2445",
+  "sourceOwner": "Original Root",
+  "files": {
+    "mesh_route_observer.py": {
+      "bytes": 9586,
+      "sha256": "db390cdc4e05718e111037b3118573aab5ee9215c57b8e4398767a8b07e6ce7a"
+    },
+    "local_composition.py": {
+      "bytes": 14282,
+      "sha256": "aaf9585ad24429c44ea5ed78b00a7ad49369f324528f901ac46a56eae9b22ba0"
+    },
+    "local_producer.py": {
+      "bytes": 4348,
+      "sha256": "fcb518cf6fb7ec7f773bc29c0e67d0ad235945e9036cf0198a745b1cfd8b59b4"
+    },
+    "campaign.py": {
+      "bytes": 2640,
+      "sha256": "cdadf3e857fa4b39a22d7221653ab1b9d8174c2e4ccbaf322dbd5bff40a838df"
+    },
+    "stage_adapter.py": {
+      "bytes": 10931,
+      "sha256": "f678712c75a50146194ccb34331fab8d995f057461e565be99be8d69c2b364a6"
+    },
+    "route_observation_sink.py": {
+      "bytes": 11671,
+      "sha256": "d02cbff12f4bf88923cbbc8e6e990b1b140833b276fb112ca521dc21b40d1773"
+    },
+    "bindings.py": {
+      "bytes": 5492,
+      "sha256": "79558452e6f61268ad246476ca848e060b8ea808e15091bc53a3c4e0e28b1647"
+    },
+    "collect_pair.py": {
+      "bytes": 5878,
+      "sha256": "f7efcd8d6bddb41a5322c9e5039a6ef4274d4cd386354dc1545ba0320035f38d"
+    },
+    "queue_observer.py": {
+      "bytes": 2562,
+      "sha256": "a57ef99e9c48bd7442068d5ea8f8bee016141fbc5f4efd8f9a7e78a1a5631afb"
+    },
+    "SOURCE-PREPARATION.json": {
+      "bytes": 8020,
+      "sha256": "61fd1be408103ab1fc93d598aa684f27b22421316df1002e7c0e9fa73663da06"
+    },
+    "resource_sample.py": {
+      "bytes": 7475,
+      "sha256": "8f62ec378e74036d4539d9159e3caf29b8fd7a9115de1ab0f482dfd58b6e1857"
+    },
+    "observer.py": {
+      "bytes": 11873,
+      "sha256": "784cc4bffc0d6824bbe378d17a7f632d587ca0a315896b048b2ebef727082df5"
+    },
+    "primary_case.py": {
+      "bytes": 5311,
+      "sha256": "d8d630537b93ba6cb83b6c668c11aedb858ae6e3eb9888b1e2343a41f61d1092"
+    },
+    "local_case.py": {
+      "bytes": 7897,
+      "sha256": "3e8986463cf5090d393e2eab2eef063f6a6a26a23be61d53c6e2894d48781c2b"
+    },
+    "aurora_voice_telemetry_v430.py": {
+      "bytes": 11584,
+      "sha256": "8129ffe7591a47a0107ede53b101aead9fc1f58b92f0c0c4203176cc7608325d"
+    },
+    "k3_composition.py": {
+      "bytes": 13755,
+      "sha256": "09399c07cfc44cfbaaac969af5c928e9ae57fab2d6848f76f29950e7fdc314bf"
+    },
+    "route_runtime_pins.json": {
+      "bytes": 2346,
+      "sha256": "5d79681b500485fd7c4c9e3d562a39af957b261f0f75452d25ad9fcc59dbc1db"
+    },
+    "mesh_stage_adapter.py": {
+      "bytes": 10765,
+      "sha256": "6e09f9d66a9178ff184f93395cd81b6bfe3828895a90003057eeeae6c1a0a719"
+    },
+    "README.md": {
+      "bytes": 2341,
+      "sha256": "ff9b85d9f8370993619e83443f6e3c4ad33f52d5ac95d47885901c72b174386e"
+    },
+    "admission_boundary.py": {
+      "bytes": 1800,
+      "sha256": "b121287bb3ec172afdfb440f1f02830e182d73fc1c8d5a4d0a60898acc31411b"
+    }
+  },
+  "retainedQualifiedP2PModules": 9,
+  "qualifiedImplementationHashesVerified": true,
+  "python": "3.11.17",
+  "compiledPythonFiles": 17,
+  "changedModuleRuffFatalChecks": "PASS",
+  "actualCurrentPrimaryGuard": "Refused before app import, case write or network because predecessor281887/start143363140 is live",
+  "localOnlyGuard": "Refused missing production bus before HTTP type-adapter import or case write",
+  "futureCounts": {
+    "primaryMeasured": 900,
+    "localCompanionMeasured": 900,
+    "excludedWarmupPairs": 15
+  },
+  "distinctCorrelationPrefixes": {
+    "primary": "c12p2p-primary-v2445-",
+    "local": "c12p2p-local-v2445-"
+  },
+  "actualNewRuntimeInferenceNetworkBuildDeviceOrWorkerCalls": 0,
+  "operationalManifestClockReservationOrActorsAllocated": false,
+  "remaining": [
+    "Requester Supervisor/bootstrap and paired controller integration",
+    "Normal fresh route/catalog/grant/lease and passive ICE-path capture wiring",
+    "Ordinary15paired warmup native/queue/actual-path check implementation",
+    "Finite lifecycle/source/config/resource allocation after predecessor natural terminal, EOF/audio custody and resource release"
+  ],
+  "currentHTTP": {
+    "correctPerStream": [
+      178,
+      178
+    ],
+    "failedPerStream": [
+      0,
+      0
+    ],
+    "capsules": 179,
+    "requesterPid": 281887,
+    "startTicks": 143363140,
+    "liveState": "S"
+  },
+  "currentSourceSettingsTargetsMasterClockChanged": false,
+  "newSeparatePilotOrReviewGate": false,
+  "methodologyMirror": {
+    "bytes": 894176,
+    "sha256": "ca93e2026274de90755ce4ccbb088b454f84fa11e318dc3ad91d8fa27ab088a7",
+    "prior884494BytesUnchanged": true
+  },
+  "cacheOwnerQuestion": "Still pending; no deletion or inferred approval"
+}

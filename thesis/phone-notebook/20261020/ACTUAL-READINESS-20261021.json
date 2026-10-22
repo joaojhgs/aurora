@@ -1,0 +1,401 @@
+{
+  "schema": "aurora.phone_notebook.closed_setup.v3",
+  "at": "2026-10-22T12:09:56.630727+00:00",
+  "status": "WINDOW_CLOSED_DISTRIBUTED_SETUP_NOT_READY",
+  "setupReady": false,
+  "source": {
+    "baseSourceSha": "ebde3a8acf6315f920d03593845f17a1fc65a733",
+    "sourceIdentity": "ebde3a8acf6315f920d03593845f17a1fc65a733 + source-closure-overlay-v2383 + android-bundled-model-rename-v1 + android-node-policy-initial-publication-v2 + android-finite-file-audio-v3 + android-finite-file-audio-v3a + android-k3-sdk-file-audio-v4 + android-k3-sdk-mode-v4a + android-k3-sdk-build-flag-v5 + android-k3-native-surface-v6 + android-native-pairing-role-v7 + isolated-workspace-resolution-v7a + unchanged-voice-package-reuse-v7b + android-sdk-speech-binding-v8 + android-sdk-consumer-lease-v8a",
+    "remoteSha": null,
+    "acquisition": "Root-approved exact archive and isolated immutable repair epochs",
+    "sharedGitWrites": false,
+    "frozenCampaignSourceChanged": false,
+    "repairs": [
+      {
+        "manifest": "repairs/android-bundled-model-rename-v1/MANIFEST.json",
+        "manifestSha256": "f740961ae8353fedb2cf7ada8204c3bad5b5e3cc8f432c46ff98edee8e2634a8",
+        "patch": "repairs/android-bundled-model-rename-v1/PATCH.diff",
+        "patchSha256": "40b385401472445ec32c184e73a99495efee8d59e4c3c34af2d62aa1edb3d9fc"
+      },
+      {
+        "manifest": "repairs/android-finite-file-audio-v3/MANIFEST.json",
+        "manifestSha256": "7119cf3fb1ad59165380d369a3eeb7bf6b1655c893e5ef1c09aea4dbd8e1832e",
+        "patch": "repairs/android-finite-file-audio-v3/PATCH.diff",
+        "patchSha256": "6982e5916fd4fc0eac304abc0c4bbda6923e7e689c8f6f64164d0a44d844dd24"
+      },
+      {
+        "manifest": "repairs/android-finite-file-audio-v3a/MANIFEST.json",
+        "manifestSha256": "d969ec475d0ddbe391cdedb64521a4f2cd94ca4362bc1afb80574c86764567b0",
+        "patch": "repairs/android-finite-file-audio-v3a/PATCH.diff",
+        "patchSha256": "13d9011e0914bc08d7f2b2dbcdc8509dd76c365829f548743d01b3b8730c08c4"
+      },
+      {
+        "manifest": "repairs/android-k3-native-surface-v6/MANIFEST.json",
+        "manifestSha256": "2984a9c9cd4dedd10b75c93f6491cdc6e7343a4ad79be3cbe0d8056f70f2549f",
+        "patch": "repairs/android-k3-native-surface-v6/PATCH.diff",
+        "patchSha256": "a0b6eb741842ba950d59e21f3a83d789d770a9c4e8793585addf162b1e8fc80b"
+      },
+      {
+        "manifest": "repairs/android-k3-sdk-build-flag-v5/MANIFEST.json",
+        "manifestSha256": "eb40b3a7056f81a289f018fc7bc3cc3574d0117b393cef77fb5d095daf64928d",
+        "patch": "repairs/android-k3-sdk-build-flag-v5/PATCH.diff",
+        "patchSha256": "7fd311c626367a9b04410234ee8296f03566a63d5eebea4607f6d6b35def4058"
+      },
+      {
+        "manifest": "repairs/android-k3-sdk-file-audio-v4/MANIFEST.json",
+        "manifestSha256": "5fa7dfabca52b57bbeac69764ef7c46413345c1c09c828274300d5201b3b7868",
+        "patch": "repairs/android-k3-sdk-file-audio-v4/PATCH.diff",
+        "patchSha256": "12644898f589c9bbeaf4ddc5e8db2a799b267148f032a939bb93963c33152b70"
+      },
+      {
+        "manifest": "repairs/android-k3-sdk-mode-v4a/MANIFEST.json",
+        "manifestSha256": "ba552b1ea2ec9860a83f07d24f9550255326664095b4534bd66baac5a77ad79a",
+        "patch": "repairs/android-k3-sdk-mode-v4a/PATCH.diff",
+        "patchSha256": "c260a59f315dda4a5d8366a27f4ce806eb9427caf9ea9cf79dc895648a4a58d9"
+      },
+      {
+        "manifest": "repairs/android-native-pairing-role-v7/MANIFEST.json",
+        "manifestSha256": "a73f166dae135b86095016dbeb56d2dd8e240f4d86ba2760efa86192c78db0f7",
+        "patch": "repairs/android-native-pairing-role-v7/PATCH.diff",
+        "patchSha256": "bfafd70fc63a0ef922d359e4ed10655da35b44b3db5d091b0c036512ac2035f1"
+      },
+      {
+        "manifest": "repairs/android-node-policy-initial-publication-v2/MANIFEST.json",
+        "manifestSha256": "8fee9115adf50579506f5dc15dcbc83e4d42c7610eb483deb1fcb7478e8c5dc7",
+        "patch": "repairs/android-node-policy-initial-publication-v2/PATCH.diff",
+        "patchSha256": "d4b2babfbdd4e62fc6b488a519fb5c9d8337bb2c213bc58915f2fa986a661082"
+      },
+      {
+        "manifest": "repairs/android-sdk-consumer-lease-v8a/MANIFEST.json",
+        "manifestSha256": "d0f651ae6ca62ba258c45d13d7a3aaec3613fd01565709c3d61289512d893f3a",
+        "patch": "repairs/android-sdk-consumer-lease-v8a/PATCH.diff",
+        "patchSha256": "622e02293b83bf54bbcd33cb89002c9d5efb2ddc97d136d40984cf9f0b554bf6"
+      },
+      {
+        "manifest": "repairs/android-sdk-speech-binding-v8/MANIFEST.json",
+        "manifestSha256": "4b986c336f49dcf501cc7d72c1d9f744a907d2eef7fda90fb4e2d37dfc7b4a31",
+        "patch": "repairs/android-sdk-speech-binding-v8/PATCH.diff",
+        "patchSha256": "b04bd205826e16dddca820049e2daf4071305a9b5cfd039b483231d8644997aa"
+      },
+      {
+        "manifest": "repairs/policy-test-fixture-closure-v169/MANIFEST.json",
+        "manifestSha256": "a1ee54d2bec0ba8d6c058f5d6bd48580bd5b44f5aecfb5e6cb144eff0808c6cf",
+        "patch": null,
+        "patchSha256": null
+      }
+    ]
+  },
+  "phone": {
+    "model": "POCO X7 Pro /2412DPC0AG",
+    "serial": "KBX8LNFUBE5XGQRG",
+    "androidVersion": "16",
+    "androidApi": 36,
+    "abi": "arm64-v8a",
+    "controller": "existing Personal notebook host USB ADB; control and custody only",
+    "package": "dev.aurora.desktop.phonenotebook",
+    "installedPackageMetadata": [
+      "primaryCpuAbi=arm64-v8a",
+      "versionCode=100 minSdk=24 targetSdk=36",
+      "versionName=1.0.0",
+      "lastUpdateTime=2026-10-22 12:52:53"
+    ],
+    "apk": {
+      "bytes": 749091842,
+      "path": "/home/developer/projects/aurora/thesis/phone-notebook/20261020/deployment/ebde3a8acf6315f920d03593845f17a1fc65a733/android-build-ebde-v2383-native-rename-v1/apps/aurora-tauri/src-tauri/gen/android/app/build/outputs/apk/universal/debug/app-universal-debug.apk",
+      "sha256": "ac043bd2f36071af8bc82c68de382d4e5cde495a612738d1ec78902d84fe8f72"
+    },
+    "signingCertificateSha256": "57bee2b41e922fd1ee2fb08e1839ec3d423d78cc361afc22e2f1d11672293963",
+    "normalReplacement": {
+      "status": "UPDATED_VERIFIED_INSTALLER_SUCCESS",
+      "finishedAt": "2026-10-22T11:52:55.741076+00:00",
+      "installAttempts": 1,
+      "receipt": {
+        "exit": 0,
+        "stderr": "",
+        "stdout": "Performing Streamed Install\nSuccess\n"
+      },
+      "installedApkMatchesBuilt": true,
+      "installerUiChecks": 13,
+      "installerForegroundObserved": false,
+      "ownerConfirmationAutomated": false,
+      "userdataWiped": false,
+      "futureUnattendedUpdatesGuaranteed": false,
+      "raw": "evidence/window-final-public-dual-v346/raw/sdk-update-v339/status.json"
+    },
+    "localLlmImplementedCompiledExposedAndActuallyValidated": true,
+    "localLlmReceipt": "PHONE-LOCAL-LLM-QUALIFIED-20261022.json",
+    "localFullPipelineQualifiedOnEarlierSourceEpoch": true,
+    "localFullPipeline": {
+      "schema": "aurora.phone.local_file_audio_qualification.v1",
+      "recordedAt": "2026-10-22T08:14:11.951360+00:00",
+      "caseId": "phone-local-bbf962c2-d9ac-4a56-bd91-e858c46632a0",
+      "status": "ACTUAL_LOCAL_PHONE_FILE_AUDIO_TO_VALID_WAV",
+      "finishedAt": "2026-10-22T07:19:54.725Z",
+      "phoneSerial": "KBX8LNFUBE5XGQRG",
+      "phoneModel": "2412DPC0AG",
+      "androidApi": 36,
+      "abi": "arm64-v8a",
+      "apkSha256": "1aaabb06746a70247562040a265a4efa6b80dcc4dc8f1fb25a0fb9da881025d6",
+      "route": "ALL_LOCAL_PHONE",
+      "measuredCases": 0,
+      "actualCompletePipelineAttempts": 2,
+      "successfulPipelinePilots": 1,
+      "priorOutputWrapperFailurePreserved": true,
+      "inputWavSha256": "da0ecc4ad0885746ab6e716585473917ab2b543a505bf0db09ebacfaa7943cbb",
+      "inputNativePcmSha256": "1d5147ec00b8582ffeeb2d6a196cfab6e713cc33c9beea9212e7bc91eeed8fbf",
+      "decodingBoundary": "faster_whisper.audio.decode_audio PyAV 16k then rint*32768/clip/LEint16 on notebook before phone timing",
+      "transcript": "What is the capital of France? Answer with only the city name.",
+      "answer": "Paris",
+      "nativeStagesMs": {
+        "stt": 133703.1,
+        "llmIntegrityAndLoad": 54431.7,
+        "llmGenerate": 3399.5,
+        "tts": 87415.9
+      },
+      "fullPhoneElapsedMs": 278999.3,
+      "wav": {
+        "sha256": "a75537d2acdf8eae8c743f90b3b7e3363f5c8ad71336d5d893c564f288ad27d7",
+        "bytes": 31788,
+        "sampleRateHz": 22050,
+        "channels": 1,
+        "frames": 15872,
+        "durationMs": 719.818594,
+        "path": "evidence/native-case-raw-dual-v222/phone-file-audio-v213/output.wav"
+      },
+      "nativeSessionClosed": true,
+      "screenWakeReleased": true,
+      "sharingChanged": false,
+      "adbMeasurementTransport": false,
+      "actualReceipt": "evidence/read-phone-file-audio-v215/result.json",
+      "dualCustodyReceipt": "evidence/native-case-raw-dual-v222/COPY-RECEIPT.json",
+      "modelMapping": "PHONE-SPEECH-MODEL-MAPPING-20261022.json",
+      "matched900Eligibility": false,
+      "matched900Gap": "Exact Whisper ONNX to reference CT2 checkpoint conversion provenance unknown; no pooling or model substitution",
+      "capacityProjection900Hours": 69.749825,
+      "capacityProjectionBoundary": "Same observed cold/integrity/provider construction per-case behavior, excludes warmups/cooling/failures; no warm retention measured",
+      "nativeResourcePeaks": "not sampled; do not invent CPU/GPU/RSS stage metrics",
+      "microphoneAcousticClaim": false,
+      "independentActualWavValidationReceipt": "evidence/actual-wav-validation-v257.json",
+      "phoneLlmSamplingLimits": "temperature0/maxTokens128 observed; seed/top-k/top-p/min-p/repeat defaults not independently exported, native512batch differs from notebook64batch; functional qualification only, no matched900 claim",
+      "sourceIdentity": "ebde3a8acf6315f920d03593845f17a1fc65a733 + source-closure-overlay-v2383 + android-bundled-model-rename-v1 + android-node-policy-initial-publication-v2 + android-finite-file-audio-v3 + android-finite-file-audio-v3a"
+    },
+    "currentApkFullPipelineQualified": false,
+    "returnedHomeVerified": true,
+    "returnReceipt": "evidence/cleanup-home-only-v344/result.json",
+    "forceStopFailurePreserved": "evidence/owner-window-retirement-read-v260/result.json",
+    "forceStopFailureExactStderr": "Not persisted by the original helper; no invented OS cause",
+    "backgroundProcessExitClaimed": false
+  },
+  "notebook": {
+    "host": "ssh:ssh-sem-notebook-personal",
+    "hostname": "skyron-notebook",
+    "accountScope": "Personal only",
+    "codingAgentLaunched": false,
+    "fixedAssets": "ASSET-READINESS-20261022.json",
+    "verifiedReferenceAssetBytes": 833499307,
+    "referenceAssetsDownloadedAgain": false,
+    "runtime": "isolated Python venv; original pinned llama-cpp-python0.3.19 Vulkan built and imported",
+    "actualSttConstructor": {
+      "device": "cpu",
+      "requestedComputeType": "int8",
+      "actualComputeType": "int8_float32"
+    },
+    "providerLlmGenerationAndEffectiveOffloadQualified": false,
+    "providerTtsSynthesisQualifiedForTestCase": false,
+    "startupGreeting": "Excluded setup TTS.Request; not a correlated test synthesis",
+    "lastResources": {
+      "at": "2026-10-22T11:57:04.018063+00:00",
+      "availableRamBytes": 23791321088,
+      "diskFreeBytes": 55384358912,
+      "load": [
+        1.04638671875,
+        2.0546875,
+        2.1298828125
+      ]
+    },
+    "lastPhonePilotResources": {
+      "at": "2026-10-22T11:54:00.154408+00:00",
+      "load": [
+        2.06201171875,
+        2.8251953125,
+        2.34130859375
+      ],
+      "monotonicNs": 50630243563473,
+      "notebookDiskFreeBytes": 55392043008,
+      "notebookRamAvailableBytes": 23699697664,
+      "phoneBattery": {
+        "AC powered": "false",
+        "USB powered": "true",
+        "health": "2",
+        "level": "98",
+        "status": "2",
+        "temperature": "302"
+      },
+      "temperaturePolicy": "observe_only"
+    },
+    "thermalPolicy": "observe only per owner correction; OS and firmware protections intact",
+    "latestBuild": {
+      "status": "ANDROID_VOICE_LIVE_APK_BUILT",
+      "finishedAt": "2026-10-22T11:52:23.769266+00:00",
+      "exit": 0,
+      "maxJobs": 2,
+      "peakOwnedBuildTreeRssBytes": 5483454464,
+      "ownBuildChildrenActive": false,
+      "consumer-lease-tests": {
+        "elapsedSeconds": 4.0691217920029885,
+        "exit": 0,
+        "sha256": "440cde00850cd48f8d0f00c25fd688cae6faaffd47735083b2874dfae3deb77b"
+      },
+      "sdk-build": {
+        "elapsedSeconds": 12.2139275849986,
+        "exit": 0,
+        "sha256": "2c93570a40c43dc9aa2b2b98345e989abe1acaa35c8ec93cd6b16f5fabf23386"
+      }
+    },
+    "ownedProvidersClosed": true,
+    "retirementReceipt": "evidence/owner-window-retirement-read-v260/result.json"
+  },
+  "routes": {
+    "direction": "physical phone requester to Personal notebook",
+    "normalSecurePairingCompleted": true,
+    "pairingReceipt": "evidence/finish-visible-pairing-dialog-v304/result.json",
+    "taskFeatureConsentReceipt": "evidence/enable-owned-voice-export-v311/result.json",
+    "phoneProviderRoleEnabled": false,
+    "phoneServicesShared": 0,
+    "nativeAuthorizedSamePeerObservedOnEarlierEpoch": true,
+    "nativeIceBeforeEarlierAttempt": {
+      "selected": true,
+      "category": "host",
+      "statsSource": "RTCPeerConnection.getStats",
+      "rawAddressRedacted": true,
+      "pairState": "succeeded",
+      "nominated": true,
+      "localCandidateType": "host",
+      "remoteCandidateType": "host",
+      "localProtocol": "udp",
+      "remoteProtocol": "udp",
+      "localRelayProtocol": "udp",
+      "remoteRelayProtocol": "udp",
+      "stunServerReflexiveCandidate": {
+        "gathered": true,
+        "candidateType": "srflx",
+        "configuredStunServerCount": 1,
+        "statsSource": "RTCPeerConnection.getStats",
+        "rawAddressRedacted": true
+      }
+    },
+    "nativeIceAfterEarlierAttempt": {
+      "selected": true,
+      "category": "host",
+      "statsSource": "RTCPeerConnection.getStats",
+      "rawAddressRedacted": true,
+      "pairState": "succeeded",
+      "nominated": true,
+      "localCandidateType": "host",
+      "remoteCandidateType": "host",
+      "localProtocol": "udp",
+      "remoteProtocol": "udp",
+      "localRelayProtocol": "udp",
+      "remoteRelayProtocol": "udp",
+      "stunServerReflexiveCandidate": {
+        "gathered": true,
+        "candidateType": "srflx",
+        "configuredStunServerCount": 1,
+        "statsSource": "RTCPeerConnection.getStats",
+        "rawAddressRedacted": true
+      }
+    },
+    "sdkRouteCategoryAtThatBoundary": "srflx",
+    "selectedAddressLanVsOverlayUnambiguouslyQualified": false,
+    "httpFallbackUsed": false,
+    "authenticatedDirectLanHttpQualified": false,
+    "httpGap": "Plain LAN health GET blocked by production CSP; trusted supported LAN HTTPS endpoint and authenticated same-pair native flow not qualified",
+    "httpReceipt": "evidence/http-policy-probe-v180/result.json",
+    "p2pFullPipelineQualified": false,
+    "lastAttempt": {
+      "at": "2026-10-22T11:53:36.210Z",
+      "canonicalNativeRouteAndAuthorizationGuardsUnchanged": true,
+      "caseSha256": "64d08b47c17dd4e0609cce0700f3e38e35e4aff71cb475e114cd63534358e055",
+      "deadlineUtc": "2026-10-22T11:56:05.149182+00:00",
+      "externalDomProjectionUnavailable": true,
+      "failedStage": "native_entrypoint",
+      "failureCode": "android_file_audio_route_unavailable",
+      "finishedAt": "2026-10-22T11:53:58.766Z",
+      "measuredCase": false,
+      "nativeBoundaryElapsedMs": 3.600000023841858,
+      "nativeStatus": "failed",
+      "outputWavPresent": false,
+      "preflight": {
+        "unavailable": true
+      },
+      "runId": "phone-notebook-18180f1e56064e028dd4fbc2d26b1b68",
+      "setupPilot": true,
+      "startedAt": "2026-10-22T11:53:58.724Z",
+      "status": "NATIVE_FLOW_FAILED_PRESERVED"
+    },
+    "remainingConcreteFailure": "v341 android_file_audio_route_unavailable at native entrypoint, 3.6ms; preflight unavailable and no audio/model submission or output WAV",
+    "rootCauseLimit": "Final bootstrap/session availability cause not established; v8a lease advertisement repair compiled and installed but not exercised past entrypoint"
+  },
+  "collection": {
+    "ownerStartUtc": "2026-10-22T04:57:25.269652Z",
+    "ownerHardStopUtc": "2026-10-22T11:57:25.269652Z",
+    "windowStatus": "EXPIRED",
+    "automaticExtensionAllowed": false,
+    "conditionalAutoStartWasAuthorized": true,
+    "bulkStarted": false,
+    "measuredCases": 0,
+    "successfulRemotePipelines": 0,
+    "remoteSetupAttemptsIncludingPreflightFailures": 6,
+    "caseHistory": "FINAL-REMOTE-CASE-HISTORY-20261022.json",
+    "targetPerApplicableCondition": 900,
+    "excludedWarmupsPerCondition": 15,
+    "attemptedMeasuredIds": [],
+    "resumeRule": "Only missing indices after explicit future finite owner window and unchanged cohort reconciliation; failed/unknown attempts retained",
+    "p50Ms": null,
+    "p90Ms": null,
+    "p95Ms": null,
+    "quantileEstimator": "Hyndman-Fan type7: h=(n-1)*p, linear interpolation; no measured observations available",
+    "remoteCapacityForecastHours": null,
+    "remoteForecastGap": "No successful remote model pipeline; transport rejection durations cannot predict throughput",
+    "localCold900ProjectionHours": 69.749825,
+    "localProjectionLimit": "Same observed cold/integrity/provider construction per-case behavior, excludes warmups/cooling/failures; no warm retention measured",
+    "k1": "Functional local phone LLM and local pipeline passed on earlier epoch; matched ONNX checkpoint/sampling settings and hybrid adapter unqualified",
+    "k2": "Does not require phone LLM; local-STT plus remote-LLM/TTS adapter and matched ONNX mapping unqualified",
+    "k3": "Does not require local phone inference; current remote route admission and actual notebook STT/LLM/TTS/WAV unqualified",
+    "newPhoneExecutionRequiresFutureFiniteOwnerWindow": true
+  },
+  "custody": {
+    "finalRaw": {
+      "at": "2026-10-22T12:06:01.136390+00:00",
+      "status": "PUBLIC_RAW_DUAL_CUSTODY_VERIFIED",
+      "sourceHost": "ssh:ssh-sem-notebook-personal",
+      "sourceRelative": "evidence/window-final-public-v343.zip",
+      "terminalIncarnation": "328cd72f-c7ea-49ff-a2db-b9275b085037",
+      "bytes": 236203,
+      "sha256": "90e4441fd579cfe6e894693ea3403b6e69da84a300f0f7407da6c18548598c91",
+      "framedChunks": 58,
+      "copyOnly": true,
+      "postWindowDataCustodyOnly": true,
+      "phoneWindowExtended": false,
+      "phoneCommands": 0,
+      "inferenceCalls": 0,
+      "ownerHardStopUtc": "2026-10-22T11:57:25.269652Z",
+      "atomicPublication": true,
+      "sourceDeleted": false,
+      "prefixRecoverySupported": true,
+      "decompressedBytes": 1225744,
+      "commandElapsedSeconds": 10.004079409874976
+    },
+    "allExportedFileHashesVerified": 61,
+    "sourceRawRetained": true
+  },
+  "mainCampaignUntouched": true,
+  "gitCommitsCreated": false,
+  "statusEvent": "msg_7cbf64ce1d5e",
+  "remainingWork": [
+    "In a future finite phone window, establish actual post-update bootstrap/session readiness before invoking K3 entrypoint; do not replay already passed local pilots",
+    "Validate v8a consumer lease on the real authorized session, then one actual correlated remote STT/LLM/TTS/WAV case",
+    "Qualify trusted LAN HTTPS native route separately; do not relabel ADB, overlay or historical relayed HTTP as direct LAN",
+    "Qualify hybrid K1/K2 and matched model/settings only where feasible, then forecast and select applicable finite900 conditions"
+  ]
+}

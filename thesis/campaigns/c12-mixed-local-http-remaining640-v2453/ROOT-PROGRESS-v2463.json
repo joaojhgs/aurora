@@ -1,0 +1,98 @@
+{
+  "at": "2026-10-22T13:01:34.217290+00:00",
+  "classification": "PROGRESS_AND_VERIFIED_LIVE_WAIT",
+  "previousTurnClassification": "VERIFIED_WAIT: exact original requester PID/startTicks directly observed live, actual cases progressing",
+  "requester": {
+    "pid": 462924,
+    "startTicks": 144596371,
+    "state": "S"
+  },
+  "current": {
+    "at": "2026-10-22T13:01:03.337390+00:00",
+    "companion": {
+      "measured": {
+        "attempted": 141,
+        "correct": 141,
+        "failed": 0,
+        "harnessErrorsIncludedInFailed": 0,
+        "incorrectIncludedInFailed": 0,
+        "offered": 141,
+        "planned": 640,
+        "timeouts": 0,
+        "unstarted": 499
+      },
+      "warmup": {
+        "attempted": 15,
+        "correct": 15,
+        "failed": 0,
+        "harnessErrorsIncludedInFailed": 0,
+        "incorrectIncludedInFailed": 0,
+        "offered": 15,
+        "planned": 15,
+        "timeouts": 0,
+        "unstarted": 0
+      }
+    },
+    "completePairedCapsules": 156,
+    "elapsedSeconds": 6553.098457626,
+    "lastIndex": 141,
+    "lastNativeParent": "a47d0a008ef21cc74129ae5902ea3b1f",
+    "lastOrdinal": 156,
+    "manifestSha256": "3bfca19d2dd0a9eec3981eae256168a5badd9ac2bb58a270ff8a55df1d986cce",
+    "phase": "measured",
+    "pid": 462924,
+    "primary": {
+      "measured": {
+        "attempted": 141,
+        "correct": 141,
+        "failed": 0,
+        "harnessErrorsIncludedInFailed": 0,
+        "incorrectIncludedInFailed": 0,
+        "offered": 141,
+        "planned": 640,
+        "timeouts": 0,
+        "unstarted": 499
+      },
+      "warmup": {
+        "attempted": 15,
+        "correct": 15,
+        "failed": 0,
+        "harnessErrorsIncludedInFailed": 0,
+        "incorrectIncludedInFailed": 0,
+        "offered": 15,
+        "planned": 15,
+        "timeouts": 0,
+        "unstarted": 0
+      }
+    },
+    "status": "running"
+  },
+  "priorRetainedMeasuredPerStream": 260,
+  "conditionCorrectPerStream": {
+    "primary": 401,
+    "companion": 401
+  },
+  "freeBytes": 2275323904,
+  "nextMaximumObservationUtc": "2026-10-22T13:06:34.217290+00:00",
+  "mainSourceSettingsCountsClocksFloorChanged": false,
+  "progress": "Replaced stale180-only K1HTTP consolidated view with versioned six-closed-condition saved-data extraction; all original indices preserved",
+  "savedResultsIndex": "thesis/results/worker-desktop-closed-core-v2463-final/README.md",
+  "savedResultsInventory": "thesis/results/worker-desktop-closed-core-v2463-final/inventory.json",
+  "savedResultsReceipt": "thesis/results/worker-desktop-closed-core-v2463-final/EXTRACTION-RECEIPT.json",
+  "savedAnalysisEntrypoint": "thesis/analysis/index_worker_desktop_closed_core_v2463.py",
+  "savedAnalysisValidation": "Compile/fatalRuff PASS, real extraction and pinned-input reproduction PASS; all11source hashes/all6condition rows identical",
+  "newMeasuredCallsOrRawQuantileComputations": 0,
+  "closedConditions": 6,
+  "closedAttemptsPerCondition": 900,
+  "formalFull13Complete": false,
+  "newCompletedControlCustody": "control-link-receipts/20261022T130024.277618Z.json",
+  "newControlFilesLinked": 286,
+  "newBytesHashed": 1731145,
+  "oldFilesRehashed": 0,
+  "newPayloadAllocations": 0,
+  "exactUnusedWebpackCachePermission": "Pending; no deletion/reask/implicit approval",
+  "phoneOwner": "term_1f27be31-0284-4366-bb91-30fe538cd30e",
+  "phoneSourceHandoff": "ebde+v2383 closed; Root no phone/Notebook operations",
+  "nextSutAction": "Complete exact current640 remaining plus retained260; retrieve EOF/prove normal actor retirement/release; only then actual prepared mixed P2P admission on available capacity",
+  "newWorkersReviewsModelsDevicesBuildsOrAuthChanges": 0
+}

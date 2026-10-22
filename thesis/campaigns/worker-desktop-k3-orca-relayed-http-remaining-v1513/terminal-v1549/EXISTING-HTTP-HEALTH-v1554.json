@@ -1,0 +1,12 @@
+{
+  "at": "2026-10-18T16:48:49.565883+00:00",
+  "endpoint": "existing127.0.0.1:18000/api/health",
+  "method": "GET",
+  "maximumRequests": 1,
+  "modelRequests": 0,
+  "credentialsOutput": false,
+  "httpStatus": 200,
+  "responseBytes": 126,
+  "authenticatedBoundaryReached": true,
+  "elapsedMs": 6933.2567129749805
+}

@@ -1,0 +1,58 @@
+{
+  "observed_at": "2026-10-14T13:51:12.055456+00:00",
+  "cell": "06-local-only",
+  "terminal": {
+    "status": "completed",
+    "child_exit_code": 0,
+    "exit_code": 0,
+    "started_at": "2026-10-14T12:53:33.598436+00:00",
+    "finished_at": "2026-10-14T13:49:04.951833+00:00",
+    "elapsed_seconds": 3331.3531272929395,
+    "receipt_validation": {
+      "validated": true,
+      "failure_classes": [],
+      "expected_requests": 105,
+      "expected_provider_captures": 105,
+      "capture_join": "request_ordinal",
+      "raw_artifacts_retained": true
+    },
+    "detached_group_cleanup": []
+  },
+  "request_count": 105,
+  "measured_count": 100,
+  "warmup_count": 5,
+  "measured_outcomes": {
+    "correct_success": 100
+  },
+  "warmup_outcomes": {
+    "correct_success": 5
+  },
+  "all_predicates_passed": true,
+  "all_identifiers_nonempty": true,
+  "all_request_ids_unique": true,
+  "all_deadlines_180s": true,
+  "all_intervals_within_deadline": true,
+  "warmup_order_matches_plan": true,
+  "capture_count": 105,
+  "all_captured": true,
+  "all_three_hashes_match": true,
+  "capture_ordinal_complete": true,
+  "capture_request_ordinal_complete": true,
+  "quantile_method": "Hyndman-Fan Type 7",
+  "population": "success-only one loaded-host session; 5 warmups excluded; no pooled/causal/stable-tail claim",
+  "derived_ms": {
+    "p50": 30729.7970785,
+    "p90": 35445.6286313,
+    "p95": 37635.40468775,
+    "p99": 40331.35223147001
+  },
+  "cleanup_status": "supervisor_returned_unverified",
+  "request_sha256": "83781442ec38f7da50ae732f21decc5fa9cb5a2a7d688e173d9ef39dd7a984c0",
+  "result_sha256": "2285f06dd123ac0e38b498ede1fffa8b977b0fb251957a3151b296d669f7e973",
+  "live_provider_capture_sha256": "fadc779e24b0adc04de7db6bc23581a321c8d7ee7636e6318ccb2adb1e5301af",
+  "next_cell_resources_exists": true,
+  "campaign_result_exists": false,
+  "independent_review": "pending",
+  "root_terminal_message": "msg_d1ca9865493c",
+  "root_delivery_ack": "delivery_d9b8d4d6cac1"
+}

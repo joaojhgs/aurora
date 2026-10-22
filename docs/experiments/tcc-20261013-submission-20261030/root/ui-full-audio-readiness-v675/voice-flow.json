@@ -1,0 +1,84 @@
+{
+  "assistant": {
+    "charCount": 5,
+    "errorCode": null,
+    "exactExpectedReply": true,
+    "messageIdSha256": "b7b3005436f4f0937d7a37d72448c99df13a612fbd1fcc2c00e25690e2c69094",
+    "nonempty": true,
+    "status": "Aurora · sent"
+  },
+  "checks": {
+    "assistantSent": true,
+    "browserOutputEnded": true,
+    "browserOutputStarted": true,
+    "exactExpectedReply": true,
+    "loopbackMicBrowserPermissionGranted": true,
+    "microphoneCalled": true,
+    "normalAssistantUi": true,
+    "normalConnection": true,
+    "normalLogin": true,
+    "transcriptMatchesFrozenQuestion": true,
+    "transcriptVisible": true,
+    "transcriptionAudioCaptured": true,
+    "transcriptionRequestCountOne": true,
+    "ttsRequestMatchesReply": true,
+    "ttsWavValid": true,
+    "voiceConsentGranted": true
+  },
+  "cleanup": {
+    "contextClosed": true,
+    "failureClass": null,
+    "profileRemoved": true
+  },
+  "completedAt": "2026-10-15T17:42:25.115Z",
+  "http401Count": 10,
+  "input": {
+    "bytes": 219794,
+    "durationSeconds": 4.982993197278912,
+    "fileAudioLoop": false,
+    "leadingSilenceMs": 1000,
+    "sha256": "da0ecc4ad0885746ab6e716585473917ab2b543a505bf0db09ebacfaa7943cbb",
+    "trailingSilenceMs": 500
+  },
+  "microphone": {
+    "calls": 1,
+    "successes": 1
+  },
+  "outcome": "passed",
+  "requestFailureCount": 8,
+  "schema": "aurora-normal-ui-file-microphone-login-v675",
+  "scope": "browser_file_microphone_to_stt_to_visible_llm_reply_to_normal_tts_audio_only",
+  "stage": "complete",
+  "startedAt": "2026-10-15T17:41:36.700Z",
+  "transcript": {
+    "charCount": 62,
+    "matchesFrozenQuestion": true,
+    "messageIdSha256": "9e7201be600af4c726d32c9825ff5702a7461513b0b957c558126c699c1ad944",
+    "nonempty": true,
+    "sha256": "34b681e385feb3500c9e9849d30f5bac982716c4e4938cdb04c5fdc617cff624"
+  },
+  "transcription": {
+    "audioCaptured": true,
+    "bytes": 191360,
+    "channels": 1,
+    "format": "raw",
+    "requestCount": 1,
+    "sampleRate": 16000,
+    "sha256": "73ae5df883f48c6589f3cf0cc6bf7fbd1f0af9aae8bbf7d29a498710727c45ed"
+  },
+  "tts": {
+    "browserOutputEnded": true,
+    "browserOutputStarted": true,
+    "requestCount": 1,
+    "requestMatchesReply": true,
+    "responseStatusOk": true,
+    "wavBytes": 31788,
+    "wavSha256": "2a84df0b3e9a7d0c463789c9d2b082a46a1f6734c89f017c2065fe82b043ce5d",
+    "wavValid": true
+  },
+  "unverified": [
+    "physical_microphone",
+    "os_permission_prompt_behavior",
+    "physical_speaker_output"
+  ]
+}

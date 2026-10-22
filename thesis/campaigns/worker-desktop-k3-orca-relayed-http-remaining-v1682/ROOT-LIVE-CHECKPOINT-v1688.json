@@ -1,0 +1,66 @@
+{
+  "at": "2026-10-20T01:00:56.880312+00:00",
+  "classification": "VERIFIED_WAIT_SAME_LIVE_FROZEN_MEASUREMENT",
+  "previousGoalTurnClassification": "PROGRESS: actual remaining-only requester/native-admission/firstcase resumed with physical evidence; this turn verified continued collection",
+  "newEpoch": {
+    "attempted": 16,
+    "correct": 16,
+    "failed": 0,
+    "target": 160,
+    "unattempted": 144,
+    "outcomes": {
+      "completed_correct": 16
+    },
+    "timeouts": 0,
+    "timeoutFieldPolicy": "Top-level timeout presence/value shown separately; missing flags not inferred false",
+    "timeoutFieldPresent": 16
+  },
+  "countsOnly": {
+    "attempted": 756,
+    "correct": 741,
+    "failed": 15,
+    "target": 900,
+    "unattempted": 144,
+    "old740Preserved": true
+  },
+  "newEpochExcludedWarmups": {
+    "attempted": 15,
+    "correct": 15
+  },
+  "lastMeasuredIndex": 756,
+  "processes": [
+    {
+      "role": "controller",
+      "pid": 2202799,
+      "startTicks": 123551050,
+      "alive": true
+    },
+    {
+      "role": "backend",
+      "pid": 2202983,
+      "startTicks": 123552157,
+      "alive": true
+    },
+    {
+      "role": "copier",
+      "pid": 2202800,
+      "startTicks": 123551051,
+      "alive": true
+    }
+  ],
+  "frozenManifestSha256": "32c5ac87c8cd765f0117a0312b6941c8f69c7731dfe66987826311e74e34b506",
+  "custody": {
+    "sequence": 17,
+    "cases": 30,
+    "files": 139,
+    "bytes": 2931324,
+    "physicalWAVs": 31,
+    "errors": null,
+    "freeBytes": 5382295552
+  },
+  "summaryExists": false,
+  "nextProgressCheckAt": "2026-10-20T01:05:56.880312+00:00",
+  "noAdvanceNudgeAt": "2026-10-20T01:05:56.880312+00:00",
+  "providerDeadlineUtc": "2026-10-20T03:42:15.698294+00:00",
+  "nextAction": "Wait on and observe SAME frozen live controller; no new traffic/tests/source changes, no resume or replacement. At natural terminal seal requester/provider EOF and reconcile exact remaining indices, then next authorized condition. Native goal stays ACTIVE."
+}

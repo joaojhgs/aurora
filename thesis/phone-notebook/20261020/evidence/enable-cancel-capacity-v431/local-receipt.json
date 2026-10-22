@@ -1,0 +1,8 @@
+{
+  "bytes": 692,
+  "copyOnly": true,
+  "custody": "Notebook result persisted and fsynced before relay; remote receipt in same output",
+  "localPath": "/home/developer/projects/aurora/thesis/phone-notebook/20261020/evidence/enable-cancel-capacity-v431/result.json",
+  "remotePath": "/home/developer/projects/aurora/thesis/phone-notebook/20261020/evidence/enable-cancel-capacity-v431.json",
+  "sha256": "6205eca7881d97cccd621b887e11f84a3bd7e54dcc39b780d90fa6c18a0065ea"
+}

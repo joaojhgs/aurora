@@ -1,0 +1,54 @@
+{
+  "observedAt": "2026-10-17T21:17:18.088510+00:00",
+  "run": "run_e6054e76e9fc",
+  "task": "task_d7ea336050cf",
+  "dispatch": "ctx_37b4d0a3c14f",
+  "rootRequest": "msg_edf90174a8ff",
+  "reviewScope": "ONE bounded read-only delta-selector/exporter and changed transport-main-flow review against closedv1232. Source pins/read source/diff and existing smoke receipt only; no new tests/replays/Personal command/Aurora calls/audio/model/archive rehash.",
+  "sourcePins": [
+    {
+      "path": "thesis/harness/provider_export_delta_v1258.py",
+      "sha256": "b5298ba9a95d1226e776ccb671183d3d474f00eb4ead9af66dd62c409b948e8d",
+      "matchesSupplied": true
+    },
+    {
+      "path": "thesis/harness/transfer_provider_delta_v1261.py",
+      "sha256": "723a755c3733cc6acac5c459d297dbee54370bf7d9c3eb0b0b8a8e37f1d06af6",
+      "matchesSupplied": true
+    }
+  ],
+  "verdict": "NO_MATERIAL_NEW_COPY_SELECTION_OR_RETENTION_DEFECT_FOUND",
+  "findings": [
+    {
+      "classification": "accepted",
+      "detail": "select_delta refuses missing/changed prior keys/bytes/SHA, duplicates and invalid state keys; output includes only new immutable keys. It preserves baseline and does not reread/recopy baseline raw payload."
+    },
+    {
+      "classification": "accepted",
+      "detail": "New files checked against exact source sizes/SHA and before/after identity; source/current snapshot hash, prefix watermarks and baseline identity are retained. Export has128MiB/4MiBsec/2GiB-floor/120s copy guards and atomic archive+receipt publication. No Aurora or model invocation."
+    },
+    {
+      "classification": "accepted",
+      "detail": "Transport diff versus closedv1232 changes docstring, destination, export-result filename, baseline metadata, page labels only. Existing lock/state/no-resend-on-ambiguity/page/checksum/extraction flow is preserved. No old archive/destination is overwritten."
+    },
+    {
+      "classification": "required-input-note-not-new-gate",
+      "detail": "--baseline must use the verified raw-only PROVIDER-EXPORT.json (56provider-raw members), not CUSTODY.json with59members including3snapshots. Actual available baseline exact path/hash recorded below."
+    },
+    {
+      "classification": "required-interpretation-note-not-new-gate",
+      "detail": "New provider snapshot references baseline plus delta. Retain explicit baseline hash/local locator and use combined immutable lookup for later analysis; existing single-root analyzer cannot treat delta extraction alone as complete provider data. Missing baseline-relative files in an uncombined delta root are not new loss/model failure. No extra analysis replay needed now."
+    }
+  ],
+  "baseline": {
+    "workerCanonicalPath": "thesis/evidence/orca-relayed-http-v1197/provider-transfer-v1232/extracted/PROVIDER-EXPORT.json",
+    "bytes": 40659,
+    "sha256": "5f29a553048441503ba0d231ec78e857f2a9ef3355a931dcae9d0db360ee760b",
+    "rawMembers": 56,
+    "rawPayloadBytes": 43117024
+  },
+  "smokeReceipt": "thesis/validation/provider-delta-v1258/MAIN-FLOW.json (Root already ran one saved749B positive copy; monitor did not rerun)",
+  "newMaterialDefects": [],
+  "actualExportTransferStatus": "No new operation observed by monitor; source approval is not execution/completion. Root owns once-only control window/actual receipt; preserve ambiguous operation before any retry.",
+  "decision": "Close bounded source review; Root may perform its planned one finite maintenance copy with IO/network confound retained. No new SUT gate or additional scenarios."
+}

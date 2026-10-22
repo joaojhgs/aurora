@@ -1,0 +1,82 @@
+{
+  "baseSourceSha": "ebde3a8acf6315f920d03593845f17a1fc65a733",
+  "sourceIdentity": "ebde3a8acf6315f920d03593845f17a1fc65a733 + source-closure-overlay-v2383 + android-bundled-model-rename-v1 + android-node-policy-initial-publication-v2 + android-finite-file-audio-v3 + android-finite-file-audio-v3a + android-k3-sdk-file-audio-v4 + android-k3-sdk-mode-v4a + android-k3-sdk-build-flag-v5 + android-k3-native-surface-v6 + android-native-pairing-role-v7 + isolated-workspace-resolution-v7a + unchanged-voice-package-reuse-v7b + android-sdk-speech-binding-v8 + android-sdk-consumer-lease-v8a",
+  "remoteSha": null,
+  "acquisition": "Root-approved exact archive and isolated immutable repair epochs",
+  "sharedGitWrites": false,
+  "frozenCampaignSourceChanged": false,
+  "repairs": [
+    {
+      "manifest": "repairs/android-bundled-model-rename-v1/MANIFEST.json",
+      "manifestSha256": "f740961ae8353fedb2cf7ada8204c3bad5b5e3cc8f432c46ff98edee8e2634a8",
+      "patch": "repairs/android-bundled-model-rename-v1/PATCH.diff",
+      "patchSha256": "40b385401472445ec32c184e73a99495efee8d59e4c3c34af2d62aa1edb3d9fc"
+    },
+    {
+      "manifest": "repairs/android-finite-file-audio-v3/MANIFEST.json",
+      "manifestSha256": "7119cf3fb1ad59165380d369a3eeb7bf6b1655c893e5ef1c09aea4dbd8e1832e",
+      "patch": "repairs/android-finite-file-audio-v3/PATCH.diff",
+      "patchSha256": "6982e5916fd4fc0eac304abc0c4bbda6923e7e689c8f6f64164d0a44d844dd24"
+    },
+    {
+      "manifest": "repairs/android-finite-file-audio-v3a/MANIFEST.json",
+      "manifestSha256": "d969ec475d0ddbe391cdedb64521a4f2cd94ca4362bc1afb80574c86764567b0",
+      "patch": "repairs/android-finite-file-audio-v3a/PATCH.diff",
+      "patchSha256": "13d9011e0914bc08d7f2b2dbcdc8509dd76c365829f548743d01b3b8730c08c4"
+    },
+    {
+      "manifest": "repairs/android-k3-native-surface-v6/MANIFEST.json",
+      "manifestSha256": "2984a9c9cd4dedd10b75c93f6491cdc6e7343a4ad79be3cbe0d8056f70f2549f",
+      "patch": "repairs/android-k3-native-surface-v6/PATCH.diff",
+      "patchSha256": "a0b6eb741842ba950d59e21f3a83d789d770a9c4e8793585addf162b1e8fc80b"
+    },
+    {
+      "manifest": "repairs/android-k3-sdk-build-flag-v5/MANIFEST.json",
+      "manifestSha256": "eb40b3a7056f81a289f018fc7bc3cc3574d0117b393cef77fb5d095daf64928d",
+      "patch": "repairs/android-k3-sdk-build-flag-v5/PATCH.diff",
+      "patchSha256": "7fd311c626367a9b04410234ee8296f03566a63d5eebea4607f6d6b35def4058"
+    },
+    {
+      "manifest": "repairs/android-k3-sdk-file-audio-v4/MANIFEST.json",
+      "manifestSha256": "5fa7dfabca52b57bbeac69764ef7c46413345c1c09c828274300d5201b3b7868",
+      "patch": "repairs/android-k3-sdk-file-audio-v4/PATCH.diff",
+      "patchSha256": "12644898f589c9bbeaf4ddc5e8db2a799b267148f032a939bb93963c33152b70"
+    },
+    {
+      "manifest": "repairs/android-k3-sdk-mode-v4a/MANIFEST.json",
+      "manifestSha256": "ba552b1ea2ec9860a83f07d24f9550255326664095b4534bd66baac5a77ad79a",
+      "patch": "repairs/android-k3-sdk-mode-v4a/PATCH.diff",
+      "patchSha256": "c260a59f315dda4a5d8366a27f4ce806eb9427caf9ea9cf79dc895648a4a58d9"
+    },
+    {
+      "manifest": "repairs/android-native-pairing-role-v7/MANIFEST.json",
+      "manifestSha256": "a73f166dae135b86095016dbeb56d2dd8e240f4d86ba2760efa86192c78db0f7",
+      "patch": "repairs/android-native-pairing-role-v7/PATCH.diff",
+      "patchSha256": "bfafd70fc63a0ef922d359e4ed10655da35b44b3db5d091b0c036512ac2035f1"
+    },
+    {
+      "manifest": "repairs/android-node-policy-initial-publication-v2/MANIFEST.json",
+      "manifestSha256": "8fee9115adf50579506f5dc15dcbc83e4d42c7610eb483deb1fcb7478e8c5dc7",
+      "patch": "repairs/android-node-policy-initial-publication-v2/PATCH.diff",
+      "patchSha256": "d4b2babfbdd4e62fc6b488a519fb5c9d8337bb2c213bc58915f2fa986a661082"
+    },
+    {
+      "manifest": "repairs/android-sdk-consumer-lease-v8a/MANIFEST.json",
+      "manifestSha256": "d0f651ae6ca62ba258c45d13d7a3aaec3613fd01565709c3d61289512d893f3a",
+      "patch": "repairs/android-sdk-consumer-lease-v8a/PATCH.diff",
+      "patchSha256": "622e02293b83bf54bbcd33cb89002c9d5efb2ddc97d136d40984cf9f0b554bf6"
+    },
+    {
+      "manifest": "repairs/android-sdk-speech-binding-v8/MANIFEST.json",
+      "manifestSha256": "4b986c336f49dcf501cc7d72c1d9f744a907d2eef7fda90fb4e2d37dfc7b4a31",
+      "patch": "repairs/android-sdk-speech-binding-v8/PATCH.diff",
+      "patchSha256": "b04bd205826e16dddca820049e2daf4071305a9b5cfd039b483231d8644997aa"
+    },
+    {
+      "manifest": "repairs/policy-test-fixture-closure-v169/MANIFEST.json",
+      "manifestSha256": "a1ee54d2bec0ba8d6c058f5d6bd48580bd5b44f5aecfb5e6cb144eff0808c6cf",
+      "patch": null,
+      "patchSha256": null
+    }
+  ]
+}

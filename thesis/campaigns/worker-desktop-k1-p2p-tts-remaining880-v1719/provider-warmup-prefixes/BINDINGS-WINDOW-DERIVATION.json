@@ -1,0 +1,30 @@
+{
+  "at": "2026-10-20T04:49:34.791456+00:00",
+  "derivedBindings": {
+    "basis": "Exact current15 successful warmup native model spans; all34 prior provider calls retained outside this new-epoch gate. Strict original proof generator unchanged.",
+    "nativeClockRange": [
+      226530849546917,
+      227183699514647
+    ],
+    "path": "thesis/campaigns/worker-desktop-k1-p2p-tts-remaining880-v1719/provider-warmup-prefixes/actual-provider-bindings.current15-native-window.jsonl",
+    "rows": 30,
+    "sha256": "c93f7e619843c4c13d1d57d84012310d61ba68045d992a3d9262a915c754dd06"
+  },
+  "excludedWarmups": 15,
+  "failedCollectorRetained": true,
+  "frozenSourceOrManifestEdited": false,
+  "measured880ForecastSecondsWith20PercentPlus300": 59763.82104822719,
+  "newOrcaSends": 0,
+  "newSutCalls": 0,
+  "originalBindings": {
+    "path": "thesis/campaigns/worker-desktop-k1-p2p-tts-remaining880-v1719/provider-warmup-prefixes/actual-provider-bindings.jsonl",
+    "rows": 98,
+    "sha256": "dbe128d69dd22c99e7c33eb65cab58f04889d8cb0042692b8e7844979434aa98"
+  },
+  "proofSha256": "9b1034c63ded434536a8957574825b789062a8cde15e2ffa65dcecaf9b152fe8",
+  "providerRemainingSeconds": 68749.294512,
+  "providerWarmupCalls": 15,
+  "requesterRemainingSeconds": 67142.27794,
+  "status": "SAME15_SAVED_WARMUPS_NATIVE_CURRENT_WINDOW_PROOF_PUBLISHED",
+  "warmupP95MsType7": 56310.43659869999
+}

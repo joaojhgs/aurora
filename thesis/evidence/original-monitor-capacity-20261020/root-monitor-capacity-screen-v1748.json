@@ -1,0 +1,40 @@
+{
+  "id": "46cb8a1b-f286-43d8-ad44-e4e7952b1eea",
+  "ok": true,
+  "result": {
+    "terminal": {
+      "handle": "term_2eab47ed-ab9b-4e35-bd9b-fc068c60e3fc",
+      "status": "running",
+      "tail": [
+        "\u203a OWNER DEADLINE/EXPEDITE REQUEST:10days until finaldeliverable, needs advisor\u2026",
+        "\u2022 Ran timeout --kill-after=2s 28s /home/developer/.orca-relay/bin/orca orchestr\u2026",
+        "  \u2514     \"runtimeId\": \"cc9e3275-28c6-4c45-85cc-bdcd2262aa7d\"",
+        "      }",
+        "    }",
+        "    + 26 lines (ctrl+t to expand)",
+        "\u2022 Ran timeout --kill-after=2s 28s /home/developer/.orca-relay/bin/orca orchestr\u2026",
+        "  \u2514     \"runtimeId\": \"cc9e3275-28c6-4c45-85cc-bdcd2262aa7d\"",
+        "      }",
+        "    }",
+        "    + 21 lines (ctrl+t to expand)",
+        "\u2022 Ran python3 - <<'PY' \u2026",
+        "  \u2514 {\"path\": \".omx/evidence/orca-monitor-20261010/FULL-PLAN-N-ACTUAL-ADMISSION-\u2026",
+        "    + 1 line (ctrl+t to expand)",
+        "\u25a0 Selected model is at capacity. Please try a different model.",
+        "\u203a Ask Codex to do anything",
+        "  GPT-6.1-Sol xhigh \u00b7 ~/projects/aurora \u00b7 Report \u2026 Goal stalled (/goal resume)",
+        "  ? for shortcuts                                      \u26a0 1 warning \u00b7 f2 to view"
+      ],
+      "truncated": true,
+      "limited": false,
+      "oldestCursor": "0",
+      "nextCursor": "0",
+      "latestCursor": "0",
+      "returnedLineCount": 18,
+      "source": "screen"
+    }
+  },
+  "_meta": {
+    "runtimeId": "cc9e3275-28c6-4c45-85cc-bdcd2262aa7d"
+  }
+}

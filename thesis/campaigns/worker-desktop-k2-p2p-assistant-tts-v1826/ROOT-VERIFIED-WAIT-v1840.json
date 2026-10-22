@@ -1,0 +1,72 @@
+{
+  "at": "2026-10-20T16:34:47.634795+00:00",
+  "classificationOfPreviousGoalTurn": "verified_wait",
+  "classificationOfCurrentObservation": "verified_wait",
+  "nativeGoal": {
+    "threadId": "01a112a5-d6bb-74e2-bf7c-ace73cb513b5",
+    "status": "active",
+    "fullObjectivePreserved": true
+  },
+  "status": "FROZEN_K2_P2P_900_COLLECTION_RUNNING",
+  "conditionManifestSha256": "a653d60065616e34844d956d1ed47038aa94f3ff876c36bf3a98e904ca838641",
+  "progress": {
+    "attempted": 116,
+    "last_attempt_file": "attempts/attempt-0116-measured.jsonl",
+    "last_attempt_status": "completed_correct",
+    "measured_attempted": 101,
+    "planned_measured": 900,
+    "planned_warmups": 15,
+    "status": "running",
+    "unattempted_measured": 799,
+    "warmups_attempted": 15
+  },
+  "measuredCompleted": 101,
+  "measuredOutcomes": {
+    "completed_correct": 101
+  },
+  "requesterProcesses": [
+    {
+      "pid": 2830732,
+      "startTicks": 129050331,
+      "state": "S",
+      "identityVerifiedLive": true
+    },
+    {
+      "pid": 2830763,
+      "startTicks": 129050436,
+      "state": "R",
+      "identityVerifiedLive": true
+    },
+    {
+      "pid": 2831081,
+      "startTicks": 129052325,
+      "state": "S",
+      "identityVerifiedLive": true
+    }
+  ],
+  "custody": {
+    "updatedAt": "2026-10-20T16:34:08.369054+00:00",
+    "receipt": "thesis/campaigns/worker-desktop-k2-p2p-assistant-tts-v1826/receipts/000034.json",
+    "receiptSha256": "6a74f0421711a15dedbc48e99dbc70834ef256697c218338d16e8720f2da6257",
+    "cases": 114,
+    "audioBlobs": 114,
+    "physicalPayloadBytes": 8929420,
+    "errors": [],
+    "diskAfter": {
+      "free": 4474433536,
+      "total": 109128826880,
+      "used": 104637616128
+    }
+  },
+  "originalMonitor": {
+    "run": "run_e6054e76e9fc",
+    "task": "task_d7ea336050cf",
+    "dispatch": "ctx_37b4d0a3c14f",
+    "lastReadHeartbeat": "msg_abc6602b5518",
+    "singleOwnerAlert": "msg_44b9a0618c24",
+    "ownerDeliveryAcknowledgement": "UNVERIFIED"
+  },
+  "sourceOrSettingsChanged": false,
+  "newWorkerOrCampaignStarted": false,
+  "nextGate": "Natural terminal boundary of SAME frozen 900, then requester/provider EOF custody and saved-data native-stage/resource/correctness summary; K1 remaining191 and full matrix remain open."
+}

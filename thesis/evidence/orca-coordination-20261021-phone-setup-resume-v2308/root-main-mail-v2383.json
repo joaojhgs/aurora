@@ -1,0 +1,38 @@
+{
+  "id": "remote-cli-1792640573661",
+  "ok": true,
+  "result": {
+    "runId": "run_e6054e76e9fc",
+    "deliveryId": "delivery_f83ddc64a387",
+    "messages": [
+      {
+        "id": "msg_82362f7b2ad0",
+        "run_id": "run_e6054e76e9fc",
+        "delivery_contract": "current_delivery",
+        "from_handle": "term_1f27be31-0284-4366-bb91-30fe538cd30e",
+        "to_handle": "run:run_e6054e76e9fc",
+        "subject": "Exact source APK failed: missing desktop-file-audio-e2e module; need Root source closure",
+        "body": "Actual voice-live APK build progressed through successful pinned AndroidARM64llama0.4.1 static engine then frontend exited2 at03:39:05UTC: apps/aurora-tauri/src/tauri-app.tsx(89,44) TS2307 Cannot find module ./desktop-file-audio-e2e; this module is absent from exact1959file source snapshot. Other @aurora/voice-web errors appear generated workspace exports and I am resolving their preparation independently; no bypassed typecheck/stub/product-source mutation. Please provide exact authorized source closure file(s) plus immutable hash/source overlay or revised exact snapshot through integration lane, without pausing main campaign; original snapshot remains immutable, no native pilot/900 claimed and GPU exposure prerequisite remains separately observed.",
+        "type": "status",
+        "priority": "high",
+        "thread_id": null,
+        "payload": "{\"reportPath\":\"thesis/phone-notebook/20261020/REPORT.md\"}",
+        "created_at": "2026-10-22T03:41:13Z",
+        "delivered_at": null
+      }
+    ],
+    "count": 1,
+    "replayed": false,
+    "acknowledged": null,
+    "timedOut": false,
+    "cancelled": false,
+    "connectionLost": false,
+    "mutation": {
+      "requestId": "bbba8e50-b40a-4d8e-b962-ded1536b0545",
+      "replayed": false
+    }
+  },
+  "_meta": {
+    "runtimeId": "cc9e3275-28c6-4c45-85cc-bdcd2262aa7d"
+  }
+}

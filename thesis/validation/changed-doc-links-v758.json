@@ -1,0 +1,15 @@
+{
+  "schema": "aurora.thesis.changed-doc-links.v758",
+  "at": "2026-10-15T23:56:21.644973+00:00",
+  "scope": "New retained-source inventory docs and updated public status; no unchanged source/runtime/test suite rerun",
+  "files": [
+    "thesis/README.md",
+    "thesis/inventory/README.md",
+    "thesis/harness/retained/README.md",
+    "docs/experiments/tcc-20261013-submission-20261030/root/CURRENT.md"
+  ],
+  "relativeLinksChecked": 62,
+  "failures": [],
+  "newMeasuredRequests": 0,
+  "modelsOrServicesLoaded": false
+}

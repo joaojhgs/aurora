@@ -1,0 +1,31 @@
+{
+  "at": "2026-10-22T15:25:48.075577+00:00",
+  "status": "COMPLETE_DERIVED_ANALYSIS_PHYSICALLY_RETAINED_IN_WORKER_REPO_THESIS",
+  "archive": "thesis/results/c12-mixed-local-http-289partial-v2479/analysis-results.tar.gz",
+  "archiveBytes": 181243,
+  "archiveSha256": "7d7e8071de94054a1b1b6a9cff79298e25486aef1fe13fe69cd8a63752e14711",
+  "verifiedLogicalPayloadFiles": [
+    "ANALYZER-AS-EXECUTED.py",
+    "CASE-HISTORY.jsonl",
+    "CURRENT.snapshot.json",
+    "INPUT-MANIFEST.json",
+    "NATIVE-STAGES-QUEUE.jsonl",
+    "RAM-ANALYSIS-RECEIPT.json",
+    "REPORT.md",
+    "SUMMARY.json"
+  ],
+  "logicalPayloadBytes": 1346545,
+  "allOriginalRawInputsAlreadyPhysicalThesis": true,
+  "analysisAlgorithmUnchangedSha256": "20234279339c2099610c0270a0307b020dab87b40583fd9c0115cfec57d0215c",
+  "computedInRamToAvoidUncompressedWorkerPeak": true,
+  "archiveExtractedToDisk": false,
+  "plainSmallSummaryAndReportCopiedForReading": true,
+  "originalRamReceiptPendingStatusHistoricalSupersededByThisCustody": true,
+  "currentEpochMeasuredCorrectPerStream": 289,
+  "globalRetainedCorrectPerStream": 549,
+  "globalUnstartedPerStream": 351,
+  "newInference": 0,
+  "newNetworkTrafficByAnalysis": 0,
+  "oldDataDeleted": false,
+  "workerFreeBeforeBytes": 2173730816
+}

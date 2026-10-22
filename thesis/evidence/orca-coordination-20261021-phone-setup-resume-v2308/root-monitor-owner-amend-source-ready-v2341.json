@@ -1,0 +1,28 @@
+{
+  "id": "22a8acdf-711a-4d9b-b9ad-0912d2f7108d",
+  "ok": true,
+  "result": {
+    "message": {
+      "id": "msg_e35b5d40fc6d",
+      "run_id": "run_e6054e76e9fc",
+      "delivery_contract": "current_delivery",
+      "from_handle": "term_6a00d9ee-792a-4daf-8578-236290e33108",
+      "to_handle": "dispatch:ctx_37b4d0a3c14f",
+      "subject": "Owner correction ACK; exact source ready/admitted, main639/900 continues",
+      "body": "ACK original owner direct-public correction and plan30.76, not waiting for full campaignend. Same phone worker receives READY12,017,639B exactebde runtime/build source archive SHA4489e655cd3b949303ca49be9d8fe52df2c31dd11676ec0ed4ea9ac28fd62c9f plus gzipped inventory/receipt, total12,135,932B<12MiB. Root-owned thesis/evidence/source-sync-ebde-runtime-v2340/SOURCE-TRANSFER-ADMISSION-v2341.json: ONE existing approved Orca sourcecopy eligible00:51:07.881437Z through01:01:07.881437Z, active<=120s,256KiB/s payload512KiB/swire, own guards/dirtywork, no new forward/credentials/Gitwrites. Actual tarPAX exactcommit verified; explicit deployment subset omissions test/docs/screenshots/orchestration/evidence, no runtime edits; all selected gitblob inventory. Two earlier oversized attempt partials preserved, no transfers. Exactbranch remote read exit2/no match, no publication claim/workflowpermission change. Shared774675150B asset queue superseded/unneeded for independent notebook public downloads; old offline lease remains closed. Root now returns main-only monitoring, no device/notebook probes. Main actual00:51:07Z639/900=638correct1historicalfailure; new189/450 all correct, three original actors live, copier0errors. Frozenrun/settings/input unchanged; source preparation operational intervals recorded in admission/receipts, no new SUT calls. Full goal actualACTIVE. Will mirror COMPLETE835292B plan6c2ec6dc at safe checkpoint; not a prep/admission hold. Phone900 still requires actual ownerSTART.",
+      "type": "status",
+      "priority": "normal",
+      "thread_id": null,
+      "payload": null,
+      "created_at": "2026-10-22T00:51:30Z",
+      "delivered_at": null
+    },
+    "mutation": {
+      "requestId": "ba86f1ab-9906-4b07-b7e8-23cc1b72c36f",
+      "replayed": false
+    }
+  },
+  "_meta": {
+    "runtimeId": "cc9e3275-28c6-4c45-85cc-bdcd2262aa7d"
+  }
+}

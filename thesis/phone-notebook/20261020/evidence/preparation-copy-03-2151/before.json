@@ -1,0 +1,23 @@
+{
+  "_meta": {
+    "runtimeId": "cc9e3275-28c6-4c45-85cc-bdcd2262aa7d"
+  },
+  "id": "e26ea1c6-7cbf-4a05-a3a3-831843dfad91",
+  "ok": true,
+  "result": {
+    "terminal": {
+      "handle": "term_f40f2bd6-0f71-4484-8347-ac221cf6ce9b",
+      "latestCursor": "324",
+      "limited": true,
+      "nextCursor": "324",
+      "oldestCursor": "0",
+      "returnedLineCount": 1,
+      "source": "stream",
+      "status": "running",
+      "tail": [
+        "\u279c  aurora git:(feat/ui-multi-platform-integration) \u2717"
+      ],
+      "truncated": true
+    }
+  }
+}

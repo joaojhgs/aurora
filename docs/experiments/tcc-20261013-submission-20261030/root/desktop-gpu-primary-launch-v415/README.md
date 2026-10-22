@@ -1,0 +1,9 @@
+**Status: Current bounded check.**
+
+Desktop GPU typed Assistant measurements actually started 17:56:39.900723 UTC on personal.skyron-server, runner PID2707433/start62890835 under original Root controller2707431. At 17:57:57.548447 UTC, five excluded warmups and eight measured requests were all correct. The real reply/IDs/history and input/stage predicate are retained. Approved readiness naturally exited0 after two excluded requests; logs show25/25 model layers offloaded and owned RX7600 DRM activity. CPU mapped/embedding/host work remains involved.
+
+The frozen component declares900 measured plus15excludedwarmups independently per local and HTTP API condition, three fresh model/application/process sessions of300 measured plus5warm each. Six epochs are serial under original Root GPU reservation. Caps3300s per epoch/3350outer/20160overall are operational, based on excluded cold6.474s/warm5.450s, not a tail estimate. No source/count/model/configuration changes while live. The first receipt is progress, not completion.
+
+Original worker900-total CPU campaign finished naturally17:01:15, sealed and independently reviewed, retained as EXTRA CPU typed control. Desktop setup was parallel; actual GPU measurements started after CPU finished because prerequisites remained incomplete. No earlier launch is claimed.
+
+Typed local/API only: STT/TTS/tool execution/render/playback and full applicable non-iOS surfaces remain. The full individual GPU campaign is not finished/sealed. Cross-device/cross-surface measured traffic stays HELD until BOTH full individual campaigns finish and seal; later declared shared-provider contention is expected. Authoritative owner plan1351lines/SHA7028f770457f08fd64e7b2221572a45932bfb4576ff5b27082696b1522d0223e, monitor sole vault writer. Same native aggregate ACTIVE/unbudgeted, original Root/Orca monitor/branch/dirty work preserved. No iOS active work, new workers, company/security changes or publishing.

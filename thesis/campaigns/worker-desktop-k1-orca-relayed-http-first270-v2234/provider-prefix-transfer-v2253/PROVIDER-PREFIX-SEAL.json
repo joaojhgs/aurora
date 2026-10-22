@@ -1,0 +1,265 @@
+{
+  "at": "2026-10-21T20:50:24.286897+00:00",
+  "status": "k1_http_provider_after_requester_terminal_fixed_prefix",
+  "providerManifestSha256": "950d449e3c337764a654ae4dd08c66623f50f96617615328be0cd8c54a4eaea2",
+  "epochManifestSha256": "11bbea3fc1e45e65da1ecb7b501aee77739870cb087d792e5bc5197f9b1027be",
+  "actors": [
+    {
+      "pid": 1440195,
+      "startTicks": 35427348,
+      "state": "S"
+    },
+    {
+      "pid": 1440196,
+      "startTicks": 35427408,
+      "state": "S"
+    }
+  ],
+  "providerRetired": false,
+  "reservationPreserved": true,
+  "nativeSpansAtBoundary": 600,
+  "openNativeSpansAtBoundary": 0,
+  "files": [
+    {
+      "name": "raw/provider-manifest.json",
+      "source": "/home/developer/projects/aurora/thesis/campaigns/worker-desktop-k1-http-provider-v2220/provider/provider-manifest.json",
+      "bytes": 10252,
+      "sha256": "950d449e3c337764a654ae4dd08c66623f50f96617615328be0cd8c54a4eaea2",
+      "sourceInode": 4621453,
+      "observedSourceBytes": 10252,
+      "terminalEOF": false,
+      "completeLinePrefix": false
+    },
+    {
+      "name": "raw/controller-launch.json",
+      "source": "/home/developer/projects/aurora/thesis/campaigns/worker-desktop-k1-http-provider-v2220/provider/controller-launch.json",
+      "bytes": 302,
+      "sha256": "d3b4427eecb536e0e91522016f72d2f283bebfbaca59290f9d57112fe62ca744",
+      "sourceInode": 4621459,
+      "observedSourceBytes": 302,
+      "terminalEOF": false,
+      "completeLinePrefix": false
+    },
+    {
+      "name": "raw/receiver-identity.json",
+      "source": "/home/developer/projects/aurora/thesis/campaigns/worker-desktop-k1-http-provider-v2220/provider/receiver-identity.json",
+      "bytes": 1373,
+      "sha256": "46cea26a99e5b8f9587363dcb7272be52c1a5e3dc922a0a76931c1886430c58d",
+      "sourceInode": 4621460,
+      "observedSourceBytes": 1373,
+      "terminalEOF": false,
+      "completeLinePrefix": false
+    },
+    {
+      "name": "raw/assistant-identity.json",
+      "source": "/home/developer/projects/aurora/thesis/campaigns/worker-desktop-k1-http-provider-v2220/provider/assistant-identity.json",
+      "bytes": 1418,
+      "sha256": "3ec886efa489aa006c1249a655d3f2dd4c9b8eaa42890fd3240a9d79c2000740",
+      "sourceInode": 4621467,
+      "observedSourceBytes": 1418,
+      "terminalEOF": false,
+      "completeLinePrefix": false
+    },
+    {
+      "name": "raw/stt-identity.json",
+      "source": "/home/developer/projects/aurora/thesis/campaigns/worker-desktop-k1-http-provider-v2220/provider/stt-identity.json",
+      "bytes": 1400,
+      "sha256": "38a04ca99a6e14b59e5e4e9b1d235479d7dbd73959f2353e7c42213cba90d006",
+      "sourceInode": 4621468,
+      "observedSourceBytes": 1400,
+      "terminalEOF": false,
+      "completeLinePrefix": false
+    },
+    {
+      "name": "raw/runtime-versions.json",
+      "source": "/home/developer/projects/aurora/thesis/campaigns/worker-desktop-k1-http-provider-v2220/provider/runtime-versions.json",
+      "bytes": 211,
+      "sha256": "f7c12de41bf7a411725ddfbfe4c9dd84e00c5fda9ae562c2d2e919b920a39a42",
+      "sourceInode": 4621457,
+      "observedSourceBytes": 211,
+      "terminalEOF": false,
+      "completeLinePrefix": false
+    },
+    {
+      "name": "raw/ACTUAL-FILES-v2220.json",
+      "source": "/home/developer/projects/aurora/thesis/campaigns/worker-desktop-k1-http-provider-v2220/provider/ACTUAL-FILES-v2220.json",
+      "bytes": 2184,
+      "sha256": "6d5ab1655bbf1b8da463fd71387e20b5ac9cc9fbf5187ea7357a420001d0fdcb",
+      "sourceInode": 4621452,
+      "observedSourceBytes": 2184,
+      "terminalEOF": false,
+      "completeLinePrefix": false
+    },
+    {
+      "name": "raw/PREPARATION-v2220.json",
+      "source": "/home/developer/projects/aurora/thesis/campaigns/worker-desktop-k1-http-provider-v2220/provider/PREPARATION-v2220.json",
+      "bytes": 11521,
+      "sha256": "74d65f8e2081a6ea1b1d7086a921953e2fdba95be8a58d02179ff62e61f01444",
+      "sourceInode": 4621454,
+      "observedSourceBytes": 11521,
+      "terminalEOF": false,
+      "completeLinePrefix": false
+    },
+    {
+      "name": "raw/ROOT-ADMISSION-v2220.json",
+      "source": "/home/developer/projects/aurora/thesis/campaigns/worker-desktop-k1-http-provider-v2220/provider/ROOT-ADMISSION-v2220.json",
+      "bytes": 11615,
+      "sha256": "a24ae90f52142f80acf5a078439c44ea95e38caea6b22d78d04731e91a8c79c8",
+      "sourceInode": 4621477,
+      "observedSourceBytes": 11615,
+      "terminalEOF": false,
+      "completeLinePrefix": false
+    },
+    {
+      "name": "raw/ROOT-LAUNCH-v2220.json",
+      "source": "/home/developer/projects/aurora/thesis/campaigns/worker-desktop-k1-http-provider-v2220/provider/ROOT-LAUNCH-v2220.json",
+      "bytes": 274,
+      "sha256": "471b49355b9bab2a7ae4a129ff37e40f9e386d04e9071dfa92d329d6361bacb9",
+      "sourceInode": 4621456,
+      "observedSourceBytes": 274,
+      "terminalEOF": false,
+      "completeLinePrefix": false
+    },
+    {
+      "name": "raw/ROOT-LAUNCH-INTENT-v2220.json",
+      "source": "/home/developer/projects/aurora/thesis/campaigns/worker-desktop-k1-http-provider-v2220/provider/ROOT-LAUNCH-INTENT-v2220.json",
+      "bytes": 187,
+      "sha256": "93186342712d5606a9c1fe887eab4b9aa00aa1a24aa322b3ba8bba3f7abf531b",
+      "sourceInode": 4621455,
+      "observedSourceBytes": 187,
+      "terminalEOF": false,
+      "completeLinePrefix": false
+    },
+    {
+      "name": "raw/STATUS.json",
+      "source": "/home/developer/projects/aurora/thesis/campaigns/worker-desktop-k1-http-provider-v2220/provider/STATUS.json",
+      "bytes": 161093,
+      "sha256": "1dff368cc17953aba0ad37e3c2a4b5c47f131e41a65515773a0cefbbbc7b4fe1",
+      "sourceInode": 4621479,
+      "observedSourceBytes": 161093,
+      "terminalEOF": false,
+      "completeLinePrefix": false
+    },
+    {
+      "name": "raw/voice-stages.jsonl",
+      "source": "/home/developer/projects/aurora/thesis/campaigns/worker-desktop-k1-http-provider-v2220/provider/voice-stages.jsonl",
+      "bytes": 1456500,
+      "sha256": "58315a389e43f1f96bf2aeda927de69f3c549fd90bb09541ab7e908ef608396c",
+      "sourceInode": 4621469,
+      "observedSourceBytes": 1456500,
+      "terminalEOF": false,
+      "completeLinePrefix": true
+    },
+    {
+      "name": "raw/actual-provider-bindings.jsonl",
+      "source": "/home/developer/projects/aurora/thesis/campaigns/worker-desktop-k1-http-provider-v2220/provider/actual-provider-bindings.jsonl",
+      "bytes": 226721,
+      "sha256": "6d4f39dadb0022da22b52e560a07828ca2aaf47f6df86c1b756e5f8a225c8a87",
+      "sourceInode": 4621475,
+      "observedSourceBytes": 226721,
+      "terminalEOF": false,
+      "completeLinePrefix": true
+    },
+    {
+      "name": "raw/resources.jsonl",
+      "source": "/home/developer/projects/aurora/thesis/campaigns/worker-desktop-k1-http-provider-v2220/provider/resources.jsonl",
+      "bytes": 73716651,
+      "sha256": "b0dfa97381c9e10109a80eaf87e99f61ff37527fb9080bf143cdfbf812e1bfb6",
+      "sourceInode": 4621458,
+      "observedSourceBytes": 73716651,
+      "terminalEOF": false,
+      "completeLinePrefix": true
+    },
+    {
+      "name": "raw/binding-guard-diagnostic.jsonl",
+      "source": "/home/developer/projects/aurora/thesis/campaigns/worker-desktop-k1-http-provider-v2220/provider/binding-guard-diagnostic.jsonl",
+      "bytes": 0,
+      "sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+      "sourceInode": 4621471,
+      "observedSourceBytes": 0,
+      "terminalEOF": false,
+      "completeLinePrefix": true
+    }
+  ],
+  "rawPayloadBytes": 75601702,
+  "requesterTerminal": {
+    "at": "2026-10-21T20:50:17.291820+00:00",
+    "status": "REQUESTER_TERMINAL_AND_PHYSICAL_CUSTODY_SEALED",
+    "manifestSha256": "11bbea3fc1e45e65da1ecb7b501aee77739870cb087d792e5bc5197f9b1027be",
+    "requesterActorsAbsent": true,
+    "requesterActors": [
+      {
+        "pid": 3751414,
+        "expectedStartTicks": 137933512,
+        "state": "ABSENT"
+      },
+      {
+        "pid": 3751426,
+        "expectedStartTicks": 137933748,
+        "state": "ABSENT"
+      },
+      {
+        "pid": 3751415,
+        "expectedStartTicks": 137933513,
+        "state": "ABSENT"
+      }
+    ],
+    "epochMeasured": {
+      "attempted": 270,
+      "correct": 270,
+      "failed": 0,
+      "incorrect": 0,
+      "timeouts": 0,
+      "planned": 270,
+      "unattempted": 0
+    },
+    "conditionCountsOnly": {
+      "attempted": 450,
+      "correct": 449,
+      "failed": 1,
+      "incorrect": 0,
+      "unattempted": 450,
+      "target": 900
+    },
+    "failureCodes": {},
+    "excludedWarmups": 15,
+    "caseRecords": 285,
+    "actualWAV": 285,
+    "verifiedFiles": 1840,
+    "verifiedBytes": 33923202,
+    "snapshotSha256": "b71d9e43a06c5e92101df9c0685e841318b4931e95ad527b19a93fcb8c104450",
+    "sourceCheckpointSha256": "8e68aaa5fbd8689db341db57dd89f540ba98ae4bbf648fcc520f741f485a7fa5",
+    "requesterNativeResourcePrefixEOF": [
+      {
+        "name": "voice-stages.jsonl",
+        "bytes": 3348465,
+        "sourceEOFVerified": true
+      },
+      {
+        "name": "actual-provider-bindings.jsonl",
+        "bytes": 2143,
+        "sourceEOFVerified": true
+      },
+      {
+        "name": "resources.jsonl",
+        "bytes": 19137664,
+        "sourceEOFVerified": true
+      }
+    ],
+    "controllerExitCode": 0,
+    "terminalStatus": "completed_all_correct",
+    "terminalStopReason": null,
+    "newInference": 0,
+    "nativeGoalMutations": 0,
+    "noLatencyPooling": true
+  },
+  "originalFilesPreserved": true,
+  "archiveContainsPhysicalCopies": true,
+  "sutCalls": 0,
+  "epochMeasuredAttempted": 270,
+  "conditionMeasuredAttempted": 450,
+  "conditionRemaining": 450,
+  "providerDeadlineNotExtendedUtc": "2026-10-21T22:45:52.468654+00:00",
+  "rootDeadlineNotResetUtc": "2026-10-21T23:36:07.231887+00:00",
+  "nativeCoverageScope": "Current V2234 correlations only; prefix also contains previous readiness calls. No cross-host clock subtraction."
+}

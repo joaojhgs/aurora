@@ -1,0 +1,12 @@
+{
+  "controlDeadline": "2026-10-22T10:05:00Z",
+  "explicitNewline": true,
+  "host": "ssh:ssh-sem-notebook-personal",
+  "incarnation": "328cd72f-c7ea-49ff-a2db-b9275b085037",
+  "remoteResult": "/home/developer/projects/aurora/thesis/phone-notebook/20261020/evidence/connect-phone-private-room-v267.json",
+  "rootAdmissionMessage": "existing-owner-supported-normal-private-room-reconnect-ui-without-code-export",
+  "script": "scripts/connect_phone_private_room_v267.py",
+  "scriptSha256": "d031b37abd13a2649e1c00767d7155e7874c1bcd7f770cfa92f0c259d43d4eb2",
+  "singleSend": true,
+  "terminal": "term_a2ed5feb-7c92-48e4-bd88-d1b0e6737989"
+}

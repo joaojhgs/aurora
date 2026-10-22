@@ -1,0 +1,531 @@
+{
+  "observedAt": "2026-10-20T04:54:09.022971+00:00",
+  "event": "OWNER_REQUESTED_P2P_MEASURED_RESUMPTION_VERIFIED",
+  "dedupeKey": "owner-k1p2p-resume:V1719:global21",
+  "run": "run_e6054e76e9fc",
+  "task": "task_d7ea336050cf",
+  "dispatch": "ctx_37b4d0a3c14f",
+  "root": "term_6a00d9ee-792a-4daf-8578-236290e33108",
+  "monitor": "term_2eab47ed-ab9b-4e35-bd9b-fc068c60e3fc",
+  "nativeMonitorGoal": "01a123ff-19ba-7332-a2f7-346a722af79f active",
+  "condition": "Actual P2P K1 TTS-only, worker requester -> same Personal desktop provider",
+  "stageProviderMap": {
+    "STT": "worker CPU",
+    "LLM": "worker llama-cpp CPU",
+    "TTS": "Personal desktop Piper CPU"
+  },
+  "frozenManifestSha256": "120dd99a4de0a242c30ebe4bb46d854ca77313c482a0c74f024edb624829a6e8",
+  "originalProvider": {
+    "pid": 3194394,
+    "startTicks": 22320527,
+    "lastNativeWarmupProofPid": 3194394
+  },
+  "currentWorkerActors": [
+    {
+      "pid": 2360747,
+      "startTicks": 124937766,
+      "state": "S"
+    },
+    {
+      "pid": 2360768,
+      "startTicks": 124937952,
+      "state": "S"
+    },
+    {
+      "pid": 2361201,
+      "startTicks": 124942780,
+      "state": "S"
+    }
+  ],
+  "progress": {
+    "indexUpdatedAt": "2026-10-20T04:53:09.531162+00:00",
+    "sequence": 18,
+    "sourceProgress": {
+      "attempted": 19,
+      "last_attempt_file": "attempts/attempt-0019-measured.jsonl",
+      "last_attempt_status": "completed_correct",
+      "measured_attempted": 4,
+      "planned_measured": 880,
+      "planned_warmups": 15,
+      "status": "running",
+      "unattempted_measured": 876,
+      "warmups_attempted": 15
+    },
+    "newMeasured": 4,
+    "newCorrect": 4,
+    "newOtherOutcomes": 0,
+    "priorMeasured": 20,
+    "priorCorrect": 19,
+    "priorFailed": 1,
+    "combinedMeasured": 24,
+    "combinedCorrect": 23,
+    "combinedFailedOrIncorrect": 1,
+    "remaining": 876
+  },
+  "excludedWarmupAdmission": {
+    "correct": 15,
+    "localSttNativeSpanJoins": 15,
+    "localResolvedLlmSpanJoins": 15,
+    "remotePiperNativeCalls": 15,
+    "exactPeerRouteJoins": 15,
+    "routeGate": {
+      "continuous_route_stability_claimed": false,
+      "frozen_manifest_sha256": "120dd99a4de0a242c30ebe4bb46d854ca77313c482a0c74f024edb624829a6e8",
+      "joined_receiver_calls": 15,
+      "observed_calls": 15,
+      "observed_path_class_rows": {
+        "after": {
+          "direct": 15,
+          "relay": 0
+        },
+        "before": {
+          "direct": 15,
+          "relay": 0
+        }
+      },
+      "requester_pid": 2360768,
+      "route_observer_sha256": "2c23fd2bc69b00b746c2c5dc28c1d2b77428016314045363dceea5fe9ee5cdbb",
+      "route_runtime_pins_sha256": "db270c9c6373b24e669bdf2b002da5fadb3e3841ee1ecc6ad8dec5a7ad26daf8",
+      "route_sink_sha256": "2b235781c15410e6dbfc8829971a34e8334714cdf015053edfd127756325cfb8",
+      "runtime_source_pin_status": "verified_before_observer_install",
+      "schema": "aurora.mesh_route_warmup_gate.v1",
+      "sink_dropped_rows": 0,
+      "sink_invalid_rows": 0,
+      "sink_oversize_rows": 0,
+      "sink_quota_rows": 0,
+      "sink_written_rows": 15,
+      "snapshot_scope": "before_after_snapshots_all_pc_transports_no_pair_id_no_continuous_stability",
+      "status": "passed"
+    },
+    "localJoinedSpans": [
+      {
+        "ordinal": 1,
+        "correlationId": "audio-campaign-d043e1d9665740afaeb4a5927100cf54",
+        "nativeHandlers": {
+          "stt.model_invoke": {
+            "spanId": "123b20861ab44d479e2117d6624c579f",
+            "pid": 2360768,
+            "clockDomain": "python_process_monotonic",
+            "startNs": "1249413896032310",
+            "endNs": "1249421701669536",
+            "outcome": "completed"
+          },
+          "resolved_chat_model.astream": {
+            "spanId": "dc75913efd36426ba36e5601493ac40a",
+            "pid": 2360768,
+            "clockDomain": "python_process_monotonic",
+            "startNs": "1249429188386513",
+            "endNs": "1249470341747539",
+            "outcome": "completed"
+          }
+        }
+      },
+      {
+        "ordinal": 2,
+        "correlationId": "audio-campaign-44c3d94922a3411988e4879171dce303",
+        "nativeHandlers": {
+          "stt.model_invoke": {
+            "spanId": "934eec3ec9b448d295cb1a031dea069a",
+            "pid": 2360768,
+            "clockDomain": "python_process_monotonic",
+            "startNs": "1249473727397428",
+            "endNs": "1249482486883620",
+            "outcome": "completed"
+          },
+          "resolved_chat_model.astream": {
+            "spanId": "8bcc39851c504819880ed1b697d133b8",
+            "pid": 2360768,
+            "clockDomain": "python_process_monotonic",
+            "startNs": "1249488226389685",
+            "endNs": "1249521712921821",
+            "outcome": "completed"
+          }
+        }
+      },
+      {
+        "ordinal": 3,
+        "correlationId": "audio-campaign-0b054bd8f8924304ae19b7913106e968",
+        "nativeHandlers": {
+          "stt.model_invoke": {
+            "spanId": "0b6743941cd345c582071a84a7a4e672",
+            "pid": 2360768,
+            "clockDomain": "python_process_monotonic",
+            "startNs": "1249525351624301",
+            "endNs": "1249532039368369",
+            "outcome": "completed"
+          },
+          "resolved_chat_model.astream": {
+            "spanId": "f4403df292044e868246fd9308538eba",
+            "pid": 2360768,
+            "clockDomain": "python_process_monotonic",
+            "startNs": "1249537084231189",
+            "endNs": "1249566314415907",
+            "outcome": "completed"
+          }
+        }
+      },
+      {
+        "ordinal": 4,
+        "correlationId": "audio-campaign-2a62a2f81f784b879f6f6d611a423887",
+        "nativeHandlers": {
+          "stt.model_invoke": {
+            "spanId": "34101e40b1f742dcb3177905a731c5eb",
+            "pid": 2360768,
+            "clockDomain": "python_process_monotonic",
+            "startNs": "1249569267437730",
+            "endNs": "1249578424714210",
+            "outcome": "completed"
+          },
+          "resolved_chat_model.astream": {
+            "spanId": "641c55ac5f5540d3840d6502cc73792c",
+            "pid": 2360768,
+            "clockDomain": "python_process_monotonic",
+            "startNs": "1249583470958082",
+            "endNs": "1249611606888900",
+            "outcome": "completed"
+          }
+        }
+      },
+      {
+        "ordinal": 5,
+        "correlationId": "audio-campaign-69c7edf587c6468c87661023965d5e1a",
+        "nativeHandlers": {
+          "stt.model_invoke": {
+            "spanId": "711b32934b31401eac9d2f7ab6169d11",
+            "pid": 2360768,
+            "clockDomain": "python_process_monotonic",
+            "startNs": "1249614731353978",
+            "endNs": "1249622411886987",
+            "outcome": "completed"
+          },
+          "resolved_chat_model.astream": {
+            "spanId": "b532e4b4dc1149bba7ce2f9deba8397f",
+            "pid": 2360768,
+            "clockDomain": "python_process_monotonic",
+            "startNs": "1249627459419709",
+            "endNs": "1249656099124817",
+            "outcome": "completed"
+          }
+        }
+      },
+      {
+        "ordinal": 6,
+        "correlationId": "audio-campaign-b1379c3524e5473c8a3d2fefc289c529",
+        "nativeHandlers": {
+          "stt.model_invoke": {
+            "spanId": "401d5e06f4cc41798510d86ed568a600",
+            "pid": 2360768,
+            "clockDomain": "python_process_monotonic",
+            "startNs": "1249659543387111",
+            "endNs": "1249666470859993",
+            "outcome": "completed"
+          },
+          "resolved_chat_model.astream": {
+            "spanId": "9240df2039694b3abf01ffaa6576db99",
+            "pid": 2360768,
+            "clockDomain": "python_process_monotonic",
+            "startNs": "1249671517561510",
+            "endNs": "1249702580237534",
+            "outcome": "completed"
+          }
+        }
+      },
+      {
+        "ordinal": 7,
+        "correlationId": "audio-campaign-e06c2fd1417b4a03a2b5cb9308132a76",
+        "nativeHandlers": {
+          "stt.model_invoke": {
+            "spanId": "f45a4d8670f9423693dc8f07c1b3a5d0",
+            "pid": 2360768,
+            "clockDomain": "python_process_monotonic",
+            "startNs": "1249705405172261",
+            "endNs": "1249714002712891",
+            "outcome": "completed"
+          },
+          "resolved_chat_model.astream": {
+            "spanId": "ea14cfe1307047a9a3407d0f6e89004d",
+            "pid": 2360768,
+            "clockDomain": "python_process_monotonic",
+            "startNs": "1249719056322514",
+            "endNs": "1249748135718171",
+            "outcome": "completed"
+          }
+        }
+      },
+      {
+        "ordinal": 8,
+        "correlationId": "audio-campaign-fb2a3398bbef4034bc5d93063f11f26e",
+        "nativeHandlers": {
+          "stt.model_invoke": {
+            "spanId": "54f622b640d24823a76152d639ebfb96",
+            "pid": 2360768,
+            "clockDomain": "python_process_monotonic",
+            "startNs": "1249751520219585",
+            "endNs": "1249764495178662",
+            "outcome": "completed"
+          },
+          "resolved_chat_model.astream": {
+            "spanId": "1c8e5ca1c4354596af4c842679861c6f",
+            "pid": 2360768,
+            "clockDomain": "python_process_monotonic",
+            "startNs": "1249769540018991",
+            "endNs": "1249799443234169",
+            "outcome": "completed"
+          }
+        }
+      },
+      {
+        "ordinal": 9,
+        "correlationId": "audio-campaign-fca4729104814b6d9a0a3ee88b2d5a88",
+        "nativeHandlers": {
+          "stt.model_invoke": {
+            "spanId": "ef29ca1212c94378aa4d3235d40bcab2",
+            "pid": 2360768,
+            "clockDomain": "python_process_monotonic",
+            "startNs": "1249803358483165",
+            "endNs": "1249809611243987",
+            "outcome": "completed"
+          },
+          "resolved_chat_model.astream": {
+            "spanId": "dab67315d1e8490ca91a37519b16011f",
+            "pid": 2360768,
+            "clockDomain": "python_process_monotonic",
+            "startNs": "1249814711056592",
+            "endNs": "1249842473821524",
+            "outcome": "completed"
+          }
+        }
+      },
+      {
+        "ordinal": 10,
+        "correlationId": "audio-campaign-831a9a2124574862a580be714de7e620",
+        "nativeHandlers": {
+          "stt.model_invoke": {
+            "spanId": "0a94fb3567ed4208b5f1ee3c91860397",
+            "pid": 2360768,
+            "clockDomain": "python_process_monotonic",
+            "startNs": "1249845356404530",
+            "endNs": "1249855920701320",
+            "outcome": "completed"
+          },
+          "resolved_chat_model.astream": {
+            "spanId": "d84cca54075f47c5af807dba7d104bbe",
+            "pid": 2360768,
+            "clockDomain": "python_process_monotonic",
+            "startNs": "1249860986958809",
+            "endNs": "1249886484774892",
+            "outcome": "completed"
+          }
+        }
+      },
+      {
+        "ordinal": 11,
+        "correlationId": "audio-campaign-147021632b654ef091da2ebebba0186a",
+        "nativeHandlers": {
+          "stt.model_invoke": {
+            "spanId": "985d5652022543409adcdddf8fd7ffc4",
+            "pid": 2360768,
+            "clockDomain": "python_process_monotonic",
+            "startNs": "1249889060674916",
+            "endNs": "1249897288463706",
+            "outcome": "completed"
+          },
+          "resolved_chat_model.astream": {
+            "spanId": "e7e968549df84d13a08fc720f6884ea6",
+            "pid": 2360768,
+            "clockDomain": "python_process_monotonic",
+            "startNs": "1249902334604266",
+            "endNs": "1249931685891191",
+            "outcome": "completed"
+          }
+        }
+      },
+      {
+        "ordinal": 12,
+        "correlationId": "audio-campaign-7f01ebb027464430bd5b3e9beb88137a",
+        "nativeHandlers": {
+          "stt.model_invoke": {
+            "spanId": "b7404e4b5b8242eea79085a1b4a4b2f6",
+            "pid": 2360768,
+            "clockDomain": "python_process_monotonic",
+            "startNs": "1249934931044972",
+            "endNs": "1249940951109078",
+            "outcome": "completed"
+          },
+          "resolved_chat_model.astream": {
+            "spanId": "712a1341188a4213a241128ad1774ba3",
+            "pid": 2360768,
+            "clockDomain": "python_process_monotonic",
+            "startNs": "1249946439975585",
+            "endNs": "1249977933148128",
+            "outcome": "completed"
+          }
+        }
+      },
+      {
+        "ordinal": 13,
+        "correlationId": "audio-campaign-a3af48990d5d4b73aec479042c2fa4b1",
+        "nativeHandlers": {
+          "stt.model_invoke": {
+            "spanId": "6368b3d9ad984473af2e2534807a8de1",
+            "pid": 2360768,
+            "clockDomain": "python_process_monotonic",
+            "startNs": "1249981395917231",
+            "endNs": "1249988580864926",
+            "outcome": "completed"
+          },
+          "resolved_chat_model.astream": {
+            "spanId": "77167cb98af5468593a16f39a8855e8e",
+            "pid": 2360768,
+            "clockDomain": "python_process_monotonic",
+            "startNs": "1249993627798500",
+            "endNs": "1250020143043746",
+            "outcome": "completed"
+          }
+        }
+      },
+      {
+        "ordinal": 14,
+        "correlationId": "audio-campaign-c2eaf4bf74a74c8cbe4250085d3b9a5c",
+        "nativeHandlers": {
+          "stt.model_invoke": {
+            "spanId": "e307a1ee480046c1b69c4cc69a51f856",
+            "pid": 2360768,
+            "clockDomain": "python_process_monotonic",
+            "startNs": "1250023008284063",
+            "endNs": "1250030747114624",
+            "outcome": "completed"
+          },
+          "resolved_chat_model.astream": {
+            "spanId": "45a7148a34cd4a879c0ac55c3816e1b6",
+            "pid": 2360768,
+            "clockDomain": "python_process_monotonic",
+            "startNs": "1250035793155978",
+            "endNs": "1250074186811042",
+            "outcome": "completed"
+          }
+        }
+      },
+      {
+        "ordinal": 15,
+        "correlationId": "audio-campaign-433924e034334cc999c1ac827c990d18",
+        "nativeHandlers": {
+          "stt.model_invoke": {
+            "spanId": "2b43a3f5a87f4edebd5a2524905a0f84",
+            "pid": 2360768,
+            "clockDomain": "python_process_monotonic",
+            "startNs": "1250077826929032",
+            "endNs": "1250085793247976",
+            "outcome": "completed"
+          },
+          "resolved_chat_model.astream": {
+            "spanId": "41026a99969c4ef6968720aa08fd25ff",
+            "pid": 2360768,
+            "clockDomain": "python_process_monotonic",
+            "startNs": "1250090840532443",
+            "endNs": "1250121491177481",
+            "outcome": "completed"
+          }
+        }
+      }
+    ],
+    "localVoicePrefixSha256": "0f19d78b207fbf2114c8499d7957bd3481d36d20dbd23626aec40babc2d9e82a",
+    "localVoicePrefixBytes": 232505,
+    "localVoiceCanonicalChunkPaths": [
+      "thesis/campaigns/worker-desktop-k1-p2p-tts-remaining880-v1719/prefixes/voice-stages.jsonl/000000000000-000000008427.chunk",
+      "thesis/campaigns/worker-desktop-k1-p2p-tts-remaining880-v1719/prefixes/voice-stages.jsonl/000000008427-000000020176.chunk",
+      "thesis/campaigns/worker-desktop-k1-p2p-tts-remaining880-v1719/prefixes/voice-stages.jsonl/000000020176-000000032772.chunk",
+      "thesis/campaigns/worker-desktop-k1-p2p-tts-remaining880-v1719/prefixes/voice-stages.jsonl/000000032772-000000044521.chunk",
+      "thesis/campaigns/worker-desktop-k1-p2p-tts-remaining880-v1719/prefixes/voice-stages.jsonl/000000044521-000000067172.chunk",
+      "thesis/campaigns/worker-desktop-k1-p2p-tts-remaining880-v1719/prefixes/voice-stages.jsonl/000000067172-000000079768.chunk",
+      "thesis/campaigns/worker-desktop-k1-p2p-tts-remaining880-v1719/prefixes/voice-stages.jsonl/000000079768-000000091517.chunk",
+      "thesis/campaigns/worker-desktop-k1-p2p-tts-remaining880-v1719/prefixes/voice-stages.jsonl/000000091517-000000109142.chunk",
+      "thesis/campaigns/worker-desktop-k1-p2p-tts-remaining880-v1719/prefixes/voice-stages.jsonl/000000109142-000000126764.chunk",
+      "thesis/campaigns/worker-desktop-k1-p2p-tts-remaining880-v1719/prefixes/voice-stages.jsonl/000000126764-000000138513.chunk",
+      "thesis/campaigns/worker-desktop-k1-p2p-tts-remaining880-v1719/prefixes/voice-stages.jsonl/000000138513-000000156138.chunk",
+      "thesis/campaigns/worker-desktop-k1-p2p-tts-remaining880-v1719/prefixes/voice-stages.jsonl/000000156138-000000172913.chunk",
+      "thesis/campaigns/worker-desktop-k1-p2p-tts-remaining880-v1719/prefixes/voice-stages.jsonl/000000172913-000000176235.chunk",
+      "thesis/campaigns/worker-desktop-k1-p2p-tts-remaining880-v1719/prefixes/voice-stages.jsonl/000000176235-000000185509.chunk",
+      "thesis/campaigns/worker-desktop-k1-p2p-tts-remaining880-v1719/prefixes/voice-stages.jsonl/000000185509-000000208160.chunk",
+      "thesis/campaigns/worker-desktop-k1-p2p-tts-remaining880-v1719/prefixes/voice-stages.jsonl/000000208160-000000220756.chunk",
+      "thesis/campaigns/worker-desktop-k1-p2p-tts-remaining880-v1719/prefixes/voice-stages.jsonl/000000220756-000000232505.chunk"
+    ]
+  },
+  "firstNewMeasured": {
+    "globalIndex": 21,
+    "localIndex": 1,
+    "status": "completed_correct",
+    "flowDurationMs": 41084.13314,
+    "flowEndPoint": "valid_non_silent_pcm16_tts_wav_received_decoded_and_checked",
+    "correlation": {
+      "correlation_id": "audio-campaign-2763b617c83c43029a515073bdb2917c",
+      "request_id": "audio-request-24624010cb454e14895193ff54fe5ebc",
+      "session_id": "audio-session-0d1000969a2b45a3b40c8daaab714d0c"
+    },
+    "correctness": {
+      "all_expected": true,
+      "assistant_reply_matches_expected_words": true,
+      "transcript_matches_reference_words": true
+    },
+    "outputAudio": {
+      "file": "audio/977b1154a103cfd3a61dd708e685fb44545ad5654f3abc436fa428833b142403.wav",
+      "sha256": "977b1154a103cfd3a61dd708e685fb44545ad5654f3abc436fa428833b142403"
+    },
+    "stages": {
+      "assistant": {
+        "status": "completed",
+        "duration_ms": 30149.893915,
+        "transport": null,
+        "selected_peer_id_sha256": null
+      },
+      "stt": {
+        "status": "completed",
+        "duration_ms": 6989.701281,
+        "transport": null,
+        "selected_peer_id_sha256": null
+      },
+      "tts": {
+        "status": "completed",
+        "duration_ms": 3943.696098,
+        "transport": "typed_gateway_mesh_peer_bridge",
+        "selected_peer_id_sha256": "77421aa81ce7ae2e865455348e9aa5ae17013d8f5e1f72d38d71d09f110ef868"
+      }
+    }
+  },
+  "sourcePins": {
+    "condition-frozen.json": {
+      "path": "thesis/campaigns/worker-desktop-k1-p2p-tts-remaining880-v1719/condition-frozen.json",
+      "bytes": 15721,
+      "sha256": "120dd99a4de0a242c30ebe4bb46d854ca77313c482a0c74f024edb624829a6e8"
+    },
+    "ORDINARY-WARMUP-ADMISSION.json": {
+      "path": "thesis/campaigns/worker-desktop-k1-p2p-tts-remaining880-v1719/ORDINARY-WARMUP-ADMISSION.json",
+      "bytes": 1374,
+      "sha256": "cfa501001106755f867c8f682e69da4705e90fff53fc93878010a906ba9f1475"
+    },
+    "admission/receiver-warmup-proof.json": {
+      "path": "thesis/campaigns/worker-desktop-k1-p2p-tts-remaining880-v1719/admission/receiver-warmup-proof.json",
+      "bytes": 35548,
+      "sha256": "9b1034c63ded434536a8957574825b789062a8cde15e2ffa65dcecaf9b152fe8"
+    },
+    "attempts/attempt-0016-measured.jsonl": {
+      "path": "thesis/campaigns/worker-desktop-k1-p2p-tts-remaining880-v1719/attempts/attempt-0016-measured.jsonl",
+      "bytes": 4912,
+      "sha256": "3949f973d777868014b4d19c0e982bddcf56c8b96d756011bd0dc4e0ec001ad2"
+    },
+    "firstMeasuredWav": {
+      "path": "thesis/campaigns/worker-desktop-k1-p2p-tts-remaining880-v1719/audio/977b1154a103cfd3a61dd708e685fb44545ad5654f3abc436fa428833b142403.wav",
+      "bytes": 31788,
+      "sha256": "977b1154a103cfd3a61dd708e685fb44545ad5654f3abc436fa428833b142403",
+      "riffWave": true
+    }
+  },
+  "limits": [
+    "Actual measured resumption, not900 completion or full matrix acceptance",
+    "Before/after nominated direct ICE snapshots, not continuous route stability",
+    "No all-GPU or pure-protocol-overhead/speedup claim",
+    "Prior20 including one capability_changed failure retained, no replay or success topup",
+    "Android observer/binding remains independent unknown; no new inference from monitor"
+  ],
+  "ownerResponseReceiptStatus": "Prepared for one original-Run event; Coding/Personal external delivery not yet verified"
+}

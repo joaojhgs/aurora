@@ -1,0 +1,82 @@
+{
+  "observedAt": "2026-10-15T01:32:31.812273+00:00",
+  "rootMessage": "msg_a8bc1bc1bb4d",
+  "package": "docs/experiments/tcc-20261013-submission-20261030/root/tts-interruption-fix-v469",
+  "manifestSha256": "e30541bebf5e8311ccc9f4e79df9c1442438bcb5741c7e8d68bc272c556624a4",
+  "memberCount": 11,
+  "withManifest": 12,
+  "READMEIncludedInManifest": true,
+  "allMembersPass": true,
+  "checks": [
+    {
+      "path": "README.md",
+      "bytes": 1285,
+      "sha256": "6a283152b3c823c90c34b98bdcf684baf91ee6eb37161e347bb7e19898df559e"
+    },
+    {
+      "path": "REVIEW.md",
+      "bytes": 3523,
+      "sha256": "8a0d422b0926b6e9e58f100fa9cd71bdb996d571bf565356fdb73a7fa5e48b0a"
+    },
+    {
+      "path": "final/packages/aurora-ui/src/use-assistant-tts.test.ts",
+      "bytes": 15931,
+      "sha256": "a176e81d7a45ae511bb36183d19620d9ece8598fabd9b8c3680da39f5268635f"
+    },
+    {
+      "path": "final/packages/aurora-ui/src/use-assistant-tts.ts",
+      "bytes": 12909,
+      "sha256": "e5caa61b1158946b4e9f0d274a898c3e2c6b538cff5b4aef941d474ee3a08745"
+    },
+    {
+      "path": "final.patch",
+      "bytes": 5977,
+      "sha256": "f8faf23175d5c56d46b9b5f5a4b4f299a9247bc2c987ec3bd71463e51cdbe65b"
+    },
+    {
+      "path": "integration.json",
+      "bytes": 806,
+      "sha256": "470cb7c3631ee57b202c51fc462b0fddea541d295e188a688db1f827c01d41ab"
+    },
+    {
+      "path": "preimages/packages/aurora-ui/src/use-assistant-tts.test.ts",
+      "bytes": 12703,
+      "sha256": "33710059b74f4b92a162b7d410b7ae28983959d1b10008f7da9a021b7c8bb9fa"
+    },
+    {
+      "path": "preimages/packages/aurora-ui/src/use-assistant-tts.ts",
+      "bytes": 12412,
+      "sha256": "a584ad56d7df8148471cb409fc04ca267bd6cf090222578eb9f1ac3ed8ff8cbb"
+    },
+    {
+      "path": "validation-20261015T012751Z/result.json",
+      "bytes": 720,
+      "sha256": "6f4f3c689a31895b363a5eee0c1c6f4c11b39df12557b68a895e33d8ef2740ff"
+    },
+    {
+      "path": "validation-20261015T012751Z/tts-interrupt-main.log",
+      "bytes": 239,
+      "sha256": "943907b0029da629d333d86bd341c49be2a9011ac5c8dc304ec613b280a5a3e1"
+    },
+    {
+      "path": "validation-20261015T012751Z/ui-typecheck.log",
+      "bytes": 0,
+      "sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+    }
+  ],
+  "canonicalFinalHashes": [
+    {
+      "path": "packages/aurora-ui/src/use-assistant-tts.test.ts",
+      "sha256": "a176e81d7a45ae511bb36183d19620d9ece8598fabd9b8c3680da39f5268635f",
+      "matchesReviewedFinal": true
+    },
+    {
+      "path": "packages/aurora-ui/src/use-assistant-tts.ts",
+      "sha256": "e5caa61b1158946b4e9f0d274a898c3e2c6b538cff5b4aef941d474ee3a08745",
+      "matchesReviewedFinal": true
+    }
+  ],
+  "readmeReviewValidationRead": true,
+  "verification": "One bytes/hash/read of existing receipts/approval only; no tests/models/imports/build/analyzer/exporter/device/source edit/newreview",
+  "limits": "11affectedtests/UItsc/sourceSolAPP prove focusedslice only; no liveplayback/Miccause/native/fullPER286/fullGPU/phase2 acceptance"
+}

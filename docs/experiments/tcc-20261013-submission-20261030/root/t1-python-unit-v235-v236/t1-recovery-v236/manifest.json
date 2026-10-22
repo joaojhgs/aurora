@@ -1,0 +1,35 @@
+{
+  "stage": "T1-attributable-temp-path-recovery",
+  "sourceCommit": "5782746afba213f6b36907db2f09f0017625e218",
+  "command": [
+    "flock",
+    "--nonblock",
+    "/tmp/aurora-global-build.lock",
+    "timeout",
+    "--signal=TERM",
+    "--kill-after=10s",
+    "120s",
+    "uv",
+    "run",
+    "--no-sync",
+    "pytest",
+    "tests/unit/tools/test_pockettts_language_packs.py::test_runtime_staging_excludes_stale_fp32_and_builder_files",
+    "tests/unit/tools/test_pockettts_language_packs.py::test_archive_pack_is_byte_identical_after_mtime_and_mode_changes",
+    "-q",
+    "--junitxml=/home/developer/projects/aurora/.git/aurora-handoff-import-20261006/t1-recovery-v236/junit.xml",
+    "--basetemp=/tmp/aurora-t1-recovery-v236-qankzb4p",
+    "-o",
+    "cache_dir=/home/developer/projects/aurora/.git/aurora-handoff-import-20261006/t1-recovery-v236/pytest-cache"
+  ],
+  "startedAt": "2026-10-14T00:09:18.536654+00:00",
+  "deadlineSeconds": 120,
+  "priorFailure": "t1-unit-v235/junit.xml",
+  "changedCondition": "pytest basetemp outside .git; production source and assertions unchanged",
+  "cases": [
+    "tests/unit/tools/test_pockettts_language_packs.py::test_runtime_staging_excludes_stale_fp32_and_builder_files",
+    "tests/unit/tools/test_pockettts_language_packs.py::test_archive_pack_is_byte_identical_after_mtime_and_mode_changes"
+  ],
+  "rootOnlySerialOwner": true,
+  "globalBuildLock": "/tmp/aurora-global-build.lock",
+  "publicExportPolicy": "Complete test logs/JUnit copied byte-for-byte; private configuration backups, environment and their hashes withheld. Source data are unit-test fixtures, not private assistant history or benchmark requests."
+}

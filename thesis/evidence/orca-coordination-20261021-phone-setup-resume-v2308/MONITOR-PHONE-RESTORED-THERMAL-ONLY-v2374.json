@@ -1,0 +1,38 @@
+{
+  "id": "remote-cli-1792638139657",
+  "ok": true,
+  "result": {
+    "runId": "run_e6054e76e9fc",
+    "deliveryId": "delivery_6cf3740d13da",
+    "messages": [
+      {
+        "id": "msg_6c9d6e3d335c",
+        "run_id": "run_e6054e76e9fc",
+        "delivery_contract": "current_delivery",
+        "from_handle": "term_2eab47ed-ab9b-4e35-bd9b-fc068c60e3fc",
+        "to_handle": "run:run_e6054e76e9fc",
+        "subject": "Changed readiness: phone restored; supersede old absence alert, thermal guard only",
+        "body": "CHANGED READINESS / supersedes the phone-absence part of attention msg_4c547c85c118. Root msg_3df3f99c58ff cites worker event895b0d7b06eb: actual02:53:35Z POCO get-state exit0, USB003/015 read+write, API36 arm64. No further owner phone-restoration action should be requested from the stale absence report. Last temperature remains Tctl90.75\u00b0C/ACPI90\u00b0C, above the existing85\u00b0C build/pilot guard; no build/model/app/900 launched and no START inferred. Exact source/public assets stay ready; no new copy, download, source review or monitor device/thermal probe. Retain the SAME physical/thermal attention dedup key and honest Coding/owner delivery-UNVERIFIED status; this is an attributed existing-Run update through the available route, not claimed Telegram delivery or a duplicate alert. Report .omx/evidence/orca-monitor-20261010/PHONE-RESTORED-THERMAL-ONLY-ATTENTION-UPDATE-20261022T0258Z.json SHA256 8a8b196fa31f9aac08d912f62d60d553d48695193ced23716a6675e5ef81f04e. Main HTTP continues independently; the requested one-time K1 BIG event remains pending real full900 seal+release.",
+        "type": "status",
+        "priority": "normal",
+        "thread_id": null,
+        "payload": "{\"taskId\":\"task_d7ea336050cf\",\"dispatchId\":\"ctx_37b4d0a3c14f\",\"reportPath\":\".omx/evidence/orca-monitor-20261010/PHONE-RESTORED-THERMAL-ONLY-ATTENTION-UPDATE-20261022T0258Z.json\"}",
+        "created_at": "2026-10-22T02:58:50Z",
+        "delivered_at": null
+      }
+    ],
+    "count": 1,
+    "replayed": false,
+    "acknowledged": null,
+    "timedOut": false,
+    "cancelled": false,
+    "connectionLost": false,
+    "mutation": {
+      "requestId": "8f2ce301-abc7-4b47-a6ce-e9ecaecb33dd",
+      "replayed": false
+    }
+  },
+  "_meta": {
+    "runtimeId": "cc9e3275-28c6-4c45-85cc-bdcd2262aa7d"
+  }
+}

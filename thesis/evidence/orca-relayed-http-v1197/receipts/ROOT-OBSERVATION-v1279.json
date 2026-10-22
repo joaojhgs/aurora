@@ -1,0 +1,49 @@
+{
+  "at": "2026-10-17T21:30:28Z",
+  "classification": "VERIFIED_WAIT_ORIGINAL_RUN",
+  "progress": {
+    "attempted": 96,
+    "last_attempt_file": "attempts/attempt-0096-measured.jsonl",
+    "last_attempt_status": "completed_correct",
+    "measured_attempted": 81,
+    "planned_measured": 900,
+    "planned_warmups": 15,
+    "status": "running",
+    "unattempted_measured": 819,
+    "warmups_attempted": 15
+  },
+  "originalProcesses": {
+    "430655": {
+      "present": true,
+      "state": "S",
+      "startTicks": 104608580,
+      "sameProcess": true
+    },
+    "430656": {
+      "present": true,
+      "state": "S",
+      "startTicks": 104608648,
+      "sameProcess": true
+    },
+    "442775": {
+      "present": true,
+      "state": "S",
+      "startTicks": 104723117,
+      "sameProcess": true
+    },
+    "421717": {
+      "present": true,
+      "state": "S",
+      "startTicks": 104535394,
+      "sameProcess": true
+    }
+  },
+  "copierCheckpointAt": "2026-10-17T21:30:18.708123+00:00",
+  "physicalCompletedCaseCopies": 96,
+  "freeBytes": 7191728128,
+  "terminalSummaryPresent": false,
+  "newInferenceCallsByObserver": 0,
+  "noSourceOrSettingsMutation": true,
+  "nextOrdinaryObservationUtc": "2026-10-17T21:40:00Z",
+  "watchUtc": "2026-10-17T21:45:00Z"
+}

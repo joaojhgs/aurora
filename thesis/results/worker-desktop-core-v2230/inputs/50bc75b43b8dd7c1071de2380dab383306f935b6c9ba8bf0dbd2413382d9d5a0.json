@@ -1,0 +1,109 @@
+{
+  "at": "2026-10-21T05:54:39.663532+00:00",
+  "status": "K1_P2P_900_ATTEMPT_TARGET_CLOSED_WITH_PRESERVED_FAILURES",
+  "measuredAttempted": 900,
+  "correctFullAudio": 885,
+  "failed": 15,
+  "timeoutsIncludedInFailed": 1,
+  "remaining": 0,
+  "failureCodes": {
+    "remote_mesh_exact_remote_peer_call_not_confirmed": 1,
+    "remote_mesh_preaccept_capability_changed": 13,
+    "remote_mesh_tts_timeout_ambiguous": 1
+  },
+  "excludedWarmupsInMeasuredEpochs": 45,
+  "additionalStartupHistory": "V1779 retains3additional excludedwarmups=2correct1failed/0measured; V2143 zero requests; separate preserved history",
+  "caseRecords": 945,
+  "audioFilesPresentAndPreviouslySealed": 930,
+  "joinedNativeInferencePairs": 2820,
+  "positiveCasesWithCompleteLocalSTTLLMRemoteTTSRouteResourceJoins": 930,
+  "positiveNativeOutcomes": {
+    "completed": 2790
+  },
+  "positiveTraceGaps": 0,
+  "preservedFailedCaseLimitations": [
+    {
+      "caseId": "audio-campaign-v1719-0704",
+      "field": "route",
+      "reason": "saved route/call binding did not match",
+      "globalMeasuredIndex": 709,
+      "status": "failed",
+      "timeout": true,
+      "classification": "preserved trace ambiguity of already-failed historical request; not a positive-flow join gap",
+      "requestsToRetry": 0
+    }
+  ],
+  "quantiles": {
+    "estimator": "Hyndman-Fan Type7",
+    "unit": "ms",
+    "perEpochCorrectFullAudio": {
+      "first20": {
+        "n": 19,
+        "units": "ms",
+        "estimator": "Hyndman-Fan type 7",
+        "p50": 43657.277037,
+        "p90": 48616.7359926,
+        "p95": 49321.44234509999,
+        "p99": 52896.27271542
+      },
+      "next689": {
+        "n": 678,
+        "units": "ms",
+        "estimator": "Hyndman-Fan type 7",
+        "p50": 44990.468276,
+        "p90": 51271.1096626,
+        "p95": 53838.35479685,
+        "p99": 58142.1964085
+      },
+      "remaining191": {
+        "n": 188,
+        "units": "ms",
+        "estimator": "Hyndman-Fan type 7",
+        "p50": 44781.190986,
+        "p90": 49884.9047023,
+        "p95": 51352.36127465001,
+        "p99": 55648.307218669994
+      }
+    },
+    "whole900PooledLatency": null,
+    "contextPolicy": "Per-epoch distributions only: explicit language-list contract compatibility source delta and full-three-model desktop residency in final191; no silent context pooling or pure protocol-overhead interpretation"
+  },
+  "analysis": {
+    "source": "thesis/harness/analyze_k1_mesh_saved_v2200.py",
+    "sourceSha256": "32271c0abd7e25d0c18ae63df47f05ae0bd5337a45a3c76a9964c1d3b3b247b2",
+    "result": "thesis/campaigns/worker-desktop-k1-p2p-tts-remaining191-v2153/analysis-v2200/RESULT.json",
+    "resultSha256": "1313a46e3319a22ad86ada92a0f76ad0e754031c6d6cc4a44b659ea5f6da3f3b",
+    "caseAnalysis": "thesis/campaigns/worker-desktop-k1-p2p-tts-remaining191-v2153/analysis-v2200/case-analysis.jsonl",
+    "caseAnalysisSha256": "e50bd2792ceaed76a5e2691ad824a507d13f1b37e3bd562b8a14063016afa66e",
+    "report": "thesis/campaigns/worker-desktop-k1-p2p-tts-remaining191-v2153/analysis-v2200/results.md",
+    "reportSha256": "fcdf1ed39593f7ed46e8b15096b6037927da28ff6e446838e03e801116c2d13e",
+    "elapsedSeconds": 16.511088019935414,
+    "sutCalls": 0
+  },
+  "requesterSeal": {
+    "path": "thesis/campaigns/worker-desktop-k1-p2p-tts-remaining191-v2153/terminal-v2196/seal/REQUESTER-SEAL.json",
+    "sha256": "1b80be87f9ce8670045f3bd44e2d16e3654d9ca859053bea7bc4e796f17a7507"
+  },
+  "desktopPrefix": {
+    "custody": "thesis/campaigns/worker-desktop-k1-p2p-tts-remaining191-v2153/provider-prefix-transfer-v2198/CUSTODY.json",
+    "rawFiles": 15,
+    "rawPayloadBytes": 127759004,
+    "archive": {
+      "path": "thesis/campaigns/worker-desktop-k1-p2p-tts-remaining191-v2153/provider-prefix-transfer-v2198/provider-prefix-v2197.tar.gz",
+      "bytes": 7787275,
+      "sha256": "c52c0748f60831e33701688ef23ed51445a71c6c88e174be4692579ef3ea5544"
+    },
+    "providerRetired": false,
+    "reservationPreserved": true,
+    "openNativeSpansAtFixedBoundary": 0,
+    "finalControlCursor": "145745",
+    "earlierEffectiveDeadlineUtc": "2026-10-21T12:41:24.961804+00:00"
+  },
+  "clockPolicy": "W flow/local-native/resource windows use W monotonic; D native/resource windows use the appropriate D receiver process monotonic; no cross-host subtraction",
+  "counterErrors": "Retained in RESULT.json per-epoch/provider resource metadata; unavailable fields are not zero",
+  "next": "K1 Orca-relayed HTTP only missing720/global181-900 real route/native/warmup/capacity admission under solemonitorplan30.72.3; no new900 or oldfailed-index retry",
+  "nativeGoal": "original aggregate ACTIVE, full13/fullmatrix not complete",
+  "nativeSnapshot": "NATIVE-GOAL-TERMINAL-v2195.json",
+  "sourceMutation": false,
+  "newInference": 0
+}

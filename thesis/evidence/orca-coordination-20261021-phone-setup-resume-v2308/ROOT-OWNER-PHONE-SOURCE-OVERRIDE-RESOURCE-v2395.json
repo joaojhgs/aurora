@@ -1,0 +1,76 @@
+{
+  "schema": "aurora.root.phone-source-owner-update.v1",
+  "at": "2026-10-22T04:52:35.073337+00:00",
+  "ownerMessages": [
+    "msg_2c3258883419",
+    "msg_30668c1050d6"
+  ],
+  "run": "run_e6054e76e9fc",
+  "sameWorkerTask": "task_e35b809903c1",
+  "sameWorkerTerminal": "term_1f27be31-0284-4366-bb91-30fe538cd30e",
+  "sourceAuthority": "Owner authorizes existing phone worker to diagnose, implement, build, install and test bounded necessary product fixes in new isolated owned source/deployment overlays; Root prior proposal-only restriction is superseded",
+  "isolatedClaims": [
+    "rust/crates/aurora-local-inference/src/lib.rs",
+    "apps/aurora-tauri/src-tauri/src/native_local_inference.rs",
+    "apps/aurora-tauri/src-tauri/src/lib.rs only if required for startup boundary"
+  ],
+  "rootHasNoActiveWritesToThoseFiles": true,
+  "sharedGitAndLaterCanonicalIntegrationOwner": "Original Root only; no concurrent shared-tree/index/ref writer",
+  "priorLease": {
+    "identity": "ROOT-DISJOINT-READINESS-RESOURCE-ADMISSION-v2391",
+    "workerReportedBoot": "2026-10-22T04:42:06Z",
+    "controllerPid": 181798,
+    "servicePid": 181953,
+    "reportedServiceStartTicks": 2471739,
+    "originalExpiryUtc": "2026-10-22T05:01:06Z",
+    "workerReportedStopOperation": "v113",
+    "actualFinalRetirementReceipt": "PENDING; no assumption of process exit or reused lease"
+  },
+  "conditionalRepairResourceAdmission": {
+    "state": "ADMITTED_ONLY_AFTER_EXACT_PRIOR_LEASE_PROVEN_RETIRED",
+    "oldLeaseRetirementVerifiedByExistingWorkerWithoutWaitingForAnotherRootReview": true,
+    "singlePatchAndManifestCopyMaxBytes": 32768,
+    "copyMaxSeconds": 30,
+    "copyRateMaxBytesPerSecond": 32768,
+    "existingApprovedControlOnly": true,
+    "notebookLocalBuildMaxJobs": 2,
+    "buildMaxSeconds": 1200,
+    "ownedTreeRssMaxBytes": 8589934592,
+    "availableRamFloorBytes": 8589934592,
+    "diskFreeFloorBytes": 2147483648,
+    "normalOsProtectionsAndTemperatureRecording": true,
+    "noBuildInferenceOverlap": true,
+    "noSharedWorkerDesktopInferenceOrModelBinaryTransfer": true,
+    "noAdditionalInferenceLeaseOrPilotCallsGrantedHere": true
+  },
+  "stageDependencies": {
+    "phoneLocalBaseline": [
+      "phoneSTT",
+      "phoneLLM",
+      "phoneTTS"
+    ],
+    "phoneK1_remoteTTS": [
+      "phoneSTT",
+      "phoneLLM"
+    ],
+    "phoneK2_remoteLLM_TTS": [
+      "phoneSTT"
+    ],
+    "phoneK3_allRemote": []
+  },
+  "evidenceRules": [
+    "Preserve ebde+v2383 old snapshots, install and startup/build failures",
+    "Each changed source/config/package overlay needs exact hashes and provenance; no historical result relabel or silent model/backend substitution",
+    "Attach prior ONNX phone STT/TTS proof with exact version mapping; do not invent fresh acceptance",
+    "Actual local phone LLM load/generate/cancel remains unproven until real bounded evidence",
+    "Existing worker provides exact next feasible pilot caps after diagnosis and build, plus actual prior release receipt"
+  ],
+  "boundaries": {
+    "rootStaysOnFrozenMainV2296": true,
+    "mainSourceSettingsManifestProvidersUntouched": true,
+    "noRootPhoneNotebookReadsOrDuplicateFix": true,
+    "noNewWorkersOrGoalsOrSecurityDriverCredentialBrokerChanges": true,
+    "no900OrUnattendedPhoneCampaignBeforeLaterOwnerSleepStart": true,
+    "monitorSoleMethodologyPlanWriter": true
+  }
+}

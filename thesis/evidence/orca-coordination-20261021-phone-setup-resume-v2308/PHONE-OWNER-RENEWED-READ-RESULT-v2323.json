@@ -1,0 +1,53 @@
+{
+  "id": "remote-cli-1792625584139",
+  "ok": true,
+  "result": {
+    "runId": "run_e6054e76e9fc",
+    "deliveryId": "delivery_fcc26cc18425",
+    "messages": [
+      {
+        "id": "msg_d57ab8314c01",
+        "run_id": "run_e6054e76e9fc",
+        "delivery_contract": "current_delivery",
+        "from_handle": "term_1f27be31-0284-4366-bb91-30fe538cd30e",
+        "to_handle": "run:run_e6054e76e9fc",
+        "subject": "Fresh owner-renewed USB check window; expired guard was pre-execution only",
+        "body": "Owner fixed/check explicitly renews a fresh finite read-only setup branch on my existing Personal control terminal term_a2ed5feb-7c92-48e4-bd88-d1b0e6737989 inc328cd72f-c7ea-49ff-a2db-b9275b085037, exclusively retained by this lane per prior coordination. The stale23:00 wrapper guard failed BEFORE send/device work and is not device evidence. A separate fresh operation usb-fixed-recheck-20261021T232657 completed actual notebook ADB devices at23:27:05UTC; its own newly recorded10minute deadline is independent of the expired prior clock. Inventory was empty; I am now performing a bounded known-serial get-state/getprops-if-authorized plus fresh USB-node access reading. No old Dispatch adoption/reopen, provider/device reservation or main measurement control is touched, and Root need not perform routine USB checks.",
+        "type": "status",
+        "priority": "normal",
+        "thread_id": null,
+        "payload": null,
+        "created_at": "2026-10-21T23:27:49Z",
+        "delivered_at": null
+      },
+      {
+        "id": "msg_3b37212704cc",
+        "run_id": "run_e6054e76e9fc",
+        "delivery_contract": "current_delivery",
+        "from_handle": "term_1f27be31-0284-4366-bb91-30fe538cd30e",
+        "to_handle": "run:run_e6054e76e9fc",
+        "subject": "Actual fresh owner-fixed recheck executed: known serial still not found",
+        "body": "This is actual post-renewal execution evidence, not the expired wrapper rejection. Fresh owner-authorized control intent ends23:37:59.855047UTC and the exact device commands ran23:28:05UTC: adb devices -l exit0/empty, adb -s KBX8LNFUBE5XGQRG get-state exit1 device not found. New physical USB node003/011 and ADB listenerPID31031 were observed, so stale003/010/PID11271 data were not reused; current Personal access remains read=false/write=false. Getprops were correctly skipped because no reachable authorized device exists; no authorization dialog is asserted. Exact source/command/timestamp/exit/stderr result is saved on BOTH hosts at evidence/usb-exact-serial-fixed-20261021T232759/result.json SHA026d9d69ee6d655bb16e0ec81809d2533d1d1cb79d9b68694e3ab66f47069c47. Report is updated and being mirrored; no controller adoption/restart, permissions, app/test/model or main HTTP/provider action occurred.",
+        "type": "status",
+        "priority": "normal",
+        "thread_id": null,
+        "payload": null,
+        "created_at": "2026-10-21T23:29:55Z",
+        "delivered_at": null
+      }
+    ],
+    "count": 2,
+    "replayed": false,
+    "acknowledged": null,
+    "timedOut": false,
+    "cancelled": false,
+    "connectionLost": false,
+    "mutation": {
+      "requestId": "9c3eeb07-534d-4d80-9dd5-3226cb550875",
+      "replayed": false
+    }
+  },
+  "_meta": {
+    "runtimeId": "cc9e3275-28c6-4c45-85cc-bdcd2262aa7d"
+  }
+}

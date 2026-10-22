@@ -1,0 +1,7 @@
+{
+  "at": "2026-10-21T03:10:22.745667+00:00",
+  "basis": "Original six provider fields, PID/start/manifest/source-receipt retained; peer from actual normal catalogue+mesh; hardware hash from captured current host payload. Expected CPU/sample-rate metadata is independently checked against15actual Piper calls/returned WAV. No original identity rewrite",
+  "derivedSha256": "bb4f9b25e70162b4143f53ed5d1ca9bebdb81809660eafd678d0d678eeaa3e34",
+  "originalSha256": "37e4c22e225c8f863dd3ed7645633b2fad56525497faf7937fb5b0a41c63de72",
+  "sutCalls": 0
+}

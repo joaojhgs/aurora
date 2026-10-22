@@ -1,0 +1,11 @@
+{
+  "startedAt": "2026-10-17T20:08:30.670882+00:00",
+  "finishedAt": "2026-10-17T20:20:35.435950+00:00",
+  "status": "receiver_proof_written",
+  "controllerPid": 430655,
+  "controllerStartTicks": 104608580,
+  "proofPath": "/home/developer/projects/aurora/.git/aurora-handoff-import-20261006/distributed-k1-orca-relayed-http-cell-v1197/campaign/receiver-warmup-proof.json",
+  "calls": 15,
+  "sutRequestsByFinalizer": 0,
+  "measurementAdmission": "existing runner independently checks proof before measured1"
+}

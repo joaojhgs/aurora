@@ -1,0 +1,18 @@
+{
+  "at": "2026-10-20T21:44:45.141016+00:00",
+  "branch": "codex/aurora-native-speech-routing-20261007",
+  "localCommit": "ebde3a8acf6315f920d03593845f17a1fc65a733",
+  "sourceCommits": [
+    "1c2f2da9d1eaa2a0b31db09c914f43834285dafb",
+    "e5745babb13b69f44aef4df1a7bc6b4b58aadc7d",
+    "ebde3a8acf6315f920d03593845f17a1fc65a733"
+  ],
+  "pushStatus": "REJECTED_NOT_PUBLISHED",
+  "exactRejection": "refusing to allow a Personal Access Token to create or update workflow .github/workflows/python-tests.yml without workflow scope",
+  "authChanges": false,
+  "newPrCiMerge": false,
+  "desktopDirtyCustody": "thesis/evidence/source-sync-20261020/desktop-preserved-v1933/CUSTODY.json",
+  "allDirtyFilesAndFrozenSourcesPreserved": true,
+  "furtherProvenanceIntegration": "deferred per newest owner Root-priority steering; no blanket staging/raw upload",
+  "handoff": "exact immutable LOCAL commit is approved source; remote pull unavailable; supported copy-only git archive deployment is permissible after Root bounded resource admission, no new checkout overwriting dirty notebook"
+}

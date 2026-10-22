@@ -1,0 +1,21 @@
+{
+  "at": "2026-10-22T11:49:24.233118+00:00",
+  "sourceEpoch": "android-sdk-consumer-lease-v8a",
+  "base": "v8",
+  "files": [
+    {
+      "path": "packages/aurora-sdk/src/webrtc/runtime.ts",
+      "baseSha256": "41e4deaff8f6d4ee99e01ce58929fc6e996db58bc1df0ec9fb7de0b7dd7fda6d",
+      "sha256": "1a6fb612e6fb6dcf82a481697462de13653515c2956475033db02fd0db8f434b"
+    },
+    {
+      "path": "packages/aurora-sdk/tests/webrtc-runtime.test.ts",
+      "baseSha256": "93f09b141dc84040941c3d5be4ed5fd004058bedc38a92d4a543ec8ec4d77918",
+      "sha256": "03a6b3df5a37c6cfceccf8627304b64cfcffc192aaa7cdfdf4dfe6cb118d463f"
+    }
+  ],
+  "patchSha256": "622e02293b83bf54bbcd33cb89002c9d5efb2ddc97d136d40984cf9f0b554bf6",
+  "actualGap": "v334 authorized peer has projected constraints/evidence but no negotiated lease; consumer hello omitted supported lease capability",
+  "roleChanged": false,
+  "receiverChecksChanged": false
+}

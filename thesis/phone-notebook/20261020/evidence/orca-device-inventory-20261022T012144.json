@@ -1,0 +1,15 @@
+{
+  "at": "2026-10-22T01:21:44Z",
+  "command": [
+    "/home/developer/.orca-relay/bin/orca",
+    "emulator",
+    "devices",
+    "--worktree",
+    "03d8a475-d62e-43b3-8885-e382b313ab1b::/home/developer/projects/aurora",
+    "--json"
+  ],
+  "observedResponseId": "a9c1523c-9ff7-49e1-a587-ea97a02cecf3",
+  "ok": true,
+  "result": [],
+  "noChanges": true
+}

@@ -1,0 +1,38 @@
+{
+  "at": "2026-10-20T14:20:45.057923+00:00",
+  "status": "WARMUP_FAILED_LOCAL_EOF_SEALED",
+  "wholeMeasured": {
+    "planned": 900,
+    "attempted": 709,
+    "correct": 697,
+    "failed": 12,
+    "unattempted": 191
+  },
+  "newMeasured": 0,
+  "excludedWarmupsThisEpoch": {
+    "attempted": 3,
+    "correct": 2,
+    "failed": 1
+  },
+  "excludedWarmupsAcrossEpochs": 33,
+  "failure": "remote_mesh_preaccept_capability_changed",
+  "failurePhase": "warmup3",
+  "actualSttAndLlmCorrect": true,
+  "timeout": false,
+  "exactRejectionCause": "UNKNOWN",
+  "seal": "thesis/campaigns/worker-desktop-k1-p2p-tts-remaining191-v1779/terminal-v1781/seal/REQUESTER-SEAL.json",
+  "sealSha256": "3a1c159c8fac2ff2fbf5aae2ca872e4a3045582e15e0976027206dc693dbaf2f",
+  "verifiedCases": 3,
+  "verifiedWavs": 2,
+  "verifiedIndexedBytes": 973151,
+  "retiredLocalActors": [
+    2747722,
+    2747791,
+    2748029,
+    2748030
+  ],
+  "nativeGoal": "01a112a5-d6bb-74e2-bf7c-ace73cb513b5",
+  "nextAction": "Finite source/runtime triage and original monitor coordination; no blind warmup loop or weakened guard. Remaining191 explicit, qualified K2 lifecycle considered under original plan.",
+  "providerRuntime": "Original3194385/3194394 not stopped or replaced",
+  "fullAggregateGoalComplete": false
+}

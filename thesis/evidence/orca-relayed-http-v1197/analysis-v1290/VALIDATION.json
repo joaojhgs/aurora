@@ -1,0 +1,46 @@
+{
+  "scope": "ONE saved51case replay with new provider-chain resolver; no new experiment requests, outcome changes or statistical formula changes.",
+  "status": "PASS_SAME_CASES_UNCHANGED_LOCAL_AND_FLOW_METRICS_PROVIDER_COVERAGE_COMPLETED",
+  "previousAnalysis": "thesis/evidence/orca-relayed-http-v1197/analysis-v1240/SUMMARY.json",
+  "newAnalysis": "thesis/evidence/orca-relayed-http-v1197/analysis-v1290/SUMMARY.json",
+  "measured": 36,
+  "excludedWarmups": 15,
+  "flowAndHarnessAndRequesterNativeMetricsExactlyUnchanged": true,
+  "oldProviderCasesPerHandler": {
+    "TTS.Synthesize": 24,
+    "tts.model_invoke": 24
+  },
+  "newProviderCasesPerHandler": {
+    "TTS.Synthesize": 36,
+    "tts.model_invoke": 36
+  },
+  "oldPartialReportsPreserved": true,
+  "missingTwelveWereEarlierCopiedPrefixLimitNotModelFailures": true,
+  "newExperimentMeasurements": 0,
+  "terminal900Seal": false,
+  "sourceFiles": [
+    {
+      "original": "thesis/analysis/k1_saved_case_history.py",
+      "retained": "thesis/evidence/orca-relayed-http-v1197/analysis-v1290/analysis-source.py",
+      "bytes": 18039,
+      "sha256": "4a406dd330e2396d38a6ce3b8b5a38362a7727058aff644d0232bdff54474608"
+    },
+    {
+      "original": "thesis/analysis/native_span_metrics_v2.py",
+      "retained": "thesis/evidence/orca-relayed-http-v1197/analysis-v1290/native_span_metrics_v2.py",
+      "bytes": 5210,
+      "sha256": "b8fc433bae6e941bd8829df1fa65a5df42af94f2a45d1f3e7174aca8767a7932"
+    }
+  ],
+  "replayCommand": "nice -n19 uv run --no-sync python thesis/analysis/k1_saved_case_history.py --requester-custody thesis/evidence/orca-relayed-http-v1197 --requester-snapshot thesis/evidence/orca-relayed-http-v1197/analysis-v1240/REQUESTER-CURRENT.snapshot.json --provider-extracted thesis/evidence/orca-relayed-http-v1197/provider-transfer-delta-v1261/extracted --provider-coverage-chain thesis/evidence/orca-relayed-http-v1197/provider-transfer-delta-v1261/COVERAGE-CHAIN.json --output-dir <fresh-versioned-directory-under-thesis>",
+  "sourceReview": "SOL-SOURCE-REVIEW.json",
+  "sourceReviewMessage": "msg_f49d271f6ce4",
+  "sourceReviewStatus": "CLOSED_NO_MATERIAL_CHANGED_RESOLVER_DEFECT",
+  "targetedLint": {
+    "command": "uv run --no-sync ruff check --select F,E9 thesis/analysis/k1_saved_case_history.py",
+    "exitCode": 0
+  },
+  "observedToolWallSeconds": 0.616944653,
+  "analysisReportedAt": "2026-10-17T21:43:50.018756+00:00",
+  "concurrentMeasurementPolicy": "Low-priority saved-data IO/CPU; keep every concurrent measured case. No workload, model, endpoint or experiment source changed."
+}

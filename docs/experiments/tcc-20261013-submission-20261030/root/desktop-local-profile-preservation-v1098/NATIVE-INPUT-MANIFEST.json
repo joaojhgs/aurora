@@ -1,0 +1,100 @@
+{
+  "schema": "aurora.native-local-setup.build-input-delta.v1097",
+  "at": "2026-10-16T15:43:47.281505+00:00",
+  "status": "READY_WORKER_ONLY_NOT_STAGED_BUILT_OR_EXECUTED_ON_PERSONAL",
+  "base": "Existing reviewed current-source materialization V1020 for Rootcbac; all original files/artifacts stay immutable",
+  "sourceDelta": [
+    {
+      "path": "apps/aurora-tauri/src/aurora-client.ts",
+      "baseWorkingTreeSha256": "f315ffc77530a460a73789f707f83c29e903fe9c4845a1da2a1c559160fabe31",
+      "bytes": 119635,
+      "sha256": "b54392ff9c883d061a736c5fc8d90bedfe070cda7a5a7e29f096f6bd39a92b0a"
+    },
+    {
+      "path": "apps/aurora-tauri/src/tauri-app.tsx",
+      "baseWorkingTreeSha256": "edfbf868d97bd1e0257aa88211b95e4bf9af7ddacebc130b3940238ad9156c5a",
+      "bytes": 113845,
+      "sha256": "1b7637e5359e4c02cf1df52f968b799f50947ad0c9607d1fdf84e3252824db65"
+    },
+    {
+      "path": "apps/aurora-tauri/src/offline-profile-main.test.ts",
+      "baseWorkingTreeSha256": "3a48034b0d86311938ccc585009b529a83e66758a4ab22ad2a40264594c4c5cb",
+      "bytes": 13183,
+      "sha256": "3ab2a4c61e47c98e61bf17deff4a1ac7b585985768e4a5f52d792f7d3a11e3c3"
+    },
+    {
+      "path": "apps/aurora-tauri/src-tauri/src/lib.rs",
+      "baseWorkingTreeSha256": "39b18ff7f46e157b72b35c042134073c74118cee173a345e3631aacc308c97af",
+      "bytes": 523880,
+      "sha256": "16a837eb74ced7ddcea59337cdade5c543709fe0412b843c0543a76e7d0e2107"
+    },
+    {
+      "path": "packages/aurora-ui/src/onboarding-view.tsx",
+      "baseWorkingTreeSha256": "03199bd782770350296485b33b9f65c9a5e2363edeb49256fc7e28c06c3e8135",
+      "bytes": 52274,
+      "sha256": "a46a71c92ef44a259931bc04336436ff585f7654e023e595a41feb80f194b33e"
+    },
+    {
+      "path": "packages/aurora-ui/src/runtime-profile.ts",
+      "baseWorkingTreeSha256": "ee5d41a3acabbb20cc6a34c8f8408181ef8f0402b6822bba4d8a9adf7e522d18",
+      "bytes": 31555,
+      "sha256": "c55a893eb1541714d001af27c3ec23e809e612201e2fdafe0444ccd15036a944"
+    },
+    {
+      "path": "packages/aurora-ui/tests/runtime-profile.test.ts",
+      "baseWorkingTreeSha256": "93eea310873f163a598cd71c8a9c0603b513488e26a38406decc654028a44f42",
+      "bytes": 22130,
+      "sha256": "c0d77039cbd772f16d9a6c9f35762ca747964033bc8f4551fa50b9548ae440fa"
+    },
+    {
+      "path": "packages/aurora-ui/tests/onboarding-and-mesh-baseline.test.tsx",
+      "baseWorkingTreeSha256": "74edded4c28c8f485879ff68be5682f2b49e02f1941784f034f6bc344a6ce4c2",
+      "bytes": 57510,
+      "sha256": "705220a9debc4743828b0cfcd55211b482c37dfbac8eb92bc59d34fd6c85bae5"
+    },
+    {
+      "path": "rust/crates/aurora-voice-native/src/runtime_profile.rs",
+      "baseWorkingTreeSha256": "0ebc1de8a5c2d496230d7c44a854997f04f2da7778efdadd43a8ae9cb9e87e0b",
+      "bytes": 50477,
+      "sha256": "40c25d866e95cdfe2cd9d22fcbcb6dfde8e8be2d6f8364d5e9eabc575c61a29e"
+    },
+    {
+      "path": "packages/aurora-ui/src/styles.css",
+      "baseWorkingTreeSha256": "7136a273ad91a0f4f5b94de6fddc3955fe67131ea037588757f70a78420fca47",
+      "bytes": 323539,
+      "sha256": "970640f74b8483effe558b527ac384ad2ae7ce6eacdb931bc271b4e4c121346f"
+    }
+  ],
+  "archive": {
+    "path": ".git/aurora-handoff-import-20261006/native-local-setup-inputs-v1097/reviewed-source-delta-v1097.tar.gz",
+    "bytes": 216944,
+    "sha256": "919b893d17d0fb050680cb8ec6cd3b5eddbf06fa5c8444d65e9df38ba067e1aa"
+  },
+  "productionFrontend": {
+    "at": "2026-10-16T15:43:47.155986+00:00",
+    "fileAudioDevHookAbsent": true,
+    "nativePackageCapabilityStringPresentIn": [
+      "assets/index-D4ArKVlY.js"
+    ],
+    "archive": ".git/aurora-handoff-import-20261006/desktop-local-frontend-v1096/frontend-production-v1096.tar.gz",
+    "archiveBytes": 2095970,
+    "archiveSha256": "5bf007ceb99c5b6e746f744869bc56fd8b76c945907d7cc2d658730056ccf1a0",
+    "files": 78,
+    "totalAssetBytes": 6847611,
+    "buildLeaderRetired": true,
+    "replacesCandidateOnly": "desktop-local-frontend-v1087",
+    "scope": "Production frontend candidate only; no native package/runtime or benchmark acceptance"
+  },
+  "sourceReview": "Original Sol1081 plus saved-profile source-only Sol1094; test seed corrected to existing canonical lowercase, production source exactly Sol1094 b54392...",
+  "sourceValidation": "Latest4 affected profile tests and Tauri typecheck PASS; prior45UI+19native/sharedUI types retained unaffected, no rerun. Two prior failed regression receipts preserved.",
+  "admissionBoundary": [
+    "Do not apply this delta to the current frozen C06 source/artifact or disturb its reservation",
+    "Use a separate candidate build directory only after existing process/results are reconciled and Root resource admission allows it",
+    "Validate each affected base path against its recorded pre-change workingtree hash before overlay; absent/mismatch must be reconciled without changing originals",
+    "Use genuine installed compiled Python sidecar package; current packet does not assert one exists, and approved external test backend is not package proof",
+    "New native artifact must include capability-manifest and profile-validator changes before normal onboarding/send/history live validation",
+    "No scientific baseline, first distributed gate, model/config/weight change or old cohort replay is introduced"
+  ],
+  "outstandingNativePackageMetadata": "15:00 retrieval was blocked by Orca prompt219e01dc; no capability inference from that failure",
+  "replacesCandidateOnly": "native-local-setup-inputs-v1089"
+}

@@ -1,0 +1,32 @@
+{
+  "at": "2026-10-18T18:25:33.731710+00:00",
+  "status": "K1_FIRST360_SOURCE_REVIEWED_NOT_ADMITTED_ZERO_EXECUTION",
+  "originalGoal": "01a112a5-d6bb-74e2-bf7c-ace73cb513b5",
+  "sourceManifest": "SOURCE-MANIFEST.json",
+  "draft": "condition-draft-v1600.json",
+  "validation": "STATIC-VALIDATION.json",
+  "sourceDelta": "SOURCE-DELTA.patch",
+  "sourceReview": "CLOSED msg_800150e9a9b5; ORIGINAL-SOL-REVIEW-RECEIPT-v1604.json3166B/SHA c6dbcc5e79b6cdca2b7f39a639775d55b8ea8d565d792913618a49b73126c5ed",
+  "sourceOnlyRequestCount": 0,
+  "nextActualPriority": "K3 V1590 remaining184 AFTER existing control writes restored and actual resource admission",
+  "currentControlBlocker": "thesis/campaigns/worker-desktop-k3-orca-relayed-http-remaining-v1590/control-admission-v1595/EXACT-BLOCKER.json",
+  "noControlRetryOrNewWorkers": true,
+  "verifiedLiveReviewHandle": {
+    "terminal": "term_2eab47ed-ab9b-4e35-bd9b-fc068c60e3fc",
+    "incarnation": "37e50d9c-6cf5-4e28-a63b-f2bc3eed5661",
+    "connected": true,
+    "agentIdentity": "codex",
+    "receipt": ".git/aurora-handoff-import-20261006/v1602-original-monitor-live.json"
+  },
+  "originalK1MeasuredPreserved": 180,
+  "firstSessionMeasured": 360,
+  "conditionIndices": [
+    181,
+    540
+  ],
+  "secondSessionSeparate": [
+    541,
+    900
+  ],
+  "nativeGoalSnapshot": "NATIVE-GOAL-v1604.json"
+}

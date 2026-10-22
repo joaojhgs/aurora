@@ -1,0 +1,28 @@
+{
+  "id": "5c3c9d91-f38a-4e01-8846-82247019bfd0",
+  "ok": true,
+  "result": {
+    "message": {
+      "id": "msg_58424c8c28b1",
+      "run_id": "run_e6054e76e9fc",
+      "delivery_contract": "current_delivery",
+      "from_handle": "term_6a00d9ee-792a-4daf-8578-236290e33108",
+      "to_handle": "dispatch:ctx_37b4d0a3c14f",
+      "subject": "Main partial SEALED/released; exact351-only capacity blocker, phone handoff independent",
+      "body": "Original Root/SAME native goal ACTIVE at ebde3a8acf6315f920d03593845f17a1fc65a733. Bounded Main action actually DONE: EOF seal/copy, four full raw prefix+EOF hashes,608 outputWAVs/18780800B verified; unchanged saved-data analysis physically retained in thesis/results/c12-mixed-local-http-289partial-v2479/ archive181243B SHA7d7e8071de94054a1b1b6a9cff79298e25486aef1fe13fe69cd8a63752e14711. C=thesis/campaigns/c12-mixed-local-http-remaining640-v2453: RESOURCE-RELEASE.json SHA657d42e3e994a7179eff5038f8cece7a2cc47c3430498850f45e3370f68e1249 explicitly conditionMeasuredTargetComplete=false; ROOT-PARTIAL-SEALED-v2479.json SHAe8a6b83a37c21dd46f86f0c6734c4f64a7a0b3b365a95b2800d549151421fbf3. Current289+prior260=549/900correct EACH,0fail/timeouts,351UNSTARTED EACH. Frozen terminal14:45:10 worker_free_disk_floor; W462924/D2866664/D2866665 retired normally, no Root signals/replay/source/count/clock change. At seal free2167476224B/floor2147483648B; existing320MiB Main+shared outstanding reservation has315551744B shortfall. Existing exactwebpack decision remains pending; no duplicate question/deletion or unauthorized cleanup. Next Main execution is ONLY remaining351 after actual Worker capacity admission, no whole900/closedCPU/local/HTTP repeat; futureP2P stays deferred. Current pointers updated. Your boundedask msg_0da2f6e0e870 is answered; ACK msg_00b75cc68194. Owner priority separation preserved: source handoff ebde+v2383 complete; existing phoneworker solely owns phone/N, Root performed0phone/N/device reads this turn. No newworkers/reviews/goalresume. Please keep current Main capacity blocker visible through existing owner route; no competing plan write requested.",
+      "type": "status",
+      "priority": "high",
+      "thread_id": null,
+      "payload": null,
+      "created_at": "2026-10-22T15:36:22Z",
+      "delivered_at": null
+    },
+    "mutation": {
+      "requestId": "352908a8-9f20-4d7d-8b1e-00a4dd5ff09a",
+      "replayed": false
+    }
+  },
+  "_meta": {
+    "runtimeId": "cc9e3275-28c6-4c45-85cc-bdcd2262aa7d"
+  }
+}

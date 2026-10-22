@@ -1,0 +1,49 @@
+{
+  "at": "2026-10-22T05:40:35.601750+00:00",
+  "kind": "EXACT_IDLE_ORIGINAL_SUT_GRACEFUL_RETIREMENT_ONCE_AND_EOF_EXPORT",
+  "command": [
+    "/home/developer/projects/aurora/.git/aurora-handoff-import-20261006/cpu-audio-campaign-v491/env/bin/python",
+    "/home/developer/projects/aurora/thesis/harness/orca_copy_control_raw_read_v1652.py",
+    "k1-http-current-provider-retirement-v2400",
+    "/home/developer/projects/aurora/thesis/campaigns/worker-desktop-k1-orca-relayed-http-remaining450-v2296/provider-eof-delta-v2400/retirement.command.txt",
+    "AURORA_K1_HTTP_PROVIDER_RETIRE_V2400"
+  ],
+  "sourceSha256": "ac28facdcd7580285a0ad0825e99c14e341e06667cb4d5ff1fb363930a4ee39c",
+  "sourceBytes": 10447,
+  "shellCommandBytes": 23272,
+  "allocationSha256": "e0bf68319b9ba7355a33cbde67ed57acf174b277c34fdb08f7e103d81cefb311",
+  "proofSha256": "60ac69c69ddbee27e9795a465fca246f85f61223fa2c11989a21661749a1fb7b",
+  "expectedDesktopActors": [
+    {
+      "pid": 1820862,
+      "startTicks": 37439756
+    },
+    {
+      "pid": 1820863,
+      "startTicks": 37439818
+    }
+  ],
+  "signalTarget": {
+    "pid": 1820863,
+    "startTicks": 37439818,
+    "signal": "SIGTERM"
+  },
+  "maximumSignals": 1,
+  "maximumSends": 1,
+  "parentTimeoutSeconds": 210,
+  "noOrcaSshAgentSignals": true,
+  "noInference": true,
+  "nativeGoal": {
+    "goal": {
+      "threadId": "01a112a5-d6bb-74e2-bf7c-ace73cb513b5",
+      "objective": "Complete the durable ultragoal plan in .omx/ultragoal/goals.json, including later accepted/appended stories, under the original brief constraints; use .omx/ultragoal/ledger.jsonl as the audit trail.",
+      "status": "active",
+      "tokensUsed": 245734870,
+      "timeUsedSeconds": 900836,
+      "createdAt": 1791314947,
+      "updatedAt": 1792647564
+    },
+    "remainingTokens": null,
+    "completionBudgetReport": null
+  }
+}

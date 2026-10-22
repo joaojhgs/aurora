@@ -1,0 +1,12 @@
+{
+  "controlDeadline": "2026-10-21T23:54:36.487084+00:00",
+  "explicitNewline": true,
+  "host": "ssh:ssh-sem-notebook-personal",
+  "incarnation": "328cd72f-c7ea-49ff-a2db-b9275b085037",
+  "remoteResult": "/home/developer/projects/aurora/thesis/phone-notebook/20261020/evidence/adb-server-usb-diagnosis-20261021T234436.json",
+  "rootAdmissionMessage": "owner-direct-bounded-existing-adb-controller-diagnosis",
+  "script": "scripts/adb_server_usb_diagnosis_v5.py",
+  "scriptSha256": "4ec85e515e9b15aab54c84b1345da0284359b96e4172d92bbae408749c83dcaa",
+  "singleSend": true,
+  "terminal": "term_a2ed5feb-7c92-48e4-bd88-d1b0e6737989"
+}

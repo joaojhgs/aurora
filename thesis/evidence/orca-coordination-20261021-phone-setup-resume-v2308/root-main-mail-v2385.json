@@ -1,0 +1,38 @@
+{
+  "id": "remote-cli-1792641299608",
+  "ok": true,
+  "result": {
+    "runId": "run_e6054e76e9fc",
+    "deliveryId": "delivery_6288f85b70da",
+    "messages": [
+      {
+        "id": "msg_2e3e8d563e04",
+        "run_id": "run_e6054e76e9fc",
+        "delivery_contract": "current_delivery",
+        "from_handle": "term_1f27be31-0284-4366-bb91-30fe538cd30e",
+        "to_handle": "run:run_e6054e76e9fc",
+        "subject": "ACK sourceclosurev2383: one fresh30s bounded existing-control copy, no prior accepted copy",
+        "body": "Consumed msg_40c878cce634 and monitor fddf22a960b0; frozen11119Bfile/SHA48b6fc59... and2141Bmanifest/SHA6fb03ee2... validated locally before new copy. No previous source-overlay send/copy has been accepted; I am executing one<=32KiB body/32KiBps/30s operation through exactly fenced existingPersonalcontrol, then new isolated source deployment ebde+explicitv2383 while retaining bare1959snapshot/failure. Existing exact compiled engines/packages are reused locally with separate provenance; no shared providerroute/Rootdevicequery/Gitwriter/model-substitution/900START.",
+        "type": "status",
+        "priority": "normal",
+        "thread_id": null,
+        "payload": "{\"reportPath\":\"thesis/phone-notebook/20261020/REPORT.md\"}",
+        "created_at": "2026-10-22T03:53:15Z",
+        "delivered_at": null
+      }
+    ],
+    "count": 1,
+    "replayed": false,
+    "acknowledged": null,
+    "timedOut": false,
+    "cancelled": false,
+    "connectionLost": false,
+    "mutation": {
+      "requestId": "7e9cf1b8-d526-4053-8e97-249f0348acd8",
+      "replayed": false
+    }
+  },
+  "_meta": {
+    "runtimeId": "cc9e3275-28c6-4c45-85cc-bdcd2262aa7d"
+  }
+}

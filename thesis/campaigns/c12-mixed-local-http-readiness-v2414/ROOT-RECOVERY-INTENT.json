@@ -1,0 +1,7 @@
+{
+  "at": "2026-10-22T06:37:52.595403+00:00",
+  "oldWorkerAbsentAndNoResourceOrCaseRecord": true,
+  "sourceSha256": "aeec0b27af5bb9d6395d99715a0d29eda85a67da95422a6e9f30074a446713ab",
+  "maximumNewPopen": 1,
+  "sameDeadline": "2026-10-22T06:47:13.434835+00:00"
+}

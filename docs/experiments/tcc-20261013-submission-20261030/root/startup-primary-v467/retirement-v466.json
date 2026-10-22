@@ -1,0 +1,35 @@
+{
+  "at": "2026-10-15T01:12:30.319988+00:00",
+  "allEnumeratedOwnedPIDsAbsent": true,
+  "pids": [
+    2874520,
+    2874540,
+    2874541,
+    2874548,
+    2874552,
+    2874927,
+    2874941
+  ],
+  "globalLockAvailable": true,
+  "homeFree": 391000064,
+  "shmFree": 589979648,
+  "memAvailable": 3294769152,
+  "observerStatus": {
+    "capture_complete": true,
+    "encoded_bytes": 2286,
+    "event_count": 3,
+    "flush_error_count": 0,
+    "rejected_event_count": 0,
+    "write_error_count": 0
+  },
+  "terminal": {
+    "startedAt": "2026-10-15T01:08:58.804729+00:00",
+    "reason": "Root_requested_own_test_cleanup",
+    "finishedAt": "2026-10-15T01:11:17.650838+00:00",
+    "elapsedSeconds": 138.84626471507363,
+    "childrenExitCodes": [
+      130,
+      -2
+    ]
+  }
+}

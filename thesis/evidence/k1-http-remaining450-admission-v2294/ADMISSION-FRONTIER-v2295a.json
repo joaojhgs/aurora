@@ -1,0 +1,112 @@
+{
+  "at": "2026-10-21T21:18:27.207725+00:00",
+  "status": "NEXT450_SOURCE_AND_FROZEN_ADMISSION_PENDING_NO_NEW_LIFECYCLE_OR_INFERENCE",
+  "sameOriginalNativeGoal": "01a112a5-d6bb-74e2-bf7c-ace73cb513b5",
+  "nativeGoalStatus": "active",
+  "run": "run_e6054e76e9fc",
+  "rootTerminal": "term_6a00d9ee-792a-4daf-8578-236290e33108",
+  "monitorDispatch": "ctx_37b4d0a3c14f",
+  "rootSoleExecutionAndSourceOwner": true,
+  "monitorSoleMethodologyWriter": true,
+  "current270Closure": "thesis/campaigns/worker-desktop-k1-orca-relayed-http-first270-v2234/ROOT-EPOCH-COMPLETE-v2293.json",
+  "eligibility": "ELIGIBILITY.json",
+  "eligibleOnly": [
+    451,
+    900
+  ],
+  "remainingMeasured": 450,
+  "historicalFailure180NeverRetry": true,
+  "frozenFutureManifest": "NOT_CREATED",
+  "futureAllocation": "CAPACITY-ACCOUNTING-DRAFT.json;43200prospective all-inclusive/115200aggregate only draft, actualSTART/DEADLINE/charges must freeze before lifecycle",
+  "desktopResourceRead": {
+    "path": "DESKTOP-RESOURCE-READ-v2295a.json",
+    "sha256": "d6f7f6d002a121cdd0239a3b1cc30faf58b7c8d2d2603cf65d9b24b616bdebde",
+    "at": "2026-10-21T21:14:03.945464+00:00",
+    "sameOriginalProviderActors": [
+      {
+        "pid": 1440195,
+        "startTicks": 35427348,
+        "state": "S"
+      },
+      {
+        "pid": 1440196,
+        "startTicks": 35427408,
+        "state": "S"
+      }
+    ],
+    "openNativeSpans": 0,
+    "memoryAvailableBytes": 24191139840,
+    "freeBytes": 144816418816,
+    "cpuCount": 8,
+    "loadAverage": [
+      0.64990234375,
+      0.71337890625,
+      0.724609375
+    ],
+    "gpuMetadata": [
+      {
+        "device": "0x7480",
+        "vendor": "0x1002",
+        "mem_info_vram_total": "8573157376",
+        "mem_info_vram_used": "55422976",
+        "gpu_busy_percent": "0",
+        "temperaturesMilliC": {
+          "hwmon/hwmon4/temp3_input": "34000",
+          "hwmon/hwmon4/temp1_input": "35000",
+          "hwmon/hwmon4/temp2_input": "36000"
+        }
+      },
+      {
+        "device": "0x15d8",
+        "vendor": "0x1002",
+        "mem_info_vram_total": "2147483648",
+        "mem_info_vram_used": "309374976",
+        "gpu_busy_percent": "0",
+        "temperaturesMilliC": {
+          "hwmon/hwmon5/temp1_input": "35000"
+        }
+      }
+    ],
+    "gpuScope": "Hardware/resource metadata only; currentK1 invokes PersonalPiperCPU, no uninvokedGPU performance claim. Preserve configured three-service context and actual lazy/resident state evidence."
+  },
+  "desktopDeadlineInterpretation": {
+    "manifestMaximumUnchanged": "2026-10-21T22:56:07.231887+00:00",
+    "earlierEffectiveCurrentProviderCutoff": "2026-10-21T22:45:52.468654+00:00",
+    "rootOldCutoff": "2026-10-21T23:36:07.231887+00:00",
+    "policy": "Earlier effective bound governs; resource-read manifestMaximum is not an extension."
+  },
+  "sameDesktopPlainControl": {
+    "terminal": "term_d5651d8d-58e2-4b38-85e2-51c668cc933c",
+    "incarnation": "034ff933-61a3-4c74-b5ad-98a75e8ac21c",
+    "target": "ssh:ssh-1786238480967-semdev",
+    "completedCursor": "159341",
+    "pendingAcceptedOperation": null
+  },
+  "localReadFailureResolved": {
+    "initialOperation": "k1-http-next450-desktop-resource-v2295",
+    "commandsSent": 0,
+    "failureReceipt": "LOCAL-PREFLIGHT-FAILURE-v2295/RECEIPT.json",
+    "correctedOperation": "k1-http-next450-desktop-resource-v2295a",
+    "maximumSends": 1,
+    "actualResultPhysicallyCopied": true
+  },
+  "workingTemplatesRead": [
+    "thesis/harness/prepare_k1_http_provider_v2220.py",
+    "thesis/harness/launch_k1_http_provider_v2220.py",
+    "thesis/harness/k1_http_partial270_root_v2234.py",
+    "thesis/harness/k1_http_warmup_finalize_v2234.py"
+  ],
+  "nextSourceWork": [
+    "Prepare versioned successor V2296 from working source; preserve all old files. Update cohort/global451-900/count450/uniquecaseIDs and new runtimeconfig-reference hash, operational caps and lineage; scientific app400file snapshot/audio/models/decoding/correctness/auth/route/placement remain inherited.",
+    "Inspect existing controller/runner/custody and exact-idle retirement helper retire_idle_provider_and_export_v2215.py; reuse normal application retirement control and preserve oldprovider EOF tail. Do not signal/stop anyOrca/SSH/agent/service or create workers. Freeze allocation/source/absoluteSTART/DEADLINE/actualpriorcharges before any later SUT lifecycle.",
+    "New provider parent is live V2220 manifest950d449e3c337764a654ae4dd08c66623f50f96617615328be0cd8c54a4eaea2 with exact controller1440195/start35427348 receiver1440196/start35427408. Existing source/controller SHA6d8cc38e24bda0ff32546845880e68479fa945e2fdd4e2e6fa21fa9b593b6e5b/config1b2e464a9dd2a191954504161862d3aa19a991126eb2b08c4de55a40778fd002. New source guards must use this predecessor, not old852896/852897.",
+    "Fresh source must replace stale V2234 prior15proofage<900/sameoldreceiver prerequisite with named prior comparison reference plus actual new provider protected-read/descriptor admission; retain strict fresh15 native/local/remote/correctness and capacity gate before new measurements. No extra TTS diagnostic inference outside15.",
+    "Fresh warmup forecast450*max(actualwarmupp95s,60.3053512957)*1.2+480; availablewindows must use new worker condition39000/controller39600, actual newprovider deadline, newparent43200minus2400, and newaggregate115200 minus ACTUALoriginal+oldparent priorcharges at freeze minus newparentage. Do not retain hardcoded72000-10027only or resetoldelapsed.",
+    "Keep2GiBfloor plus proposed768MiB worker diskreserve; refresh WCPU/RAM/disk/no-build/global-lock and Dreadiness before freeze. No models/config/env/DB/credential copies. Same existing18000Orca-relayedHTTP route; no duplicateforward/auth/security changes.",
+    "Copy cases/audio and bounded native/resource prefixes into new physical repo thesis from launch, using existing custody helper with versioned roots. Freeze source hashes before launch; normal source lint/AST and actual mainflow only, no new workers/review/edge-case loops. Report actual launch/fresh15admission and firstnew451WAVreceipt, not intent."
+  ],
+  "newInference": 0,
+  "newApplicationLifecycle": 0,
+  "newNativeGoalsOrWorkers": 0,
+  "full13AndFullMatrixRemainOpen": true
+}

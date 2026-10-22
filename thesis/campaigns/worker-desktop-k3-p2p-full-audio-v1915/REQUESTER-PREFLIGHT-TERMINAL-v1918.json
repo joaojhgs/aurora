@@ -1,0 +1,28 @@
+{
+  "at": "2026-10-20T21:06:54.593785+00:00",
+  "status": "REQUESTER_PREFLIGHT_ONLY_TERMINAL_ZERO_AUDIO_ZERO_BACKEND_SPAWNS",
+  "controller": {
+    "pid": 3057025,
+    "startTicks": 130875311,
+    "absent": true
+  },
+  "finalizer": {
+    "pid": 3057027,
+    "startTicks": 130875313,
+    "absent": true
+  },
+  "copier": {
+    "pid": 3057026,
+    "startTicks": 130875313,
+    "signal": "SIGINT after exact own PID/start check",
+    "retired": true
+  },
+  "cellCreated": false,
+  "warmupCases": 0,
+  "measuredCases": 0,
+  "error": "independent_remote_receiver_bindings_missing: inherited two-stage controller guard",
+  "noProviderRestart": true,
+  "sourceCorrection": "Add actual STT peer validation and exact three-stage receiver binding, no guard weakening",
+  "replacementLink": "thesis/harness/distributed-k3-mesh-v1919",
+  "caps": "Retain original K3 cumulative wall start and original provider deadline"
+}

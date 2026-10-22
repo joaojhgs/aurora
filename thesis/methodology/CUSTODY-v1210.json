@@ -1,0 +1,14 @@
+{
+  "at": "2026-10-17T20:26:00.577638+00:00",
+  "bytes": 500295,
+  "destination": "thesis/methodology/owner-requirements-20261017-263d8e38.md",
+  "fullyReadDeltaSha256": "51bcae7f231fb84a84c0bee59f848b9aa3413e42364c6a520fb39034ae5f5b36",
+  "fullyReadNewDeltaBytes": 8773,
+  "originalMonitorSoleWriter": true,
+  "priorBytes": 491522,
+  "priorPrefixByteIdentical": true,
+  "rootExactPromotionOnly": true,
+  "sections": "full owner plan through30.49",
+  "sha256": "263d8e3840e26092f60174db90440b22854fd2d4f4b0eca06d5bb98fba4175a4",
+  "source": "/home/developer/Documents/Obsidian Vault Origin/5-full-notes/faculdade/tcc/future-work-test-requirements.md"
+}

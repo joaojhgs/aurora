@@ -1,0 +1,25 @@
+{
+  "at": "2026-10-21T03:12:11.578307+00:00",
+  "status": "15_ORDINARY_P2P_WARMUPS_NATIVE_RECEIVER_AND_ROUTE_PROOF_PUBLISHED_FROM_SAME_SAVED_PREFIXES",
+  "proofSha256": "a2571287aab8f63c9af2facf0a3ede4cf81558c403d3b5653ea8b3b33df49991",
+  "providerWarmupCalls": 15,
+  "excludedWarmups": 15,
+  "correctExcludedWarmups": 15,
+  "failedExcludedWarmups": 0,
+  "warmupP95MsType7": 50287.369398899995,
+  "measured191ForecastSecondsWith20PercentPlus300": 11825.865066227878,
+  "fixedConditionCapSeconds": 14067,
+  "requesterRemainingSeconds": 13231.783435,
+  "providerRemainingSeconds": 34153.40479,
+  "originalFailurePreserved": {
+    "at": "2026-10-21T03:10:22.759221+00:00",
+    "automaticRetry": false,
+    "error": "No module named 'warmup_policy'",
+    "errorCategory": "ModuleNotFoundError",
+    "preserveSameAttemptAndAcceptedControl": true
+  },
+  "recovery": "Add existing staged policy module to local proof-assembly search path; reuse original collected files. No source/manifest change, no repeated inference, no remote resend.",
+  "remoteSendsByRecovery": 0,
+  "sutCallsByRecovery": 0,
+  "remainingAdmission": "Frozen runner independently checks15localSTT/LLM native spans plus receiver proof before measured1"
+}

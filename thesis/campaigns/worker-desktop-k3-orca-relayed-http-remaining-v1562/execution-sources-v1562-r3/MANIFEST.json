@@ -1,0 +1,36 @@
+{
+  "operators": [
+    {
+      "source": "thesis/harness/k3_remaining_root_v1562.py",
+      "retainedCopy": "thesis/campaigns/worker-desktop-k3-orca-relayed-http-remaining-v1562/execution-sources-v1562-r3/k3_remaining_root_v1562.py",
+      "bytes": 16693,
+      "sha256": "7427f3e4eccecb7671ad86e049053ff43c8f21c5333514ba578c35fd9efbb227"
+    },
+    {
+      "source": "thesis/harness/k3_warmup_finalize_v1562.py",
+      "retainedCopy": "thesis/campaigns/worker-desktop-k3-orca-relayed-http-remaining-v1562/execution-sources-v1562-r3/k3_warmup_finalize_v1562.py",
+      "bytes": 7305,
+      "sha256": "2c6541b623f9e8fe862ffd30dc6c869d1e517b081023fd66414f2f6f61c223dd"
+    },
+    {
+      "source": "thesis/harness/k3_remote_warmup_proof_v1562.py",
+      "retainedCopy": "thesis/campaigns/worker-desktop-k3-orca-relayed-http-remaining-v1562/execution-sources-v1562-r3/k3_remote_warmup_proof_v1562.py",
+      "bytes": 7487,
+      "sha256": "05c3e59bf2b72a6569fe9832c851e88ca2a7722105eebb1f4ba46992cbbf8f4a"
+    },
+    {
+      "source": "thesis/harness/custody_k3_requester_v1562.py",
+      "retainedCopy": "thesis/campaigns/worker-desktop-k3-orca-relayed-http-remaining-v1562/execution-sources-v1562-r3/custody_k3_requester_v1562.py",
+      "bytes": 15847,
+      "sha256": "d9091db5e107a475c8a6aae88c7938fd471b166adf56589ff7fdeded1dc178b4"
+    },
+    {
+      "source": "thesis/harness/orca_control_raw_read_v1523.py",
+      "retainedCopy": "thesis/campaigns/worker-desktop-k3-orca-relayed-http-remaining-v1562/execution-sources-v1562-r3/orca_control_raw_read_v1523.py",
+      "bytes": 2691,
+      "sha256": "c3536841f9d16b0a43d21f98f769e9f091ebe402ed12fadb5d1cb77a494481a6"
+    }
+  ],
+  "notLaunched": true,
+  "newModelRequests": 0
+}

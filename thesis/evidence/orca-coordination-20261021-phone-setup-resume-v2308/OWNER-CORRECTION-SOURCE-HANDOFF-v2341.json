@@ -1,0 +1,29 @@
+{
+  "at": "2026-10-22T00:52:30.021695+00:00",
+  "state": "SOURCE_ARCHIVE_READY_ADMISSION_DELIVERED_RECEIVER_COMPLETION_PENDING",
+  "ownerCorrectionMessages": [
+    "msg_dc95b90137ee",
+    "msg_c4cfcd2fdc53",
+    "msg_8861e09e02cc"
+  ],
+  "oldQueue": "QUEUED-SOURCE-ASSET-STAGING-REQUEST-v2331.json",
+  "supersedes": "Old shared774675150B asset queue and campaign-end-only source hold. Independent exact public notebook acquisition authorized now; one bounded source transfer admitted now. Historical records preserved.",
+  "sourceAdmission": "thesis/evidence/source-sync-ebde-runtime-v2340/SOURCE-TRANSFER-ADMISSION-v2341.json",
+  "sourceSha": "ebde3a8acf6315f920d03593845f17a1fc65a733",
+  "deliveryReceipts": [
+    {
+      "receipt": "thesis/evidence/orca-coordination-20261021-phone-setup-resume-v2308/root-phone-exact-source-handoff-v2341.json",
+      "messageId": "msg_130802a842bb",
+      "sha256": "89aaf1670dcb082db5e967a20d7c188322afbf1e12ce6924feca54604371b284"
+    },
+    {
+      "receipt": "thesis/evidence/orca-coordination-20261021-phone-setup-resume-v2308/root-monitor-owner-amend-source-ready-v2341.json",
+      "messageId": "msg_e35b5d40fc6d",
+      "sha256": "d5076f073f4960021a568a9b30b31df97e9e53b29b8d291e2da0218ab5a4238b"
+    }
+  ],
+  "rootMainPriorityUnchanged": true,
+  "phoneChecksByRoot": 0,
+  "newWorkers": 0,
+  "phone900StartAuthorized": false
+}

@@ -1,0 +1,7 @@
+{
+  "at": "2026-10-18T22:28:02.381920+00:00",
+  "automaticRetry": false,
+  "error": "[Errno 2] No such file or directory: '/proc/1494269/stat'",
+  "errorType": "FileNotFoundError",
+  "sameAttemptMustBePreserved": true
+}

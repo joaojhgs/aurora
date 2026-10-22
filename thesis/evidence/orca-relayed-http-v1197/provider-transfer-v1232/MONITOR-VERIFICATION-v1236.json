@@ -1,0 +1,89 @@
+{
+  "observedAt": "2026-10-17T20:45:57.832455+00:00",
+  "run": "run_e6054e76e9fc",
+  "task": "task_d7ea336050cf",
+  "dispatch": "ctx_37b4d0a3c14f",
+  "originalRootTerminal": "term_6a00d9ee-792a-4daf-8578-236290e33108",
+  "RootReceiptMessage": "msg_bfbce9ff006f",
+  "sourceCustodyReceipt": "thesis/evidence/orca-relayed-http-v1197/provider-transfer-v1232/CUSTODY.json",
+  "custodyReceiptSha256": "a0c77a1d91c52aa20a5b45d3122cf980dd9d326b7ca895d70d4f2c7348dc408d",
+  "transferStatus": "complete_checkpoint_copy",
+  "finishedAt": "2026-10-17T20:44:43.330226+00:00",
+  "snapshotAt": "2026-10-17T20:40:55.137447+00:00",
+  "checkpointSequence": 12,
+  "physicalInventory": {
+    "rawFiles": 56,
+    "rawPayloadBytes": 43117024,
+    "allFilesWithManifests": 59,
+    "allExtractedBytes": 43202867,
+    "archiveBytes": 2597567,
+    "archiveSHA256_RootVerified": "80b8d8a35b546a2da8758f131937905163a8fc5a069b03701c96c483b3beb00c",
+    "archivePageCount": 27,
+    "allPageRangesContiguous": true
+  },
+  "prefixes": {
+    "actual-provider-bindings.jsonl": {
+      "endByte": 30763,
+      "chunks": 12,
+      "incomplete": true
+    },
+    "resources.jsonl": {
+      "endByte": 42722823,
+      "chunks": 21,
+      "incomplete": true
+    },
+    "voice-stages.jsonl": {
+      "endByte": 189206,
+      "chunks": 12,
+      "incomplete": true
+    }
+  },
+  "independentMonitorScope": "Every59 destination and archive containment/existence/size, page ranges and prefix watermark consistency. Root export/extraction verified each file SHA; monitor did not redundantly hash43MB or rehash archive. No SUT/test/Personal command/extra process started.",
+  "materialProblems": [],
+  "liveOriginalLocalProcesses": [
+    {
+      "pid": 430655,
+      "expectedStartTicks": "104608580",
+      "actualStartTicks": "104608580",
+      "state": "S",
+      "liveIdentity": true
+    },
+    {
+      "pid": 430656,
+      "expectedStartTicks": "104608648",
+      "actualStartTicks": "104608648",
+      "state": "S",
+      "liveIdentity": true
+    },
+    {
+      "pid": 442775,
+      "expectedStartTicks": "104723117",
+      "actualStartTicks": "104723117",
+      "state": "S",
+      "liveIdentity": true
+    },
+    {
+      "pid": 421717,
+      "expectedStartTicks": "104535394",
+      "actualStartTicks": "104535394",
+      "state": "S",
+      "liveIdentity": true
+    }
+  ],
+  "campaignProgress": {
+    "attempted": 44,
+    "last_attempt_file": "attempts/attempt-0044-measured.jsonl",
+    "last_attempt_status": "completed_correct",
+    "measured_attempted": 29,
+    "planned_measured": 900,
+    "planned_warmups": 15,
+    "status": "running",
+    "unattempted_measured": 871,
+    "warmups_attempted": 15
+  },
+  "requesterCustodyReceipt": "thesis/evidence/orca-relayed-http-v1197/receipts/000021.json",
+  "requesterCustodySequence": 21,
+  "retainedCases": 44,
+  "retainedAudioBlobs": 44,
+  "remaining": "Later than20:40:55 provider tail remains in active Personal in-repo custody; needs next bounded transfer/seal. Whole900 condition incomplete. Historical V799 raw archive unrecovered, C06 final/raw unknown; no replay."
+}

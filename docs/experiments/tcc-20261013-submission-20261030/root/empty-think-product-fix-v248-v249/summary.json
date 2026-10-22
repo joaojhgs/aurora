@@ -1,0 +1,18 @@
+{
+  "grounding": "Real V247 fixed-public-task response contains empty leading thought markup; correlation/history match, exact plain answer fails and UI carries raw text",
+  "final_source_sha256": {
+    "app/services/orchestrator/service.py": "0b77092091946b94130945b3bfb670a922a209b846d5ffe30e23f75b52f982f3",
+    "tests/unit/orchestrator/test_session_persistence.py": "3e171573ddac0d2eaed0f244207bd4934fcd6efb74fbca1997c409f058624390"
+  },
+  "independent_sol_review": "APPROVE exact final hashes; stream double-pass finding closed by outer nonstream-only guard",
+  "focused_tests": {
+    "candidate": "4PASS0.78s",
+    "final_integrated": "4PASS0.69s/whole3.691s"
+  },
+  "ruff": "PASS",
+  "scope": "Strip one leading empty thought block at final reply boundary before persistence/emission/return; preserve nonempty/body/context/IDs/predicates/models/auth/topics",
+  "original_failed_request_history_retained": true,
+  "incremental_streaming_redesign": false,
+  "commit_or_push": false,
+  "next": "One affected real LocalBus/authAPI gate V250 currently owned Root handle; inspect actual terminal result before claiming runtime success."
+}

@@ -1,0 +1,83 @@
+{
+  "id": "remote-cli-1792526164764",
+  "ok": true,
+  "result": {
+    "runId": "run_e6054e76e9fc",
+    "deliveryId": "delivery_766ee0d4757b",
+    "messages": [
+      {
+        "id": "msg_04f0739db837",
+        "run_id": "run_e6054e76e9fc",
+        "delivery_contract": "current_delivery",
+        "from_handle": "term_2eab47ed-ab9b-4e35-bd9b-fc068c60e3fc",
+        "to_handle": "run:run_e6054e76e9fc",
+        "subject": "K2 new assistant correctness failures; preaccept count zero",
+        "body": "CHANGED K2 outcome: copied 788/900=774 correct+14 failures at19:48:09; all3 original requester actors live19:48:56. Measured786/787/788 saved raw hashes verify assistant_reply_predicate_failed, transcript correct, timeout=false, partial_quality_incorrect=true, consecutive_preaccept_rejections=0. These do NOT establish the three-preaccept hardstop; cause unknown. Please reconcile actual frozen quality policy/controller state once and preserve outcomes/denominator, no auto restart/top-up or changed source/model/fixture/predicate. Saved compact report; sole execution remains you.",
+        "type": "status",
+        "priority": "normal",
+        "thread_id": null,
+        "payload": "{\"taskId\":\"task_d7ea336050cf\",\"dispatchId\":\"ctx_37b4d0a3c14f\",\"reportPath\":\".omx/evidence/orca-monitor-20261010/K2-NEW-ASSISTANT-QUALITY-FAILURES-20261020T1952Z.json\"}",
+        "created_at": "2026-10-20T19:52:30Z",
+        "delivered_at": null
+      },
+      {
+        "id": "msg_b42c49f3dba4",
+        "run_id": "run_e6054e76e9fc",
+        "delivery_contract": "current_delivery",
+        "from_handle": "term_2eab47ed-ab9b-4e35-bd9b-fc068c60e3fc",
+        "to_handle": "run:run_e6054e76e9fc",
+        "subject": "alive",
+        "body": "",
+        "type": "heartbeat",
+        "priority": "normal",
+        "thread_id": null,
+        "payload": "{\"taskId\":\"task_d7ea336050cf\",\"dispatchId\":\"ctx_37b4d0a3c14f\",\"phase\":\"reviewing\"}",
+        "created_at": "2026-10-20T19:52:32Z",
+        "delivered_at": null
+      },
+      {
+        "id": "msg_7406a3d9b803",
+        "run_id": "run_e6054e76e9fc",
+        "delivery_contract": "current_delivery",
+        "from_handle": "term_2eab47ed-ab9b-4e35-bd9b-fc068c60e3fc",
+        "to_handle": "run:run_e6054e76e9fc",
+        "subject": "Original monitor ACTIVE; ACK new quality category; lifecycle rejection clarified",
+        "body": "Original monitor remains ACTIVE on native01a123ff-19ba-7332-a2f7-346a722af79f, same Sol6.1/xhigh/session. Own heartbeat msg_b42c49f3dba4 at19:52:32 accepted; event-driven45s mailbox waits continue. ACK your 19:54:30 rejected escalation content: root cannot send worker lifecycle escalation as this monitor dispatch; ordinary status works, no replacement/resume needed. I independently verified first3 assistant predicate failures/preaccept0 and sent msg_04f0739db837 at19:52:30 with compact report/hash9eadb4038a9f6e433ec378e7a0e025560a56778c58617bab13dc753de61fbbd2. Latest own19:52:58 custody805=774correct31failed and original3PIDstarts live. Saved-diagnostics-only reconciliation remains yours; no changed source/settings/predicate, interruption, extra inference or review gate. Please retain exact lifecycle-rejection receipt separately from model/provider failure; it is not a dead monitor.",
+        "type": "status",
+        "priority": "normal",
+        "thread_id": null,
+        "payload": "{\"taskId\":\"task_d7ea336050cf\",\"dispatchId\":\"ctx_37b4d0a3c14f\",\"reportPath\":\".omx/evidence/orca-monitor-20261010/K2-NEW-ASSISTANT-QUALITY-FAILURES-20261020T1952Z.json\"}",
+        "created_at": "2026-10-20T19:54:49Z",
+        "delivered_at": null
+      },
+      {
+        "id": "msg_94546169e33d",
+        "run_id": "run_e6054e76e9fc",
+        "delivery_contract": "current_delivery",
+        "from_handle": "term_2eab47ed-ab9b-4e35-bd9b-fc068c60e3fc",
+        "to_handle": "run:run_e6054e76e9fc",
+        "subject": "Direct Root ACK: original monitor alive; no replacement needed",
+        "body": "Original monitor nativegoal ACTIVE, same model/session,45s event waits. Heartbeat accepted19:52:32 msg_b42c49f3dba4. Your msg_7a3508f86365 rejected lifecycle-escalation content was received and ACKed19:54:37; do not interpret rejection as monitor absence. Run channel msg_04f0739db837 already records independently hash-verified first3 K2 assistant_reply_predicate_failed with preaccept0 and msg_7406a3d9b803 reconciles. Compact report .omx/evidence/orca-monitor-20261010/K2-NEW-ASSISTANT-QUALITY-FAILURES-20261020T1952Z.json SHA9eadb4038a9f6e433ec378e7a0e025560a56778c58617bab13dc753de61fbbd2. You retain sole saved-diagnostic/frozen-policy reconciliation; no interruption/restart/top-up/model/fixture/predicate change or new test gate. Direct notification closes stale heartbeat ambiguity; full matrix remains OPEN.",
+        "type": "status",
+        "priority": "normal",
+        "thread_id": null,
+        "payload": "{\"taskId\":\"task_d7ea336050cf\",\"dispatchId\":\"ctx_37b4d0a3c14f\"}",
+        "created_at": "2026-10-20T19:55:01Z",
+        "delivered_at": null
+      }
+    ],
+    "count": 4,
+    "replayed": false,
+    "acknowledged": null,
+    "timedOut": false,
+    "cancelled": false,
+    "connectionLost": false,
+    "mutation": {
+      "requestId": "2fb2825a-bea6-47b1-9fa0-406001883f29",
+      "replayed": false
+    }
+  },
+  "_meta": {
+    "runtimeId": "cc9e3275-28c6-4c45-85cc-bdcd2262aa7d"
+  }
+}

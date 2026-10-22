@@ -1,0 +1,18 @@
+{
+  "at": "2026-10-17T23:51:34.226762+00:00",
+  "kind": "copy_only_new_immutable_provider_logs",
+  "previousBaselineFiles": 456,
+  "baselineSha256": "9fd7b4ebd4be44db8052893792981056d9d885ac0cb6d112999cbf0b05080778",
+  "exporter": "thesis/harness/provider_export_delta_v1400.py",
+  "exporterSha256": "6f4b3201b6e2d17eb3e94afb2f77ef9d3d56d76748dcf0b47ecf337326b3cc34",
+  "maxRawBytes": 134217728,
+  "maxExportSeconds": 120,
+  "rateBytesPerSecond": 4194304,
+  "freeFloorBytes": 2147483648,
+  "newSutCalls": 0,
+  "newWorkers": 0,
+  "confound": "Root export/Orca control relay/disk IO concurrent with measured K2; preserve every affected case and actual operation window, do not infer zero impact.",
+  "existingProviderManifestUnchanged": "450ee5af677a229e93f75c093e4e5ee3135c25b223f0d73f713f0c31f56c4cae",
+  "requesterSnapshot": "thesis/campaigns/worker-desktop-k2-orca-relayed-http-v1264/REQUESTER-CURRENT-before-provider-delta-v1401.json",
+  "commandBytes": 50736
+}

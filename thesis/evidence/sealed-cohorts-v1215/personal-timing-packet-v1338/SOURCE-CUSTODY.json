@@ -1,0 +1,31 @@
+{
+  "at": "2026-10-17T22:22:15.185159+00:00",
+  "files": [
+    {
+      "source": "thesis/audit/20261017-data-and-results/export_personal_timing_packet.py",
+      "copy": "thesis/evidence/sealed-cohorts-v1215/personal-timing-packet-v1338/EXECUTED-EXPORTER.py",
+      "bytes": 5406,
+      "sha256": "b1236289abf318425ea9ace924b80f42da8b7d6574cb2a39324071f2909598a6"
+    },
+    {
+      "source": "thesis/harness/transfer_audit_packet_v1338.py",
+      "copy": "thesis/evidence/sealed-cohorts-v1215/personal-timing-packet-v1338/TRANSFER-SOURCE.py",
+      "bytes": 8496,
+      "sha256": "d54fdcd25b219eeefe17e59cca92da833af280e3c425930be0943c4e5114e1c2"
+    },
+    {
+      "source": ".git/aurora-handoff-import-20261006/v1336-personal-timing-export-RESULT.json",
+      "copy": "thesis/evidence/sealed-cohorts-v1215/personal-timing-packet-v1338/EXPORT-RECEIPT-v1336.json",
+      "bytes": 719,
+      "sha256": "f60415d11f660a3e0d846478316a8d9091b5c32f94e88d8ad0328c63bc5709d6"
+    },
+    {
+      "source": ".git/aurora-handoff-import-20261006/v1336-personal-timing-export.command.txt",
+      "copy": "thesis/evidence/sealed-cohorts-v1215/personal-timing-packet-v1338/EXPORT-OPERATION.txt",
+      "bytes": 12473,
+      "sha256": "3ca15179b7f8d40cfd47342ac8a4e2138eece945e8a0c831f2b0479119e77cf0"
+    }
+  ],
+  "copyOnly": true,
+  "noNewMeasurements": true
+}

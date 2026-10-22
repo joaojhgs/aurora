@@ -1,0 +1,91 @@
+{
+  "at": "2026-10-22T09:24:04.341772+00:00",
+  "classification": "VERIFIED_WAIT_WITH_EXISTING_ORCA_COORDINATION",
+  "nativeGoalId": "01a112a5-d6bb-74e2-bf7c-ace73cb513b5",
+  "nativeGoalStatus": "active",
+  "requester": {
+    "pid": 281887,
+    "startTicks": 143363140,
+    "state": "S"
+  },
+  "actualCurrent": {
+    "at": "2026-10-22T09:23:43.828277+00:00",
+    "companion": {
+      "measured": {
+        "attempted": 144,
+        "correct": 144,
+        "failed": 0,
+        "harnessErrorsIncludedInFailed": 0,
+        "incorrectIncludedInFailed": 0,
+        "offered": 144,
+        "planned": 900,
+        "timeouts": 0,
+        "unstarted": 756
+      },
+      "warmup": {
+        "attempted": 1,
+        "correct": 1,
+        "failed": 0,
+        "harnessErrorsIncludedInFailed": 0,
+        "incorrectIncludedInFailed": 0,
+        "offered": 1,
+        "planned": 1,
+        "timeouts": 0,
+        "unstarted": 0
+      }
+    },
+    "completePairedCapsules": 145,
+    "elapsedSeconds": 5846.458961055,
+    "lastIndex": 144,
+    "lastNativeParent": "97c80f8e7fe061d00575791ba245c70d",
+    "lastOrdinal": 145,
+    "manifestSha256": "316d4cc09adc44d0104dca8ac1f2a966347588ffef37bc2fa809ec14fd5efff8",
+    "phase": "measured",
+    "pid": 281887,
+    "primary": {
+      "measured": {
+        "attempted": 144,
+        "correct": 144,
+        "failed": 0,
+        "harnessErrorsIncludedInFailed": 0,
+        "incorrectIncludedInFailed": 0,
+        "offered": 144,
+        "planned": 900,
+        "timeouts": 0,
+        "unstarted": 756
+      },
+      "warmup": {
+        "attempted": 1,
+        "correct": 1,
+        "failed": 0,
+        "harnessErrorsIncludedInFailed": 0,
+        "incorrectIncludedInFailed": 0,
+        "offered": 1,
+        "planned": 1,
+        "timeouts": 0,
+        "unstarted": 0
+      }
+    },
+    "status": "running"
+  },
+  "nextMaximumCheck": "2026-10-22T09:29:04.341772+00:00",
+  "earlierCheck": "Real terminal/failure/stale progress/resource alarm, actual owner answer or existing monitor next-cell reply",
+  "sameSourceSettingsTargetsFloorAndMasterClocks": true,
+  "newSutInferenceTestsBuildsWorkersOrDeviceCalls": 0,
+  "freeBytes": 2574901248,
+  "cacheQuestion": "Still pending exact935MB webpack-cache scope; no deletion, inferred answer or repeat question",
+  "nextCellCoordination": "Original monitor asked for exact next already-declared cell/route/source references; response pending. No new condition or gate invented; main is not held.",
+  "monitorMessage": "msg_bc2a31990be3 fully read/ACKed; Root relayed its existing phone coordination ONLY",
+  "existingWorkerRelay": {
+    "messageId": "msg_d2b7c5ef839f",
+    "requestId": "3333f44d-d7e0-4f9d-9ac9-b8b85f71f67f",
+    "target": "term_1f27be31-0284-4366-bb91-30fe538cd30e",
+    "accepted": true,
+    "deliveredOrRead": "UNVERIFIED",
+    "warning": "Live terminal-only mailbox; do not claim durable Dispatch or worker readback",
+    "routeCorrection": "Initial terminal: prefix definitively rejected terminal_not_found; corrected once to bare existing term handle, no worker absence/restart inferred"
+  },
+  "phoneBoundary": "Sole existing task/worker retains device/setup ownership; no Root device reads or operation",
+  "mail": "delivery_0b815adbc508 +heartbeat delivery_1b4f61499b20 fully ACKed; next batch empty, no outstanding ACK",
+  "preferredEOF": "thesis/harness/c12_terminal_delta_custody_v2440.py, genuine execution still pending retirement"
+}

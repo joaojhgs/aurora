@@ -1,0 +1,8 @@
+{
+  "bytes": 793,
+  "copyOnly": true,
+  "custody": "Notebook result persisted and fsynced before relay; remote receipt in same output",
+  "localPath": "/home/developer/projects/aurora/thesis/phone-notebook/20261020/evidence/read-native-llm-shapes-v378/result.json",
+  "remotePath": "/home/developer/projects/aurora/thesis/phone-notebook/20261020/evidence/read-native-llm-shapes-v378.json",
+  "sha256": "4d4a4fc764cc4b3af92297c658ec83b69d6881059385bbf728960eafc3f90b24"
+}

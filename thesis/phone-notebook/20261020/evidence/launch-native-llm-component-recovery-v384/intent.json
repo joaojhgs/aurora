@@ -1,0 +1,13 @@
+{
+  "controlDeadline": "2026-10-22T12:57:42.173750+00:00",
+  "host": "ssh:ssh-sem-notebook-personal",
+  "incarnation": "328cd72f-c7ea-49ff-a2db-b9275b085037",
+  "remoteResult": "/home/developer/projects/aurora/thesis/phone-notebook/20261020/evidence/launch-native-llm-component-recovery-v384.json",
+  "rootAdmissionMessage": "Correct source staging bytes/str failure before launch; prior v381 job absent assertion prevents duplicate; actual authorized runtime v380, one fixed-text native LLM request only",
+  "script": "scripts/launch_native_llm_component_v381.py",
+  "scriptSha256": "f8e616cc163cf97db4e97eefbf29676e24d3c64bdb33f4a0f74cd139d4f964ce",
+  "singleSend": true,
+  "supportedEnter": true,
+  "terminal": "term_a2ed5feb-7c92-48e4-bd88-d1b0e6737989",
+  "textTrailingNewline": false
+}

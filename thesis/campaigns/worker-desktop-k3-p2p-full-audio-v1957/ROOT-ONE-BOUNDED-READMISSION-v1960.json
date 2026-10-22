@@ -1,0 +1,78 @@
+{
+  "at": "2026-10-20T22:06:38.229008+00:00",
+  "status": "ONE_FINITE_FRESH_K3_ADMISSION_SAME_PROVIDER_NO_RUNTIME_CHANGE",
+  "nativeGoalStatus": "active",
+  "nativeGoalThread": "01a112a5-d6bb-74e2-bf7c-ace73cb513b5",
+  "localHead": "ebde3a8acf6315f920d03593845f17a1fc65a733",
+  "launch": {
+    "at": "2026-10-20T22:05:56.286813+00:00",
+    "status": "K3_REQUESTER_AND_BOUNDED_AUXILIARIES_STARTED",
+    "requester": {
+      "at": "2026-10-20T22:05:56.263526+00:00",
+      "conditionManifestSha256": "5fe805df6e328fb3159ad3da65c62bfb4b73f7e70d138842eb7f00f5072e19ba",
+      "controllerPid": 3121745,
+      "controllerStartTicks": 131241685,
+      "excludedWarmups": 15,
+      "measurementAdmitted": false,
+      "newWorker": false,
+      "plannedMeasured": 900,
+      "provider": {
+        "pid": 212717,
+        "startTicks": 28836628,
+        "state": "S"
+      }
+    },
+    "auxiliaries": {
+      "copier": {
+        "pid": 3121746,
+        "startTicks": 131241687,
+        "state": "R",
+        "sourceSha256": "5ea207cf3dbf27406bdfaa492603d1110e761d4e58cb88d0deb494939a00e1ec"
+      },
+      "warmup-finalizer": {
+        "pid": 3121747,
+        "startTicks": 131241687,
+        "state": "R",
+        "sourceSha256": "dd2232999d7111a39c6ad545144647a738bda4b7f0fa42b6d3f83cdb15e9770a"
+      }
+    },
+    "conditionManifestSha256": "5fe805df6e328fb3159ad3da65c62bfb4b73f7e70d138842eb7f00f5072e19ba",
+    "measurementAdmitted": false,
+    "plannedMeasured": 900,
+    "excludedWarmups": 15,
+    "newOrcaWorker": false,
+    "provider": {
+      "pid": 212717,
+      "state": "S",
+      "startTicks": 28836628
+    }
+  },
+  "provider": {
+    "controllerPid": 212716,
+    "controllerStartTicks": 28836566,
+    "receiverPid": 212717,
+    "receiverStartTicks": 28836628,
+    "manifestSha256": "016d461363c4f1d3baa2fbb67bf7a85c0aa79df1a0ebb419fc7d3f166a4de629",
+    "deadlineUtc": "2026-10-21T12:45:06.664473+00:00",
+    "notRestarted": true
+  },
+  "priorV1949": {
+    "correctWarmups": 12,
+    "failedWarmups": 1,
+    "failure": "TTS preaccept_capability_changed; STT and LLM correctness passed",
+    "traceRows": 39,
+    "traceInvalidOrDropped": 0,
+    "measured": 0,
+    "terminalReceipt": "thesis/campaigns/worker-desktop-k3-p2p-full-audio-v1949/PREACCEPT-WARMUP-TERMINAL-v1956.json"
+  },
+  "runtimeChangesFromPrior": 0,
+  "newStageTracingBugFixed": true,
+  "additionalSameRuntimeAdmissionCap": 1,
+  "onRepeatedSamePreaccept": "No more unchanged admission replays; actual binding/lease diagnostics and independent remaining matrix work",
+  "originalWallStartUtc": "2026-10-20T21:04:37.423478+00:00",
+  "originalCapSeconds": 57600,
+  "measuredTarget": 900,
+  "warmupsTargetExcluded": 15,
+  "allOriginalsPreserved": true,
+  "rootPriority": "K3/matrix only; no phone work"
+}

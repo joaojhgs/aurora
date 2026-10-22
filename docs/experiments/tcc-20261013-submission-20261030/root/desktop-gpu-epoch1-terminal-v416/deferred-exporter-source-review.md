@@ -1,0 +1,29 @@
+# V416 bounded private retained-data exporter source review
+
+2026-10-14 UTC. **APPROVE / PASS, source only**, for the declared coding-worker post-terminal placement and approved V415 controller/V414 driver schemas. Existing native Sol reviewer result for Root relay; no new worker/orchestration. Exact candidate hashes:
+
+- export.py: `750464eca5164b4d626e721d7593fefb20b3150f550b96b7a44a0a260515bd4e`.
+- README.md: `5ee73537ef941eda41e1164ffea4065c2b74b0088a627727f6cac0125b8cabf7`.
+- REPORT.md: `a1fbc8c109e182e8d43a1459ce4770bc2efec95bb71157d0c2aae925a1d082467`.
+
+Independent standard-library source ast.parse passes. Checked source pins against existing coding-worker files: controller `7f0a1c3cdbd4578034e6def8502a0758cf6c90e755886c8615307c845d0a8b4b`, launcher `0f072fbb3d840dc4db30f55248a59827da3c677bef206479643eab16e9956d09`, runner `12a8a67a0cb0407aa4c2294b33f15518271db41376c4d7619eeb6feea760777d`, observer `1ca1b6feca00eca188c9dc424a67aba948744d4549234c3e53d8b1dd3a4e8828`, hook `29553fb948234818ddd2a80d5b8abd0817e9e54e0a3b9649172d578e29d10ce0`, measurement helper `2648b5579c487e15936bf2eafd70ae8b63db5567915ff4c1c1b318989da2a646`, legacy analysis `42c42917b30df199c27476bcf66ae8abbf638157b39e25f3a11828e1326c5ed8`. No exporter/helper/app imports or invocation, tests/models/builds/services/network/devices/live campaign reads, or source/index/goals/ledger/vault writes. This report is the sole owned write.
+
+## Terminal and raw safety
+
+Source matches actual V415 plan and status names: local-only epochs 1–3 then API epochs 1–3. It refuses running/no-finish controller, unexpected plan/order, any attempted epoch still marked running/launcher_observation_timeout, missing terminal receipt or processPresentAfterWait not false. Thus the actual controller observation-timeout path cannot masquerade as stopped/completed data. All six normal epochs must reach natural terminal before intended invocation; terminal failure/unattempted statuses remain exportable as such when owned children are confirmed stopped.
+
+Fresh destination is constrained under the private tool directory, exclusive-created, with mode-0700 directories/0600 files. Source pins are checked before copying/importing the analysis-only helper. The copier streams original epoch trees, logs and sidecars without altering/deleting/relabeling originals; symlinks/nonregular entries are rejected, controller bytes are rechecked against concurrent mutation, and copied files/source/docs receive byte/hash manifests. Original private reports/logs remain private, not generically redacted or published. Printed completion contains only the private path/status; Root must perform a separate reviewed public projection.
+
+## Denominators and timings
+
+Per-condition target is 900 measured plus 15 excluded warmups across three separately fresh approved launcher invocations. Controller, manifest and validated-row attempted counts are retained separately and must agree before a common attempted denominator is claimed. Missing/invalid data remains explicit; unknown agreement yields null totals/unattempted counts rather than invented completed rows. Actual finite failures/timeouts/cancellation/infeasibility/exclusions remain raw and counted; planned/unattempted epochs and original failures are not converted to success. Each complete epoch requires actual 305/5/300 rows, matching artifact hashes, captures/context and complete written LLM pairs; complete route flags require all three completed epochs and actual 900/15 counts. Source-selected target alone cannot set completion.
+
+The pinned request helper validates actual raw schemas/groups and supplies Type 7. Caller nanosecond differences are divided by 1,000,000 for milliseconds; quantiles use successful measured rows only, with warmups excluded, and stay separate for local/API. CPU data is not read or pooled. Per-epoch outcomes and success-only p50/p90/p95 remain descriptive, not stable-tail/confidence/causal estimates. Existing CPU acceptance is not reopened.
+
+LLM/history spans pair only within receiver PID/request ID/stage/span ID and Python monotonic clock domain, with one start/end and ordered time. Unpaired/malformed observations remain raw and completeness fails; absence is not a fabricated zero duration. Paired stage-duration lists are observations, including any failure-boundary data, not labeled success-only engine time. Pre-LLM subtraction additionally requires the actual launched runner PID and request ID; its interval is explicitly unclassified, not queue/protocol attribution. DB history readback remains a separate correctness predicate outside caller reply latency. Missing voice/tool/render/playback/first-token metrics remain unsupported; no new metric gate is imposed.
+
+## Placement and scope limits
+
+Root clarified execution only on coding-worker after all six desktop epochs stop and the complete private raw tree is transferred/verified into the declared handoff root. Required source/helper pins exist here; the desktop's older source environment is not an invocation target for this helper. Root separately verifies actual desktop PID termination and complete transfer before export; no compression/IO operation against live provider epochs was performed by this review.
+
+Requested GPU settings, raw offload logs and resources remain provenance inputs for Root's actual offload review, not an exporter-authored all-GPU verdict. Private stage/record completeness is not whole GPU campaign/full voice/STT/TTS/playback/surface/mobile/product acceptance, and does not release the CPU+GPU cross-device seal barrier. Internal cleanup/container unknowns remain in raw receipts. No material source blocker found within this bounded genuine-schema review. Root owns one post-terminal invocation and actual retained-data validation; no test/replay/matrix/extra source criterion requested. Stop slice.

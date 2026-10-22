@@ -1,0 +1,56 @@
+{
+  "at": "2026-10-21T17:14:55.642078+00:00",
+  "status": "SAME_FROZEN_V2234_MEASURED_COLLECTION_RUNNING",
+  "rootNativeGoal": "01a112a5-d6bb-74e2-bf7c-ace73cb513b5",
+  "nativeGoalStatus": "active",
+  "previousTurn": "progress: receiver-schema fixed and actualmeasured181plusvalidphysicalWAV",
+  "thisTurn": "progress: measured count advanced, saved-data analyzer implemented+smoked and originalmonitor woke once",
+  "newMeasured": {
+    "attempted": 24,
+    "correct": 24,
+    "failed": 0,
+    "planned": 270
+  },
+  "conditionCountsOnly": {
+    "attempted": 204,
+    "correct": 203,
+    "failed": 1,
+    "unattempted": 696,
+    "target": 900
+  },
+  "actors": [
+    {
+      "pid": 3751414,
+      "startTicks": 137933512,
+      "state": "S"
+    },
+    {
+      "pid": 3751426,
+      "startTicks": 137933748,
+      "state": "S"
+    },
+    {
+      "pid": 3751415,
+      "startTicks": 137933513,
+      "state": "S"
+    }
+  ],
+  "custody": {
+    "cases": 38,
+    "WAV": 38,
+    "sequence": 34,
+    "errors": []
+  },
+  "frozenManifestSha256": "11bbea3fc1e45e65da1ecb7b501aee77739870cb087d792e5bc5197f9b1027be",
+  "sameProvider": {
+    "pid": 1440196,
+    "startTicks": 35427408
+  },
+  "nextReadOnlyCheckAt": "2026-10-21T17:19:55.642078+00:00",
+  "onActualError": "Reconcile exactsame accepted request/process/raw; preservefailures, no blindretry",
+  "afterNaturalTerminal": "Drain/seal requester and finalsameproviderraw; one actual savednative/resource analysis, no newtests/review expansion",
+  "rootDeadlineNotReset": "2026-10-21T23:36:07.231887+00:00",
+  "providerDeadlineNotExtended": "2026-10-21T22:45:52.468654+00:00",
+  "phoneNotGate": true,
+  "monitorWakeup": "thesis/evidence/orca-monitor-native-wakeup-v2244/VERIFIED-WAKEUP.json"
+}

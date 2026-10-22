@@ -1,0 +1,13 @@
+{
+  "at": "2026-10-20T15:57:51.516511+00:00",
+  "host": "personal.skyron-server",
+  "operation": "saved_actual_main_handoff_size_only",
+  "allFiles": 6,
+  "uncompressedPayloadBytes": 159708,
+  "zlibBase64PacketBytes": 33368,
+  "capBytes": 98304,
+  "fits": true,
+  "sourceRawPrefixVoiceBytes": 99495,
+  "modelCalls": 0,
+  "noHistoricalResultPublished": true
+}

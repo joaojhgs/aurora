@@ -1,0 +1,145 @@
+--- reviewed-bab719/runner.py
++++ setup-timing-correction/runner.py
+@@ -658,6 +658,10 @@
+         "schema_version": "aurora.full_audio_campaign.v1",
+         "status": status,
+         "condition": "worker_local_stt_remote_mesh_assistant_tts",
++        "setup_started_monotonic_ns": setup_started_ns,
++        "setup_completed": False,
++        "mesh_route_admission_timing": {"status": "not_started", "clock_domain": "python_process_monotonic",
++            "started_monotonic_ns": None, "ended_monotonic_ns": None, "duration_ms": None},
+         "planned_warmups": WARMUP_COUNT,
+         "planned_measured": MEASURED_COUNT,
+         "failure_policy": {"known_structured_preaccept_capability_changed": "count_failed_then_next_distinct_measured_index", "consecutive_rejection_hard_stop": 3, "retry_or_fallback": False, "warmup_failure": "hard_stop", "all_other_system_failures": "hard_stop"},
+@@ -723,7 +727,6 @@
+         config = config_after
+         config_hash = config_after_hash
+         summary["config_sha256"] = config_hash
+-        summary["setup_duration_ms"] = (time.monotonic_ns() - setup_started_ns) / 1_000_000
+         # Resolve both real routes before the ordinary warmups. These are
+         # metadata requests only; no model, grant, fallback or retry is invoked.
+         from app.shared.contracts.models.gateway import (
+@@ -734,50 +737,76 @@
+         from app.shared.contracts.models.orchestrator import OrchestratorMethods
+         from app.shared.contracts.models.tts import TTSMethods
+         from app.messaging.mesh_bus import MeshBus
++        admission_started_ns = time.monotonic_ns()
+         admission_end = time.monotonic() + 120
++        admission_status = "waiting"
++        admission_error_class = None
+         last_admission = {}
+-        while time.monotonic() < admission_end:
+-            if isinstance(supervisor.bus, MeshBus):
+-                cat_raw = await supervisor.bus.request(
+-                    GatewayMethods.GET_CAPABILITY_CATALOG,
+-                    CapabilityCatalogRequest(modules=["Orchestrator", "TTS"], include_schemas=False), timeout=10)
+-                if cat_raw.ok:
+-                    cat = CapabilityCatalogResponse.model_validate(cat_raw.data)
+-                    admitted = cat.local_peer_id == cohort_manifest["existingAuthorizedTaskProfile"]["expectedLocalPeerId"]
+-                    routes = {}
+-                    for name, topic, peer, speech in (
+-                        ("assistant", OrchestratorMethods.EXTERNAL_USER_INPUT, assistant_peer, None),
+-                        ("tts", TTSMethods.SYNTHESIZE, tts_peer, RouteExplainSpeechConstraints()),
+-                    ):
+-                        route_raw = await supervisor.bus.request(
+-                            GatewayMethods.EXPLAIN_ROUTE,
+-                            RouteExplainRequest(topic=topic, speech=speech,
+-                                selector=MeshAddressSelector(peer_id=peer.peer_id)), timeout=10)
+-                        if not route_raw.ok:
+-                            admitted = False
+-                            continue
+-                        route = RouteExplainResponse.model_validate(route_raw.data)
+-                        routes[name] = route.model_dump(mode="json")
+-                        admitted = admitted and (route.selector_valid and route.selected_peer_id == peer.peer_id
+-                            and not route.blockers and not route.security_privacy_blockers
+-                            and any(p.peer_id == peer.peer_id and p.eligible for p in cat.providers))
+-                    last_admission = {"at_monotonic_ns": time.monotonic_ns(), "catalogue": cat.model_dump(mode="json"),
+-                        "routes": routes, "model_requests_for_admission": 0}
+-                    if admitted and set(routes) == {"assistant", "tts"}:
+-                        last_admission["status"] = "existing_exact_peers_both_normal_routes_admitted"
+-                        _atomic_progress(output / "mesh-route-admission.json", last_admission)
+-                        break
+-            await asyncio.sleep(2)
+-        else:
+-            last_admission["status"] = "normal_catalogue_or_exact_peer_admission_deadline"
+-            _atomic_progress(output / "mesh-route-admission.json", last_admission)
+-            raise CampaignFailure("startup", "normal_catalogue_or_exact_peers_not_admitted", stop=True)
++        try:
++            while time.monotonic() < admission_end:
++                if isinstance(supervisor.bus, MeshBus):
++                    cat_raw = await supervisor.bus.request(
++                        GatewayMethods.GET_CAPABILITY_CATALOG,
++                        CapabilityCatalogRequest(modules=["Orchestrator", "TTS"], include_schemas=False), timeout=10)
++                    if cat_raw.ok:
++                        cat = CapabilityCatalogResponse.model_validate(cat_raw.data)
++                        admitted = cat.local_peer_id == cohort_manifest["existingAuthorizedTaskProfile"]["expectedLocalPeerId"]
++                        routes = {}
++                        for name, topic, peer, speech in (
++                            ("assistant", OrchestratorMethods.EXTERNAL_USER_INPUT, assistant_peer, None),
++                            ("tts", TTSMethods.SYNTHESIZE, tts_peer, RouteExplainSpeechConstraints()),
++                        ):
++                            route_raw = await supervisor.bus.request(
++                                GatewayMethods.EXPLAIN_ROUTE,
++                                RouteExplainRequest(topic=topic, speech=speech,
++                                    selector=MeshAddressSelector(peer_id=peer.peer_id)), timeout=10)
++                            if not route_raw.ok:
++                                admitted = False
++                                continue
++                            route = RouteExplainResponse.model_validate(route_raw.data)
++                            routes[name] = route.model_dump(mode="json")
++                            admitted = admitted and (route.selector_valid and route.selected_peer_id == peer.peer_id
++                                and not route.blockers and not route.security_privacy_blockers
++                                and any(p.peer_id == peer.peer_id and p.eligible for p in cat.providers))
++                        last_admission = {"at_monotonic_ns": time.monotonic_ns(), "catalogue": cat.model_dump(mode="json"),
++                            "routes": routes, "model_requests_for_admission": 0}
++                        if admitted and set(routes) == {"assistant", "tts"}:
++                            admission_status = "admitted"
++                            last_admission["status"] = "existing_exact_peers_both_normal_routes_admitted"
++                            _atomic_progress(output / "mesh-route-admission.json", last_admission)
++                            break
++                await asyncio.sleep(2)
++            else:
++                admission_status = "deadline"
++                last_admission["status"] = "normal_catalogue_or_exact_peer_admission_deadline"
++                _atomic_progress(output / "mesh-route-admission.json", last_admission)
++                raise CampaignFailure("startup", "normal_catalogue_or_exact_peers_not_admitted", stop=True)
++        except BaseException as exc:
++            if admission_status == "waiting":
++                admission_status = "interrupted" if isinstance(exc, (KeyboardInterrupt, asyncio.CancelledError)) else "failed"
++            admission_error_class = type(exc).__name__
++            raise
++        finally:
++            admission_ended_ns = time.monotonic_ns()
++            admission_timing = {
++                "clock_domain": "python_process_monotonic", "process_id": os.getpid(),
++                "status": admission_status, "error_class": admission_error_class,
++                "started_monotonic_ns": admission_started_ns,
++                "ended_monotonic_ns": admission_ended_ns,
++                "duration_ms": (admission_ended_ns - admission_started_ns) / 1_000_000,
++                "model_requests": 0,
++            }
++            summary["mesh_route_admission_timing"] = admission_timing
++            _atomic_progress(output / "mesh-route-admission-timing.json", admission_timing)
+         bindings_before = _bindings(supervisor, config)
+         summary["provider_bindings_before"] = bindings_before
+         condition_started = time.monotonic()
+         condition_started_ns = time.monotonic_ns()
+         condition_deadline = condition_started + CONDITION_CAP_SECONDS
+         summary["condition_started_monotonic_ns"] = condition_started_ns
++        summary["setup_duration_ms"] = (condition_started_ns - setup_started_ns) / 1_000_000
++        summary["setup_ended_monotonic_ns"] = condition_started_ns
++        summary["setup_completed"] = True
+         status = "running"
+         total = WARMUP_COUNT + MEASURED_COUNT
+         consecutive_preaccept_rejections = 0
+@@ -1027,6 +1056,10 @@
+             if condition_started_ns is not None else None
+         )
+         shutdown_started_ns = time.monotonic_ns()
++        if condition_started_ns is None:
++            summary["setup_duration_ms"] = (shutdown_started_ns - setup_started_ns) / 1_000_000
++            summary["setup_ended_monotonic_ns"] = shutdown_started_ns
++            summary["setup_completed"] = False
+         try:
+             await supervisor.shutdown()
+             shutdown_ok = True

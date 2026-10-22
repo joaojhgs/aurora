@@ -1,0 +1,144 @@
+{
+  "at": "2026-10-21T20:54:06.868458+00:00",
+  "analysisPythonVersion": "3.11.17 (main, Oct  3 2026, 01:03:29) [Clang 22.1.3 ]",
+  "analysisExecutable": "/home/developer/projects/aurora/.git/aurora-handoff-import-20261006/cpu-audio-campaign-v491/env/bin/python",
+  "scope": "One saved K1HTTP epoch, no cross-epoch pooling",
+  "status": "SAVED_EPOCH_ANALYSIS_COMPLETE",
+  "terminalStatus": "completed_all_correct",
+  "terminalStopReason": null,
+  "cohort": "aurora-worker-desktop-k1-orca-relayed-http-first270-v2234",
+  "manifestSha256": "11bbea3fc1e45e65da1ecb7b501aee77739870cb087d792e5bc5197f9b1027be",
+  "epochLineage": {
+    "conditionTargetMeasured": 900,
+    "epochId": "V2234",
+    "failed180Retried": false,
+    "firstConditionMeasuredIndex": 181,
+    "lastConditionMeasuredIndex": 450,
+    "parentManifestSha256": "6bc65cf5cc3c4eddb90b80b0764a01e6a9fc4afbed66f33c731e3ab58528e101",
+    "parentSealSha256": "613158562e914f5d952f009b87c3d6438b350d4809d6a97f9bf82ed301918829",
+    "plannedEpochMeasured": 270,
+    "priorAttemptedMeasured": 180,
+    "priorCorrect": 179,
+    "priorFailed": 1
+  },
+  "measured": {
+    "attempted": 270,
+    "outcomes": {
+      "completed_correct": 270
+    },
+    "correct": 270,
+    "incorrect": 0,
+    "failedOrInterrupted": 0,
+    "timeouts": 0
+  },
+  "timeoutFieldAbsent": 0,
+  "warmupsExcluded": {
+    "attempted": 15,
+    "outcomes": {
+      "completed_correct": 15
+    },
+    "correct": 15,
+    "incorrect": 0,
+    "failedOrInterrupted": 0,
+    "timeouts": 0
+  },
+  "plannedEpochMeasured": 270,
+  "unattemptedEpoch": 0,
+  "correctOnlyLatencyMs": {
+    "denominator": 270,
+    "p50_ms": 50957.1080565,
+    "p90_ms": 58608.017694199996,
+    "p95_ms": 60103.400722399994
+  },
+  "allAttemptsTimeToOutcomeMs": {
+    "denominator": 270,
+    "p50_ms": 50957.1080565,
+    "p90_ms": 58608.017694199996,
+    "p95_ms": 60103.400722399994
+  },
+  "failedTimeToOutcomeMs": {
+    "denominator": 0,
+    "p50_ms": null,
+    "p90_ms": null,
+    "p95_ms": null
+  },
+  "nativeAllInvokedMeasuredMs": {
+    "stt": {
+      "denominator": 270,
+      "p50_ms": 7926.228072,
+      "p90_ms": 10759.1213811,
+      "p95_ms": 11749.20194635
+    },
+    "assistant": {
+      "denominator": 270,
+      "p50_ms": 28514.326805999997,
+      "p90_ms": 36969.3496457,
+      "p95_ms": 38620.99770435
+    },
+    "tts": {
+      "denominator": 270,
+      "p50_ms": 1660.6508105,
+      "p90_ms": 1827.1452456,
+      "p95_ms": 1994.4703917499999
+    }
+  },
+  "nativeCorrectFullAudioOnlyMs": {
+    "stt": {
+      "denominator": 270,
+      "p50_ms": 7926.228072,
+      "p90_ms": 10759.1213811,
+      "p95_ms": 11749.20194635
+    },
+    "assistant": {
+      "denominator": 270,
+      "p50_ms": 28514.326805999997,
+      "p90_ms": 36969.3496457,
+      "p95_ms": 38620.99770435
+    },
+    "tts": {
+      "denominator": 270,
+      "p50_ms": 1660.6508105,
+      "p90_ms": 1827.1452456,
+      "p95_ms": 1994.4703917499999
+    }
+  },
+  "nativeObservedStageCounts": {
+    "stt": 270,
+    "assistant": 270,
+    "tts": 270
+  },
+  "allPhasesNativeStageJoins": 855,
+  "positiveFlowNativeGaps": [],
+  "pairingCounters": {
+    "requester": {
+      "unmatchedStartsInSavedPrefix": 0
+    },
+    "provider": {
+      "unmatchedStartsInSavedPrefix": 0
+    }
+  },
+  "resources": {
+    "requester": {
+      "identityMatchedSamples": 14784,
+      "excludedIdentityOrPrestartup": 0,
+      "counterErrorFields": {
+        "gpu.vendor": 14784
+      }
+    },
+    "provider": {
+      "identityMatchedSamples": 16912,
+      "excludedIdentityOrPrestartup": 0,
+      "counterErrorFields": {
+        "gpu.gpu_busy_percent": 8,
+        "gpu.vendor": 118384
+      }
+    }
+  },
+  "providerResourceDataPresent": true,
+  "quantileMethod": "Hyndman-Fan Type7; h=(n-1)*p with linear interpolation; ms",
+  "resourcePolicy": "Same-host sample brackets with explicit slack; RSS uses actual-window samples. Missing observations stay unknown. Parent CPU excludes Piper child; host GPU/network counters are contextual, not exclusive request attribution.",
+  "clockPolicy": "No cross-host timestamp subtraction; no sum or subtraction of independently computed percentiles",
+  "routePolicy": "ORCA_RELAYED_HTTP_EXISTING_INTERMEDIARY_NOT_DIRECT_HTTP_OR_MESH",
+  "newInference": 0,
+  "newNetworkTraffic": 0
+}

@@ -1,0 +1,28 @@
+{
+  "id": "39f28bca-92fc-42a2-827c-e1a861fd8cd2",
+  "ok": true,
+  "result": {
+    "message": {
+      "id": "msg_b1b8bfc524f1",
+      "run_id": "run_e6054e76e9fc",
+      "delivery_contract": "current_delivery",
+      "from_handle": "term_6a00d9ee-792a-4daf-8578-236290e33108",
+      "to_handle": "dispatch:ctx_37b4d0a3c14f",
+      "subject": "Main655/900 live; next bound01:10:50Z; old sourcecopy unused/closed",
+      "body": "Original Root native goal actualACTIVE/unbudgeted, previous turn VERIFIED_WAIT. Actual01:05:50Z V2296 new205/450 all correct; full655/900=654correct1preservedhistoricalfailure,245mandatoryremain. Original controller3965950/backend3965978/copier3965951 exactstartticks live; copier219case/WAV0errors,3.202GBfree. ROOT-VERIFIED-WAIT-v2346.json/fresh native snapshot/CURRENT/routing refreshed; nextbound01:10:50.963125Z or earlier actual failure/terminal/guard. No new tests/baseline/review/workers/sourcechanges, frozen clocks/settings intact. Sourceworker4508e660588b actualreports old01:01:07sourcewindow ended with zero sourcebytes and no uncertainsend; Root ACKc1295c378e94? Correction: exact ACK receipt is root-phone-source-expiry-ack-v2346.json, keep supported receipt authoritative. Same worker owns receiver prep and future fresh source-only admission request; no extension or campaign-end prerequisite. Event receipt physically SOURCE-WINDOW-EXPIRED-NO-TRANSFER-WORKER-RECEIPT-v2346.json, Root no device queries. Independent notebook prep remains separate; no phone900START. Continue existing coordination/guard, no duplicated phone investigation. Main collection/natural-seal remains Root priority; full13 open.",
+      "type": "status",
+      "priority": "normal",
+      "thread_id": null,
+      "payload": null,
+      "created_at": "2026-10-22T01:06:21Z",
+      "delivered_at": null
+    },
+    "mutation": {
+      "requestId": "44ffcc72-4dda-4770-b600-c298a05ff700",
+      "replayed": false
+    }
+  },
+  "_meta": {
+    "runtimeId": "cc9e3275-28c6-4c45-85cc-bdcd2262aa7d"
+  }
+}

@@ -1,0 +1,17 @@
+{
+  "at": "2026-10-22T09:01:20.592103+00:00",
+  "kind": "copied actual WAV verification, no model execution",
+  "path": "thesis/phone-notebook/20261020/evidence/native-case-raw-dual-v222/phone-file-audio-v213/output.wav",
+  "sha256": "a75537d2acdf8eae8c743f90b3b7e3363f5c8ad71336d5d893c564f288ad27d7",
+  "pcmSha256": "b37c5746b9ef407aa25af333e86a39808130e01103d5e5bf92431e09312b036a",
+  "channels": 1,
+  "sampleWidth": 2,
+  "sampleRateHz": 22050,
+  "frames": 15872,
+  "minimumPcm16": -9711,
+  "maximumPcm16": 15321,
+  "clippedSamples": 0,
+  "rms": 2098.4634755526067,
+  "bytes": 31788,
+  "reason": "Independently validate clipping because original JS initialized its count without calculating it"
+}

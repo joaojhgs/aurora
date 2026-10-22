@@ -1,0 +1,37 @@
+{
+  "at": "2026-10-18T01:16:43.793613+00:00",
+  "scope": "ONE existing question delivery reconciliation; no duplicate question",
+  "nativeThreadId": "01a112a5-d6bb-74e2-bf7c-ace73cb513b5",
+  "nativeTool": "request_user_input_async",
+  "nativeCallId": "call_7b6a6f8389364aa7816e6f54e3920e41",
+  "questionItemIndex": 0,
+  "separateNativeQuestionIdReturned": null,
+  "submittedAt": "2026-10-18T00:02:20.040Z",
+  "acceptedAt": "2026-10-18T00:02:20.194Z",
+  "nativeResult": {
+    "accepted": true
+  },
+  "ownerViewedOrRead": "UNKNOWN; API acceptance is not an owner read receipt",
+  "ownerAnswer": null,
+  "orcaCodingOwnerNotificationReceipt": null,
+  "sourceRead": {
+    "path": "/home/developer/.codex/sessions/2026/10/06/rollout-2026-10-06T19-17-00-01a112a5-d6bb-74e2-bf7c-ace73cb513b5.jsonl",
+    "fileBytesAtReadStart": 834464574,
+    "byteStart": 826183692,
+    "byteEnd": 834464574,
+    "bytes": 8280882,
+    "readSha256": "45cbbad5d92964a59059bed47def32863bc1a214e8a94b0d01239798221bf300",
+    "rateCap": "approx4MiB/s",
+    "routingEvidenceOnlyNotOwnershipAuthority": true
+  },
+  "exactEventCopy": {
+    "path": "thesis/evidence/owner-attention-v1431/NATIVE-QUESTION-EXACT-EVENTS.json",
+    "bytes": 1522,
+    "sha256": "a5d9d863ce81776ab9c643eca31b7ffdee99e43e830ed457f2f64a674f7b36d7"
+  },
+  "originalBlockerPacket": "thesis/campaigns/worker-desktop-paired-http-p2p-v1376/K1-P2P-ADMISSION-DECISION-v1387.json",
+  "sutCalls": 0,
+  "sourceOrSettingsChanges": false,
+  "newOwnerQuestions": 0,
+  "possibleConfound": "Bounded local metadata read/copy while existing campaign runs; no affected case excluded"
+}

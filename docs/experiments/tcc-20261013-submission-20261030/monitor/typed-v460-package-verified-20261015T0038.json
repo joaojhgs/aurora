@@ -1,0 +1,244 @@
+{
+  "at": "2026-10-15T00:38:00.189822+00:00",
+  "scope": "Local evidence bytes/readable claims against existing Root receipts only; no UI/model/test/exporter/analyzer replay",
+  "package": "docs/experiments/tcc-20261013-submission-20261030/root/typed-product-main-v460",
+  "manifest_sha256": "2019418f919e95456d79181185d68d6e6f57ba88e3781a28b9183d97680d0903",
+  "manifest_evidence_members": 56,
+  "files": {
+    "retained-input-alignment-v458.json": {
+      "bytes_match": true,
+      "sha256_match": true
+    },
+    "retirement-v459.json": {
+      "bytes_match": true,
+      "sha256_match": true
+    },
+    "typed-v457/driver-progress.json": {
+      "bytes_match": true,
+      "sha256_match": true
+    },
+    "typed-v457/driver-spawn.json": {
+      "bytes_match": true,
+      "sha256_match": true
+    },
+    "typed-v457/driver-terminal.json": {
+      "bytes_match": true,
+      "sha256_match": true
+    },
+    "typed-v457/ready.json": {
+      "bytes_match": true,
+      "sha256_match": true
+    },
+    "typed-v457/runtime-manifest.json": {
+      "bytes_match": true,
+      "sha256_match": true
+    },
+    "typed-v457/runtime/launch.json": {
+      "bytes_match": true,
+      "sha256_match": true
+    },
+    "typed-v457/runtime/terminal.json": {
+      "bytes_match": true,
+      "sha256_match": true
+    },
+    "typed-v457/runtime/voice-stages.installed.json": {
+      "bytes_match": true,
+      "sha256_match": true
+    },
+    "typed-v457/runtime/voice-stages.jsonl": {
+      "bytes_match": true,
+      "sha256_match": true
+    },
+    "typed-v457/runtime/voice-stages.status.json": {
+      "bytes_match": true,
+      "sha256_match": true
+    },
+    "typed-v457/source-guard.json": {
+      "bytes_match": true,
+      "sha256_match": true
+    },
+    "typed-v457/spawn.json": {
+      "bytes_match": true,
+      "sha256_match": true
+    },
+    "typed-v457/terminal.json": {
+      "bytes_match": true,
+      "sha256_match": true
+    },
+    "typed-v457/ui-case/private/driver-error.txt": {
+      "bytes_match": true,
+      "sha256_match": true
+    },
+    "typed-v457/ui-case/private/network-events.jsonl": {
+      "bytes_match": true,
+      "sha256_match": true
+    },
+    "typed-v457/ui-case/result.json": {
+      "bytes_match": true,
+      "sha256_match": true
+    },
+    "typed-v457/ui-case/safe-projection.json": {
+      "bytes_match": true,
+      "sha256_match": true
+    },
+    "typed-v459/driver-progress.json": {
+      "bytes_match": true,
+      "sha256_match": true
+    },
+    "typed-v459/driver-spawn.json": {
+      "bytes_match": true,
+      "sha256_match": true
+    },
+    "typed-v459/driver-terminal.json": {
+      "bytes_match": true,
+      "sha256_match": true
+    },
+    "typed-v459/manifest.json": {
+      "bytes_match": true,
+      "sha256_match": true
+    },
+    "typed-v459/ready.json": {
+      "bytes_match": true,
+      "sha256_match": true
+    },
+    "typed-v459/runtime/launch.json": {
+      "bytes_match": true,
+      "sha256_match": true
+    },
+    "typed-v459/runtime/terminal.json": {
+      "bytes_match": true,
+      "sha256_match": true
+    },
+    "typed-v459/runtime/voice-stages.installed.json": {
+      "bytes_match": true,
+      "sha256_match": true
+    },
+    "typed-v459/runtime/voice-stages.jsonl": {
+      "bytes_match": true,
+      "sha256_match": true
+    },
+    "typed-v459/runtime/voice-stages.status.json": {
+      "bytes_match": true,
+      "sha256_match": true
+    },
+    "typed-v459/source-guard.json": {
+      "bytes_match": true,
+      "sha256_match": true
+    },
+    "typed-v459/spawn.json": {
+      "bytes_match": true,
+      "sha256_match": true
+    },
+    "typed-v459/terminal.json": {
+      "bytes_match": true,
+      "sha256_match": true
+    },
+    "typed-v459/ui-case/private/bodies/0006-request.bin": {
+      "bytes_match": true,
+      "sha256_match": true
+    },
+    "typed-v459/ui-case/private/bodies/0007-request.bin": {
+      "bytes_match": true,
+      "sha256_match": true
+    },
+    "typed-v459/ui-case/private/bodies/0016-request.bin": {
+      "bytes_match": true,
+      "sha256_match": true
+    },
+    "typed-v459/ui-case/private/bodies/0016-response.bin": {
+      "bytes_match": true,
+      "sha256_match": true
+    },
+    "typed-v459/ui-case/private/bodies/0017-request.bin": {
+      "bytes_match": true,
+      "sha256_match": true
+    },
+    "typed-v459/ui-case/private/bodies/0017-response.bin": {
+      "bytes_match": true,
+      "sha256_match": true
+    },
+    "typed-v459/ui-case/private/bodies/0021-request.bin": {
+      "bytes_match": true,
+      "sha256_match": true
+    },
+    "typed-v459/ui-case/private/bodies/0021-response.bin": {
+      "bytes_match": true,
+      "sha256_match": true
+    },
+    "typed-v459/ui-case/private/bodies/0022-request.bin": {
+      "bytes_match": true,
+      "sha256_match": true
+    },
+    "typed-v459/ui-case/private/bodies/0022-response.bin": {
+      "bytes_match": true,
+      "sha256_match": true
+    },
+    "typed-v459/ui-case/private/bodies/0024-request.bin": {
+      "bytes_match": true,
+      "sha256_match": true
+    },
+    "typed-v459/ui-case/private/bodies/0024-response.bin": {
+      "bytes_match": true,
+      "sha256_match": true
+    },
+    "typed-v459/ui-case/private/bodies/0025-request.bin": {
+      "bytes_match": true,
+      "sha256_match": true
+    },
+    "typed-v459/ui-case/private/bodies/0025-response.bin": {
+      "bytes_match": true,
+      "sha256_match": true
+    },
+    "typed-v459/ui-case/private/bodies/0031-request.bin": {
+      "bytes_match": true,
+      "sha256_match": true
+    },
+    "typed-v459/ui-case/private/bodies/0031-response.bin": {
+      "bytes_match": true,
+      "sha256_match": true
+    },
+    "typed-v459/ui-case/private/bodies/0032-request.bin": {
+      "bytes_match": true,
+      "sha256_match": true
+    },
+    "typed-v459/ui-case/private/bodies/0032-response.bin": {
+      "bytes_match": true,
+      "sha256_match": true
+    },
+    "typed-v459/ui-case/private/driver-error.txt": {
+      "bytes_match": true,
+      "sha256_match": true
+    },
+    "typed-v459/ui-case/private/in-context-primary.json": {
+      "bytes_match": true,
+      "sha256_match": true
+    },
+    "typed-v459/ui-case/private/in-context-primary.png": {
+      "bytes_match": true,
+      "sha256_match": true
+    },
+    "typed-v459/ui-case/private/network-events.jsonl": {
+      "bytes_match": true,
+      "sha256_match": true
+    },
+    "typed-v459/ui-case/result.json": {
+      "bytes_match": true,
+      "sha256_match": true
+    },
+    "typed-v459/ui-case/safe-projection.json": {
+      "bytes_match": true,
+      "sha256_match": true
+    }
+  },
+  "readme_sha256": "fe98d8afd756ffa87f3a5f0d8929756ee82da78b1f2219a239148daae7282efa",
+  "raw_zip_members_include_manifest": true,
+  "typed_main_attempts": 2,
+  "global_voice_unchanged": 8,
+  "voice_measured_samples": 0,
+  "phase2_allowed": false,
+  "root_message": "msg_ba6f017377da",
+  "run": "run_e6054e76e9fc",
+  "task": "task_d7ea336050cf",
+  "dispatch": "ctx_37b4d0a3c14f",
+  "all_hashes_match": true
+}

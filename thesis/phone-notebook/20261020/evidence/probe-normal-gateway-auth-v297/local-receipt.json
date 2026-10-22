@@ -1,0 +1,8 @@
+{
+  "bytes": 843,
+  "copyOnly": true,
+  "custody": "Notebook result persisted and fsynced before relay; remote receipt in same output",
+  "localPath": "/home/developer/projects/aurora/thesis/phone-notebook/20261020/evidence/probe-normal-gateway-auth-v297/result.json",
+  "remotePath": "/home/developer/projects/aurora/thesis/phone-notebook/20261020/evidence/probe-normal-gateway-auth-v297.json",
+  "sha256": "8536a955bfb0c8642756b909e936131d1b4ac9c3c753fab9899ed32e4c82b018"
+}

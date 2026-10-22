@@ -1,0 +1,7 @@
+{
+  "recordedAt": "2026-10-18T06:27:18.659557+00:00",
+  "scope": "Root CURRENT metadata, not scientific measurements or campaign source",
+  "observed": "Checkpoint 1462 outcome-paragraph replacement also removed the remainder of its line, including the latest observation link and admission summary. Counts and immutable observation remained intact.",
+  "repair": "Restored the existing admission-summary text and checkpoint citation, with outcomes in their own paragraph; future reporter inserts outcomes after a full paragraph.",
+  "validation": "Current includes exact 833/797/36 denominator and one matching v1462 observation link. No SUT call, sample/rerun, source/settings/lifecycle or frozen-manifest change."
+}

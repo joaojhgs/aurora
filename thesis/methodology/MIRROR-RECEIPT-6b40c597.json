@@ -1,0 +1,14 @@
+{
+  "at": "2026-10-20T05:24:36.646301+00:00",
+  "source": ".omx/evidence/orca-monitor-20261010/PLAN-AFTER-RESPONSE-LIMIT-ANDROID-20261020T0510.md",
+  "destination": "thesis/methodology/owner-requirements-20261020-6b40c597.md",
+  "bytes": 662114,
+  "sha256": "6b40c597550e245ec82c1b3f9a7c1ada1f27196ab2a98d86ac2d9442d061c0a0",
+  "priorBytes": 656364,
+  "exactPriorPrefix": true,
+  "appendBytes": 5750,
+  "completeCanonicalMirror": true,
+  "methodologyWriter": "Original monitor only",
+  "rootCopyOnly": true,
+  "newSutCalls": 0
+}

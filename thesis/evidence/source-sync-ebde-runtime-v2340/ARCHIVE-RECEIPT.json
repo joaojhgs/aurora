@@ -1,0 +1,131 @@
+{
+  "at": "2026-10-22T00:50:02.190325+00:00",
+  "state": "SOURCE_ARCHIVE_READY_NOT_TRANSFERRED",
+  "sourceSha": "ebde3a8acf6315f920d03593845f17a1fc65a733",
+  "archive": "thesis/evidence/source-sync-ebde-runtime-v2340/aurora-ebde3a8a-runtime.tar.gz",
+  "archiveBytes": 12017639,
+  "archiveSha256": "4489e655cd3b949303ca49be9d8fe52df2c31dd11676ec0ed4ea9ac28fd62c9f",
+  "tarCommitId": "ebde3a8acf6315f920d03593845f17a1fc65a733",
+  "sourceFileInventory": "thesis/evidence/source-sync-ebde-runtime-v2340/SOURCE-FILE-INVENTORY.json",
+  "sourceFileInventorySha256": "88c7330effe93499e9c673921e9b12c90c54db53e572885f34bbd40644c8d47b",
+  "selectedSourceFiles": 1959,
+  "omittedNonRuntimeFiles": 803,
+  "elapsedSeconds": 33.95794941904023,
+  "mainBefore": {
+    "at": "2026-10-22T00:49:28.613601+00:00",
+    "classification": "VERIFIED_WAIT",
+    "manifestSha256": "9adbf9ba3a7ec0948a087edad3655cf94ee344b3a2371a78d15f188f44150d42",
+    "actors": [
+      {
+        "pid": 3965950,
+        "expectedStartTicks": 139740362,
+        "state": "S",
+        "startTicks": 139740362,
+        "matches": true
+      },
+      {
+        "pid": 3965978,
+        "expectedStartTicks": 139740616,
+        "state": "S",
+        "startTicks": 139740616,
+        "matches": true
+      },
+      {
+        "pid": 3965951,
+        "expectedStartTicks": 139740363,
+        "state": "S",
+        "startTicks": 139740363,
+        "matches": true
+      }
+    ],
+    "epochMeasured": {
+      "attempted": 188,
+      "correct": 188,
+      "failed": 0,
+      "incorrect": 0,
+      "timeouts": 0,
+      "planned": 450
+    },
+    "conditionCountsOnly": {
+      "attempted": 638,
+      "correct": 637,
+      "failed": 1,
+      "incorrect": 0,
+      "unattempted": 262,
+      "planned": 900
+    },
+    "copier": {
+      "receipt": "thesis/campaigns/worker-desktop-k1-orca-relayed-http-remaining450-v2296/receipts/000187.json",
+      "sha256": "b15d0a6cf622b490eed5aa6a76a7f98c4fdea7c3a25e7c293fd112110a224c06",
+      "cases": 202,
+      "WAV": 202,
+      "errors": [],
+      "freeBytes": 3232882688
+    },
+    "terminalSummaryPresent": false,
+    "observationOnly": true,
+    "newSutCalls": 0,
+    "processSignals": 0,
+    "measurementInputsNotModifiedByThisObserver": true
+  },
+  "mainAfter": {
+    "at": "2026-10-22T00:50:02.188187+00:00",
+    "classification": "VERIFIED_WAIT",
+    "manifestSha256": "9adbf9ba3a7ec0948a087edad3655cf94ee344b3a2371a78d15f188f44150d42",
+    "actors": [
+      {
+        "pid": 3965950,
+        "expectedStartTicks": 139740362,
+        "state": "S",
+        "startTicks": 139740362,
+        "matches": true
+      },
+      {
+        "pid": 3965978,
+        "expectedStartTicks": 139740616,
+        "state": "S",
+        "startTicks": 139740616,
+        "matches": true
+      },
+      {
+        "pid": 3965951,
+        "expectedStartTicks": 139740363,
+        "state": "S",
+        "startTicks": 139740363,
+        "matches": true
+      }
+    ],
+    "epochMeasured": {
+      "attempted": 188,
+      "correct": 188,
+      "failed": 0,
+      "incorrect": 0,
+      "timeouts": 0,
+      "planned": 450
+    },
+    "conditionCountsOnly": {
+      "attempted": 638,
+      "correct": 637,
+      "failed": 1,
+      "incorrect": 0,
+      "unattempted": 262,
+      "planned": 900
+    },
+    "copier": {
+      "receipt": "thesis/campaigns/worker-desktop-k1-orca-relayed-http-remaining450-v2296/receipts/000187.json",
+      "sha256": "b15d0a6cf622b490eed5aa6a76a7f98c4fdea7c3a25e7c293fd112110a224c06",
+      "cases": 202,
+      "WAV": 202,
+      "errors": [],
+      "freeBytes": 3232882688
+    },
+    "terminalSummaryPresent": false,
+    "observationOnly": true,
+    "newSutCalls": 0,
+    "processSignals": 0,
+    "measurementInputsNotModifiedByThisObserver": true
+  },
+  "sharedTransferStarted": false,
+  "gitIndexOrRefsModified": false,
+  "newSutCalls": 0
+}

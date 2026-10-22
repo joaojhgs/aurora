@@ -1,0 +1,36 @@
+{
+  "files": {
+    "driver-controller.py": {
+      "bytes": 2790,
+      "sha256": "b799b465196d58afdd8f7e808cc0ca9a8055626521aa081ee44a633691c23b3f"
+    },
+    "backend-controller.py": {
+      "bytes": 7177,
+      "sha256": "58119fe2ed7b344796dd1391ba6744aef4473b659e8f71dfc04ff7cea50e0979"
+    },
+    "supervisor.py": {
+      "bytes": 8429,
+      "sha256": "409e6aa8cd3d273d2866a9794613cae15265277e7f5a3ef38c7cc1f4834083db"
+    },
+    "driver.py": {
+      "bytes": 35902,
+      "sha256": "ff10454458ac72155f8ddb6862971c67c777aacad551c8fea3170310aec1db9f"
+    },
+    "source_guard_v455.py": {
+      "bytes": 1588,
+      "sha256": "dbcbdacf26441e5397e4cac01eaf90bac0e9a8ea848cfe21faf63f62de7dcff1"
+    }
+  },
+  "sourceFix": "reviewed focusedPTT readinesscef59aa2 + queuedPCMaf88cb9a in newproductionwebV463",
+  "onlyNormalWorkflowCorrection": "New conversation before PTT as verified V461 normal product action",
+  "globalPreviousExcludedVoiceFailures": 8,
+  "newOrdinalOnlyOnFirstSTT": 9,
+  "sameInputModelSettingsPredicate": true,
+  "maximumNewLogicalVoiceCases": 1,
+  "modelsTTSSTTSettingsUnchanged": true,
+  "parentCapSeconds": 900,
+  "driverCapSeconds": 420,
+  "flowDeadlineSeconds": 180,
+  "phase2MeasuredAllowed": false,
+  "launchStarted": false
+}

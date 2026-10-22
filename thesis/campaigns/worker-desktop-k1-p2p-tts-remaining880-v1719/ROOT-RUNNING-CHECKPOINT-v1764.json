@@ -1,0 +1,248 @@
+{
+  "at": "2026-10-20T11:06:25.114361+00:00",
+  "status": "RUNNING",
+  "nativeGoal": {
+    "threadId": "01a112a5-d6bb-74e2-bf7c-ace73cb513b5",
+    "status": "active"
+  },
+  "run": "run_e6054e76e9fc",
+  "originalMonitor": {
+    "taskId": "task_d7ea336050cf",
+    "dispatchId": "ctx_37b4d0a3c14f",
+    "terminal": "term_2eab47ed-ab9b-4e35-bd9b-fc068c60e3fc",
+    "incarnation": "37e50d9c-6cf5-4e28-a63b-f2bc3eed5661"
+  },
+  "actors": [
+    {
+      "pid": 2360747,
+      "startTicks": 124937766,
+      "state": "S"
+    },
+    {
+      "pid": 2360768,
+      "startTicks": 124937952,
+      "state": "S"
+    },
+    {
+      "pid": 2361201,
+      "startTicks": 124942780,
+      "state": "S"
+    }
+  ],
+  "conditionManifestSha256": "120dd99a4de0a242c30ebe4bb46d854ca77313c482a0c74f024edb624829a6e8",
+  "indexAt": "2026-10-20T11:06:19.760205+00:00",
+  "indexSha256": "8a7c3f896ae2b5cd8e977d3431e40343bc8b4ba52d665f8f04727af9b13dd28b",
+  "continuation": {
+    "attempted": 498,
+    "correct": 491,
+    "failed": 7,
+    "planned": 880
+  },
+  "wholeCondition": {
+    "attempted": 518,
+    "correct": 510,
+    "failed": 8,
+    "planned": 900,
+    "unattempted": 382,
+    "excludedWarmupsAcrossEpochs": 30
+  },
+  "freeDiskBytes": 4819480576,
+  "priorPersonalActualRead": {
+    "path": "thesis/campaigns/worker-desktop-k1-p2p-tts-remaining880-v1719/PERSONAL-PROVIDER-LIVENESS-v1734.json",
+    "at": "2026-10-20T05:55:39.423188+00:00",
+    "samePidsManifestRuntimeConfig": true,
+    "noNewInferenceByRead": true
+  },
+  "futureK2": {
+    "path": "thesis/harness/distributed-k2-mesh-v1731",
+    "status": "REQUESTER_PROVIDER_COLLECTOR_BOUNDED_SOURCE_REVIEWS_PASS_NOT_LAUNCHED",
+    "oldClassifierChecksRerun": false,
+    "providerSource": "thesis/harness/k2_mesh_provider_v1733.py",
+    "collectorSource": "thesis/harness/k2_mesh_saved_warmup_proof_v1735.py",
+    "sourceReviewsClosed": true,
+    "actualNewGpuProof": "PENDING_ORDINARY_WARMUPS"
+  },
+  "futureK3": {
+    "candidate": "thesis/harness/stt-mesh-runtime-candidate-v1738",
+    "patchSha256": "038f6d443fbee9b83202dabe4db60375ff2f059493007548ad5989a18842f27f",
+    "sourceReview": "PASS_CLOSED",
+    "currentSourceApplied": false,
+    "runtimeTestsExecuted": false,
+    "authoredFocusedCases": {
+      "python": 3,
+      "sdk": 1
+    },
+    "nextGate": "One focused validation batch at natural physical resource boundary, then new exact source/manifest and real ordinary full-audio/native/route/backend warmups before K3 measured900"
+  },
+  "notebook": {
+    "newMetadata": "thesis/evidence/personal-notebook-readiness-20261020/ASSET-PREPARATION-RECEIPT-v1737.json",
+    "measurementAdmission": false,
+    "buildInstallTransferInference": 0,
+    "scope": "Existing approved Personal same control only; missing exact asset/cache paths is not global absence",
+    "offlineAdmission": "thesis/evidence/personal-notebook-readiness-20261020/offline-runtime-admission-v1742/ADMISSION-DECISION-AND-INPUTS.json",
+    "networkComparison": "thesis/evidence/approved-node-network-admission-20261020/RESOURCE-ADMISSION-DECISION-v1743.json",
+    "offlineResult": "NO_CACHED_MATCHING_RUNTIME_NOT_MODEL_INFEASIBILITY",
+    "physicalUplinkGroup": "UNKNOWN_AFTER_ONE_BOUNDED_COMPARISON",
+    "next": "Acquire exact inputs at first natural resource window unless genuine existing disjoint-group evidence arrives sooner; no more unchanged cache/network probes, no N gate on K2"
+  },
+  "methodology": {
+    "path": "thesis/methodology/owner-requirements-20261020-e9e4051d.md",
+    "bytes": 692672,
+    "sha256": "e9e4051dcaf6e03d3460cc2229c71c8d0d778835d50e618bc0fc5fe5d96fcdc7"
+  },
+  "android": {
+    "status": "CONTROL_CONTAINER_HAS_ADB_NATIVE_OBSERVER_CAPABILITY_STILL_UNPROVED",
+    "receipt": "thesis/evidence/waydroid-relay-command-discovery-20261020/CONTEXT-INVENTORY-RECEIPT-v1745.json",
+    "statusDeviceOrInferenceCalls": 0,
+    "noFurtherUnchangedProbes": true
+  },
+  "previousGoalTurnClassification": "VERIFIED_WAIT",
+  "thisTurnProgress": "12 actual original PID/start polls across 605.9s confirmed retained attempts 504\u2192517; observed failure counts [8]. Fresh original actors live, copier0errors and case/progress equality. No extra workload/test/review/model/worker/resume.",
+  "nextAction": "Continue same frozen K1 at five-minute/failure/natural-terminal gates; native Root and original monitor remain active, no further resume needed. All K2 source/custody review scopes CLOSED. Next K2 runtime after actual K1 terminal/raw sealing/safe owned SUT release; finite N acquisition cannot hold K2. No old test/source/probe loops or additional workers.",
+  "per291": {
+    "path": "thesis/goal-evidence/PER291-source-reconciliation-20261020/CURRENT-CONTRACT-EVIDENCE.json",
+    "status": "LOCAL_PROPOSAL_FACTUAL_REVIEW_PASS_NOT_TASK_ACCEPTANCE",
+    "publishedPlanAndProductUntouched": true,
+    "parentStage2AndOriginalDeliveryGatesRemainOpen": true,
+    "testsRepeated": 0
+  },
+  "per282": {
+    "path": "thesis/goal-evidence/PER282-external-state-20261020/READ-RECEIPT-v1741.json",
+    "status": "TASK_STATE_UNKNOWN_SERVER_READ_FAILED",
+    "mutations": 0,
+    "retries": 0
+  },
+  "delegationScope": "Use latest owner-authorized conditional distinct tasks only when genuinely useful after required runtime/catalog/quota/resource checks; no duplicate Root, monitor, competing writer, company or unsafe execution. No new worker launched this turn.",
+  "continuationFailures": [
+    {
+      "globalIndex": 36,
+      "failure": {
+        "code": "remote_mesh_preaccept_capability_changed",
+        "stage": "tts"
+      },
+      "consecutivePreacceptRejections": 1,
+      "case": "thesis/campaigns/worker-desktop-k1-p2p-tts-remaining880-v1719/attempts/attempt-0031-measured.jsonl",
+      "sha256": "2f181598cdbd7e2b452171f5648300c3bbf246b9dcc6bd29634d92bf7442ad88"
+    },
+    {
+      "globalIndex": 98,
+      "failure": {
+        "code": "remote_mesh_preaccept_capability_changed",
+        "stage": "tts"
+      },
+      "consecutivePreacceptRejections": 1,
+      "case": "thesis/campaigns/worker-desktop-k1-p2p-tts-remaining880-v1719/attempts/attempt-0093-measured.jsonl",
+      "sha256": "cfb718bd320c899ef52f95e11fa3a734ed977d39e67f68a25731d85dd416fe0e"
+    },
+    {
+      "globalIndex": 129,
+      "failure": {
+        "code": "remote_mesh_preaccept_capability_changed",
+        "stage": "tts"
+      },
+      "consecutivePreacceptRejections": 1,
+      "case": "thesis/campaigns/worker-desktop-k1-p2p-tts-remaining880-v1719/attempts/attempt-0124-measured.jsonl",
+      "sha256": "6ac45ce6727d0a0500d1b8db908cf75d2051462abb23deda5f613d4579823ab0"
+    },
+    {
+      "globalIndex": 169,
+      "failure": {
+        "code": "remote_mesh_preaccept_capability_changed",
+        "stage": "tts"
+      },
+      "consecutivePreacceptRejections": 1,
+      "case": "thesis/campaigns/worker-desktop-k1-p2p-tts-remaining880-v1719/attempts/attempt-0164-measured.jsonl",
+      "sha256": "012d8a67cf098501b9e6f4609897c806d018bd05e162ec0734e6c93e62eb34b3"
+    },
+    {
+      "globalIndex": 229,
+      "failure": {
+        "code": "remote_mesh_preaccept_capability_changed",
+        "stage": "tts"
+      },
+      "consecutivePreacceptRejections": 1,
+      "case": "thesis/campaigns/worker-desktop-k1-p2p-tts-remaining880-v1719/attempts/attempt-0224-measured.jsonl",
+      "sha256": "255056bf736e86345ddf20dc367d859ff3d9f151979e056c47a1473ccf9f9283"
+    },
+    {
+      "globalIndex": 242,
+      "failure": {
+        "code": "remote_mesh_preaccept_capability_changed",
+        "stage": "tts"
+      },
+      "consecutivePreacceptRejections": 1,
+      "case": "thesis/campaigns/worker-desktop-k1-p2p-tts-remaining880-v1719/attempts/attempt-0237-measured.jsonl",
+      "sha256": "55893f5ea937caed347a22ec6258b9989ceca7f253d5ab8b950d38dc3b1e666d"
+    },
+    {
+      "globalIndex": 439,
+      "failure": {
+        "code": "remote_mesh_preaccept_capability_changed",
+        "stage": "tts"
+      },
+      "consecutivePreacceptRejections": 1,
+      "case": "thesis/campaigns/worker-desktop-k1-p2p-tts-remaining880-v1719/attempts/attempt-0434-measured.jsonl",
+      "sha256": "259eff73328184d7bf7e788bbbe5906ce711c223cb9caffea0271c2ddc02ed21"
+    }
+  ],
+  "latestProgress": {
+    "attempted": 513,
+    "last_attempt_file": "attempts/attempt-0513-measured.jsonl",
+    "last_attempt_status": "completed_correct",
+    "measured_attempted": 498,
+    "planned_measured": 880,
+    "planned_warmups": 15,
+    "status": "running",
+    "unattempted_measured": 382,
+    "warmups_attempted": 15
+  },
+  "notebookInputPreparation": "thesis/evidence/personal-notebook-readiness-20261020/matched-input-preparation-v1746/INPUTS-AND-RUNTIME-PROVENANCE.json",
+  "fullAggregateGoalComplete": false,
+  "thisGoalTurnClassification": "VERIFIED_WAIT",
+  "verifiedWait": {
+    "localObservationSession": 70328,
+    "observationExitCode": 0,
+    "observations": 12,
+    "observedDurationSeconds": 605.883558,
+    "firstAt": "2026-10-20T10:56:13.066703+00:00",
+    "lastAt": "2026-10-20T11:06:18.950261+00:00",
+    "firstAttempted": 504,
+    "lastAttempted": 517,
+    "observedFailureCounts": [
+      8
+    ],
+    "physicalLog": "thesis/campaigns/worker-desktop-k1-p2p-tts-remaining880-v1719/ROOT-VERIFIED-WAIT-v1764.jsonl",
+    "bytes": 8316,
+    "sha256": "29142964c411e4789b7ff7aad56182d156e5f8608b11a35ae5ba2ae219c6b67d",
+    "sameOriginalThreePidStartIdentitiesEveryObservation": true,
+    "experimentStillLiveAtFinalCheckpoint": true
+  },
+  "futureK2Custody": {
+    "source": "thesis/harness/custody_k2_mesh_requester_v1748.py",
+    "sha256": "648c97916910c6152a0b07ef7a4a30d73163f470b9238147dff1f2b78c3da164",
+    "review": "PASS_CLOSED",
+    "report": "thesis/harness/distributed-k2-operations-v1748/review/P2P-K2-V1748-COPIER-ARTIFACT-MAP-REVIEW-20261020T0802.md",
+    "futurePathsInstantiated": false,
+    "runtimeTestsOrCalls": 0,
+    "newReviewGate": false
+  },
+  "originalMonitorNativeStatus": {
+    "status": "active",
+    "actualGetGoalAt": "2026-10-20T08:04:10Z",
+    "recoveryReceipt": "thesis/evidence/original-monitor-capacity-20261020/NATIVE-MONITOR-ACTIVE-v1749.json",
+    "singleSupportedResumeRequestId": "46748383-5b38-4f43-8a26-35a3748408bb",
+    "noMoreResumesNeeded": true
+  },
+  "lastCopierReceipt": {
+    "path": "thesis/campaigns/worker-desktop-k1-p2p-tts-remaining880-v1719/receipts/000389.json",
+    "sha256": "2fbf8cabf305024de85152ee6475477c2af1615227d0d2353c1cd92ed8ecd176",
+    "errors": [],
+    "measuredCasesMatchReportedProgress": true
+  },
+  "nativeGoalSnapshot": "thesis/campaigns/worker-desktop-k1-p2p-tts-remaining880-v1719/NATIVE-GOAL-CHECKPOINT-v1764.json",
+  "checkpointRecorder": {
+    "path": "thesis/harness/checkpoint_existing_k1_wait_v1760.py",
+    "sha256": "318ff8aa16b6f7620a565863d9b48506a907f61cc86fd6ef0105e78d9a91e221",
+    "sutCalls": 0
+  }
+}

@@ -1,0 +1,116 @@
+{
+  "at": "2026-10-20T07:17:14.336678+00:00",
+  "status": "RUNNING",
+  "nativeGoal": {
+    "threadId": "01a112a5-d6bb-74e2-bf7c-ace73cb513b5",
+    "status": "active"
+  },
+  "run": "run_e6054e76e9fc",
+  "originalMonitor": {
+    "taskId": "task_d7ea336050cf",
+    "dispatchId": "ctx_37b4d0a3c14f",
+    "terminal": "term_2eab47ed-ab9b-4e35-bd9b-fc068c60e3fc",
+    "incarnation": "37e50d9c-6cf5-4e28-a63b-f2bc3eed5661"
+  },
+  "actors": [
+    {
+      "pid": 2360747,
+      "startTicks": 124937766,
+      "state": "S"
+    },
+    {
+      "pid": 2360768,
+      "startTicks": 124937952,
+      "state": "R"
+    },
+    {
+      "pid": 2361201,
+      "startTicks": 124942780,
+      "state": "S"
+    }
+  ],
+  "conditionManifestSha256": "120dd99a4de0a242c30ebe4bb46d854ca77313c482a0c74f024edb624829a6e8",
+  "indexAt": "2026-10-20T07:16:43.989663+00:00",
+  "indexSha256": "d130379be3a8c110814c736e6eb9407bb4c8c86e81a63a66ba79f154556d4940",
+  "continuation": {
+    "attempted": 199,
+    "correct": 195,
+    "incorrect": 0,
+    "failed": 4,
+    "planned": 880
+  },
+  "wholeCondition": {
+    "attempted": 219,
+    "correct": 214,
+    "incorrect": 0,
+    "failed": 5,
+    "planned": 900,
+    "unattempted": 681,
+    "excludedWarmupsAcrossEpochs": 30
+  },
+  "freeDiskBytes": 5028487168,
+  "priorPersonalActualRead": {
+    "path": "thesis/campaigns/worker-desktop-k1-p2p-tts-remaining880-v1719/PERSONAL-PROVIDER-LIVENESS-v1734.json",
+    "at": "2026-10-20T05:55:39.423188+00:00",
+    "samePidsManifestRuntimeConfig": true,
+    "noNewInferenceByRead": true
+  },
+  "futureK2": {
+    "path": "thesis/harness/distributed-k2-mesh-v1731",
+    "status": "REQUESTER_PROVIDER_COLLECTOR_BOUNDED_SOURCE_REVIEWS_PASS_NOT_LAUNCHED",
+    "oldClassifierChecksRerun": false,
+    "providerSource": "thesis/harness/k2_mesh_provider_v1733.py",
+    "collectorSource": "thesis/harness/k2_mesh_saved_warmup_proof_v1735.py",
+    "sourceReviewsClosed": true,
+    "actualNewGpuProof": "PENDING_ORDINARY_WARMUPS"
+  },
+  "futureK3": {
+    "candidate": "thesis/harness/stt-mesh-runtime-candidate-v1738",
+    "patchSha256": "038f6d443fbee9b83202dabe4db60375ff2f059493007548ad5989a18842f27f",
+    "sourceReview": "PASS_CLOSED",
+    "currentSourceApplied": false,
+    "runtimeTestsExecuted": false,
+    "authoredFocusedCases": {
+      "python": 3,
+      "sdk": 1
+    },
+    "nextGate": "One focused validation batch at natural physical resource boundary, then new exact source/manifest and real ordinary full-audio/native/route/backend warmups before K3 measured900"
+  },
+  "notebook": {
+    "newMetadata": "thesis/evidence/personal-notebook-readiness-20261020/ASSET-PREPARATION-RECEIPT-v1737.json",
+    "measurementAdmission": false,
+    "buildInstallTransferInference": 0,
+    "scope": "Existing approved Personal same control only; missing exact asset/cache paths is not global absence",
+    "offlineAdmission": "thesis/evidence/personal-notebook-readiness-20261020/offline-runtime-admission-v1742/ADMISSION-DECISION-AND-INPUTS.json",
+    "networkComparison": "thesis/evidence/approved-node-network-admission-20261020/RESOURCE-ADMISSION-DECISION-v1743.json",
+    "offlineResult": "NO_CACHED_MATCHING_RUNTIME_NOT_MODEL_INFEASIBILITY",
+    "physicalUplinkGroup": "UNKNOWN_AFTER_ONE_BOUNDED_COMPARISON",
+    "next": "Acquire exact inputs at first natural resource window unless genuine existing disjoint-group evidence arrives sooner; no more unchanged cache/network probes, no N gate on K2"
+  },
+  "methodology": {
+    "path": "thesis/methodology/owner-requirements-20261020-e9e4051d.md",
+    "bytes": 692672,
+    "sha256": "e9e4051dcaf6e03d3460cc2229c71c8d0d778835d50e618bc0fc5fe5d96fcdc7"
+  },
+  "android": {
+    "status": "INDEPENDENT_OWNING_HOST_OBSERVER_CAPABILITY_UNKNOWN",
+    "noUnchangedProbeRepeated": true
+  },
+  "previousGoalTurnClassification": "PROGRESS",
+  "thisTurnProgress": "PER291 stale search claims corrected in a preserved local proposal, bounded factual Sol review PASS; retained original search tests/source instead of redoing repair. Exact PER282 current read failed with server-unavailable response, no mutation/retry. Actual N offline runtime resolution attempted and failed uncached0.3.19; bounded N/D namespace/proxy comparison completed, preserved raw evidence and explicit resource admission decision.",
+  "nextAction": "Observe SAME live K1 at five-minute/failure/natural-terminal gate. No more product-plan/source-review cycles or closed-test reruns. Consume genuine changed resource metadata if provided; otherwise finite N input acquisition at natural gap, preserving next serial K2 admission. K3 focused3Python+1SDK checks remain deferred to the natural resource window.",
+  "per291": {
+    "path": "thesis/goal-evidence/PER291-source-reconciliation-20261020/CURRENT-CONTRACT-EVIDENCE.json",
+    "status": "LOCAL_PROPOSAL_FACTUAL_REVIEW_PASS_NOT_TASK_ACCEPTANCE",
+    "publishedPlanAndProductUntouched": true,
+    "parentStage2AndOriginalDeliveryGatesRemainOpen": true,
+    "testsRepeated": 0
+  },
+  "per282": {
+    "path": "thesis/goal-evidence/PER282-external-state-20261020/READ-RECEIPT-v1741.json",
+    "status": "TASK_STATE_UNKNOWN_SERVER_READ_FAILED",
+    "mutations": 0,
+    "retries": 0
+  },
+  "delegationScope": "Use latest owner-authorized conditional distinct tasks only when genuinely useful after required runtime/catalog/quota/resource checks; no duplicate Root, monitor, competing writer, company or unsafe execution. No new worker launched this turn."
+}

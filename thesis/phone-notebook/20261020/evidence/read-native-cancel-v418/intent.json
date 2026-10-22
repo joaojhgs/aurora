@@ -1,0 +1,13 @@
+{
+  "controlDeadline": "2026-10-22T14:19:00Z",
+  "host": "ssh:ssh-sem-notebook-personal",
+  "incarnation": "328cd72f-c7ea-49ff-a2db-b9275b085037",
+  "remoteResult": "/home/developer/projects/aurora/thesis/phone-notebook/20261020/evidence/read-native-cancel-v418.json",
+  "rootAdmissionMessage": "Read already launched owned cancellation result and exact native span teardown only",
+  "script": "scripts/read_cancel_v418.py",
+  "scriptSha256": "7b71c969cbaddfaf7ede193ccfece829fe84d3672bb38142de3324afe129f3f9",
+  "singleSend": true,
+  "supportedEnter": true,
+  "terminal": "term_a2ed5feb-7c92-48e4-bd88-d1b0e6737989",
+  "textTrailingNewline": false
+}

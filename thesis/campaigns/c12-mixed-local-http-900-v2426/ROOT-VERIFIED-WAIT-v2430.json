@@ -1,0 +1,77 @@
+{
+  "at": "2026-10-22T07:55:51.339090+00:00",
+  "classification": "verified_wait_after_progress",
+  "previousGoalTurn": "progress: implemented/froze actual paired900+900 campaign, preserved15correct warmups, repaired inner-bus telemetry, completed real gate and first measured correct pair",
+  "actor": {
+    "pid": 281887,
+    "startTicks": 143363140,
+    "state": "S"
+  },
+  "current": {
+    "at": "2026-10-22T07:55:42.339682+00:00",
+    "companion": {
+      "measured": {
+        "attempted": 13,
+        "correct": 13,
+        "failed": 0,
+        "harnessErrorsIncludedInFailed": 0,
+        "incorrectIncludedInFailed": 0,
+        "offered": 13,
+        "planned": 900,
+        "timeouts": 0,
+        "unstarted": 887
+      },
+      "warmup": {
+        "attempted": 1,
+        "correct": 1,
+        "failed": 0,
+        "harnessErrorsIncludedInFailed": 0,
+        "incorrectIncludedInFailed": 0,
+        "offered": 1,
+        "planned": 1,
+        "timeouts": 0,
+        "unstarted": 0
+      }
+    },
+    "completePairedCapsules": 14,
+    "elapsedSeconds": 564.969043723,
+    "lastIndex": 13,
+    "lastNativeParent": "ea82728901d0264ba97c6d8bdf2a1526",
+    "lastOrdinal": 14,
+    "manifestSha256": "316d4cc09adc44d0104dca8ac1f2a966347588ffef37bc2fa809ec14fd5efff8",
+    "phase": "measured",
+    "pid": 281887,
+    "primary": {
+      "measured": {
+        "attempted": 13,
+        "correct": 13,
+        "failed": 0,
+        "harnessErrorsIncludedInFailed": 0,
+        "incorrectIncludedInFailed": 0,
+        "offered": 13,
+        "planned": 900,
+        "timeouts": 0,
+        "unstarted": 887
+      },
+      "warmup": {
+        "attempted": 1,
+        "correct": 1,
+        "failed": 0,
+        "harnessErrorsIncludedInFailed": 0,
+        "incorrectIncludedInFailed": 0,
+        "offered": 1,
+        "planned": 1,
+        "timeouts": 0,
+        "unstarted": 0
+      }
+    },
+    "status": "running"
+  },
+  "manifestSha256": "316d4cc09adc44d0104dca8ac1f2a966347588ffef37bc2fa809ec14fd5efff8",
+  "terminalAbsent": true,
+  "workerFreeBytes": 2723282944,
+  "nextMaximumCheckUtc": "2026-10-22T08:00:51.339134+00:00",
+  "wakeEarlierOn": "Actual exception/terminal/source or reservation conflict; original monitor messages",
+  "nextAction": "Observe this original frozen process/local raw/custody only; no source edits, new tests/builds, Dterminal competing writes or phone investigation",
+  "nativeAggregateGoal": "Original01a112a5 ACTIVE/unbudgeted; full13 and remaining matrix open"
+}

@@ -1,0 +1,84 @@
+{
+  "at": "2026-10-18T14:55:13.484416+00:00",
+  "proof-collection-request.json": {
+    "at": "2026-10-18T14:53:27.679438+00:00",
+    "commandSha256": "2ea6239e90ee90c642bbd52b2512322080c029c28392a08966bd27fdd474e7c3",
+    "expectedNativeJoins": 45,
+    "modelRequestsByFinalizer": 0,
+    "sendCountPlanned": 1,
+    "warmups": 15
+  },
+  "warmup-finalizer-result.json": {
+    "actualOffloadedLayers": 25,
+    "actualSttComputeType": "int8_float32",
+    "actualSttDevice": "cpu",
+    "actualTotalLayers": 25,
+    "at": "2026-10-18T14:53:49.323090+00:00",
+    "calls": 45,
+    "forecastWith20PercentMarginPlus300Seconds": 14692.586323933561,
+    "measurementAdmission": "Unchanged reviewed runner must independently verify the published proof before measured1",
+    "modelCallsByFinalizer": 0,
+    "nativeProofHandlers": [
+      "stt.model_invoke",
+      "resolved_chat_model.astream",
+      "tts.model_invoke"
+    ],
+    "nextPersonalCursor": "47908",
+    "ordinaryWarmupP95MsType7": 30991.7879499,
+    "proofSha256": "7e14895b02975970a994fdac7738527ace37d0fc583282134b40ff938eb0efc9",
+    "providerDeadlineUtc": "2026-10-19T00:08:53.328388+00:00",
+    "providerReceiverPid": 1227894,
+    "providerRemainingSecondsAtCheck": 33325.655267,
+    "status": "K3_15_EXCLUDED_WARMUPS_45_NATIVE_JOINS_PROOF_PUBLISHED",
+    "warmupDurationsMs": [
+      29584.255998,
+      29662.739196,
+      29872.165418,
+      29926.108477,
+      29956.245004,
+      30051.552742,
+      30225.1554,
+      30245.228499,
+      30249.926314,
+      30272.775849,
+      30319.772581,
+      30552.673687,
+      30724.263767,
+      30902.603565,
+      31199.884848
+    ]
+  },
+  "warmup-finalizer-failure.json": null,
+  "proofRawSend": {
+    "ok": true,
+    "accepted": true,
+    "error": null
+  },
+  "controller": {
+    "pid": 1231594,
+    "sameLiveProcess": true
+  },
+  "backend": {
+    "pid": 1231687,
+    "sameLiveProcess": true
+  },
+  "copier": {
+    "pid": 1231601,
+    "sameLiveProcess": true
+  },
+  "finalizer": {
+    "pid": 1231602,
+    "sameLiveProcess": false
+  },
+  "progress": {
+    "attempted": 17,
+    "last_attempt_file": "attempts/attempt-0017-measured.jsonl",
+    "last_attempt_status": "completed_correct",
+    "measured_attempted": 2,
+    "planned_measured": 387,
+    "planned_warmups": 15,
+    "status": "running",
+    "unattempted_measured": 385,
+    "warmups_attempted": 15
+  }
+}

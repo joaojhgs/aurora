@@ -1,0 +1,1 @@
+{"at": "2026-10-22T01:53:14.504659+00:00", "exit": 2, "newAppTurns": 0, "newModelCalls": 0, "runtimeJobDirectoriesUnchanged": true, "stderr": "", "stdout": {"at": "2026-10-22T01:53:14.497717+00:00", "modelCalls": 0, "newBuildProcesses": 0, "requiredBelowC": 85, "sensorC": [94.0], "status": "BUILD_NOT_STARTED_THERMAL_GUARD"}}

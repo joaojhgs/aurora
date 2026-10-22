@@ -1,0 +1,17 @@
+{
+  "at": "2026-10-16T15:13:01.354769+00:00",
+  "records": [
+    {
+      "source": ".git/aurora-handoff-import-20261006/native-local-setup-inputs-v1089/MANIFEST.json",
+      "path": "MANIFEST.json",
+      "bytes": 5247,
+      "sha256": "66541ca6109768030b3f5ef2fd5071b60b448b6ed24a3a29c2689525447c06cf"
+    },
+    {
+      "source": ".git/aurora-handoff-import-20261006/native-local-setup-inputs-v1089/reviewed-source-delta-v1089.tar.gz",
+      "path": "reviewed-source-delta-v1089.tar.gz",
+      "bytes": 216853,
+      "sha256": "9478502896c9344d85d74be6ee4e17472a2855f4ba351f96a3b145ba2a375f1e"
+    }
+  ]
+}

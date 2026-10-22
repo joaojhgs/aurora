@@ -1,0 +1,58 @@
+{
+  "at": "2026-10-22T14:45:10.631582+00:00",
+  "companion": {
+    "measured": {
+      "attempted": 289,
+      "correct": 289,
+      "failed": 0,
+      "harnessErrorsIncludedInFailed": 0,
+      "incorrectIncludedInFailed": 0,
+      "offered": 289,
+      "planned": 640,
+      "timeouts": 0,
+      "unstarted": 351
+    },
+    "warmup": {
+      "attempted": 15,
+      "correct": 15,
+      "failed": 0,
+      "harnessErrorsIncludedInFailed": 0,
+      "incorrectIncludedInFailed": 0,
+      "offered": 15,
+      "planned": 15,
+      "timeouts": 0,
+      "unstarted": 0
+    }
+  },
+  "elapsedSeconds": 12800.392811741,
+  "extraCompanionCalls": 0,
+  "extraPrimaryCalls": 0,
+  "failedOrPartialCasesRetained": true,
+  "fullAggregateGoalComplete": false,
+  "pid": 462924,
+  "primary": {
+    "measured": {
+      "attempted": 289,
+      "correct": 289,
+      "failed": 0,
+      "harnessErrorsIncludedInFailed": 0,
+      "incorrectIncludedInFailed": 0,
+      "offered": 289,
+      "planned": 640,
+      "timeouts": 0,
+      "unstarted": 351
+    },
+    "warmup": {
+      "attempted": 15,
+      "correct": 15,
+      "failed": 0,
+      "harnessErrorsIncludedInFailed": 0,
+      "incorrectIncludedInFailed": 0,
+      "offered": 15,
+      "planned": 15,
+      "timeouts": 0,
+      "unstarted": 0
+    }
+  },
+  "reason": "worker_free_disk_floor"
+}

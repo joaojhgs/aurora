@@ -1,0 +1,10 @@
+{
+  "at": "2026-10-20T04:55:59.659565+00:00",
+  "entrypoint": "thesis/harness/scope_tts_warmup_bindings_v1724.py",
+  "status": "PASS_REPRODUCED_ACTUAL_BINDING_SLICE_BYTE_FOR_BYTE",
+  "rows": 30,
+  "sha256": "c93f7e619843c4c13d1d57d84012310d61ba68045d992a3d9262a915c754dd06",
+  "sutCalls": 0,
+  "networkCalls": 0,
+  "sourceModified": false
+}

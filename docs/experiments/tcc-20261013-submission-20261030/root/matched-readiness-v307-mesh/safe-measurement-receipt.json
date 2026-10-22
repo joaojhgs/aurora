@@ -1,0 +1,78 @@
+{
+  "private_report_sha256": "e4cb98aabc40a33769eec8aee4fc415cf785072e001c55fd087299964e4834ce",
+  "safe_rows": [
+    {
+      "condition": "browser-webrtc-mesh",
+      "workload": "orbit-exact-v1",
+      "attempt": 1,
+      "warmupCount": 0,
+      "outcome": "typed_error",
+      "requestId": null,
+      "sessionId": null,
+      "correlationId": null,
+      "messageId": null,
+      "modelLabel": null,
+      "exactResponse": false,
+      "completionCount": 0,
+      "completionKind": null,
+      "updateKind": "failed",
+      "updateKinds": [
+        "failed"
+      ],
+      "requesterDispatchToTypedCompletionMs": 1357,
+      "errorCode": "unavailable_service",
+      "errorDetailCode": null,
+      "errorDetailReason": {
+        "state": "matched",
+        "value": "provider_not_ready"
+      },
+      "errorStatus": null,
+      "errorChain": [
+        {
+          "errorClass": "AuroraError",
+          "codeState": "matched",
+          "code": "unavailable_service",
+          "reasonState": "absent",
+          "reason": null,
+          "status": null,
+          "detail": {
+            "codeState": "present_unmatched",
+            "code": null,
+            "reasonState": "matched",
+            "reason": "provider_not_ready",
+            "status": null
+          },
+          "messageHash": "74fcc54c21a3eed87816237a83ab9412292d23089dde4601bf24d79409d724ef"
+        }
+      ],
+      "peerAtTerminal": {
+        "state": "authorized",
+        "status": "authorized",
+        "expectedStablePeerPresent": true,
+        "diagnosticCode": {
+          "state": "present_unmatched",
+          "value": null
+        },
+        "rosterTotal": 1,
+        "rosterAuthorized": 1
+      },
+      "peerBeforeDispatch": {
+        "state": "authorized",
+        "status": "authorized",
+        "expectedStablePeerPresent": true,
+        "diagnosticCode": {
+          "state": "present_unmatched",
+          "value": null
+        },
+        "rosterTotal": 1,
+        "rosterAuthorized": 1
+      }
+    }
+  ],
+  "errors_hashed_only": [
+    {
+      "message_sha256": "818dd4184c5decac6afdca216cb743be5f96326109ce1a8cf01a5ffa1ce07851",
+      "category": "assertion_or_runner_error"
+    }
+  ]
+}

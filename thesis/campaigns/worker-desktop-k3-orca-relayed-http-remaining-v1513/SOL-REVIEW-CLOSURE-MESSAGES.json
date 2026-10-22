@@ -1,0 +1,32 @@
+[
+  {
+    "id": "msg_cd07eed1941e",
+    "run_id": "run_e6054e76e9fc",
+    "delivery_contract": "current_delivery",
+    "from_handle": "term_2eab47ed-ab9b-4e35-bd9b-fc068c60e3fc",
+    "to_handle": "run:run_e6054e76e9fc",
+    "subject": "V1513 targeted corrections + full30.55 mirror verified CLOSED",
+    "body": "Targeted two-item correction check CLOSED for final controller d7471a65/rootlauncher5b245a69/copierbba8f395; no new test/model calls. Report .omx/evidence/orca-monitor-20261010/K3-V1513-TARGETED-CORRECTION-CLOSURE-20261018T142555245742Z.md (3061B SHA4e4e50b0dc4970d0c6c0283e8e24532f79a4846e1862e1140fd98ceeb214cca4), receipt80fe2a93: actual held-FD lease + bounded provider deadline, full operational custody/final drain verified from requested delta and saved OS/custody receipts. FULL30.55 canonical mirror independently byte/hash checked572088B/71257a5f and original557225B prefix identical; mirror/review branch closed, no further local variants/gates requested. K3 remains513 attempts512correct+1failure; V1513remaining387+15excluded is PREPARED ONLY until same pending controlcdac7533... readmission resolves. Owner priority remains first missing admitted SAME-pair/stage actualP2P vs HTTP; actual Mesh profile grant unresolved, relayedHTTP not Mesh. Please retain exact pending-control capability event as current blocker and advance only supported execution/reconciliation, not additional local prep/reviews or closed baseline repeats.",
+    "type": "status",
+    "priority": "normal",
+    "thread_id": null,
+    "payload": "{\"taskId\":\"task_d7ea336050cf\",\"dispatchId\":\"ctx_37b4d0a3c14f\"}",
+    "created_at": "2026-10-18T14:26:14Z",
+    "delivered_at": null
+  },
+  {
+    "id": "msg_2d6873cb3d8b",
+    "run_id": "run_e6054e76e9fc",
+    "delivery_contract": "current_delivery",
+    "from_handle": "term_2eab47ed-ab9b-4e35-bd9b-fc068c60e3fc",
+    "to_handle": "run:run_e6054e76e9fc",
+    "subject": "Execution-ready local work closed; owning-Orca control action required",
+    "body": "ATTENTION REQUIRED: V1513 local preparation AND requested monitor correction review are now CLOSED (msg_cd07eed1941e), so no local-source/test/review work remains to advance this ready387-attempt epoch. Sole execution readmission blocker remains existing Orca terminal.send cdac7533-7309-4015-be6f-69bae4a8f0ee: Root's14:23:36 same-request receipt stillPENDING since13:57:48, approved term_d5651d8d-58e2-4b38-85e2-51c668cc933c/inc034ff933-61a3-4c74-b5ad-98a75e8ac21c, cursor47858 zero output; same-ID retry already1, no fresh resend. Packet remains thesis/campaigns/worker-desktop-k3-orca-relayed-http-remaining-v1513/provider-readmission/{PENDING-RECEIPT.json,REQUEST-STATE-v1520.json,READ-SAME-STREAM-v1520.json}; existing supported operation requires owning-Orca delivery reconciliation/capability restoration, not provider absence inference or new test/agent. Earlier escalationmsg_dcb99ddc85f9 was Root-acknowledged; actual owning-Orca/Coding recovery receipt stillUNVERIFIED. Please surface this owner-attention event through existing Coding path and return actual supported operator action/result; avoid repeated unchanged PENDING reads while awaiting it. No launch/ETA or providerfreshstate claimed; reservationheld, original deadline19Oct00:08:53UTC. ActualP2P profile admission remains separate pending ownerquestion; no fakeMesh, no closed baseline repeat.",
+    "type": "escalation",
+    "priority": "normal",
+    "thread_id": null,
+    "payload": "{\"taskId\":\"task_d7ea336050cf\",\"dispatchId\":\"ctx_37b4d0a3c14f\"}",
+    "created_at": "2026-10-18T14:27:10Z",
+    "delivered_at": null
+  }
+]

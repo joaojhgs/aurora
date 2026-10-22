@@ -1,0 +1,160 @@
+{
+  "at": "2026-10-15T02:08:34.663466+00:00",
+  "case": "retainedV461 answer read aloud and browser software playback",
+  "actualDriverExitCode": 0,
+  "actualDriverDurationSeconds": 56.03426679898985,
+  "completed": true,
+  "newAssistantSTTRequests": 0,
+  "TTSBrowserRequests": 1,
+  "oldSetupFailurePreserved": true,
+  "noMeasuredSample": true,
+  "noFullVoiceOrGPUSeal": true,
+  "phase2MeasuredAllowed": false,
+  "files": [
+    {
+      "path": "audio-v474/driver-progress.json",
+      "bytes": 525,
+      "sha256": "053a07f9035ab4e4cd0c3f3ccdd4050b519964934b9c8bacb07cc08697706d7e"
+    },
+    {
+      "path": "audio-v474/driver-spawn.json",
+      "bytes": 197,
+      "sha256": "995e8922401e33fc8e01ed5eb1cea8c6cca8be277a5bb8689b7da3ccc2390ba1"
+    },
+    {
+      "path": "audio-v474/driver-terminal.json",
+      "bytes": 633,
+      "sha256": "3ba4999c1b439d859ffdf746d957873c22b3adcb01c246aeda52bb2c2be8c68f"
+    },
+    {
+      "path": "audio-v474/final-sources.json",
+      "bytes": 1161,
+      "sha256": "70efd744b22883dd038057fef8dc2e27e4ded83b5fa001fd41f2236dfbbf63ed"
+    },
+    {
+      "path": "audio-v474/progress.json",
+      "bytes": 1137,
+      "sha256": "f9ab3c9203055453c94449d6b1b6e3a064dce97c079e62f062e7999d29a9eea8"
+    },
+    {
+      "path": "audio-v474/ready.json",
+      "bytes": 1916,
+      "sha256": "b5fd2c60464304a8c5c85dccf2383e19aa4ca6a551a215f87998c04a49ef719d"
+    },
+    {
+      "path": "audio-v474/result-observation.json",
+      "bytes": 3361,
+      "sha256": "b864310e1237b54c339fa2dcc90f2d6dcb8922fb5d297bafb890cf90ba7f47c2"
+    },
+    {
+      "path": "audio-v474/retirement.json",
+      "bytes": 555,
+      "sha256": "c81ac5fe43e3f528b702c7eed71b83c585e9b142c3c3573a9c58f04ea2fa55d6"
+    },
+    {
+      "path": "audio-v474/runtime/launch.json",
+      "bytes": 1777,
+      "sha256": "6a78b07055155b8e0e3d22fc39077bc7b34515c2e1ece6a51b2443b907895fd3"
+    },
+    {
+      "path": "audio-v474/runtime/terminal.json",
+      "bytes": 1987,
+      "sha256": "c2b6ec907a68b3df40320137d96b4823b180434d5fd93a443193273803e8a150"
+    },
+    {
+      "path": "audio-v474/runtime/voice-stages.installed.json",
+      "bytes": 121,
+      "sha256": "8e21a1892590a29aac22600ff5709c94f22dc52cba9fdddf3df5fb94ac39d7f1"
+    },
+    {
+      "path": "audio-v474/runtime/voice-stages.jsonl",
+      "bytes": 7093,
+      "sha256": "769a7292db0c0b3908154529d80278eb64a6c9730df3748e67a7799321fc7ded"
+    },
+    {
+      "path": "audio-v474/runtime/voice-stages.status.json",
+      "bytes": 132,
+      "sha256": "5863d93da52df91ab70cd22210a4311b150777533b10ab51245d1514e6874650"
+    },
+    {
+      "path": "audio-v474/source-guard.json",
+      "bytes": 455,
+      "sha256": "096b838a462871fa4dbbf58f499b4fb444fc48854402ae5a8e0ded58e7875865"
+    },
+    {
+      "path": "audio-v474/spawn.json",
+      "bytes": 725,
+      "sha256": "1c4d04801ba2b70a5bc8c8371c1a352ba51d51dc6164affda76c323b70baa14b"
+    },
+    {
+      "path": "audio-v474/terminal.json",
+      "bytes": 2195,
+      "sha256": "a54e2b2f81142953bedbad4d4090fd5eb3430db4d034d1de73694cae67a4d214"
+    },
+    {
+      "path": "audio-v474/ui-case/private/read-aloud-completed.png",
+      "bytes": 94745,
+      "sha256": "461ef96b6cc682d78be837c9f66ffc8c949fa0177e5b5e5f4e028d66fe9c2222"
+    },
+    {
+      "path": "audio-v474/ui-case/private/read-aloud.wav",
+      "bytes": 21548,
+      "sha256": "f00344a020a8ba4006d159b0a70dd179a7ede653e21f7558508a660628e9558c"
+    },
+    {
+      "path": "audio-v474/ui-case/private/session-network.json",
+      "bytes": 16172,
+      "sha256": "b6fe652820c2c6b43f15a4c991b88b2fd141e9b2ea20a9bfebe0fe4edee4200c"
+    },
+    {
+      "path": "audio-v474/ui-case/result.json",
+      "bytes": 1309,
+      "sha256": "f69f79d82de414e79a73a708eeac4f316abdb36b99ad773346dc842047e495ad"
+    },
+    {
+      "path": "audio-v474/web-server.json",
+      "bytes": 470,
+      "sha256": "aacd881b42b2a968966019f5a4e9f722bc25d54613dc97fb88c0ad42d92fae62"
+    },
+    {
+      "path": "build-v472/packet.json",
+      "bytes": 429,
+      "sha256": "6127a086c94ae9004dfc706332400796f561037ce6e51803d8a5dac73117ddb1"
+    },
+    {
+      "path": "build-v472/production-web.log",
+      "bytes": 2211,
+      "sha256": "91a3473e053be8f5de8ae3e2d7f8ec39ea182fc527073e2b3af07975fbe73303"
+    },
+    {
+      "path": "build-v472/progress.json",
+      "bytes": 1003,
+      "sha256": "1909a2cc5b9419901387e7f7423695bae3e5af414c8697e22df64d990954df0e"
+    },
+    {
+      "path": "build-v472/spawn.json",
+      "bytes": 317,
+      "sha256": "5acd717d5c130cfeba453685024db06135cfea7fe7b30ce54cec28e8bdc91c39"
+    },
+    {
+      "path": "build-v472/terminal.json",
+      "bytes": 1485,
+      "sha256": "50c8abcb5ae651780a5f0ccc358aa188cff0084b07a2656a9aa5a93de7fff1c6"
+    },
+    {
+      "path": "setup-failed-v473/retirement.json",
+      "bytes": 158,
+      "sha256": "d8abd7c368577497cf464120a7660651d86037bd56e2680b26fe543138e0b4bc"
+    },
+    {
+      "path": "setup-failed-v473/spawn.json",
+      "bytes": 725,
+      "sha256": "91865712e857b76db3d831e3ff78993a7edf56fb4d94ed1910e16eeebbd77a37"
+    },
+    {
+      "path": "setup-failed-v473/terminal.json",
+      "bytes": 770,
+      "sha256": "58304d800d046e09b40ede37e711ade3d8b43cb476d6de056b4ec59efc8f76d2"
+    }
+  ]
+}

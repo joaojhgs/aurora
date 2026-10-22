@@ -1,0 +1,24 @@
+{
+  "at": "2026-10-22T07:48:59.746133+00:00",
+  "version": "V2428",
+  "classification": "C12_MEASURED_ACTIVE_AFTER_RETAINED15_PLUS1_GATE",
+  "nativeGoalThread": "01a112a5-d6bb-74e2-bf7c-ace73cb513b5",
+  "nativeGoalStatus": "active",
+  "nativeGoalBudget": null,
+  "mainLiveSource": "thesis/campaigns/c12-mixed-local-http-900-v2426/CURRENT.json",
+  "latestRootReceipt": "thesis/campaigns/c12-mixed-local-http-900-v2426/ROOT-FIRST-MEASURED-PAIR-v2428.json",
+  "originalRequester": {
+    "pid": 281887,
+    "startTicks": 143363140,
+    "state": "S"
+  },
+  "originalProvider": {
+    "pid": 2555839,
+    "startTicks": 41063588
+  },
+  "manifestSha256": "316d4cc09adc44d0104dca8ac1f2a966347588ffef37bc2fa809ec14fd5efff8",
+  "rootOwnsMainExecution": true,
+  "phoneOwner": "term_1f27be31-0284-4366-bb91-30fe538cd30e",
+  "full13AndRemainingMatrixOpen": true,
+  "nextAction": "Preserve frozen running C12, observe exact requester PID and durable case/custody counters, handle real terminal/failure only; no new inference/test/build/source/Dterminal commands outside existing controller"
+}

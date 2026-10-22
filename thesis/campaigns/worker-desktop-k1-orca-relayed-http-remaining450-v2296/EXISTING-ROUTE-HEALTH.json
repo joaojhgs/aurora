@@ -1,0 +1,8 @@
+{
+  "at": "2026-10-21T21:42:23.015100+00:00",
+  "credentialValuesLoggedOrCopied": false,
+  "httpStatus": 200,
+  "responseSha256": "80471e4d4e66378c9bdaadfe167c7b20d8eb22046f350f1ce886b3c0d3ec0b6c",
+  "scope": "Protected metadata read only; real15nativefullflows remain required before measurement",
+  "status": "EXISTING_PEER_BEARER_PROTECTED_HTTP_READ_PASSED"
+}

@@ -1,0 +1,97 @@
+{
+  "at": "2026-10-17T22:13:11.059337+00:00",
+  "task": "task_c626834bf1c6",
+  "request": "15142b33-da95-45c7-b9fd-6303d9cb3d61",
+  "method": "normal orchestration worker-start",
+  "supersedes": "old CLI guard bug / manager route admission explanation",
+  "scope": {
+    "mode": "host",
+    "executionHostId": "ssh:ssh-oci-coding-worker"
+  },
+  "codexUsage": {
+    "status": "ok",
+    "error": null,
+    "weekly": {
+      "usedPercent": 2,
+      "windowMinutes": 10080,
+      "resetsAt": 1792874447000,
+      "resetDescription": "s\u00e1b., 20:40"
+    },
+    "session": null,
+    "checkedAt": 1792274737434,
+    "retryAt": 1792275036255,
+    "sessionInterpretation": "unreported; not inferred zero",
+    "retryInterpretation": "healthy collector scheduling; not exhaustion"
+  },
+  "catalogFetchedAt": "2026-10-17T22:12:02.728402700Z",
+  "model": "gpt-6.1-sol",
+  "effort": "xhigh",
+  "resources": {
+    "at": "2026-10-17T22:12:22.633143+00:00",
+    "disk": {
+      "total": 109128826880,
+      "used": 101949849600,
+      "free": 7162200064
+    },
+    "pids": {
+      "430655": {
+        "expectedStartTicks": 104608580,
+        "startTicks": 104608580,
+        "same": true,
+        "state": "S"
+      },
+      "430656": {
+        "expectedStartTicks": 104608648,
+        "startTicks": 104608648,
+        "same": true,
+        "state": "S"
+      },
+      "442775": {
+        "expectedStartTicks": 104723117,
+        "startTicks": 104723117,
+        "same": true,
+        "state": "S"
+      },
+      "421717": {
+        "expectedStartTicks": 104535394,
+        "startTicks": 104535394,
+        "same": true,
+        "state": "S"
+      }
+    },
+    "MemAvailable": "4208936 kB",
+    "loadavg": "6.37 7.27 7.11 11/631 523305"
+  },
+  "requestState": {
+    "requestId": "15142b33-da95-45c7-b9fd-6303d9cb3d61",
+    "state": "absent",
+    "interpretation": "No receipt for request 15142b33-da95-45c7-b9fd-6303d9cb3d61 under this caller identity. It never reached this Orca runtime, failed before recording anything, or its receipt was pruned. Absent is not proof that nothing happened."
+  },
+  "dispatch": null,
+  "command": [
+    "/home/developer/.orca-relay/bin/orca",
+    "orchestration",
+    "worker-start",
+    "--task",
+    "task_c626834bf1c6",
+    "--worktree",
+    "id:314e7b89-8f19-4535-9443-22b342aedff7::/home/developer/projects/aurora",
+    "--agent",
+    "codex",
+    "--model",
+    "gpt-6.1-sol",
+    "--effort",
+    "xhigh",
+    "--run",
+    "run_e6054e76e9fc",
+    "--from",
+    "term_6a00d9ee-792a-4daf-8578-236290e33108",
+    "--retry-request",
+    "15142b33-da95-45c7-b9fd-6303d9cb3d61",
+    "--timeout-ms",
+    "60000",
+    "--json"
+  ],
+  "ownership": "thesis/audit/20261017-data-and-results/ only",
+  "launchStatus": "ATTEMPTING_ONCE"
+}

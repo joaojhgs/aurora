@@ -1,0 +1,71 @@
+{
+  "at": "2026-10-21T20:50:17.291820+00:00",
+  "status": "REQUESTER_TERMINAL_AND_PHYSICAL_CUSTODY_SEALED",
+  "manifestSha256": "11bbea3fc1e45e65da1ecb7b501aee77739870cb087d792e5bc5197f9b1027be",
+  "requesterActorsAbsent": true,
+  "requesterActors": [
+    {
+      "pid": 3751414,
+      "expectedStartTicks": 137933512,
+      "state": "ABSENT"
+    },
+    {
+      "pid": 3751426,
+      "expectedStartTicks": 137933748,
+      "state": "ABSENT"
+    },
+    {
+      "pid": 3751415,
+      "expectedStartTicks": 137933513,
+      "state": "ABSENT"
+    }
+  ],
+  "epochMeasured": {
+    "attempted": 270,
+    "correct": 270,
+    "failed": 0,
+    "incorrect": 0,
+    "timeouts": 0,
+    "planned": 270,
+    "unattempted": 0
+  },
+  "conditionCountsOnly": {
+    "attempted": 450,
+    "correct": 449,
+    "failed": 1,
+    "incorrect": 0,
+    "unattempted": 450,
+    "target": 900
+  },
+  "failureCodes": {},
+  "excludedWarmups": 15,
+  "caseRecords": 285,
+  "actualWAV": 285,
+  "verifiedFiles": 1840,
+  "verifiedBytes": 33923202,
+  "snapshotSha256": "b71d9e43a06c5e92101df9c0685e841318b4931e95ad527b19a93fcb8c104450",
+  "sourceCheckpointSha256": "8e68aaa5fbd8689db341db57dd89f540ba98ae4bbf648fcc520f741f485a7fa5",
+  "requesterNativeResourcePrefixEOF": [
+    {
+      "name": "voice-stages.jsonl",
+      "bytes": 3348465,
+      "sourceEOFVerified": true
+    },
+    {
+      "name": "actual-provider-bindings.jsonl",
+      "bytes": 2143,
+      "sourceEOFVerified": true
+    },
+    {
+      "name": "resources.jsonl",
+      "bytes": 19137664,
+      "sourceEOFVerified": true
+    }
+  ],
+  "controllerExitCode": 0,
+  "terminalStatus": "completed_all_correct",
+  "terminalStopReason": null,
+  "newInference": 0,
+  "nativeGoalMutations": 0,
+  "noLatencyPooling": true
+}

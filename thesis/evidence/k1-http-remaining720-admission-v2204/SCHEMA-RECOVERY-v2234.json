@@ -1,0 +1,23 @@
+{
+  "at": "2026-10-21T16:40:11.394007+00:00",
+  "status": "SAVED_GATE_VALIDATED_BEFORE_V2234_LAUNCH",
+  "savedFlows": 15,
+  "actualStageJoins": 45,
+  "newSourcePreflightAST": "PASS",
+  "sameProvider": {
+    "pid": 1440196,
+    "state": "S",
+    "startTicks": 35427408
+  },
+  "newProvider": false,
+  "newOrcaWorker": false,
+  "target": 900,
+  "newMeasuredPlanned": 270,
+  "globalFirst": 181,
+  "globalLast": 450,
+  "oldWarmupsAndAllFailuresPreserved": true,
+  "freshWarmupReason": "Prior requester naturally shut down; new actual constructor/native bindings before measurements",
+  "rootDeadlineNotReset": "2026-10-21T23:36:07.231887+00:00",
+  "providerDeadlineNotExtended": "2026-10-21T22:45:52.468654+00:00",
+  "proof": "thesis/campaigns/worker-desktop-k1-orca-relayed-http-first270-v2224/provider-saved15-v2233/SAVED15-CORRECTED-FULL-GATE-v2234.json"
+}

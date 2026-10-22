@@ -1,0 +1,1559 @@
+{
+  "at": "2026-10-22T13:36:52.945847+00:00",
+  "status": "NEW_COMPLETED_CONTROLS_PHYSICALLY_LINKED",
+  "currentSnapshotAt": "2026-10-22T13:36:40.538728+00:00",
+  "eligiblePairedCutoff": 207,
+  "previousVerifiedFilesSkipped": 4345,
+  "oldFilesRehashed": 0,
+  "newFilesLinked": 220,
+  "eligibleNewFiles": 220,
+  "allEligibleNewFilesLinked": true,
+  "newBytesHashed": 1325210,
+  "maximumReadBytes": 8388608,
+  "newPayloadAllocations": 0,
+  "originalsDeletedOrModified": false,
+  "remoteRuntimeModelOrDeviceCalls": 0,
+  "elapsedMs": 206.887442,
+  "files": [
+    {
+      "source": ".git/aurora-handoff-import-20261006/c12-v2453-pair-0198-page-00-READ-0.json",
+      "destination": "thesis/campaigns/c12-mixed-local-http-remaining640-v2453/control/cli-custody/c12-v2453-pair-0198-page-00-READ-0.json",
+      "bytes": 476,
+      "sha256": "d8543e58c047865dde9cb7ddf49a44f6ac2f51170846e718677b91fce8a73c07",
+      "onePhysicalCopy": true
+    },
+    {
+      "source": ".git/aurora-handoff-import-20261006/c12-v2453-pair-0198-page-00-READ-0.raw.gz",
+      "destination": "thesis/campaigns/c12-mixed-local-http-remaining640-v2453/control/cli-custody/c12-v2453-pair-0198-page-00-READ-0.raw.gz",
+      "bytes": 46838,
+      "sha256": "a1bc4c876fd0c583d33637e1cf6ca15ff36a20037de3dc1a9a0cd6af741ec6a9",
+      "onePhysicalCopy": true
+    },
+    {
+      "source": ".git/aurora-handoff-import-20261006/c12-v2453-pair-0198-page-00-READ-BEFORE.json",
+      "destination": "thesis/campaigns/c12-mixed-local-http-remaining640-v2453/control/cli-custody/c12-v2453-pair-0198-page-00-READ-BEFORE.json",
+      "bytes": 475,
+      "sha256": "a87ff384eb0bf01bc5e9f426455e9d3bb3f9e7a9c0f47a286b4ffaafae80c248",
+      "onePhysicalCopy": true
+    },
+    {
+      "source": ".git/aurora-handoff-import-20261006/c12-v2453-pair-0198-page-00-READ-BEFORE.raw.gz",
+      "destination": "thesis/campaigns/c12-mixed-local-http-remaining640-v2453/control/cli-custody/c12-v2453-pair-0198-page-00-READ-BEFORE.raw.gz",
+      "bytes": 379,
+      "sha256": "ef8a2ebcdb3fa257eae85d2916425a0baf3b0e6e93dbb21b63cc7e0c1efd8fa6",
+      "onePhysicalCopy": true
+    },
+    {
+      "source": ".git/aurora-handoff-import-20261006/c12-v2453-pair-0198-page-00-RESULT.json",
+      "destination": "thesis/campaigns/c12-mixed-local-http-remaining640-v2453/control/cli-custody/c12-v2453-pair-0198-page-00-RESULT.json",
+      "bytes": 49746,
+      "sha256": "41b3ee8c99f50d8a74ae4dfc526e494e325b67e1ae3173ea2d68501bac094a76",
+      "onePhysicalCopy": true
+    },
+    {
+      "source": ".git/aurora-handoff-import-20261006/c12-v2453-pair-0198-page-00-SEND-INTENT.json",
+      "destination": "thesis/campaigns/c12-mixed-local-http-remaining640-v2453/control/cli-custody/c12-v2453-pair-0198-page-00-SEND-INTENT.json",
+      "bytes": 93,
+      "sha256": "8410e6a54a3a8741137f211c63561ec39acfaac059174b600c2a547f60861bf7",
+      "onePhysicalCopy": true
+    },
+    {
+      "source": ".git/aurora-handoff-import-20261006/c12-v2453-pair-0198-page-00-SEND.json",
+      "destination": "thesis/campaigns/c12-mixed-local-http-remaining640-v2453/control/cli-custody/c12-v2453-pair-0198-page-00-SEND.json",
+      "bytes": 463,
+      "sha256": "d4d86b718c7af1b3ab3a61ec31a56de4733e8bfbe3693b1fffa2c7f515624b10",
+      "onePhysicalCopy": true
+    },
+    {
+      "source": ".git/aurora-handoff-import-20261006/c12-v2453-pair-0198-page-00-SEND.raw.gz",
+      "destination": "thesis/campaigns/c12-mixed-local-http-remaining640-v2453/control/cli-custody/c12-v2453-pair-0198-page-00-SEND.raw.gz",
+      "bytes": 525,
+      "sha256": "d8725f406538db9a603d0f68c5243491d437da37923a820254a049c435f47e8a",
+      "onePhysicalCopy": true
+    },
+    {
+      "source": ".git/aurora-handoff-import-20261006/c12-v2453-pair-0198-page-00-SHOW-FENCE.json",
+      "destination": "thesis/campaigns/c12-mixed-local-http-remaining640-v2453/control/cli-custody/c12-v2453-pair-0198-page-00-SHOW-FENCE.json",
+      "bytes": 471,
+      "sha256": "33fc60101d69aeeb2b8bfcdc59f6861b05e12f2c7eaf396c12f9b245ba6e9e78",
+      "onePhysicalCopy": true
+    },
+    {
+      "source": ".git/aurora-handoff-import-20261006/c12-v2453-pair-0198-page-00-SHOW-FENCE.raw.gz",
+      "destination": "thesis/campaigns/c12-mixed-local-http-remaining640-v2453/control/cli-custody/c12-v2453-pair-0198-page-00-SHOW-FENCE.raw.gz",
+      "bytes": 882,
+      "sha256": "fa8b1acae488b350462b7e7f834befdd9706d31803155253b268bf1dfaa07262",
+      "onePhysicalCopy": true
+    },
+    {
+      "source": ".git/aurora-handoff-import-20261006/c12-v2453-pair-0198-page-00-command.txt",
+      "destination": "thesis/campaigns/c12-mixed-local-http-remaining640-v2453/control/cli-custody/c12-v2453-pair-0198-page-00-command.txt",
+      "bytes": 616,
+      "sha256": "31d65a09b8368cd32891e981ef3197213c63851342d0a4c602d746519e0c4b60",
+      "onePhysicalCopy": true
+    },
+    {
+      "source": ".git/aurora-handoff-import-20261006/c12-v2453-pair-0198-page-01-READ-0.json",
+      "destination": "thesis/campaigns/c12-mixed-local-http-remaining640-v2453/control/cli-custody/c12-v2453-pair-0198-page-01-READ-0.json",
+      "bytes": 475,
+      "sha256": "884834c5ee7654e4a942c0fc1adb4b85f274d2a389e9c3bfd97476000810006c",
+      "onePhysicalCopy": true
+    },
+    {
+      "source": ".git/aurora-handoff-import-20261006/c12-v2453-pair-0198-page-01-READ-0.raw.gz",
+      "destination": "thesis/campaigns/c12-mixed-local-http-remaining640-v2453/control/cli-custody/c12-v2453-pair-0198-page-01-READ-0.raw.gz",
+      "bytes": 13752,
+      "sha256": "f4d0708c23a42470224ad40a7366ad63806b77bb7b08286bb83fb114dc9a6fbd",
+      "onePhysicalCopy": true
+    },
+    {
+      "source": ".git/aurora-handoff-import-20261006/c12-v2453-pair-0198-page-01-READ-BEFORE.json",
+      "destination": "thesis/campaigns/c12-mixed-local-http-remaining640-v2453/control/cli-custody/c12-v2453-pair-0198-page-01-READ-BEFORE.json",
+      "bytes": 475,
+      "sha256": "55defa9d52fcbb35bd849198998cad1028eb7b3a6ad0b6a1e555b47f77813ce7",
+      "onePhysicalCopy": true
+    },
+    {
+      "source": ".git/aurora-handoff-import-20261006/c12-v2453-pair-0198-page-01-READ-BEFORE.raw.gz",
+      "destination": "thesis/campaigns/c12-mixed-local-http-remaining640-v2453/control/cli-custody/c12-v2453-pair-0198-page-01-READ-BEFORE.raw.gz",
+      "bytes": 378,
+      "sha256": "8056824de672f3e422f40312860493c7aed5a6587b74de0f35d06a75f701fdd0",
+      "onePhysicalCopy": true
+    },
+    {
+      "source": ".git/aurora-handoff-import-20261006/c12-v2453-pair-0198-page-01-RESULT.json",
+      "destination": "thesis/campaigns/c12-mixed-local-http-remaining640-v2453/control/cli-custody/c12-v2453-pair-0198-page-01-RESULT.json",
+      "bytes": 13614,
+      "sha256": "a215949c21c47391681aa3eb03e31244d7ebbf42b0c7148a2b29e72ad9813b65",
+      "onePhysicalCopy": true
+    },
+    {
+      "source": ".git/aurora-handoff-import-20261006/c12-v2453-pair-0198-page-01-SEND-INTENT.json",
+      "destination": "thesis/campaigns/c12-mixed-local-http-remaining640-v2453/control/cli-custody/c12-v2453-pair-0198-page-01-SEND-INTENT.json",
+      "bytes": 93,
+      "sha256": "8410e6a54a3a8741137f211c63561ec39acfaac059174b600c2a547f60861bf7",
+      "onePhysicalCopy": true
+    },
+    {
+      "source": ".git/aurora-handoff-import-20261006/c12-v2453-pair-0198-page-01-SEND.json",
+      "destination": "thesis/campaigns/c12-mixed-local-http-remaining640-v2453/control/cli-custody/c12-v2453-pair-0198-page-01-SEND.json",
+      "bytes": 463,
+      "sha256": "ef6cf7fce42833f156927b24a47da08418c0568956fb67b34882cef00260ea1b",
+      "onePhysicalCopy": true
+    },
+    {
+      "source": ".git/aurora-handoff-import-20261006/c12-v2453-pair-0198-page-01-SEND.raw.gz",
+      "destination": "thesis/campaigns/c12-mixed-local-http-remaining640-v2453/control/cli-custody/c12-v2453-pair-0198-page-01-SEND.raw.gz",
+      "bytes": 526,
+      "sha256": "f0dab72be425b056d69a2c7ae015735a0a148ee327c35af0e09590cfb1b97b1c",
+      "onePhysicalCopy": true
+    },
+    {
+      "source": ".git/aurora-handoff-import-20261006/c12-v2453-pair-0198-page-01-SHOW-FENCE.json",
+      "destination": "thesis/campaigns/c12-mixed-local-http-remaining640-v2453/control/cli-custody/c12-v2453-pair-0198-page-01-SHOW-FENCE.json",
+      "bytes": 471,
+      "sha256": "fbeb1a67a19fa8c5ada07aac54530e3879e28e83cfebf0fae28937cb4d5718d8",
+      "onePhysicalCopy": true
+    },
+    {
+      "source": ".git/aurora-handoff-import-20261006/c12-v2453-pair-0198-page-01-SHOW-FENCE.raw.gz",
+      "destination": "thesis/campaigns/c12-mixed-local-http-remaining640-v2453/control/cli-custody/c12-v2453-pair-0198-page-01-SHOW-FENCE.raw.gz",
+      "bytes": 883,
+      "sha256": "bee23292e525558763b2bbdc9ae01b42ca5ad34b1b7e6a32c0c86ddb22644923",
+      "onePhysicalCopy": true
+    },
+    {
+      "source": ".git/aurora-handoff-import-20261006/c12-v2453-pair-0198-page-01-command.txt",
+      "destination": "thesis/campaigns/c12-mixed-local-http-remaining640-v2453/control/cli-custody/c12-v2453-pair-0198-page-01-command.txt",
+      "bytes": 616,
+      "sha256": "256419af380257e9a7cefdf0df772ceb4f854a62b41fe082b2c484490ff6e149",
+      "onePhysicalCopy": true
+    },
+    {
+      "source": ".git/aurora-handoff-import-20261006/c12-v2453-pair-0199-page-00-READ-0.json",
+      "destination": "thesis/campaigns/c12-mixed-local-http-remaining640-v2453/control/cli-custody/c12-v2453-pair-0199-page-00-READ-0.json",
+      "bytes": 476,
+      "sha256": "3a744b25efda7debb311d4df7eb254f9bd279815bfca6c38adfa778b3415d2c2",
+      "onePhysicalCopy": true
+    },
+    {
+      "source": ".git/aurora-handoff-import-20261006/c12-v2453-pair-0199-page-00-READ-0.raw.gz",
+      "destination": "thesis/campaigns/c12-mixed-local-http-remaining640-v2453/control/cli-custody/c12-v2453-pair-0199-page-00-READ-0.raw.gz",
+      "bytes": 46953,
+      "sha256": "e139f11c7c1f767416bc7350ca16ddb01bb4c3f30a22446eac9f043bae77a54f",
+      "onePhysicalCopy": true
+    },
+    {
+      "source": ".git/aurora-handoff-import-20261006/c12-v2453-pair-0199-page-00-READ-BEFORE.json",
+      "destination": "thesis/campaigns/c12-mixed-local-http-remaining640-v2453/control/cli-custody/c12-v2453-pair-0199-page-00-READ-BEFORE.json",
+      "bytes": 475,
+      "sha256": "c5c2ec8f4a9a4c7e8fd5e735e1236bfeacfde7e126f2a013de46dc1c7726387e",
+      "onePhysicalCopy": true
+    },
+    {
+      "source": ".git/aurora-handoff-import-20261006/c12-v2453-pair-0199-page-00-READ-BEFORE.raw.gz",
+      "destination": "thesis/campaigns/c12-mixed-local-http-remaining640-v2453/control/cli-custody/c12-v2453-pair-0199-page-00-READ-BEFORE.raw.gz",
+      "bytes": 380,
+      "sha256": "4d6df608b0684cd0a36f3e3241735c4417ed982b1ffa3340ac541fdd83a6d9c2",
+      "onePhysicalCopy": true
+    },
+    {
+      "source": ".git/aurora-handoff-import-20261006/c12-v2453-pair-0199-page-00-RESULT.json",
+      "destination": "thesis/campaigns/c12-mixed-local-http-remaining640-v2453/control/cli-custody/c12-v2453-pair-0199-page-00-RESULT.json",
+      "bytes": 49748,
+      "sha256": "8063108d937244b67eeccdd77954bc440f52b79fb6ba6e9b76d4bd388b632131",
+      "onePhysicalCopy": true
+    },
+    {
+      "source": ".git/aurora-handoff-import-20261006/c12-v2453-pair-0199-page-00-SEND-INTENT.json",
+      "destination": "thesis/campaigns/c12-mixed-local-http-remaining640-v2453/control/cli-custody/c12-v2453-pair-0199-page-00-SEND-INTENT.json",
+      "bytes": 93,
+      "sha256": "8410e6a54a3a8741137f211c63561ec39acfaac059174b600c2a547f60861bf7",
+      "onePhysicalCopy": true
+    },
+    {
+      "source": ".git/aurora-handoff-import-20261006/c12-v2453-pair-0199-page-00-SEND.json",
+      "destination": "thesis/campaigns/c12-mixed-local-http-remaining640-v2453/control/cli-custody/c12-v2453-pair-0199-page-00-SEND.json",
+      "bytes": 463,
+      "sha256": "5e34d4864de88b1cf017dbd4272f14c4c022a182af0ffdd8781dfc41ffee35b1",
+      "onePhysicalCopy": true
+    },
+    {
+      "source": ".git/aurora-handoff-import-20261006/c12-v2453-pair-0199-page-00-SEND.raw.gz",
+      "destination": "thesis/campaigns/c12-mixed-local-http-remaining640-v2453/control/cli-custody/c12-v2453-pair-0199-page-00-SEND.raw.gz",
+      "bytes": 526,
+      "sha256": "c87e7c19d7a6c1ace215d1b3e5b7f2e8e5a250acbacfa423e38c181574b8e53b",
+      "onePhysicalCopy": true
+    },
+    {
+      "source": ".git/aurora-handoff-import-20261006/c12-v2453-pair-0199-page-00-SHOW-FENCE.json",
+      "destination": "thesis/campaigns/c12-mixed-local-http-remaining640-v2453/control/cli-custody/c12-v2453-pair-0199-page-00-SHOW-FENCE.json",
+      "bytes": 471,
+      "sha256": "f183d7e061f1a1c1113cf77364088cbc60674af45466a49c9fb9c6b48a7424fe",
+      "onePhysicalCopy": true
+    },
+    {
+      "source": ".git/aurora-handoff-import-20261006/c12-v2453-pair-0199-page-00-SHOW-FENCE.raw.gz",
+      "destination": "thesis/campaigns/c12-mixed-local-http-remaining640-v2453/control/cli-custody/c12-v2453-pair-0199-page-00-SHOW-FENCE.raw.gz",
+      "bytes": 885,
+      "sha256": "d20d0295375d2d0f3d5647c7e48fb2e082fd1223b0f92b71896e64adb37ecc81",
+      "onePhysicalCopy": true
+    },
+    {
+      "source": ".git/aurora-handoff-import-20261006/c12-v2453-pair-0199-page-00-command.txt",
+      "destination": "thesis/campaigns/c12-mixed-local-http-remaining640-v2453/control/cli-custody/c12-v2453-pair-0199-page-00-command.txt",
+      "bytes": 616,
+      "sha256": "61041645c5d9d27f9097e25d32614a21386fa84dc62976585d69d4266e54b30f",
+      "onePhysicalCopy": true
+    },
+    {
+      "source": ".git/aurora-handoff-import-20261006/c12-v2453-pair-0199-page-01-READ-0.json",
+      "destination": "thesis/campaigns/c12-mixed-local-http-remaining640-v2453/control/cli-custody/c12-v2453-pair-0199-page-01-READ-0.json",
+      "bytes": 475,
+      "sha256": "859db6c481113c26099a777da2afa280b395319b6e27a60c24f23e5705b40018",
+      "onePhysicalCopy": true
+    },
+    {
+      "source": ".git/aurora-handoff-import-20261006/c12-v2453-pair-0199-page-01-READ-0.raw.gz",
+      "destination": "thesis/campaigns/c12-mixed-local-http-remaining640-v2453/control/cli-custody/c12-v2453-pair-0199-page-01-READ-0.raw.gz",
+      "bytes": 13259,
+      "sha256": "e94bd967dac3d6cf52f5441c504a23eef31d9780b965fa9d49c5454ba0158625",
+      "onePhysicalCopy": true
+    },
+    {
+      "source": ".git/aurora-handoff-import-20261006/c12-v2453-pair-0199-page-01-READ-BEFORE.json",
+      "destination": "thesis/campaigns/c12-mixed-local-http-remaining640-v2453/control/cli-custody/c12-v2453-pair-0199-page-01-READ-BEFORE.json",
+      "bytes": 475,
+      "sha256": "9107dee7485fa46b441a5409fb24c9e30e9c02f1b8ae2058de7864f25088f72e",
+      "onePhysicalCopy": true
+    },
+    {
+      "source": ".git/aurora-handoff-import-20261006/c12-v2453-pair-0199-page-01-READ-BEFORE.raw.gz",
+      "destination": "thesis/campaigns/c12-mixed-local-http-remaining640-v2453/control/cli-custody/c12-v2453-pair-0199-page-01-READ-BEFORE.raw.gz",
+      "bytes": 379,
+      "sha256": "b77c50582f5376c2277b653d0b4bda3185d705196a001e4884dbf1f2a9820c3f",
+      "onePhysicalCopy": true
+    },
+    {
+      "source": ".git/aurora-handoff-import-20261006/c12-v2453-pair-0199-page-01-RESULT.json",
+      "destination": "thesis/campaigns/c12-mixed-local-http-remaining640-v2453/control/cli-custody/c12-v2453-pair-0199-page-01-RESULT.json",
+      "bytes": 13089,
+      "sha256": "08aa4e93136033bc658223a690d2590be030d5c73cf6b84cf910d9814a446c18",
+      "onePhysicalCopy": true
+    },
+    {
+      "source": ".git/aurora-handoff-import-20261006/c12-v2453-pair-0199-page-01-SEND-INTENT.json",
+      "destination": "thesis/campaigns/c12-mixed-local-http-remaining640-v2453/control/cli-custody/c12-v2453-pair-0199-page-01-SEND-INTENT.json",
+      "bytes": 93,
+      "sha256": "8410e6a54a3a8741137f211c63561ec39acfaac059174b600c2a547f60861bf7",
+      "onePhysicalCopy": true
+    },
+    {
+      "source": ".git/aurora-handoff-import-20261006/c12-v2453-pair-0199-page-01-SEND.json",
+      "destination": "thesis/campaigns/c12-mixed-local-http-remaining640-v2453/control/cli-custody/c12-v2453-pair-0199-page-01-SEND.json",
+      "bytes": 463,
+      "sha256": "f64cd40f4db38f329bf8f061d58819727ec0e5e93c631834aea04f4bde20a132",
+      "onePhysicalCopy": true
+    },
+    {
+      "source": ".git/aurora-handoff-import-20261006/c12-v2453-pair-0199-page-01-SEND.raw.gz",
+      "destination": "thesis/campaigns/c12-mixed-local-http-remaining640-v2453/control/cli-custody/c12-v2453-pair-0199-page-01-SEND.raw.gz",
+      "bytes": 526,
+      "sha256": "a41308ef42e8b97a8d4d937d521d57b471ad77730ca74e661ddf32679b245c21",
+      "onePhysicalCopy": true
+    },
+    {
+      "source": ".git/aurora-handoff-import-20261006/c12-v2453-pair-0199-page-01-SHOW-FENCE.json",
+      "destination": "thesis/campaigns/c12-mixed-local-http-remaining640-v2453/control/cli-custody/c12-v2453-pair-0199-page-01-SHOW-FENCE.json",
+      "bytes": 471,
+      "sha256": "e778d14ab92d5db48facb31ad91efdd1db07a7abbbd5543f377f8e2e4d8b8089",
+      "onePhysicalCopy": true
+    },
+    {
+      "source": ".git/aurora-handoff-import-20261006/c12-v2453-pair-0199-page-01-SHOW-FENCE.raw.gz",
+      "destination": "thesis/campaigns/c12-mixed-local-http-remaining640-v2453/control/cli-custody/c12-v2453-pair-0199-page-01-SHOW-FENCE.raw.gz",
+      "bytes": 889,
+      "sha256": "ae58eb9847a1a21f29b2b915be5658d0e7a51c5134ef5864c3247618201b4b81",
+      "onePhysicalCopy": true
+    },
+    {
+      "source": ".git/aurora-handoff-import-20261006/c12-v2453-pair-0199-page-01-command.txt",
+      "destination": "thesis/campaigns/c12-mixed-local-http-remaining640-v2453/control/cli-custody/c12-v2453-pair-0199-page-01-command.txt",
+      "bytes": 616,
+      "sha256": "0589d903f81dae0c01806c82efc0592e165eb3ecde0773febdebc41d36df6758",
+      "onePhysicalCopy": true
+    },
+    {
+      "source": ".git/aurora-handoff-import-20261006/c12-v2453-pair-0200-page-00-READ-0.json",
+      "destination": "thesis/campaigns/c12-mixed-local-http-remaining640-v2453/control/cli-custody/c12-v2453-pair-0200-page-00-READ-0.json",
+      "bytes": 476,
+      "sha256": "c6b4b37c5a324e610631b6ce1c823f16a4915991f4232795105e002598954f3e",
+      "onePhysicalCopy": true
+    },
+    {
+      "source": ".git/aurora-handoff-import-20261006/c12-v2453-pair-0200-page-00-READ-0.raw.gz",
+      "destination": "thesis/campaigns/c12-mixed-local-http-remaining640-v2453/control/cli-custody/c12-v2453-pair-0200-page-00-READ-0.raw.gz",
+      "bytes": 46924,
+      "sha256": "96b833800359ce7866c61df4c27e84115ea32655641646ffa60441300d42c364",
+      "onePhysicalCopy": true
+    },
+    {
+      "source": ".git/aurora-handoff-import-20261006/c12-v2453-pair-0200-page-00-READ-BEFORE.json",
+      "destination": "thesis/campaigns/c12-mixed-local-http-remaining640-v2453/control/cli-custody/c12-v2453-pair-0200-page-00-READ-BEFORE.json",
+      "bytes": 475,
+      "sha256": "116787b0fb92126e198eb4fba6491ccf970e0935cacf0fa31990b25a5e7cb97d",
+      "onePhysicalCopy": true
+    },
+    {
+      "source": ".git/aurora-handoff-import-20261006/c12-v2453-pair-0200-page-00-READ-BEFORE.raw.gz",
+      "destination": "thesis/campaigns/c12-mixed-local-http-remaining640-v2453/control/cli-custody/c12-v2453-pair-0200-page-00-READ-BEFORE.raw.gz",
+      "bytes": 377,
+      "sha256": "0911c1c23e214b0df6f27da88814a08583d2e0c098567b8b8c3e49fb081e81be",
+      "onePhysicalCopy": true
+    },
+    {
+      "source": ".git/aurora-handoff-import-20261006/c12-v2453-pair-0200-page-00-RESULT.json",
+      "destination": "thesis/campaigns/c12-mixed-local-http-remaining640-v2453/control/cli-custody/c12-v2453-pair-0200-page-00-RESULT.json",
+      "bytes": 49747,
+      "sha256": "4b4a80ab8e6b457fcacfd63f25af6ea6dc9f53292fc6d268288a60d4cc7d6b63",
+      "onePhysicalCopy": true
+    },
+    {
+      "source": ".git/aurora-handoff-import-20261006/c12-v2453-pair-0200-page-00-SEND-INTENT.json",
+      "destination": "thesis/campaigns/c12-mixed-local-http-remaining640-v2453/control/cli-custody/c12-v2453-pair-0200-page-00-SEND-INTENT.json",
+      "bytes": 93,
+      "sha256": "8410e6a54a3a8741137f211c63561ec39acfaac059174b600c2a547f60861bf7",
+      "onePhysicalCopy": true
+    },
+    {
+      "source": ".git/aurora-handoff-import-20261006/c12-v2453-pair-0200-page-00-SEND.json",
+      "destination": "thesis/campaigns/c12-mixed-local-http-remaining640-v2453/control/cli-custody/c12-v2453-pair-0200-page-00-SEND.json",
+      "bytes": 463,
+      "sha256": "3e8050572bda1fd42e69d78c6ac7fdc427bbeec47c2c6af2840d8b9dcfa502d3",
+      "onePhysicalCopy": true
+    },
+    {
+      "source": ".git/aurora-handoff-import-20261006/c12-v2453-pair-0200-page-00-SEND.raw.gz",
+      "destination": "thesis/campaigns/c12-mixed-local-http-remaining640-v2453/control/cli-custody/c12-v2453-pair-0200-page-00-SEND.raw.gz",
+      "bytes": 524,
+      "sha256": "715e5655f60dd921f0e2242b5ef84c4637c60da3f6c26fa985af457e09468aa4",
+      "onePhysicalCopy": true
+    },
+    {
+      "source": ".git/aurora-handoff-import-20261006/c12-v2453-pair-0200-page-00-SHOW-FENCE.json",
+      "destination": "thesis/campaigns/c12-mixed-local-http-remaining640-v2453/control/cli-custody/c12-v2453-pair-0200-page-00-SHOW-FENCE.json",
+      "bytes": 471,
+      "sha256": "709b8b785944b29550a1d5f529b2cfb9e9588c9eb8be7fcf69736386d31ae13d",
+      "onePhysicalCopy": true
+    },
+    {
+      "source": ".git/aurora-handoff-import-20261006/c12-v2453-pair-0200-page-00-SHOW-FENCE.raw.gz",
+      "destination": "thesis/campaigns/c12-mixed-local-http-remaining640-v2453/control/cli-custody/c12-v2453-pair-0200-page-00-SHOW-FENCE.raw.gz",
+      "bytes": 888,
+      "sha256": "47f51ed1277af8bda8ec87dc1bd117284da2c485dad50440901cd72422f74776",
+      "onePhysicalCopy": true
+    },
+    {
+      "source": ".git/aurora-handoff-import-20261006/c12-v2453-pair-0200-page-00-command.txt",
+      "destination": "thesis/campaigns/c12-mixed-local-http-remaining640-v2453/control/cli-custody/c12-v2453-pair-0200-page-00-command.txt",
+      "bytes": 616,
+      "sha256": "ee9e325ecd939197eb5c9a37c9ab61d437dad84542d5ed317d5fab587daa090c",
+      "onePhysicalCopy": true
+    },
+    {
+      "source": ".git/aurora-handoff-import-20261006/c12-v2453-pair-0200-page-01-READ-0.json",
+      "destination": "thesis/campaigns/c12-mixed-local-http-remaining640-v2453/control/cli-custody/c12-v2453-pair-0200-page-01-READ-0.json",
+      "bytes": 475,
+      "sha256": "9ec7fbd6adc50d506da490432f07342bc27a22398eb5007c413023ebd4b0179a",
+      "onePhysicalCopy": true
+    },
+    {
+      "source": ".git/aurora-handoff-import-20261006/c12-v2453-pair-0200-page-01-READ-0.raw.gz",
+      "destination": "thesis/campaigns/c12-mixed-local-http-remaining640-v2453/control/cli-custody/c12-v2453-pair-0200-page-01-READ-0.raw.gz",
+      "bytes": 13737,
+      "sha256": "e0564de9a97920676c92849e9fae39e1dd8b928f92b3317ed032fb3c257de852",
+      "onePhysicalCopy": true
+    },
+    {
+      "source": ".git/aurora-handoff-import-20261006/c12-v2453-pair-0200-page-01-READ-BEFORE.json",
+      "destination": "thesis/campaigns/c12-mixed-local-http-remaining640-v2453/control/cli-custody/c12-v2453-pair-0200-page-01-READ-BEFORE.json",
+      "bytes": 475,
+      "sha256": "04b9b11cb7c1f2461ad0186c3075b94665f8a36f7f7680d9b20b874101c61069",
+      "onePhysicalCopy": true
+    },
+    {
+      "source": ".git/aurora-handoff-import-20261006/c12-v2453-pair-0200-page-01-READ-BEFORE.raw.gz",
+      "destination": "thesis/campaigns/c12-mixed-local-http-remaining640-v2453/control/cli-custody/c12-v2453-pair-0200-page-01-READ-BEFORE.raw.gz",
+      "bytes": 379,
+      "sha256": "4486a0f8538be155ef69a26bcb88be655b355d3119e53968218fe703ed838023",
+      "onePhysicalCopy": true
+    },
+    {
+      "source": ".git/aurora-handoff-import-20261006/c12-v2453-pair-0200-page-01-RESULT.json",
+      "destination": "thesis/campaigns/c12-mixed-local-http-remaining640-v2453/control/cli-custody/c12-v2453-pair-0200-page-01-RESULT.json",
+      "bytes": 13525,
+      "sha256": "b71296dd829413d4b02b24be47e44a980441c3d0fc1f5887cb4059f1bbcea38f",
+      "onePhysicalCopy": true
+    },
+    {
+      "source": ".git/aurora-handoff-import-20261006/c12-v2453-pair-0200-page-01-SEND-INTENT.json",
+      "destination": "thesis/campaigns/c12-mixed-local-http-remaining640-v2453/control/cli-custody/c12-v2453-pair-0200-page-01-SEND-INTENT.json",
+      "bytes": 93,
+      "sha256": "8410e6a54a3a8741137f211c63561ec39acfaac059174b600c2a547f60861bf7",
+      "onePhysicalCopy": true
+    },
+    {
+      "source": ".git/aurora-handoff-import-20261006/c12-v2453-pair-0200-page-01-SEND.json",
+      "destination": "thesis/campaigns/c12-mixed-local-http-remaining640-v2453/control/cli-custody/c12-v2453-pair-0200-page-01-SEND.json",
+      "bytes": 463,
+      "sha256": "4f038c41f01fe8f90a9a7c55958b3bd14a481bacc4eef5dbe1a78f052c34943f",
+      "onePhysicalCopy": true
+    },
+    {
+      "source": ".git/aurora-handoff-import-20261006/c12-v2453-pair-0200-page-01-SEND.raw.gz",
+      "destination": "thesis/campaigns/c12-mixed-local-http-remaining640-v2453/control/cli-custody/c12-v2453-pair-0200-page-01-SEND.raw.gz",
+      "bytes": 525,
+      "sha256": "c9bd20cee6029220758f5206201a26c91422155eab927ef8a8c4a7628c718bc0",
+      "onePhysicalCopy": true
+    },
+    {
+      "source": ".git/aurora-handoff-import-20261006/c12-v2453-pair-0200-page-01-SHOW-FENCE.json",
+      "destination": "thesis/campaigns/c12-mixed-local-http-remaining640-v2453/control/cli-custody/c12-v2453-pair-0200-page-01-SHOW-FENCE.json",
+      "bytes": 471,
+      "sha256": "c236d205efd234fc9fbe7326fc793bf9d6ce44d6a6164f69e7a3c893315bc87e",
+      "onePhysicalCopy": true
+    },
+    {
+      "source": ".git/aurora-handoff-import-20261006/c12-v2453-pair-0200-page-01-SHOW-FENCE.raw.gz",
+      "destination": "thesis/campaigns/c12-mixed-local-http-remaining640-v2453/control/cli-custody/c12-v2453-pair-0200-page-01-SHOW-FENCE.raw.gz",
+      "bytes": 889,
+      "sha256": "9eaadb4af0df49f1081f9280dee8621aef8dda0a4d2b4213becdb11df1dd35d6",
+      "onePhysicalCopy": true
+    },
+    {
+      "source": ".git/aurora-handoff-import-20261006/c12-v2453-pair-0200-page-01-command.txt",
+      "destination": "thesis/campaigns/c12-mixed-local-http-remaining640-v2453/control/cli-custody/c12-v2453-pair-0200-page-01-command.txt",
+      "bytes": 616,
+      "sha256": "771d46d7d18da56dcb1a55658cdca81442e4e8853d10697bb6d1e53500b9a30a",
+      "onePhysicalCopy": true
+    },
+    {
+      "source": ".git/aurora-handoff-import-20261006/c12-v2453-pair-0201-page-00-READ-0.json",
+      "destination": "thesis/campaigns/c12-mixed-local-http-remaining640-v2453/control/cli-custody/c12-v2453-pair-0201-page-00-READ-0.json",
+      "bytes": 476,
+      "sha256": "fa2a72e95f69df8aa1c53d99409aef9317fdf3b1d0e3a221e4145c9d80b11d2e",
+      "onePhysicalCopy": true
+    },
+    {
+      "source": ".git/aurora-handoff-import-20261006/c12-v2453-pair-0201-page-00-READ-0.raw.gz",
+      "destination": "thesis/campaigns/c12-mixed-local-http-remaining640-v2453/control/cli-custody/c12-v2453-pair-0201-page-00-READ-0.raw.gz",
+      "bytes": 46831,
+      "sha256": "2211440137b3453d7a6704e803a8d4bc0dde68e8969e59de9d77f2c69df2aa6f",
+      "onePhysicalCopy": true
+    },
+    {
+      "source": ".git/aurora-handoff-import-20261006/c12-v2453-pair-0201-page-00-READ-BEFORE.json",
+      "destination": "thesis/campaigns/c12-mixed-local-http-remaining640-v2453/control/cli-custody/c12-v2453-pair-0201-page-00-READ-BEFORE.json",
+      "bytes": 475,
+      "sha256": "5d67e68c50f319dea9bc5c7507df5a7cf64db92536a46729309a9cf04fe3107a",
+      "onePhysicalCopy": true
+    },
+    {
+      "source": ".git/aurora-handoff-import-20261006/c12-v2453-pair-0201-page-00-READ-BEFORE.raw.gz",
+      "destination": "thesis/campaigns/c12-mixed-local-http-remaining640-v2453/control/cli-custody/c12-v2453-pair-0201-page-00-READ-BEFORE.raw.gz",
+      "bytes": 379,
+      "sha256": "9e78d94753b262636da08e36431f85876e8181c83a609c7870e45aeac027bef5",
+      "onePhysicalCopy": true
+    },
+    {
+      "source": ".git/aurora-handoff-import-20261006/c12-v2453-pair-0201-page-00-RESULT.json",
+      "destination": "thesis/campaigns/c12-mixed-local-http-remaining640-v2453/control/cli-custody/c12-v2453-pair-0201-page-00-RESULT.json",
+      "bytes": 49747,
+      "sha256": "ffdb0b3402ec0a1a12098d26a1b0ad5beec42870a0d003220741e6186a555a87",
+      "onePhysicalCopy": true
+    },
+    {
+      "source": ".git/aurora-handoff-import-20261006/c12-v2453-pair-0201-page-00-SEND-INTENT.json",
+      "destination": "thesis/campaigns/c12-mixed-local-http-remaining640-v2453/control/cli-custody/c12-v2453-pair-0201-page-00-SEND-INTENT.json",
+      "bytes": 93,
+      "sha256": "8410e6a54a3a8741137f211c63561ec39acfaac059174b600c2a547f60861bf7",
+      "onePhysicalCopy": true
+    },
+    {
+      "source": ".git/aurora-handoff-import-20261006/c12-v2453-pair-0201-page-00-SEND.json",
+      "destination": "thesis/campaigns/c12-mixed-local-http-remaining640-v2453/control/cli-custody/c12-v2453-pair-0201-page-00-SEND.json",
+      "bytes": 463,
+      "sha256": "f4b12b5c87d9fc37942cd2b1d6eeb34ac41accd2215d8b900780be54cb5d8071",
+      "onePhysicalCopy": true
+    },
+    {
+      "source": ".git/aurora-handoff-import-20261006/c12-v2453-pair-0201-page-00-SEND.raw.gz",
+      "destination": "thesis/campaigns/c12-mixed-local-http-remaining640-v2453/control/cli-custody/c12-v2453-pair-0201-page-00-SEND.raw.gz",
+      "bytes": 524,
+      "sha256": "12ee59b8590f014a4e39f024728f207118df2499b09f82df1adfa59200cd6421",
+      "onePhysicalCopy": true
+    },
+    {
+      "source": ".git/aurora-handoff-import-20261006/c12-v2453-pair-0201-page-00-SHOW-FENCE.json",
+      "destination": "thesis/campaigns/c12-mixed-local-http-remaining640-v2453/control/cli-custody/c12-v2453-pair-0201-page-00-SHOW-FENCE.json",
+      "bytes": 471,
+      "sha256": "4cf7e47dc81ff1e1c53256090493a07810cb20ff34eab9879379dbd40959b3ce",
+      "onePhysicalCopy": true
+    },
+    {
+      "source": ".git/aurora-handoff-import-20261006/c12-v2453-pair-0201-page-00-SHOW-FENCE.raw.gz",
+      "destination": "thesis/campaigns/c12-mixed-local-http-remaining640-v2453/control/cli-custody/c12-v2453-pair-0201-page-00-SHOW-FENCE.raw.gz",
+      "bytes": 888,
+      "sha256": "237f02b48abc4ac97fa9f31d326c6127fba9cbdc87828a7700f3b5d61f5442a3",
+      "onePhysicalCopy": true
+    },
+    {
+      "source": ".git/aurora-handoff-import-20261006/c12-v2453-pair-0201-page-00-command.txt",
+      "destination": "thesis/campaigns/c12-mixed-local-http-remaining640-v2453/control/cli-custody/c12-v2453-pair-0201-page-00-command.txt",
+      "bytes": 616,
+      "sha256": "730663eb114e8edd3a82e802d2a9916e855a01c4af810e11ec66befd34dce50d",
+      "onePhysicalCopy": true
+    },
+    {
+      "source": ".git/aurora-handoff-import-20261006/c12-v2453-pair-0201-page-01-READ-0.json",
+      "destination": "thesis/campaigns/c12-mixed-local-http-remaining640-v2453/control/cli-custody/c12-v2453-pair-0201-page-01-READ-0.json",
+      "bytes": 475,
+      "sha256": "3c07ea987489d71f21db6b18f5b12d958df01b255d3b184e274c98be92c3dc9f",
+      "onePhysicalCopy": true
+    },
+    {
+      "source": ".git/aurora-handoff-import-20261006/c12-v2453-pair-0201-page-01-READ-0.raw.gz",
+      "destination": "thesis/campaigns/c12-mixed-local-http-remaining640-v2453/control/cli-custody/c12-v2453-pair-0201-page-01-READ-0.raw.gz",
+      "bytes": 14163,
+      "sha256": "2fe6878d883c6571c3c189ab89daec31763250a9adf2bc906f9c5d8224944d8f",
+      "onePhysicalCopy": true
+    },
+    {
+      "source": ".git/aurora-handoff-import-20261006/c12-v2453-pair-0201-page-01-READ-BEFORE.json",
+      "destination": "thesis/campaigns/c12-mixed-local-http-remaining640-v2453/control/cli-custody/c12-v2453-pair-0201-page-01-READ-BEFORE.json",
+      "bytes": 475,
+      "sha256": "7e522ae16cac661ca4b37c290a322ba8bdac03e636c0f35d394cc5e7a8dd450e",
+      "onePhysicalCopy": true
+    },
+    {
+      "source": ".git/aurora-handoff-import-20261006/c12-v2453-pair-0201-page-01-READ-BEFORE.raw.gz",
+      "destination": "thesis/campaigns/c12-mixed-local-http-remaining640-v2453/control/cli-custody/c12-v2453-pair-0201-page-01-READ-BEFORE.raw.gz",
+      "bytes": 378,
+      "sha256": "d41f450d2d05efd34a90d79653e72951a2c7babce4ea002d9bcad57bbd7f436e",
+      "onePhysicalCopy": true
+    },
+    {
+      "source": ".git/aurora-handoff-import-20261006/c12-v2453-pair-0201-page-01-RESULT.json",
+      "destination": "thesis/campaigns/c12-mixed-local-http-remaining640-v2453/control/cli-custody/c12-v2453-pair-0201-page-01-RESULT.json",
+      "bytes": 14018,
+      "sha256": "117b389dc1d11fe8d304884c4a2a8adf959771bf061713efb24465065a74f531",
+      "onePhysicalCopy": true
+    },
+    {
+      "source": ".git/aurora-handoff-import-20261006/c12-v2453-pair-0201-page-01-SEND-INTENT.json",
+      "destination": "thesis/campaigns/c12-mixed-local-http-remaining640-v2453/control/cli-custody/c12-v2453-pair-0201-page-01-SEND-INTENT.json",
+      "bytes": 93,
+      "sha256": "8410e6a54a3a8741137f211c63561ec39acfaac059174b600c2a547f60861bf7",
+      "onePhysicalCopy": true
+    },
+    {
+      "source": ".git/aurora-handoff-import-20261006/c12-v2453-pair-0201-page-01-SEND.json",
+      "destination": "thesis/campaigns/c12-mixed-local-http-remaining640-v2453/control/cli-custody/c12-v2453-pair-0201-page-01-SEND.json",
+      "bytes": 463,
+      "sha256": "bdf8e15b9c3793647c507ea4a7b6ac261ff7b7fed6c5d95dd8970c29a6993e8e",
+      "onePhysicalCopy": true
+    },
+    {
+      "source": ".git/aurora-handoff-import-20261006/c12-v2453-pair-0201-page-01-SEND.raw.gz",
+      "destination": "thesis/campaigns/c12-mixed-local-http-remaining640-v2453/control/cli-custody/c12-v2453-pair-0201-page-01-SEND.raw.gz",
+      "bytes": 525,
+      "sha256": "c156704091e792b6762d0e35cbec70addc7be0b9eb0a7445af02e0e27f49aa80",
+      "onePhysicalCopy": true
+    },
+    {
+      "source": ".git/aurora-handoff-import-20261006/c12-v2453-pair-0201-page-01-SHOW-FENCE.json",
+      "destination": "thesis/campaigns/c12-mixed-local-http-remaining640-v2453/control/cli-custody/c12-v2453-pair-0201-page-01-SHOW-FENCE.json",
+      "bytes": 471,
+      "sha256": "167501022f15260a4c5b87040e32d7600b8c3078d5e08cb1f7e28e555901ef7f",
+      "onePhysicalCopy": true
+    },
+    {
+      "source": ".git/aurora-handoff-import-20261006/c12-v2453-pair-0201-page-01-SHOW-FENCE.raw.gz",
+      "destination": "thesis/campaigns/c12-mixed-local-http-remaining640-v2453/control/cli-custody/c12-v2453-pair-0201-page-01-SHOW-FENCE.raw.gz",
+      "bytes": 890,
+      "sha256": "46d02989ea108695c412d6f56990f12c1e41863806a3412dd55cef14e533113b",
+      "onePhysicalCopy": true
+    },
+    {
+      "source": ".git/aurora-handoff-import-20261006/c12-v2453-pair-0201-page-01-command.txt",
+      "destination": "thesis/campaigns/c12-mixed-local-http-remaining640-v2453/control/cli-custody/c12-v2453-pair-0201-page-01-command.txt",
+      "bytes": 616,
+      "sha256": "2bf6ad250c966f15f1d044be8ba854e412bd57e63fc069ff0237baf29f78f3e6",
+      "onePhysicalCopy": true
+    },
+    {
+      "source": ".git/aurora-handoff-import-20261006/c12-v2453-pair-0202-page-00-READ-0.json",
+      "destination": "thesis/campaigns/c12-mixed-local-http-remaining640-v2453/control/cli-custody/c12-v2453-pair-0202-page-00-READ-0.json",
+      "bytes": 476,
+      "sha256": "4779a1025bfb17e72d3fb49cbb5a374809961b35b46e13e358bfcd523467ed35",
+      "onePhysicalCopy": true
+    },
+    {
+      "source": ".git/aurora-handoff-import-20261006/c12-v2453-pair-0202-page-00-READ-0.raw.gz",
+      "destination": "thesis/campaigns/c12-mixed-local-http-remaining640-v2453/control/cli-custody/c12-v2453-pair-0202-page-00-READ-0.raw.gz",
+      "bytes": 46978,
+      "sha256": "846e328c3c23333cc48fa3585f5222e1fc21dfc241a827bd978ef3aa0622ab64",
+      "onePhysicalCopy": true
+    },
+    {
+      "source": ".git/aurora-handoff-import-20261006/c12-v2453-pair-0202-page-00-READ-BEFORE.json",
+      "destination": "thesis/campaigns/c12-mixed-local-http-remaining640-v2453/control/cli-custody/c12-v2453-pair-0202-page-00-READ-BEFORE.json",
+      "bytes": 475,
+      "sha256": "389875eb275cdf6467fce70b6174270ee11496bf780570901f7283b438523411",
+      "onePhysicalCopy": true
+    },
+    {
+      "source": ".git/aurora-handoff-import-20261006/c12-v2453-pair-0202-page-00-READ-BEFORE.raw.gz",
+      "destination": "thesis/campaigns/c12-mixed-local-http-remaining640-v2453/control/cli-custody/c12-v2453-pair-0202-page-00-READ-BEFORE.raw.gz",
+      "bytes": 379,
+      "sha256": "3a163af2031e1705daef0f31aa9e48df7753770eec26cb41cfc6642eba7cd705",
+      "onePhysicalCopy": true
+    },
+    {
+      "source": ".git/aurora-handoff-import-20261006/c12-v2453-pair-0202-page-00-RESULT.json",
+      "destination": "thesis/campaigns/c12-mixed-local-http-remaining640-v2453/control/cli-custody/c12-v2453-pair-0202-page-00-RESULT.json",
+      "bytes": 49748,
+      "sha256": "27313d4f1d2ec35310ee197e3947fe82851f02380f17489f725c3b8caedf4f10",
+      "onePhysicalCopy": true
+    },
+    {
+      "source": ".git/aurora-handoff-import-20261006/c12-v2453-pair-0202-page-00-SEND-INTENT.json",
+      "destination": "thesis/campaigns/c12-mixed-local-http-remaining640-v2453/control/cli-custody/c12-v2453-pair-0202-page-00-SEND-INTENT.json",
+      "bytes": 93,
+      "sha256": "8410e6a54a3a8741137f211c63561ec39acfaac059174b600c2a547f60861bf7",
+      "onePhysicalCopy": true
+    },
+    {
+      "source": ".git/aurora-handoff-import-20261006/c12-v2453-pair-0202-page-00-SEND.json",
+      "destination": "thesis/campaigns/c12-mixed-local-http-remaining640-v2453/control/cli-custody/c12-v2453-pair-0202-page-00-SEND.json",
+      "bytes": 463,
+      "sha256": "8e0c29ea96a383aeaa77c9f765f4b01d87398975a4f1ddf796feed49b992f8bf",
+      "onePhysicalCopy": true
+    },
+    {
+      "source": ".git/aurora-handoff-import-20261006/c12-v2453-pair-0202-page-00-SEND.raw.gz",
+      "destination": "thesis/campaigns/c12-mixed-local-http-remaining640-v2453/control/cli-custody/c12-v2453-pair-0202-page-00-SEND.raw.gz",
+      "bytes": 526,
+      "sha256": "c6448933d3157cc2bfb531580b88b402219807347adc2e974b8cf693c14c1e17",
+      "onePhysicalCopy": true
+    },
+    {
+      "source": ".git/aurora-handoff-import-20261006/c12-v2453-pair-0202-page-00-SHOW-FENCE.json",
+      "destination": "thesis/campaigns/c12-mixed-local-http-remaining640-v2453/control/cli-custody/c12-v2453-pair-0202-page-00-SHOW-FENCE.json",
+      "bytes": 471,
+      "sha256": "089db3e253282a42f263ff1cfbdf204270334a0484b23f130e4fb5559ff68a68",
+      "onePhysicalCopy": true
+    },
+    {
+      "source": ".git/aurora-handoff-import-20261006/c12-v2453-pair-0202-page-00-SHOW-FENCE.raw.gz",
+      "destination": "thesis/campaigns/c12-mixed-local-http-remaining640-v2453/control/cli-custody/c12-v2453-pair-0202-page-00-SHOW-FENCE.raw.gz",
+      "bytes": 885,
+      "sha256": "badf00dc3f1e1266f6664a73d07eb18d1175ec48e267fcfb83f0fe4f06182374",
+      "onePhysicalCopy": true
+    },
+    {
+      "source": ".git/aurora-handoff-import-20261006/c12-v2453-pair-0202-page-00-command.txt",
+      "destination": "thesis/campaigns/c12-mixed-local-http-remaining640-v2453/control/cli-custody/c12-v2453-pair-0202-page-00-command.txt",
+      "bytes": 616,
+      "sha256": "8a615bedcf88087b14fdfc837703edd8912b88bd95e08a4a08ddd49bc60e364e",
+      "onePhysicalCopy": true
+    },
+    {
+      "source": ".git/aurora-handoff-import-20261006/c12-v2453-pair-0202-page-01-READ-0.json",
+      "destination": "thesis/campaigns/c12-mixed-local-http-remaining640-v2453/control/cli-custody/c12-v2453-pair-0202-page-01-READ-0.json",
+      "bytes": 475,
+      "sha256": "bc5fed387e3591e3d4c9329bf25c8149c76be328d43437fec15decdfb5532870",
+      "onePhysicalCopy": true
+    },
+    {
+      "source": ".git/aurora-handoff-import-20261006/c12-v2453-pair-0202-page-01-READ-0.raw.gz",
+      "destination": "thesis/campaigns/c12-mixed-local-http-remaining640-v2453/control/cli-custody/c12-v2453-pair-0202-page-01-READ-0.raw.gz",
+      "bytes": 12861,
+      "sha256": "38c82e94ec7346606b126ff6629266764d9057ee2f49ba94468871595c798c9f",
+      "onePhysicalCopy": true
+    },
+    {
+      "source": ".git/aurora-handoff-import-20261006/c12-v2453-pair-0202-page-01-READ-BEFORE.json",
+      "destination": "thesis/campaigns/c12-mixed-local-http-remaining640-v2453/control/cli-custody/c12-v2453-pair-0202-page-01-READ-BEFORE.json",
+      "bytes": 475,
+      "sha256": "421068156a5556a991085efd4fca067dd2b8420ed69660f1ac4f949c12a10351",
+      "onePhysicalCopy": true
+    },
+    {
+      "source": ".git/aurora-handoff-import-20261006/c12-v2453-pair-0202-page-01-READ-BEFORE.raw.gz",
+      "destination": "thesis/campaigns/c12-mixed-local-http-remaining640-v2453/control/cli-custody/c12-v2453-pair-0202-page-01-READ-BEFORE.raw.gz",
+      "bytes": 382,
+      "sha256": "8b5198b12e4c1c71f074ff0d4bb1c9e16af7aab73abafba62278d4df52426f5c",
+      "onePhysicalCopy": true
+    },
+    {
+      "source": ".git/aurora-handoff-import-20261006/c12-v2453-pair-0202-page-01-RESULT.json",
+      "destination": "thesis/campaigns/c12-mixed-local-http-remaining640-v2453/control/cli-custody/c12-v2453-pair-0202-page-01-RESULT.json",
+      "bytes": 12689,
+      "sha256": "166499ecb748fa6e04552f57f2a4106da00e1104e8ec116f03a19ed070527d6b",
+      "onePhysicalCopy": true
+    },
+    {
+      "source": ".git/aurora-handoff-import-20261006/c12-v2453-pair-0202-page-01-SEND-INTENT.json",
+      "destination": "thesis/campaigns/c12-mixed-local-http-remaining640-v2453/control/cli-custody/c12-v2453-pair-0202-page-01-SEND-INTENT.json",
+      "bytes": 93,
+      "sha256": "8410e6a54a3a8741137f211c63561ec39acfaac059174b600c2a547f60861bf7",
+      "onePhysicalCopy": true
+    },
+    {
+      "source": ".git/aurora-handoff-import-20261006/c12-v2453-pair-0202-page-01-SEND.json",
+      "destination": "thesis/campaigns/c12-mixed-local-http-remaining640-v2453/control/cli-custody/c12-v2453-pair-0202-page-01-SEND.json",
+      "bytes": 463,
+      "sha256": "ab25f75c76707a353974e3eb74448e3d45018b48bc1582014b5ed53194cb7203",
+      "onePhysicalCopy": true
+    },
+    {
+      "source": ".git/aurora-handoff-import-20261006/c12-v2453-pair-0202-page-01-SEND.raw.gz",
+      "destination": "thesis/campaigns/c12-mixed-local-http-remaining640-v2453/control/cli-custody/c12-v2453-pair-0202-page-01-SEND.raw.gz",
+      "bytes": 526,
+      "sha256": "7b66c23c6cddd133c6de6f7fe1f395fda3b256c261fe146c0c8f3920c5cd0b9b",
+      "onePhysicalCopy": true
+    },
+    {
+      "source": ".git/aurora-handoff-import-20261006/c12-v2453-pair-0202-page-01-SHOW-FENCE.json",
+      "destination": "thesis/campaigns/c12-mixed-local-http-remaining640-v2453/control/cli-custody/c12-v2453-pair-0202-page-01-SHOW-FENCE.json",
+      "bytes": 471,
+      "sha256": "700a9ce89552adb9215484fc3ddb5bd302f1f1d8f9a4df5549ba5a37a2081721",
+      "onePhysicalCopy": true
+    },
+    {
+      "source": ".git/aurora-handoff-import-20261006/c12-v2453-pair-0202-page-01-SHOW-FENCE.raw.gz",
+      "destination": "thesis/campaigns/c12-mixed-local-http-remaining640-v2453/control/cli-custody/c12-v2453-pair-0202-page-01-SHOW-FENCE.raw.gz",
+      "bytes": 888,
+      "sha256": "e956918c5d5712e79cace31e0f27f4797ef4f8a695dccf2e526bce607fc582d0",
+      "onePhysicalCopy": true
+    },
+    {
+      "source": ".git/aurora-handoff-import-20261006/c12-v2453-pair-0202-page-01-command.txt",
+      "destination": "thesis/campaigns/c12-mixed-local-http-remaining640-v2453/control/cli-custody/c12-v2453-pair-0202-page-01-command.txt",
+      "bytes": 616,
+      "sha256": "bbe5ae4e217a414506c2b4d9d551b3e23c7ae7728031a7f576b3a85973f48241",
+      "onePhysicalCopy": true
+    },
+    {
+      "source": ".git/aurora-handoff-import-20261006/c12-v2453-pair-0203-page-00-READ-0.json",
+      "destination": "thesis/campaigns/c12-mixed-local-http-remaining640-v2453/control/cli-custody/c12-v2453-pair-0203-page-00-READ-0.json",
+      "bytes": 476,
+      "sha256": "ba34d66cc2a74dc9ff330161dba7fefcfe534e313da152af02e043c293a2468a",
+      "onePhysicalCopy": true
+    },
+    {
+      "source": ".git/aurora-handoff-import-20261006/c12-v2453-pair-0203-page-00-READ-0.raw.gz",
+      "destination": "thesis/campaigns/c12-mixed-local-http-remaining640-v2453/control/cli-custody/c12-v2453-pair-0203-page-00-READ-0.raw.gz",
+      "bytes": 46787,
+      "sha256": "96a16d7d9f8b8ebdbe9f4f7a240b3bd9a2ca4781bce1f8bf7dc713d475b51899",
+      "onePhysicalCopy": true
+    },
+    {
+      "source": ".git/aurora-handoff-import-20261006/c12-v2453-pair-0203-page-00-READ-BEFORE.json",
+      "destination": "thesis/campaigns/c12-mixed-local-http-remaining640-v2453/control/cli-custody/c12-v2453-pair-0203-page-00-READ-BEFORE.json",
+      "bytes": 475,
+      "sha256": "a3936988c28c532ef8be8ecb9d1ac523612be3a68a85a99672ba524fd4fa83e6",
+      "onePhysicalCopy": true
+    },
+    {
+      "source": ".git/aurora-handoff-import-20261006/c12-v2453-pair-0203-page-00-READ-BEFORE.raw.gz",
+      "destination": "thesis/campaigns/c12-mixed-local-http-remaining640-v2453/control/cli-custody/c12-v2453-pair-0203-page-00-READ-BEFORE.raw.gz",
+      "bytes": 377,
+      "sha256": "22e271f4824c3c15ea8b5d50da007cf01eaf5496c7b3fcb6b02e908df0333d59",
+      "onePhysicalCopy": true
+    },
+    {
+      "source": ".git/aurora-handoff-import-20261006/c12-v2453-pair-0203-page-00-RESULT.json",
+      "destination": "thesis/campaigns/c12-mixed-local-http-remaining640-v2453/control/cli-custody/c12-v2453-pair-0203-page-00-RESULT.json",
+      "bytes": 49748,
+      "sha256": "1c535e764e521ffcd8b9c6aa347921ac5d0db7daf12cdc4778d207b4428d0013",
+      "onePhysicalCopy": true
+    },
+    {
+      "source": ".git/aurora-handoff-import-20261006/c12-v2453-pair-0203-page-00-SEND-INTENT.json",
+      "destination": "thesis/campaigns/c12-mixed-local-http-remaining640-v2453/control/cli-custody/c12-v2453-pair-0203-page-00-SEND-INTENT.json",
+      "bytes": 93,
+      "sha256": "8410e6a54a3a8741137f211c63561ec39acfaac059174b600c2a547f60861bf7",
+      "onePhysicalCopy": true
+    },
+    {
+      "source": ".git/aurora-handoff-import-20261006/c12-v2453-pair-0203-page-00-SEND.json",
+      "destination": "thesis/campaigns/c12-mixed-local-http-remaining640-v2453/control/cli-custody/c12-v2453-pair-0203-page-00-SEND.json",
+      "bytes": 463,
+      "sha256": "9fa6ee21378dd35f91b3d1d60fe404a8713cb42f5b48a252b4627918ffcfa8b6",
+      "onePhysicalCopy": true
+    },
+    {
+      "source": ".git/aurora-handoff-import-20261006/c12-v2453-pair-0203-page-00-SEND.raw.gz",
+      "destination": "thesis/campaigns/c12-mixed-local-http-remaining640-v2453/control/cli-custody/c12-v2453-pair-0203-page-00-SEND.raw.gz",
+      "bytes": 525,
+      "sha256": "5304da4e221c1e39d580576fae7f2895c9ddb205a83571be14a2d0e57d96f095",
+      "onePhysicalCopy": true
+    },
+    {
+      "source": ".git/aurora-handoff-import-20261006/c12-v2453-pair-0203-page-00-SHOW-FENCE.json",
+      "destination": "thesis/campaigns/c12-mixed-local-http-remaining640-v2453/control/cli-custody/c12-v2453-pair-0203-page-00-SHOW-FENCE.json",
+      "bytes": 471,
+      "sha256": "0f09beebf3745e4ac31e2da5b6eb138dd7b9c3d149904b6e39133aca65ffc16f",
+      "onePhysicalCopy": true
+    },
+    {
+      "source": ".git/aurora-handoff-import-20261006/c12-v2453-pair-0203-page-00-SHOW-FENCE.raw.gz",
+      "destination": "thesis/campaigns/c12-mixed-local-http-remaining640-v2453/control/cli-custody/c12-v2453-pair-0203-page-00-SHOW-FENCE.raw.gz",
+      "bytes": 884,
+      "sha256": "96159f60d3604e07ecdaa34680afb5155daa2fb7deaae621b18bd2ca16cefd1a",
+      "onePhysicalCopy": true
+    },
+    {
+      "source": ".git/aurora-handoff-import-20261006/c12-v2453-pair-0203-page-00-command.txt",
+      "destination": "thesis/campaigns/c12-mixed-local-http-remaining640-v2453/control/cli-custody/c12-v2453-pair-0203-page-00-command.txt",
+      "bytes": 616,
+      "sha256": "0cf0603b19b93fe672e4c94b38945f4dbd59d23d319f4605de7d3765f3e590ef",
+      "onePhysicalCopy": true
+    },
+    {
+      "source": ".git/aurora-handoff-import-20261006/c12-v2453-pair-0203-page-01-READ-0.json",
+      "destination": "thesis/campaigns/c12-mixed-local-http-remaining640-v2453/control/cli-custody/c12-v2453-pair-0203-page-01-READ-0.json",
+      "bytes": 475,
+      "sha256": "adc89f3b3da183708a82ad8f66e587f55b742979fd3636875fc4fc72e433c3b0",
+      "onePhysicalCopy": true
+    },
+    {
+      "source": ".git/aurora-handoff-import-20261006/c12-v2453-pair-0203-page-01-READ-0.raw.gz",
+      "destination": "thesis/campaigns/c12-mixed-local-http-remaining640-v2453/control/cli-custody/c12-v2453-pair-0203-page-01-READ-0.raw.gz",
+      "bytes": 14285,
+      "sha256": "6d8469dc9eb685772ce505cc899b12a11cf96938af541465b5e225a36b392f52",
+      "onePhysicalCopy": true
+    },
+    {
+      "source": ".git/aurora-handoff-import-20261006/c12-v2453-pair-0203-page-01-READ-BEFORE.json",
+      "destination": "thesis/campaigns/c12-mixed-local-http-remaining640-v2453/control/cli-custody/c12-v2453-pair-0203-page-01-READ-BEFORE.json",
+      "bytes": 475,
+      "sha256": "2d8c5bbf2561551c58adc5cce48d2e21bca23adcd00d7ab0ac605c170c7fbaaa",
+      "onePhysicalCopy": true
+    },
+    {
+      "source": ".git/aurora-handoff-import-20261006/c12-v2453-pair-0203-page-01-READ-BEFORE.raw.gz",
+      "destination": "thesis/campaigns/c12-mixed-local-http-remaining640-v2453/control/cli-custody/c12-v2453-pair-0203-page-01-READ-BEFORE.raw.gz",
+      "bytes": 376,
+      "sha256": "4665dbd73f784df1a92d716e98732ec4e15c7e94fdb40cb9575442dc843d93fd",
+      "onePhysicalCopy": true
+    },
+    {
+      "source": ".git/aurora-handoff-import-20261006/c12-v2453-pair-0203-page-01-RESULT.json",
+      "destination": "thesis/campaigns/c12-mixed-local-http-remaining640-v2453/control/cli-custody/c12-v2453-pair-0203-page-01-RESULT.json",
+      "bytes": 14166,
+      "sha256": "fe48c9cb0bcba0c1b9cb09072d3733ed254a35db5dc837e56e2fb78288ed12e2",
+      "onePhysicalCopy": true
+    },
+    {
+      "source": ".git/aurora-handoff-import-20261006/c12-v2453-pair-0203-page-01-SEND-INTENT.json",
+      "destination": "thesis/campaigns/c12-mixed-local-http-remaining640-v2453/control/cli-custody/c12-v2453-pair-0203-page-01-SEND-INTENT.json",
+      "bytes": 93,
+      "sha256": "8410e6a54a3a8741137f211c63561ec39acfaac059174b600c2a547f60861bf7",
+      "onePhysicalCopy": true
+    },
+    {
+      "source": ".git/aurora-handoff-import-20261006/c12-v2453-pair-0203-page-01-SEND.json",
+      "destination": "thesis/campaigns/c12-mixed-local-http-remaining640-v2453/control/cli-custody/c12-v2453-pair-0203-page-01-SEND.json",
+      "bytes": 463,
+      "sha256": "80c84826b4fe9776dbaed65bb0bbedcb6f1a582d894e3285cf3a46510fff1084",
+      "onePhysicalCopy": true
+    },
+    {
+      "source": ".git/aurora-handoff-import-20261006/c12-v2453-pair-0203-page-01-SEND.raw.gz",
+      "destination": "thesis/campaigns/c12-mixed-local-http-remaining640-v2453/control/cli-custody/c12-v2453-pair-0203-page-01-SEND.raw.gz",
+      "bytes": 525,
+      "sha256": "4cd607c0902963a2d4eb348d340da69913cd76a99979869bc6f733392ee45c74",
+      "onePhysicalCopy": true
+    },
+    {
+      "source": ".git/aurora-handoff-import-20261006/c12-v2453-pair-0203-page-01-SHOW-FENCE.json",
+      "destination": "thesis/campaigns/c12-mixed-local-http-remaining640-v2453/control/cli-custody/c12-v2453-pair-0203-page-01-SHOW-FENCE.json",
+      "bytes": 471,
+      "sha256": "812cd5c3d504f23c23a1a5e022e12e3dc671f683a1a449e4d749632f1c2f071c",
+      "onePhysicalCopy": true
+    },
+    {
+      "source": ".git/aurora-handoff-import-20261006/c12-v2453-pair-0203-page-01-SHOW-FENCE.raw.gz",
+      "destination": "thesis/campaigns/c12-mixed-local-http-remaining640-v2453/control/cli-custody/c12-v2453-pair-0203-page-01-SHOW-FENCE.raw.gz",
+      "bytes": 886,
+      "sha256": "b0c52a1d42a6a822dfffa574bc353e4f658e5c85265f4a99b3507cdcc67e43fa",
+      "onePhysicalCopy": true
+    },
+    {
+      "source": ".git/aurora-handoff-import-20261006/c12-v2453-pair-0203-page-01-command.txt",
+      "destination": "thesis/campaigns/c12-mixed-local-http-remaining640-v2453/control/cli-custody/c12-v2453-pair-0203-page-01-command.txt",
+      "bytes": 616,
+      "sha256": "9e5ddb177fed3b5895632f10c0faef4e1e898060fcdf6fa7e084f2ac1335e8d4",
+      "onePhysicalCopy": true
+    },
+    {
+      "source": ".git/aurora-handoff-import-20261006/c12-v2453-pair-0204-page-00-READ-0.json",
+      "destination": "thesis/campaigns/c12-mixed-local-http-remaining640-v2453/control/cli-custody/c12-v2453-pair-0204-page-00-READ-0.json",
+      "bytes": 476,
+      "sha256": "f848c916e647f581d22f09d00cbc17ac1d38a204a7bc0fcec299b78617801994",
+      "onePhysicalCopy": true
+    },
+    {
+      "source": ".git/aurora-handoff-import-20261006/c12-v2453-pair-0204-page-00-READ-0.raw.gz",
+      "destination": "thesis/campaigns/c12-mixed-local-http-remaining640-v2453/control/cli-custody/c12-v2453-pair-0204-page-00-READ-0.raw.gz",
+      "bytes": 46898,
+      "sha256": "6d17f4e6e64510fc4202d0120f39477f1c148a542a6adc8d3ff7239bee30df07",
+      "onePhysicalCopy": true
+    },
+    {
+      "source": ".git/aurora-handoff-import-20261006/c12-v2453-pair-0204-page-00-READ-BEFORE.json",
+      "destination": "thesis/campaigns/c12-mixed-local-http-remaining640-v2453/control/cli-custody/c12-v2453-pair-0204-page-00-READ-BEFORE.json",
+      "bytes": 475,
+      "sha256": "df90dd12f2f84aba30d2aeee72355daf66d283d59c7f8f2466cfa63e82ec762a",
+      "onePhysicalCopy": true
+    },
+    {
+      "source": ".git/aurora-handoff-import-20261006/c12-v2453-pair-0204-page-00-READ-BEFORE.raw.gz",
+      "destination": "thesis/campaigns/c12-mixed-local-http-remaining640-v2453/control/cli-custody/c12-v2453-pair-0204-page-00-READ-BEFORE.raw.gz",
+      "bytes": 378,
+      "sha256": "49d249e04490c79adaecc3980618d35ef178318ecb37c736eed0cce757d57ef6",
+      "onePhysicalCopy": true
+    },
+    {
+      "source": ".git/aurora-handoff-import-20261006/c12-v2453-pair-0204-page-00-RESULT.json",
+      "destination": "thesis/campaigns/c12-mixed-local-http-remaining640-v2453/control/cli-custody/c12-v2453-pair-0204-page-00-RESULT.json",
+      "bytes": 49747,
+      "sha256": "5058f81967724efe0039227154eda8d510332ed0407c77ca7c6f9e57810a0eac",
+      "onePhysicalCopy": true
+    },
+    {
+      "source": ".git/aurora-handoff-import-20261006/c12-v2453-pair-0204-page-00-SEND-INTENT.json",
+      "destination": "thesis/campaigns/c12-mixed-local-http-remaining640-v2453/control/cli-custody/c12-v2453-pair-0204-page-00-SEND-INTENT.json",
+      "bytes": 93,
+      "sha256": "8410e6a54a3a8741137f211c63561ec39acfaac059174b600c2a547f60861bf7",
+      "onePhysicalCopy": true
+    },
+    {
+      "source": ".git/aurora-handoff-import-20261006/c12-v2453-pair-0204-page-00-SEND.json",
+      "destination": "thesis/campaigns/c12-mixed-local-http-remaining640-v2453/control/cli-custody/c12-v2453-pair-0204-page-00-SEND.json",
+      "bytes": 463,
+      "sha256": "9c64988589ea42881201b679a6c1e0791975c8d15f91d9a26df51cc35a482239",
+      "onePhysicalCopy": true
+    },
+    {
+      "source": ".git/aurora-handoff-import-20261006/c12-v2453-pair-0204-page-00-SEND.raw.gz",
+      "destination": "thesis/campaigns/c12-mixed-local-http-remaining640-v2453/control/cli-custody/c12-v2453-pair-0204-page-00-SEND.raw.gz",
+      "bytes": 524,
+      "sha256": "fa8260ba69cde8ce22fe7bdc38f48264f741afd0fc2096b4ecd1c04ec5fd1dba",
+      "onePhysicalCopy": true
+    },
+    {
+      "source": ".git/aurora-handoff-import-20261006/c12-v2453-pair-0204-page-00-SHOW-FENCE.json",
+      "destination": "thesis/campaigns/c12-mixed-local-http-remaining640-v2453/control/cli-custody/c12-v2453-pair-0204-page-00-SHOW-FENCE.json",
+      "bytes": 471,
+      "sha256": "4442f792597bc27bb59b94a2499608e44bb4db9f07678a98ed717fa232e06868",
+      "onePhysicalCopy": true
+    },
+    {
+      "source": ".git/aurora-handoff-import-20261006/c12-v2453-pair-0204-page-00-SHOW-FENCE.raw.gz",
+      "destination": "thesis/campaigns/c12-mixed-local-http-remaining640-v2453/control/cli-custody/c12-v2453-pair-0204-page-00-SHOW-FENCE.raw.gz",
+      "bytes": 881,
+      "sha256": "4aec7c05f5dc210141281d238f67b93964580358aefbbebf130812681d8e204e",
+      "onePhysicalCopy": true
+    },
+    {
+      "source": ".git/aurora-handoff-import-20261006/c12-v2453-pair-0204-page-00-command.txt",
+      "destination": "thesis/campaigns/c12-mixed-local-http-remaining640-v2453/control/cli-custody/c12-v2453-pair-0204-page-00-command.txt",
+      "bytes": 616,
+      "sha256": "d6cdb61594c6f7044df2b102c615b8671d4aed345b5f10bb5a2a58f5d1aaa5ea",
+      "onePhysicalCopy": true
+    },
+    {
+      "source": ".git/aurora-handoff-import-20261006/c12-v2453-pair-0204-page-01-READ-0.json",
+      "destination": "thesis/campaigns/c12-mixed-local-http-remaining640-v2453/control/cli-custody/c12-v2453-pair-0204-page-01-READ-0.json",
+      "bytes": 475,
+      "sha256": "99511cb5b84087761c8f770dacdede9d6fe17cc6b00f890c3fe9b23c8e70b199",
+      "onePhysicalCopy": true
+    },
+    {
+      "source": ".git/aurora-handoff-import-20261006/c12-v2453-pair-0204-page-01-READ-0.raw.gz",
+      "destination": "thesis/campaigns/c12-mixed-local-http-remaining640-v2453/control/cli-custody/c12-v2453-pair-0204-page-01-READ-0.raw.gz",
+      "bytes": 12378,
+      "sha256": "e0647d4267e6cfca1c8ed770097cfd86256e8385cd97c93476987fe3428ce2ff",
+      "onePhysicalCopy": true
+    },
+    {
+      "source": ".git/aurora-handoff-import-20261006/c12-v2453-pair-0204-page-01-READ-BEFORE.json",
+      "destination": "thesis/campaigns/c12-mixed-local-http-remaining640-v2453/control/cli-custody/c12-v2453-pair-0204-page-01-READ-BEFORE.json",
+      "bytes": 475,
+      "sha256": "87a371abe53bc2a682af12c53c4d79dbe7424acaff740002a500b34b75948e04",
+      "onePhysicalCopy": true
+    },
+    {
+      "source": ".git/aurora-handoff-import-20261006/c12-v2453-pair-0204-page-01-READ-BEFORE.raw.gz",
+      "destination": "thesis/campaigns/c12-mixed-local-http-remaining640-v2453/control/cli-custody/c12-v2453-pair-0204-page-01-READ-BEFORE.raw.gz",
+      "bytes": 379,
+      "sha256": "ebfbfa52dba2a98fdd0d8936e2e84253a39c237dc391ab47506c80debbf88184",
+      "onePhysicalCopy": true
+    },
+    {
+      "source": ".git/aurora-handoff-import-20261006/c12-v2453-pair-0204-page-01-RESULT.json",
+      "destination": "thesis/campaigns/c12-mixed-local-http-remaining640-v2453/control/cli-custody/c12-v2453-pair-0204-page-01-RESULT.json",
+      "bytes": 12189,
+      "sha256": "d50cd53b5d24ca87b6d8bd4761375a3919a00cdb2cfaf0e39fbca3c513c95f2e",
+      "onePhysicalCopy": true
+    },
+    {
+      "source": ".git/aurora-handoff-import-20261006/c12-v2453-pair-0204-page-01-SEND-INTENT.json",
+      "destination": "thesis/campaigns/c12-mixed-local-http-remaining640-v2453/control/cli-custody/c12-v2453-pair-0204-page-01-SEND-INTENT.json",
+      "bytes": 93,
+      "sha256": "8410e6a54a3a8741137f211c63561ec39acfaac059174b600c2a547f60861bf7",
+      "onePhysicalCopy": true
+    },
+    {
+      "source": ".git/aurora-handoff-import-20261006/c12-v2453-pair-0204-page-01-SEND.json",
+      "destination": "thesis/campaigns/c12-mixed-local-http-remaining640-v2453/control/cli-custody/c12-v2453-pair-0204-page-01-SEND.json",
+      "bytes": 463,
+      "sha256": "e6cd71ef5cb1f8073003c6de9b925f48b2d86ba234054e9d94c91e0912c444b7",
+      "onePhysicalCopy": true
+    },
+    {
+      "source": ".git/aurora-handoff-import-20261006/c12-v2453-pair-0204-page-01-SEND.raw.gz",
+      "destination": "thesis/campaigns/c12-mixed-local-http-remaining640-v2453/control/cli-custody/c12-v2453-pair-0204-page-01-SEND.raw.gz",
+      "bytes": 526,
+      "sha256": "6b7acd86a7d9cfe2cee12dd8ec1ab8a41ed3108a543193877470901bd80ee000",
+      "onePhysicalCopy": true
+    },
+    {
+      "source": ".git/aurora-handoff-import-20261006/c12-v2453-pair-0204-page-01-SHOW-FENCE.json",
+      "destination": "thesis/campaigns/c12-mixed-local-http-remaining640-v2453/control/cli-custody/c12-v2453-pair-0204-page-01-SHOW-FENCE.json",
+      "bytes": 471,
+      "sha256": "ee15432b62ff801fafd68e528a5e3463dd7810653e37e90a8d5346e43a49a490",
+      "onePhysicalCopy": true
+    },
+    {
+      "source": ".git/aurora-handoff-import-20261006/c12-v2453-pair-0204-page-01-SHOW-FENCE.raw.gz",
+      "destination": "thesis/campaigns/c12-mixed-local-http-remaining640-v2453/control/cli-custody/c12-v2453-pair-0204-page-01-SHOW-FENCE.raw.gz",
+      "bytes": 889,
+      "sha256": "5ed7cc434d3af29f58d5400e8455251ece8218d094d1d19b492d78cd170188bd",
+      "onePhysicalCopy": true
+    },
+    {
+      "source": ".git/aurora-handoff-import-20261006/c12-v2453-pair-0204-page-01-command.txt",
+      "destination": "thesis/campaigns/c12-mixed-local-http-remaining640-v2453/control/cli-custody/c12-v2453-pair-0204-page-01-command.txt",
+      "bytes": 616,
+      "sha256": "74869b758dd48bcabd869d9467685cb724e1c2589e270b5661a49ac520f6c074",
+      "onePhysicalCopy": true
+    },
+    {
+      "source": ".git/aurora-handoff-import-20261006/c12-v2453-pair-0205-page-00-READ-0.json",
+      "destination": "thesis/campaigns/c12-mixed-local-http-remaining640-v2453/control/cli-custody/c12-v2453-pair-0205-page-00-READ-0.json",
+      "bytes": 476,
+      "sha256": "fc413ee557fc826b3be3d53218f21b4fd05bec64f9c2204b0dc145c1878c2f8c",
+      "onePhysicalCopy": true
+    },
+    {
+      "source": ".git/aurora-handoff-import-20261006/c12-v2453-pair-0205-page-00-READ-0.raw.gz",
+      "destination": "thesis/campaigns/c12-mixed-local-http-remaining640-v2453/control/cli-custody/c12-v2453-pair-0205-page-00-READ-0.raw.gz",
+      "bytes": 46954,
+      "sha256": "5a0179fb6f389a20311ec2e20fd9210675c98ef1b6bd58d1509c1abaa4e66fb0",
+      "onePhysicalCopy": true
+    },
+    {
+      "source": ".git/aurora-handoff-import-20261006/c12-v2453-pair-0205-page-00-READ-BEFORE.json",
+      "destination": "thesis/campaigns/c12-mixed-local-http-remaining640-v2453/control/cli-custody/c12-v2453-pair-0205-page-00-READ-BEFORE.json",
+      "bytes": 475,
+      "sha256": "39042ba37055b26463d2a8e9fa468d28a45c34135a9e150434b93d5be1eb8ab5",
+      "onePhysicalCopy": true
+    },
+    {
+      "source": ".git/aurora-handoff-import-20261006/c12-v2453-pair-0205-page-00-READ-BEFORE.raw.gz",
+      "destination": "thesis/campaigns/c12-mixed-local-http-remaining640-v2453/control/cli-custody/c12-v2453-pair-0205-page-00-READ-BEFORE.raw.gz",
+      "bytes": 379,
+      "sha256": "c826f9d969a7f112f08cbae9c91398afc0e7b67f5695160a8445ca259893167a",
+      "onePhysicalCopy": true
+    },
+    {
+      "source": ".git/aurora-handoff-import-20261006/c12-v2453-pair-0205-page-00-RESULT.json",
+      "destination": "thesis/campaigns/c12-mixed-local-http-remaining640-v2453/control/cli-custody/c12-v2453-pair-0205-page-00-RESULT.json",
+      "bytes": 49748,
+      "sha256": "ad7485a036c9988274b092fb39f91fd5745b354c860c16fdf3a8df4aac233578",
+      "onePhysicalCopy": true
+    },
+    {
+      "source": ".git/aurora-handoff-import-20261006/c12-v2453-pair-0205-page-00-SEND-INTENT.json",
+      "destination": "thesis/campaigns/c12-mixed-local-http-remaining640-v2453/control/cli-custody/c12-v2453-pair-0205-page-00-SEND-INTENT.json",
+      "bytes": 93,
+      "sha256": "8410e6a54a3a8741137f211c63561ec39acfaac059174b600c2a547f60861bf7",
+      "onePhysicalCopy": true
+    },
+    {
+      "source": ".git/aurora-handoff-import-20261006/c12-v2453-pair-0205-page-00-SEND.json",
+      "destination": "thesis/campaigns/c12-mixed-local-http-remaining640-v2453/control/cli-custody/c12-v2453-pair-0205-page-00-SEND.json",
+      "bytes": 463,
+      "sha256": "96e9499ffb2dec02f543a8c7918e256a8e88c745209b116f286f923037d550f8",
+      "onePhysicalCopy": true
+    },
+    {
+      "source": ".git/aurora-handoff-import-20261006/c12-v2453-pair-0205-page-00-SEND.raw.gz",
+      "destination": "thesis/campaigns/c12-mixed-local-http-remaining640-v2453/control/cli-custody/c12-v2453-pair-0205-page-00-SEND.raw.gz",
+      "bytes": 526,
+      "sha256": "29ad4cfc28befddb5b164daaab6a00f8e21df20319d674c1679d007561b4466f",
+      "onePhysicalCopy": true
+    },
+    {
+      "source": ".git/aurora-handoff-import-20261006/c12-v2453-pair-0205-page-00-SHOW-FENCE.json",
+      "destination": "thesis/campaigns/c12-mixed-local-http-remaining640-v2453/control/cli-custody/c12-v2453-pair-0205-page-00-SHOW-FENCE.json",
+      "bytes": 471,
+      "sha256": "edab0f472cd301bd164aa4c15007e7ef7b1d1214700ffc6b59c88c6a180ed1e6",
+      "onePhysicalCopy": true
+    },
+    {
+      "source": ".git/aurora-handoff-import-20261006/c12-v2453-pair-0205-page-00-SHOW-FENCE.raw.gz",
+      "destination": "thesis/campaigns/c12-mixed-local-http-remaining640-v2453/control/cli-custody/c12-v2453-pair-0205-page-00-SHOW-FENCE.raw.gz",
+      "bytes": 887,
+      "sha256": "07f7d746a415dc5017a3a31b45fce6946087330241f54f745a24ef55a3194f4d",
+      "onePhysicalCopy": true
+    },
+    {
+      "source": ".git/aurora-handoff-import-20261006/c12-v2453-pair-0205-page-00-command.txt",
+      "destination": "thesis/campaigns/c12-mixed-local-http-remaining640-v2453/control/cli-custody/c12-v2453-pair-0205-page-00-command.txt",
+      "bytes": 616,
+      "sha256": "0b9dd606288fc2794f464eefc6384611db940ab0855c5871e94f78453258b5dd",
+      "onePhysicalCopy": true
+    },
+    {
+      "source": ".git/aurora-handoff-import-20261006/c12-v2453-pair-0205-page-01-READ-0.json",
+      "destination": "thesis/campaigns/c12-mixed-local-http-remaining640-v2453/control/cli-custody/c12-v2453-pair-0205-page-01-READ-0.json",
+      "bytes": 475,
+      "sha256": "be58d73f201604bafd91da7e6fddce3e2d4aa53b1144a554eaca2e0a5d677532",
+      "onePhysicalCopy": true
+    },
+    {
+      "source": ".git/aurora-handoff-import-20261006/c12-v2453-pair-0205-page-01-READ-0.raw.gz",
+      "destination": "thesis/campaigns/c12-mixed-local-http-remaining640-v2453/control/cli-custody/c12-v2453-pair-0205-page-01-READ-0.raw.gz",
+      "bytes": 14480,
+      "sha256": "e2ac2f7eecc5c46575f63aff637958abe5b81f59c33a3579c16709b37801ed8e",
+      "onePhysicalCopy": true
+    },
+    {
+      "source": ".git/aurora-handoff-import-20261006/c12-v2453-pair-0205-page-01-READ-BEFORE.json",
+      "destination": "thesis/campaigns/c12-mixed-local-http-remaining640-v2453/control/cli-custody/c12-v2453-pair-0205-page-01-READ-BEFORE.json",
+      "bytes": 475,
+      "sha256": "ab391454cb0ec860fb472dc88bbb138d6bdb9905ee57a5e51a6cacab0ebd7f6b",
+      "onePhysicalCopy": true
+    },
+    {
+      "source": ".git/aurora-handoff-import-20261006/c12-v2453-pair-0205-page-01-READ-BEFORE.raw.gz",
+      "destination": "thesis/campaigns/c12-mixed-local-http-remaining640-v2453/control/cli-custody/c12-v2453-pair-0205-page-01-READ-BEFORE.raw.gz",
+      "bytes": 378,
+      "sha256": "f291886d520f75ad2b087a4e6c82a659448d4361705ac8577a62a658b39a765c",
+      "onePhysicalCopy": true
+    },
+    {
+      "source": ".git/aurora-handoff-import-20261006/c12-v2453-pair-0205-page-01-RESULT.json",
+      "destination": "thesis/campaigns/c12-mixed-local-http-remaining640-v2453/control/cli-custody/c12-v2453-pair-0205-page-01-RESULT.json",
+      "bytes": 14306,
+      "sha256": "a9bab52cee63a32f096fa7de07f0d6435004ceb6f163af1c820e0b74cbad8c86",
+      "onePhysicalCopy": true
+    },
+    {
+      "source": ".git/aurora-handoff-import-20261006/c12-v2453-pair-0205-page-01-SEND-INTENT.json",
+      "destination": "thesis/campaigns/c12-mixed-local-http-remaining640-v2453/control/cli-custody/c12-v2453-pair-0205-page-01-SEND-INTENT.json",
+      "bytes": 93,
+      "sha256": "8410e6a54a3a8741137f211c63561ec39acfaac059174b600c2a547f60861bf7",
+      "onePhysicalCopy": true
+    },
+    {
+      "source": ".git/aurora-handoff-import-20261006/c12-v2453-pair-0205-page-01-SEND.json",
+      "destination": "thesis/campaigns/c12-mixed-local-http-remaining640-v2453/control/cli-custody/c12-v2453-pair-0205-page-01-SEND.json",
+      "bytes": 463,
+      "sha256": "325889405d0bdd1a3441af5124242cbfd1b03fa3f99272efaf2c391e09e7ae0a",
+      "onePhysicalCopy": true
+    },
+    {
+      "source": ".git/aurora-handoff-import-20261006/c12-v2453-pair-0205-page-01-SEND.raw.gz",
+      "destination": "thesis/campaigns/c12-mixed-local-http-remaining640-v2453/control/cli-custody/c12-v2453-pair-0205-page-01-SEND.raw.gz",
+      "bytes": 523,
+      "sha256": "d75df4d3b7b165278c0b5697c422f3937ddd91be7b6eff714916532df0a596e6",
+      "onePhysicalCopy": true
+    },
+    {
+      "source": ".git/aurora-handoff-import-20261006/c12-v2453-pair-0205-page-01-SHOW-FENCE.json",
+      "destination": "thesis/campaigns/c12-mixed-local-http-remaining640-v2453/control/cli-custody/c12-v2453-pair-0205-page-01-SHOW-FENCE.json",
+      "bytes": 471,
+      "sha256": "be51e0ae5c11ff717981acbda9510bfbeb4e79019a9bea40f32ca4715f8f17c9",
+      "onePhysicalCopy": true
+    },
+    {
+      "source": ".git/aurora-handoff-import-20261006/c12-v2453-pair-0205-page-01-SHOW-FENCE.raw.gz",
+      "destination": "thesis/campaigns/c12-mixed-local-http-remaining640-v2453/control/cli-custody/c12-v2453-pair-0205-page-01-SHOW-FENCE.raw.gz",
+      "bytes": 886,
+      "sha256": "8ef77533df18111682a17fc6b438e5918a4c88010fe09e5dfd3a5567aee10b6c",
+      "onePhysicalCopy": true
+    },
+    {
+      "source": ".git/aurora-handoff-import-20261006/c12-v2453-pair-0205-page-01-command.txt",
+      "destination": "thesis/campaigns/c12-mixed-local-http-remaining640-v2453/control/cli-custody/c12-v2453-pair-0205-page-01-command.txt",
+      "bytes": 616,
+      "sha256": "5348955e5dbb9e9d547709f5c2c2d0b32b8cf96b36bf5c31264ce02827fc41df",
+      "onePhysicalCopy": true
+    },
+    {
+      "source": ".git/aurora-handoff-import-20261006/c12-v2453-pair-0206-page-00-READ-0.json",
+      "destination": "thesis/campaigns/c12-mixed-local-http-remaining640-v2453/control/cli-custody/c12-v2453-pair-0206-page-00-READ-0.json",
+      "bytes": 476,
+      "sha256": "78985b8f4980a4ab2e7a23fb7fd283746abe73b719f2e39afefc1be4a35a8b1e",
+      "onePhysicalCopy": true
+    },
+    {
+      "source": ".git/aurora-handoff-import-20261006/c12-v2453-pair-0206-page-00-READ-0.raw.gz",
+      "destination": "thesis/campaigns/c12-mixed-local-http-remaining640-v2453/control/cli-custody/c12-v2453-pair-0206-page-00-READ-0.raw.gz",
+      "bytes": 46936,
+      "sha256": "9392969bf3f147cf02d956325d0222920f63865437f21ee51821a1435d512834",
+      "onePhysicalCopy": true
+    },
+    {
+      "source": ".git/aurora-handoff-import-20261006/c12-v2453-pair-0206-page-00-READ-BEFORE.json",
+      "destination": "thesis/campaigns/c12-mixed-local-http-remaining640-v2453/control/cli-custody/c12-v2453-pair-0206-page-00-READ-BEFORE.json",
+      "bytes": 475,
+      "sha256": "fe6d44f0d81f2a9c0ae6be77b6835da001fef8208aa18f74d56bb525531e86f8",
+      "onePhysicalCopy": true
+    },
+    {
+      "source": ".git/aurora-handoff-import-20261006/c12-v2453-pair-0206-page-00-READ-BEFORE.raw.gz",
+      "destination": "thesis/campaigns/c12-mixed-local-http-remaining640-v2453/control/cli-custody/c12-v2453-pair-0206-page-00-READ-BEFORE.raw.gz",
+      "bytes": 383,
+      "sha256": "81a7098d7aaa3510dafe7ae8a85d9ad855bbeab2a239890d7d68aa52bf2a0838",
+      "onePhysicalCopy": true
+    },
+    {
+      "source": ".git/aurora-handoff-import-20261006/c12-v2453-pair-0206-page-00-RESULT.json",
+      "destination": "thesis/campaigns/c12-mixed-local-http-remaining640-v2453/control/cli-custody/c12-v2453-pair-0206-page-00-RESULT.json",
+      "bytes": 49748,
+      "sha256": "1d321a63f50e0474aa590fa2af5b97616f77fbae7499c2da16450993d4cbc098",
+      "onePhysicalCopy": true
+    },
+    {
+      "source": ".git/aurora-handoff-import-20261006/c12-v2453-pair-0206-page-00-SEND-INTENT.json",
+      "destination": "thesis/campaigns/c12-mixed-local-http-remaining640-v2453/control/cli-custody/c12-v2453-pair-0206-page-00-SEND-INTENT.json",
+      "bytes": 93,
+      "sha256": "8410e6a54a3a8741137f211c63561ec39acfaac059174b600c2a547f60861bf7",
+      "onePhysicalCopy": true
+    },
+    {
+      "source": ".git/aurora-handoff-import-20261006/c12-v2453-pair-0206-page-00-SEND.json",
+      "destination": "thesis/campaigns/c12-mixed-local-http-remaining640-v2453/control/cli-custody/c12-v2453-pair-0206-page-00-SEND.json",
+      "bytes": 463,
+      "sha256": "b40575cc367c05da4697bbce002fa1acc4d852b7dc445742c0ec75a3dfb020b4",
+      "onePhysicalCopy": true
+    },
+    {
+      "source": ".git/aurora-handoff-import-20261006/c12-v2453-pair-0206-page-00-SEND.raw.gz",
+      "destination": "thesis/campaigns/c12-mixed-local-http-remaining640-v2453/control/cli-custody/c12-v2453-pair-0206-page-00-SEND.raw.gz",
+      "bytes": 525,
+      "sha256": "df8c7056ddab216ba8fb2bad1a2c15cadb6a59a5140db792b376eacd3b7fd15f",
+      "onePhysicalCopy": true
+    },
+    {
+      "source": ".git/aurora-handoff-import-20261006/c12-v2453-pair-0206-page-00-SHOW-FENCE.json",
+      "destination": "thesis/campaigns/c12-mixed-local-http-remaining640-v2453/control/cli-custody/c12-v2453-pair-0206-page-00-SHOW-FENCE.json",
+      "bytes": 471,
+      "sha256": "55ef99db2ee7b9ecfcd228ceb78e18fed774f3ca2db9d6d5068fa78b5a874a13",
+      "onePhysicalCopy": true
+    },
+    {
+      "source": ".git/aurora-handoff-import-20261006/c12-v2453-pair-0206-page-00-SHOW-FENCE.raw.gz",
+      "destination": "thesis/campaigns/c12-mixed-local-http-remaining640-v2453/control/cli-custody/c12-v2453-pair-0206-page-00-SHOW-FENCE.raw.gz",
+      "bytes": 881,
+      "sha256": "30ab90d44da515d69f245cd866b6ae6cccb52fababd3ffd4ab53d4570a1ea567",
+      "onePhysicalCopy": true
+    },
+    {
+      "source": ".git/aurora-handoff-import-20261006/c12-v2453-pair-0206-page-00-command.txt",
+      "destination": "thesis/campaigns/c12-mixed-local-http-remaining640-v2453/control/cli-custody/c12-v2453-pair-0206-page-00-command.txt",
+      "bytes": 616,
+      "sha256": "ecb42a41ccad4df98f51b2f70f79f4ba6c33ba1661685f6527b55953c5c52d65",
+      "onePhysicalCopy": true
+    },
+    {
+      "source": ".git/aurora-handoff-import-20261006/c12-v2453-pair-0206-page-01-READ-0.json",
+      "destination": "thesis/campaigns/c12-mixed-local-http-remaining640-v2453/control/cli-custody/c12-v2453-pair-0206-page-01-READ-0.json",
+      "bytes": 475,
+      "sha256": "a72e42daf6ad1331740ecd98ddef998939c8e273863533b52f78fc48e2a0cdb6",
+      "onePhysicalCopy": true
+    },
+    {
+      "source": ".git/aurora-handoff-import-20261006/c12-v2453-pair-0206-page-01-READ-0.raw.gz",
+      "destination": "thesis/campaigns/c12-mixed-local-http-remaining640-v2453/control/cli-custody/c12-v2453-pair-0206-page-01-READ-0.raw.gz",
+      "bytes": 13020,
+      "sha256": "7197b9c588f1112af5aa45db3c39573d12685abc280847fbb349e4afedec145e",
+      "onePhysicalCopy": true
+    },
+    {
+      "source": ".git/aurora-handoff-import-20261006/c12-v2453-pair-0206-page-01-READ-BEFORE.json",
+      "destination": "thesis/campaigns/c12-mixed-local-http-remaining640-v2453/control/cli-custody/c12-v2453-pair-0206-page-01-READ-BEFORE.json",
+      "bytes": 475,
+      "sha256": "7835dfba7beb8a77474bd4b551c92f1d6efe8ae9aaca84085091662d44dd6ad8",
+      "onePhysicalCopy": true
+    },
+    {
+      "source": ".git/aurora-handoff-import-20261006/c12-v2453-pair-0206-page-01-READ-BEFORE.raw.gz",
+      "destination": "thesis/campaigns/c12-mixed-local-http-remaining640-v2453/control/cli-custody/c12-v2453-pair-0206-page-01-READ-BEFORE.raw.gz",
+      "bytes": 383,
+      "sha256": "576126c5358fd3d15e75690ee6acde57159e1c7093b06fa17cad532265be6fa1",
+      "onePhysicalCopy": true
+    },
+    {
+      "source": ".git/aurora-handoff-import-20261006/c12-v2453-pair-0206-page-01-RESULT.json",
+      "destination": "thesis/campaigns/c12-mixed-local-http-remaining640-v2453/control/cli-custody/c12-v2453-pair-0206-page-01-RESULT.json",
+      "bytes": 12845,
+      "sha256": "1359d80f5edf47b026c7b5259328ff44d9b5a6666bde166e07f7b49c126d87e2",
+      "onePhysicalCopy": true
+    },
+    {
+      "source": ".git/aurora-handoff-import-20261006/c12-v2453-pair-0206-page-01-SEND-INTENT.json",
+      "destination": "thesis/campaigns/c12-mixed-local-http-remaining640-v2453/control/cli-custody/c12-v2453-pair-0206-page-01-SEND-INTENT.json",
+      "bytes": 93,
+      "sha256": "8410e6a54a3a8741137f211c63561ec39acfaac059174b600c2a547f60861bf7",
+      "onePhysicalCopy": true
+    },
+    {
+      "source": ".git/aurora-handoff-import-20261006/c12-v2453-pair-0206-page-01-SEND.json",
+      "destination": "thesis/campaigns/c12-mixed-local-http-remaining640-v2453/control/cli-custody/c12-v2453-pair-0206-page-01-SEND.json",
+      "bytes": 463,
+      "sha256": "cf25496bb6af4354469be15557a678631ff79d2fb60c24c91f2add79c507b326",
+      "onePhysicalCopy": true
+    },
+    {
+      "source": ".git/aurora-handoff-import-20261006/c12-v2453-pair-0206-page-01-SEND.raw.gz",
+      "destination": "thesis/campaigns/c12-mixed-local-http-remaining640-v2453/control/cli-custody/c12-v2453-pair-0206-page-01-SEND.raw.gz",
+      "bytes": 523,
+      "sha256": "bc53df9da1a1b1f0105f64406c632389dacbe8e54abef4132af99036fcedb553",
+      "onePhysicalCopy": true
+    },
+    {
+      "source": ".git/aurora-handoff-import-20261006/c12-v2453-pair-0206-page-01-SHOW-FENCE.json",
+      "destination": "thesis/campaigns/c12-mixed-local-http-remaining640-v2453/control/cli-custody/c12-v2453-pair-0206-page-01-SHOW-FENCE.json",
+      "bytes": 471,
+      "sha256": "7c04f2eff34d57cb83e6929765990c2f7b884e8b34153961a5f3a19a6c5013da",
+      "onePhysicalCopy": true
+    },
+    {
+      "source": ".git/aurora-handoff-import-20261006/c12-v2453-pair-0206-page-01-SHOW-FENCE.raw.gz",
+      "destination": "thesis/campaigns/c12-mixed-local-http-remaining640-v2453/control/cli-custody/c12-v2453-pair-0206-page-01-SHOW-FENCE.raw.gz",
+      "bytes": 885,
+      "sha256": "5317eda5d7c612741c650005f505443b9fd1ac247dccca2ede3f08aa259a16f8",
+      "onePhysicalCopy": true
+    },
+    {
+      "source": ".git/aurora-handoff-import-20261006/c12-v2453-pair-0206-page-01-command.txt",
+      "destination": "thesis/campaigns/c12-mixed-local-http-remaining640-v2453/control/cli-custody/c12-v2453-pair-0206-page-01-command.txt",
+      "bytes": 616,
+      "sha256": "f7f00671c8c0d11618e20adf535a337bf8a2e2a14e887c9699fb90aacaf3f522",
+      "onePhysicalCopy": true
+    },
+    {
+      "source": ".git/aurora-handoff-import-20261006/c12-v2453-pair-0207-page-00-READ-0.json",
+      "destination": "thesis/campaigns/c12-mixed-local-http-remaining640-v2453/control/cli-custody/c12-v2453-pair-0207-page-00-READ-0.json",
+      "bytes": 476,
+      "sha256": "1a7e7ce50667131f274db614875a1ea782418227a9151f48bb71a216657b650f",
+      "onePhysicalCopy": true
+    },
+    {
+      "source": ".git/aurora-handoff-import-20261006/c12-v2453-pair-0207-page-00-READ-0.raw.gz",
+      "destination": "thesis/campaigns/c12-mixed-local-http-remaining640-v2453/control/cli-custody/c12-v2453-pair-0207-page-00-READ-0.raw.gz",
+      "bytes": 46977,
+      "sha256": "4776168be5a29d2b5fc00616c917a4bbebbd1cbd238407019aaad7b9cf1402c5",
+      "onePhysicalCopy": true
+    },
+    {
+      "source": ".git/aurora-handoff-import-20261006/c12-v2453-pair-0207-page-00-READ-BEFORE.json",
+      "destination": "thesis/campaigns/c12-mixed-local-http-remaining640-v2453/control/cli-custody/c12-v2453-pair-0207-page-00-READ-BEFORE.json",
+      "bytes": 475,
+      "sha256": "2c839c50c8ada276b0433669abfd5aeeff9d8e721e51ef744209d4605cd4df43",
+      "onePhysicalCopy": true
+    },
+    {
+      "source": ".git/aurora-handoff-import-20261006/c12-v2453-pair-0207-page-00-READ-BEFORE.raw.gz",
+      "destination": "thesis/campaigns/c12-mixed-local-http-remaining640-v2453/control/cli-custody/c12-v2453-pair-0207-page-00-READ-BEFORE.raw.gz",
+      "bytes": 380,
+      "sha256": "dfc028ff17ca2714b0cd9e21b7723649340abe619a4f7c521f9ab60106de7943",
+      "onePhysicalCopy": true
+    },
+    {
+      "source": ".git/aurora-handoff-import-20261006/c12-v2453-pair-0207-page-00-RESULT.json",
+      "destination": "thesis/campaigns/c12-mixed-local-http-remaining640-v2453/control/cli-custody/c12-v2453-pair-0207-page-00-RESULT.json",
+      "bytes": 49745,
+      "sha256": "f324dcccbf264e10b206efd7c60760a08697af337c9278c6120d458eeeb15713",
+      "onePhysicalCopy": true
+    },
+    {
+      "source": ".git/aurora-handoff-import-20261006/c12-v2453-pair-0207-page-00-SEND-INTENT.json",
+      "destination": "thesis/campaigns/c12-mixed-local-http-remaining640-v2453/control/cli-custody/c12-v2453-pair-0207-page-00-SEND-INTENT.json",
+      "bytes": 93,
+      "sha256": "8410e6a54a3a8741137f211c63561ec39acfaac059174b600c2a547f60861bf7",
+      "onePhysicalCopy": true
+    },
+    {
+      "source": ".git/aurora-handoff-import-20261006/c12-v2453-pair-0207-page-00-SEND.json",
+      "destination": "thesis/campaigns/c12-mixed-local-http-remaining640-v2453/control/cli-custody/c12-v2453-pair-0207-page-00-SEND.json",
+      "bytes": 463,
+      "sha256": "3ad8593a8c803b9c6e7f6179a840e4e37e682165225b9e6a0eefe222533db4de",
+      "onePhysicalCopy": true
+    },
+    {
+      "source": ".git/aurora-handoff-import-20261006/c12-v2453-pair-0207-page-00-SEND.raw.gz",
+      "destination": "thesis/campaigns/c12-mixed-local-http-remaining640-v2453/control/cli-custody/c12-v2453-pair-0207-page-00-SEND.raw.gz",
+      "bytes": 525,
+      "sha256": "eb1d6784298bc53a77def2bf9de81b9788a57d41fcd104b0a6a25d1b079b3c70",
+      "onePhysicalCopy": true
+    },
+    {
+      "source": ".git/aurora-handoff-import-20261006/c12-v2453-pair-0207-page-00-SHOW-FENCE.json",
+      "destination": "thesis/campaigns/c12-mixed-local-http-remaining640-v2453/control/cli-custody/c12-v2453-pair-0207-page-00-SHOW-FENCE.json",
+      "bytes": 471,
+      "sha256": "9527c3b9ab9a41d9f84c70864a19bd0b658089ff1c32c47de963f69be37a913c",
+      "onePhysicalCopy": true
+    },
+    {
+      "source": ".git/aurora-handoff-import-20261006/c12-v2453-pair-0207-page-00-SHOW-FENCE.raw.gz",
+      "destination": "thesis/campaigns/c12-mixed-local-http-remaining640-v2453/control/cli-custody/c12-v2453-pair-0207-page-00-SHOW-FENCE.raw.gz",
+      "bytes": 886,
+      "sha256": "ed8601d4e89e7b143c4786ff1bfb704e8db351f804f84864b1d05510eaa2b901",
+      "onePhysicalCopy": true
+    },
+    {
+      "source": ".git/aurora-handoff-import-20261006/c12-v2453-pair-0207-page-00-command.txt",
+      "destination": "thesis/campaigns/c12-mixed-local-http-remaining640-v2453/control/cli-custody/c12-v2453-pair-0207-page-00-command.txt",
+      "bytes": 616,
+      "sha256": "92da48d0b80105f9437323cb4e236a50ea95957a235a144b6975fa5a13501f8d",
+      "onePhysicalCopy": true
+    },
+    {
+      "source": ".git/aurora-handoff-import-20261006/c12-v2453-pair-0207-page-01-READ-0.json",
+      "destination": "thesis/campaigns/c12-mixed-local-http-remaining640-v2453/control/cli-custody/c12-v2453-pair-0207-page-01-READ-0.json",
+      "bytes": 475,
+      "sha256": "8b7f2c7451a4ec738f32722a16e3f2038ccc8bf17ad45c5dd0a3b48737a1b592",
+      "onePhysicalCopy": true
+    },
+    {
+      "source": ".git/aurora-handoff-import-20261006/c12-v2453-pair-0207-page-01-READ-0.raw.gz",
+      "destination": "thesis/campaigns/c12-mixed-local-http-remaining640-v2453/control/cli-custody/c12-v2453-pair-0207-page-01-READ-0.raw.gz",
+      "bytes": 14355,
+      "sha256": "282b94dcbbd080b9b6bd9b58b11d49a1b10c6a227ce6f8dd68ebcb792aaf9598",
+      "onePhysicalCopy": true
+    },
+    {
+      "source": ".git/aurora-handoff-import-20261006/c12-v2453-pair-0207-page-01-READ-BEFORE.json",
+      "destination": "thesis/campaigns/c12-mixed-local-http-remaining640-v2453/control/cli-custody/c12-v2453-pair-0207-page-01-READ-BEFORE.json",
+      "bytes": 475,
+      "sha256": "018bb8ac5935ea399f2205214ee70db7534570e6aebf6ebeb1a961f5e1960b0c",
+      "onePhysicalCopy": true
+    },
+    {
+      "source": ".git/aurora-handoff-import-20261006/c12-v2453-pair-0207-page-01-READ-BEFORE.raw.gz",
+      "destination": "thesis/campaigns/c12-mixed-local-http-remaining640-v2453/control/cli-custody/c12-v2453-pair-0207-page-01-READ-BEFORE.raw.gz",
+      "bytes": 378,
+      "sha256": "55509c6c6da11796d39ca0ad8a613619a7d1b39a6ffdd99da1e85afe7424d750",
+      "onePhysicalCopy": true
+    },
+    {
+      "source": ".git/aurora-handoff-import-20261006/c12-v2453-pair-0207-page-01-RESULT.json",
+      "destination": "thesis/campaigns/c12-mixed-local-http-remaining640-v2453/control/cli-custody/c12-v2453-pair-0207-page-01-RESULT.json",
+      "bytes": 14258,
+      "sha256": "e022152e7233c95cfa7a5898a625417549691423507b45a09c4cdb0e97118bb8",
+      "onePhysicalCopy": true
+    },
+    {
+      "source": ".git/aurora-handoff-import-20261006/c12-v2453-pair-0207-page-01-SEND-INTENT.json",
+      "destination": "thesis/campaigns/c12-mixed-local-http-remaining640-v2453/control/cli-custody/c12-v2453-pair-0207-page-01-SEND-INTENT.json",
+      "bytes": 93,
+      "sha256": "8410e6a54a3a8741137f211c63561ec39acfaac059174b600c2a547f60861bf7",
+      "onePhysicalCopy": true
+    },
+    {
+      "source": ".git/aurora-handoff-import-20261006/c12-v2453-pair-0207-page-01-SEND.json",
+      "destination": "thesis/campaigns/c12-mixed-local-http-remaining640-v2453/control/cli-custody/c12-v2453-pair-0207-page-01-SEND.json",
+      "bytes": 463,
+      "sha256": "11a66a69574bd5e4ac8e624778807e85d586c9a261c5f309005bc17bf467833d",
+      "onePhysicalCopy": true
+    },
+    {
+      "source": ".git/aurora-handoff-import-20261006/c12-v2453-pair-0207-page-01-SEND.raw.gz",
+      "destination": "thesis/campaigns/c12-mixed-local-http-remaining640-v2453/control/cli-custody/c12-v2453-pair-0207-page-01-SEND.raw.gz",
+      "bytes": 526,
+      "sha256": "c4b5642a6697e18e80fbf6684787476c758ea2e5dc70a48e96aa876c9ecccd09",
+      "onePhysicalCopy": true
+    },
+    {
+      "source": ".git/aurora-handoff-import-20261006/c12-v2453-pair-0207-page-01-SHOW-FENCE.json",
+      "destination": "thesis/campaigns/c12-mixed-local-http-remaining640-v2453/control/cli-custody/c12-v2453-pair-0207-page-01-SHOW-FENCE.json",
+      "bytes": 471,
+      "sha256": "5130011eaaccde36d20531b1d39ea4694b5cd87b1ffa046b5d2bce7cd9dc30b7",
+      "onePhysicalCopy": true
+    },
+    {
+      "source": ".git/aurora-handoff-import-20261006/c12-v2453-pair-0207-page-01-SHOW-FENCE.raw.gz",
+      "destination": "thesis/campaigns/c12-mixed-local-http-remaining640-v2453/control/cli-custody/c12-v2453-pair-0207-page-01-SHOW-FENCE.raw.gz",
+      "bytes": 889,
+      "sha256": "abc76d5200c5e88997ffd7ac54698f5268656db02de20ce036bbb40b17bdc5a9",
+      "onePhysicalCopy": true
+    },
+    {
+      "source": ".git/aurora-handoff-import-20261006/c12-v2453-pair-0207-page-01-command.txt",
+      "destination": "thesis/campaigns/c12-mixed-local-http-remaining640-v2453/control/cli-custody/c12-v2453-pair-0207-page-01-command.txt",
+      "bytes": 616,
+      "sha256": "6ea0e9eba093fe15218465a35039c014368ba3161a6304c80c8e1a73c3dffea2",
+      "onePhysicalCopy": true
+    }
+  ]
+}

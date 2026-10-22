@@ -1,0 +1,26 @@
+{
+  "at": "2026-10-18T00:21:38.781052+00:00",
+  "scope": "One retained2minute exact-owned relay-unit window around V1197 terminalfailure; no SUTcalls",
+  "command": [
+    "journalctl",
+    "--user",
+    "-u",
+    "orca-network-aurora-tts.service",
+    "--since",
+    "2026-10-17 22:53:30 UTC",
+    "--until",
+    "2026-10-17 22:55:30 UTC",
+    "--output=json",
+    "--no-pager",
+    "-n",
+    "50"
+  ],
+  "exitCode": 0,
+  "stdoutBytes": 0,
+  "stderrSummary": "",
+  "sameForwardPidStartTicks": true,
+  "unitScope": "user",
+  "entries": [],
+  "causalConclusion": "UNKNOWN; temporal log evidence is not causal proof and absent entries do not prove no transport failure",
+  "newRequests": 0
+}

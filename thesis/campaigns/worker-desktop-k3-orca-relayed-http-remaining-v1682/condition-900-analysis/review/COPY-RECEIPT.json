@@ -1,0 +1,12 @@
+{
+  "at": "2026-10-20T03:41:16.859942+00:00",
+  "verdict": "PASS with limits; no further measurement or review indicated",
+  "files": [
+    {
+      "source": ".omx/evidence/orca-monitor-20261010/K3-900-SINGLE-BOUNDED-SAVED-DATA-REVIEW-20261020T0303.md",
+      "destination": "thesis/campaigns/worker-desktop-k3-orca-relayed-http-remaining-v1682/condition-900-analysis/review/K3-900-SINGLE-BOUNDED-SAVED-DATA-REVIEW-20261020T0303.md",
+      "bytes": 7266,
+      "sha256": "ef19cfa73206b8f2f78ed6f6221a98cbbe5e7f3514f2bb36da0d84b8be970205"
+    }
+  ]
+}

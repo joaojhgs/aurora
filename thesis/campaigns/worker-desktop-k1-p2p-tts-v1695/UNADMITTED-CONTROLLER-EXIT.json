@@ -1,0 +1,9 @@
+{
+  "status": "CONTROLLER_PRE_RUNTIME_EXIT",
+  "controllerPid": 2305417,
+  "reason": "existingProfileEnvAbsentButCredentialsAlreadyInExistingTaskConfigAndDB",
+  "modelsCalled": 0,
+  "warmups": 0,
+  "measured": 0,
+  "successor": "V1698 allows absent optional env without creating/copying credentials; normal loader behavior retained"
+}

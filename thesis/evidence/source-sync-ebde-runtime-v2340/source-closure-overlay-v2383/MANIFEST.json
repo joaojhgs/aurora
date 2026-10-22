@@ -1,0 +1,54 @@
+{
+  "schema": "aurora.source-closure-overlay.v1",
+  "at": "2026-10-22T03:44:54.661543+00:00",
+  "baseCommit": "ebde3a8acf6315f920d03593845f17a1fc65a733",
+  "baseSnapshotFiles": 1959,
+  "baseSnapshotUnchanged": true,
+  "overlayId": "ebde-desktop-file-audio-e2e-closure-v2383",
+  "reason": "Committed tauri-app.tsx imports pre-existing untracked module absent from immutable Git archive; existing worker actual APK TS2307",
+  "files": [
+    {
+      "path": "apps/aurora-tauri/src/desktop-file-audio-e2e.ts",
+      "bytes": 11119,
+      "sha256": "48b6fc597996536ead4439bca2024a3b3a4f5c6d1ad4c64f8a5d68f84a05c522",
+      "gitMode": "100644",
+      "sourceState": "pre-existing untracked worker worktree file; not a file present in ebde commit",
+      "physicalCopy": "thesis/evidence/source-sync-ebde-runtime-v2340/source-closure-overlay-v2383/source/apps/aurora-tauri/src/desktop-file-audio-e2e.ts"
+    }
+  ],
+  "importer": {
+    "path": "apps/aurora-tauri/src/tauri-app.tsx",
+    "sha256": "1b7637e5359e4c02cf1df52f968b799f50947ad0c9607d1fdf84e3252824db65",
+    "equalsBaseCommit": true
+  },
+  "imports": [
+    {
+      "name": "@aurora/client",
+      "typeOnly": true,
+      "preExistingWorkspacePackage": true
+    },
+    {
+      "name": "./aurora-client",
+      "typeOnly": true,
+      "presentAtBaseCommit": true
+    }
+  ],
+  "applicationSourceIdentity": "ebde3a8acf6315f920d03593845f17a1fc65a733 + source-closure-overlay-v2383; not a new Git commit",
+  "constraints": {
+    "noChangesToActiveWorkerDesktopCampaign": true,
+    "noFrozenInputSettingsOrManifestChanges": true,
+    "noModelInferenceBuildTestOrDeviceAccessByRoot": true,
+    "noGitIndexRefCommitPushMutation": true,
+    "oldMeasurementsNotRelabeled": true,
+    "workerMustCreateNewIsolatedDeploymentAndRecordEffectiveOverlayHash": true
+  },
+  "transferAdmission": {
+    "fileBytes": 11119,
+    "maximumBodyBytes": 32768,
+    "rateLimitBytesPerSecond": 32768,
+    "deadlineSeconds": 30,
+    "singleCopyOnlyToExistingApprovedNotebookControl": true,
+    "noWorkerDesktopSutServiceRouteUse": true,
+    "existingWorkerOwnsOperationAndMustPreserveAcceptedRequestReceipt": true
+  }
+}

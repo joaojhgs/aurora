@@ -1,0 +1,23 @@
+{
+  "at": "2026-10-16T15:26:13.420039+00:00",
+  "goal": "G004-per-282-ui-maintainability-plan-feat",
+  "issueId": "9e299a93-149e-46a9-bcf3-84d7c62b380d",
+  "identifier": "PER-282",
+  "workspaceId": "8ba5e156-5ff4-4990-b201-7f5d435fdcef",
+  "projectId": "5345dd7c-2f0b-4a4b-b636-c1db93067f0a",
+  "status": "PREPARED_UNSUBMITTED_TASK_READ_HTTP502",
+  "currentTaskStatus": "UNKNOWN; no mutation attempted",
+  "comment": "PREPARED-COMMENT.md",
+  "statusChange": null,
+  "prStateChanges": false,
+  "ciRunsStarted": false,
+  "newTests": false,
+  "continuation": [
+    "Wait for an actual changed service/capability event; no unchanged HTTP502 polling loop",
+    "Read this exact existing Personal/Aurora task and its current comment context before mutation",
+    "Retain done/accepted states; do not downgrade or start an agent; use --no-start for any authorized status update",
+    "Post the reviewed linkage note via --content-file only after current state/context is known; no speculative parent or status",
+    "Do not complete native goalG004 until its external-closeout requirement is actually satisfied"
+  ],
+  "sourceAcceptance": "Retain original accepted implementation/review/CI evidence and original tested-head attribution; no new source or CI panel"
+}

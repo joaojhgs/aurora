@@ -1,0 +1,216 @@
+{
+  "startedAt": "2026-10-22T05:43:34.244976+00:00",
+  "status": "complete_verified_provider_prefix_archive",
+  "export": {
+    "at": "2026-10-22T05:41:14.628953+00:00",
+    "status": "original_provider_eof_delta_archive",
+    "actors": [
+      {
+        "pid": 1820862,
+        "state": "absent",
+        "sameStart": false
+      },
+      {
+        "pid": 1820863,
+        "state": "absent",
+        "sameStart": false
+      }
+    ],
+    "providerRetired": true,
+    "reservationPreserved": true,
+    "rootPhysicalReservationHeldForNextCondition": true,
+    "oldFixedPrefixSealSha256": "ac73dafcfc45a051797e394b981feacbb09f7932422aedda7197ae75fa1e5720",
+    "oldFixedPrefixArchiveSha256": "3a22bd10761d9fa54755d319b4ef86fb8c7319da906b4716fb2bb1f67f7e19dc",
+    "oldPrefixPlusDeltaReconstructsEof": true,
+    "rawPayloadBytes": 11283579,
+    "originalFilesPreserved": true,
+    "K1MeasuredAttempted": 900,
+    "K1Correct": 899,
+    "K1Failed": 1,
+    "K1Remaining": 0,
+    "signalsSent": 1,
+    "newInference": 0,
+    "newOrcaWorkers": 0,
+    "oldEffectiveDeadlineUnchanged": "2026-10-22T08:31:16.563152+00:00",
+    "host": "personal.skyron-server",
+    "archive": "/home/developer/projects/aurora/thesis/campaigns/worker-desktop-k1-http-provider-v2296/terminal-v2400/provider-eof-delta-v2400.tar.gz",
+    "bytes": 670362,
+    "sha256": "252799b425f284ecd66c79718405bf3bc51d28f0b4e616906fda5052f87cc6d2",
+    "sealSha256": "5e325b362a7942ed81ac4164201e782acd9830897a3997d7dbeff7335b9d1781",
+    "files": 3,
+    "elapsedSeconds": 30.57273507397622,
+    "controllerTerminal": {
+      "at": "2026-10-21T21:41:17.217077+00:00",
+      "controllerPid": 1820862,
+      "elapsedSeconds": 28795.961592709005,
+      "exitCode": 0,
+      "finishedAt": "2026-10-22T05:41:13.178631+00:00",
+      "host": "personal.skyron-server",
+      "manifestSha256": "0f4a4bf0e7638b63b8d046331e1e7393e4f108f406802f0e4f0d543feca5ffa2",
+      "measurementStartedByController": false,
+      "receiverAbsent": true,
+      "receiverPid": 1820863,
+      "receiverStartTicks": 37439818
+    }
+  },
+  "copiedBytes": 670362,
+  "operation": null,
+  "pages": [
+    {
+      "offset": 0,
+      "bytes": 49152,
+      "sha256": "78c41e9ffb225ad08550bba3bab0a9a894ecfecb7ac93db1884b54c278981b1b",
+      "nextCursor": "177028",
+      "receipt": "k1-eof-delta-v2401-page-0000-RESULT.json"
+    },
+    {
+      "offset": 49152,
+      "bytes": 49152,
+      "sha256": "49a8421c6ee583e99adec1c6b41b317895c8e9de1e61d75bea2a8858debbc749",
+      "nextCursor": "177139",
+      "receipt": "k1-eof-delta-v2401-page-0001-RESULT.json"
+    },
+    {
+      "offset": 98304,
+      "bytes": 49152,
+      "sha256": "78c02d54cabddb01108c268a72d7f3a38c64623e68aaa65fa8f7a81115de5e47",
+      "nextCursor": "177250",
+      "receipt": "k1-eof-delta-v2401-page-0002-RESULT.json"
+    },
+    {
+      "offset": 147456,
+      "bytes": 49152,
+      "sha256": "bc43bdae729c1d314c1bbbeba5911fb2a7a1421c00942f37cf14ae0dc832d807",
+      "nextCursor": "177361",
+      "receipt": "k1-eof-delta-v2401-page-0003-RESULT.json"
+    },
+    {
+      "offset": 196608,
+      "bytes": 49152,
+      "sha256": "b110ac731aa29f67c80e78df38a20987f1fda15195ade03ea1340ac6b29d7d1b",
+      "nextCursor": "177472",
+      "receipt": "k1-eof-delta-v2401-page-0004-RESULT.json"
+    },
+    {
+      "offset": 245760,
+      "bytes": 49152,
+      "sha256": "6f464d4a7b24b9264f09f5d3b59720dd60daf89d8db8fa2b5455002c03bc22b4",
+      "nextCursor": "177583",
+      "receipt": "k1-eof-delta-v2401-page-0005-RESULT.json"
+    },
+    {
+      "offset": 294912,
+      "bytes": 49152,
+      "sha256": "b0ae38775f2741489964f0a73331e72ed3a0b39255fc02c022e1015c9c7f916a",
+      "nextCursor": "177694",
+      "receipt": "k1-eof-delta-v2401-page-0006-RESULT.json"
+    },
+    {
+      "offset": 344064,
+      "bytes": 49152,
+      "sha256": "c0b248ff030a65d5e534c764b4547b0261f575a1c11745b2ca0685deb193c9cb",
+      "nextCursor": "177805",
+      "receipt": "k1-eof-delta-v2401-page-0007-RESULT.json"
+    },
+    {
+      "offset": 393216,
+      "bytes": 49152,
+      "sha256": "005b7db844f3831e81ab8dc1d2a4674bda3394b1b304aaad80f8d624bd65a1ea",
+      "nextCursor": "177916",
+      "receipt": "k1-eof-delta-v2401-page-0008-RESULT.json"
+    },
+    {
+      "offset": 442368,
+      "bytes": 49152,
+      "sha256": "ac10325e74d8da43e14650851e9a52837c101342a13dc3240dafb4bb7dd01290",
+      "nextCursor": "178027",
+      "receipt": "k1-eof-delta-v2401-page-0009-RESULT.json"
+    },
+    {
+      "offset": 491520,
+      "bytes": 49152,
+      "sha256": "871f9a8dd1852bbd9ced7ac904e0e1b4a09364af124da0af5e1131d26fc7b275",
+      "nextCursor": "178138",
+      "receipt": "k1-eof-delta-v2401-page-0010-RESULT.json"
+    },
+    {
+      "offset": 540672,
+      "bytes": 49152,
+      "sha256": "801bf84670abeab853a1a568a871c8500c0d834af3968f9adf51e5f9a99a6d96",
+      "nextCursor": "178249",
+      "receipt": "k1-eof-delta-v2401-page-0011-RESULT.json"
+    },
+    {
+      "offset": 589824,
+      "bytes": 49152,
+      "sha256": "6d5fe782a4daf81f4244e6d133e4261b912c12abd5de2b74894ca07a4596ac31",
+      "nextCursor": "178360",
+      "receipt": "k1-eof-delta-v2401-page-0012-RESULT.json"
+    },
+    {
+      "offset": 638976,
+      "bytes": 31386,
+      "sha256": "d71f067dc4b710ea4269d441a9146128f14139926234d06f24496e3b1231ed9a",
+      "nextCursor": "178432",
+      "receipt": "k1-eof-delta-v2401-page-0013-RESULT.json"
+    }
+  ],
+  "diskBefore": {
+    "total": 109128826880,
+    "used": 106312679424,
+    "free": 2799370240
+  },
+  "outerSeconds": 600,
+  "priorTransportAttempt": "Existing qualified48KiB read-only pages; original provider remains reserved; immutable fixed-prefix archive is sealed. No inference replay or duplicate old prefix payload; only EOF delta.",
+  "sutCalls": 0,
+  "newAgents": 0,
+  "newK1ProviderArchiveBytes": 670362,
+  "baseline": null,
+  "possibleConfound": "Post-requester-terminal retrieval of existing checksummed archive; no active measurements or new SUT traffic; original provider is retired; old fixedprefix plus retained delta reconstructs EOF.",
+  "updatedAt": "2026-10-22T05:44:39.619671+00:00",
+  "archiveVerified": {
+    "path": "thesis/campaigns/worker-desktop-k1-orca-relayed-http-remaining450-v2296/provider-eof-delta-v2400/provider-eof-delta-v2400.tar.gz",
+    "bytes": 670362,
+    "sha256": "252799b425f284ecd66c79718405bf3bc51d28f0b4e616906fda5052f87cc6d2"
+  },
+  "files": [
+    {
+      "member": "snapshots/STATUS.json",
+      "bytes": 161095,
+      "sha256": "554682a09ddc25a961d74e252d7962534547a203eb22faf2fccfa6de26acef4e",
+      "custody": "verified member of physical retained archive"
+    },
+    {
+      "member": "delta/resources.jsonl.tail",
+      "bytes": 11122047,
+      "sha256": "a306a4e7e404bc2ad705358b30a63597b8fc9a8ae0260dff12e7cc7ad5e64572",
+      "custody": "verified member of physical retained archive"
+    },
+    {
+      "member": "snapshots/terminal.json",
+      "bytes": 437,
+      "sha256": "b2f9c391fc8e5113b4918fafd0499085a2294e7300eb81e5bbddd89bdb1f8b79",
+      "custody": "verified member of physical retained archive"
+    },
+    {
+      "member": "PROVIDER-PREFIX-SEAL.json",
+      "bytes": 2047,
+      "sha256": "5e325b362a7942ed81ac4164201e782acd9830897a3997d7dbeff7335b9d1781",
+      "custody": "verified member of physical retained archive"
+    }
+  ],
+  "finishedAt": "2026-10-22T05:44:39.619621+00:00",
+  "rawFiles": 3,
+  "rawPayloadBytes": 11283579,
+  "originalRawPreserved": true,
+  "duplicateUncompressedBytes": 0,
+  "actorsAbsent": true,
+  "providerRetired": true,
+  "reservationPreserved": true,
+  "K1Measured": 900,
+  "diskAfter": {
+    "total": 109128826880,
+    "used": 106318901248,
+    "free": 2793148416
+  }
+}

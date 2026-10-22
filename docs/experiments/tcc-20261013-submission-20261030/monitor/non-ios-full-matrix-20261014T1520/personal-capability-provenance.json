@@ -1,0 +1,16 @@
+{
+  "observed_at": "2026-10-14T15:46:45.836432+00:00",
+  "source_path": "/home/developer/.hermes/profiles/coordinator/plugin-data/tcc/personal-desktop-capability-msg_75f13acf7813.json",
+  "source_sha256": "e99e9eb59c3e6176a89b29a14134760c1008917f16370c3ef07754c6fed07b3b",
+  "copy": "docs/experiments/tcc-20261013-submission-20261030/monitor/non-ios-full-matrix-20261014T1520/personal-desktop-capability.json",
+  "source_read": "full",
+  "root_latest_scope_ack": "msg_c0eb0af09b33",
+  "root_sampling_cpu_gpu_ack": "msg_e438c175ba4b",
+  "gpu_state": "receiver_authority_blocked_gpu_unverified",
+  "actual_gpu_backend": null,
+  "actual_gpu_launch_receipt": null,
+  "manager_authority_refused": true,
+  "retry_or_credentials_changed": false,
+  "personal_existing_terminal": "term_8109a3ac-570e-4c3f-a7ac-e68e36764b2b",
+  "personal_incarnation": "468a0928-9867-4612-b5f2-e7631784582d"
+}

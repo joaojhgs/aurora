@@ -1,0 +1,6 @@
+{
+  "pid": 2306339,
+  "startTicks": 124447476,
+  "reason": "Model/controller already retired before any request; copy checkpoint atomically sealed; retire own no-traffic utility only",
+  "nativeOrOrcaWorkerStopped": false
+}

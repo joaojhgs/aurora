@@ -1,0 +1,235 @@
+{
+  "at": "2026-10-21T00:42:36.007594+00:00",
+  "observationStartedAt": "2026-10-21T00:42:35.991086+00:00",
+  "observationEndedAt": "2026-10-21T00:42:36.007594+00:00",
+  "source": "fresh primary case files, custody CURRENT and /proc; no previous receipt reused; combined condition counts add immutable sealed parent276, no raw-row rewrite",
+  "primaryCasesDirectory": "/home/developer/projects/aurora/.git/aurora-handoff-import-20261006/distributed-k3-mesh-cell-v2043/campaign/attempts",
+  "primaryProgressPath": "/home/developer/projects/aurora/.git/aurora-handoff-import-20261006/distributed-k3-mesh-cell-v2043/campaign/progress.json",
+  "custodyCurrentPath": "/home/developer/projects/aurora/thesis/campaigns/worker-desktop-k3-p2p-full-audio-v2043/CURRENT.json",
+  "status": "running",
+  "actors": {
+    "3207537": {
+      "state": "S",
+      "startTicks": 131930077,
+      "sameStart": true
+    },
+    "3207665": {
+      "state": "S",
+      "startTicks": 131930844,
+      "sameStart": true
+    },
+    "3207538": {
+      "state": "S",
+      "startTicks": 131930081,
+      "sameStart": true
+    }
+  },
+  "custody": {
+    "sequence": 42,
+    "cases": 198,
+    "audio": 180,
+    "files": 653,
+    "audioReferences": 180
+  },
+  "freeBytes": 4077469696,
+  "measuredNonCorrect": [
+    {
+      "phase_index": 7,
+      "status": "failed",
+      "failure": {
+        "code": "preaccept_capability_changed",
+        "stage": "stt"
+      },
+      "timeout": false,
+      "partial_quality_incorrect": false
+    },
+    {
+      "phase_index": 12,
+      "status": "failed",
+      "failure": {
+        "code": "preaccept_capability_changed",
+        "stage": "tts"
+      },
+      "timeout": false,
+      "partial_quality_incorrect": false
+    },
+    {
+      "phase_index": 33,
+      "status": "failed",
+      "failure": {
+        "code": "preaccept_capability_changed",
+        "stage": "stt"
+      },
+      "timeout": false,
+      "partial_quality_incorrect": false
+    },
+    {
+      "phase_index": 43,
+      "status": "failed",
+      "failure": {
+        "code": "preaccept_capability_changed",
+        "stage": "stt"
+      },
+      "timeout": false,
+      "partial_quality_incorrect": false
+    },
+    {
+      "phase_index": 53,
+      "status": "failed",
+      "failure": {
+        "code": "preaccept_capability_changed",
+        "stage": "stt"
+      },
+      "timeout": false,
+      "partial_quality_incorrect": false
+    },
+    {
+      "phase_index": 81,
+      "status": "failed",
+      "failure": {
+        "code": "preaccept_capability_changed",
+        "stage": "stt"
+      },
+      "timeout": false,
+      "partial_quality_incorrect": false
+    },
+    {
+      "phase_index": 85,
+      "status": "failed",
+      "failure": {
+        "code": "preaccept_capability_changed",
+        "stage": "stt"
+      },
+      "timeout": false,
+      "partial_quality_incorrect": false
+    },
+    {
+      "phase_index": 92,
+      "status": "failed",
+      "failure": {
+        "code": "preaccept_capability_changed",
+        "stage": "stt"
+      },
+      "timeout": false,
+      "partial_quality_incorrect": false
+    },
+    {
+      "phase_index": 96,
+      "status": "failed",
+      "failure": {
+        "code": "preaccept_capability_changed",
+        "stage": "stt"
+      },
+      "timeout": false,
+      "partial_quality_incorrect": false
+    },
+    {
+      "phase_index": 111,
+      "status": "failed",
+      "failure": {
+        "code": "preaccept_capability_changed",
+        "stage": "stt"
+      },
+      "timeout": false,
+      "partial_quality_incorrect": false
+    },
+    {
+      "phase_index": 115,
+      "status": "failed",
+      "failure": {
+        "code": "preaccept_capability_changed",
+        "stage": "stt"
+      },
+      "timeout": false,
+      "partial_quality_incorrect": false
+    },
+    {
+      "phase_index": 127,
+      "status": "failed",
+      "failure": {
+        "code": "preaccept_capability_changed",
+        "stage": "stt"
+      },
+      "timeout": false,
+      "partial_quality_incorrect": false
+    },
+    {
+      "phase_index": 131,
+      "status": "failed",
+      "failure": {
+        "code": "preaccept_capability_changed",
+        "stage": "stt"
+      },
+      "timeout": false,
+      "partial_quality_incorrect": false
+    },
+    {
+      "phase_index": 154,
+      "status": "failed",
+      "failure": {
+        "code": "preaccept_capability_changed",
+        "stage": "stt"
+      },
+      "timeout": false,
+      "partial_quality_incorrect": false
+    },
+    {
+      "phase_index": 158,
+      "status": "failed",
+      "failure": {
+        "code": "preaccept_capability_changed",
+        "stage": "stt"
+      },
+      "timeout": false,
+      "partial_quality_incorrect": false
+    }
+  ],
+  "priorCheckpointMeasuredCount": 182,
+  "newMeasuredAttempts": 2,
+  "classification": "verified_wait",
+  "nextRoutineCheckUtc": "2026-10-21T00:47:36.007594+00:00",
+  "nativeGoalThreadId": "01a112a5-d6bb-74e2-bf7c-ace73cb513b5",
+  "phoneTaskSeparate": true,
+  "sutCalls": 0,
+  "epochMeasured": {
+    "attempted": 184,
+    "correct": 169,
+    "incorrect": 0,
+    "failed": 15,
+    "timeouts": 0,
+    "remaining": 440,
+    "planned": 624
+  },
+  "measured": {
+    "attempted": 460,
+    "correct": 425,
+    "incorrect": 0,
+    "failed": 35,
+    "timeouts": 1,
+    "remaining": 440,
+    "planned": 900
+  },
+  "warmupsThisEpoch": {
+    "attempted": 18,
+    "correct": 15,
+    "failed": 3
+  },
+  "priorMeasured": {
+    "attempted": 276,
+    "correct": 256,
+    "failed": 20,
+    "timeouts": 1,
+    "sealedReceipt": "thesis/campaigns/worker-desktop-k3-p2p-full-audio-v1988/PARTIAL-CONDITION-SEAL-v2042.json"
+  },
+  "admission": {
+    "at": "2026-10-21T00:05:13.146985+00:00",
+    "status": "K3_15_ORDINARY_WARMUPS_REMOTE_NATIVE_GPU_ROUTE_PROOF_PUBLISHED",
+    "proofSha256": "d4f66435ec3492ed20ae2a2d6eef81601153ec373442a4edab62c6d141097b32",
+    "excludedWarmups": 18,
+    "remoteModelJoins": 45,
+    "warmupP95MsType7": 13013.3967715,
+    "measured624ForecastSecondsWith20PercentPlus300": 10044.4315024992,
+    "actualGpuLayers": 25,
+    "actualTotalGpuLayers": 25
+  }
+}

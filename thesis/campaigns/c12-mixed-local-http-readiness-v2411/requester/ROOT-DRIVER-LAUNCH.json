@@ -1,0 +1,9 @@
+{
+  "at": "2026-10-22T06:35:02.917032+00:00",
+  "pid": 227943,
+  "startTicks": 142936350,
+  "releaseAtUtc": "2026-10-22T06:34:58.722503+00:00",
+  "measured": 0,
+  "phase": "second and final candidate in current finite readiness allocation, one flow per stream",
+  "sourceSha256": "87881819ce0a7b838acbfe6c76fbf88b78ed73c38f11fefb003a3016bc1f5919"
+}

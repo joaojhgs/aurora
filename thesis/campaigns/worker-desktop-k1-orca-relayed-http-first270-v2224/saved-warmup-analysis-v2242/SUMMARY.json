@@ -1,0 +1,129 @@
+{
+  "at": "2026-10-21T17:06:50.060375+00:00",
+  "scope": "One saved K1HTTP epoch, no cross-epoch pooling",
+  "status": "SAVED_WARMUP_ONLY_ANALYSIS_COMPLETE",
+  "terminalStatus": "stopped_system_failure",
+  "terminalStopReason": "remote_tts_receiver_manifest_invalid",
+  "cohort": "aurora-worker-desktop-k1-orca-relayed-http-first270-v2224",
+  "manifestSha256": "40a606f2113708bbb5bf6cc528f038c00a35a8944ebfb1e424c93215dc922294",
+  "epochLineage": {
+    "conditionTargetMeasured": 900,
+    "epochId": "V2224",
+    "failed180Retried": false,
+    "firstConditionMeasuredIndex": 181,
+    "lastConditionMeasuredIndex": 450,
+    "parentManifestSha256": "6bc65cf5cc3c4eddb90b80b0764a01e6a9fc4afbed66f33c731e3ab58528e101",
+    "parentSealSha256": "613158562e914f5d952f009b87c3d6438b350d4809d6a97f9bf82ed301918829",
+    "plannedEpochMeasured": 270,
+    "priorAttemptedMeasured": 180,
+    "priorCorrect": 179,
+    "priorFailed": 1
+  },
+  "measured": {
+    "attempted": 0,
+    "outcomes": {},
+    "correct": 0,
+    "incorrect": 0,
+    "failedOrInterrupted": 0,
+    "timeouts": 0
+  },
+  "timeoutFieldAbsent": 0,
+  "warmupsExcluded": {
+    "attempted": 15,
+    "outcomes": {
+      "completed_correct": 15
+    },
+    "correct": 15,
+    "incorrect": 0,
+    "failedOrInterrupted": 0,
+    "timeouts": 0
+  },
+  "plannedEpochMeasured": 270,
+  "unattemptedEpoch": 270,
+  "correctOnlyLatencyMs": {
+    "denominator": 0,
+    "p50_ms": null,
+    "p90_ms": null,
+    "p95_ms": null
+  },
+  "allAttemptsTimeToOutcomeMs": {
+    "denominator": 0,
+    "p50_ms": null,
+    "p90_ms": null,
+    "p95_ms": null
+  },
+  "failedTimeToOutcomeMs": {
+    "denominator": 0,
+    "p50_ms": null,
+    "p90_ms": null,
+    "p95_ms": null
+  },
+  "nativeAllInvokedMeasuredMs": {
+    "stt": {
+      "denominator": 0,
+      "p50_ms": null,
+      "p90_ms": null,
+      "p95_ms": null
+    },
+    "assistant": {
+      "denominator": 0,
+      "p50_ms": null,
+      "p90_ms": null,
+      "p95_ms": null
+    },
+    "tts": {
+      "denominator": 0,
+      "p50_ms": null,
+      "p90_ms": null,
+      "p95_ms": null
+    }
+  },
+  "nativeCorrectFullAudioOnlyMs": {
+    "stt": {
+      "denominator": 0,
+      "p50_ms": null,
+      "p90_ms": null,
+      "p95_ms": null
+    },
+    "assistant": {
+      "denominator": 0,
+      "p50_ms": null,
+      "p90_ms": null,
+      "p95_ms": null
+    },
+    "tts": {
+      "denominator": 0,
+      "p50_ms": null,
+      "p90_ms": null,
+      "p95_ms": null
+    }
+  },
+  "nativeObservedStageCounts": {},
+  "allPhasesNativeStageJoins": 45,
+  "positiveFlowNativeGaps": [],
+  "pairingCounters": {
+    "requester": {
+      "unmatchedStartsInSavedPrefix": 0
+    },
+    "provider": {
+      "unmatchedStartsInSavedPrefix": 0
+    }
+  },
+  "resources": {
+    "requester": {
+      "identityMatchedSamples": 844,
+      "excludedIdentityOrPrestartup": 0,
+      "counterErrorFields": {
+        "gpu.vendor": 844
+      }
+    },
+    "provider": null
+  },
+  "providerResourceDataPresent": false,
+  "quantileMethod": "Hyndman-Fan Type7; h=(n-1)*p with linear interpolation; ms",
+  "resourcePolicy": "Same-host sample brackets with explicit slack; RSS uses actual-window samples. Missing observations stay unknown. Parent CPU excludes Piper child; host GPU/network counters are contextual, not exclusive request attribution.",
+  "clockPolicy": "No cross-host timestamp subtraction; no sum or subtraction of independently computed percentiles",
+  "routePolicy": "ORCA_RELAYED_HTTP_EXISTING_INTERMEDIARY_NOT_DIRECT_HTTP_OR_MESH",
+  "newInference": 0,
+  "newNetworkTraffic": 0
+}

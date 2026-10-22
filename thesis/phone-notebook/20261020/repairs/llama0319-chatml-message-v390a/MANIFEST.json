@@ -1,0 +1,26 @@
+{
+  "at": "2026-10-22T13:05:48.037337+00:00",
+  "sourceEpoch": "llama0319-chatml-message-v390a",
+  "baseProviderSourceSha": "ebde3a8acf6315f920d03593845f17a1fc65a733",
+  "pinnedPublicFormatterSourceSha256": "dee83e0c4f561d92700fa5b9c41190c0d66407a5a3aac9692f9a1e7d6b215b5f",
+  "actualFailure": "native v359 and v381 empty message; pinned message branch applies follow-up tool-name grammar and ignores max_tokens",
+  "changedBehavior": "Normal message branch retains caller grammar and max_tokens; tool selection and tool JSON grammar unchanged",
+  "nativeMethodsOrOwnershipChecksChanged": false,
+  "installedPackageOrOldSourceModified": false,
+  "files": [
+    {
+      "path": "app/services/orchestrator/chatml_message_compat.py",
+      "sha256": "e9edd3c22df0291a0ae8e2722b3ec716ed1f22be855b858ce3e026199fc95b2e",
+      "bytes": 3978
+    },
+    {
+      "path": "tests/test_chatml_message_compat.py",
+      "sha256": "18b4a1f16e27cb718a76222a8a347a7a94a4b0d415adfde556bf8921502e501a",
+      "bytes": 2650
+    }
+  ],
+  "patchSha256": "c7ad3efd27039ce7ccf3547f4211bf7f7b617bbc6df3104cc6667179e9c8e87a",
+  "actualNativeQualificationPending": true,
+  "previousRegistrationApiFailurePreserved": "evidence/stage-test-chatml-compat-v390/result.json",
+  "publicRegistrationApi": "LlamaChatCompletionHandlerRegistry.register_chat_completion_handler(overwrite=True)"
+}

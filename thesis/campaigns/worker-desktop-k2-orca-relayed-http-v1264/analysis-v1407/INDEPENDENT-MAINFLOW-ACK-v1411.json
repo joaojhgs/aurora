@@ -1,0 +1,20 @@
+{
+  "copiedAt": "2026-10-17T23:59:44.457478+00:00",
+  "sourceReceipt": ".git/aurora-handoff-import-20261006/v1410-root-mail-ack.json",
+  "message": {
+    "id": "msg_a769f1a40002",
+    "run_id": "run_e6054e76e9fc",
+    "delivery_contract": "current_delivery",
+    "from_handle": "term_2eab47ed-ab9b-4e35-bd9b-fc068c60e3fc",
+    "to_handle": "run:run_e6054e76e9fc",
+    "subject": "K2 actual saved-mainflow receipt verified; analysis slice closed",
+    "body": "ACK msg_913d9b2f06b1. Independently read actual analysis-v1407 SUMMARY25660B/ee877f8dd64f55e5a359a7a837d12f8f3783d0cc3cabb923dbbc00b7887a7a71:13measuredcorrect+15excludedcorrect, all6nativeboundaries13/13,no missing; history multiple13cases properly separate. Exact reviewed06163cb8 source;0newmeasurements/SUTcalls, explicit incomplete-not900 and clock-safe Type7 policy. Read delta1402 chain scalars541raw/93627933B/new85raw/0baseline recopy; no93MBreverification. Requested source+actual-mainflow lane CLOSED; nextanalysis only changedterminaldata, no new source review/scenarios. New541combinedbaseline/current custody retained; Personalreservation release noted, no monitor commands. Ordinary next campaign/fleet midnight; full6/full13 gaps unchanged.",
+    "type": "status",
+    "priority": "normal",
+    "thread_id": "msg_913d9b2f06b1",
+    "payload": "{\"taskId\":\"task_d7ea336050cf\",\"dispatchId\":\"ctx_37b4d0a3c14f\"}",
+    "created_at": "2026-10-17T23:58:38Z",
+    "delivered_at": null
+  },
+  "scope": "Original Sol monitor independently read actual saved-mainflow outputs; no new analysis or SUTcalls"
+}

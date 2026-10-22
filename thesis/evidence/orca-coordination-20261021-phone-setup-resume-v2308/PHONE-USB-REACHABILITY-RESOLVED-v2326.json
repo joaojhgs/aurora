@@ -1,0 +1,53 @@
+{
+  "id": "remote-cli-1792626334108",
+  "ok": true,
+  "result": {
+    "runId": "run_e6054e76e9fc",
+    "deliveryId": "delivery_6f4884a0cfe6",
+    "messages": [
+      {
+        "id": "msg_8edd8951cde8",
+        "run_id": "run_e6054e76e9fc",
+        "delivery_contract": "current_delivery",
+        "from_handle": "term_1f27be31-0284-4366-bb91-30fe538cd30e",
+        "to_handle": "run:run_e6054e76e9fc",
+        "subject": "ONE fresh owner check: USB access fixed, ADB still not enumerated",
+        "body": "Actual fresh single bounded check ran2026-10-21T23:40:20UTC on existing Personal controller. POCO serial KBX8LNFUBE5XGQRG currentUSB003/011 now has canRead=true/canWrite=true, group1002; owner fix is visible and the old node-permission blocker is stale. adb devices -l exit0 has empty device list; selected get-state exit1 says device not found, with no unauthorized state/dialog. No getprops were attempted without a reachable device. Raw exact command/result/source/window receipt is physically on both hosts at thesis/phone-notebook/20261020/evidence/owner-check-again-20261021T234015/result.json; REPORT and LATEST-USB-CHECK updated. One physical replug could trigger enumeration, but cause remains unproven. No restart, extra USB polling, permission/mount/security/account change, app/pilot or model activity; main HTTP/provider control untouched. No old Dispatch completion is reused.",
+        "type": "status",
+        "priority": "normal",
+        "thread_id": null,
+        "payload": null,
+        "created_at": "2026-10-21T23:41:17Z",
+        "delivered_at": null
+      },
+      {
+        "id": "msg_f6ea48902254",
+        "run_id": "run_e6054e76e9fc",
+        "delivery_contract": "current_delivery",
+        "from_handle": "term_1f27be31-0284-4366-bb91-30fe538cd30e",
+        "to_handle": "run:run_e6054e76e9fc",
+        "subject": "USB now authorized and reachable: POCO serial state device",
+        "body": "Fresh actual Personal notebook receipt at 23:44:44 UTC: KBX8LNFUBE5XGQRG enumerated as device usb:3-1 model2412DPC0AG, selected get-state exit0 device. Existing server now PID39627, SDK37, LIBUSB forced with ADB_LIBUSB=1 and holds /dev/bus/usb/003/011; server changed externally at23:44:19 and this lane performed no restart, permission change, namespace entry or main SUT action. Continuing bounded nonprivate getprops, Aurora package metadata and route inventory; raw dual-host evidence thesis/phone-notebook/20261020/evidence/adb-server-usb-diagnosis-20261021T234436/result.json; full900 remains waiting owner start.",
+        "type": "status",
+        "priority": "normal",
+        "thread_id": null,
+        "payload": null,
+        "created_at": "2026-10-21T23:44:49Z",
+        "delivered_at": null
+      }
+    ],
+    "count": 2,
+    "replayed": false,
+    "acknowledged": null,
+    "timedOut": false,
+    "cancelled": false,
+    "connectionLost": false,
+    "mutation": {
+      "requestId": "93fbbabc-4f9c-4ad6-956e-2e03decfad43",
+      "replayed": false
+    }
+  },
+  "_meta": {
+    "runtimeId": "cc9e3275-28c6-4c45-85cc-bdcd2262aa7d"
+  }
+}

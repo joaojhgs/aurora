@@ -1,0 +1,37 @@
+{
+  "at": "2026-10-22T06:00:51.693820+00:00",
+  "state": "FINAL_EXECUTION_VERIFIED_READY_FOR_SINGLE_MONITOR_OWNER_NOTICE",
+  "canonicalNotificationDedupKey": "run_e6054e76e9fc:K1_HTTP_FULL900_FINAL_SEAL_RELEASE:OWNER_REQUEST_20261022",
+  "originalOwnerRequest": "msg_dd7d643976ce",
+  "originalMonitorContract": "msg_b7092e90c09a",
+  "originalRun": "run_e6054e76e9fc",
+  "monitorTask": "task_d7ea336050cf",
+  "monitorDispatch": "ctx_37b4d0a3c14f",
+  "monitorTerminal": "term_2eab47ed-ab9b-4e35-bd9b-fc068c60e3fc",
+  "nativeRootGoal": "01a112a5-d6bb-74e2-bf7c-ace73cb513b5",
+  "nativeRootGoalStatus": "active",
+  "nativeRootGoalBudget": null,
+  "finalSummary": {
+    "path": "thesis/results/worker-desktop-k1-http-full900-v2403/FULL900-SUMMARY.json",
+    "bytes": 10109,
+    "sha256": "cc803a992a86d9b15c41e2c6b5f01f6e4400360f0ad61a5f54f4b1dff041dbdc"
+  },
+  "report": {
+    "path": "thesis/results/worker-desktop-k1-http-full900-v2403/REPORT.md",
+    "bytes": 2463,
+    "sha256": "94b412c0b7efc4b8d395ec23a3a00c357f041ca6a3459f886fbd8e87dd928d2a"
+  },
+  "resourceRelease": {
+    "path": "thesis/results/worker-desktop-k1-http-full900-v2403/RESOURCE-RELEASE.json",
+    "bytes": 2264,
+    "sha256": "92422e2c83f0358873813d57e4a51806bdfd6dc7ba2f3634633df8ab0c8cfe37"
+  },
+  "idIndex": {
+    "path": "thesis/results/worker-desktop-k1-http-full900-v2403/MEASURED-ID-INDEX.jsonl",
+    "bytes": 294416,
+    "sha256": "b92356a7c929f5f566de8bdfa1c0d3f02c198af4f0cb5a6878ab55f7b0b442aa"
+  },
+  "ownerCodingDelivery": "PENDING_NOT_VERIFIED",
+  "rootWillNotEmitCompetingBigNotice": true,
+  "remainingFull13AndMatrixOpen": true
+}

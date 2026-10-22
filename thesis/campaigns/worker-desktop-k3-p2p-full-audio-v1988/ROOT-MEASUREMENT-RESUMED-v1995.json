@@ -1,0 +1,81 @@
+{
+  "at": "2026-10-20T22:54:56.499995+00:00",
+  "status": "K3_MEASURED_RUNNING_FIRST_CORRECT_AUDIO_VERIFIED",
+  "manifestSha256": "46003ef84b71fade94e1d9e3cbac0dcee8bb524680ca613a9f02df5878e4cd6b",
+  "measured": {
+    "attempted": 5,
+    "correct": 5,
+    "failed": 0,
+    "remaining": 895
+  },
+  "warmups": {
+    "attemptedExcluded": 17,
+    "correctExcluded": 15,
+    "failedPreacceptExcluded": 2
+  },
+  "admission": {
+    "at": "2026-10-20T22:53:51.848047+00:00",
+    "proofSha256": "64c5802f61de1480e0a429852632630cc75fc9e18a6b95efe4e0d292821d2419",
+    "nativeJoins": 45,
+    "actualGpuLayers": 25,
+    "totalGpuLayers": 25,
+    "backend": "Vulkan",
+    "warmupP95MsType7": 12910.1150696,
+    "forecast900SecondsWith20PercentPlus300": 14242.924275168001
+  },
+  "firstMeasured": {
+    "phaseIndex": 1,
+    "status": "completed_correct",
+    "flowDurationMs": 11889.015826,
+    "correctness": {
+      "all_expected": true,
+      "assistant_reply_matches_expected_words": true,
+      "transcript_matches_reference_words": true
+    },
+    "copierCaseExists": true,
+    "copierAudioExists": true,
+    "physicalCaseSha256": "51a9894db52ea199ebb6d935d470a92e6470a294af9c9c6b3759286ec9aa8998",
+    "physicalCase": "thesis/campaigns/worker-desktop-k3-p2p-full-audio-v1988/attempts/attempt-0018-measured.jsonl",
+    "physicalAudio": "thesis/campaigns/worker-desktop-k3-p2p-full-audio-v1988/audio/584e96be98f6bdacceefaa4dab40730403bb874732324f5f4c203d9d07c6a75c.wav",
+    "physicalAudioSha256": "584e96be98f6bdacceefaa4dab40730403bb874732324f5f4c203d9d07c6a75c",
+    "audioBytes": 30252,
+    "audioFormat": {
+      "channels": 1,
+      "sampleWidth": 2,
+      "sampleRate": 22050,
+      "frames": 15104
+    }
+  },
+  "actors": {
+    "3154212": {
+      "state": "S",
+      "startTicks": 131502232,
+      "sameStart": true
+    },
+    "3154248": {
+      "state": "R",
+      "startTicks": 131502574,
+      "sameStart": "first_recorded_original_child"
+    },
+    "3154213": {
+      "state": "S",
+      "startTicks": 131502236,
+      "sameStart": true
+    },
+    "3154214": "absent"
+  },
+  "custody": {
+    "sequence": 6,
+    "caseCount": 19,
+    "audioCount": 17,
+    "fileCount": 95
+  },
+  "freeBytes": 4172607488,
+  "provider": {
+    "controllerPid": 251472,
+    "receiverPid": 251473,
+    "deadlineUtc": "2026-10-21T12:41:24.961804+00:00"
+  },
+  "phoneTaskSeparate": true,
+  "nextGate": "bounded main-run liveness/custody/progress only;no extra tests/builds/inference;terminal or actual error immediate reconciliation"
+}

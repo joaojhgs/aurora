@@ -1,0 +1,54 @@
+{
+  "at": "2026-10-18T23:25:28.874136+00:00",
+  "originalNativeGoal": "01a112a5-d6bb-74e2-bf7c-ace73cb513b5",
+  "originalRun": "run_e6054e76e9fc",
+  "sameBlockingCondition": "Existing Personal plain-terminal command route rejects terminal.send terminal_not_writable; saved-data application read alternative returns RemoteDisconnected; installed public catalog exposes no applicable repair.",
+  "consecutiveGoalTurns": 3,
+  "turns": [
+    {
+      "turn": 1,
+      "classification": "progress",
+      "evidence": "V1620 terminal24 reconciled, local EOF and saved statistics completed; actual rejected passive send f2f7472f-e005-46ec-9eb9-715187e69291, original cursor57008 unchanged; one authenticated session read also failed; public301catalog has no applicable sameSSH repair."
+    },
+    {
+      "turn": 2,
+      "classification": "verified_wait",
+      "evidence": "Original monitor dispatch ctx_37b4d0a3c14f freshly verified live; bounded wait obtained actual final local-result acceptance and its native blocked receipt. Forward421717/start104535394 still original running NRestarts0; no route-health inference. All independent saved work complete."
+    },
+    {
+      "turn": 3,
+      "classification": "no_progress",
+      "evidence": "Fresh original-run mailbox check succeeded, no messages or changed capability; delivery466cccd4a0e2 acknowledged. No remaining safe executable action under existing authorized tools."
+    }
+  ],
+  "atImpasse": true,
+  "safeAlternativesExhausted": [
+    "Original rejected SEND and unchanged original output reconciled, not resent",
+    "One authenticated saved-session application read returned RemoteDisconnected; no retries",
+    "Fresh301-command public catalog has no applicable same-SSH recovery; managed-server environment recover is not this operation",
+    "Request/case/audio/log/resource requester EOF and saved analysis finished; original monitor independently verified",
+    "No new terminal, worker, forward, provider restart, credentials/security changes or permissions bypass authorized",
+    "Remaining provider raw retrieval, ordinary MQTT pairing/consent and subsequent matrix require original Personal control"
+  ],
+  "requiredExternalCapability": {
+    "host": "ssh:ssh-1786238480967-semdev",
+    "terminal": "term_d5651d8d-58e2-4b38-85e2-51c668cc933c",
+    "incarnation": "034ff933-61a3-4c74-b5ad-98a75e8ac21c",
+    "action": "Owning Orca restore normal terminal.send routing while preserving existing PTY/provider/reservation. No supported worker-side public repair operation exposed."
+  },
+  "scopePreserved": {
+    "fullAggregateGoalUnchanged": true,
+    "all13StoriesPreserved": true,
+    "branch": "codex/aurora-native-speech-routing-20261007",
+    "head": "cbac78fe3fb2b73100bfaa9dc198fb6bff689840",
+    "noGoalComplete": true,
+    "noWorkerDone": true,
+    "noCancellation": true,
+    "allRawResultsAndFailuresPreserved": true,
+    "k3Attempted": 740,
+    "k3StillRequired": 160,
+    "providerCurrentLiveness": "UNKNOWN",
+    "originalProviderReservation": "PRESERVED, not proof of liveness"
+  },
+  "nextActionAfterChangedCapability": "Reconcile exact original provider/process/results before rerunning anything; retrieve saved native/resource delta, then one ordinary approved existing-room MQTT/pair/task-consent check. No replay of closed baselines or measured indices."
+}

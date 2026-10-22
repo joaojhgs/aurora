@@ -1,0 +1,20 @@
+{
+  "status": "Current bounded check",
+  "at": "2026-10-15T02:50:40.831710+00:00",
+  "package": "docs/experiments/tcc-20261013-submission-20261030/root/llama-config-fidelity-v478",
+  "manifestSha256": "f1636ee20d1b0d7df4a6d75d2d214f2471b09c707a4028b23594a5b48c7cc8d8",
+  "listedMembersVerified": 19,
+  "canonicalSourceHashesMatched": 5,
+  "readmeSha256": "3fd7f8cbc40d33e432cc23046740ed80d62a0f09bae68254189c0e17809d5fb2",
+  "reviewSha256": "bbc89368fbc0bef3d6f6fe2b9669808dc219be917a9ea72599a158a3cd63423d",
+  "sourceReviewRead": true,
+  "targetedRootTestExitCode": 0,
+  "realModelLoadedByTest": false,
+  "documentationGateExitCode": 2,
+  "documentationGap": "Owner-required experimental evidence tree861reports plus one older campaign.py link; no records moved/deleted/checker weakened",
+  "noMonitorTestsBuildsModelCalls": true,
+  "noHistoricalInferenceUpgrade": true,
+  "ASRCorrectnessRepaired": false,
+  "actualGPUOffloadProven": false,
+  "phase2MeasuredAllowed": false
+}

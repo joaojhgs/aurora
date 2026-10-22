@@ -1,0 +1,35 @@
+{
+  "at": "2026-10-22T12:24:00.979968+00:00",
+  "scope": "One bounded stat-only scan of this active campaign, unique inode allocations counted once; no other host/device reads or broad disk search",
+  "currentAt": "2026-10-22T12:23:42.039739+00:00",
+  "completedPairedCapsules": 103,
+  "measuredRemainingPerStream": 552,
+  "uniqueFiles": 3034,
+  "allocatedBytesByGroup": {
+    "rootMetadata": 1662976,
+    "requester": 10506240,
+    "control-link-receipts": 69632,
+    "control": 21450752,
+    "provider-custody": 6365184
+  },
+  "logicalBytesByGroup": {
+    "rootMetadata": 1522924,
+    "requester": 9262183,
+    "control-link-receipts": 68880,
+    "control": 20233384,
+    "provider-custody": 5988098
+  },
+  "campaignUniqueAllocatedBytes": 40054784,
+  "freeBytes": 2322509824,
+  "floorBytes": 2147483648,
+  "headroomAboveFloorBytes": 175026176,
+  "empiricalCurrentBytesPerCompletedPairIncludingCurrentOverhead": 388881.3980582524,
+  "linearCurrentRemainingBytes": 214662532,
+  "linearCurrentRemainingMarginBytes": -39636356,
+  "linearFuture915PairBytes": 355826480,
+  "futureConditionMarginAfterCurrentLinearBytes": -395462836,
+  "projectionLimits": "Linear current-epoch footprint, not an admission guarantee; setup/static receipts included, future P2P/raw/EOF overhead and unrelated writers not guaranteed. No CPU/GPU/model latency inference.",
+  "exactOldWebpackCacheQuestion": "PENDING; no deletion or inferred approval",
+  "frozenCurrentClocksSourceFloorOrCountsChanged": false,
+  "newInferenceOrNetworkTraffic": 0
+}

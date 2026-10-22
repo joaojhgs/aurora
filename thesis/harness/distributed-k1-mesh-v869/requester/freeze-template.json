@@ -1,0 +1,50 @@
+{
+  "schema": "aurora.distributed_k1_mesh_tts_condition.v1",
+  "cohortId": null,
+  "comparisonFamilyId": "aurora-full-audio-capital-base-qwen-piper-v1",
+  "measurementPlan": {
+    "plannedWarmups": 15,
+    "plannedMeasuredPerCondition": 900,
+    "requestCapSeconds": 180,
+    "conditionOverallCapSeconds": 57600
+  },
+  "audio": {
+    "wavSha256": "da0ecc4ad0885746ab6e716585473917ab2b543a505bf0db09ebacfaa7943cbb",
+    "wavBytes": 219794,
+    "sampleRate": 22050,
+    "channels": 1,
+    "sampleWidthBytes": 2
+  },
+  "candidateManifestSha256": "ce75b965ee5879ebece6ea7dfe133441547d20ccf89ecd5d66ea510bd9645e60",
+  "meshTtsPeerIdSha256": null,
+  "meshTtsAuthorityBinding": "existing_authorized_peer_session",
+  "remoteMeshTtsReceiver": null,
+  "sourceClosure": {
+    "equivalenceVerified": false,
+    "cpuSourceRoot": null,
+    "cpuSourceInventorySha256": null
+  },
+  "implementation": {
+    "runnerSha256": "46d77b55dfb0687a249845c70f14201be19bd4b859a2855477b613539691518a",
+    "controllerSha256": "809bedd7aec6636b4382ab944b3bf65c0da57361d1a1252dd21884963c884a4f",
+    "adapterSha256": "1db8cb386a37c680bec6e03135ee007f6b76a850a85c4e1eedda6562c0895ceb",
+    "receiverProofSha256": "04c5f9f781bbf53b0db9103372cb27cd1b5c68c3b0c3973cf98f3fda97e6affb",
+    "bootstrapSha256": "5f3f18d935466b3ea670af4caff79a801ea1c7a3c6471b4644b8864ad0c7b883",
+    "bindingsSha256": "79558452e6f61268ad246476ca848e060b8ea808e15091bc53a3c4e0e28b1647",
+    "observerSha256": "784cc4bffc0d6824bbe378d17a7f632d587ca0a315896b048b2ebef727082df5",
+    "telemetrySha256": "8129ffe7591a47a0107ede53b101aead9fc1f58b92f0c0c4203176cc7608325d",
+    "resourceSamplerSha256": "8f62ec378e74036d4539d9159e3caf29b8fd7a9115de1ab0f482dfd58b6e1857"
+  },
+  "models": {
+    "stt": "d01c3014881c9c6f3133c182f3d2887eb6ca1c789a7538c5c007196857a0a6a9",
+    "llm": "57d1997790d1744fba5b40a7317df71ea5e2acee28c47e78f0cce39c0703f8cf",
+    "tts": "6f52a751e2349abe7a76735eb09dc1875298c77ea2342ffd2fef79ff81b87f22",
+    "ttsConfig": null
+  },
+  "runtime": {
+    "venvExecutable": null,
+    "resolvedInterpreterSha256": null
+  },
+  "runtimeConfigSha256": null,
+  "status": "template_only_not_launchable"
+}

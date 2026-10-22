@@ -1,0 +1,91 @@
+{
+  "scope": "global_excluded_logical_flows_5_and_6",
+  "logical_flows_before_this_packet": 4,
+  "logical_flows_total": 6,
+  "accepted_voice_measurements": 0,
+  "whole_gpu_sealed": false,
+  "phase2_measured_allowed": false,
+  "voice_quantiles_available": false,
+  "files": [
+    {
+      "path": "flow-5/pilot-result.json",
+      "bytes": 2178,
+      "sha256": "6a9e1045d92ca1cb1857a7c22a80a2b5f51bc57c72fffea3d1d35577a9b06051"
+    },
+    {
+      "path": "flow-5/pilot-launch.json",
+      "bytes": 916,
+      "sha256": "dd19c68a1c2af77b9676c32f1bd15cd5e840bac294bd8275838903bb34f8b254"
+    },
+    {
+      "path": "flow-5/workload.json",
+      "bytes": 902,
+      "sha256": "396ce032cbf58e55ce7485d234f96795ac5a42986cc431225c792ea8025e748c"
+    },
+    {
+      "path": "flow-5/source-manifest.json",
+      "bytes": 1131,
+      "sha256": "09768546cab8af5e7a605a06509248deb917c6ca6337979d80ed888dd253687a"
+    },
+    {
+      "path": "flow-5/voice-stages.jsonl",
+      "bytes": 13817,
+      "sha256": "d39570dc991806cef25286a75664ee980a734431888061e849f285a8d7632fd1"
+    },
+    {
+      "path": "flow-5/voice-stages.status.json",
+      "bytes": 134,
+      "sha256": "dca4614bde09dec777940df334dcffbec8784a9e438e7161ce4fb1d2fef36227"
+    },
+    {
+      "path": "flow-5/voice-stages.installed.json",
+      "bytes": 121,
+      "sha256": "2e47f3c25373e7d0ebc88a98f04740ac0f98dfca9faa6f2a0e60fcba957f7f8c"
+    },
+    {
+      "path": "flow-5/span-analysis.json",
+      "bytes": 3450,
+      "sha256": "26ad40a89bc36fa292200e0d7e838f2fa6a3d450a367aabf82e4a867d7de9f8a"
+    },
+    {
+      "path": "flow-6/pilot-result.json",
+      "bytes": 4788,
+      "sha256": "0d632f7fdea1ed3c87a91cc1640b9f5ab5bd2ca6c6fe86b1f1f1f988d4654aed"
+    },
+    {
+      "path": "flow-6/pilot-launch.json",
+      "bytes": 916,
+      "sha256": "8e341c4616a397117a46785c3203d57ad42598f2dfa14a98de00996b36c7784f"
+    },
+    {
+      "path": "flow-6/workload.json",
+      "bytes": 902,
+      "sha256": "257793f5d9f55238333be232b8234d7b8540ecb82fa7b71ae67eaab559905d0a"
+    },
+    {
+      "path": "flow-6/source-manifest.json",
+      "bytes": 660,
+      "sha256": "2e5f63dda52e6141843782d253d2f6c21a7659ebc31279c591c97929db2c5094"
+    },
+    {
+      "path": "flow-6/voice-stages.jsonl",
+      "bytes": 18624,
+      "sha256": "5d4cec0575466fb3b755d823c73ead420e1172f6807035969323fe5eb6148397"
+    },
+    {
+      "path": "flow-6/voice-stages.status.json",
+      "bytes": 134,
+      "sha256": "49e5a3e5daf07d2e576a3ca96e457b0ac1f50c8411cfabb34bf7e6491be58550"
+    },
+    {
+      "path": "flow-6/voice-stages.installed.json",
+      "bytes": 121,
+      "sha256": "a8ea0025f96870e234fbd37f0daca7fa470aa75da553148c9691bcb174aa0704"
+    },
+    {
+      "path": "flow-6/span-analysis.json",
+      "bytes": 4391,
+      "sha256": "2ccc04cfdbde22d9288e962f563f34f2a9012d6bcb78c052f163a3209527b753"
+    }
+  ]
+}

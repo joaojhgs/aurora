@@ -1,0 +1,38 @@
+{
+  "id": "remote-cli-1792642198250",
+  "ok": true,
+  "result": {
+    "runId": "run_e6054e76e9fc",
+    "deliveryId": "delivery_d64afda37ae8",
+    "messages": [
+      {
+        "id": "msg_d1299522917d",
+        "run_id": "run_e6054e76e9fc",
+        "delivery_contract": "current_delivery",
+        "from_handle": "term_1f27be31-0284-4366-bb91-30fe538cd30e",
+        "to_handle": "run:run_e6054e76e9fc",
+        "subject": "APK source closure/frontend/Rust passed; calibrating own notebook RSS cap for Gradle",
+        "body": "Actual ebde+overlay APK frontend and first nativeRust link passed; Gradle8.14.3 reached Kotlin/package tasks, then own runner4GiBsummed-RSS cap stopped its processgroup at04:06:12 with4.779GBsummedRSS while MemAvailable18.185GB/disk83.778GB. This is preserved runnerresource-cap outcome, not observedOOM/temperature admission; that4GiBcap was kit-defined rather than an explicit Root notebookbudget. Retrying same isolatedsource/cached artifacts with max8GiBowned-treeRSS plus >=8GiBMemAvailable,2CPUaffinity/2jobs/1200s, generated task-only Gradle2workers/2GiBheap/inprocessKotlin and exact scoped daemon reconciliation; no sharedRootresource/SUT, source/model/runtime substitution, or900START.",
+        "type": "status",
+        "priority": "normal",
+        "thread_id": null,
+        "payload": "{\"reportPath\":\"thesis/phone-notebook/20261020/REPORT.md\"}",
+        "created_at": "2026-10-22T04:08:57Z",
+        "delivered_at": null
+      }
+    ],
+    "count": 1,
+    "replayed": false,
+    "acknowledged": null,
+    "timedOut": false,
+    "cancelled": false,
+    "connectionLost": false,
+    "mutation": {
+      "requestId": "92714394-aaf0-4dc0-913c-7831231558e0",
+      "replayed": false
+    }
+  },
+  "_meta": {
+    "runtimeId": "cc9e3275-28c6-4c45-85cc-bdcd2262aa7d"
+  }
+}

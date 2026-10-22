@@ -1,0 +1,13 @@
+{
+  "command": [
+    "pnpm",
+    "--filter",
+    "@aurora/ui",
+    "typecheck"
+  ],
+  "startedAt": "2026-10-16T14:35:17.846629+00:00",
+  "endedAt": "2026-10-16T14:36:35.182826+00:00",
+  "exitCode": 0,
+  "error": null,
+  "log": ".git/aurora-handoff-import-20261006/desktop-local-profile-integration-v1082/shared-ui-typecheck.log"
+}

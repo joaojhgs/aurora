@@ -1,0 +1,16 @@
+{
+  "at": "2026-10-21T16:06:51.234010+00:00",
+  "bodyBytes": 126,
+  "bodySha256": "db2037f605886c474730adeb770e98faf01f1bd84ca67a745d6064cea5270102",
+  "credentialCopiedOrLogged": false,
+  "durationMs": 6014.224499,
+  "existingKeyUsedInMemory": true,
+  "existingRoute": "desktop-aurora-tts/worker127.0.0.1:18000",
+  "inferenceRequests": 0,
+  "providerReceiver": {
+    "pid": 1440196,
+    "startTicks": 35427408,
+    "state": "S"
+  },
+  "status": 200
+}

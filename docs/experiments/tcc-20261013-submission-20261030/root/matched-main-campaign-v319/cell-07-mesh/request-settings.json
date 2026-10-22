@@ -1,0 +1,19 @@
+{
+  "config_sha256": null,
+  "generation_settings": null,
+  "matched_provider_fingerprints": {
+    "messages_sha256": "b65cbaff90f6dc8875d93914fc34a52d288427f7c28691ae7f8b15a8f6ae7fde",
+    "provider_input_sha256": "5a95a2f1b72dc76f3f875d7759c7926b3b06d4736e7a8a08fcc8144706b48fac",
+    "validated_params_sha256": "2e8bc1ea2a932715d302bf954699fbe70526b8713fce3e461eb50f1c400dc7b9"
+  },
+  "model_bytes": 563036064,
+  "model_id": null,
+  "model_sha256": "57d1997790d1744fba5b40a7317df71ea5e2acee28c47e78f0cce39c0703f8cf",
+  "private_cell_manifest_sha256": "5b2422619f5255be3fc2a4eef665f2add10838a62f8d733af19e33af39dbe95b",
+  "request_deadline_ms": 180000,
+  "resource_condition": "explicitly loaded; no clean-baseline or exclusive-performance claim",
+  "scope": "descriptive matched local/API/mesh main campaign; no mobile, cross-region, or clean-host claim",
+  "source_head": "5782746afba213f6b36907db2f09f0017625e218",
+  "workload_id": null,
+  "workload_sha256": null
+}

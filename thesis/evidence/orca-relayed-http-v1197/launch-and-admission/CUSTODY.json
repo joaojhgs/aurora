@@ -1,0 +1,90 @@
+{
+  "at": "2026-10-17T20:30:57.767554+00:00",
+  "copyScope": "Existing safe report/admission receipts; no private config/backend log",
+  "files": [
+    {
+      "bytes": 2278,
+      "destination": "thesis/evidence/orca-relayed-http-v1197/launch-and-admission/CUSTODY.json",
+      "sha256": "5400264bfece7a4a8b67b52ac2be31e3b83a12ed31f327b83650ece6c9321056",
+      "source": "docs/experiments/tcc-20261013-submission-20261030/root/distributed-k1-orca-relayed-http-v1197/CUSTODY.json"
+    },
+    {
+      "bytes": 4750,
+      "destination": "thesis/evidence/orca-relayed-http-v1197/launch-and-admission/REPORT.md",
+      "sha256": "17bab000af072d21ab04ec2ef3e193937e84463caafceb89713d5349a8fe47ea",
+      "source": "docs/experiments/tcc-20261013-submission-20261030/root/distributed-k1-orca-relayed-http-v1197/REPORT.md"
+    },
+    {
+      "bytes": 13753,
+      "destination": "thesis/evidence/orca-relayed-http-v1197/launch-and-admission/condition-frozen.json",
+      "sha256": "6bc65cf5cc3c4eddb90b80b0764a01e6a9fc4afbed66f33c731e3ab58528e101",
+      "source": "docs/experiments/tcc-20261013-submission-20261030/root/distributed-k1-orca-relayed-http-v1197/condition-frozen.json"
+    },
+    {
+      "bytes": 358,
+      "destination": "thesis/evidence/orca-relayed-http-v1197/launch-and-admission/existing-forward-service.json",
+      "sha256": "dc52eb1403c502cf939eef98674ccb390441e4617e5b5e0e761e9f2736a1cc76",
+      "source": "docs/experiments/tcc-20261013-submission-20261030/root/distributed-k1-orca-relayed-http-v1197/existing-forward-service.json"
+    },
+    {
+      "bytes": 413,
+      "destination": "thesis/evidence/orca-relayed-http-v1197/launch-and-admission/existing-orca-network-routes-v1191.json",
+      "sha256": "d434623d9085d920738c5e86824c7b9a303d1ce2c4e06f6bcbee31042eefe66b",
+      "source": "docs/experiments/tcc-20261013-submission-20261030/root/distributed-k1-orca-relayed-http-v1197/existing-orca-network-routes-v1191.json"
+    },
+    {
+      "bytes": 4764,
+      "destination": "thesis/evidence/orca-relayed-http-v1197/launch-and-admission/first-ordinary-warmup.raw.json",
+      "sha256": "57346def628af8f6806a04da3c6d8c910d045b77620e106521dbaaf917835a27",
+      "source": "docs/experiments/tcc-20261013-submission-20261030/root/distributed-k1-orca-relayed-http-v1197/first-ordinary-warmup.raw.json"
+    },
+    {
+      "bytes": 460,
+      "destination": "thesis/evidence/orca-relayed-http-v1197/launch-and-admission/health-authenticated-http200.json",
+      "sha256": "daa86dfbf8e2c2abe9a971480539d636f9176df84e74aa77a18472f356694b9a",
+      "source": "docs/experiments/tcc-20261013-submission-20261030/root/distributed-k1-orca-relayed-http-v1197/health-authenticated-http200.json"
+    },
+    {
+      "bytes": 537,
+      "destination": "thesis/evidence/orca-relayed-http-v1197/launch-and-admission/health-first5s-timeout.json",
+      "sha256": "4d6229fb020fe9c859b54c6d0fd279c898f05dd8023fdf723a49d7d05804d7aa",
+      "source": "docs/experiments/tcc-20261013-submission-20261030/root/distributed-k1-orca-relayed-http-v1197/health-first5s-timeout.json"
+    },
+    {
+      "bytes": 3103,
+      "destination": "thesis/evidence/orca-relayed-http-v1197/launch-and-admission/original-provider-revalidation-v1193.json",
+      "sha256": "97f5a73ad6bfbf30e5861c047a83f1e935fb3f91d3a2a0ba5d40a9417dd74770",
+      "source": "docs/experiments/tcc-20261013-submission-20261030/root/distributed-k1-orca-relayed-http-v1197/original-provider-revalidation-v1193.json"
+    },
+    {
+      "bytes": 729,
+      "destination": "thesis/evidence/orca-relayed-http-v1197/launch-and-admission/prestart-config-drift-failure-v1194.json",
+      "sha256": "7e6892890aa8cdb2fe92d7b40081bc202671e7325c0cdb7e65cc2746f4d3fe45",
+      "source": "docs/experiments/tcc-20261013-submission-20261030/root/distributed-k1-orca-relayed-http-v1197/prestart-config-drift-failure-v1194.json"
+    },
+    {
+      "bytes": 941,
+      "destination": "thesis/evidence/orca-relayed-http-v1197/launch-and-admission/provider-budget-v1203.json",
+      "sha256": "896d026ac80113ff01a7d54e05bd0fde78dabfde03690de6003e17d5ceffe102",
+      "source": "docs/experiments/tcc-20261013-submission-20261030/root/distributed-k1-orca-relayed-http-v1197/provider-budget-v1203.json"
+    },
+    {
+      "bytes": 768,
+      "destination": "thesis/evidence/orca-relayed-http-v1197/launch-and-admission/requester-launch.json",
+      "sha256": "75ddb067bf311c3e9cb4dec53d9353886567ce855e4a86397da9a7755c3dd21d",
+      "source": "docs/experiments/tcc-20261013-submission-20261030/root/distributed-k1-orca-relayed-http-v1197/requester-launch.json"
+    },
+    {
+      "bytes": 293,
+      "destination": "thesis/evidence/orca-relayed-http-v1197/launch-and-admission/root-proof-finalizer-launch.json",
+      "sha256": "897844daaf8024fa5af52728d6f53f069a9cdd160a0715d09dc8bab3ea2aedbd",
+      "source": "docs/experiments/tcc-20261013-submission-20261030/root/distributed-k1-orca-relayed-http-v1197/root-proof-finalizer-launch.json"
+    },
+    {
+      "bytes": 374,
+      "destination": "thesis/evidence/orca-relayed-http-v1197/launch-and-admission/warmup-progress-v1202.json",
+      "sha256": "7cd01fdc034d1fce4192726dc5179535c8c6267d882e620ddeaace895d86a028",
+      "source": "docs/experiments/tcc-20261013-submission-20261030/root/distributed-k1-orca-relayed-http-v1197/warmup-progress-v1202.json"
+    }
+  ]
+}

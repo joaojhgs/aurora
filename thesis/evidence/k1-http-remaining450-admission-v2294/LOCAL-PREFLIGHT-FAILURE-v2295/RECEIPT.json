@@ -1,0 +1,37 @@
+{
+  "at": "2026-10-21T21:13:52.579235+00:00",
+  "localError": "Generated metadata source SyntaxError:unterminated string literal line15 before file creation; helper then FileNotFoundError line31 before SEND-INTENT/send",
+  "commandFileCreated": false,
+  "sendIntentCreated": false,
+  "terminalCommandsSent": 0,
+  "nativeInference": 0,
+  "lifecycleChanges": 0,
+  "proof": "orca_copy_control_raw_read_v1652.py line31 reads source before SEND-INTENT and terminal.send; exact old SEND-INTENT/SEND receipts absent",
+  "correctedReadOperation": "k1-http-next450-desktop-resource-v2295a",
+  "readOnlyFencesPreserved": [
+    {
+      "source": ".git/aurora-handoff-import-20261006/k1-http-next450-desktop-resource-v2295-READ-BEFORE.json",
+      "copy": "thesis/evidence/k1-http-remaining450-admission-v2294/LOCAL-PREFLIGHT-FAILURE-v2295/k1-http-next450-desktop-resource-v2295-READ-BEFORE.json",
+      "bytes": 34035,
+      "sha256": "d16d873090b26357c97d366f88e51827222e1798755b33f9577fa6e9f9965c5b"
+    },
+    {
+      "source": ".git/aurora-handoff-import-20261006/k1-http-next450-desktop-resource-v2295-SHOW-FENCE.json",
+      "copy": "thesis/evidence/k1-http-remaining450-admission-v2294/LOCAL-PREFLIGHT-FAILURE-v2295/k1-http-next450-desktop-resource-v2295-SHOW-FENCE.json",
+      "bytes": 1311,
+      "sha256": "29d441ca5d46a45027a55f0fc2c739b6ffc3032a97f0e325a728dc54c92564f4"
+    },
+    {
+      "source": ".git/aurora-handoff-import-20261006/k1-http-next450-desktop-resource-v2295-READ-BEFORE.raw",
+      "copy": "thesis/evidence/k1-http-remaining450-admission-v2294/LOCAL-PREFLIGHT-FAILURE-v2295/k1-http-next450-desktop-resource-v2295-READ-BEFORE.raw",
+      "bytes": 34096,
+      "sha256": "9f6e6192193ebfbf42ff8d9390673491da5fc07145f3374dec88ed12687404fd"
+    },
+    {
+      "source": ".git/aurora-handoff-import-20261006/k1-http-next450-desktop-resource-v2295-SHOW-FENCE.raw",
+      "copy": "thesis/evidence/k1-http-remaining450-admission-v2294/LOCAL-PREFLIGHT-FAILURE-v2295/k1-http-next450-desktop-resource-v2295-SHOW-FENCE.raw",
+      "bytes": 1372,
+      "sha256": "0b7c3169da99b6e5c8a26d3cde541bbf6528995f2c1ea88468f103725afa9107"
+    }
+  ]
+}

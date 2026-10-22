@@ -1,0 +1,97 @@
+{
+  "at": "2026-10-18T13:57:00.620212+00:00",
+  "checks": {
+    "epochMeasured": 387,
+    "firstGlobalMeasured": 514,
+    "freshWarmups": 15,
+    "lastGlobalMeasured": 900,
+    "newRuntimeRequests": 0,
+    "priorFailuresRetained": 1,
+    "wholeConditionAttemptTarget": 900
+  },
+  "lineageSha256": "a915ed2af9658ebea141e2dd04ff8dc740d3734efac20c6db6e26cd2e469519e",
+  "newConditionOrChangedEffectiveSetup": false,
+  "parentUnchanged": true,
+  "sourceFiles": [
+    {
+      "bytes": 54907,
+      "name": "runner.py",
+      "priorSha256": "6b534605a668a424f6ab1e9164e3ddada57eeadd989b95cd706208199efcfa40",
+      "sha256": "a1d39df18f20a37cd97e94eeba858ebee6b1874b4be00b235fb31b7db0e48954"
+    },
+    {
+      "bytes": 18976,
+      "name": "controller.py",
+      "priorSha256": "ea542c7b4f2c1355d6f06000fe6424ad6099778e91466f82becc38af2e64a0fd",
+      "sha256": "d7471a65b4eb834a187d51e4b52b0874dc1afe61e8490720694ebeed20cd977c"
+    },
+    {
+      "bytes": 15751,
+      "name": "receiver_proof.py",
+      "priorSha256": "25ce34e728c55ecf62cca5db20cb1d0ef8bfa92676966e49ce8ce7aad0295c42",
+      "sha256": "40ac64685ffb078b9d9aa983916d20df9c218badc40ae46b29c7398e4a0d259f"
+    },
+    {
+      "bytes": 8801,
+      "name": "stage_adapter.py",
+      "priorSha256": "204ea4d6b48571ab7ba0add0310a3dadd87b5e1e2afdc172634185755c9bb02c",
+      "sha256": "204ea4d6b48571ab7ba0add0310a3dadd87b5e1e2afdc172634185755c9bb02c"
+    },
+    {
+      "bytes": 13333,
+      "name": "k3_composition.py",
+      "priorSha256": "a62e5a036eb127657e1f81c503c08a272a7ef603c53c5e03991c17f4daa1a9e6",
+      "sha256": "a62e5a036eb127657e1f81c503c08a272a7ef603c53c5e03991c17f4daa1a9e6"
+    },
+    {
+      "bytes": 1950,
+      "name": "bootstrap.py",
+      "priorSha256": "6dddcd75348326ed65f6efaf05abdc40dcc503d512dd0a20b6335cbb277f5d50",
+      "sha256": "6dddcd75348326ed65f6efaf05abdc40dcc503d512dd0a20b6335cbb277f5d50"
+    },
+    {
+      "bytes": 3230,
+      "name": "bindings.py",
+      "priorSha256": "52182f956b34788ecbfbbb241c8243ff88baebe2874e3605791793777ed0dc91",
+      "sha256": "52182f956b34788ecbfbbb241c8243ff88baebe2874e3605791793777ed0dc91"
+    },
+    {
+      "bytes": 11873,
+      "name": "observer.py",
+      "priorSha256": "784cc4bffc0d6824bbe378d17a7f632d587ca0a315896b048b2ebef727082df5",
+      "sha256": "784cc4bffc0d6824bbe378d17a7f632d587ca0a315896b048b2ebef727082df5"
+    },
+    {
+      "bytes": 11584,
+      "name": "aurora_voice_telemetry_v430.py",
+      "priorSha256": "8129ffe7591a47a0107ede53b101aead9fc1f58b92f0c0c4203176cc7608325d",
+      "sha256": "8129ffe7591a47a0107ede53b101aead9fc1f58b92f0c0c4203176cc7608325d"
+    },
+    {
+      "bytes": 7475,
+      "name": "resource_sample.py",
+      "priorSha256": "8f62ec378e74036d4539d9159e3caf29b8fd7a9115de1ab0f482dfd58b6e1857",
+      "sha256": "8f62ec378e74036d4539d9159e3caf29b8fd7a9115de1ab0f482dfd58b6e1857"
+    },
+    {
+      "bytes": 220,
+      "name": "candidate-manifest.json",
+      "priorSha256": "ce75b965ee5879ebece6ea7dfe133441547d20ccf89ecd5d66ea510bd9645e60",
+      "sha256": "ce75b965ee5879ebece6ea7dfe133441547d20ccf89ecd5d66ea510bd9645e60"
+    },
+    {
+      "bytes": 219794,
+      "name": "candidate-input.wav",
+      "priorSha256": "da0ecc4ad0885746ab6e716585473917ab2b543a505bf0db09ebacfaa7943cbb",
+      "sha256": "da0ecc4ad0885746ab6e716585473917ab2b543a505bf0db09ebacfaa7943cbb"
+    },
+    {
+      "bytes": 58216,
+      "name": "source-inventory.json",
+      "priorSha256": "96ec8e3e14233520d4cd469c4177264a193d05cf26b4b512d91d98f16bbb7dee",
+      "sha256": "96ec8e3e14233520d4cd469c4177264a193d05cf26b4b512d91d98f16bbb7dee"
+    }
+  ],
+  "status": "SOURCE_PREPARED_NOT_LAUNCHED",
+  "reviewCorrections": "Inherited lock descriptor and complete incremental operational/log custody; pre-review sources preserved."
+}

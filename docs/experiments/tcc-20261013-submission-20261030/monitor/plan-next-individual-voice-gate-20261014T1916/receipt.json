@@ -1,0 +1,30 @@
+{
+  "objective": "tcc:20261013:submission-20261030",
+  "run": "run_e6054e76e9fc",
+  "task": "task_d7ea336050cf",
+  "dispatch": "ctx_37b4d0a3c14f",
+  "root_request": "msg_45314e6f92da",
+  "authoritative_path": "/home/developer/Documents/Obsidian Vault Origin/5-full-notes/faculdade/tcc/future-work-test-requirements.md",
+  "before_sha256": "7028f770457f08fd64e7b2221572a45932bfb4576ff5b27082696b1522d0223e",
+  "after_sha256": "92f2164224790012e7dd466752fa95fd0e22f8ef80315c9257ee704995820d83",
+  "before_lines": 1351,
+  "after_lines": 1388,
+  "diff_sha256": "a35e3be142a2e4aad3176c674e9847be7652f75a35ec6452d27014de1b99ba2f",
+  "checks": {
+    "exact_old_document_preserved": true,
+    "all_original_task_specs": true,
+    "phase_barrier_preserved": true,
+    "accepted_sample_rule_preserved": true,
+    "cumulative_stage_rule_preserved": true,
+    "next_gate_present": true,
+    "fake_gateway_scope_explicit": true,
+    "no_execution_claim": true
+  },
+  "branch": "codex/aurora-native-speech-routing-20261007",
+  "head": "5782746afba213f6b36907db2f09f0017625e218",
+  "normal_status_dirty_rows": 43,
+  "branch_head_status_rows_unchanged": true,
+  "execution": "documentation/source-read only; no tests/builds/models/device/network execution, source/goals/ledger mutation or commits/push",
+  "scope": "existing mandatoryT0/T2 gate appended; old1351lines retained; no replacement abbreviatedplan",
+  "gitnexus": "no tool/contextresource exposed; ordinary bounded source fallback, no graph/completeness/indexbuild claim"
+}

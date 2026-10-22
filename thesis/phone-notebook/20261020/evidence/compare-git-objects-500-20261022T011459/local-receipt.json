@@ -1,0 +1,8 @@
+{
+  "bytes": 1242,
+  "copyOnly": true,
+  "custody": "Notebook result persisted and fsynced before relay; remote receipt in same output",
+  "localPath": "/home/developer/projects/aurora/thesis/phone-notebook/20261020/evidence/compare-git-objects-500-20261022T011459/result.json",
+  "remotePath": "/home/developer/projects/aurora/thesis/phone-notebook/20261020/evidence/compare-git-objects-500-20261022T011459.json",
+  "sha256": "140fd785aa717bc63435c8cc718b99a8ac1dd673508db54da250b109503e411b"
+}

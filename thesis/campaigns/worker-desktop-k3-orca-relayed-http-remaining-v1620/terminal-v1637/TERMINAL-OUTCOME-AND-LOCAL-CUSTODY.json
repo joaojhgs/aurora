@@ -1,0 +1,55 @@
+{
+  "at": "2026-10-18T23:09:13.412998+00:00",
+  "status": "TERMINAL_PARTIAL24_11CORRECT_12REPLY_PREDICATE_1TRANSPORT_NOT96_OR900_COMPLETE",
+  "sourceSummary": {
+    "all": {
+      "attempted": 39,
+      "completed_correct": 26,
+      "completed_incorrect": 0,
+      "failed_or_interrupted": 13,
+      "planned": 111,
+      "timeouts": 0,
+      "unattempted": 72
+    },
+    "measured": {
+      "attempted": 24,
+      "completed_correct": 11,
+      "completed_incorrect": 0,
+      "failed_or_interrupted": 13,
+      "planned": 96,
+      "timeouts": 0,
+      "unattempted": 72
+    },
+    "warmup_excluded": {
+      "attempted": 15,
+      "completed_correct": 15,
+      "completed_incorrect": 0,
+      "failed_or_interrupted": 0,
+      "planned": 15,
+      "timeouts": 0,
+      "unattempted": 0
+    }
+  },
+  "measuredAttempted": 24,
+  "measuredCorrect": 11,
+  "partialReplyPredicateFailures": 12,
+  "executionTransportFailures": 1,
+  "explicitTimeoutFlags": 0,
+  "unattemptedInDeclared96": 72,
+  "unattemptedConditionTotal": 160,
+  "combinedConditionAttemptsCountOnly": 740,
+  "old716AttemptsAndTwoFailuresPreserved": true,
+  "allThreeWorkerProcessesAbsent": true,
+  "retainedCases": 39,
+  "indexedFilesVerified": 160,
+  "indexedBytesVerified": 3096198,
+  "expectedOutputAudioReferences": 26,
+  "modelQualityCausationUnknown": true,
+  "capturedException": "http.client.RemoteDisconnected/assistant",
+  "sourceTransportDiagnostic": ".git/aurora-handoff-import-20261006/distributed-k3-orca-relayed-http-cell-v1620/transport-diagnostics.jsonl",
+  "fixedManifestSha256": "4f1a09e7ac7dedeaeae6c1bef5a364d4a007e9249aec74f20a0b63b6375a6279",
+  "conditionElapsedSeconds": 1104.201375728,
+  "setupSeconds": 17.104950936,
+  "shutdownSeconds": 0.250308621,
+  "newOperation": "No new inference/fixture/model/forward/restart; readonlysavedanalysis only"
+}

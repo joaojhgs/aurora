@@ -1,0 +1,4460 @@
+{
+  "observed_at": "2026-10-14T14:02:35.790133+00:00",
+  "mode": "read-only; no deletion",
+  "sole_proposed_deleter": "original Root term_6a00d9ee-792a-4daf-8578-236290e33108",
+  "lineage": {
+    "run": "run_e6054e76e9fc",
+    "task": "task_d7ea336050cf",
+    "dispatch": "ctx_37b4d0a3c14f"
+  },
+  "df_before": "Filesystem        1B-blocks         Used  Available Use% Mounted on\n/dev/sda1      109128826880 106841272320 2270777344  98% /\n",
+  "inventory": [
+    {
+      "path": "/home/developer/projects/aurora/rust/target/debug/incremental/live_cpal_audio-0fvdmqdsciejh",
+      "root": "rust/target/debug/incremental",
+      "crate": "live_cpal_audio",
+      "bytes": 4689920,
+      "last_file_modified_at": "2026-10-09T15:03:34.812300+00:00",
+      "latest_mtime": 1791558214.8123,
+      "files": 4,
+      "lockfiles": [
+        "s-hn1yhcca86-1skec9w.lock"
+      ],
+      "symlink": false,
+      "candidate_old_other_variant": true,
+      "newest_preserved_path": "/home/developer/projects/aurora/rust/target/debug/incremental/live_cpal_audio-1i8io1ubeehzb"
+    },
+    {
+      "path": "/home/developer/projects/aurora/rust/target/debug/incremental/aurora_voice_core-2boka4u53oxia",
+      "root": "rust/target/debug/incremental",
+      "crate": "aurora_voice_core",
+      "bytes": 15568896,
+      "last_file_modified_at": "2026-10-11T02:58:26.762724+00:00",
+      "latest_mtime": 1791687506.7627242,
+      "files": 5,
+      "lockfiles": [
+        "s-hn3lvkefow-08ryaew.lock"
+      ],
+      "symlink": false,
+      "candidate_old_other_variant": true,
+      "newest_preserved_path": "/home/developer/projects/aurora/rust/target/debug/incremental/aurora_voice_core-19pjuxkisnblq"
+    },
+    {
+      "path": "/home/developer/projects/aurora/rust/target/debug/incremental/vad_parity_driver-2egz8x5wpf3a3",
+      "root": "rust/target/debug/incremental",
+      "crate": "vad_parity_driver",
+      "bytes": 5398528,
+      "last_file_modified_at": "2026-10-08T09:32:07.793334+00:00",
+      "latest_mtime": 1791451927.793334,
+      "files": 78,
+      "lockfiles": [
+        "s-hn0lnjuck5-1lbkzmo.lock"
+      ],
+      "symlink": false,
+      "candidate_old_other_variant": false,
+      "newest_preserved_path": "/home/developer/projects/aurora/rust/target/debug/incremental/vad_parity_driver-2egz8x5wpf3a3"
+    },
+    {
+      "path": "/home/developer/projects/aurora/rust/target/debug/incremental/aurora_voice_core-117lyr43ztvaw",
+      "root": "rust/target/debug/incremental",
+      "crate": "aurora_voice_core",
+      "bytes": 12771328,
+      "last_file_modified_at": "2026-10-07T20:54:31.860238+00:00",
+      "latest_mtime": 1791406471.860238,
+      "files": 4,
+      "lockfiles": [
+        "s-hn00rs4zhd-1j5evf0.lock"
+      ],
+      "symlink": false,
+      "candidate_old_other_variant": true,
+      "newest_preserved_path": "/home/developer/projects/aurora/rust/target/debug/incremental/aurora_voice_core-19pjuxkisnblq"
+    },
+    {
+      "path": "/home/developer/projects/aurora/rust/target/debug/incremental/catalog_number_text-0lxmheychfxzw",
+      "root": "rust/target/debug/incremental",
+      "crate": "catalog_number_text",
+      "bytes": 4595712,
+      "last_file_modified_at": "2026-10-07T20:13:44.158440+00:00",
+      "latest_mtime": 1791404024.15844,
+      "files": 38,
+      "lockfiles": [
+        "s-hmzznb3kxi-1xzvh3c.lock"
+      ],
+      "symlink": false,
+      "candidate_old_other_variant": true,
+      "newest_preserved_path": "/home/developer/projects/aurora/rust/target/debug/incremental/catalog_number_text-1ci5ak2tsrajd"
+    },
+    {
+      "path": "/home/developer/projects/aurora/rust/target/debug/incremental/aurora_voice_sherpa_sys-1ybew7y7oxhpd",
+      "root": "rust/target/debug/incremental",
+      "crate": "aurora_voice_sherpa_sys",
+      "bytes": 3907584,
+      "last_file_modified_at": "2026-10-08T09:31:18.039207+00:00",
+      "latest_mtime": 1791451878.0392065,
+      "files": 4,
+      "lockfiles": [
+        "s-hn0lmq50ht-1jclwsd.lock"
+      ],
+      "symlink": false,
+      "candidate_old_other_variant": true,
+      "newest_preserved_path": "/home/developer/projects/aurora/rust/target/debug/incremental/aurora_voice_sherpa_sys-29yp8nx9v1e1z"
+    },
+    {
+      "path": "/home/developer/projects/aurora/rust/target/debug/incremental/aurora_contracts-0pzuf92k8je0s",
+      "root": "rust/target/debug/incremental",
+      "crate": "aurora_contracts",
+      "bytes": 115892224,
+      "last_file_modified_at": "2026-10-08T08:13:28.073199+00:00",
+      "latest_mtime": 1791447208.0731986,
+      "files": 4,
+      "lockfiles": [
+        "s-hn0jhbn8q1-09kt0tr.lock"
+      ],
+      "symlink": false,
+      "candidate_old_other_variant": true,
+      "newest_preserved_path": "/home/developer/projects/aurora/rust/target/debug/incremental/aurora_contracts-2r2cjm2k9n3tf"
+    },
+    {
+      "path": "/home/developer/projects/aurora/rust/target/debug/incremental/catalog_number_text-1ci5ak2tsrajd",
+      "root": "rust/target/debug/incremental",
+      "crate": "catalog_number_text",
+      "bytes": 4599808,
+      "last_file_modified_at": "2026-10-07T22:12:30.208726+00:00",
+      "latest_mtime": 1791411150.208726,
+      "files": 38,
+      "lockfiles": [
+        "s-hn02x5t6ac-06g4ny3.lock"
+      ],
+      "symlink": false,
+      "candidate_old_other_variant": false,
+      "newest_preserved_path": "/home/developer/projects/aurora/rust/target/debug/incremental/catalog_number_text-1ci5ak2tsrajd"
+    },
+    {
+      "path": "/home/developer/projects/aurora/rust/target/debug/incremental/node_policy-1zo9wv9dy4kzu",
+      "root": "rust/target/debug/incremental",
+      "crate": "node_policy",
+      "bytes": 1327104,
+      "last_file_modified_at": "2026-10-09T15:03:39.838473+00:00",
+      "latest_mtime": 1791558219.8384733,
+      "files": 4,
+      "lockfiles": [
+        "s-hn1yhfcikf-0pv1vza.lock"
+      ],
+      "symlink": false,
+      "candidate_old_other_variant": true,
+      "newest_preserved_path": "/home/developer/projects/aurora/rust/target/debug/incremental/node_policy-2q6ww1fwunk8k"
+    },
+    {
+      "path": "/home/developer/projects/aurora/rust/target/debug/incremental/catalog_number_text-21vgljkk8xmd8",
+      "root": "rust/target/debug/incremental",
+      "crate": "catalog_number_text",
+      "bytes": 1167360,
+      "last_file_modified_at": "2026-10-07T20:54:33.311249+00:00",
+      "latest_mtime": 1791406473.3112495,
+      "files": 4,
+      "lockfiles": [
+        "s-hn00rtffk4-0ac7gyl.lock"
+      ],
+      "symlink": false,
+      "candidate_old_other_variant": true,
+      "newest_preserved_path": "/home/developer/projects/aurora/rust/target/debug/incremental/catalog_number_text-1ci5ak2tsrajd"
+    },
+    {
+      "path": "/home/developer/projects/aurora/rust/target/debug/incremental/aurora_voice_core-1pslmvkpo0muw",
+      "root": "rust/target/debug/incremental",
+      "crate": "aurora_voice_core",
+      "bytes": 36851712,
+      "last_file_modified_at": "2026-10-07T20:55:25.350654+00:00",
+      "latest_mtime": 1791406525.3506544,
+      "files": 166,
+      "lockfiles": [
+        "s-hn00sly7h3-1erah06.lock"
+      ],
+      "symlink": false,
+      "candidate_old_other_variant": true,
+      "newest_preserved_path": "/home/developer/projects/aurora/rust/target/debug/incremental/aurora_voice_core-19pjuxkisnblq"
+    },
+    {
+      "path": "/home/developer/projects/aurora/rust/target/debug/incremental/aurora_voice_core-0g21dhi8v8z0k",
+      "root": "rust/target/debug/incremental",
+      "crate": "aurora_voice_core",
+      "bytes": 30834688,
+      "last_file_modified_at": "2026-10-10T01:28:25.647470+00:00",
+      "latest_mtime": 1791595705.6474695,
+      "files": 121,
+      "lockfiles": [
+        "s-hn2fpaxxog-0pr82b1.lock"
+      ],
+      "symlink": false,
+      "candidate_old_other_variant": true,
+      "newest_preserved_path": "/home/developer/projects/aurora/rust/target/debug/incremental/aurora_voice_core-19pjuxkisnblq"
+    },
+    {
+      "path": "/home/developer/projects/aurora/rust/target/debug/incremental/aurora_local_inference-0d6lcv2hvx30w",
+      "root": "rust/target/debug/incremental",
+      "crate": "aurora_local_inference",
+      "bytes": 5038080,
+      "last_file_modified_at": "2026-10-11T11:11:39.727885+00:00",
+      "latest_mtime": 1791717099.7278848,
+      "files": 5,
+      "lockfiles": [
+        "s-hn3zh04w4x-1eeqott.lock"
+      ],
+      "symlink": false,
+      "candidate_old_other_variant": true,
+      "newest_preserved_path": "/home/developer/projects/aurora/rust/target/debug/incremental/aurora_local_inference-22ykubu5ohykq"
+    },
+    {
+      "path": "/home/developer/projects/aurora/rust/target/debug/incremental/aurora_contracts-1dl3dvkkn6l18",
+      "root": "rust/target/debug/incremental",
+      "crate": "aurora_contracts",
+      "bytes": 262901760,
+      "last_file_modified_at": "2026-10-09T22:39:35.075483+00:00",
+      "latest_mtime": 1791585575.075483,
+      "files": 260,
+      "lockfiles": [
+        "s-hn2b1gj193-0rxbjvl.lock"
+      ],
+      "symlink": false,
+      "candidate_old_other_variant": true,
+      "newest_preserved_path": "/home/developer/projects/aurora/rust/target/debug/incremental/aurora_contracts-2r2cjm2k9n3tf"
+    },
+    {
+      "path": "/home/developer/projects/aurora/rust/target/debug/incremental/aurora_voice_sherpa_sys-343qtoezkn9co",
+      "root": "rust/target/debug/incremental",
+      "crate": "aurora_voice_sherpa_sys",
+      "bytes": 10166272,
+      "last_file_modified_at": "2026-10-09T20:33:18.277792+00:00",
+      "latest_mtime": 1791577998.2777925,
+      "files": 77,
+      "lockfiles": [
+        "s-hn27kihlxm-1u04lof.lock"
+      ],
+      "symlink": false,
+      "candidate_old_other_variant": true,
+      "newest_preserved_path": "/home/developer/projects/aurora/rust/target/debug/incremental/aurora_voice_sherpa_sys-29yp8nx9v1e1z"
+    },
+    {
+      "path": "/home/developer/projects/aurora/rust/target/debug/incremental/aurora_voice_engine-0ow1t87lzdrq6",
+      "root": "rust/target/debug/incremental",
+      "crate": "aurora_voice_engine",
+      "bytes": 56979456,
+      "last_file_modified_at": "2026-10-08T02:29:48.679482+00:00",
+      "latest_mtime": 1791426588.6794817,
+      "files": 180,
+      "lockfiles": [
+        "s-hn0a0e05ml-0rqe2qq.lock"
+      ],
+      "symlink": false,
+      "candidate_old_other_variant": true,
+      "newest_preserved_path": "/home/developer/projects/aurora/rust/target/debug/incremental/aurora_voice_engine-1mwznqxds5wob"
+    },
+    {
+      "path": "/home/developer/projects/aurora/rust/target/debug/incremental/aurora_voice_sherpa-0l85oso1c8rx8",
+      "root": "rust/target/debug/incremental",
+      "crate": "aurora_voice_sherpa",
+      "bytes": 5488640,
+      "last_file_modified_at": "2026-10-09T18:32:35.532124+00:00",
+      "latest_mtime": 1791570755.5321243,
+      "files": 4,
+      "lockfiles": [
+        "s-hn248qs312-0o08v9b.lock"
+      ],
+      "symlink": false,
+      "candidate_old_other_variant": true,
+      "newest_preserved_path": "/home/developer/projects/aurora/rust/target/debug/incremental/aurora_voice_sherpa-08wqj9d39rhbt"
+    },
+    {
+      "path": "/home/developer/projects/aurora/rust/target/debug/incremental/aurora_contracts-29d4cghptmjd1",
+      "root": "rust/target/debug/incremental",
+      "crate": "aurora_contracts",
+      "bytes": 106405888,
+      "last_file_modified_at": "2026-10-09T15:03:51.426663+00:00",
+      "latest_mtime": 1791558231.4266627,
+      "files": 4,
+      "lockfiles": [
+        "s-hn1yhfmjmc-0wl2waf.lock"
+      ],
+      "symlink": false,
+      "candidate_old_other_variant": true,
+      "newest_preserved_path": "/home/developer/projects/aurora/rust/target/debug/incremental/aurora_contracts-2r2cjm2k9n3tf"
+    },
+    {
+      "path": "/home/developer/projects/aurora/rust/target/debug/incremental/aurora_mesh_authority-20abckrrq2q2r",
+      "root": "rust/target/debug/incremental",
+      "crate": "aurora_mesh_authority",
+      "bytes": 21192704,
+      "last_file_modified_at": "2026-10-09T15:05:26.036385+00:00",
+      "latest_mtime": 1791558326.0363846,
+      "files": 94,
+      "lockfiles": [
+        "s-hn1yj6a52w-11lvj34.lock"
+      ],
+      "symlink": false,
+      "candidate_old_other_variant": true,
+      "newest_preserved_path": "/home/developer/projects/aurora/rust/target/debug/incremental/aurora_mesh_authority-0zvu0r9vzbm5d"
+    },
+    {
+      "path": "/home/developer/projects/aurora/rust/target/debug/incremental/aurora_voice_native-05wb888vf6xi8",
+      "root": "rust/target/debug/incremental",
+      "crate": "aurora_voice_native",
+      "bytes": 280993792,
+      "last_file_modified_at": "2026-10-09T22:38:58.596213+00:00",
+      "latest_mtime": 1791585538.5962133,
+      "files": 260,
+      "lockfiles": [
+        "s-hn2b0ug8d6-03traza.lock"
+      ],
+      "symlink": false,
+      "candidate_old_other_variant": true,
+      "newest_preserved_path": "/home/developer/projects/aurora/rust/target/debug/incremental/aurora_voice_native-0ckngnjvijtaw"
+    },
+    {
+      "path": "/home/developer/projects/aurora/rust/target/debug/incremental/aurora_contracts-3ga5nio6co71m",
+      "root": "rust/target/debug/incremental",
+      "crate": "aurora_contracts",
+      "bytes": 115957760,
+      "last_file_modified_at": "2026-10-07T18:49:28.938026+00:00",
+      "latest_mtime": 1791398968.9380264,
+      "files": 4,
+      "lockfiles": [
+        "s-hmzxbjeq8a-1e52qqx.lock"
+      ],
+      "symlink": false,
+      "candidate_old_other_variant": true,
+      "newest_preserved_path": "/home/developer/projects/aurora/rust/target/debug/incremental/aurora_contracts-2r2cjm2k9n3tf"
+    },
+    {
+      "path": "/home/developer/projects/aurora/rust/target/debug/incremental/aurora_voice_core-1lw74gy8wrgvr",
+      "root": "rust/target/debug/incremental",
+      "crate": "aurora_voice_core",
+      "bytes": 31227904,
+      "last_file_modified_at": "2026-10-09T22:39:36.787496+00:00",
+      "latest_mtime": 1791585576.7874956,
+      "files": 122,
+      "lockfiles": [
+        "s-hn2b1uhyk5-0aor0rb.lock"
+      ],
+      "symlink": false,
+      "candidate_old_other_variant": true,
+      "newest_preserved_path": "/home/developer/projects/aurora/rust/target/debug/incremental/aurora_voice_core-19pjuxkisnblq"
+    },
+    {
+      "path": "/home/developer/projects/aurora/rust/target/debug/incremental/aurora_voice_engine-3f1yjmiuj72ap",
+      "root": "rust/target/debug/incremental",
+      "crate": "aurora_voice_engine",
+      "bytes": 20533248,
+      "last_file_modified_at": "2026-10-07T20:54:35.320265+00:00",
+      "latest_mtime": 1791406475.320265,
+      "files": 4,
+      "lockfiles": [
+        "s-hn00rthi0r-1wsrrzc.lock"
+      ],
+      "symlink": false,
+      "candidate_old_other_variant": true,
+      "newest_preserved_path": "/home/developer/projects/aurora/rust/target/debug/incremental/aurora_voice_engine-1mwznqxds5wob"
+    },
+    {
+      "path": "/home/developer/projects/aurora/rust/target/debug/incremental/aurora_voice_native-2vibqi9v1v82a",
+      "root": "rust/target/debug/incremental",
+      "crate": "aurora_voice_native",
+      "bytes": 131776512,
+      "last_file_modified_at": "2026-10-09T20:35:55.337891+00:00",
+      "latest_mtime": 1791578155.3378913,
+      "files": 260,
+      "lockfiles": [
+        "s-hn27n3nedc-166ybny.lock"
+      ],
+      "symlink": false,
+      "candidate_old_other_variant": true,
+      "newest_preserved_path": "/home/developer/projects/aurora/rust/target/debug/incremental/aurora_voice_native-0ckngnjvijtaw"
+    },
+    {
+      "path": "/home/developer/projects/aurora/rust/target/debug/incremental/phase_request-2md9nuj2t82lp",
+      "root": "rust/target/debug/incremental",
+      "crate": "phase_request",
+      "bytes": 8433664,
+      "last_file_modified_at": "2026-10-08T03:17:39.964586+00:00",
+      "latest_mtime": 1791429459.964586,
+      "files": 88,
+      "lockfiles": [
+        "s-hn0bbyl4pl-0dqehso.lock"
+      ],
+      "symlink": false,
+      "candidate_old_other_variant": false,
+      "newest_preserved_path": "/home/developer/projects/aurora/rust/target/debug/incremental/phase_request-2md9nuj2t82lp"
+    },
+    {
+      "path": "/home/developer/projects/aurora/rust/target/debug/incremental/build_script_build-2tzocwyai8azm",
+      "root": "rust/target/debug/incremental",
+      "crate": "build_script_build",
+      "bytes": 3731456,
+      "last_file_modified_at": "2026-10-12T00:35:43.647315+00:00",
+      "latest_mtime": 1791765343.6473148,
+      "files": 75,
+      "lockfiles": [
+        "s-hn4lmv9770-10o2pbs.lock"
+      ],
+      "symlink": false,
+      "candidate_old_other_variant": false,
+      "newest_preserved_path": "/home/developer/projects/aurora/rust/target/debug/incremental/build_script_build-2tzocwyai8azm"
+    },
+    {
+      "path": "/home/developer/projects/aurora/rust/target/debug/incremental/aurora_voice_sherpa_sys-0ek03sw486epg",
+      "root": "rust/target/debug/incremental",
+      "crate": "aurora_voice_sherpa_sys",
+      "bytes": 3686400,
+      "last_file_modified_at": "2026-10-08T09:30:46.072972+00:00",
+      "latest_mtime": 1791451846.072972,
+      "files": 4,
+      "lockfiles": [
+        "s-hn0lm74nz8-1vlnnku.lock"
+      ],
+      "symlink": false,
+      "candidate_old_other_variant": true,
+      "newest_preserved_path": "/home/developer/projects/aurora/rust/target/debug/incremental/aurora_voice_sherpa_sys-29yp8nx9v1e1z"
+    },
+    {
+      "path": "/home/developer/projects/aurora/rust/target/debug/incremental/aurora_contracts-1h87djcegr490",
+      "root": "rust/target/debug/incremental",
+      "crate": "aurora_contracts",
+      "bytes": 116609024,
+      "last_file_modified_at": "2026-10-10T22:55:54.323888+00:00",
+      "latest_mtime": 1791672954.3238876,
+      "files": 4,
+      "lockfiles": [
+        "s-hn3f6lx74s-1d2o4xz.lock"
+      ],
+      "symlink": false,
+      "candidate_old_other_variant": true,
+      "newest_preserved_path": "/home/developer/projects/aurora/rust/target/debug/incremental/aurora_contracts-2r2cjm2k9n3tf"
+    },
+    {
+      "path": "/home/developer/projects/aurora/rust/target/debug/incremental/aurora_voice_sherpa-13y2kmhkos9ja",
+      "root": "rust/target/debug/incremental",
+      "crate": "aurora_voice_sherpa",
+      "bytes": 20123648,
+      "last_file_modified_at": "2026-10-10T01:28:32.280520+00:00",
+      "latest_mtime": 1791595712.28052,
+      "files": 134,
+      "lockfiles": [
+        "s-hn2fpgfcbb-1bjvf4y.lock"
+      ],
+      "symlink": false,
+      "candidate_old_other_variant": true,
+      "newest_preserved_path": "/home/developer/projects/aurora/rust/target/debug/incremental/aurora_voice_sherpa-08wqj9d39rhbt"
+    },
+    {
+      "path": "/home/developer/projects/aurora/rust/target/debug/incremental/aurora_voice_engine-28f2jxk2etp6z",
+      "root": "rust/target/debug/incremental",
+      "crate": "aurora_voice_engine",
+      "bytes": 19890176,
+      "last_file_modified_at": "2026-10-07T20:54:20.591150+00:00",
+      "latest_mtime": 1791406460.5911503,
+      "files": 4,
+      "lockfiles": [
+        "s-hn00rkv6m4-17oqro8.lock"
+      ],
+      "symlink": false,
+      "candidate_old_other_variant": true,
+      "newest_preserved_path": "/home/developer/projects/aurora/rust/target/debug/incremental/aurora_voice_engine-1mwznqxds5wob"
+    },
+    {
+      "path": "/home/developer/projects/aurora/rust/target/debug/incremental/aurora_contracts-1hfnxcr1k1uqd",
+      "root": "rust/target/debug/incremental",
+      "crate": "aurora_contracts",
+      "bytes": 109641728,
+      "last_file_modified_at": "2026-10-09T15:03:14.878384+00:00",
+      "latest_mtime": 1791558194.8783839,
+      "files": 4,
+      "lockfiles": [
+        "s-hn1ygwuog0-0cf1z96.lock"
+      ],
+      "symlink": false,
+      "candidate_old_other_variant": true,
+      "newest_preserved_path": "/home/developer/projects/aurora/rust/target/debug/incremental/aurora_contracts-2r2cjm2k9n3tf"
+    },
+    {
+      "path": "/home/developer/projects/aurora/rust/target/debug/incremental/build_script_build-2u67e8s22wfmw",
+      "root": "rust/target/debug/incremental",
+      "crate": "build_script_build",
+      "bytes": 2772992,
+      "last_file_modified_at": "2026-10-09T20:33:13.939762+00:00",
+      "latest_mtime": 1791577993.9397624,
+      "files": 43,
+      "lockfiles": [
+        "s-hn27kg66hq-0nskiix.lock"
+      ],
+      "symlink": false,
+      "candidate_old_other_variant": true,
+      "newest_preserved_path": "/home/developer/projects/aurora/rust/target/debug/incremental/build_script_build-2tzocwyai8azm"
+    },
+    {
+      "path": "/home/developer/projects/aurora/rust/target/debug/incremental/aurora_voice_native-0ckngnjvijtaw",
+      "root": "rust/target/debug/incremental",
+      "crate": "aurora_voice_native",
+      "bytes": 42442752,
+      "last_file_modified_at": "2026-10-11T02:59:04.752015+00:00",
+      "latest_mtime": 1791687544.7520149,
+      "files": 5,
+      "lockfiles": [
+        "s-hn3lw4w8xp-0t6qot8.lock"
+      ],
+      "symlink": false,
+      "candidate_old_other_variant": false,
+      "newest_preserved_path": "/home/developer/projects/aurora/rust/target/debug/incremental/aurora_voice_native-0ckngnjvijtaw"
+    },
+    {
+      "path": "/home/developer/projects/aurora/rust/target/debug/incremental/parity_corpus-0w31heputwtgn",
+      "root": "rust/target/debug/incremental",
+      "crate": "parity_corpus",
+      "bytes": 3477504,
+      "last_file_modified_at": "2026-10-09T15:03:53.306025+00:00",
+      "latest_mtime": 1791558233.3060246,
+      "files": 4,
+      "lockfiles": [
+        "s-hn1yhnc2ij-1fov7h0.lock"
+      ],
+      "symlink": false,
+      "candidate_old_other_variant": true,
+      "newest_preserved_path": "/home/developer/projects/aurora/rust/target/debug/incremental/parity_corpus-3p080nhj7yuhz"
+    },
+    {
+      "path": "/home/developer/projects/aurora/rust/target/debug/incremental/aurora_voice_native-0u3cexdzifohw",
+      "root": "rust/target/debug/incremental",
+      "crate": "aurora_voice_native",
+      "bytes": 37289984,
+      "last_file_modified_at": "2026-10-09T15:03:32.768520+00:00",
+      "latest_mtime": 1791558212.7685204,
+      "files": 4,
+      "lockfiles": [
+        "s-hn1yh9od24-098xayv.lock"
+      ],
+      "symlink": false,
+      "candidate_old_other_variant": true,
+      "newest_preserved_path": "/home/developer/projects/aurora/rust/target/debug/incremental/aurora_voice_native-0ckngnjvijtaw"
+    },
+    {
+      "path": "/home/developer/projects/aurora/rust/target/debug/incremental/opaque_json-0gn1lw2z21k0s",
+      "root": "rust/target/debug/incremental",
+      "crate": "opaque_json",
+      "bytes": 6537216,
+      "last_file_modified_at": "2026-10-07T18:50:29.827495+00:00",
+      "latest_mtime": 1791399029.8274953,
+      "files": 58,
+      "lockfiles": [
+        "s-hmzxcpa1v4-1vycoxa.lock"
+      ],
+      "symlink": false,
+      "candidate_old_other_variant": true,
+      "newest_preserved_path": "/home/developer/projects/aurora/rust/target/debug/incremental/opaque_json-1td708sqycuxs"
+    },
+    {
+      "path": "/home/developer/projects/aurora/rust/target/debug/incremental/wasm_json_shape-0p6zkpj5arai5",
+      "root": "rust/target/debug/incremental",
+      "crate": "wasm_json_shape",
+      "bytes": 122880,
+      "last_file_modified_at": "2026-10-07T19:31:11.251094+00:00",
+      "latest_mtime": 1791401471.2510943,
+      "files": 9,
+      "lockfiles": [
+        "s-hmzyh3cptq-1l1cuun.lock"
+      ],
+      "symlink": false,
+      "candidate_old_other_variant": true,
+      "newest_preserved_path": "/home/developer/projects/aurora/rust/target/debug/incremental/wasm_json_shape-1qjpr7eda7odr"
+    },
+    {
+      "path": "/home/developer/projects/aurora/rust/target/debug/incremental/aurora_contracts-038phh1ynyrs1",
+      "root": "rust/target/debug/incremental",
+      "crate": "aurora_contracts",
+      "bytes": 106201088,
+      "last_file_modified_at": "2026-10-07T18:49:39.609109+00:00",
+      "latest_mtime": 1791398979.6091087,
+      "files": 4,
+      "lockfiles": [
+        "s-hmzxbps39d-12je2fj.lock"
+      ],
+      "symlink": false,
+      "candidate_old_other_variant": true,
+      "newest_preserved_path": "/home/developer/projects/aurora/rust/target/debug/incremental/aurora_contracts-2r2cjm2k9n3tf"
+    },
+    {
+      "path": "/home/developer/projects/aurora/rust/target/debug/incremental/aurora_voice_engine-3b6fhmnp1o137",
+      "root": "rust/target/debug/incremental",
+      "crate": "aurora_voice_engine",
+      "bytes": 61505536,
+      "last_file_modified_at": "2026-10-07T22:09:21.577286+00:00",
+      "latest_mtime": 1791410961.5772865,
+      "files": 170,
+      "lockfiles": [
+        "s-hn02u0x02a-182cpfe.lock"
+      ],
+      "symlink": false,
+      "candidate_old_other_variant": true,
+      "newest_preserved_path": "/home/developer/projects/aurora/rust/target/debug/incremental/aurora_voice_engine-1mwznqxds5wob"
+    },
+    {
+      "path": "/home/developer/projects/aurora/rust/target/debug/incremental/build_script_build-0fsciauxquwx5",
+      "root": "rust/target/debug/incremental",
+      "crate": "build_script_build",
+      "bytes": 3457024,
+      "last_file_modified_at": "2026-10-11T10:37:10.449102+00:00",
+      "latest_mtime": 1791715030.449102,
+      "files": 75,
+      "lockfiles": [
+        "s-hn3yis57gd-1lgfcxe.lock"
+      ],
+      "symlink": false,
+      "candidate_old_other_variant": true,
+      "newest_preserved_path": "/home/developer/projects/aurora/rust/target/debug/incremental/build_script_build-2tzocwyai8azm"
+    },
+    {
+      "path": "/home/developer/projects/aurora/rust/target/debug/incremental/phase_b-0v2ocanexvvka",
+      "root": "rust/target/debug/incremental",
+      "crate": "phase_b",
+      "bytes": 5713920,
+      "last_file_modified_at": "2026-10-08T03:17:38.715576+00:00",
+      "latest_mtime": 1791429458.7155764,
+      "files": 74,
+      "lockfiles": [
+        "s-hn0bby2jku-0fqg7ha.lock"
+      ],
+      "symlink": false,
+      "candidate_old_other_variant": false,
+      "newest_preserved_path": "/home/developer/projects/aurora/rust/target/debug/incremental/phase_b-0v2ocanexvvka"
+    },
+    {
+      "path": "/home/developer/projects/aurora/rust/target/debug/incremental/aurora_voice_engine-00xfa138wutcc",
+      "root": "rust/target/debug/incremental",
+      "crate": "aurora_voice_engine",
+      "bytes": 56602624,
+      "last_file_modified_at": "2026-10-07T20:55:17.255591+00:00",
+      "latest_mtime": 1791406517.2555914,
+      "files": 180,
+      "lockfiles": [
+        "s-hn00sh2j7n-0et7ohh.lock"
+      ],
+      "symlink": false,
+      "candidate_old_other_variant": true,
+      "newest_preserved_path": "/home/developer/projects/aurora/rust/target/debug/incremental/aurora_voice_engine-1mwznqxds5wob"
+    },
+    {
+      "path": "/home/developer/projects/aurora/rust/target/debug/incremental/json_text_catalogs-2k145kzbca74y",
+      "root": "rust/target/debug/incremental",
+      "crate": "json_text_catalogs",
+      "bytes": 5595136,
+      "last_file_modified_at": "2026-10-07T20:54:36.720276+00:00",
+      "latest_mtime": 1791406476.720276,
+      "files": 52,
+      "lockfiles": [
+        "s-hn00rvfup4-1js2v9x.lock"
+      ],
+      "symlink": false,
+      "candidate_old_other_variant": true,
+      "newest_preserved_path": "/home/developer/projects/aurora/rust/target/debug/incremental/json_text_catalogs-2cfahybeo0kes"
+    },
+    {
+      "path": "/home/developer/projects/aurora/rust/target/debug/incremental/aurora_local_inference-2ocjth8xrn8g3",
+      "root": "rust/target/debug/incremental",
+      "crate": "aurora_local_inference",
+      "bytes": 5033984,
+      "last_file_modified_at": "2026-10-11T10:37:21.593187+00:00",
+      "latest_mtime": 1791715041.5931869,
+      "files": 5,
+      "lockfiles": [
+        "s-hn3yiyroyv-1kg2xuc.lock"
+      ],
+      "symlink": false,
+      "candidate_old_other_variant": true,
+      "newest_preserved_path": "/home/developer/projects/aurora/rust/target/debug/incremental/aurora_local_inference-22ykubu5ohykq"
+    },
+    {
+      "path": "/home/developer/projects/aurora/rust/target/debug/incremental/generated_contracts-2ne31c6w0uymn",
+      "root": "rust/target/debug/incremental",
+      "crate": "generated_contracts",
+      "bytes": 3489792,
+      "last_file_modified_at": "2026-10-09T15:03:40.138998+00:00",
+      "latest_mtime": 1791558220.1389978,
+      "files": 4,
+      "lockfiles": [
+        "s-hn1yhfizy0-1d55jn3.lock"
+      ],
+      "symlink": false,
+      "candidate_old_other_variant": true,
+      "newest_preserved_path": "/home/developer/projects/aurora/rust/target/debug/incremental/generated_contracts-3epj2autaf8z0"
+    },
+    {
+      "path": "/home/developer/projects/aurora/rust/target/debug/incremental/aurora_voice_engine-0oslh0hxf16lk",
+      "root": "rust/target/debug/incremental",
+      "crate": "aurora_voice_engine",
+      "bytes": 19603456,
+      "last_file_modified_at": "2026-10-07T22:09:16.033244+00:00",
+      "latest_mtime": 1791410956.0332441,
+      "files": 4,
+      "lockfiles": [
+        "s-hn02tx9vpk-13jc51s.lock"
+      ],
+      "symlink": false,
+      "candidate_old_other_variant": true,
+      "newest_preserved_path": "/home/developer/projects/aurora/rust/target/debug/incremental/aurora_voice_engine-1mwznqxds5wob"
+    },
+    {
+      "path": "/home/developer/projects/aurora/rust/target/debug/incremental/handoff_raw_feature_boundary-20z4vkvvrexow",
+      "root": "rust/target/debug/incremental",
+      "crate": "handoff_raw_feature_boundary",
+      "bytes": 3919872,
+      "last_file_modified_at": "2026-10-07T09:37:05.702415+00:00",
+      "latest_mtime": 1791365825.702415,
+      "files": 17,
+      "lockfiles": [
+        "s-hmzi3kur4u-1glnf8g.lock"
+      ],
+      "symlink": false,
+      "candidate_old_other_variant": true,
+      "newest_preserved_path": "/home/developer/projects/aurora/rust/target/debug/incremental/handoff_raw_feature_boundary-03skjpcyec7nf"
+    },
+    {
+      "path": "/home/developer/projects/aurora/rust/target/debug/incremental/nsr04_app_json150_helper-2y67s54niwqsd",
+      "root": "rust/target/debug/incremental",
+      "crate": "nsr04_app_json150_helper",
+      "bytes": 36864,
+      "last_file_modified_at": "2026-10-08T03:17:33.235534+00:00",
+      "latest_mtime": 1791429453.2355342,
+      "files": 5,
+      "lockfiles": [
+        "s-hn0bbv44i6-0skwhgh.lock"
+      ],
+      "symlink": false,
+      "candidate_old_other_variant": true,
+      "newest_preserved_path": "/home/developer/projects/aurora/rust/target/debug/incremental/nsr04_app_json150_helper-0qibob9gt2dm8"
+    },
+    {
+      "path": "/home/developer/projects/aurora/rust/target/debug/incremental/aurora_tauri_response_json_helper_v1-1ji1u2l9062hk",
+      "root": "rust/target/debug/incremental",
+      "crate": "aurora_tauri_response_json_helper_v1",
+      "bytes": 1466368,
+      "last_file_modified_at": "2026-10-08T02:42:40.101396+00:00",
+      "latest_mtime": 1791427360.1013958,
+      "files": 9,
+      "lockfiles": [
+        "s-hn0ad8vl9v-0hydp7r.lock"
+      ],
+      "symlink": false,
+      "candidate_old_other_variant": true,
+      "newest_preserved_path": "/home/developer/projects/aurora/rust/target/debug/incremental/aurora_tauri_response_json_helper_v1-0i3rlfq5jnxgk"
+    },
+    {
+      "path": "/home/developer/projects/aurora/rust/target/debug/incremental/aurora_voice_sherpa_sys-3fu2wvushcz40",
+      "root": "rust/target/debug/incremental",
+      "crate": "aurora_voice_sherpa_sys",
+      "bytes": 4698112,
+      "last_file_modified_at": "2026-10-08T09:12:33.746300+00:00",
+      "latest_mtime": 1791450753.7463005,
+      "files": 4,
+      "lockfiles": [
+        "s-hn0l44ptpj-07fupj0.lock"
+      ],
+      "symlink": false,
+      "candidate_old_other_variant": true,
+      "newest_preserved_path": "/home/developer/projects/aurora/rust/target/debug/incremental/aurora_voice_sherpa_sys-29yp8nx9v1e1z"
+    },
+    {
+      "path": "/home/developer/projects/aurora/rust/target/debug/incremental/aurora_contracts-1ikjnb131jppo",
+      "root": "rust/target/debug/incremental",
+      "crate": "aurora_contracts",
+      "bytes": 258478080,
+      "last_file_modified_at": "2026-10-10T01:28:29.656500+00:00",
+      "latest_mtime": 1791595709.6565,
+      "files": 260,
+      "lockfiles": [
+        "s-hn2fp277po-09704tn.lock"
+      ],
+      "symlink": false,
+      "candidate_old_other_variant": true,
+      "newest_preserved_path": "/home/developer/projects/aurora/rust/target/debug/incremental/aurora_contracts-2r2cjm2k9n3tf"
+    },
+    {
+      "path": "/home/developer/projects/aurora/rust/target/debug/incremental/aurora_voice_core-19r2m5f0y82g1",
+      "root": "rust/target/debug/incremental",
+      "crate": "aurora_voice_core",
+      "bytes": 27680768,
+      "last_file_modified_at": "2026-10-08T08:13:50.432369+00:00",
+      "latest_mtime": 1791447230.4323685,
+      "files": 118,
+      "lockfiles": [
+        "s-hn0jhunpu1-0iqklgq.lock"
+      ],
+      "symlink": false,
+      "candidate_old_other_variant": true,
+      "newest_preserved_path": "/home/developer/projects/aurora/rust/target/debug/incremental/aurora_voice_core-19pjuxkisnblq"
+    },
+    {
+      "path": "/home/developer/projects/aurora/rust/target/debug/incremental/aurora_contracts-3tyqej4lrivab",
+      "root": "rust/target/debug/incremental",
+      "crate": "aurora_contracts",
+      "bytes": 257236992,
+      "last_file_modified_at": "2026-10-07T18:49:49.819187+00:00",
+      "latest_mtime": 1791398989.8191872,
+      "files": 260,
+      "lockfiles": [
+        "s-hmzxbw2las-1ess6ut.lock"
+      ],
+      "symlink": false,
+      "candidate_old_other_variant": true,
+      "newest_preserved_path": "/home/developer/projects/aurora/rust/target/debug/incremental/aurora_contracts-2r2cjm2k9n3tf"
+    },
+    {
+      "path": "/home/developer/projects/aurora/rust/target/debug/incremental/aurora_voice_ios_bridge-08sb7jazwam7n",
+      "root": "rust/target/debug/incremental",
+      "crate": "aurora_voice_ios_bridge",
+      "bytes": 5513216,
+      "last_file_modified_at": "2026-10-09T22:38:35.000188+00:00",
+      "latest_mtime": 1791585515.000188,
+      "files": 44,
+      "lockfiles": [
+        "s-hn2b0u76o1-0jptch8.lock"
+      ],
+      "symlink": false,
+      "candidate_old_other_variant": true,
+      "newest_preserved_path": "/home/developer/projects/aurora/rust/target/debug/incremental/aurora_voice_ios_bridge-1h6mj1qpqyt43"
+    },
+    {
+      "path": "/home/developer/projects/aurora/rust/target/debug/incremental/aurora_voice_core-16uvrzgoywzcj",
+      "root": "rust/target/debug/incremental",
+      "crate": "aurora_voice_core",
+      "bytes": 12775424,
+      "last_file_modified_at": "2026-10-08T08:13:28.866205+00:00",
+      "latest_mtime": 1791447208.8662045,
+      "files": 4,
+      "lockfiles": [
+        "s-hn0jhhxifu-1hkr9of.lock"
+      ],
+      "symlink": false,
+      "candidate_old_other_variant": true,
+      "newest_preserved_path": "/home/developer/projects/aurora/rust/target/debug/incremental/aurora_voice_core-19pjuxkisnblq"
+    },
+    {
+      "path": "/home/developer/projects/aurora/rust/target/debug/incremental/aurora_local_inference-3d9mzz4kncxml",
+      "root": "rust/target/debug/incremental",
+      "crate": "aurora_local_inference",
+      "bytes": 3461120,
+      "last_file_modified_at": "2026-10-11T02:59:06.013024+00:00",
+      "latest_mtime": 1791687546.0130243,
+      "files": 5,
+      "lockfiles": [
+        "s-hn3lw8o3t5-08r6wkw.lock"
+      ],
+      "symlink": false,
+      "candidate_old_other_variant": true,
+      "newest_preserved_path": "/home/developer/projects/aurora/rust/target/debug/incremental/aurora_local_inference-22ykubu5ohykq"
+    },
+    {
+      "path": "/home/developer/projects/aurora/rust/target/debug/incremental/aurora_mesh_authority-3ebrb1frml4j0",
+      "root": "rust/target/debug/incremental",
+      "crate": "aurora_mesh_authority",
+      "bytes": 33058816,
+      "last_file_modified_at": "2026-10-07T19:31:04.147040+00:00",
+      "latest_mtime": 1791401464.1470401,
+      "files": 99,
+      "lockfiles": [
+        "s-hmzygwzq7t-0phz0ev.lock"
+      ],
+      "symlink": false,
+      "candidate_old_other_variant": true,
+      "newest_preserved_path": "/home/developer/projects/aurora/rust/target/debug/incremental/aurora_mesh_authority-0zvu0r9vzbm5d"
+    },
+    {
+      "path": "/home/developer/projects/aurora/rust/target/debug/incremental/aurora_voice_engine-0y8twgtg2ugjk",
+      "root": "rust/target/debug/incremental",
+      "crate": "aurora_voice_engine",
+      "bytes": 62410752,
+      "last_file_modified_at": "2026-10-08T06:36:40.959822+00:00",
+      "latest_mtime": 1791441400.959822,
+      "files": 169,
+      "lockfiles": [
+        "s-hn0gtc71fa-02e01mw.lock"
+      ],
+      "symlink": false,
+      "candidate_old_other_variant": true,
+      "newest_preserved_path": "/home/developer/projects/aurora/rust/target/debug/incremental/aurora_voice_engine-1mwznqxds5wob"
+    },
+    {
+      "path": "/home/developer/projects/aurora/rust/target/debug/incremental/aurora_local_inference-2wqb250cb38w7",
+      "root": "rust/target/debug/incremental",
+      "crate": "aurora_local_inference",
+      "bytes": 5038080,
+      "last_file_modified_at": "2026-10-11T10:59:25.007285+00:00",
+      "latest_mtime": 1791716365.0072849,
+      "files": 5,
+      "lockfiles": [
+        "s-hn3z4upvs7-1o5z488.lock"
+      ],
+      "symlink": false,
+      "candidate_old_other_variant": true,
+      "newest_preserved_path": "/home/developer/projects/aurora/rust/target/debug/incremental/aurora_local_inference-22ykubu5ohykq"
+    },
+    {
+      "path": "/home/developer/projects/aurora/rust/target/debug/incremental/candidate_model_packs-269dsfgtv99a5",
+      "root": "rust/target/debug/incremental",
+      "crate": "candidate_model_packs",
+      "bytes": 2437120,
+      "last_file_modified_at": "2026-10-08T08:13:33.566450+00:00",
+      "latest_mtime": 1791447213.5664496,
+      "files": 4,
+      "lockfiles": [
+        "s-hn0jhknp2e-1ay1o3j.lock"
+      ],
+      "symlink": false,
+      "candidate_old_other_variant": true,
+      "newest_preserved_path": "/home/developer/projects/aurora/rust/target/debug/incremental/candidate_model_packs-10x92a2or4lfa"
+    },
+    {
+      "path": "/home/developer/projects/aurora/rust/target/debug/incremental/aurora_voice_core-29mulfhj33sqi",
+      "root": "rust/target/debug/incremental",
+      "crate": "aurora_voice_core",
+      "bytes": 27983872,
+      "last_file_modified_at": "2026-10-08T02:29:51.611504+00:00",
+      "latest_mtime": 1791426591.6115043,
+      "files": 118,
+      "lockfiles": [
+        "s-hn0a0hoo2d-03eknay.lock"
+      ],
+      "symlink": false,
+      "candidate_old_other_variant": true,
+      "newest_preserved_path": "/home/developer/projects/aurora/rust/target/debug/incremental/aurora_voice_core-19pjuxkisnblq"
+    },
+    {
+      "path": "/home/developer/projects/aurora/rust/target/debug/incremental/aurora_voice_engine-1mwznqxds5wob",
+      "root": "rust/target/debug/incremental",
+      "crate": "aurora_voice_engine",
+      "bytes": 22757376,
+      "last_file_modified_at": "2026-10-11T02:58:19.807671+00:00",
+      "latest_mtime": 1791687499.807671,
+      "files": 5,
+      "lockfiles": [
+        "s-hn3lvfe0ps-171cb8z.lock"
+      ],
+      "symlink": false,
+      "candidate_old_other_variant": false,
+      "newest_preserved_path": "/home/developer/projects/aurora/rust/target/debug/incremental/aurora_voice_engine-1mwznqxds5wob"
+    },
+    {
+      "path": "/home/developer/projects/aurora/rust/target/debug/incremental/wasm_core-30dyvlo9zyzp7",
+      "root": "rust/target/debug/incremental",
+      "crate": "wasm_core",
+      "bytes": 53248,
+      "last_file_modified_at": "2026-10-09T15:03:34.170838+00:00",
+      "latest_mtime": 1791558214.170838,
+      "files": 4,
+      "lockfiles": [
+        "s-hn1yhc1o1v-1b01vsp.lock"
+      ],
+      "symlink": false,
+      "candidate_old_other_variant": true,
+      "newest_preserved_path": "/home/developer/projects/aurora/rust/target/debug/incremental/wasm_core-2roz8o7dhvoix"
+    },
+    {
+      "path": "/home/developer/projects/aurora/rust/target/debug/incremental/node_policy-1pi2g6xg897vl",
+      "root": "rust/target/debug/incremental",
+      "crate": "node_policy",
+      "bytes": 7417856,
+      "last_file_modified_at": "2026-10-09T19:08:17.219443+00:00",
+      "latest_mtime": 1791572897.219443,
+      "files": 70,
+      "lockfiles": [
+        "s-hn2585jhni-0g0q7nc.lock"
+      ],
+      "symlink": false,
+      "candidate_old_other_variant": true,
+      "newest_preserved_path": "/home/developer/projects/aurora/rust/target/debug/incremental/node_policy-2q6ww1fwunk8k"
+    },
+    {
+      "path": "/home/developer/projects/aurora/rust/target/debug/incremental/native_vad_smoke-2v2o2139ppmyt",
+      "root": "rust/target/debug/incremental",
+      "crate": "native_vad_smoke",
+      "bytes": 122880,
+      "last_file_modified_at": "2026-10-10T02:20:07.539030+00:00",
+      "latest_mtime": 1791598807.53903,
+      "files": 9,
+      "lockfiles": [
+        "s-hn2h4o9y62-0ppaex1.lock"
+      ],
+      "symlink": false,
+      "candidate_old_other_variant": false,
+      "newest_preserved_path": "/home/developer/projects/aurora/rust/target/debug/incremental/native_vad_smoke-2v2o2139ppmyt"
+    },
+    {
+      "path": "/home/developer/projects/aurora/rust/target/debug/incremental/aurora_voice_engine-0pjowxjz2j2fa",
+      "root": "rust/target/debug/incremental",
+      "crate": "aurora_voice_engine",
+      "bytes": 20729856,
+      "last_file_modified_at": "2026-10-08T07:11:46.632946+00:00",
+      "latest_mtime": 1791443506.6329463,
+      "files": 4,
+      "lockfiles": [
+        "s-hn0hs8yzl3-0n7ny7j.lock"
+      ],
+      "symlink": false,
+      "candidate_old_other_variant": true,
+      "newest_preserved_path": "/home/developer/projects/aurora/rust/target/debug/incremental/aurora_voice_engine-1mwznqxds5wob"
+    },
+    {
+      "path": "/home/developer/projects/aurora/rust/target/debug/incremental/aurora_mesh_authority-050laxmbvf1b5",
+      "root": "rust/target/debug/incremental",
+      "crate": "aurora_mesh_authority",
+      "bytes": 32665600,
+      "last_file_modified_at": "2026-10-09T15:04:07.350784+00:00",
+      "latest_mtime": 1791558247.3507843,
+      "files": 99,
+      "lockfiles": [
+        "s-hn1yhvazov-0ou0gls.lock"
+      ],
+      "symlink": false,
+      "candidate_old_other_variant": true,
+      "newest_preserved_path": "/home/developer/projects/aurora/rust/target/debug/incremental/aurora_mesh_authority-0zvu0r9vzbm5d"
+    },
+    {
+      "path": "/home/developer/projects/aurora/rust/target/debug/incremental/opaque_json-3b41accyi7six",
+      "root": "rust/target/debug/incremental",
+      "crate": "opaque_json",
+      "bytes": 2830336,
+      "last_file_modified_at": "2026-10-07T18:49:29.105028+00:00",
+      "latest_mtime": 1791398969.1050277,
+      "files": 4,
+      "lockfiles": [
+        "s-hmzxbpl1yk-1xdpjdi.lock"
+      ],
+      "symlink": false,
+      "candidate_old_other_variant": true,
+      "newest_preserved_path": "/home/developer/projects/aurora/rust/target/debug/incremental/opaque_json-1td708sqycuxs"
+    },
+    {
+      "path": "/home/developer/projects/aurora/rust/target/debug/incremental/aurora_voice_native-3bo3rk44yxg98",
+      "root": "rust/target/debug/incremental",
+      "crate": "aurora_voice_native",
+      "bytes": 36683776,
+      "last_file_modified_at": "2026-10-09T18:32:37.248137+00:00",
+      "latest_mtime": 1791570757.2481372,
+      "files": 4,
+      "lockfiles": [
+        "s-hn248qz066-17ddudd.lock"
+      ],
+      "symlink": false,
+      "candidate_old_other_variant": true,
+      "newest_preserved_path": "/home/developer/projects/aurora/rust/target/debug/incremental/aurora_voice_native-0ckngnjvijtaw"
+    },
+    {
+      "path": "/home/developer/projects/aurora/rust/target/debug/incremental/build_script_build-22z0qh7r2wwyj",
+      "root": "rust/target/debug/incremental",
+      "crate": "build_script_build",
+      "bytes": 3649536,
+      "last_file_modified_at": "2026-10-11T10:59:18.795238+00:00",
+      "latest_mtime": 1791716358.7952375,
+      "files": 75,
+      "lockfiles": [
+        "s-hn3z4qzuvi-13ifb71.lock"
+      ],
+      "symlink": false,
+      "candidate_old_other_variant": true,
+      "newest_preserved_path": "/home/developer/projects/aurora/rust/target/debug/incremental/build_script_build-2tzocwyai8azm"
+    },
+    {
+      "path": "/home/developer/projects/aurora/rust/target/debug/incremental/aurora_voice_testkit-0phtfafuc83ga",
+      "root": "rust/target/debug/incremental",
+      "crate": "aurora_voice_testkit",
+      "bytes": 3559424,
+      "last_file_modified_at": "2026-10-09T15:03:56.023698+00:00",
+      "latest_mtime": 1791558236.0236979,
+      "files": 4,
+      "lockfiles": [
+        "s-hn1yhoxlly-0mh44bb.lock"
+      ],
+      "symlink": false,
+      "candidate_old_other_variant": true,
+      "newest_preserved_path": "/home/developer/projects/aurora/rust/target/debug/incremental/aurora_voice_testkit-144g1okd8vx33"
+    },
+    {
+      "path": "/home/developer/projects/aurora/rust/target/debug/incremental/aurora_contracts-0yg1j07gfpgkl",
+      "root": "rust/target/debug/incremental",
+      "crate": "aurora_contracts",
+      "bytes": 261222400,
+      "last_file_modified_at": "2026-10-07T20:55:11.576547+00:00",
+      "latest_mtime": 1791406511.5765474,
+      "files": 260,
+      "lockfiles": [
+        "s-hn00s01ldf-1vij5kb.lock"
+      ],
+      "symlink": false,
+      "candidate_old_other_variant": true,
+      "newest_preserved_path": "/home/developer/projects/aurora/rust/target/debug/incremental/aurora_contracts-2r2cjm2k9n3tf"
+    },
+    {
+      "path": "/home/developer/projects/aurora/rust/target/debug/incremental/aurora_mesh_session-37ww7kdfmbia5",
+      "root": "rust/target/debug/incremental",
+      "crate": "aurora_mesh_session",
+      "bytes": 15171584,
+      "last_file_modified_at": "2026-10-09T22:39:51.388604+00:00",
+      "latest_mtime": 1791585591.3886037,
+      "files": 75,
+      "lockfiles": [
+        "s-hn2b238g32-1qbt2rj.lock"
+      ],
+      "symlink": false,
+      "candidate_old_other_variant": true,
+      "newest_preserved_path": "/home/developer/projects/aurora/rust/target/debug/incremental/aurora_mesh_session-0wd2stq0y508e"
+    },
+    {
+      "path": "/home/developer/projects/aurora/rust/target/debug/incremental/native_kws_smoke-3ju6ssp4wrjz7",
+      "root": "rust/target/debug/incremental",
+      "crate": "native_kws_smoke",
+      "bytes": 122880,
+      "last_file_modified_at": "2026-10-10T02:20:07.783032+00:00",
+      "latest_mtime": 1791598807.783032,
+      "files": 9,
+      "lockfiles": [
+        "s-hn2h4of9ch-0d1yqvu.lock"
+      ],
+      "symlink": false,
+      "candidate_old_other_variant": false,
+      "newest_preserved_path": "/home/developer/projects/aurora/rust/target/debug/incremental/native_kws_smoke-3ju6ssp4wrjz7"
+    },
+    {
+      "path": "/home/developer/projects/aurora/rust/target/debug/incremental/aurora_voice_native-2cweauy7vswt1",
+      "root": "rust/target/debug/incremental",
+      "crate": "aurora_voice_native",
+      "bytes": 123183104,
+      "last_file_modified_at": "2026-10-09T18:32:03.096879+00:00",
+      "latest_mtime": 1791570723.0968792,
+      "files": 260,
+      "lockfiles": [
+        "s-hn2484hguy-1mrp1o1.lock"
+      ],
+      "symlink": false,
+      "candidate_old_other_variant": true,
+      "newest_preserved_path": "/home/developer/projects/aurora/rust/target/debug/incremental/aurora_voice_native-0ckngnjvijtaw"
+    },
+    {
+      "path": "/home/developer/projects/aurora/rust/target/debug/incremental/aurora_voice_engine-2pgauc53sfg5u",
+      "root": "rust/target/debug/incremental",
+      "crate": "aurora_voice_engine",
+      "bytes": 19603456,
+      "last_file_modified_at": "2026-10-07T22:09:30.720356+00:00",
+      "latest_mtime": 1791410970.7203562,
+      "files": 4,
+      "lockfiles": [
+        "s-hn02u65t2g-0mw7o5h.lock"
+      ],
+      "symlink": false,
+      "candidate_old_other_variant": true,
+      "newest_preserved_path": "/home/developer/projects/aurora/rust/target/debug/incremental/aurora_voice_engine-1mwznqxds5wob"
+    },
+    {
+      "path": "/home/developer/projects/aurora/rust/target/debug/incremental/native_kws_smoke-0r2ca16ne4r3h",
+      "root": "rust/target/debug/incremental",
+      "crate": "native_kws_smoke",
+      "bytes": 135168,
+      "last_file_modified_at": "2026-10-08T09:32:08.100385+00:00",
+      "latest_mtime": 1791451928.100385,
+      "files": 9,
+      "lockfiles": [
+        "s-hn0lnk29xy-0h7jrr4.lock"
+      ],
+      "symlink": false,
+      "candidate_old_other_variant": true,
+      "newest_preserved_path": "/home/developer/projects/aurora/rust/target/debug/incremental/native_kws_smoke-3ju6ssp4wrjz7"
+    },
+    {
+      "path": "/home/developer/projects/aurora/rust/target/debug/incremental/aurora_voice_sherpa-20mglx3ltxcow",
+      "root": "rust/target/debug/incremental",
+      "crate": "aurora_voice_sherpa",
+      "bytes": 6213632,
+      "last_file_modified_at": "2026-10-09T15:03:55.763696+00:00",
+      "latest_mtime": 1791558235.7636957,
+      "files": 4,
+      "lockfiles": [
+        "s-hn1yhooivt-0xis20w.lock"
+      ],
+      "symlink": false,
+      "candidate_old_other_variant": true,
+      "newest_preserved_path": "/home/developer/projects/aurora/rust/target/debug/incremental/aurora_voice_sherpa-08wqj9d39rhbt"
+    },
+    {
+      "path": "/home/developer/projects/aurora/rust/target/debug/incremental/grant_management_recovery-30tbuc6xasml5",
+      "root": "rust/target/debug/incremental",
+      "crate": "grant_management_recovery",
+      "bytes": 7548928,
+      "last_file_modified_at": "2026-10-09T15:05:10.667267+00:00",
+      "latest_mtime": 1791558310.6672673,
+      "files": 74,
+      "lockfiles": [
+        "s-hn1yixesvl-1q1o2zr.lock"
+      ],
+      "symlink": false,
+      "candidate_old_other_variant": false,
+      "newest_preserved_path": "/home/developer/projects/aurora/rust/target/debug/incremental/grant_management_recovery-30tbuc6xasml5"
+    },
+    {
+      "path": "/home/developer/projects/aurora/rust/target/debug/incremental/aurora_voice_native-12ogkczh154hg",
+      "root": "rust/target/debug/incremental",
+      "crate": "aurora_voice_native",
+      "bytes": 273211392,
+      "last_file_modified_at": "2026-10-09T20:36:41.062215+00:00",
+      "latest_mtime": 1791578201.062215,
+      "files": 260,
+      "lockfiles": [
+        "s-hn27ndajzi-17z7mio.lock"
+      ],
+      "symlink": false,
+      "candidate_old_other_variant": true,
+      "newest_preserved_path": "/home/developer/projects/aurora/rust/target/debug/incremental/aurora_voice_native-0ckngnjvijtaw"
+    },
+    {
+      "path": "/home/developer/projects/aurora/rust/target/debug/incremental/opaque_json-1td708sqycuxs",
+      "root": "rust/target/debug/incremental",
+      "crate": "opaque_json",
+      "bytes": 6598656,
+      "last_file_modified_at": "2026-10-09T15:04:59.874185+00:00",
+      "latest_mtime": 1791558299.8741848,
+      "files": 58,
+      "lockfiles": [
+        "s-hn1yiq327g-0vxrs57.lock"
+      ],
+      "symlink": false,
+      "candidate_old_other_variant": false,
+      "newest_preserved_path": "/home/developer/projects/aurora/rust/target/debug/incremental/opaque_json-1td708sqycuxs"
+    },
+    {
+      "path": "/home/developer/projects/aurora/rust/target/debug/incremental/phase_request-1i5n8exon3var",
+      "root": "rust/target/debug/incremental",
+      "crate": "phase_request",
+      "bytes": 8515584,
+      "last_file_modified_at": "2026-10-08T03:17:35.601552+00:00",
+      "latest_mtime": 1791429455.6015522,
+      "files": 87,
+      "lockfiles": [
+        "s-hn0bbw17w9-1l8w73c.lock"
+      ],
+      "symlink": false,
+      "candidate_old_other_variant": true,
+      "newest_preserved_path": "/home/developer/projects/aurora/rust/target/debug/incremental/phase_request-2md9nuj2t82lp"
+    },
+    {
+      "path": "/home/developer/projects/aurora/rust/target/debug/incremental/phase_a-16eptim1eqcjo",
+      "root": "rust/target/debug/incremental",
+      "crate": "phase_a",
+      "bytes": 3883008,
+      "last_file_modified_at": "2026-10-08T03:17:33.577537+00:00",
+      "latest_mtime": 1791429453.5775368,
+      "files": 57,
+      "lockfiles": [
+        "s-hn0bbv4nkm-18dv256.lock"
+      ],
+      "symlink": false,
+      "candidate_old_other_variant": true,
+      "newest_preserved_path": "/home/developer/projects/aurora/rust/target/debug/incremental/phase_a-0wt0hdpa6oxrm"
+    },
+    {
+      "path": "/home/developer/projects/aurora/rust/target/debug/incremental/native_stt_smoke-0xc8kuw6lmsz1",
+      "root": "rust/target/debug/incremental",
+      "crate": "native_stt_smoke",
+      "bytes": 53248,
+      "last_file_modified_at": "2026-10-08T09:31:03.278284+00:00",
+      "latest_mtime": 1791451863.2782836,
+      "files": 4,
+      "lockfiles": [
+        "s-hn0lmhh02g-17iq54w.lock"
+      ],
+      "symlink": false,
+      "candidate_old_other_variant": true,
+      "newest_preserved_path": "/home/developer/projects/aurora/rust/target/debug/incremental/native_stt_smoke-06x8w8ytq7viz"
+    },
+    {
+      "path": "/home/developer/projects/aurora/rust/target/debug/incremental/aurora_voice_core-382c27mwi1cm8",
+      "root": "rust/target/debug/incremental",
+      "crate": "aurora_voice_core",
+      "bytes": 28020736,
+      "last_file_modified_at": "2026-10-07T20:55:19.898612+00:00",
+      "latest_mtime": 1791406519.898612,
+      "files": 118,
+      "lockfiles": [
+        "s-hn00sjrdd7-0zkg6h4.lock"
+      ],
+      "symlink": false,
+      "candidate_old_other_variant": true,
+      "newest_preserved_path": "/home/developer/projects/aurora/rust/target/debug/incremental/aurora_voice_core-19pjuxkisnblq"
+    },
+    {
+      "path": "/home/developer/projects/aurora/rust/target/debug/incremental/aurora_android_audio_spike-1t8bjdtxt60yv",
+      "root": "rust/target/debug/incremental",
+      "crate": "aurora_android_audio_spike",
+      "bytes": 3026944,
+      "last_file_modified_at": "2026-10-08T02:58:36.165700+00:00",
+      "latest_mtime": 1791428316.1657004,
+      "files": 47,
+      "lockfiles": [
+        "s-hn0at1zvrb-17p25gt.lock"
+      ],
+      "symlink": false,
+      "candidate_old_other_variant": false,
+      "newest_preserved_path": "/home/developer/projects/aurora/rust/target/debug/incremental/aurora_android_audio_spike-1t8bjdtxt60yv"
+    },
+    {
+      "path": "/home/developer/projects/aurora/rust/target/debug/incremental/aurora_contracts-0dtb6dfa9v0i9",
+      "root": "rust/target/debug/incremental",
+      "crate": "aurora_contracts",
+      "bytes": 82653184,
+      "last_file_modified_at": "2026-10-07T18:23:26.294821+00:00",
+      "latest_mtime": 1791397406.2948205,
+      "files": 2,
+      "lockfiles": [
+        "s-hmzwljhnps-0dvrieq.lock"
+      ],
+      "symlink": false,
+      "candidate_old_other_variant": true,
+      "newest_preserved_path": "/home/developer/projects/aurora/rust/target/debug/incremental/aurora_contracts-2r2cjm2k9n3tf"
+    },
+    {
+      "path": "/home/developer/projects/aurora/rust/target/debug/incremental/native_stt_smoke-1t0c3uh857d2k",
+      "root": "rust/target/debug/incremental",
+      "crate": "native_stt_smoke",
+      "bytes": 135168,
+      "last_file_modified_at": "2026-10-08T09:32:08.514102+00:00",
+      "latest_mtime": 1791451928.5141025,
+      "files": 9,
+      "lockfiles": [
+        "s-hn0lnkb56u-0cq61yf.lock"
+      ],
+      "symlink": false,
+      "candidate_old_other_variant": true,
+      "newest_preserved_path": "/home/developer/projects/aurora/rust/target/debug/incremental/native_stt_smoke-06x8w8ytq7viz"
+    },
+    {
+      "path": "/home/developer/projects/aurora/rust/target/debug/incremental/json_text_catalogs-1ernhi1lrnw7d",
+      "root": "rust/target/debug/incremental",
+      "crate": "json_text_catalogs",
+      "bytes": 5640192,
+      "last_file_modified_at": "2026-10-07T20:24:40.064422+00:00",
+      "latest_mtime": 1791404680.064422,
+      "files": 52,
+      "lockfiles": [
+        "s-hmzzy5m9ld-0m6jmgn.lock"
+      ],
+      "symlink": false,
+      "candidate_old_other_variant": true,
+      "newest_preserved_path": "/home/developer/projects/aurora/rust/target/debug/incremental/json_text_catalogs-2cfahybeo0kes"
+    },
+    {
+      "path": "/home/developer/projects/aurora/rust/target/debug/incremental/aurora_voice_ios_bridge-2h1p7lsa6958s",
+      "root": "rust/target/debug/incremental",
+      "crate": "aurora_voice_ios_bridge",
+      "bytes": 2957312,
+      "last_file_modified_at": "2026-10-09T18:32:35.689974+00:00",
+      "latest_mtime": 1791570755.6899736,
+      "files": 4,
+      "lockfiles": [
+        "s-hn248qvo3t-03fy8yy.lock"
+      ],
+      "symlink": false,
+      "candidate_old_other_variant": true,
+      "newest_preserved_path": "/home/developer/projects/aurora/rust/target/debug/incremental/aurora_voice_ios_bridge-1h6mj1qpqyt43"
+    },
+    {
+      "path": "/home/developer/projects/aurora/rust/target/debug/incremental/live_cpal_audio-1i8io1ubeehzb",
+      "root": "rust/target/debug/incremental",
+      "crate": "live_cpal_audio",
+      "bytes": 14438400,
+      "last_file_modified_at": "2026-10-09T20:35:55.692894+00:00",
+      "latest_mtime": 1791578155.692894,
+      "files": 90,
+      "lockfiles": [
+        "s-hn27n4kii4-1pnghcy.lock"
+      ],
+      "symlink": false,
+      "candidate_old_other_variant": false,
+      "newest_preserved_path": "/home/developer/projects/aurora/rust/target/debug/incremental/live_cpal_audio-1i8io1ubeehzb"
+    },
+    {
+      "path": "/home/developer/projects/aurora/rust/target/debug/incremental/handoff_raw_feature_boundary-00q9n9vq0pel9",
+      "root": "rust/target/debug/incremental",
+      "crate": "handoff_raw_feature_boundary",
+      "bytes": 2830336,
+      "last_file_modified_at": "2026-10-07T17:22:50.700361+00:00",
+      "latest_mtime": 1791393770.7003613,
+      "files": 24,
+      "lockfiles": [
+        "s-hmzuxqisk5-1f8yh3u.lock"
+      ],
+      "symlink": false,
+      "candidate_old_other_variant": true,
+      "newest_preserved_path": "/home/developer/projects/aurora/rust/target/debug/incremental/handoff_raw_feature_boundary-03skjpcyec7nf"
+    },
+    {
+      "path": "/home/developer/projects/aurora/rust/target/debug/incremental/aurora_voice_native-39vfisd02fyrh",
+      "root": "rust/target/debug/incremental",
+      "crate": "aurora_voice_native",
+      "bytes": 120422400,
+      "last_file_modified_at": "2026-10-09T15:04:12.727825+00:00",
+      "latest_mtime": 1791558252.7278252,
+      "files": 260,
+      "lockfiles": [
+        "s-hn1yhxpwhk-1r2q3oi.lock"
+      ],
+      "symlink": false,
+      "candidate_old_other_variant": true,
+      "newest_preserved_path": "/home/developer/projects/aurora/rust/target/debug/incremental/aurora_voice_native-0ckngnjvijtaw"
+    },
+    {
+      "path": "/home/developer/projects/aurora/rust/target/debug/incremental/build_script_build-30dy2vl32afnc",
+      "root": "rust/target/debug/incremental",
+      "crate": "build_script_build",
+      "bytes": 1724416,
+      "last_file_modified_at": "2026-10-09T16:51:16.270929+00:00",
+      "latest_mtime": 1791564676.2709286,
+      "files": 15,
+      "lockfiles": [
+        "s-hn21g69re1-1rhifgp.lock"
+      ],
+      "symlink": false,
+      "candidate_old_other_variant": true,
+      "newest_preserved_path": "/home/developer/projects/aurora/rust/target/debug/incremental/build_script_build-2tzocwyai8azm"
+    },
+    {
+      "path": "/home/developer/projects/aurora/rust/target/debug/incremental/aurora_voice_testkit-1l1lmcl5gt78e",
+      "root": "rust/target/debug/incremental",
+      "crate": "aurora_voice_testkit",
+      "bytes": 11259904,
+      "last_file_modified_at": "2026-10-09T15:03:55.330693+00:00",
+      "latest_mtime": 1791558235.3306925,
+      "files": 4,
+      "lockfiles": [
+        "s-hn1yho94jf-0fc8nhz.lock"
+      ],
+      "symlink": false,
+      "candidate_old_other_variant": true,
+      "newest_preserved_path": "/home/developer/projects/aurora/rust/target/debug/incremental/aurora_voice_testkit-144g1okd8vx33"
+    },
+    {
+      "path": "/home/developer/projects/aurora/rust/target/debug/incremental/build_script_build-1nqd2uqyck2r0",
+      "root": "rust/target/debug/incremental",
+      "crate": "build_script_build",
+      "bytes": 2772992,
+      "last_file_modified_at": "2026-10-08T09:12:00.417046+00:00",
+      "latest_mtime": 1791450720.4170456,
+      "files": 43,
+      "lockfiles": [
+        "s-hn0l3kx09z-0ke07w0.lock"
+      ],
+      "symlink": false,
+      "candidate_old_other_variant": true,
+      "newest_preserved_path": "/home/developer/projects/aurora/rust/target/debug/incremental/build_script_build-2tzocwyai8azm"
+    },
+    {
+      "path": "/home/developer/projects/aurora/rust/target/debug/incremental/aurora_local_inference-308gvazofpb1s",
+      "root": "rust/target/debug/incremental",
+      "crate": "aurora_local_inference",
+      "bytes": 14897152,
+      "last_file_modified_at": "2026-10-11T11:02:11.977558+00:00",
+      "latest_mtime": 1791716531.9775577,
+      "files": 126,
+      "lockfiles": [
+        "s-hn3z7loywc-0elrvth.lock"
+      ],
+      "symlink": false,
+      "candidate_old_other_variant": true,
+      "newest_preserved_path": "/home/developer/projects/aurora/rust/target/debug/incremental/aurora_local_inference-22ykubu5ohykq"
+    },
+    {
+      "path": "/home/developer/projects/aurora/rust/target/debug/incremental/live_cpal_audio-0i89mv6retdy3",
+      "root": "rust/target/debug/incremental",
+      "crate": "live_cpal_audio",
+      "bytes": 14393344,
+      "last_file_modified_at": "2026-10-09T15:04:20.575885+00:00",
+      "latest_mtime": 1791558260.575885,
+      "files": 90,
+      "lockfiles": [
+        "s-hn1yi3jle5-0m99e8k.lock"
+      ],
+      "symlink": false,
+      "candidate_old_other_variant": true,
+      "newest_preserved_path": "/home/developer/projects/aurora/rust/target/debug/incremental/live_cpal_audio-1i8io1ubeehzb"
+    },
+    {
+      "path": "/home/developer/projects/aurora/rust/target/debug/incremental/aurora_voice_ios_bridge-1h6mj1qpqyt43",
+      "root": "rust/target/debug/incremental",
+      "crate": "aurora_voice_ios_bridge",
+      "bytes": 3330048,
+      "last_file_modified_at": "2026-10-11T02:58:55.116941+00:00",
+      "latest_mtime": 1791687535.116941,
+      "files": 5,
+      "lockfiles": [
+        "s-hn3lw2ak6c-074yknc.lock"
+      ],
+      "symlink": false,
+      "candidate_old_other_variant": false,
+      "newest_preserved_path": "/home/developer/projects/aurora/rust/target/debug/incremental/aurora_voice_ios_bridge-1h6mj1qpqyt43"
+    },
+    {
+      "path": "/home/developer/projects/aurora/rust/target/debug/incremental/aurora_voice_sherpa-0jtbwlrx83jmy",
+      "root": "rust/target/debug/incremental",
+      "crate": "aurora_voice_sherpa",
+      "bytes": 10739712,
+      "last_file_modified_at": "2026-10-09T22:38:34.855038+00:00",
+      "latest_mtime": 1791585514.8550377,
+      "files": 86,
+      "lockfiles": [
+        "s-hn2b0u1kdh-07xajlg.lock"
+      ],
+      "symlink": false,
+      "candidate_old_other_variant": true,
+      "newest_preserved_path": "/home/developer/projects/aurora/rust/target/debug/incremental/aurora_voice_sherpa-08wqj9d39rhbt"
+    },
+    {
+      "path": "/home/developer/projects/aurora/rust/target/debug/incremental/build_script_build-1nm437lkmhhui",
+      "root": "rust/target/debug/incremental",
+      "crate": "build_script_build",
+      "bytes": 2772992,
+      "last_file_modified_at": "2026-10-10T01:28:03.255299+00:00",
+      "latest_mtime": 1791595683.2552993,
+      "files": 43,
+      "lockfiles": [
+        "s-hn2fp00fg4-1gw8sfr.lock"
+      ],
+      "symlink": false,
+      "candidate_old_other_variant": true,
+      "newest_preserved_path": "/home/developer/projects/aurora/rust/target/debug/incremental/build_script_build-2tzocwyai8azm"
+    },
+    {
+      "path": "/home/developer/projects/aurora/rust/target/debug/incremental/aurora_voice_core-3idc735qu2oqf",
+      "root": "rust/target/debug/incremental",
+      "crate": "aurora_voice_core",
+      "bytes": 38940672,
+      "last_file_modified_at": "2026-10-09T15:05:08.461251+00:00",
+      "latest_mtime": 1791558308.4612505,
+      "files": 170,
+      "lockfiles": [
+        "s-hn1yivqp0x-1ldlqai.lock"
+      ],
+      "symlink": false,
+      "candidate_old_other_variant": true,
+      "newest_preserved_path": "/home/developer/projects/aurora/rust/target/debug/incremental/aurora_voice_core-19pjuxkisnblq"
+    },
+    {
+      "path": "/home/developer/projects/aurora/rust/target/debug/incremental/aurora_mesh_session-3meepsfclrjwk",
+      "root": "rust/target/debug/incremental",
+      "crate": "aurora_mesh_session",
+      "bytes": 14733312,
+      "last_file_modified_at": "2026-10-09T15:04:14.305837+00:00",
+      "latest_mtime": 1791558254.3058374,
+      "files": 75,
+      "lockfiles": [
+        "s-hn1yhzs9gi-01lsst1.lock"
+      ],
+      "symlink": false,
+      "candidate_old_other_variant": true,
+      "newest_preserved_path": "/home/developer/projects/aurora/rust/target/debug/incremental/aurora_mesh_session-0wd2stq0y508e"
+    },
+    {
+      "path": "/home/developer/projects/aurora/rust/target/debug/incremental/aurora_voice_engine-3jsyf1zr5x4ss",
+      "root": "rust/target/debug/incremental",
+      "crate": "aurora_voice_engine",
+      "bytes": 57458688,
+      "last_file_modified_at": "2026-10-08T09:59:36.481948+00:00",
+      "latest_mtime": 1791453576.481948,
+      "files": 180,
+      "lockfiles": [
+        "s-hn0mepwszk-1vpa5th.lock"
+      ],
+      "symlink": false,
+      "candidate_old_other_variant": true,
+      "newest_preserved_path": "/home/developer/projects/aurora/rust/target/debug/incremental/aurora_voice_engine-1mwznqxds5wob"
+    },
+    {
+      "path": "/home/developer/projects/aurora/rust/target/debug/incremental/aurora_voice_sherpa_sys-0tq6e7cabjsjt",
+      "root": "rust/target/debug/incremental",
+      "crate": "aurora_voice_sherpa_sys",
+      "bytes": 10792960,
+      "last_file_modified_at": "2026-10-10T02:20:07.523030+00:00",
+      "latest_mtime": 1791598807.52303,
+      "files": 112,
+      "lockfiles": [
+        "s-hn2h4ni36k-0o12pu0.lock"
+      ],
+      "symlink": false,
+      "candidate_old_other_variant": true,
+      "newest_preserved_path": "/home/developer/projects/aurora/rust/target/debug/incremental/aurora_voice_sherpa_sys-29yp8nx9v1e1z"
+    },
+    {
+      "path": "/home/developer/projects/aurora/rust/target/debug/incremental/aurora_contracts-2nan52x988k4c",
+      "root": "rust/target/debug/incremental",
+      "crate": "aurora_contracts",
+      "bytes": 119496704,
+      "last_file_modified_at": "2026-10-07T18:50:40.220575+00:00",
+      "latest_mtime": 1791399040.2205753,
+      "files": 222,
+      "lockfiles": [
+        "s-hmzxcry6gf-1gwb6bk.lock"
+      ],
+      "symlink": false,
+      "candidate_old_other_variant": true,
+      "newest_preserved_path": "/home/developer/projects/aurora/rust/target/debug/incremental/aurora_contracts-2r2cjm2k9n3tf"
+    },
+    {
+      "path": "/home/developer/projects/aurora/rust/target/debug/incremental/aurora_voice_native-2ceu0y39czsqt",
+      "root": "rust/target/debug/incremental",
+      "crate": "aurora_voice_native",
+      "bytes": 35254272,
+      "last_file_modified_at": "2026-10-08T08:13:32.685234+00:00",
+      "latest_mtime": 1791447212.6852336,
+      "files": 4,
+      "lockfiles": [
+        "s-hn0jhigt0h-10s813a.lock"
+      ],
+      "symlink": false,
+      "candidate_old_other_variant": true,
+      "newest_preserved_path": "/home/developer/projects/aurora/rust/target/debug/incremental/aurora_voice_native-0ckngnjvijtaw"
+    },
+    {
+      "path": "/home/developer/projects/aurora/rust/target/debug/incremental/generated_contracts-28t7zbsxd6msa",
+      "root": "rust/target/debug/incremental",
+      "crate": "generated_contracts",
+      "bytes": 11235328,
+      "last_file_modified_at": "2026-10-07T18:49:54.225221+00:00",
+      "latest_mtime": 1791398994.2252212,
+      "files": 112,
+      "lockfiles": [
+        "s-hmzxc4ca0f-0ptahha.lock"
+      ],
+      "symlink": false,
+      "candidate_old_other_variant": true,
+      "newest_preserved_path": "/home/developer/projects/aurora/rust/target/debug/incremental/generated_contracts-3epj2autaf8z0"
+    },
+    {
+      "path": "/home/developer/projects/aurora/rust/target/debug/incremental/aurora_voice_ios_bridge-0uwohmj6f06wi",
+      "root": "rust/target/debug/incremental",
+      "crate": "aurora_voice_ios_bridge",
+      "bytes": 2904064,
+      "last_file_modified_at": "2026-10-09T15:03:30.094257+00:00",
+      "latest_mtime": 1791558210.0942569,
+      "files": 4,
+      "lockfiles": [
+        "s-hn1yh9jw9q-06gfkjv.lock"
+      ],
+      "symlink": false,
+      "candidate_old_other_variant": true,
+      "newest_preserved_path": "/home/developer/projects/aurora/rust/target/debug/incremental/aurora_voice_ios_bridge-1h6mj1qpqyt43"
+    },
+    {
+      "path": "/home/developer/projects/aurora/rust/target/debug/incremental/aurora_voice_wasm-1rf7dcrtle8pr",
+      "root": "rust/target/debug/incremental",
+      "crate": "aurora_voice_wasm",
+      "bytes": 14065664,
+      "last_file_modified_at": "2026-10-09T15:03:34.123468+00:00",
+      "latest_mtime": 1791558214.1234677,
+      "files": 4,
+      "lockfiles": [
+        "s-hn1yhbhl5l-0hhtwb3.lock"
+      ],
+      "symlink": false,
+      "candidate_old_other_variant": true,
+      "newest_preserved_path": "/home/developer/projects/aurora/rust/target/debug/incremental/aurora_voice_wasm-0vubco7wff5o5"
+    },
+    {
+      "path": "/home/developer/projects/aurora/rust/target/debug/incremental/aurora_voice_engine-1dj2nik07i20h",
+      "root": "rust/target/debug/incremental",
+      "crate": "aurora_voice_engine",
+      "bytes": 61984768,
+      "last_file_modified_at": "2026-10-08T06:24:10.853864+00:00",
+      "latest_mtime": 1791440650.853864,
+      "files": 168,
+      "lockfiles": [
+        "s-hn0ggxs4nk-074gl22.lock"
+      ],
+      "symlink": false,
+      "candidate_old_other_variant": true,
+      "newest_preserved_path": "/home/developer/projects/aurora/rust/target/debug/incremental/aurora_voice_engine-1mwznqxds5wob"
+    },
+    {
+      "path": "/home/developer/projects/aurora/rust/target/debug/incremental/aurora_mesh_session-1xbpgeymxlukg",
+      "root": "rust/target/debug/incremental",
+      "crate": "aurora_mesh_session",
+      "bytes": 6770688,
+      "last_file_modified_at": "2026-10-09T15:05:10.268264+00:00",
+      "latest_mtime": 1791558310.2682643,
+      "files": 9,
+      "lockfiles": [
+        "s-hn1yix4xl5-05y3h9k.lock"
+      ],
+      "symlink": false,
+      "candidate_old_other_variant": true,
+      "newest_preserved_path": "/home/developer/projects/aurora/rust/target/debug/incremental/aurora_mesh_session-0wd2stq0y508e"
+    },
+    {
+      "path": "/home/developer/projects/aurora/rust/target/debug/incremental/nsr04_app_json150_helper-0qibob9gt2dm8",
+      "root": "rust/target/debug/incremental",
+      "crate": "nsr04_app_json150_helper",
+      "bytes": 36864,
+      "last_file_modified_at": "2026-10-08T03:17:37.534567+00:00",
+      "latest_mtime": 1791429457.5345674,
+      "files": 5,
+      "lockfiles": [
+        "s-hn0bbxo9hc-0qzdoqj.lock"
+      ],
+      "symlink": false,
+      "candidate_old_other_variant": false,
+      "newest_preserved_path": "/home/developer/projects/aurora/rust/target/debug/incremental/nsr04_app_json150_helper-0qibob9gt2dm8"
+    },
+    {
+      "path": "/home/developer/projects/aurora/rust/target/debug/incremental/candidate_model_packs-3btvxjfcqdp0p",
+      "root": "rust/target/debug/incremental",
+      "crate": "candidate_model_packs",
+      "bytes": 2437120,
+      "last_file_modified_at": "2026-10-09T15:03:34.605205+00:00",
+      "latest_mtime": 1791558214.605205,
+      "files": 4,
+      "lockfiles": [
+        "s-hn1yhc8b7s-0b2skpt.lock"
+      ],
+      "symlink": false,
+      "candidate_old_other_variant": true,
+      "newest_preserved_path": "/home/developer/projects/aurora/rust/target/debug/incremental/candidate_model_packs-10x92a2or4lfa"
+    },
+    {
+      "path": "/home/developer/projects/aurora/rust/target/debug/incremental/aurora_contracts-27e0ra02ggipi",
+      "root": "rust/target/debug/incremental",
+      "crate": "aurora_contracts",
+      "bytes": 120410112,
+      "last_file_modified_at": "2026-10-08T06:23:48.687694+00:00",
+      "latest_mtime": 1791440628.6876936,
+      "files": 236,
+      "lockfiles": [
+        "s-hn0ggkjtph-0rtkaz0.lock"
+      ],
+      "symlink": false,
+      "candidate_old_other_variant": true,
+      "newest_preserved_path": "/home/developer/projects/aurora/rust/target/debug/incremental/aurora_contracts-2r2cjm2k9n3tf"
+    },
+    {
+      "path": "/home/developer/projects/aurora/rust/target/debug/incremental/aurora_voice_sherpa-2fkal3nkmid4l",
+      "root": "rust/target/debug/incremental",
+      "crate": "aurora_voice_sherpa",
+      "bytes": 18104320,
+      "last_file_modified_at": "2026-10-09T15:05:21.882353+00:00",
+      "latest_mtime": 1791558321.8823528,
+      "files": 125,
+      "lockfiles": [
+        "s-hn1yj40wob-0b0z1ds.lock"
+      ],
+      "symlink": false,
+      "candidate_old_other_variant": true,
+      "newest_preserved_path": "/home/developer/projects/aurora/rust/target/debug/incremental/aurora_voice_sherpa-08wqj9d39rhbt"
+    },
+    {
+      "path": "/home/developer/projects/aurora/rust/target/debug/incremental/aurora_voice_native-3edpp2sguq8mt",
+      "root": "rust/target/debug/incremental",
+      "crate": "aurora_voice_native",
+      "bytes": 57524224,
+      "last_file_modified_at": "2026-10-08T08:13:38.693279+00:00",
+      "latest_mtime": 1791447218.6932793,
+      "files": 4,
+      "lockfiles": [
+        "s-hn0jhlbceo-00ssows.lock"
+      ],
+      "symlink": false,
+      "candidate_old_other_variant": true,
+      "newest_preserved_path": "/home/developer/projects/aurora/rust/target/debug/incremental/aurora_voice_native-0ckngnjvijtaw"
+    },
+    {
+      "path": "/home/developer/projects/aurora/rust/target/debug/incremental/aurora_tauri_lib-3ntpu3mii6jip",
+      "root": "rust/target/debug/incremental",
+      "crate": "aurora_tauri_lib",
+      "bytes": 350584832,
+      "last_file_modified_at": "2026-10-08T13:15:32.523397+00:00",
+      "latest_mtime": 1791465332.523397,
+      "files": 260,
+      "lockfiles": [
+        "s-hn0rsx748v-0xsg9e9.lock"
+      ],
+      "symlink": false,
+      "candidate_old_other_variant": true,
+      "newest_preserved_path": "/home/developer/projects/aurora/rust/target/debug/incremental/aurora_tauri_lib-3puz838svpdip"
+    },
+    {
+      "path": "/home/developer/projects/aurora/rust/target/debug/incremental/webrtc_dtls-1ks6uf0f0yj80",
+      "root": "rust/target/debug/incremental",
+      "crate": "webrtc_dtls",
+      "bytes": 20443136,
+      "last_file_modified_at": "2026-10-11T02:58:50.572906+00:00",
+      "latest_mtime": 1791687530.5729063,
+      "files": 5,
+      "lockfiles": [
+        "s-hn3lvycthq-1edx9bh.lock"
+      ],
+      "symlink": false,
+      "candidate_old_other_variant": false,
+      "newest_preserved_path": "/home/developer/projects/aurora/rust/target/debug/incremental/webrtc_dtls-1ks6uf0f0yj80"
+    },
+    {
+      "path": "/home/developer/projects/aurora/rust/target/debug/incremental/aurora_voice_sherpa_sys-3031x5mqs2332",
+      "root": "rust/target/debug/incremental",
+      "crate": "aurora_voice_sherpa_sys",
+      "bytes": 8216576,
+      "last_file_modified_at": "2026-10-10T01:28:04.394308+00:00",
+      "latest_mtime": 1791595684.394308,
+      "files": 71,
+      "lockfiles": [
+        "s-hn2fp0darz-12zktm3.lock"
+      ],
+      "symlink": false,
+      "candidate_old_other_variant": true,
+      "newest_preserved_path": "/home/developer/projects/aurora/rust/target/debug/incremental/aurora_voice_sherpa_sys-29yp8nx9v1e1z"
+    },
+    {
+      "path": "/home/developer/projects/aurora/rust/target/debug/incremental/build_script_build-3chxfg6r0qq1d",
+      "root": "rust/target/debug/incremental",
+      "crate": "build_script_build",
+      "bytes": 2772992,
+      "last_file_modified_at": "2026-10-10T01:25:52.389305+00:00",
+      "latest_mtime": 1791595552.3893046,
+      "files": 43,
+      "lockfiles": [
+        "s-hn2fmu51il-1y091xy.lock"
+      ],
+      "symlink": false,
+      "candidate_old_other_variant": true,
+      "newest_preserved_path": "/home/developer/projects/aurora/rust/target/debug/incremental/build_script_build-2tzocwyai8azm"
+    },
+    {
+      "path": "/home/developer/projects/aurora/rust/target/debug/incremental/aurora_voice_sherpa_sys-0eu6vbh6tbpgz",
+      "root": "rust/target/debug/incremental",
+      "crate": "aurora_voice_sherpa_sys",
+      "bytes": 10166272,
+      "last_file_modified_at": "2026-10-08T10:00:39.540430+00:00",
+      "latest_mtime": 1791453639.54043,
+      "files": 77,
+      "lockfiles": [
+        "s-hn0mfuhun6-1h7w5lr.lock"
+      ],
+      "symlink": false,
+      "candidate_old_other_variant": true,
+      "newest_preserved_path": "/home/developer/projects/aurora/rust/target/debug/incremental/aurora_voice_sherpa_sys-29yp8nx9v1e1z"
+    },
+    {
+      "path": "/home/developer/projects/aurora/rust/target/debug/incremental/candidate_model_packs-2gxceys7q7oza",
+      "root": "rust/target/debug/incremental",
+      "crate": "candidate_model_packs",
+      "bytes": 15880192,
+      "last_file_modified_at": "2026-10-09T15:04:25.539923+00:00",
+      "latest_mtime": 1791558265.539923,
+      "files": 96,
+      "lockfiles": [
+        "s-hn1yi6hrst-1bfknp6.lock"
+      ],
+      "symlink": false,
+      "candidate_old_other_variant": true,
+      "newest_preserved_path": "/home/developer/projects/aurora/rust/target/debug/incremental/candidate_model_packs-10x92a2or4lfa"
+    },
+    {
+      "path": "/home/developer/projects/aurora/rust/target/debug/incremental/aurora_voice_engine-1d1wkvk6btgrx",
+      "root": "rust/target/debug/incremental",
+      "crate": "aurora_voice_engine",
+      "bytes": 19603456,
+      "last_file_modified_at": "2026-10-07T22:09:26.236322+00:00",
+      "latest_mtime": 1791410966.236322,
+      "files": 4,
+      "lockfiles": [
+        "s-hn02u3ga4k-1dlmbat.lock"
+      ],
+      "symlink": false,
+      "candidate_old_other_variant": true,
+      "newest_preserved_path": "/home/developer/projects/aurora/rust/target/debug/incremental/aurora_voice_engine-1mwznqxds5wob"
+    },
+    {
+      "path": "/home/developer/projects/aurora/rust/target/debug/incremental/aurora_voice_sherpa_sys-1ea3tey3mclg4",
+      "root": "rust/target/debug/incremental",
+      "crate": "aurora_voice_sherpa_sys",
+      "bytes": 7421952,
+      "last_file_modified_at": "2026-10-10T02:20:07.020026+00:00",
+      "latest_mtime": 1791598807.0200262,
+      "files": 65,
+      "lockfiles": [
+        "s-hn2h4ni2eu-0twtni7.lock"
+      ],
+      "symlink": false,
+      "candidate_old_other_variant": true,
+      "newest_preserved_path": "/home/developer/projects/aurora/rust/target/debug/incremental/aurora_voice_sherpa_sys-29yp8nx9v1e1z"
+    },
+    {
+      "path": "/home/developer/projects/aurora/rust/target/debug/incremental/aurora_voice_engine-233oldln1zqtd",
+      "root": "rust/target/debug/incremental",
+      "crate": "aurora_voice_engine",
+      "bytes": 20635648,
+      "last_file_modified_at": "2026-10-07T22:09:18.115260+00:00",
+      "latest_mtime": 1791410958.11526,
+      "files": 4,
+      "lockfiles": [
+        "s-hn02tyehyi-0pa24ag.lock"
+      ],
+      "symlink": false,
+      "candidate_old_other_variant": true,
+      "newest_preserved_path": "/home/developer/projects/aurora/rust/target/debug/incremental/aurora_voice_engine-1mwznqxds5wob"
+    },
+    {
+      "path": "/home/developer/projects/aurora/rust/target/debug/incremental/json_text_catalogs-2cfahybeo0kes",
+      "root": "rust/target/debug/incremental",
+      "crate": "json_text_catalogs",
+      "bytes": 5591040,
+      "last_file_modified_at": "2026-10-08T07:13:28.650723+00:00",
+      "latest_mtime": 1791443608.6507235,
+      "files": 52,
+      "lockfiles": [
+        "s-hn0htyu73l-0hig4no.lock"
+      ],
+      "symlink": false,
+      "candidate_old_other_variant": false,
+      "newest_preserved_path": "/home/developer/projects/aurora/rust/target/debug/incremental/json_text_catalogs-2cfahybeo0kes"
+    },
+    {
+      "path": "/home/developer/projects/aurora/rust/target/debug/incremental/generated_contracts-06xvjp3id6wxe",
+      "root": "rust/target/debug/incremental",
+      "crate": "generated_contracts",
+      "bytes": 3485696,
+      "last_file_modified_at": "2026-10-07T18:49:29.292397+00:00",
+      "latest_mtime": 1791398969.2923973,
+      "files": 4,
+      "lockfiles": [
+        "s-hmzxbpo4og-0peykox.lock"
+      ],
+      "symlink": false,
+      "candidate_old_other_variant": true,
+      "newest_preserved_path": "/home/developer/projects/aurora/rust/target/debug/incremental/generated_contracts-3epj2autaf8z0"
+    },
+    {
+      "path": "/home/developer/projects/aurora/rust/target/debug/incremental/aurora_mesh_authority-17rly1q6fiywn",
+      "root": "rust/target/debug/incremental",
+      "crate": "aurora_mesh_authority",
+      "bytes": 16031744,
+      "last_file_modified_at": "2026-10-09T16:33:57.376996+00:00",
+      "latest_mtime": 1791563637.3769956,
+      "files": 4,
+      "lockfiles": [
+        "s-hn20z0judg-08smdzt.lock"
+      ],
+      "symlink": false,
+      "candidate_old_other_variant": true,
+      "newest_preserved_path": "/home/developer/projects/aurora/rust/target/debug/incremental/aurora_mesh_authority-0zvu0r9vzbm5d"
+    },
+    {
+      "path": "/home/developer/projects/aurora/rust/target/debug/incremental/aurora_mesh_authority-0zvu0r9vzbm5d",
+      "root": "rust/target/debug/incremental",
+      "crate": "aurora_mesh_authority",
+      "bytes": 17960960,
+      "last_file_modified_at": "2026-10-11T02:58:58.339966+00:00",
+      "latest_mtime": 1791687538.3399658,
+      "files": 5,
+      "lockfiles": [
+        "s-hn3lw35gsf-0tinyzb.lock"
+      ],
+      "symlink": false,
+      "candidate_old_other_variant": false,
+      "newest_preserved_path": "/home/developer/projects/aurora/rust/target/debug/incremental/aurora_mesh_authority-0zvu0r9vzbm5d"
+    },
+    {
+      "path": "/home/developer/projects/aurora/rust/target/debug/incremental/aurora_voice_core-0asqr1k3iob96",
+      "root": "rust/target/debug/incremental",
+      "crate": "aurora_voice_core",
+      "bytes": 20205568,
+      "last_file_modified_at": "2026-10-10T22:55:58.401920+00:00",
+      "latest_mtime": 1791672958.4019196,
+      "files": 4,
+      "lockfiles": [
+        "s-hn3f6xfnoi-0wooe4e.lock"
+      ],
+      "symlink": false,
+      "candidate_old_other_variant": true,
+      "newest_preserved_path": "/home/developer/projects/aurora/rust/target/debug/incremental/aurora_voice_core-19pjuxkisnblq"
+    },
+    {
+      "path": "/home/developer/projects/aurora/rust/target/debug/incremental/opaque_json-1mdy8lb23bj37",
+      "root": "rust/target/debug/incremental",
+      "crate": "opaque_json",
+      "bytes": 6623232,
+      "last_file_modified_at": "2026-10-07T18:49:50.204190+00:00",
+      "latest_mtime": 1791398990.2041903,
+      "files": 58,
+      "lockfiles": [
+        "s-hmzxc2388y-0sp0jvy.lock"
+      ],
+      "symlink": false,
+      "candidate_old_other_variant": true,
+      "newest_preserved_path": "/home/developer/projects/aurora/rust/target/debug/incremental/opaque_json-1td708sqycuxs"
+    },
+    {
+      "path": "/home/developer/projects/aurora/rust/target/debug/incremental/aurora_local_inference-1psbexmswa8mw",
+      "root": "rust/target/debug/incremental",
+      "crate": "aurora_local_inference",
+      "bytes": 3403776,
+      "last_file_modified_at": "2026-10-10T22:58:40.229187+00:00",
+      "latest_mtime": 1791673120.2291875,
+      "files": 4,
+      "lockfiles": [
+        "s-hn3f9nyx04-11zwxxh.lock"
+      ],
+      "symlink": false,
+      "candidate_old_other_variant": true,
+      "newest_preserved_path": "/home/developer/projects/aurora/rust/target/debug/incremental/aurora_local_inference-22ykubu5ohykq"
+    },
+    {
+      "path": "/home/developer/projects/aurora/rust/target/debug/incremental/node_policy-3v463v443f2ia",
+      "root": "rust/target/debug/incremental",
+      "crate": "node_policy",
+      "bytes": 7065600,
+      "last_file_modified_at": "2026-10-09T15:04:48.203096+00:00",
+      "latest_mtime": 1791558288.203096,
+      "files": 70,
+      "lockfiles": [
+        "s-hn1yik248m-0zpeiuf.lock"
+      ],
+      "symlink": false,
+      "candidate_old_other_variant": true,
+      "newest_preserved_path": "/home/developer/projects/aurora/rust/target/debug/incremental/node_policy-2q6ww1fwunk8k"
+    },
+    {
+      "path": "/home/developer/projects/aurora/rust/target/debug/incremental/aurora_contracts-2eyntxbbgsezr",
+      "root": "rust/target/debug/incremental",
+      "crate": "aurora_contracts",
+      "bytes": 110051328,
+      "last_file_modified_at": "2026-10-09T16:33:47.697922+00:00",
+      "latest_mtime": 1791563627.6979225,
+      "files": 4,
+      "lockfiles": [
+        "s-hn20yqc38r-0wcltup.lock"
+      ],
+      "symlink": false,
+      "candidate_old_other_variant": true,
+      "newest_preserved_path": "/home/developer/projects/aurora/rust/target/debug/incremental/aurora_contracts-2r2cjm2k9n3tf"
+    },
+    {
+      "path": "/home/developer/projects/aurora/rust/target/debug/incremental/aurora_voice_ios_bridge-291awhcc41pzh",
+      "root": "rust/target/debug/incremental",
+      "crate": "aurora_voice_ios_bridge",
+      "bytes": 3932160,
+      "last_file_modified_at": "2026-10-09T15:03:56.502702+00:00",
+      "latest_mtime": 1791558236.5027015,
+      "files": 4,
+      "lockfiles": [
+        "s-hn1yhp8pue-1dhsf43.lock"
+      ],
+      "symlink": false,
+      "candidate_old_other_variant": true,
+      "newest_preserved_path": "/home/developer/projects/aurora/rust/target/debug/incremental/aurora_voice_ios_bridge-1h6mj1qpqyt43"
+    },
+    {
+      "path": "/home/developer/projects/aurora/rust/target/debug/incremental/aurora_voice_engine-3g6p4srp2oqae",
+      "root": "rust/target/debug/incremental",
+      "crate": "aurora_voice_engine",
+      "bytes": 56524800,
+      "last_file_modified_at": "2026-10-08T09:20:50.048126+00:00",
+      "latest_mtime": 1791451250.0481257,
+      "files": 180,
+      "lockfiles": [
+        "s-hn0lc9nfr4-1aojmqm.lock"
+      ],
+      "symlink": false,
+      "candidate_old_other_variant": true,
+      "newest_preserved_path": "/home/developer/projects/aurora/rust/target/debug/incremental/aurora_voice_engine-1mwznqxds5wob"
+    },
+    {
+      "path": "/home/developer/projects/aurora/rust/target/debug/incremental/aurora_voice_wasm-0vubco7wff5o5",
+      "root": "rust/target/debug/incremental",
+      "crate": "aurora_voice_wasm",
+      "bytes": 36081664,
+      "last_file_modified_at": "2026-10-09T15:05:20.254340+00:00",
+      "latest_mtime": 1791558320.2543404,
+      "files": 154,
+      "lockfiles": [
+        "s-hn1yj2w33m-1em3jd1.lock"
+      ],
+      "symlink": false,
+      "candidate_old_other_variant": false,
+      "newest_preserved_path": "/home/developer/projects/aurora/rust/target/debug/incremental/aurora_voice_wasm-0vubco7wff5o5"
+    },
+    {
+      "path": "/home/developer/projects/aurora/rust/target/debug/incremental/aurora_contracts-0i6ddhaoi1mzk",
+      "root": "rust/target/debug/incremental",
+      "crate": "aurora_contracts",
+      "bytes": 120111104,
+      "last_file_modified_at": "2026-10-09T15:04:54.806146+00:00",
+      "latest_mtime": 1791558294.8061464,
+      "files": 236,
+      "lockfiles": [
+        "s-hn1yikit8l-1vakaro.lock"
+      ],
+      "symlink": false,
+      "candidate_old_other_variant": true,
+      "newest_preserved_path": "/home/developer/projects/aurora/rust/target/debug/incremental/aurora_contracts-2r2cjm2k9n3tf"
+    },
+    {
+      "path": "/home/developer/projects/aurora/rust/target/debug/incremental/aurora_contracts-01ui5g1zavpo2",
+      "root": "rust/target/debug/incremental",
+      "crate": "aurora_contracts",
+      "bytes": 260767744,
+      "last_file_modified_at": "2026-10-07T18:50:24.004450+00:00",
+      "latest_mtime": 1791399024.0044503,
+      "files": 260,
+      "lockfiles": [
+        "s-hmzxcf5oxx-1ewwaz0.lock"
+      ],
+      "symlink": false,
+      "candidate_old_other_variant": true,
+      "newest_preserved_path": "/home/developer/projects/aurora/rust/target/debug/incremental/aurora_contracts-2r2cjm2k9n3tf"
+    },
+    {
+      "path": "/home/developer/projects/aurora/rust/target/debug/incremental/aurora_voice_engine-2b3dmz72yzof7",
+      "root": "rust/target/debug/incremental",
+      "crate": "aurora_voice_engine",
+      "bytes": 63909888,
+      "last_file_modified_at": "2026-10-07T22:09:34.401384+00:00",
+      "latest_mtime": 1791410974.4013844,
+      "files": 183,
+      "lockfiles": [
+        "s-hn02u8hby2-1ao08fa.lock"
+      ],
+      "symlink": false,
+      "candidate_old_other_variant": true,
+      "newest_preserved_path": "/home/developer/projects/aurora/rust/target/debug/incremental/aurora_voice_engine-1mwznqxds5wob"
+    },
+    {
+      "path": "/home/developer/projects/aurora/rust/target/debug/incremental/aurora_voice_engine-0shzgnrc38ze5",
+      "root": "rust/target/debug/incremental",
+      "crate": "aurora_voice_engine",
+      "bytes": 21131264,
+      "last_file_modified_at": "2026-10-07T22:09:32.850373+00:00",
+      "latest_mtime": 1791410972.8503726,
+      "files": 4,
+      "lockfiles": [
+        "s-hn02u74omv-157nyx5.lock"
+      ],
+      "symlink": false,
+      "candidate_old_other_variant": true,
+      "newest_preserved_path": "/home/developer/projects/aurora/rust/target/debug/incremental/aurora_voice_engine-1mwznqxds5wob"
+    },
+    {
+      "path": "/home/developer/projects/aurora/rust/target/debug/incremental/build_script_build-0jz46jjw0hqe0",
+      "root": "rust/target/debug/incremental",
+      "crate": "build_script_build",
+      "bytes": 3293184,
+      "last_file_modified_at": "2026-10-10T22:58:39.397205+00:00",
+      "latest_mtime": 1791673119.3972046,
+      "files": 77,
+      "lockfiles": [
+        "s-hn3f9njald-0ssqxkc.lock"
+      ],
+      "symlink": false,
+      "candidate_old_other_variant": true,
+      "newest_preserved_path": "/home/developer/projects/aurora/rust/target/debug/incremental/build_script_build-2tzocwyai8azm"
+    },
+    {
+      "path": "/home/developer/projects/aurora/rust/target/debug/incremental/aurora_ios_audio_spike-2sgz9jsncyqbz",
+      "root": "rust/target/debug/incremental",
+      "crate": "aurora_ios_audio_spike",
+      "bytes": 3063808,
+      "last_file_modified_at": "2026-10-08T02:58:35.424695+00:00",
+      "latest_mtime": 1791428315.4246948,
+      "files": 48,
+      "lockfiles": [
+        "s-hn0at1jy24-0pl78uj.lock"
+      ],
+      "symlink": false,
+      "candidate_old_other_variant": false,
+      "newest_preserved_path": "/home/developer/projects/aurora/rust/target/debug/incremental/aurora_ios_audio_spike-2sgz9jsncyqbz"
+    },
+    {
+      "path": "/home/developer/projects/aurora/rust/target/debug/incremental/session_liveness-2udwb25mjwihk",
+      "root": "rust/target/debug/incremental",
+      "crate": "session_liveness",
+      "bytes": 9064448,
+      "last_file_modified_at": "2026-10-09T15:04:16.474854+00:00",
+      "latest_mtime": 1791558256.4748538,
+      "files": 61,
+      "lockfiles": [
+        "s-hn1yi14iop-0061284.lock"
+      ],
+      "symlink": false,
+      "candidate_old_other_variant": false,
+      "newest_preserved_path": "/home/developer/projects/aurora/rust/target/debug/incremental/session_liveness-2udwb25mjwihk"
+    },
+    {
+      "path": "/home/developer/projects/aurora/rust/target/debug/incremental/parity_corpus-3p080nhj7yuhz",
+      "root": "rust/target/debug/incremental",
+      "crate": "parity_corpus",
+      "bytes": 15966208,
+      "last_file_modified_at": "2026-10-09T15:05:16.332310+00:00",
+      "latest_mtime": 1791558316.3323104,
+      "files": 104,
+      "lockfiles": [
+        "s-hn1yj0bx72-1gajpit.lock"
+      ],
+      "symlink": false,
+      "candidate_old_other_variant": false,
+      "newest_preserved_path": "/home/developer/projects/aurora/rust/target/debug/incremental/parity_corpus-3p080nhj7yuhz"
+    },
+    {
+      "path": "/home/developer/projects/aurora/rust/target/debug/incremental/generated_contracts-24y9n6ygw9hua",
+      "root": "rust/target/debug/incremental",
+      "crate": "generated_contracts",
+      "bytes": 11124736,
+      "last_file_modified_at": "2026-10-07T18:50:24.505454+00:00",
+      "latest_mtime": 1791399024.5054543,
+      "files": 112,
+      "lockfiles": [
+        "s-hmzxcmftdw-1rymeuf.lock"
+      ],
+      "symlink": false,
+      "candidate_old_other_variant": true,
+      "newest_preserved_path": "/home/developer/projects/aurora/rust/target/debug/incremental/generated_contracts-3epj2autaf8z0"
+    },
+    {
+      "path": "/home/developer/projects/aurora/rust/target/debug/incremental/aurora_voice_core-1uia9obofn0g8",
+      "root": "rust/target/debug/incremental",
+      "crate": "aurora_voice_core",
+      "bytes": 11509760,
+      "last_file_modified_at": "2026-10-08T02:43:02.067564+00:00",
+      "latest_mtime": 1791427382.067564,
+      "files": 4,
+      "lockfiles": [
+        "s-hn0adlandg-0x70mor.lock"
+      ],
+      "symlink": false,
+      "candidate_old_other_variant": true,
+      "newest_preserved_path": "/home/developer/projects/aurora/rust/target/debug/incremental/aurora_voice_core-19pjuxkisnblq"
+    },
+    {
+      "path": "/home/developer/projects/aurora/rust/target/debug/incremental/aurora_voice_native-05d2dis07wuc1",
+      "root": "rust/target/debug/incremental",
+      "crate": "aurora_voice_native",
+      "bytes": 212856832,
+      "last_file_modified_at": "2026-10-08T08:14:00.555445+00:00",
+      "latest_mtime": 1791447240.5554454,
+      "files": 260,
+      "lockfiles": [
+        "s-hn0jhvfnk0-1bxycug.lock"
+      ],
+      "symlink": false,
+      "candidate_old_other_variant": true,
+      "newest_preserved_path": "/home/developer/projects/aurora/rust/target/debug/incremental/aurora_voice_native-0ckngnjvijtaw"
+    },
+    {
+      "path": "/home/developer/projects/aurora/rust/target/debug/incremental/build_script_build-1q7p20x34rqk2",
+      "root": "rust/target/debug/incremental",
+      "crate": "build_script_build",
+      "bytes": 2772992,
+      "last_file_modified_at": "2026-10-06T22:54:28.635979+00:00",
+      "latest_mtime": 1791327268.635979,
+      "files": 43,
+      "lockfiles": [
+        "s-hmz0dwwtiu-1d23v9b.lock"
+      ],
+      "symlink": false,
+      "candidate_old_other_variant": true,
+      "newest_preserved_path": "/home/developer/projects/aurora/rust/target/debug/incremental/build_script_build-2tzocwyai8azm"
+    },
+    {
+      "path": "/home/developer/projects/aurora/rust/target/debug/incremental/session_liveness-3p9jw6o7xyxcv",
+      "root": "rust/target/debug/incremental",
+      "crate": "session_liveness",
+      "bytes": 3080192,
+      "last_file_modified_at": "2026-10-09T15:03:34.432936+00:00",
+      "latest_mtime": 1791558214.4329364,
+      "files": 4,
+      "lockfiles": [
+        "s-hn1yhc2oc4-0s5djky.lock"
+      ],
+      "symlink": false,
+      "candidate_old_other_variant": true,
+      "newest_preserved_path": "/home/developer/projects/aurora/rust/target/debug/incremental/session_liveness-2udwb25mjwihk"
+    },
+    {
+      "path": "/home/developer/projects/aurora/rust/target/debug/incremental/aurora_voice_engine-2nk40a1en3dfs",
+      "root": "rust/target/debug/incremental",
+      "crate": "aurora_voice_engine",
+      "bytes": 63348736,
+      "last_file_modified_at": "2026-10-08T07:13:35.550776+00:00",
+      "latest_mtime": 1791443615.550776,
+      "files": 202,
+      "lockfiles": [
+        "s-hn0hu1m4ls-0yjupph.lock"
+      ],
+      "symlink": false,
+      "candidate_old_other_variant": true,
+      "newest_preserved_path": "/home/developer/projects/aurora/rust/target/debug/incremental/aurora_voice_engine-1mwznqxds5wob"
+    },
+    {
+      "path": "/home/developer/projects/aurora/rust/target/debug/incremental/build_script_build-2ee3xhzbimlqy",
+      "root": "rust/target/debug/incremental",
+      "crate": "build_script_build",
+      "bytes": 1740800,
+      "last_file_modified_at": "2026-10-09T22:51:41.067919+00:00",
+      "latest_mtime": 1791586301.067919,
+      "files": 15,
+      "lockfiles": [
+        "s-hn2bdt19bn-10lzs99.lock"
+      ],
+      "symlink": false,
+      "candidate_old_other_variant": true,
+      "newest_preserved_path": "/home/developer/projects/aurora/rust/target/debug/incremental/build_script_build-2tzocwyai8azm"
+    },
+    {
+      "path": "/home/developer/projects/aurora/rust/target/debug/incremental/wasm_json_shape-1oc4x4n2oi76k",
+      "root": "rust/target/debug/incremental",
+      "crate": "wasm_json_shape",
+      "bytes": 53248,
+      "last_file_modified_at": "2026-10-09T15:03:53.349290+00:00",
+      "latest_mtime": 1791558233.3492904,
+      "files": 4,
+      "lockfiles": [
+        "s-hn1yhngr5f-1pv6qam.lock"
+      ],
+      "symlink": false,
+      "candidate_old_other_variant": true,
+      "newest_preserved_path": "/home/developer/projects/aurora/rust/target/debug/incremental/wasm_json_shape-1qjpr7eda7odr"
+    },
+    {
+      "path": "/home/developer/projects/aurora/rust/target/debug/incremental/build_script_build-1layhyk4l3nq5",
+      "root": "rust/target/debug/incremental",
+      "crate": "build_script_build",
+      "bytes": 2772992,
+      "last_file_modified_at": "2026-10-10T02:20:05.887017+00:00",
+      "latest_mtime": 1791598805.8870175,
+      "files": 43,
+      "lockfiles": [
+        "s-hn2h4n6qtp-1oo5wbt.lock"
+      ],
+      "symlink": false,
+      "candidate_old_other_variant": true,
+      "newest_preserved_path": "/home/developer/projects/aurora/rust/target/debug/incremental/build_script_build-2tzocwyai8azm"
+    },
+    {
+      "path": "/home/developer/projects/aurora/rust/target/debug/incremental/aurora_voice_engine-0tfdir4fptnsr",
+      "root": "rust/target/debug/incremental",
+      "crate": "aurora_voice_engine",
+      "bytes": 53981184,
+      "last_file_modified_at": "2026-10-07T20:54:36.506274+00:00",
+      "latest_mtime": 1791406476.5062745,
+      "files": 144,
+      "lockfiles": [
+        "s-hn00rus3je-19r7rm8.lock"
+      ],
+      "symlink": false,
+      "candidate_old_other_variant": true,
+      "newest_preserved_path": "/home/developer/projects/aurora/rust/target/debug/incremental/aurora_voice_engine-1mwznqxds5wob"
+    },
+    {
+      "path": "/home/developer/projects/aurora/rust/target/debug/incremental/aurora_voice_testkit-144g1okd8vx33",
+      "root": "rust/target/debug/incremental",
+      "crate": "aurora_voice_testkit",
+      "bytes": 35340288,
+      "last_file_modified_at": "2026-10-09T15:05:23.104362+00:00",
+      "latest_mtime": 1791558323.1043622,
+      "files": 127,
+      "lockfiles": [
+        "s-hn1yj4nojy-1aqyzvs.lock"
+      ],
+      "symlink": false,
+      "candidate_old_other_variant": false,
+      "newest_preserved_path": "/home/developer/projects/aurora/rust/target/debug/incremental/aurora_voice_testkit-144g1okd8vx33"
+    },
+    {
+      "path": "/home/developer/projects/aurora/rust/target/debug/incremental/aurora_contracts-09ameyy7mbe0g",
+      "root": "rust/target/debug/incremental",
+      "crate": "aurora_contracts",
+      "bytes": 260100096,
+      "last_file_modified_at": "2026-10-08T08:13:49.343360+00:00",
+      "latest_mtime": 1791447229.3433602,
+      "files": 260,
+      "lockfiles": [
+        "s-hn0jhofw3g-0q30akq.lock"
+      ],
+      "symlink": false,
+      "candidate_old_other_variant": true,
+      "newest_preserved_path": "/home/developer/projects/aurora/rust/target/debug/incremental/aurora_contracts-2r2cjm2k9n3tf"
+    },
+    {
+      "path": "/home/developer/projects/aurora/rust/target/debug/incremental/aurora_voice_wasm-0j3m0266defyi",
+      "root": "rust/target/debug/incremental",
+      "crate": "aurora_voice_wasm",
+      "bytes": 26533888,
+      "last_file_modified_at": "2026-10-09T15:04:14.959842+00:00",
+      "latest_mtime": 1791558254.9598422,
+      "files": 110,
+      "lockfiles": [
+        "s-hn1yhzzbmc-0zstah2.lock"
+      ],
+      "symlink": false,
+      "candidate_old_other_variant": true,
+      "newest_preserved_path": "/home/developer/projects/aurora/rust/target/debug/incremental/aurora_voice_wasm-0vubco7wff5o5"
+    },
+    {
+      "path": "/home/developer/projects/aurora/rust/target/debug/incremental/aurora_voice_sherpa-33fzc9ovpivfi",
+      "root": "rust/target/debug/incremental",
+      "crate": "aurora_voice_sherpa",
+      "bytes": 4128768,
+      "last_file_modified_at": "2026-10-09T15:03:56.288064+00:00",
+      "latest_mtime": 1791558236.2880638,
+      "files": 4,
+      "lockfiles": [
+        "s-hn1yhp37sv-0dn30pq.lock"
+      ],
+      "symlink": false,
+      "candidate_old_other_variant": true,
+      "newest_preserved_path": "/home/developer/projects/aurora/rust/target/debug/incremental/aurora_voice_sherpa-08wqj9d39rhbt"
+    },
+    {
+      "path": "/home/developer/projects/aurora/rust/target/debug/incremental/catalog_number_text-2gbd0co6cykg1",
+      "root": "rust/target/debug/incremental",
+      "crate": "catalog_number_text",
+      "bytes": 4587520,
+      "last_file_modified_at": "2026-10-07T20:54:37.320281+00:00",
+      "latest_mtime": 1791406477.3202808,
+      "files": 38,
+      "lockfiles": [
+        "s-hn00rvswuz-1cajbyk.lock"
+      ],
+      "symlink": false,
+      "candidate_old_other_variant": true,
+      "newest_preserved_path": "/home/developer/projects/aurora/rust/target/debug/incremental/catalog_number_text-1ci5ak2tsrajd"
+    },
+    {
+      "path": "/home/developer/projects/aurora/rust/target/debug/incremental/aurora_voice_core-313eqcs8i4xym",
+      "root": "rust/target/debug/incremental",
+      "crate": "aurora_voice_core",
+      "bytes": 42401792,
+      "last_file_modified_at": "2026-10-09T21:56:48.280495+00:00",
+      "latest_mtime": 1791583008.2804954,
+      "files": 170,
+      "lockfiles": [
+        "s-hn29vbe4l6-03yyorz.lock"
+      ],
+      "symlink": false,
+      "candidate_old_other_variant": true,
+      "newest_preserved_path": "/home/developer/projects/aurora/rust/target/debug/incremental/aurora_voice_core-19pjuxkisnblq"
+    },
+    {
+      "path": "/home/developer/projects/aurora/rust/target/debug/incremental/aurora_contracts-1n0ma4cvbwym2",
+      "root": "rust/target/debug/incremental",
+      "crate": "aurora_contracts",
+      "bytes": 257085440,
+      "last_file_modified_at": "2026-10-09T15:04:05.586771+00:00",
+      "latest_mtime": 1791558245.5867708,
+      "files": 260,
+      "lockfiles": [
+        "s-hn1yhqacth-1o0ldz8.lock"
+      ],
+      "symlink": false,
+      "candidate_old_other_variant": true,
+      "newest_preserved_path": "/home/developer/projects/aurora/rust/target/debug/incremental/aurora_contracts-2r2cjm2k9n3tf"
+    },
+    {
+      "path": "/home/developer/projects/aurora/rust/target/debug/incremental/aurora_tauri_lib-0wltlfe4erzw2",
+      "root": "rust/target/debug/incremental",
+      "crate": "aurora_tauri_lib",
+      "bytes": 83353600,
+      "last_file_modified_at": "2026-10-09T18:32:42.452177+00:00",
+      "latest_mtime": 1791570762.4521766,
+      "files": 4,
+      "lockfiles": [
+        "s-hn248rz3on-097uid4.lock"
+      ],
+      "symlink": false,
+      "candidate_old_other_variant": true,
+      "newest_preserved_path": "/home/developer/projects/aurora/rust/target/debug/incremental/aurora_tauri_lib-3puz838svpdip"
+    },
+    {
+      "path": "/home/developer/projects/aurora/rust/target/debug/incremental/node_policy-2scjv8k79yg68",
+      "root": "rust/target/debug/incremental",
+      "crate": "node_policy",
+      "bytes": 1331200,
+      "last_file_modified_at": "2026-10-07T20:54:32.027877+00:00",
+      "latest_mtime": 1791406472.0278773,
+      "files": 4,
+      "lockfiles": [
+        "s-hn00rsma4u-17vng5x.lock"
+      ],
+      "symlink": false,
+      "candidate_old_other_variant": true,
+      "newest_preserved_path": "/home/developer/projects/aurora/rust/target/debug/incremental/node_policy-2q6ww1fwunk8k"
+    },
+    {
+      "path": "/home/developer/projects/aurora/rust/target/debug/incremental/wasm_json_shape-1qjpr7eda7odr",
+      "root": "rust/target/debug/incremental",
+      "crate": "wasm_json_shape",
+      "bytes": 135168,
+      "last_file_modified_at": "2026-10-09T15:05:19.510070+00:00",
+      "latest_mtime": 1791558319.5100696,
+      "files": 9,
+      "lockfiles": [
+        "s-hn1yj2re0t-0ci18oz.lock"
+      ],
+      "symlink": false,
+      "candidate_old_other_variant": false,
+      "newest_preserved_path": "/home/developer/projects/aurora/rust/target/debug/incremental/wasm_json_shape-1qjpr7eda7odr"
+    },
+    {
+      "path": "/home/developer/projects/aurora/rust/target/debug/incremental/handoff_raw_feature_boundary-3o51h2otofh5a",
+      "root": "rust/target/debug/incremental",
+      "crate": "handoff_raw_feature_boundary",
+      "bytes": 3919872,
+      "last_file_modified_at": "2026-10-07T09:36:57.758354+00:00",
+      "latest_mtime": 1791365817.7583542,
+      "files": 17,
+      "lockfiles": [
+        "s-hmzi3g4t42-10xy3dv.lock"
+      ],
+      "symlink": false,
+      "candidate_old_other_variant": true,
+      "newest_preserved_path": "/home/developer/projects/aurora/rust/target/debug/incremental/handoff_raw_feature_boundary-03skjpcyec7nf"
+    },
+    {
+      "path": "/home/developer/projects/aurora/rust/target/debug/incremental/aurora_voice_ios_bridge-2ldufu1xv5nqj",
+      "root": "rust/target/debug/incremental",
+      "crate": "aurora_voice_ios_bridge",
+      "bytes": 9818112,
+      "last_file_modified_at": "2026-10-09T15:05:24.573373+00:00",
+      "latest_mtime": 1791558324.5733733,
+      "files": 89,
+      "lockfiles": [
+        "s-hn1yj5o96w-1ss1swq.lock"
+      ],
+      "symlink": false,
+      "candidate_old_other_variant": true,
+      "newest_preserved_path": "/home/developer/projects/aurora/rust/target/debug/incremental/aurora_voice_ios_bridge-1h6mj1qpqyt43"
+    },
+    {
+      "path": "/home/developer/projects/aurora/rust/target/debug/incremental/aurora_voice_core-2nbq6jaeqgpn1",
+      "root": "rust/target/debug/incremental",
+      "crate": "aurora_voice_core",
+      "bytes": 13615104,
+      "last_file_modified_at": "2026-10-09T18:32:35.352123+00:00",
+      "latest_mtime": 1791570755.3521228,
+      "files": 4,
+      "lockfiles": [
+        "s-hn248q3ch0-1388i11.lock"
+      ],
+      "symlink": false,
+      "candidate_old_other_variant": true,
+      "newest_preserved_path": "/home/developer/projects/aurora/rust/target/debug/incremental/aurora_voice_core-19pjuxkisnblq"
+    },
+    {
+      "path": "/home/developer/projects/aurora/rust/target/debug/incremental/aurora_voice_ios_bridge-3rs2cvys2pmb7",
+      "root": "rust/target/debug/incremental",
+      "crate": "aurora_voice_ios_bridge",
+      "bytes": 2908160,
+      "last_file_modified_at": "2026-10-08T08:13:29.015106+00:00",
+      "latest_mtime": 1791447209.0151057,
+      "files": 4,
+      "lockfiles": [
+        "s-hn0jhidpon-0x1ta8f.lock"
+      ],
+      "symlink": false,
+      "candidate_old_other_variant": true,
+      "newest_preserved_path": "/home/developer/projects/aurora/rust/target/debug/incremental/aurora_voice_ios_bridge-1h6mj1qpqyt43"
+    },
+    {
+      "path": "/home/developer/projects/aurora/rust/target/debug/incremental/aurora_voice_sherpa-08wqj9d39rhbt",
+      "root": "rust/target/debug/incremental",
+      "crate": "aurora_voice_sherpa",
+      "bytes": 6225920,
+      "last_file_modified_at": "2026-10-11T02:58:48.261889+00:00",
+      "latest_mtime": 1791687528.2618887,
+      "files": 5,
+      "lockfiles": [
+        "s-hn3lvy0d7t-0feo2jx.lock"
+      ],
+      "symlink": false,
+      "candidate_old_other_variant": false,
+      "newest_preserved_path": "/home/developer/projects/aurora/rust/target/debug/incremental/aurora_voice_sherpa-08wqj9d39rhbt"
+    },
+    {
+      "path": "/home/developer/projects/aurora/rust/target/debug/incremental/json_text_catalogs-2yni8g2u3s96b",
+      "root": "rust/target/debug/incremental",
+      "crate": "json_text_catalogs",
+      "bytes": 1245184,
+      "last_file_modified_at": "2026-10-07T20:54:33.227249+00:00",
+      "latest_mtime": 1791406473.227249,
+      "files": 4,
+      "lockfiles": [
+        "s-hn00rtddzz-06c6ooj.lock"
+      ],
+      "symlink": false,
+      "candidate_old_other_variant": true,
+      "newest_preserved_path": "/home/developer/projects/aurora/rust/target/debug/incremental/json_text_catalogs-2cfahybeo0kes"
+    },
+    {
+      "path": "/home/developer/projects/aurora/rust/target/debug/incremental/aurora_mesh_session-3qs1te88hkcdm",
+      "root": "rust/target/debug/incremental",
+      "crate": "aurora_mesh_session",
+      "bytes": 6942720,
+      "last_file_modified_at": "2026-10-09T15:03:33.173523+00:00",
+      "latest_mtime": 1791558213.1735234,
+      "files": 4,
+      "lockfiles": [
+        "s-hn1yhb9g30-04q27lz.lock"
+      ],
+      "symlink": false,
+      "candidate_old_other_variant": true,
+      "newest_preserved_path": "/home/developer/projects/aurora/rust/target/debug/incremental/aurora_mesh_session-0wd2stq0y508e"
+    },
+    {
+      "path": "/home/developer/projects/aurora/rust/target/debug/incremental/aurora_voice_core-1ch6xrj5lub4j",
+      "root": "rust/target/debug/incremental",
+      "crate": "aurora_voice_core",
+      "bytes": 18538496,
+      "last_file_modified_at": "2026-10-09T15:03:52.622672+00:00",
+      "latest_mtime": 1791558232.6226718,
+      "files": 4,
+      "lockfiles": [
+        "s-hn1yhmdams-1fmnydc.lock"
+      ],
+      "symlink": false,
+      "candidate_old_other_variant": true,
+      "newest_preserved_path": "/home/developer/projects/aurora/rust/target/debug/incremental/aurora_voice_core-19pjuxkisnblq"
+    },
+    {
+      "path": "/home/developer/projects/aurora/rust/target/debug/incremental/aurora_voice_core-3veydjkn1hhc7",
+      "root": "rust/target/debug/incremental",
+      "crate": "aurora_voice_core",
+      "bytes": 27815936,
+      "last_file_modified_at": "2026-10-09T15:04:06.433777+00:00",
+      "latest_mtime": 1791558246.4337773,
+      "files": 117,
+      "lockfiles": [
+        "s-hn1yhuz9yq-14vqajd.lock"
+      ],
+      "symlink": false,
+      "candidate_old_other_variant": true,
+      "newest_preserved_path": "/home/developer/projects/aurora/rust/target/debug/incremental/aurora_voice_core-19pjuxkisnblq"
+    },
+    {
+      "path": "/home/developer/projects/aurora/rust/target/debug/incremental/aurora_tauri_response_json_helper_v1-0i3rlfq5jnxgk",
+      "root": "rust/target/debug/incremental",
+      "crate": "aurora_tauri_response_json_helper_v1",
+      "bytes": 1683456,
+      "last_file_modified_at": "2026-10-08T02:43:02.258565+00:00",
+      "latest_mtime": 1791427382.2585654,
+      "files": 4,
+      "lockfiles": [
+        "s-hn0adm1zdi-0sug3um.lock"
+      ],
+      "symlink": false,
+      "candidate_old_other_variant": false,
+      "newest_preserved_path": "/home/developer/projects/aurora/rust/target/debug/incremental/aurora_tauri_response_json_helper_v1-0i3rlfq5jnxgk"
+    },
+    {
+      "path": "/home/developer/projects/aurora/rust/target/debug/incremental/aurora_voice_sherpa_sys-29yp8nx9v1e1z",
+      "root": "rust/target/debug/incremental",
+      "crate": "aurora_voice_sherpa_sys",
+      "bytes": 5427200,
+      "last_file_modified_at": "2026-10-11T02:58:41.773839+00:00",
+      "latest_mtime": 1791687521.773839,
+      "files": 5,
+      "lockfiles": [
+        "s-hn3lvu90xf-0grvs26.lock"
+      ],
+      "symlink": false,
+      "candidate_old_other_variant": false,
+      "newest_preserved_path": "/home/developer/projects/aurora/rust/target/debug/incremental/aurora_voice_sherpa_sys-29yp8nx9v1e1z"
+    },
+    {
+      "path": "/home/developer/projects/aurora/rust/target/debug/incremental/webrtc_dtls-2tse1wl4sopt2",
+      "root": "rust/target/debug/incremental",
+      "crate": "webrtc_dtls",
+      "bytes": 61177856,
+      "last_file_modified_at": "2026-10-08T10:01:13.015686+00:00",
+      "latest_mtime": 1791453673.0156858,
+      "files": 260,
+      "lockfiles": [
+        "s-hn0mgbajes-193qgyh.lock"
+      ],
+      "symlink": false,
+      "candidate_old_other_variant": true,
+      "newest_preserved_path": "/home/developer/projects/aurora/rust/target/debug/incremental/webrtc_dtls-1ks6uf0f0yj80"
+    },
+    {
+      "path": "/home/developer/projects/aurora/rust/target/debug/incremental/vad_parity_driver-1w5jrsqjizvpr",
+      "root": "rust/target/debug/incremental",
+      "crate": "vad_parity_driver",
+      "bytes": 1843200,
+      "last_file_modified_at": "2026-10-08T09:31:03.241081+00:00",
+      "latest_mtime": 1791451863.2410808,
+      "files": 4,
+      "lockfiles": [
+        "s-hn0lmhenbk-0t4xuqp.lock"
+      ],
+      "symlink": false,
+      "candidate_old_other_variant": true,
+      "newest_preserved_path": "/home/developer/projects/aurora/rust/target/debug/incremental/vad_parity_driver-2egz8x5wpf3a3"
+    },
+    {
+      "path": "/home/developer/projects/aurora/rust/target/debug/incremental/main_flow-3g85ds6zoiwnq",
+      "root": "rust/target/debug/incremental",
+      "crate": "main_flow",
+      "bytes": 45056,
+      "last_file_modified_at": "2026-10-10T22:58:40.299957+00:00",
+      "latest_mtime": 1791673120.2999568,
+      "files": 4,
+      "lockfiles": [
+        "s-hn3f9o6pll-0aom2z6.lock"
+      ],
+      "symlink": false,
+      "candidate_old_other_variant": true,
+      "newest_preserved_path": "/home/developer/projects/aurora/rust/target/debug/incremental/main_flow-0d6j4ocbic5em"
+    },
+    {
+      "path": "/home/developer/projects/aurora/rust/target/debug/incremental/aurora_voice_native-0il7bf0y0io46",
+      "root": "rust/target/debug/incremental",
+      "crate": "aurora_voice_native",
+      "bytes": 65589248,
+      "last_file_modified_at": "2026-10-09T15:03:39.652573+00:00",
+      "latest_mtime": 1791558219.6525729,
+      "files": 4,
+      "lockfiles": [
+        "s-hn1yhcgfic-0r61b93.lock"
+      ],
+      "symlink": false,
+      "candidate_old_other_variant": true,
+      "newest_preserved_path": "/home/developer/projects/aurora/rust/target/debug/incremental/aurora_voice_native-0ckngnjvijtaw"
+    },
+    {
+      "path": "/home/developer/projects/aurora/rust/target/debug/incremental/json_text_catalogs-2gxm177mgguhd",
+      "root": "rust/target/debug/incremental",
+      "crate": "json_text_catalogs",
+      "bytes": 1241088,
+      "last_file_modified_at": "2026-10-08T07:11:43.413922+00:00",
+      "latest_mtime": 1791443503.4139216,
+      "files": 4,
+      "lockfiles": [
+        "s-hn0hs871y9-18olv43.lock"
+      ],
+      "symlink": false,
+      "candidate_old_other_variant": true,
+      "newest_preserved_path": "/home/developer/projects/aurora/rust/target/debug/incremental/json_text_catalogs-2cfahybeo0kes"
+    },
+    {
+      "path": "/home/developer/projects/aurora/rust/target/debug/incremental/aurora_cactus_installer_main_v95-0uf5i306bi5dn",
+      "root": "rust/target/debug/incremental",
+      "crate": "aurora_cactus_installer_main_v95",
+      "bytes": 10297344,
+      "last_file_modified_at": "2026-10-11T11:02:13.031566+00:00",
+      "latest_mtime": 1791716533.0315657,
+      "files": 130,
+      "lockfiles": [
+        "s-hn3z7mf8wz-01xv22z.lock"
+      ],
+      "symlink": false,
+      "candidate_old_other_variant": false,
+      "newest_preserved_path": "/home/developer/projects/aurora/rust/target/debug/incremental/aurora_cactus_installer_main_v95-0uf5i306bi5dn"
+    },
+    {
+      "path": "/home/developer/projects/aurora/rust/target/debug/incremental/aurora_contracts-08iyoelchfx1g",
+      "root": "rust/target/debug/incremental",
+      "crate": "aurora_contracts",
+      "bytes": 260853760,
+      "last_file_modified_at": "2026-10-08T02:29:42.348433+00:00",
+      "latest_mtime": 1791426582.348433,
+      "files": 260,
+      "lockfiles": [
+        "s-hn09zw4lj5-09sgifd.lock"
+      ],
+      "symlink": false,
+      "candidate_old_other_variant": true,
+      "newest_preserved_path": "/home/developer/projects/aurora/rust/target/debug/incremental/aurora_contracts-2r2cjm2k9n3tf"
+    },
+    {
+      "path": "/home/developer/projects/aurora/rust/target/debug/incremental/node_policy-36yfcv8c8fsb2",
+      "root": "rust/target/debug/incremental",
+      "crate": "node_policy",
+      "bytes": 7254016,
+      "last_file_modified_at": "2026-10-07T20:55:20.489617+00:00",
+      "latest_mtime": 1791406520.4896166,
+      "files": 70,
+      "lockfiles": [
+        "s-hn00sl9ogu-1f70mmz.lock"
+      ],
+      "symlink": false,
+      "candidate_old_other_variant": true,
+      "newest_preserved_path": "/home/developer/projects/aurora/rust/target/debug/incremental/node_policy-2q6ww1fwunk8k"
+    },
+    {
+      "path": "/home/developer/projects/aurora/rust/target/debug/incremental/aurora_contracts-2r2cjm2k9n3tf",
+      "root": "rust/target/debug/incremental",
+      "crate": "aurora_contracts",
+      "bytes": 124215296,
+      "last_file_modified_at": "2026-10-11T02:58:05.478561+00:00",
+      "latest_mtime": 1791687485.4785614,
+      "files": 5,
+      "lockfiles": [
+        "s-hn3luxqj7a-0peuhvb.lock"
+      ],
+      "symlink": false,
+      "candidate_old_other_variant": false,
+      "newest_preserved_path": "/home/developer/projects/aurora/rust/target/debug/incremental/aurora_contracts-2r2cjm2k9n3tf"
+    },
+    {
+      "path": "/home/developer/projects/aurora/rust/target/debug/incremental/aurora_mesh_authority-3dcbp9eycscx4",
+      "root": "rust/target/debug/incremental",
+      "crate": "aurora_mesh_authority",
+      "bytes": 16887808,
+      "last_file_modified_at": "2026-10-09T15:03:29.931499+00:00",
+      "latest_mtime": 1791558209.9314988,
+      "files": 4,
+      "lockfiles": [
+        "s-hn1yh8uvef-14hqpby.lock"
+      ],
+      "symlink": false,
+      "candidate_old_other_variant": true,
+      "newest_preserved_path": "/home/developer/projects/aurora/rust/target/debug/incremental/aurora_mesh_authority-0zvu0r9vzbm5d"
+    },
+    {
+      "path": "/home/developer/projects/aurora/rust/target/debug/incremental/aurora_contracts-2311c5qbo0pyv",
+      "root": "rust/target/debug/incremental",
+      "crate": "aurora_contracts",
+      "bytes": 257085440,
+      "last_file_modified_at": "2026-10-09T18:17:01.464123+00:00",
+      "latest_mtime": 1791569821.4641225,
+      "files": 260,
+      "lockfiles": [
+        "s-hn23t65zmh-1hvdrit.lock"
+      ],
+      "symlink": false,
+      "candidate_old_other_variant": true,
+      "newest_preserved_path": "/home/developer/projects/aurora/rust/target/debug/incremental/aurora_contracts-2r2cjm2k9n3tf"
+    },
+    {
+      "path": "/home/developer/projects/aurora/rust/target/debug/incremental/aurora_voice_ios_bridge-35p3y2qjugu53",
+      "root": "rust/target/debug/incremental",
+      "crate": "aurora_voice_ios_bridge",
+      "bytes": 5861376,
+      "last_file_modified_at": "2026-10-09T22:39:42.596459+00:00",
+      "latest_mtime": 1791585582.5964592,
+      "files": 44,
+      "lockfiles": [
+        "s-hn2b1yflc0-0xb7mu9.lock"
+      ],
+      "symlink": false,
+      "candidate_old_other_variant": true,
+      "newest_preserved_path": "/home/developer/projects/aurora/rust/target/debug/incremental/aurora_voice_ios_bridge-1h6mj1qpqyt43"
+    },
+    {
+      "path": "/home/developer/projects/aurora/rust/target/debug/incremental/aurora_contracts-0s8z45x393x5f",
+      "root": "rust/target/debug/incremental",
+      "crate": "aurora_contracts",
+      "bytes": 256491520,
+      "last_file_modified_at": "2026-10-08T02:26:32.191967+00:00",
+      "latest_mtime": 1791426392.1919668,
+      "files": 260,
+      "lockfiles": [
+        "s-hn09x46v89-14i8am4.lock"
+      ],
+      "symlink": false,
+      "candidate_old_other_variant": true,
+      "newest_preserved_path": "/home/developer/projects/aurora/rust/target/debug/incremental/aurora_contracts-2r2cjm2k9n3tf"
+    },
+    {
+      "path": "/home/developer/projects/aurora/rust/target/debug/incremental/live_cpal_audio-3mqr29i9v5t4d",
+      "root": "rust/target/debug/incremental",
+      "crate": "live_cpal_audio",
+      "bytes": 14536704,
+      "last_file_modified_at": "2026-10-09T18:32:04.086887+00:00",
+      "latest_mtime": 1791570724.0868866,
+      "files": 90,
+      "lockfiles": [
+        "s-hn2487pafj-1arr2j2.lock"
+      ],
+      "symlink": false,
+      "candidate_old_other_variant": true,
+      "newest_preserved_path": "/home/developer/projects/aurora/rust/target/debug/incremental/live_cpal_audio-1i8io1ubeehzb"
+    },
+    {
+      "path": "/home/developer/projects/aurora/rust/target/debug/incremental/native_kws_smoke-18m9ziij5nys3",
+      "root": "rust/target/debug/incremental",
+      "crate": "native_kws_smoke",
+      "bytes": 53248,
+      "last_file_modified_at": "2026-10-08T09:31:03.313839+00:00",
+      "latest_mtime": 1791451863.3138394,
+      "files": 4,
+      "lockfiles": [
+        "s-hn0lmhhryu-1gpkua3.lock"
+      ],
+      "symlink": false,
+      "candidate_old_other_variant": true,
+      "newest_preserved_path": "/home/developer/projects/aurora/rust/target/debug/incremental/native_kws_smoke-3ju6ssp4wrjz7"
+    },
+    {
+      "path": "/home/developer/projects/aurora/rust/target/debug/incremental/parity_corpus-00fxy3w7wqx80",
+      "root": "rust/target/debug/incremental",
+      "crate": "parity_corpus",
+      "bytes": 15949824,
+      "last_file_modified_at": "2026-10-07T19:31:08.372072+00:00",
+      "latest_mtime": 1791401468.3720722,
+      "files": 104,
+      "lockfiles": [
+        "s-hmzyh0qpc4-1ftvvza.lock"
+      ],
+      "symlink": false,
+      "candidate_old_other_variant": true,
+      "newest_preserved_path": "/home/developer/projects/aurora/rust/target/debug/incremental/parity_corpus-3p080nhj7yuhz"
+    },
+    {
+      "path": "/home/developer/projects/aurora/rust/target/debug/incremental/aurora_voice_ios_bridge-0yueqspa1edpu",
+      "root": "rust/target/debug/incremental",
+      "crate": "aurora_voice_ios_bridge",
+      "bytes": 5455872,
+      "last_file_modified_at": "2026-10-09T15:04:10.120805+00:00",
+      "latest_mtime": 1791558250.1208053,
+      "files": 44,
+      "lockfiles": [
+        "s-hn1yhxe5zt-04tf0ew.lock"
+      ],
+      "symlink": false,
+      "candidate_old_other_variant": true,
+      "newest_preserved_path": "/home/developer/projects/aurora/rust/target/debug/incremental/aurora_voice_ios_bridge-1h6mj1qpqyt43"
+    },
+    {
+      "path": "/home/developer/projects/aurora/rust/target/debug/incremental/aurora_voice_core-059snwzykzlv3",
+      "root": "rust/target/debug/incremental",
+      "crate": "aurora_voice_core",
+      "bytes": 30871552,
+      "last_file_modified_at": "2026-10-09T19:08:16.410437+00:00",
+      "latest_mtime": 1791572896.410437,
+      "files": 121,
+      "lockfiles": [
+        "s-hn2583p0xm-1e2lbo3.lock"
+      ],
+      "symlink": false,
+      "candidate_old_other_variant": true,
+      "newest_preserved_path": "/home/developer/projects/aurora/rust/target/debug/incremental/aurora_voice_core-19pjuxkisnblq"
+    },
+    {
+      "path": "/home/developer/projects/aurora/rust/target/debug/incremental/candidate_model_packs-10x92a2or4lfa",
+      "root": "rust/target/debug/incremental",
+      "crate": "candidate_model_packs",
+      "bytes": 15925248,
+      "last_file_modified_at": "2026-10-09T20:36:03.090946+00:00",
+      "latest_mtime": 1791578163.0909462,
+      "files": 96,
+      "lockfiles": [
+        "s-hn27n8zcso-05y8o16.lock"
+      ],
+      "symlink": false,
+      "candidate_old_other_variant": false,
+      "newest_preserved_path": "/home/developer/projects/aurora/rust/target/debug/incremental/candidate_model_packs-10x92a2or4lfa"
+    },
+    {
+      "path": "/home/developer/projects/aurora/rust/target/debug/incremental/node_policy-2q6ww1fwunk8k",
+      "root": "rust/target/debug/incremental",
+      "crate": "node_policy",
+      "bytes": 1417216,
+      "last_file_modified_at": "2026-10-10T22:57:38.653706+00:00",
+      "latest_mtime": 1791673058.6537056,
+      "files": 4,
+      "lockfiles": [
+        "s-hn3f8n8erb-0olxq3r.lock"
+      ],
+      "symlink": false,
+      "candidate_old_other_variant": false,
+      "newest_preserved_path": "/home/developer/projects/aurora/rust/target/debug/incremental/node_policy-2q6ww1fwunk8k"
+    },
+    {
+      "path": "/home/developer/projects/aurora/rust/target/debug/incremental/build_script_build-1wmvf6vrkbpe5",
+      "root": "rust/target/debug/incremental",
+      "crate": "build_script_build",
+      "bytes": 2854912,
+      "last_file_modified_at": "2026-10-07T22:15:52.879318+00:00",
+      "latest_mtime": 1791411352.8793185,
+      "files": 43,
+      "lockfiles": [
+        "s-hn030il018-1m1ag64.lock"
+      ],
+      "symlink": false,
+      "candidate_old_other_variant": true,
+      "newest_preserved_path": "/home/developer/projects/aurora/rust/target/debug/incremental/build_script_build-2tzocwyai8azm"
+    },
+    {
+      "path": "/home/developer/projects/aurora/rust/target/debug/incremental/live_cpal_audio-2655bhxlrma76",
+      "root": "rust/target/debug/incremental",
+      "crate": "live_cpal_audio",
+      "bytes": 4689920,
+      "last_file_modified_at": "2026-10-08T08:13:33.797242+00:00",
+      "latest_mtime": 1791447213.797242,
+      "files": 4,
+      "lockfiles": [
+        "s-hn0jhl6ca8-1pgin2o.lock"
+      ],
+      "symlink": false,
+      "candidate_old_other_variant": true,
+      "newest_preserved_path": "/home/developer/projects/aurora/rust/target/debug/incremental/live_cpal_audio-1i8io1ubeehzb"
+    },
+    {
+      "path": "/home/developer/projects/aurora/rust/target/debug/incremental/aurora_voice_core-3kp1bdoxajcnr",
+      "root": "rust/target/debug/incremental",
+      "crate": "aurora_voice_core",
+      "bytes": 13037568,
+      "last_file_modified_at": "2026-10-09T15:03:28.763490+00:00",
+      "latest_mtime": 1791558208.7634897,
+      "files": 4,
+      "lockfiles": [
+        "s-hn1yh8bvoa-0f2xdc6.lock"
+      ],
+      "symlink": false,
+      "candidate_old_other_variant": true,
+      "newest_preserved_path": "/home/developer/projects/aurora/rust/target/debug/incremental/aurora_voice_core-19pjuxkisnblq"
+    },
+    {
+      "path": "/home/developer/projects/aurora/rust/target/debug/incremental/wasm_core-2roz8o7dhvoix",
+      "root": "rust/target/debug/incremental",
+      "crate": "wasm_core",
+      "bytes": 135168,
+      "last_file_modified_at": "2026-10-09T15:04:16.080851+00:00",
+      "latest_mtime": 1791558256.0808508,
+      "files": 9,
+      "lockfiles": [
+        "s-hn1yi0zw4y-0m5b26h.lock"
+      ],
+      "symlink": false,
+      "candidate_old_other_variant": false,
+      "newest_preserved_path": "/home/developer/projects/aurora/rust/target/debug/incremental/wasm_core-2roz8o7dhvoix"
+    },
+    {
+      "path": "/home/developer/projects/aurora/rust/target/debug/incremental/grant_management_recovery-3at21lubh5dwl",
+      "root": "rust/target/debug/incremental",
+      "crate": "grant_management_recovery",
+      "bytes": 7401472,
+      "last_file_modified_at": "2026-10-07T19:31:12.026100+00:00",
+      "latest_mtime": 1791401472.0261002,
+      "files": 74,
+      "lockfiles": [
+        "s-hmzyh3h5oj-1hdo4a4.lock"
+      ],
+      "symlink": false,
+      "candidate_old_other_variant": true,
+      "newest_preserved_path": "/home/developer/projects/aurora/rust/target/debug/incremental/grant_management_recovery-30tbuc6xasml5"
+    },
+    {
+      "path": "/home/developer/projects/aurora/rust/target/debug/incremental/aurora_tauri_generic_request_text_evidence-1l78ojh9op84c",
+      "root": "rust/target/debug/incremental",
+      "crate": "aurora_tauri_generic_request_text_evidence",
+      "bytes": 2789376,
+      "last_file_modified_at": "2026-10-08T02:47:33.073413+00:00",
+      "latest_mtime": 1791427653.073413,
+      "files": 27,
+      "lockfiles": [
+        "s-hn0ai3bgow-0fenxb8.lock"
+      ],
+      "symlink": false,
+      "candidate_old_other_variant": true,
+      "newest_preserved_path": "/home/developer/projects/aurora/rust/target/debug/incremental/aurora_tauri_generic_request_text_evidence-12atkrrw7ahoz"
+    },
+    {
+      "path": "/home/developer/projects/aurora/rust/target/debug/incremental/aurora_voice_sherpa_sys-2wjghyo7qqn83",
+      "root": "rust/target/debug/incremental",
+      "crate": "aurora_voice_sherpa_sys",
+      "bytes": 7938048,
+      "last_file_modified_at": "2026-10-08T09:32:38.684571+00:00",
+      "latest_mtime": 1791451958.6845708,
+      "files": 84,
+      "lockfiles": [
+        "s-hn0lo207s0-0mp9pkz.lock"
+      ],
+      "symlink": false,
+      "candidate_old_other_variant": true,
+      "newest_preserved_path": "/home/developer/projects/aurora/rust/target/debug/incremental/aurora_voice_sherpa_sys-29yp8nx9v1e1z"
+    },
+    {
+      "path": "/home/developer/projects/aurora/rust/target/debug/incremental/aurora_voice_engine-24pahbyjlaru5",
+      "root": "rust/target/debug/incremental",
+      "crate": "aurora_voice_engine",
+      "bytes": 19173376,
+      "last_file_modified_at": "2026-10-08T02:43:00.849555+00:00",
+      "latest_mtime": 1791427380.8495545,
+      "files": 4,
+      "lockfiles": [
+        "s-hn0adjyakt-0woz844.lock"
+      ],
+      "symlink": false,
+      "candidate_old_other_variant": true,
+      "newest_preserved_path": "/home/developer/projects/aurora/rust/target/debug/incremental/aurora_voice_engine-1mwznqxds5wob"
+    },
+    {
+      "path": "/home/developer/projects/aurora/rust/target/debug/incremental/aurora_contracts-3nl1fu73ulw7d",
+      "root": "rust/target/debug/incremental",
+      "crate": "aurora_contracts",
+      "bytes": 116047872,
+      "last_file_modified_at": "2026-10-09T15:03:27.788482+00:00",
+      "latest_mtime": 1791558207.7884824,
+      "files": 4,
+      "lockfiles": [
+        "s-hn1yh1quzk-0g5f2ar.lock"
+      ],
+      "symlink": false,
+      "candidate_old_other_variant": true,
+      "newest_preserved_path": "/home/developer/projects/aurora/rust/target/debug/incremental/aurora_contracts-2r2cjm2k9n3tf"
+    },
+    {
+      "path": "/home/developer/projects/aurora/rust/target/debug/incremental/webrtc_dtls-1xjl2fr3xpszj",
+      "root": "rust/target/debug/incremental",
+      "crate": "webrtc_dtls",
+      "bytes": 18161664,
+      "last_file_modified_at": "2026-10-08T09:12:47.114403+00:00",
+      "latest_mtime": 1791450767.1144028,
+      "files": 4,
+      "lockfiles": [
+        "s-hn0l4bpnac-01g7llx.lock"
+      ],
+      "symlink": false,
+      "candidate_old_other_variant": true,
+      "newest_preserved_path": "/home/developer/projects/aurora/rust/target/debug/incremental/webrtc_dtls-1ks6uf0f0yj80"
+    },
+    {
+      "path": "/home/developer/projects/aurora/rust/target/debug/incremental/aurora_voice_engine-2kqrq1onkbk2o",
+      "root": "rust/target/debug/incremental",
+      "crate": "aurora_voice_engine",
+      "bytes": 52932608,
+      "last_file_modified_at": "2026-10-07T20:24:39.492418+00:00",
+      "latest_mtime": 1791404679.4924176,
+      "files": 139,
+      "lockfiles": [
+        "s-hmzzy4vwvg-07bspid.lock"
+      ],
+      "symlink": false,
+      "candidate_old_other_variant": true,
+      "newest_preserved_path": "/home/developer/projects/aurora/rust/target/debug/incremental/aurora_voice_engine-1mwznqxds5wob"
+    },
+    {
+      "path": "/home/developer/projects/aurora/rust/target/debug/incremental/aurora_voice_engine-1vewib9vdmszr",
+      "root": "rust/target/debug/incremental",
+      "crate": "aurora_voice_engine",
+      "bytes": 56320000,
+      "last_file_modified_at": "2026-10-08T07:09:57.473115+00:00",
+      "latest_mtime": 1791443397.4731154,
+      "files": 180,
+      "lockfiles": [
+        "s-hn0hqglp8f-1e2quxn.lock"
+      ],
+      "symlink": false,
+      "candidate_old_other_variant": true,
+      "newest_preserved_path": "/home/developer/projects/aurora/rust/target/debug/incremental/aurora_voice_engine-1mwznqxds5wob"
+    },
+    {
+      "path": "/home/developer/projects/aurora/rust/target/debug/incremental/aurora_mesh_authority-1k9urtjjr6ass",
+      "root": "rust/target/debug/incremental",
+      "crate": "aurora_mesh_authority",
+      "bytes": 21041152,
+      "last_file_modified_at": "2026-10-07T19:31:17.060139+00:00",
+      "latest_mtime": 1791401477.0601387,
+      "files": 94,
+      "lockfiles": [
+        "s-hmzyh5glgs-0mizfyh.lock"
+      ],
+      "symlink": false,
+      "candidate_old_other_variant": true,
+      "newest_preserved_path": "/home/developer/projects/aurora/rust/target/debug/incremental/aurora_mesh_authority-0zvu0r9vzbm5d"
+    },
+    {
+      "path": "/home/developer/projects/aurora/rust/target/debug/incremental/aurora_voice_native-04gqhfjk3lwnd",
+      "root": "rust/target/debug/incremental",
+      "crate": "aurora_voice_native",
+      "bytes": 138698752,
+      "last_file_modified_at": "2026-10-09T23:14:44.609232+00:00",
+      "latest_mtime": 1791587684.6092322,
+      "files": 260,
+      "lockfiles": [
+        "s-hn2c0nxvma-049lhh2.lock"
+      ],
+      "symlink": false,
+      "candidate_old_other_variant": true,
+      "newest_preserved_path": "/home/developer/projects/aurora/rust/target/debug/incremental/aurora_voice_native-0ckngnjvijtaw"
+    },
+    {
+      "path": "/home/developer/projects/aurora/rust/target/debug/incremental/aurora_local_inference-009r8r57d8yjy",
+      "root": "rust/target/debug/incremental",
+      "crate": "aurora_local_inference",
+      "bytes": 3272704,
+      "last_file_modified_at": "2026-10-10T22:58:40.250436+00:00",
+      "latest_mtime": 1791673120.2504363,
+      "files": 4,
+      "lockfiles": [
+        "s-hn3f9nygfj-1x9n93d.lock"
+      ],
+      "symlink": false,
+      "candidate_old_other_variant": true,
+      "newest_preserved_path": "/home/developer/projects/aurora/rust/target/debug/incremental/aurora_local_inference-22ykubu5ohykq"
+    },
+    {
+      "path": "/home/developer/projects/aurora/rust/target/debug/incremental/aurora_contracts-0p741nmei87da",
+      "root": "rust/target/debug/incremental",
+      "crate": "aurora_contracts",
+      "bytes": 115953664,
+      "last_file_modified_at": "2026-10-07T20:54:31.013232+00:00",
+      "latest_mtime": 1791406471.0132315,
+      "files": 4,
+      "lockfiles": [
+        "s-hn00rlwrii-1nsoxrt.lock"
+      ],
+      "symlink": false,
+      "candidate_old_other_variant": true,
+      "newest_preserved_path": "/home/developer/projects/aurora/rust/target/debug/incremental/aurora_contracts-2r2cjm2k9n3tf"
+    },
+    {
+      "path": "/home/developer/projects/aurora/rust/target/debug/incremental/aurora_tauri_authority_text_evidence-0uxpt4dj1kjht",
+      "root": "rust/target/debug/incremental",
+      "crate": "aurora_tauri_authority_text_evidence",
+      "bytes": 5128192,
+      "last_file_modified_at": "2026-10-08T02:47:37.779377+00:00",
+      "latest_mtime": 1791427657.7793775,
+      "files": 40,
+      "lockfiles": [
+        "s-hn0ai62qdn-1dk8p7j.lock"
+      ],
+      "symlink": false,
+      "candidate_old_other_variant": false,
+      "newest_preserved_path": "/home/developer/projects/aurora/rust/target/debug/incremental/aurora_tauri_authority_text_evidence-0uxpt4dj1kjht"
+    },
+    {
+      "path": "/home/developer/projects/aurora/rust/target/debug/incremental/grant_management_recovery-154wmu3xsc46q",
+      "root": "rust/target/debug/incremental",
+      "crate": "grant_management_recovery",
+      "bytes": 864256,
+      "last_file_modified_at": "2026-10-09T15:03:53.085772+00:00",
+      "latest_mtime": 1791558233.0857723,
+      "files": 4,
+      "lockfiles": [
+        "s-hn1yhn9xv0-16n3i44.lock"
+      ],
+      "symlink": false,
+      "candidate_old_other_variant": true,
+      "newest_preserved_path": "/home/developer/projects/aurora/rust/target/debug/incremental/grant_management_recovery-30tbuc6xasml5"
+    },
+    {
+      "path": "/home/developer/projects/aurora/rust/target/debug/incremental/aurora_ios_audio_spike-0zqnd0sgf8fnw",
+      "root": "rust/target/debug/incremental",
+      "crate": "aurora_ios_audio_spike",
+      "bytes": 2539520,
+      "last_file_modified_at": "2026-10-08T02:58:35.146693+00:00",
+      "latest_mtime": 1791428315.1466925,
+      "files": 37,
+      "lockfiles": [
+        "s-hn0at1fa0l-0v6en1i.lock"
+      ],
+      "symlink": false,
+      "candidate_old_other_variant": true,
+      "newest_preserved_path": "/home/developer/projects/aurora/rust/target/debug/incremental/aurora_ios_audio_spike-2sgz9jsncyqbz"
+    },
+    {
+      "path": "/home/developer/projects/aurora/rust/target/debug/incremental/aurora_contracts-2s6mbbrgt893w",
+      "root": "rust/target/debug/incremental",
+      "crate": "aurora_contracts",
+      "bytes": 258715648,
+      "last_file_modified_at": "2026-10-09T22:38:32.910023+00:00",
+      "latest_mtime": 1791585512.9100232,
+      "files": 260,
+      "lockfiles": [
+        "s-hn2b0frzc6-0vclxwf.lock"
+      ],
+      "symlink": false,
+      "candidate_old_other_variant": true,
+      "newest_preserved_path": "/home/developer/projects/aurora/rust/target/debug/incremental/aurora_contracts-2r2cjm2k9n3tf"
+    },
+    {
+      "path": "/home/developer/projects/aurora/rust/target/debug/incremental/aurora_mesh_authority-2th8h28m6nat7",
+      "root": "rust/target/debug/incremental",
+      "crate": "aurora_mesh_authority",
+      "bytes": 33255424,
+      "last_file_modified_at": "2026-10-09T22:39:46.633569+00:00",
+      "latest_mtime": 1791585586.6335685,
+      "files": 99,
+      "lockfiles": [
+        "s-hn2b1yshls-1dhamlz.lock"
+      ],
+      "symlink": false,
+      "candidate_old_other_variant": true,
+      "newest_preserved_path": "/home/developer/projects/aurora/rust/target/debug/incremental/aurora_mesh_authority-0zvu0r9vzbm5d"
+    },
+    {
+      "path": "/home/developer/projects/aurora/rust/target/debug/incremental/aurora_voice_core-19pjuxkisnblq",
+      "root": "rust/target/debug/incremental",
+      "crate": "aurora_voice_core",
+      "bytes": 30654464,
+      "last_file_modified_at": "2026-10-11T18:36:04.054556+00:00",
+      "latest_mtime": 1791743764.054556,
+      "files": 121,
+      "lockfiles": [
+        "s-hn4bpyz4jt-0pot399.lock"
+      ],
+      "symlink": false,
+      "candidate_old_other_variant": false,
+      "newest_preserved_path": "/home/developer/projects/aurora/rust/target/debug/incremental/aurora_voice_core-19pjuxkisnblq"
+    },
+    {
+      "path": "/home/developer/projects/aurora/rust/target/debug/incremental/main_flow-0d6j4ocbic5em",
+      "root": "rust/target/debug/incremental",
+      "crate": "main_flow",
+      "bytes": 12591104,
+      "last_file_modified_at": "2026-10-12T00:35:52.927385+00:00",
+      "latest_mtime": 1791765352.9273849,
+      "files": 139,
+      "lockfiles": [
+        "s-hn4ln0jls5-1a09bof.lock"
+      ],
+      "symlink": false,
+      "candidate_old_other_variant": false,
+      "newest_preserved_path": "/home/developer/projects/aurora/rust/target/debug/incremental/main_flow-0d6j4ocbic5em"
+    },
+    {
+      "path": "/home/developer/projects/aurora/rust/target/debug/incremental/aurora_tauri_response_json_helper_v1-1mh0h3xeytojj",
+      "root": "rust/target/debug/incremental",
+      "crate": "aurora_tauri_response_json_helper_v1",
+      "bytes": 3416064,
+      "last_file_modified_at": "2026-10-08T02:42:39.230389+00:00",
+      "latest_mtime": 1791427359.2303894,
+      "files": 47,
+      "lockfiles": [
+        "s-hn0ad87p5x-0zybul7.lock"
+      ],
+      "symlink": false,
+      "candidate_old_other_variant": true,
+      "newest_preserved_path": "/home/developer/projects/aurora/rust/target/debug/incremental/aurora_tauri_response_json_helper_v1-0i3rlfq5jnxgk"
+    },
+    {
+      "path": "/home/developer/projects/aurora/rust/target/debug/incremental/native_vad_smoke-178fp0wq7ih8x",
+      "root": "rust/target/debug/incremental",
+      "crate": "native_vad_smoke",
+      "bytes": 53248,
+      "last_file_modified_at": "2026-10-08T09:31:03.130704+00:00",
+      "latest_mtime": 1791451863.1307037,
+      "files": 4,
+      "lockfiles": [
+        "s-hn0lmhdtsj-1pd3pij.lock"
+      ],
+      "symlink": false,
+      "candidate_old_other_variant": true,
+      "newest_preserved_path": "/home/developer/projects/aurora/rust/target/debug/incremental/native_vad_smoke-2v2o2139ppmyt"
+    },
+    {
+      "path": "/home/developer/projects/aurora/rust/target/debug/incremental/aurora_local_inference-22ykubu5ohykq",
+      "root": "rust/target/debug/incremental",
+      "crate": "aurora_local_inference",
+      "bytes": 14893056,
+      "last_file_modified_at": "2026-10-12T00:35:51.896377+00:00",
+      "latest_mtime": 1791765351.896377,
+      "files": 126,
+      "lockfiles": [
+        "s-hn4lmzraej-0p37oi5.lock"
+      ],
+      "symlink": false,
+      "candidate_old_other_variant": false,
+      "newest_preserved_path": "/home/developer/projects/aurora/rust/target/debug/incremental/aurora_local_inference-22ykubu5ohykq"
+    },
+    {
+      "path": "/home/developer/projects/aurora/rust/target/debug/incremental/aurora_tauri_lib-3puz838svpdip",
+      "root": "rust/target/debug/incremental",
+      "crate": "aurora_tauri_lib",
+      "bytes": 104968192,
+      "last_file_modified_at": "2026-10-11T02:59:24.480165+00:00",
+      "latest_mtime": 1791687564.4801655,
+      "files": 5,
+      "lockfiles": [
+        "s-hn3lw93dnz-0e7nn79.lock"
+      ],
+      "symlink": false,
+      "candidate_old_other_variant": false,
+      "newest_preserved_path": "/home/developer/projects/aurora/rust/target/debug/incremental/aurora_tauri_lib-3puz838svpdip"
+    },
+    {
+      "path": "/home/developer/projects/aurora/rust/target/debug/incremental/aurora_voice_core-0bji09fa61dy5",
+      "root": "rust/target/debug/incremental",
+      "crate": "aurora_voice_core",
+      "bytes": 17149952,
+      "last_file_modified_at": "2026-10-07T20:54:33.126248+00:00",
+      "latest_mtime": 1791406473.1262481,
+      "files": 4,
+      "lockfiles": [
+        "s-hn00rspyez-0201cyz.lock"
+      ],
+      "symlink": false,
+      "candidate_old_other_variant": true,
+      "newest_preserved_path": "/home/developer/projects/aurora/rust/target/debug/incremental/aurora_voice_core-19pjuxkisnblq"
+    },
+    {
+      "path": "/home/developer/projects/aurora/rust/target/debug/incremental/aurora_voice_engine-17h01dksxqv2r",
+      "root": "rust/target/debug/incremental",
+      "crate": "aurora_voice_engine",
+      "bytes": 21180416,
+      "last_file_modified_at": "2026-10-07T22:09:24.540309+00:00",
+      "latest_mtime": 1791410964.540309,
+      "files": 4,
+      "lockfiles": [
+        "s-hn02u267a3-198jvse.lock"
+      ],
+      "symlink": false,
+      "candidate_old_other_variant": true,
+      "newest_preserved_path": "/home/developer/projects/aurora/rust/target/debug/incremental/aurora_voice_engine-1mwznqxds5wob"
+    },
+    {
+      "path": "/home/developer/projects/aurora/rust/target/debug/incremental/aurora_tauri_generic_request_text_evidence-12atkrrw7ahoz",
+      "root": "rust/target/debug/incremental",
+      "crate": "aurora_tauri_generic_request_text_evidence",
+      "bytes": 4665344,
+      "last_file_modified_at": "2026-10-08T02:47:33.194636+00:00",
+      "latest_mtime": 1791427653.1946363,
+      "files": 61,
+      "lockfiles": [
+        "s-hn0ai3dcqy-0kcp1tz.lock"
+      ],
+      "symlink": false,
+      "candidate_old_other_variant": false,
+      "newest_preserved_path": "/home/developer/projects/aurora/rust/target/debug/incremental/aurora_tauri_generic_request_text_evidence-12atkrrw7ahoz"
+    },
+    {
+      "path": "/home/developer/projects/aurora/rust/target/debug/incremental/aurora_mesh_session-3e04zhysnpinx",
+      "root": "rust/target/debug/incremental",
+      "crate": "aurora_mesh_session",
+      "bytes": 6799360,
+      "last_file_modified_at": "2026-10-09T15:03:52.984675+00:00",
+      "latest_mtime": 1791558232.9846747,
+      "files": 4,
+      "lockfiles": [
+        "s-hn1yhn26e9-0poq2jy.lock"
+      ],
+      "symlink": false,
+      "candidate_old_other_variant": true,
+      "newest_preserved_path": "/home/developer/projects/aurora/rust/target/debug/incremental/aurora_mesh_session-0wd2stq0y508e"
+    },
+    {
+      "path": "/home/developer/projects/aurora/rust/target/debug/incremental/aurora_mesh_session-0wd2stq0y508e",
+      "root": "rust/target/debug/incremental",
+      "crate": "aurora_mesh_session",
+      "bytes": 7409664,
+      "last_file_modified_at": "2026-10-11T02:58:58.870970+00:00",
+      "latest_mtime": 1791687538.8709698,
+      "files": 5,
+      "lockfiles": [
+        "s-hn3lw4creo-1o435v0.lock"
+      ],
+      "symlink": false,
+      "candidate_old_other_variant": false,
+      "newest_preserved_path": "/home/developer/projects/aurora/rust/target/debug/incremental/aurora_mesh_session-0wd2stq0y508e"
+    },
+    {
+      "path": "/home/developer/projects/aurora/rust/target/debug/incremental/aurora_tauri_response_json_helper_v1-0le9t8ww0v1bq",
+      "root": "rust/target/debug/incremental",
+      "crate": "aurora_tauri_response_json_helper_v1",
+      "bytes": 1466368,
+      "last_file_modified_at": "2026-10-08T02:42:38.891387+00:00",
+      "latest_mtime": 1791427358.8913867,
+      "files": 9,
+      "lockfiles": [
+        "s-hn0ad85d1g-1rv9yzp.lock"
+      ],
+      "symlink": false,
+      "candidate_old_other_variant": true,
+      "newest_preserved_path": "/home/developer/projects/aurora/rust/target/debug/incremental/aurora_tauri_response_json_helper_v1-0i3rlfq5jnxgk"
+    },
+    {
+      "path": "/home/developer/projects/aurora/rust/target/debug/incremental/aurora_voice_engine-0ki5wluae7tiv",
+      "root": "rust/target/debug/incremental",
+      "crate": "aurora_voice_engine",
+      "bytes": 56115200,
+      "last_file_modified_at": "2026-10-08T07:08:47.703585+00:00",
+      "latest_mtime": 1791443327.7035851,
+      "files": 180,
+      "lockfiles": [
+        "s-hn0hpb27rt-0qyolif.lock"
+      ],
+      "symlink": false,
+      "candidate_old_other_variant": true,
+      "newest_preserved_path": "/home/developer/projects/aurora/rust/target/debug/incremental/aurora_voice_engine-1mwznqxds5wob"
+    },
+    {
+      "path": "/home/developer/projects/aurora/rust/target/debug/incremental/native_vad_smoke-38fns6bvyygow",
+      "root": "rust/target/debug/incremental",
+      "crate": "native_vad_smoke",
+      "bytes": 135168,
+      "last_file_modified_at": "2026-10-08T09:32:08.310046+00:00",
+      "latest_mtime": 1791451928.3100464,
+      "files": 9,
+      "lockfiles": [
+        "s-hn0lnk6qs6-114k5ih.lock"
+      ],
+      "symlink": false,
+      "candidate_old_other_variant": true,
+      "newest_preserved_path": "/home/developer/projects/aurora/rust/target/debug/incremental/native_vad_smoke-2v2o2139ppmyt"
+    },
+    {
+      "path": "/home/developer/projects/aurora/rust/target/debug/incremental/phase_a-0wt0hdpa6oxrm",
+      "root": "rust/target/debug/incremental",
+      "crate": "phase_a",
+      "bytes": 3936256,
+      "last_file_modified_at": "2026-10-08T03:17:37.887570+00:00",
+      "latest_mtime": 1791429457.88757,
+      "files": 58,
+      "lockfiles": [
+        "s-hn0bbxos4e-0c46hto.lock"
+      ],
+      "symlink": false,
+      "candidate_old_other_variant": false,
+      "newest_preserved_path": "/home/developer/projects/aurora/rust/target/debug/incremental/phase_a-0wt0hdpa6oxrm"
+    },
+    {
+      "path": "/home/developer/projects/aurora/rust/target/debug/incremental/phase_b-3ubtxkq18iqpx",
+      "root": "rust/target/debug/incremental",
+      "crate": "phase_b",
+      "bytes": 5861376,
+      "last_file_modified_at": "2026-10-08T03:17:34.450543+00:00",
+      "latest_mtime": 1791429454.4505434,
+      "files": 76,
+      "lockfiles": [
+        "s-hn0bbvimf9-1u7tozz.lock"
+      ],
+      "symlink": false,
+      "candidate_old_other_variant": true,
+      "newest_preserved_path": "/home/developer/projects/aurora/rust/target/debug/incremental/phase_b-0v2ocanexvvka"
+    },
+    {
+      "path": "/home/developer/projects/aurora/rust/target/debug/incremental/build_script_build-0f22gzkn5321z",
+      "root": "rust/target/debug/incremental",
+      "crate": "build_script_build",
+      "bytes": 2883584,
+      "last_file_modified_at": "2026-10-11T02:58:20.895679+00:00",
+      "latest_mtime": 1791687500.8956795,
+      "files": 43,
+      "lockfiles": [
+        "s-hn3lvhsjdd-14tdi1v.lock"
+      ],
+      "symlink": false,
+      "candidate_old_other_variant": true,
+      "newest_preserved_path": "/home/developer/projects/aurora/rust/target/debug/incremental/build_script_build-2tzocwyai8azm"
+    },
+    {
+      "path": "/home/developer/projects/aurora/rust/target/debug/incremental/aurora_android_audio_spike-0p8a2e379kc0v",
+      "root": "rust/target/debug/incremental",
+      "crate": "aurora_android_audio_spike",
+      "bytes": 2469888,
+      "last_file_modified_at": "2026-10-08T02:58:35.890698+00:00",
+      "latest_mtime": 1791428315.8906982,
+      "files": 36,
+      "lockfiles": [
+        "s-hn0at1vchk-1ysbuya.lock"
+      ],
+      "symlink": false,
+      "candidate_old_other_variant": true,
+      "newest_preserved_path": "/home/developer/projects/aurora/rust/target/debug/incremental/aurora_android_audio_spike-1t8bjdtxt60yv"
+    },
+    {
+      "path": "/home/developer/projects/aurora/rust/target/debug/incremental/aurora_voice_engine-3bkklctqvgg1g",
+      "root": "rust/target/debug/incremental",
+      "crate": "aurora_voice_engine",
+      "bytes": 19873792,
+      "last_file_modified_at": "2026-10-10T22:55:35.273738+00:00",
+      "latest_mtime": 1791672935.273738,
+      "files": 4,
+      "lockfiles": [
+        "s-hn3f6kimio-0fkqlxg.lock"
+      ],
+      "symlink": false,
+      "candidate_old_other_variant": true,
+      "newest_preserved_path": "/home/developer/projects/aurora/rust/target/debug/incremental/aurora_voice_engine-1mwznqxds5wob"
+    },
+    {
+      "path": "/home/developer/projects/aurora/rust/target/debug/incremental/build_script_build-2ih2gv7tvkzsj",
+      "root": "rust/target/debug/incremental",
+      "crate": "build_script_build",
+      "bytes": 3649536,
+      "last_file_modified_at": "2026-10-11T11:02:03.172491+00:00",
+      "latest_mtime": 1791716523.1724906,
+      "files": 75,
+      "lockfiles": [
+        "s-hn3z7gugug-0a4ctk6.lock"
+      ],
+      "symlink": false,
+      "candidate_old_other_variant": true,
+      "newest_preserved_path": "/home/developer/projects/aurora/rust/target/debug/incremental/build_script_build-2tzocwyai8azm"
+    },
+    {
+      "path": "/home/developer/projects/aurora/rust/target/debug/incremental/aurora_voice_engine-3s9ufqxbjry9y",
+      "root": "rust/target/debug/incremental",
+      "crate": "aurora_voice_engine",
+      "bytes": 19623936,
+      "last_file_modified_at": "2026-10-08T09:11:58.360030+00:00",
+      "latest_mtime": 1791450718.36003,
+      "files": 4,
+      "lockfiles": [
+        "s-hn0l3ihrs4-03na4dh.lock"
+      ],
+      "symlink": false,
+      "candidate_old_other_variant": true,
+      "newest_preserved_path": "/home/developer/projects/aurora/rust/target/debug/incremental/aurora_voice_engine-1mwznqxds5wob"
+    },
+    {
+      "path": "/home/developer/projects/aurora/rust/target/debug/incremental/candidate_model_packs-1ygkxc8jktf5a",
+      "root": "rust/target/debug/incremental",
+      "crate": "candidate_model_packs",
+      "bytes": 16007168,
+      "last_file_modified_at": "2026-10-09T18:32:09.169925+00:00",
+      "latest_mtime": 1791570729.169925,
+      "files": 96,
+      "lockfiles": [
+        "s-hn248aubjy-0u7xdhm.lock"
+      ],
+      "symlink": false,
+      "candidate_old_other_variant": true,
+      "newest_preserved_path": "/home/developer/projects/aurora/rust/target/debug/incremental/candidate_model_packs-10x92a2or4lfa"
+    },
+    {
+      "path": "/home/developer/projects/aurora/rust/target/debug/incremental/aurora_voice_core-3n6v1td3syvww",
+      "root": "rust/target/debug/incremental",
+      "crate": "aurora_voice_core",
+      "bytes": 27426816,
+      "last_file_modified_at": "2026-10-08T02:26:32.828972+00:00",
+      "latest_mtime": 1791426392.8289716,
+      "files": 117,
+      "lockfiles": [
+        "s-hn09x8r2nq-155b2vu.lock"
+      ],
+      "symlink": false,
+      "candidate_old_other_variant": true,
+      "newest_preserved_path": "/home/developer/projects/aurora/rust/target/debug/incremental/aurora_voice_core-19pjuxkisnblq"
+    },
+    {
+      "path": "/home/developer/projects/aurora/rust/target/debug/incremental/build_script_build-26iomsspoxwxo",
+      "root": "rust/target/debug/incremental",
+      "crate": "build_script_build",
+      "bytes": 2613248,
+      "last_file_modified_at": "2026-10-11T02:58:54.820939+00:00",
+      "latest_mtime": 1791687534.8209388,
+      "files": 27,
+      "lockfiles": [
+        "s-hn3lw20umv-0rvue19.lock"
+      ],
+      "symlink": false,
+      "candidate_old_other_variant": true,
+      "newest_preserved_path": "/home/developer/projects/aurora/rust/target/debug/incremental/build_script_build-2tzocwyai8azm"
+    },
+    {
+      "path": "/home/developer/projects/aurora/rust/target/debug/incremental/generated_contracts-3epj2autaf8z0",
+      "root": "rust/target/debug/incremental",
+      "crate": "generated_contracts",
+      "bytes": 11161600,
+      "last_file_modified_at": "2026-10-09T15:05:03.946216+00:00",
+      "latest_mtime": 1791558303.946216,
+      "files": 112,
+      "lockfiles": [
+        "s-hn1yite8eo-1he68cy.lock"
+      ],
+      "symlink": false,
+      "candidate_old_other_variant": false,
+      "newest_preserved_path": "/home/developer/projects/aurora/rust/target/debug/incremental/generated_contracts-3epj2autaf8z0"
+    },
+    {
+      "path": "/home/developer/projects/aurora/rust/target/debug/incremental/build_script_build-3dz0ead0rlyxs",
+      "root": "rust/target/debug/incremental",
+      "crate": "build_script_build",
+      "bytes": 3289088,
+      "last_file_modified_at": "2026-10-11T02:58:45.550868+00:00",
+      "latest_mtime": 1791687525.550868,
+      "files": 73,
+      "lockfiles": [
+        "s-hn3lvwg798-0g71gha.lock"
+      ],
+      "symlink": false,
+      "candidate_old_other_variant": true,
+      "newest_preserved_path": "/home/developer/projects/aurora/rust/target/debug/incremental/build_script_build-2tzocwyai8azm"
+    },
+    {
+      "path": "/home/developer/projects/aurora/rust/target/debug/incremental/handoff_raw_feature_boundary-03skjpcyec7nf",
+      "root": "rust/target/debug/incremental",
+      "crate": "handoff_raw_feature_boundary",
+      "bytes": 2830336,
+      "last_file_modified_at": "2026-10-07T17:23:49.925799+00:00",
+      "latest_mtime": 1791393829.9257994,
+      "files": 24,
+      "lockfiles": [
+        "s-hmzuypr4ql-1l784fp.lock"
+      ],
+      "symlink": false,
+      "candidate_old_other_variant": false,
+      "newest_preserved_path": "/home/developer/projects/aurora/rust/target/debug/incremental/handoff_raw_feature_boundary-03skjpcyec7nf"
+    },
+    {
+      "path": "/home/developer/projects/aurora/rust/target/debug/incremental/aurora_tauri_response_json_helper_v1-25jz6a5x153um",
+      "root": "rust/target/debug/incremental",
+      "crate": "aurora_tauri_response_json_helper_v1",
+      "bytes": 1228800,
+      "last_file_modified_at": "2026-10-08T02:43:02.139565+00:00",
+      "latest_mtime": 1791427382.1395645,
+      "files": 4,
+      "lockfiles": [
+        "s-hn0adm0jin-1kots1z.lock"
+      ],
+      "symlink": false,
+      "candidate_old_other_variant": true,
+      "newest_preserved_path": "/home/developer/projects/aurora/rust/target/debug/incremental/aurora_tauri_response_json_helper_v1-0i3rlfq5jnxgk"
+    },
+    {
+      "path": "/home/developer/projects/aurora/rust/target/debug/incremental/build_script_build-03w8t5evcle76",
+      "root": "rust/target/debug/incremental",
+      "crate": "build_script_build",
+      "bytes": 3731456,
+      "last_file_modified_at": "2026-10-11T11:11:32.702831+00:00",
+      "latest_mtime": 1791717092.7028313,
+      "files": 75,
+      "lockfiles": [
+        "s-hn3zgvq21j-016myej.lock"
+      ],
+      "symlink": false,
+      "candidate_old_other_variant": true,
+      "newest_preserved_path": "/home/developer/projects/aurora/rust/target/debug/incremental/build_script_build-2tzocwyai8azm"
+    },
+    {
+      "path": "/home/developer/projects/aurora/rust/target/debug/incremental/aurora_contracts-2by4gvm0yw1bw",
+      "root": "rust/target/debug/incremental",
+      "crate": "aurora_contracts",
+      "bytes": 109916160,
+      "last_file_modified_at": "2026-10-08T02:42:58.569537+00:00",
+      "latest_mtime": 1791427378.5695372,
+      "files": 4,
+      "lockfiles": [
+        "s-hn0adbwpf0-1imdput.lock"
+      ],
+      "symlink": false,
+      "candidate_old_other_variant": true,
+      "newest_preserved_path": "/home/developer/projects/aurora/rust/target/debug/incremental/aurora_contracts-2r2cjm2k9n3tf"
+    },
+    {
+      "path": "/home/developer/projects/aurora/rust/target/debug/incremental/aurora_voice_wasm-0h6jok0aiqgz6",
+      "root": "rust/target/debug/incremental",
+      "crate": "aurora_voice_wasm",
+      "bytes": 15077376,
+      "last_file_modified_at": "2026-10-09T15:03:54.615687+00:00",
+      "latest_mtime": 1791558234.6156871,
+      "files": 4,
+      "lockfiles": [
+        "s-hn1yhnhv62-1i5rtx3.lock"
+      ],
+      "symlink": false,
+      "candidate_old_other_variant": true,
+      "newest_preserved_path": "/home/developer/projects/aurora/rust/target/debug/incremental/aurora_voice_wasm-0vubco7wff5o5"
+    },
+    {
+      "path": "/home/developer/projects/aurora/rust/target/debug/incremental/aurora_voice_sherpa-18rzp4bpkjd2u",
+      "root": "rust/target/debug/incremental",
+      "crate": "aurora_voice_sherpa",
+      "bytes": 11075584,
+      "last_file_modified_at": "2026-10-09T22:39:42.380537+00:00",
+      "latest_mtime": 1791585582.380537,
+      "files": 86,
+      "lockfiles": [
+        "s-hn2b1xdhdv-0r295e6.lock"
+      ],
+      "symlink": false,
+      "candidate_old_other_variant": true,
+      "newest_preserved_path": "/home/developer/projects/aurora/rust/target/debug/incremental/aurora_voice_sherpa-08wqj9d39rhbt"
+    },
+    {
+      "path": "/home/developer/projects/aurora/rust/target/debug/incremental/aurora_voice_engine-1igjefs17uslx",
+      "root": "rust/target/debug/incremental",
+      "crate": "aurora_voice_engine",
+      "bytes": 56045568,
+      "last_file_modified_at": "2026-10-08T02:03:43.025527+00:00",
+      "latest_mtime": 1791425023.0255275,
+      "files": 180,
+      "lockfiles": [
+        "s-hn09akqrc5-0qg7rp2.lock"
+      ],
+      "symlink": false,
+      "candidate_old_other_variant": true,
+      "newest_preserved_path": "/home/developer/projects/aurora/rust/target/debug/incremental/aurora_voice_engine-1mwznqxds5wob"
+    },
+    {
+      "path": "/home/developer/projects/aurora/rust/target/debug/incremental/aurora_voice_native-3goqfx0gy55q0",
+      "root": "rust/target/debug/incremental",
+      "crate": "aurora_voice_native",
+      "bytes": 263512064,
+      "last_file_modified_at": "2026-10-09T18:32:25.989052+00:00",
+      "latest_mtime": 1791570745.989052,
+      "files": 260,
+      "lockfiles": [
+        "s-hn248dy2ja-1eldwbd.lock"
+      ],
+      "symlink": false,
+      "candidate_old_other_variant": true,
+      "newest_preserved_path": "/home/developer/projects/aurora/rust/target/debug/incremental/aurora_voice_native-0ckngnjvijtaw"
+    },
+    {
+      "path": "/home/developer/projects/aurora/rust/target/debug/incremental/aurora_voice_core-0pepm2u73qhtp",
+      "root": "rust/target/debug/incremental",
+      "crate": "aurora_voice_core",
+      "bytes": 14749696,
+      "last_file_modified_at": "2026-10-10T22:55:57.004909+00:00",
+      "latest_mtime": 1791672957.0049086,
+      "files": 4,
+      "lockfiles": [
+        "s-hn3f6xfmfq-1ktta3k.lock"
+      ],
+      "symlink": false,
+      "candidate_old_other_variant": true,
+      "newest_preserved_path": "/home/developer/projects/aurora/rust/target/debug/incremental/aurora_voice_core-19pjuxkisnblq"
+    },
+    {
+      "path": "/home/developer/projects/aurora/rust/target/debug/incremental/aurora_mesh_authority-01ddnihw7yh4x",
+      "root": "rust/target/debug/incremental",
+      "crate": "aurora_mesh_authority",
+      "bytes": 32628736,
+      "last_file_modified_at": "2026-10-08T02:47:34.699648+00:00",
+      "latest_mtime": 1791427654.699648,
+      "files": 99,
+      "lockfiles": [
+        "s-hn0ai3ui61-1tpkzqu.lock"
+      ],
+      "symlink": false,
+      "candidate_old_other_variant": true,
+      "newest_preserved_path": "/home/developer/projects/aurora/rust/target/debug/incremental/aurora_mesh_authority-0zvu0r9vzbm5d"
+    },
+    {
+      "path": "/home/developer/projects/aurora/rust/target/debug/incremental/aurora_tauri_authority_text_evidence-2v151g9ycuvi1",
+      "root": "rust/target/debug/incremental",
+      "crate": "aurora_tauri_authority_text_evidence",
+      "bytes": 3125248,
+      "last_file_modified_at": "2026-10-08T02:47:37.631670+00:00",
+      "latest_mtime": 1791427657.6316705,
+      "files": 24,
+      "lockfiles": [
+        "s-hn0ai60wld-14gyfjj.lock"
+      ],
+      "symlink": false,
+      "candidate_old_other_variant": true,
+      "newest_preserved_path": "/home/developer/projects/aurora/rust/target/debug/incremental/aurora_tauri_authority_text_evidence-0uxpt4dj1kjht"
+    },
+    {
+      "path": "/home/developer/projects/aurora/rust/target/debug/incremental/aurora_voice_testkit-0pni8orb5vxpe",
+      "root": "rust/target/debug/incremental",
+      "crate": "aurora_voice_testkit",
+      "bytes": 15478784,
+      "last_file_modified_at": "2026-10-09T15:04:16.020850+00:00",
+      "latest_mtime": 1791558256.0208504,
+      "files": 72,
+      "lockfiles": [
+        "s-hn1yi0uw93-171qirr.lock"
+      ],
+      "symlink": false,
+      "candidate_old_other_variant": true,
+      "newest_preserved_path": "/home/developer/projects/aurora/rust/target/debug/incremental/aurora_voice_testkit-144g1okd8vx33"
+    },
+    {
+      "path": "/home/developer/projects/aurora/rust/target/debug/incremental/aurora_tauri_lib-3omsga631ve9w",
+      "root": "rust/target/debug/incremental",
+      "crate": "aurora_tauri_lib",
+      "bytes": 363315200,
+      "last_file_modified_at": "2026-10-09T23:16:08.033853+00:00",
+      "latest_mtime": 1791587768.0338528,
+      "files": 260,
+      "lockfiles": [
+        "s-hn2c2073gp-18ooqvi.lock"
+      ],
+      "symlink": false,
+      "candidate_old_other_variant": true,
+      "newest_preserved_path": "/home/developer/projects/aurora/rust/target/debug/incremental/aurora_tauri_lib-3puz838svpdip"
+    },
+    {
+      "path": "/home/developer/projects/aurora/rust/target/debug/incremental/aurora_voice_sherpa_sys-1z3s5c2lcqxke",
+      "root": "rust/target/debug/incremental",
+      "crate": "aurora_voice_sherpa_sys",
+      "bytes": 6512640,
+      "last_file_modified_at": "2026-10-08T09:31:38.959430+00:00",
+      "latest_mtime": 1791451898.9594305,
+      "files": 57,
+      "lockfiles": [
+        "s-hn0ln2ive9-1r2htid.lock"
+      ],
+      "symlink": false,
+      "candidate_old_other_variant": true,
+      "newest_preserved_path": "/home/developer/projects/aurora/rust/target/debug/incremental/aurora_voice_sherpa_sys-29yp8nx9v1e1z"
+    },
+    {
+      "path": "/home/developer/projects/aurora/rust/target/debug/incremental/aurora_tauri_response_json_helper_v1-3v11zua5wws8z",
+      "root": "rust/target/debug/incremental",
+      "crate": "aurora_tauri_response_json_helper_v1",
+      "bytes": 3416064,
+      "last_file_modified_at": "2026-10-08T02:42:40.403398+00:00",
+      "latest_mtime": 1791427360.4033983,
+      "files": 47,
+      "lockfiles": [
+        "s-hn0ad8xm2b-1ywpvoe.lock"
+      ],
+      "symlink": false,
+      "candidate_old_other_variant": true,
+      "newest_preserved_path": "/home/developer/projects/aurora/rust/target/debug/incremental/aurora_tauri_response_json_helper_v1-0i3rlfq5jnxgk"
+    },
+    {
+      "path": "/home/developer/projects/aurora/rust/target/debug/incremental/aurora_mesh_session-1q8cxwycfn3d0",
+      "root": "rust/target/debug/incremental",
+      "crate": "aurora_mesh_session",
+      "bytes": 6742016,
+      "last_file_modified_at": "2026-10-09T16:33:57.582997+00:00",
+      "latest_mtime": 1791563637.582997,
+      "files": 4,
+      "lockfiles": [
+        "s-hn20z0wxzy-1svj3p9.lock"
+      ],
+      "symlink": false,
+      "candidate_old_other_variant": true,
+      "newest_preserved_path": "/home/developer/projects/aurora/rust/target/debug/incremental/aurora_mesh_session-0wd2stq0y508e"
+    },
+    {
+      "path": "/home/developer/projects/aurora/rust/target/debug/incremental/aurora_voice_sherpa-1645i1kyi7mpo",
+      "root": "rust/target/debug/incremental",
+      "crate": "aurora_voice_sherpa",
+      "bytes": 5664768,
+      "last_file_modified_at": "2026-10-09T15:04:15.791849+00:00",
+      "latest_mtime": 1791558255.7918487,
+      "files": 44,
+      "lockfiles": [
+        "s-hn1yi0quu6-0jk1ycm.lock"
+      ],
+      "symlink": false,
+      "candidate_old_other_variant": true,
+      "newest_preserved_path": "/home/developer/projects/aurora/rust/target/debug/incremental/aurora_voice_sherpa-08wqj9d39rhbt"
+    },
+    {
+      "path": "/home/developer/projects/aurora/rust/target/debug/incremental/native_stt_smoke-06x8w8ytq7viz",
+      "root": "rust/target/debug/incremental",
+      "crate": "native_stt_smoke",
+      "bytes": 122880,
+      "last_file_modified_at": "2026-10-10T02:20:07.249028+00:00",
+      "latest_mtime": 1791598807.249028,
+      "files": 9,
+      "lockfiles": [
+        "s-hn2h4o3pes-1cck9ke.lock"
+      ],
+      "symlink": false,
+      "candidate_old_other_variant": false,
+      "newest_preserved_path": "/home/developer/projects/aurora/rust/target/debug/incremental/native_stt_smoke-06x8w8ytq7viz"
+    },
+    {
+      "path": "/home/developer/projects/aurora/rust/target/debug/incremental/opaque_json-32ktz12lyx4wo",
+      "root": "rust/target/debug/incremental",
+      "crate": "opaque_json",
+      "bytes": 2830336,
+      "last_file_modified_at": "2026-10-09T15:03:39.971575+00:00",
+      "latest_mtime": 1791558219.9715753,
+      "files": 4,
+      "lockfiles": [
+        "s-hn1yhfg21f-089he3y.lock"
+      ],
+      "symlink": false,
+      "candidate_old_other_variant": true,
+      "newest_preserved_path": "/home/developer/projects/aurora/rust/target/debug/incremental/opaque_json-1td708sqycuxs"
+    },
+    {
+      "path": "/home/developer/projects/aurora/rust/target/debug/incremental/aurora_voice_native-3j4qvh811iopr",
+      "root": "rust/target/debug/incremental",
+      "crate": "aurora_voice_native",
+      "bytes": 256294912,
+      "last_file_modified_at": "2026-10-09T15:04:34.165989+00:00",
+      "latest_mtime": 1791558274.165989,
+      "files": 260,
+      "lockfiles": [
+        "s-hn1yi9k009-0fkyuu8.lock"
+      ],
+      "symlink": false,
+      "candidate_old_other_variant": true,
+      "newest_preserved_path": "/home/developer/projects/aurora/rust/target/debug/incremental/aurora_voice_native-0ckngnjvijtaw"
+    },
+    {
+      "path": "/home/developer/projects/aurora/rust/target/debug/incremental/aurora_mesh_authority-2avarm2khfp5o",
+      "root": "rust/target/debug/incremental",
+      "crate": "aurora_mesh_authority",
+      "bytes": 16601088,
+      "last_file_modified_at": "2026-10-09T15:03:57.668710+00:00",
+      "latest_mtime": 1791558237.6687102,
+      "files": 4,
+      "lockfiles": [
+        "s-hn1yhpdbcr-0jyji6f.lock"
+      ],
+      "symlink": false,
+      "candidate_old_other_variant": true,
+      "newest_preserved_path": "/home/developer/projects/aurora/rust/target/debug/incremental/aurora_mesh_authority-0zvu0r9vzbm5d"
+    },
+    {
+      "path": "/home/developer/projects/aurora/rust/target/debug/incremental/aurora_voice_ios_bridge-2jtybjgdj8yw7",
+      "root": "rust/target/debug/incremental",
+      "crate": "aurora_voice_ios_bridge",
+      "bytes": 5451776,
+      "last_file_modified_at": "2026-10-08T08:13:50.583369+00:00",
+      "latest_mtime": 1791447230.5833695,
+      "files": 44,
+      "lockfiles": [
+        "s-hn0jhv88w6-1uxdfz9.lock"
+      ],
+      "symlink": false,
+      "candidate_old_other_variant": true,
+      "newest_preserved_path": "/home/developer/projects/aurora/rust/target/debug/incremental/aurora_voice_ios_bridge-1h6mj1qpqyt43"
+    },
+    {
+      "path": "/home/developer/projects/aurora/rust/target/debug/incremental/build_script_build-1v9jfzk9c18aw",
+      "root": "rust/target/debug/incremental",
+      "crate": "build_script_build",
+      "bytes": 1724416,
+      "last_file_modified_at": "2026-10-08T11:55:50.697295+00:00",
+      "latest_mtime": 1791460550.697295,
+      "files": 15,
+      "lockfiles": [
+        "s-hn0pm2r1u0-0oe1jac.lock"
+      ],
+      "symlink": false,
+      "candidate_old_other_variant": true,
+      "newest_preserved_path": "/home/developer/projects/aurora/rust/target/debug/incremental/build_script_build-2tzocwyai8azm"
+    },
+    {
+      "path": "/home/developer/projects/aurora/rust/target/debug/incremental/handoff_nullable_behavior-2rf0qqzbegffe",
+      "root": "rust/target/debug/incremental",
+      "crate": "handoff_nullable_behavior",
+      "bytes": 3260416,
+      "last_file_modified_at": "2026-10-07T17:54:09.787508+00:00",
+      "latest_mtime": 1791395649.7875082,
+      "files": 30,
+      "lockfiles": [
+        "s-hmzvstawf4-1ur0s2c.lock"
+      ],
+      "symlink": false,
+      "candidate_old_other_variant": false,
+      "newest_preserved_path": "/home/developer/projects/aurora/rust/target/debug/incremental/handoff_nullable_behavior-2rf0qqzbegffe"
+    },
+    {
+      "path": "/home/developer/projects/aurora/rust/target/debug/incremental/aurora_voice_engine-2d0ulb7g7jnkt",
+      "root": "rust/target/debug/incremental",
+      "crate": "aurora_voice_engine",
+      "bytes": 19869696,
+      "last_file_modified_at": "2026-10-08T07:09:26.135877+00:00",
+      "latest_mtime": 1791443366.1358774,
+      "files": 4,
+      "lockfiles": [
+        "s-hn0hpxgio1-16p5la9.lock"
+      ],
+      "symlink": false,
+      "candidate_old_other_variant": true,
+      "newest_preserved_path": "/home/developer/projects/aurora/rust/target/debug/incremental/aurora_voice_engine-1mwznqxds5wob"
+    },
+    {
+      "path": "/home/developer/projects/aurora/rust/target/wasm32-unknown-unknown/debug/incremental/aurora_contracts-3rm1usvv39ln7",
+      "root": "rust/target/wasm32-unknown-unknown/debug/incremental",
+      "crate": "aurora_contracts",
+      "bytes": 115032064,
+      "last_file_modified_at": "2026-10-07T19:50:48.046983+00:00",
+      "latest_mtime": 1791402648.0469825,
+      "files": 4,
+      "lockfiles": [
+        "s-hmzz0dhora-0gn2u6f.lock"
+      ],
+      "symlink": false,
+      "candidate_old_other_variant": true,
+      "newest_preserved_path": "/home/developer/projects/aurora/rust/target/wasm32-unknown-unknown/debug/incremental/aurora_contracts-0no8nnkmpve4h"
+    },
+    {
+      "path": "/home/developer/projects/aurora/rust/target/wasm32-unknown-unknown/debug/incremental/aurora_voice_core-25r9yqbmt1wx6",
+      "root": "rust/target/wasm32-unknown-unknown/debug/incremental",
+      "crate": "aurora_voice_core",
+      "bytes": 23543808,
+      "last_file_modified_at": "2026-10-09T15:05:58.100629+00:00",
+      "latest_mtime": 1791558358.100629,
+      "files": 113,
+      "lockfiles": [
+        "s-hn1yjpg202-0hmenai.lock"
+      ],
+      "symlink": false,
+      "candidate_old_other_variant": false,
+      "newest_preserved_path": "/home/developer/projects/aurora/rust/target/wasm32-unknown-unknown/debug/incremental/aurora_voice_core-25r9yqbmt1wx6"
+    },
+    {
+      "path": "/home/developer/projects/aurora/rust/target/wasm32-unknown-unknown/debug/incremental/aurora_contracts-36d1bwx0tb7fl",
+      "root": "rust/target/wasm32-unknown-unknown/debug/incremental",
+      "crate": "aurora_contracts",
+      "bytes": 109318144,
+      "last_file_modified_at": "2026-10-07T20:55:58.017908+00:00",
+      "latest_mtime": 1791406558.0179083,
+      "files": 4,
+      "lockfiles": [
+        "s-hn00t0qtt4-13zu6g1.lock"
+      ],
+      "symlink": false,
+      "candidate_old_other_variant": true,
+      "newest_preserved_path": "/home/developer/projects/aurora/rust/target/wasm32-unknown-unknown/debug/incremental/aurora_contracts-0no8nnkmpve4h"
+    },
+    {
+      "path": "/home/developer/projects/aurora/rust/target/wasm32-unknown-unknown/debug/incremental/aurora_mesh_authority-10egj7fziwcc7",
+      "root": "rust/target/wasm32-unknown-unknown/debug/incremental",
+      "crate": "aurora_mesh_authority",
+      "bytes": 21164032,
+      "last_file_modified_at": "2026-10-07T19:50:51.472008+00:00",
+      "latest_mtime": 1791402651.4720085,
+      "files": 4,
+      "lockfiles": [
+        "s-hmzz0l2y40-1mlroiv.lock"
+      ],
+      "symlink": false,
+      "candidate_old_other_variant": true,
+      "newest_preserved_path": "/home/developer/projects/aurora/rust/target/wasm32-unknown-unknown/debug/incremental/aurora_mesh_authority-28yeryen49mf5"
+    },
+    {
+      "path": "/home/developer/projects/aurora/rust/target/wasm32-unknown-unknown/debug/incremental/handoff_raw_feature_boundary-02ibdlg5vkfgy",
+      "root": "rust/target/wasm32-unknown-unknown/debug/incremental",
+      "crate": "handoff_raw_feature_boundary",
+      "bytes": 4968448,
+      "last_file_modified_at": "2026-10-07T17:59:42.880032+00:00",
+      "latest_mtime": 1791395982.880032,
+      "files": 45,
+      "lockfiles": [
+        "s-hmzvyak2w8-19ckhn0.lock"
+      ],
+      "symlink": false,
+      "candidate_old_other_variant": true,
+      "newest_preserved_path": "/home/developer/projects/aurora/rust/target/wasm32-unknown-unknown/debug/incremental/handoff_raw_feature_boundary-3a76tausi8ss1"
+    },
+    {
+      "path": "/home/developer/projects/aurora/rust/target/wasm32-unknown-unknown/debug/incremental/aurora_voice_wasm-2vy70thdc5si6",
+      "root": "rust/target/wasm32-unknown-unknown/debug/incremental",
+      "crate": "aurora_voice_wasm",
+      "bytes": 34304000,
+      "last_file_modified_at": "2026-10-09T15:06:01.995659+00:00",
+      "latest_mtime": 1791558361.9956589,
+      "files": 175,
+      "lockfiles": [
+        "s-hn1yjqy91f-00cpr1b.lock"
+      ],
+      "symlink": false,
+      "candidate_old_other_variant": false,
+      "newest_preserved_path": "/home/developer/projects/aurora/rust/target/wasm32-unknown-unknown/debug/incremental/aurora_voice_wasm-2vy70thdc5si6"
+    },
+    {
+      "path": "/home/developer/projects/aurora/rust/target/wasm32-unknown-unknown/debug/incremental/wasm_core-226pkndp4u64d",
+      "root": "rust/target/wasm32-unknown-unknown/debug/incremental",
+      "crate": "wasm_core",
+      "bytes": 19890176,
+      "last_file_modified_at": "2026-10-09T15:05:59.776642+00:00",
+      "latest_mtime": 1791558359.7766418,
+      "files": 123,
+      "lockfiles": [
+        "s-hn1yjqeuei-0fqb2ps.lock"
+      ],
+      "symlink": false,
+      "candidate_old_other_variant": false,
+      "newest_preserved_path": "/home/developer/projects/aurora/rust/target/wasm32-unknown-unknown/debug/incremental/wasm_core-226pkndp4u64d"
+    },
+    {
+      "path": "/home/developer/projects/aurora/rust/target/wasm32-unknown-unknown/debug/incremental/wasm_json_shape-3kkpnh7k61zq4",
+      "root": "rust/target/wasm32-unknown-unknown/debug/incremental",
+      "crate": "wasm_json_shape",
+      "bytes": 6672384,
+      "last_file_modified_at": "2026-10-07T19:51:46.572427+00:00",
+      "latest_mtime": 1791402706.5724266,
+      "files": 61,
+      "lockfiles": [
+        "s-hmzz1ienxa-0w854yq.lock"
+      ],
+      "symlink": false,
+      "candidate_old_other_variant": false,
+      "newest_preserved_path": "/home/developer/projects/aurora/rust/target/wasm32-unknown-unknown/debug/incremental/wasm_json_shape-3kkpnh7k61zq4"
+    },
+    {
+      "path": "/home/developer/projects/aurora/rust/target/wasm32-unknown-unknown/debug/incremental/handoff_wasm_json_public_boundary-38popibg6p1c8",
+      "root": "rust/target/wasm32-unknown-unknown/debug/incremental",
+      "crate": "handoff_wasm_json_public_boundary",
+      "bytes": 3338240,
+      "last_file_modified_at": "2026-10-07T19:51:57.033506+00:00",
+      "latest_mtime": 1791402717.033506,
+      "files": 38,
+      "lockfiles": [
+        "s-hmzz1ov1sl-1v5gmqb.lock"
+      ],
+      "symlink": false,
+      "candidate_old_other_variant": false,
+      "newest_preserved_path": "/home/developer/projects/aurora/rust/target/wasm32-unknown-unknown/debug/incremental/handoff_wasm_json_public_boundary-38popibg6p1c8"
+    },
+    {
+      "path": "/home/developer/projects/aurora/rust/target/wasm32-unknown-unknown/debug/incremental/handoff_raw_feature_boundary-3a76tausi8ss1",
+      "root": "rust/target/wasm32-unknown-unknown/debug/incremental",
+      "crate": "handoff_raw_feature_boundary",
+      "bytes": 4972544,
+      "last_file_modified_at": "2026-10-07T18:17:02.226909+00:00",
+      "latest_mtime": 1791397022.2269092,
+      "files": 45,
+      "lockfiles": [
+        "s-hmzwfhv2sl-1abfkgy.lock"
+      ],
+      "symlink": false,
+      "candidate_old_other_variant": false,
+      "newest_preserved_path": "/home/developer/projects/aurora/rust/target/wasm32-unknown-unknown/debug/incremental/handoff_raw_feature_boundary-3a76tausi8ss1"
+    },
+    {
+      "path": "/home/developer/projects/aurora/rust/target/wasm32-unknown-unknown/debug/incremental/aurora_mesh_authority-0nezsf3bgj4sa",
+      "root": "rust/target/wasm32-unknown-unknown/debug/incremental",
+      "crate": "aurora_mesh_authority",
+      "bytes": 42852352,
+      "last_file_modified_at": "2026-10-07T17:59:38.804001+00:00",
+      "latest_mtime": 1791395978.804001,
+      "files": 146,
+      "lockfiles": [
+        "s-hmzvy8jher-03rff2h.lock"
+      ],
+      "symlink": false,
+      "candidate_old_other_variant": true,
+      "newest_preserved_path": "/home/developer/projects/aurora/rust/target/wasm32-unknown-unknown/debug/incremental/aurora_mesh_authority-28yeryen49mf5"
+    },
+    {
+      "path": "/home/developer/projects/aurora/rust/target/wasm32-unknown-unknown/debug/incremental/aurora_mesh_authority-22vyu73ftmpt9",
+      "root": "rust/target/wasm32-unknown-unknown/debug/incremental",
+      "crate": "aurora_mesh_authority",
+      "bytes": 42319872,
+      "last_file_modified_at": "2026-10-07T19:51:28.685291+00:00",
+      "latest_mtime": 1791402688.6852908,
+      "files": 181,
+      "lockfiles": [
+        "s-hmzz16fmxy-0x1e1mj.lock"
+      ],
+      "symlink": false,
+      "candidate_old_other_variant": true,
+      "newest_preserved_path": "/home/developer/projects/aurora/rust/target/wasm32-unknown-unknown/debug/incremental/aurora_mesh_authority-28yeryen49mf5"
+    },
+    {
+      "path": "/home/developer/projects/aurora/rust/target/wasm32-unknown-unknown/debug/incremental/aurora_contracts-0no8nnkmpve4h",
+      "root": "rust/target/wasm32-unknown-unknown/debug/incremental",
+      "crate": "aurora_contracts",
+      "bytes": 225316864,
+      "last_file_modified_at": "2026-10-09T15:05:56.968621+00:00",
+      "latest_mtime": 1791558356.9686205,
+      "files": 260,
+      "lockfiles": [
+        "s-hn1yjkej3z-1ysll6a.lock"
+      ],
+      "symlink": false,
+      "candidate_old_other_variant": false,
+      "newest_preserved_path": "/home/developer/projects/aurora/rust/target/wasm32-unknown-unknown/debug/incremental/aurora_contracts-0no8nnkmpve4h"
+    },
+    {
+      "path": "/home/developer/projects/aurora/rust/target/wasm32-unknown-unknown/debug/incremental/handoff_serde_wasm_characterization-2m0td3z1ddkpa",
+      "root": "rust/target/wasm32-unknown-unknown/debug/incremental",
+      "crate": "handoff_serde_wasm_characterization",
+      "bytes": 5361664,
+      "last_file_modified_at": "2026-10-07T18:53:47.363014+00:00",
+      "latest_mtime": 1791399227.3630145,
+      "files": 56,
+      "lockfiles": [
+        "s-hmzxfz27oe-0ayijse.lock"
+      ],
+      "symlink": false,
+      "candidate_old_other_variant": false,
+      "newest_preserved_path": "/home/developer/projects/aurora/rust/target/wasm32-unknown-unknown/debug/incremental/handoff_serde_wasm_characterization-2m0td3z1ddkpa"
+    },
+    {
+      "path": "/home/developer/projects/aurora/rust/target/wasm32-unknown-unknown/debug/incremental/aurora_voice_core-10bgomidvtvwe",
+      "root": "rust/target/wasm32-unknown-unknown/debug/incremental",
+      "crate": "aurora_voice_core",
+      "bytes": 10846208,
+      "last_file_modified_at": "2026-10-07T20:56:01.479935+00:00",
+      "latest_mtime": 1791406561.4799352,
+      "files": 4,
+      "lockfiles": [
+        "s-hn00t98ylx-0q7zcs2.lock"
+      ],
+      "symlink": false,
+      "candidate_old_other_variant": true,
+      "newest_preserved_path": "/home/developer/projects/aurora/rust/target/wasm32-unknown-unknown/debug/incremental/aurora_voice_core-25r9yqbmt1wx6"
+    },
+    {
+      "path": "/home/developer/projects/aurora/rust/target/wasm32-unknown-unknown/debug/incremental/aurora_voice_wasm-2hcs1is3ezft1",
+      "root": "rust/target/wasm32-unknown-unknown/debug/incremental",
+      "crate": "aurora_voice_wasm",
+      "bytes": 27705344,
+      "last_file_modified_at": "2026-10-09T15:05:58.876635+00:00",
+      "latest_mtime": 1791558358.876635,
+      "files": 136,
+      "lockfiles": [
+        "s-hn1yjps6sa-1g0n1ib.lock"
+      ],
+      "symlink": false,
+      "candidate_old_other_variant": true,
+      "newest_preserved_path": "/home/developer/projects/aurora/rust/target/wasm32-unknown-unknown/debug/incremental/aurora_voice_wasm-2vy70thdc5si6"
+    },
+    {
+      "path": "/home/developer/projects/aurora/rust/target/wasm32-unknown-unknown/debug/incremental/aurora_mesh_authority-07mpvyhvd34sr",
+      "root": "rust/target/wasm32-unknown-unknown/debug/incremental",
+      "crate": "aurora_mesh_authority",
+      "bytes": 21139456,
+      "last_file_modified_at": "2026-10-07T19:50:49.392993+00:00",
+      "latest_mtime": 1791402649.3929927,
+      "files": 4,
+      "lockfiles": [
+        "s-hmzz0k1705-168zr9m.lock"
+      ],
+      "symlink": false,
+      "candidate_old_other_variant": true,
+      "newest_preserved_path": "/home/developer/projects/aurora/rust/target/wasm32-unknown-unknown/debug/incremental/aurora_mesh_authority-28yeryen49mf5"
+    },
+    {
+      "path": "/home/developer/projects/aurora/rust/target/wasm32-unknown-unknown/debug/incremental/parity_corpus-1mrqd11wyk1yz",
+      "root": "rust/target/wasm32-unknown-unknown/debug/incremental",
+      "crate": "parity_corpus",
+      "bytes": 3129344,
+      "last_file_modified_at": "2026-10-07T19:50:49.754120+00:00",
+      "latest_mtime": 1791402649.7541196,
+      "files": 4,
+      "lockfiles": [
+        "s-hmzz0kwv0s-18xkn91.lock"
+      ],
+      "symlink": false,
+      "candidate_old_other_variant": false,
+      "newest_preserved_path": "/home/developer/projects/aurora/rust/target/wasm32-unknown-unknown/debug/incremental/parity_corpus-1mrqd11wyk1yz"
+    },
+    {
+      "path": "/home/developer/projects/aurora/rust/target/wasm32-unknown-unknown/debug/incremental/aurora_mesh_authority-28yeryen49mf5",
+      "root": "rust/target/wasm32-unknown-unknown/debug/incremental",
+      "crate": "aurora_mesh_authority",
+      "bytes": 44130304,
+      "last_file_modified_at": "2026-10-07T19:51:44.693412+00:00",
+      "latest_mtime": 1791402704.6934123,
+      "files": 142,
+      "lockfiles": [
+        "s-hmzz1eli5y-10wupgq.lock"
+      ],
+      "symlink": false,
+      "candidate_old_other_variant": false,
+      "newest_preserved_path": "/home/developer/projects/aurora/rust/target/wasm32-unknown-unknown/debug/incremental/aurora_mesh_authority-28yeryen49mf5"
+    },
+    {
+      "path": "/home/developer/projects/aurora/rust/target/wasm32-unknown-unknown/debug/incremental/aurora_voice_engine-357o59mr7f8h5",
+      "root": "rust/target/wasm32-unknown-unknown/debug/incremental",
+      "crate": "aurora_voice_engine",
+      "bytes": 17907712,
+      "last_file_modified_at": "2026-10-07T20:56:00.246926+00:00",
+      "latest_mtime": 1791406560.2469256,
+      "files": 4,
+      "lockfiles": [
+        "s-hn00t7xtqm-0ihc8ln.lock"
+      ],
+      "symlink": false,
+      "candidate_old_other_variant": true,
+      "newest_preserved_path": "/home/developer/projects/aurora/rust/target/wasm32-unknown-unknown/debug/incremental/aurora_voice_engine-0x29prloo6wbm"
+    },
+    {
+      "path": "/home/developer/projects/aurora/rust/target/wasm32-unknown-unknown/debug/incremental/grant_management_recovery-2yc5w6f8v27q9",
+      "root": "rust/target/wasm32-unknown-unknown/debug/incremental",
+      "crate": "grant_management_recovery",
+      "bytes": 823296,
+      "last_file_modified_at": "2026-10-07T19:50:49.838162+00:00",
+      "latest_mtime": 1791402649.8381624,
+      "files": 4,
+      "lockfiles": [
+        "s-hmzz0l150j-1q2r5p0.lock"
+      ],
+      "symlink": false,
+      "candidate_old_other_variant": false,
+      "newest_preserved_path": "/home/developer/projects/aurora/rust/target/wasm32-unknown-unknown/debug/incremental/grant_management_recovery-2yc5w6f8v27q9"
+    },
+    {
+      "path": "/home/developer/projects/aurora/rust/target/wasm32-unknown-unknown/debug/incremental/aurora_voice_engine-2xnekf3e62r82",
+      "root": "rust/target/wasm32-unknown-unknown/debug/incremental",
+      "crate": "aurora_voice_engine",
+      "bytes": 18526208,
+      "last_file_modified_at": "2026-10-07T22:13:26.802158+00:00",
+      "latest_mtime": 1791411206.8021579,
+      "files": 4,
+      "lockfiles": [
+        "s-hn02y2c5mp-1rdyady.lock"
+      ],
+      "symlink": false,
+      "candidate_old_other_variant": true,
+      "newest_preserved_path": "/home/developer/projects/aurora/rust/target/wasm32-unknown-unknown/debug/incremental/aurora_voice_engine-0x29prloo6wbm"
+    },
+    {
+      "path": "/home/developer/projects/aurora/rust/target/wasm32-unknown-unknown/debug/incremental/aurora_contracts-2o5bmzk4slcam",
+      "root": "rust/target/wasm32-unknown-unknown/debug/incremental",
+      "crate": "aurora_contracts",
+      "bytes": 109096960,
+      "last_file_modified_at": "2026-10-07T22:13:24.502140+00:00",
+      "latest_mtime": 1791411204.5021403,
+      "files": 4,
+      "lockfiles": [
+        "s-hn02xtue6s-0ai836f.lock"
+      ],
+      "symlink": false,
+      "candidate_old_other_variant": true,
+      "newest_preserved_path": "/home/developer/projects/aurora/rust/target/wasm32-unknown-unknown/debug/incremental/aurora_contracts-0no8nnkmpve4h"
+    },
+    {
+      "path": "/home/developer/projects/aurora/rust/target/wasm32-unknown-unknown/debug/incremental/aurora_voice_engine-0x29prloo6wbm",
+      "root": "rust/target/wasm32-unknown-unknown/debug/incremental",
+      "crate": "aurora_voice_engine",
+      "bytes": 47894528,
+      "last_file_modified_at": "2026-10-08T07:14:05.948008+00:00",
+      "latest_mtime": 1791443645.9480076,
+      "files": 179,
+      "lockfiles": [
+        "s-hn0hukf28l-0kjwo97.lock"
+      ],
+      "symlink": false,
+      "candidate_old_other_variant": false,
+      "newest_preserved_path": "/home/developer/projects/aurora/rust/target/wasm32-unknown-unknown/debug/incremental/aurora_voice_engine-0x29prloo6wbm"
+    },
+    {
+      "path": "/home/developer/projects/aurora/rust/target/wasm32-unknown-unknown/debug/incremental/aurora_voice_core-35ct62jnwj5xs",
+      "root": "rust/target/wasm32-unknown-unknown/debug/incremental",
+      "crate": "aurora_voice_core",
+      "bytes": 10764288,
+      "last_file_modified_at": "2026-10-07T22:13:27.993167+00:00",
+      "latest_mtime": 1791411207.993167,
+      "files": 4,
+      "lockfiles": [
+        "s-hn02y3oska-1fyt46w.lock"
+      ],
+      "symlink": false,
+      "candidate_old_other_variant": true,
+      "newest_preserved_path": "/home/developer/projects/aurora/rust/target/wasm32-unknown-unknown/debug/incremental/aurora_voice_core-25r9yqbmt1wx6"
+    },
+    {
+      "path": "/home/developer/projects/aurora/rust/target/wasm32-unknown-unknown/debug/incremental/aurora_contracts-0onnunazkelf7",
+      "root": "rust/target/wasm32-unknown-unknown/debug/incremental",
+      "crate": "aurora_contracts",
+      "bytes": 224829440,
+      "last_file_modified_at": "2026-10-07T17:59:36.821986+00:00",
+      "latest_mtime": 1791395976.821986,
+      "files": 260,
+      "lockfiles": [
+        "s-hmzvy3ulu2-0ul7iaj.lock"
+      ],
+      "symlink": false,
+      "candidate_old_other_variant": true,
+      "newest_preserved_path": "/home/developer/projects/aurora/rust/target/wasm32-unknown-unknown/debug/incremental/aurora_contracts-0no8nnkmpve4h"
+    },
+    {
+      "path": "/home/developer/projects/aurora/rust/target/wasm32-unknown-unknown/debug/incremental/wasm_json_shape-3k5xa0wm1fapj",
+      "root": "rust/target/wasm32-unknown-unknown/debug/incremental",
+      "crate": "wasm_json_shape",
+      "bytes": 1204224,
+      "last_file_modified_at": "2026-10-07T19:50:49.549815+00:00",
+      "latest_mtime": 1791402649.5498147,
+      "files": 4,
+      "lockfiles": [
+        "s-hmzz0ktlst-07x3874.lock"
+      ],
+      "symlink": false,
+      "candidate_old_other_variant": true,
+      "newest_preserved_path": "/home/developer/projects/aurora/rust/target/wasm32-unknown-unknown/debug/incremental/wasm_json_shape-3kkpnh7k61zq4"
+    }
+  ],
+  "candidate_criteria": "older than 2026-10-13 UTC plus another newer variant preserved for same crate and target; candidacy alone is not permission to delete or proof of obsolete feature flags",
+  "candidate_bytes": 10595172352,
+  "candidate_count": 240,
+  "build_processes": [],
+  "cmdline_permission_denied_count": 0,
+  "open_fd_map_inspection": "Prior projection denied some PIDs; usage absence cannot be established for unreadable processes",
+  "runtime_protected": "Entire matched campaign317 inputs/outputs/model/private evidence and target final binaries/deps/build/fingerprints/release retained; only exact old incremental leaf paths candidates"
+}

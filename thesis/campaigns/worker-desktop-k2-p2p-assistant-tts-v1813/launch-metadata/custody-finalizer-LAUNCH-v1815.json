@@ -1,0 +1,14 @@
+{
+  "at": "2026-10-20T15:20:41.107178+00:00",
+  "helpers": {
+    "copier": {
+      "pid": 2803867,
+      "startTicks": 128810169
+    },
+    "finalizer": {
+      "pid": 2803868,
+      "startTicks": 128810169
+    }
+  },
+  "conditionManifestSha256": "fbc7d876c9bb804d8dc873cf468b619595639c080c3f5d21ad5665feb6a6852c"
+}

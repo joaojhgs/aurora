@@ -1,0 +1,18 @@
+{
+  "at": "2026-10-21T21:19:21.779615+00:00",
+  "source": ".git/aurora-handoff-import-20261006/root-after-complete-mail-v2295a.json",
+  "physicalCopy": "thesis/evidence/k1-http-remaining450-admission-v2294/MONITOR-CLOSURE-RECEIPTS-v2295a.json",
+  "bytes": 3362,
+  "sha256": "99a89f99422f21c9f3bbc970d804592f21fda698cec57c0464ba30a47d36a4b6",
+  "messages": [
+    "msg_449f2281f58c",
+    "msg_3aa53149cfe7"
+  ],
+  "originalMonitorTask": "task_d7ea336050cf",
+  "originalMonitorDispatch": "ctx_37b4d0a3c14f",
+  "originalMonitorTerminal": "term_2eab47ed-ab9b-4e35-bd9b-fc068c60e3fc",
+  "receiptVerificationStatus": "INDEPENDENT_MONITOR_CHECKS_CLOSED_DO_NOT_REOPEN",
+  "remaining450Authority": "Full method30.74.6 already supports finite prospective admission; no new owner-choice/review gate. Monitor will append actual frozen bounds/charges when available.",
+  "43200_115200_state": "DRAFT_NOT_LAUNCH",
+  "nextRootAction": "Implement versioned successor under ADMISSION-FRONTIER-v2295a.json; fresh resource/charge freeze before lifecycle. No repeated closed result checks."
+}

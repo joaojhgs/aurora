@@ -1,0 +1,12 @@
+{
+  "controlDeadline": "2026-10-22T00:19:55.341599+00:00",
+  "explicitNewline": true,
+  "host": "ssh:ssh-sem-notebook-personal",
+  "incarnation": "328cd72f-c7ea-49ff-a2db-b9275b085037",
+  "remoteResult": "/home/developer/projects/aurora/thesis/phone-notebook/20261020/evidence/admitted-offline-runtime-20261022T000353.json",
+  "rootAdmissionMessage": "msg_fb6e25f5d33a",
+  "script": "scripts/notebook_offline_runtime_v9.py",
+  "scriptSha256": "f6c10d0d51a2ca78f0255e3b3fa81996c9f8bf936d96f58a7bf929bd8945e7c3",
+  "singleSend": true,
+  "terminal": "term_a2ed5feb-7c92-48e4-bd88-d1b0e6737989"
+}

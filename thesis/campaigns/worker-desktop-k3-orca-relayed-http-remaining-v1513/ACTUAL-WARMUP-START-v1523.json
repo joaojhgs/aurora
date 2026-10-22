@@ -1,0 +1,77 @@
+{
+  "at": "2026-10-18T14:46:54.586276+00:00",
+  "status": "ACTUAL_CONTROLLER_AND_COLLECTION_OPERATORS_LIVE_NEW_WARMUPS_IN_PROGRESS",
+  "launch": {
+    "at": "2026-10-18T14:45:15.171368+00:00",
+    "conditionTargetMeasured": 900,
+    "controllerPid": 1231594,
+    "controllerStartTicks": 111317576,
+    "credentialsCopied": false,
+    "excludedWarmups": 15,
+    "frozenManifestSha256": "b19c10d9aad4f9a2261d7eac5b52c258315eea94db256a411e66981e6a45d4a4",
+    "globalBuildLock": "Same locked descriptor handed to controller; parent closed its copy without unlocking",
+    "newMeasuredObserved": 0,
+    "plannedMeasured": 387,
+    "priorAttemptedMeasured": 513,
+    "priorCorrect": 512,
+    "priorFailed": 1,
+    "providerManifestSha256": "b4b95d579c29695832c05d96692f2f15fd51cf3258333b9175091ab357280887",
+    "providerReceiverPid": 1227894,
+    "providerRestarted": false,
+    "requiredNativeJoins": 45,
+    "startupIsNotAcceptance": true,
+    "status": "REMAINING387_CONTROLLER_LAUNCHED_NEW_WARMUP_GATE_PENDING"
+  },
+  "operators": [
+    {
+      "role": "requesterController",
+      "pid": 1231594,
+      "startTicksExpected": 111317576,
+      "present": true,
+      "sameLiveProcess": true
+    },
+    {
+      "role": "requesterCopier",
+      "pid": 1231601,
+      "startTicksExpected": 111317577,
+      "present": true,
+      "sameLiveProcess": true
+    },
+    {
+      "role": "warmupFinalizer",
+      "pid": 1231602,
+      "startTicksExpected": 111317578,
+      "present": true,
+      "sameLiveProcess": true
+    }
+  ],
+  "controllerControl": {
+    "controller_pid": 1231594,
+    "child_pid": 1231687,
+    "started_at": "2026-10-18T14:45:27.795294+00:00",
+    "exit_code": null,
+    "effective_outer_cap_seconds": 33625.532972,
+    "provider_deadline_utc": "2026-10-19T00:08:53.328388+00:00",
+    "provider_shutdown_margin_seconds": 180
+  },
+  "progress": {
+    "attempted": 2,
+    "last_attempt_file": "attempts/attempt-0002-warmup.jsonl",
+    "last_attempt_status": "completed_correct",
+    "measured_attempted": 0,
+    "planned_measured": 387,
+    "planned_warmups": 15,
+    "status": "running",
+    "unattempted_measured": 387,
+    "warmups_attempted": 2
+  },
+  "physicalAttemptCount": 2,
+  "warmupOutcomes": {
+    "completed_correct": 2
+  },
+  "measuredAttempted": 0,
+  "actualGlobalBuildLockContenderBlocked": true,
+  "frozenManifestSha256": "b19c10d9aad4f9a2261d7eac5b52c258315eea94db256a411e66981e6a45d4a4",
+  "providerRestarted": false,
+  "unrelatedWorkersCreated": 0
+}

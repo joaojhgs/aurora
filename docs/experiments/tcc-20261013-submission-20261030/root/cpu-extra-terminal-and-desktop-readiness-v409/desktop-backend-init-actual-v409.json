@@ -1,0 +1,16 @@
+{
+  "benchmark_started": false,
+  "cap_seconds": 30,
+  "device_selector": "GGML_VK_VISIBLE_DEVICES=1",
+  "elapsed_seconds": 1.2152962130494416,
+  "exit_code": 0,
+  "inference_started": false,
+  "kind": "aurora_root_vulkan_backend_init_only",
+  "model_loaded": false,
+  "recorded_at": "2026-10-14T16:40:04.843457+00:00",
+  "selected_discrete_name_observed": true,
+  "stderr": "ggml_vulkan: Found 1 Vulkan devices:\nggml_vulkan: 0 = AMD Radeon RX 7600 (RADV NAVI33) (radv) | uma: 0 | fp16: 1 | bf16: 0 | warp size: 64 | shared memory: 65536 | int dot: 0 | matrix cores: KHR_coopmat\n",
+  "stderr_sha256": "d1227c4e9f5875c9785ec766fdd25ddedd78fcc62ee5bd6f1b539c8029966213",
+  "stdout": "GPU_SUPPORT={\"supports_gpu_offload\": true, \"package_version\": \"0.3.19\"}\n",
+  "stdout_sha256": "272ccc1ff2721c3a662ac8ae5c45290aff408847b69b219e7ea8e43929b77878"
+}

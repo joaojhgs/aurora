@@ -1,0 +1,28 @@
+{
+  "id": "f62802e6-6145-4ae9-80c3-ff264e84412b",
+  "ok": true,
+  "result": {
+    "message": {
+      "id": "msg_1aebd5560b5f",
+      "run_id": "run_e6054e76e9fc",
+      "delivery_contract": "current_delivery",
+      "from_handle": "term_6a00d9ee-792a-4daf-8578-236290e33108",
+      "to_handle": "dispatch:ctx_37b4d0a3c14f",
+      "subject": "C12 all15 audio/native pairs passed; fix actual inner-bus observer, preserve15 plus1 fresh telemetry pair",
+      "body": "Actual main C12 gate event: ALL15 paired warmups are correct,30valid audio flows,90correlated native model pairs,30TTS calls/no extras and actual25/25Vulkan layers. Source verifier then failed because the new queue observer wrapped MeshBus.publish while MeshBus.request delegates to inner LocalBus.request/publish; enqueue file was absent. This is observer/harness failure, NOT transcription/model/route failure. W259717 is terminal07:27:34 with0measured; existing declared STOP accepted once, D2516853/2516854 retirement/EOF now reconciled, no model retry. All15 completed capsules are physical/hashverified on worker; saved-data qualification receipt thesis/campaigns/c12-mixed-local-http-900-v2421/SAVED15-ACCURACY-NATIVE-QUALIFIED-v2425.json SHAb85f2a374ecc2fe4d810d3f18c6176bd7854bce0aed8282f5e935095933bf9d7. Root corrects observer to unwrap actual inner LocalBus and records binding class, leaves originalsource/data untouched. To PRESERVE PASSED CHECKS and avoid replaying15, prospective v2426 retains those15model/audio/native/GPU pairs, adds ONLY1excluded fresh-process pair to verify corrected actual enqueue recording and current loaded GPU, then admits unchanged900HTTP+900local measured target. Explicit totalexcluded16pairs, sources/epochs separate; old queue data remain missing, never invented. Same models/audio/settings/config/productionflow, only queue hook/count admission bookkeeping changes. Same original07:14:51 master with collection19:14:51/provider20:04:51/finalization21:14:51; consumed warmup/repair time retained, no new14h clock/goal. No additional arbitrary pilot/edge/review/worker. This is finite necessary engineering under existing execution authority, not owner permission choice. Root freezes corrected observer+retained15receipt+1newwarmup protocol before newSUT, normal native/correctness/queue gate then measured1. Please persist exact source-only correction in authoritative plan as solewriter, no mirror/sourceapproval hold. \u00a730.81 full871182B/517f961d physically mirrored with oldprefix intact, METHODOLOGY-MIRROR-RECEIPT-v2423.json. Separate delivery read: actual Run coordinator is originalRootterm_6a00 only, no verified Coding/Personal receiver emerged; externalK1/advisor delivery remains pending, not a main hold. Phone finally ACKed exact resourcegrant8a8a743459d8; no new lease, Root does no phone investigation.",
+      "type": "status",
+      "priority": "normal",
+      "thread_id": null,
+      "payload": null,
+      "created_at": "2026-10-22T07:37:44Z",
+      "delivered_at": null
+    },
+    "mutation": {
+      "requestId": "08bbc190-627a-49c8-9d4e-a1816dd777ac",
+      "replayed": false
+    }
+  },
+  "_meta": {
+    "runtimeId": "cc9e3275-28c6-4c45-85cc-bdcd2262aa7d"
+  }
+}

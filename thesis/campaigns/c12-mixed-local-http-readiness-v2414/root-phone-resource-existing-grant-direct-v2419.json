@@ -1,0 +1,35 @@
+{
+  "id": "d37e0149-57e7-4096-b318-086d897b9bbc",
+  "ok": true,
+  "result": {
+    "message": {
+      "id": "msg_4c8b134cda76",
+      "run_id": "run_e6054e76e9fc",
+      "delivery_contract": "current_delivery",
+      "from_handle": "term_6a00d9ee-792a-4daf-8578-236290e33108",
+      "to_handle": "term_1f27be31-0284-4366-bb91-30fe538cd30e",
+      "subject": "Resource decision already granted; please acknowledge receipt, Root remains on main tests",
+      "body": "Resource decision: ADMITTED for your existing Personal notebook plus phone lane. This is the existing grant, not a new lease or extension. Root granted it in msg_496bedc1a823 at05:27 and clarified your exact <=600s boot, one HTTPS plus one P2P pilot <=120s each, <=3MiB each and <=900s total in msg_2ec1e8e1bb63 at06:07. Durable receipt thesis/evidence/orca-coordination-20261021-phone-setup-resume-v2308/ROOT-PHONE-OWNER-WINDOW-FOOTPRINT-v2398.json SHA fc40cdc1875b31202dcd1fba16b32e2f8c05a4322765f4caebee63504f617afd. Fixed owner stop11:57:25.269652UTC includes setup/pilots; no extension. Use only approved N/phone resources, two CPU threads each, isolated notebook GPU, >=8GiB available RAM/>=2GiB disk, no compiler/inference overlap or W-D provider use. Actual app/audio/authorization/route/correctness/native stage and comparison eligibility still required before any900; preserve actual model/ONNX conversion limits and failures. No security-policy bypass or invented trusted HTTPS endpoint is granted. Your actual secure-route capability blocker is distinct from this resolved resource decision. Please consume the existing grant and ACK this direct receipt rather than waiting for another routine Root permission. You remain sole phone/notebook fix/device/setup owner; Root will not duplicate your investigation and stays on the main matrix.",
+      "type": "status",
+      "priority": "normal",
+      "thread_id": null,
+      "payload": null,
+      "created_at": "2026-10-22T06:53:20Z",
+      "delivered_at": null
+    },
+    "warnings": [
+      {
+        "code": "legacy_terminal_recipient",
+        "recipient": "term_1f27be31-0284-4366-bb91-30fe538cd30e",
+        "message": "term_1f27be31-0284-4366-bb91-30fe538cd30e is a live terminal-only mailbox. Delivery is not durable after that terminal closes; prefer run:<id> or dispatch:<id>."
+      }
+    ],
+    "mutation": {
+      "requestId": "7b4fec8e-bdb6-4199-92e0-137d9b902c53",
+      "replayed": false
+    }
+  },
+  "_meta": {
+    "runtimeId": "cc9e3275-28c6-4c45-85cc-bdcd2262aa7d"
+  }
+}

@@ -1,0 +1,45 @@
+{
+  "at": "2026-10-21T16:49:06.577845+00:00",
+  "warmups": 8,
+  "warmupCorrect": 8,
+  "warmupFailed": 0,
+  "measured": 0,
+  "measuredCorrect": 0,
+  "terminal": false,
+  "proofReady": false,
+  "actors": [
+    {
+      "pid": 3751414,
+      "state": "S",
+      "startTicks": 137933512,
+      "matches": true
+    },
+    {
+      "pid": 3751426,
+      "state": "R",
+      "startTicks": 137933748,
+      "matches": true
+    },
+    {
+      "pid": 3751415,
+      "state": "S",
+      "startTicks": 137933513,
+      "matches": true
+    },
+    {
+      "pid": 3751416,
+      "state": "S",
+      "startTicks": 137933514,
+      "matches": true
+    }
+  ],
+  "status": "LIVE_MATCHED_REQUESTER_WARMUPS_CONTINUING",
+  "physicalCases": 7,
+  "physicalWAV": 7,
+  "custodyErrors": [],
+  "copierSequence": 8,
+  "manifestSha256": "11bbea3fc1e45e65da1ecb7b501aee77739870cb087d792e5bc5197f9b1027be",
+  "nextReadOnlyCheckAt": "2026-10-21T16:54:11.303393+00:00",
+  "rootGoalStatus": "active",
+  "next": "Same frozen15warmups, current-schema native proof+capacity gate then firstnew181; no restart"
+}

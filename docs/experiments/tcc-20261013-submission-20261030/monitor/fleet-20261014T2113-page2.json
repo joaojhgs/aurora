@@ -1,0 +1,2022 @@
+{
+  "id": "83acefec-0381-4081-8b6e-dd35c1028419",
+  "ok": true,
+  "result": {
+    "workers": [
+      {
+        "dispatchId": "ctx_1c7010efd1a4",
+        "taskId": "task_8357fddb3c9e",
+        "runId": "run_e6054e76e9fc",
+        "workerState": "succeeded",
+        "dispatchStatus": "completed",
+        "agentTerminalHandle": "term_ef0e5862-cbee-42a6-962d-80b59e47ee23",
+        "terminalState": "retained",
+        "resource": null,
+        "projection": {
+          "id": "ctx_1c7010efd1a4",
+          "dispatchId": "ctx_1c7010efd1a4",
+          "taskId": "task_8357fddb3c9e",
+          "runId": "run_e6054e76e9fc",
+          "role": "worker",
+          "parent": null,
+          "provider": null,
+          "host": {
+            "kind": "local",
+            "id": "local"
+          },
+          "workspace": {
+            "id": "314e7b89-8f19-4535-9443-22b342aedff7::/home/developer/projects/aurora/.git/aurora-lanes/product-native-handler-20261009T131300Z",
+            "kind": "folder_or_worktree"
+          },
+          "stage": {
+            "worker": "succeeded",
+            "dispatch": "completed",
+            "detail": "settled",
+            "activity": "unknown"
+          },
+          "outcome": "succeeded",
+          "liveness": {
+            "verdict": "unverifiable",
+            "reason": "missing_status"
+          },
+          "evidence": {
+            "durable": true,
+            "liveStatus": "unavailable",
+            "lastObservedAt": null
+          },
+          "resource": {
+            "state": "absent",
+            "reason": "not_materialized"
+          },
+          "nextAction": {
+            "kind": "none",
+            "argv": []
+          },
+          "attention": {
+            "categories": [
+              "unverifiable",
+              "root_completion"
+            ],
+            "requiresAction": true
+          }
+        }
+      },
+      {
+        "dispatchId": "ctx_01aaf3d41309",
+        "taskId": "task_25fe3ae22774",
+        "runId": "run_e6054e76e9fc",
+        "workerState": "succeeded",
+        "dispatchStatus": "completed",
+        "agentTerminalHandle": "term_fb989718-d78a-444c-8cdd-c10479534d16",
+        "terminalState": "released",
+        "resource": {
+          "id": "wtr_3807c0b4a38f",
+          "ownershipState": "released",
+          "releaseState": "released",
+          "retainedReason": null,
+          "terminalHandle": "term_fb989718-d78a-444c-8cdd-c10479534d16",
+          "worktreeId": "314e7b89-8f19-4535-9443-22b342aedff7::/home/developer/projects/aurora/.git/aurora-lanes/product-native-service-20261009T131300Z",
+          "endpointId": "f69558b6-f0b0-4431-ab90-99156cddcf39",
+          "endpointIncarnation": "ssh:ssh-oci-coding-worker@@pty2:47ec4130-fe3d-49e5-91b0-384bab6e8b15:30:cc467476-40cc-458e-95f6-06e45dc4a572",
+          "originDispatchId": "ctx_0a9ce503a9c6",
+          "ownerDispatchId": "ctx_01aaf3d41309",
+          "releaseRequestedAt": "2026-10-10 05:37:04",
+          "releaseCompletedAt": "2026-10-10 05:37:08",
+          "releaseError": null,
+          "recoveryAttemptCount": 0,
+          "lastRecoveryAt": null,
+          "archive": {
+            "source": "transcript",
+            "status": "captured"
+          }
+        },
+        "projection": {
+          "id": "ctx_01aaf3d41309",
+          "dispatchId": "ctx_01aaf3d41309",
+          "taskId": "task_25fe3ae22774",
+          "runId": "run_e6054e76e9fc",
+          "role": "worker",
+          "parent": null,
+          "provider": null,
+          "host": {
+            "kind": "remote",
+            "id": "ssh-oci-coding-worker"
+          },
+          "workspace": {
+            "id": "314e7b89-8f19-4535-9443-22b342aedff7::/home/developer/projects/aurora/.git/aurora-lanes/product-native-service-20261009T131300Z",
+            "kind": "folder_or_worktree"
+          },
+          "stage": {
+            "worker": "succeeded",
+            "dispatch": "completed",
+            "detail": "settled",
+            "activity": "unknown"
+          },
+          "outcome": "succeeded",
+          "liveness": {
+            "verdict": "exited",
+            "source": "resource_release"
+          },
+          "evidence": {
+            "durable": true,
+            "liveStatus": "unavailable",
+            "lastObservedAt": null
+          },
+          "resource": {
+            "state": "released"
+          },
+          "nextAction": {
+            "kind": "none",
+            "argv": []
+          },
+          "attention": {
+            "categories": [
+              "root_completion"
+            ],
+            "requiresAction": false
+          }
+        }
+      },
+      {
+        "dispatchId": "ctx_ea1b6524c309",
+        "taskId": "task_98d5acefb7d7",
+        "runId": "run_e6054e76e9fc",
+        "workerState": "succeeded",
+        "dispatchStatus": "completed",
+        "agentTerminalHandle": "term_755165e3-2d37-4ec6-bc1e-d5d69056bda4",
+        "terminalState": "released",
+        "resource": {
+          "id": "wtr_85c65e9df679",
+          "ownershipState": "released",
+          "releaseState": "released",
+          "retainedReason": null,
+          "terminalHandle": "term_755165e3-2d37-4ec6-bc1e-d5d69056bda4",
+          "worktreeId": "314e7b89-8f19-4535-9443-22b342aedff7::/home/developer/projects/aurora/.git/aurora-lanes/lint",
+          "endpointId": "f69558b6-f0b0-4431-ab90-99156cddcf39",
+          "endpointIncarnation": "ssh:ssh-oci-coding-worker@@pty2:47ec4130-fe3d-49e5-91b0-384bab6e8b15:31:0f29e9f6-0b00-4f3c-b650-eb10dd2ab3df",
+          "originDispatchId": "ctx_c95e9e382062",
+          "ownerDispatchId": "ctx_ea1b6524c309",
+          "releaseRequestedAt": "2026-10-10 05:35:46",
+          "releaseCompletedAt": "2026-10-10 05:35:49",
+          "releaseError": null,
+          "recoveryAttemptCount": 0,
+          "lastRecoveryAt": null,
+          "archive": {
+            "source": "transcript",
+            "status": "captured"
+          }
+        },
+        "projection": {
+          "id": "ctx_ea1b6524c309",
+          "dispatchId": "ctx_ea1b6524c309",
+          "taskId": "task_98d5acefb7d7",
+          "runId": "run_e6054e76e9fc",
+          "role": "worker",
+          "parent": null,
+          "provider": null,
+          "host": {
+            "kind": "remote",
+            "id": "ssh-oci-coding-worker"
+          },
+          "workspace": {
+            "id": "314e7b89-8f19-4535-9443-22b342aedff7::/home/developer/projects/aurora/.git/aurora-lanes/lint",
+            "kind": "folder_or_worktree"
+          },
+          "stage": {
+            "worker": "succeeded",
+            "dispatch": "completed",
+            "detail": "settled",
+            "activity": "unknown"
+          },
+          "outcome": "succeeded",
+          "liveness": {
+            "verdict": "exited",
+            "source": "resource_release"
+          },
+          "evidence": {
+            "durable": true,
+            "liveStatus": "unavailable",
+            "lastObservedAt": null
+          },
+          "resource": {
+            "state": "released"
+          },
+          "nextAction": {
+            "kind": "none",
+            "argv": []
+          },
+          "attention": {
+            "categories": [
+              "root_completion"
+            ],
+            "requiresAction": false
+          }
+        }
+      },
+      {
+        "dispatchId": "ctx_c95e9e382062",
+        "taskId": "task_169bd95d4f71",
+        "runId": "run_e6054e76e9fc",
+        "workerState": "succeeded",
+        "dispatchStatus": "completed",
+        "agentTerminalHandle": "term_755165e3-2d37-4ec6-bc1e-d5d69056bda4",
+        "terminalState": "retained",
+        "resource": null,
+        "projection": {
+          "id": "ctx_c95e9e382062",
+          "dispatchId": "ctx_c95e9e382062",
+          "taskId": "task_169bd95d4f71",
+          "runId": "run_e6054e76e9fc",
+          "role": "worker",
+          "parent": null,
+          "provider": null,
+          "host": {
+            "kind": "local",
+            "id": "local"
+          },
+          "workspace": {
+            "id": "314e7b89-8f19-4535-9443-22b342aedff7::/home/developer/projects/aurora/.git/aurora-lanes/lint",
+            "kind": "folder_or_worktree"
+          },
+          "stage": {
+            "worker": "succeeded",
+            "dispatch": "completed",
+            "detail": "settled",
+            "activity": "unknown"
+          },
+          "outcome": "succeeded",
+          "liveness": {
+            "verdict": "unverifiable",
+            "reason": "missing_status"
+          },
+          "evidence": {
+            "durable": true,
+            "liveStatus": "unavailable",
+            "lastObservedAt": null
+          },
+          "resource": {
+            "state": "absent",
+            "reason": "not_materialized"
+          },
+          "nextAction": {
+            "kind": "none",
+            "argv": []
+          },
+          "attention": {
+            "categories": [
+              "unverifiable",
+              "root_completion"
+            ],
+            "requiresAction": true
+          }
+        }
+      },
+      {
+        "dispatchId": "ctx_29a3acaa42b6",
+        "taskId": "task_ec181cf2fbdf",
+        "runId": "run_e6054e76e9fc",
+        "workerState": "succeeded",
+        "dispatchStatus": "completed",
+        "agentTerminalHandle": "term_fb989718-d78a-444c-8cdd-c10479534d16",
+        "terminalState": "retained",
+        "resource": null,
+        "projection": {
+          "id": "ctx_29a3acaa42b6",
+          "dispatchId": "ctx_29a3acaa42b6",
+          "taskId": "task_ec181cf2fbdf",
+          "runId": "run_e6054e76e9fc",
+          "role": "worker",
+          "parent": null,
+          "provider": null,
+          "host": {
+            "kind": "local",
+            "id": "local"
+          },
+          "workspace": {
+            "id": "314e7b89-8f19-4535-9443-22b342aedff7::/home/developer/projects/aurora/.git/aurora-lanes/product-native-service-20261009T131300Z",
+            "kind": "folder_or_worktree"
+          },
+          "stage": {
+            "worker": "succeeded",
+            "dispatch": "completed",
+            "detail": "settled",
+            "activity": "unknown"
+          },
+          "outcome": "succeeded",
+          "liveness": {
+            "verdict": "unverifiable",
+            "reason": "missing_status"
+          },
+          "evidence": {
+            "durable": true,
+            "liveStatus": "unavailable",
+            "lastObservedAt": null
+          },
+          "resource": {
+            "state": "absent",
+            "reason": "not_materialized"
+          },
+          "nextAction": {
+            "kind": "none",
+            "argv": []
+          },
+          "attention": {
+            "categories": [
+              "unverifiable",
+              "root_completion"
+            ],
+            "requiresAction": true
+          }
+        }
+      },
+      {
+        "dispatchId": "ctx_0a9ce503a9c6",
+        "taskId": "task_90b28111648c",
+        "runId": "run_e6054e76e9fc",
+        "workerState": "succeeded",
+        "dispatchStatus": "completed",
+        "agentTerminalHandle": "term_fb989718-d78a-444c-8cdd-c10479534d16",
+        "terminalState": "retained",
+        "resource": null,
+        "projection": {
+          "id": "ctx_0a9ce503a9c6",
+          "dispatchId": "ctx_0a9ce503a9c6",
+          "taskId": "task_90b28111648c",
+          "runId": "run_e6054e76e9fc",
+          "role": "worker",
+          "parent": null,
+          "provider": null,
+          "host": {
+            "kind": "local",
+            "id": "local"
+          },
+          "workspace": {
+            "id": "314e7b89-8f19-4535-9443-22b342aedff7::/home/developer/projects/aurora/.git/aurora-lanes/product-native-service-20261009T131300Z",
+            "kind": "folder_or_worktree"
+          },
+          "stage": {
+            "worker": "succeeded",
+            "dispatch": "completed",
+            "detail": "settled",
+            "activity": "unknown"
+          },
+          "outcome": "succeeded",
+          "liveness": {
+            "verdict": "unverifiable",
+            "reason": "missing_status"
+          },
+          "evidence": {
+            "durable": true,
+            "liveStatus": "unavailable",
+            "lastObservedAt": null
+          },
+          "resource": {
+            "state": "absent",
+            "reason": "not_materialized"
+          },
+          "nextAction": {
+            "kind": "none",
+            "argv": []
+          },
+          "attention": {
+            "categories": [
+              "unverifiable",
+              "root_completion"
+            ],
+            "requiresAction": true
+          }
+        }
+      },
+      {
+        "dispatchId": "ctx_a13c027c2b9c",
+        "taskId": "task_ec181cf2fbdf",
+        "runId": "run_e6054e76e9fc",
+        "workerState": "failed",
+        "dispatchStatus": "failed",
+        "agentTerminalHandle": "term_85d130a0-3ec6-4ee3-91ec-0b40be9d803a",
+        "terminalState": "released",
+        "resource": {
+          "id": "wtr_f46eb136156e",
+          "ownershipState": "released",
+          "releaseState": "released",
+          "retainedReason": null,
+          "terminalHandle": "term_85d130a0-3ec6-4ee3-91ec-0b40be9d803a",
+          "worktreeId": "314e7b89-8f19-4535-9443-22b342aedff7::/home/developer/projects/aurora/.git/aurora-lanes/product-native-handler-20261009T131300Z",
+          "endpointId": "f69558b6-f0b0-4431-ab90-99156cddcf39",
+          "endpointIncarnation": "ssh:ssh-oci-coding-worker@@pty2:47ec4130-fe3d-49e5-91b0-384bab6e8b15:29:61b52dd7-3995-49c3-846a-ccc5fd81d8d1",
+          "originDispatchId": "ctx_a13c027c2b9c",
+          "ownerDispatchId": "ctx_a13c027c2b9c",
+          "releaseRequestedAt": "2026-10-10 05:22:32",
+          "releaseCompletedAt": "2026-10-10 05:22:37",
+          "releaseError": null,
+          "recoveryAttemptCount": 0,
+          "lastRecoveryAt": null,
+          "archive": {
+            "source": "terminal",
+            "status": "captured"
+          }
+        },
+        "projection": {
+          "id": "ctx_a13c027c2b9c",
+          "dispatchId": "ctx_a13c027c2b9c",
+          "taskId": "task_ec181cf2fbdf",
+          "runId": "run_e6054e76e9fc",
+          "role": "worker",
+          "parent": null,
+          "provider": null,
+          "host": {
+            "kind": "remote",
+            "id": "ssh-oci-coding-worker"
+          },
+          "workspace": {
+            "id": "314e7b89-8f19-4535-9443-22b342aedff7::/home/developer/projects/aurora/.git/aurora-lanes/product-native-handler-20261009T131300Z",
+            "kind": "folder_or_worktree"
+          },
+          "stage": {
+            "worker": "failed",
+            "dispatch": "failed",
+            "detail": "agent_readiness",
+            "activity": "unknown"
+          },
+          "outcome": "failed",
+          "liveness": {
+            "verdict": "exited",
+            "source": "resource_release"
+          },
+          "evidence": {
+            "durable": true,
+            "liveStatus": "unavailable",
+            "lastObservedAt": null
+          },
+          "resource": {
+            "state": "released"
+          },
+          "nextAction": {
+            "kind": "none",
+            "argv": []
+          },
+          "attention": {
+            "categories": [
+              "failure"
+            ],
+            "requiresAction": true
+          }
+        }
+      },
+      {
+        "dispatchId": "ctx_9090d3b45921",
+        "taskId": "task_ec181cf2fbdf",
+        "runId": "run_e6054e76e9fc",
+        "workerState": "failed",
+        "dispatchStatus": "failed",
+        "agentTerminalHandle": "term_6915a8cf-45e9-48b5-b67a-42dfae297e57",
+        "terminalState": "released",
+        "resource": {
+          "id": "wtr_4ad11ecd97fe",
+          "ownershipState": "released",
+          "releaseState": "released",
+          "retainedReason": null,
+          "terminalHandle": "term_6915a8cf-45e9-48b5-b67a-42dfae297e57",
+          "worktreeId": "314e7b89-8f19-4535-9443-22b342aedff7::/home/developer/projects/aurora/.git/aurora-lanes/product-native-handler-20261009T131300Z",
+          "endpointId": "f69558b6-f0b0-4431-ab90-99156cddcf39",
+          "endpointIncarnation": "ssh:ssh-oci-coding-worker@@pty2:47ec4130-fe3d-49e5-91b0-384bab6e8b15:28:481951e6-e3a7-4051-8c70-23015cc60410",
+          "originDispatchId": "ctx_9090d3b45921",
+          "ownerDispatchId": "ctx_9090d3b45921",
+          "releaseRequestedAt": "2026-10-10 05:20:08",
+          "releaseCompletedAt": "2026-10-10 05:20:12",
+          "releaseError": null,
+          "recoveryAttemptCount": 0,
+          "lastRecoveryAt": null,
+          "archive": {
+            "source": "terminal",
+            "status": "captured"
+          }
+        },
+        "projection": {
+          "id": "ctx_9090d3b45921",
+          "dispatchId": "ctx_9090d3b45921",
+          "taskId": "task_ec181cf2fbdf",
+          "runId": "run_e6054e76e9fc",
+          "role": "worker",
+          "parent": null,
+          "provider": null,
+          "host": {
+            "kind": "remote",
+            "id": "ssh-oci-coding-worker"
+          },
+          "workspace": {
+            "id": "314e7b89-8f19-4535-9443-22b342aedff7::/home/developer/projects/aurora/.git/aurora-lanes/product-native-handler-20261009T131300Z",
+            "kind": "folder_or_worktree"
+          },
+          "stage": {
+            "worker": "failed",
+            "dispatch": "failed",
+            "detail": "agent_readiness",
+            "activity": "unknown"
+          },
+          "outcome": "failed",
+          "liveness": {
+            "verdict": "exited",
+            "source": "resource_release"
+          },
+          "evidence": {
+            "durable": true,
+            "liveStatus": "unavailable",
+            "lastObservedAt": null
+          },
+          "resource": {
+            "state": "released"
+          },
+          "nextAction": {
+            "kind": "none",
+            "argv": []
+          },
+          "attention": {
+            "categories": [
+              "failure"
+            ],
+            "requiresAction": true
+          }
+        }
+      },
+      {
+        "dispatchId": "ctx_95743e474c91",
+        "taskId": "task_f1ebe371782e",
+        "runId": "run_e6054e76e9fc",
+        "workerState": "succeeded",
+        "dispatchStatus": "completed",
+        "agentTerminalHandle": "term_0af5b639-2d45-42ef-8120-19e15de65ab4",
+        "terminalState": "released",
+        "resource": {
+          "id": "wtr_f5dc06df3f8b",
+          "ownershipState": "released",
+          "releaseState": "released",
+          "retainedReason": null,
+          "terminalHandle": "term_0af5b639-2d45-42ef-8120-19e15de65ab4",
+          "worktreeId": "314e7b89-8f19-4535-9443-22b342aedff7::/home/developer/projects/aurora/.git/aurora-lanes/lint",
+          "endpointId": "f69558b6-f0b0-4431-ab90-99156cddcf39",
+          "endpointIncarnation": "ssh:ssh-oci-coding-worker@@pty2:47ec4130-fe3d-49e5-91b0-384bab6e8b15:27:8172bf96-e9ff-4bf0-9dee-cc0168568b9c",
+          "originDispatchId": "ctx_39b619d70742",
+          "ownerDispatchId": "ctx_95743e474c91",
+          "releaseRequestedAt": "2026-10-10 05:09:15",
+          "releaseCompletedAt": "2026-10-10 05:09:26",
+          "releaseError": null,
+          "recoveryAttemptCount": 0,
+          "lastRecoveryAt": null,
+          "archive": {
+            "source": "transcript",
+            "status": "captured"
+          }
+        },
+        "projection": {
+          "id": "ctx_95743e474c91",
+          "dispatchId": "ctx_95743e474c91",
+          "taskId": "task_f1ebe371782e",
+          "runId": "run_e6054e76e9fc",
+          "role": "worker",
+          "parent": null,
+          "provider": null,
+          "host": {
+            "kind": "remote",
+            "id": "ssh-oci-coding-worker"
+          },
+          "workspace": {
+            "id": "314e7b89-8f19-4535-9443-22b342aedff7::/home/developer/projects/aurora/.git/aurora-lanes/lint",
+            "kind": "folder_or_worktree"
+          },
+          "stage": {
+            "worker": "succeeded",
+            "dispatch": "completed",
+            "detail": "settled",
+            "activity": "unknown"
+          },
+          "outcome": "succeeded",
+          "liveness": {
+            "verdict": "exited",
+            "source": "resource_release"
+          },
+          "evidence": {
+            "durable": true,
+            "liveStatus": "unavailable",
+            "lastObservedAt": null
+          },
+          "resource": {
+            "state": "released"
+          },
+          "nextAction": {
+            "kind": "none",
+            "argv": []
+          },
+          "attention": {
+            "categories": [
+              "root_completion"
+            ],
+            "requiresAction": false
+          }
+        }
+      },
+      {
+        "dispatchId": "ctx_39b619d70742",
+        "taskId": "task_79f18b6683ba",
+        "runId": "run_e6054e76e9fc",
+        "workerState": "succeeded",
+        "dispatchStatus": "completed",
+        "agentTerminalHandle": "term_0af5b639-2d45-42ef-8120-19e15de65ab4",
+        "terminalState": "retained",
+        "resource": null,
+        "projection": {
+          "id": "ctx_39b619d70742",
+          "dispatchId": "ctx_39b619d70742",
+          "taskId": "task_79f18b6683ba",
+          "runId": "run_e6054e76e9fc",
+          "role": "worker",
+          "parent": null,
+          "provider": null,
+          "host": {
+            "kind": "local",
+            "id": "local"
+          },
+          "workspace": {
+            "id": "314e7b89-8f19-4535-9443-22b342aedff7::/home/developer/projects/aurora/.git/aurora-lanes/lint",
+            "kind": "folder_or_worktree"
+          },
+          "stage": {
+            "worker": "succeeded",
+            "dispatch": "completed",
+            "detail": "settled",
+            "activity": "unknown"
+          },
+          "outcome": "succeeded",
+          "liveness": {
+            "verdict": "unverifiable",
+            "reason": "missing_status"
+          },
+          "evidence": {
+            "durable": true,
+            "liveStatus": "unavailable",
+            "lastObservedAt": null
+          },
+          "resource": {
+            "state": "absent",
+            "reason": "not_materialized"
+          },
+          "nextAction": {
+            "kind": "none",
+            "argv": []
+          },
+          "attention": {
+            "categories": [
+              "unverifiable",
+              "root_completion"
+            ],
+            "requiresAction": true
+          }
+        }
+      },
+      {
+        "dispatchId": "ctx_4a9e841da6bc",
+        "taskId": "task_d90af2ef8229",
+        "runId": "run_e6054e76e9fc",
+        "workerState": "succeeded",
+        "dispatchStatus": "completed",
+        "agentTerminalHandle": "term_879551c2-0bab-4fca-98d2-c1e2da2044f6",
+        "terminalState": "released",
+        "resource": {
+          "id": "wtr_ecc43e3d65a6",
+          "ownershipState": "released",
+          "releaseState": "released",
+          "retainedReason": null,
+          "terminalHandle": "term_879551c2-0bab-4fca-98d2-c1e2da2044f6",
+          "worktreeId": "314e7b89-8f19-4535-9443-22b342aedff7::/home/developer/projects/aurora/.git/aurora-lanes/product-native-service-20261009T131300Z",
+          "endpointId": "f69558b6-f0b0-4431-ab90-99156cddcf39",
+          "endpointIncarnation": "ssh:ssh-oci-coding-worker@@pty2:47ec4130-fe3d-49e5-91b0-384bab6e8b15:26:906a511d-00bd-4f94-86aa-f46f1bb13db6",
+          "originDispatchId": "ctx_4a9e841da6bc",
+          "ownerDispatchId": "ctx_4a9e841da6bc",
+          "releaseRequestedAt": "2026-10-10 05:02:44",
+          "releaseCompletedAt": "2026-10-10 05:03:03",
+          "releaseError": null,
+          "recoveryAttemptCount": 0,
+          "lastRecoveryAt": null,
+          "archive": {
+            "source": "transcript",
+            "status": "captured"
+          }
+        },
+        "projection": {
+          "id": "ctx_4a9e841da6bc",
+          "dispatchId": "ctx_4a9e841da6bc",
+          "taskId": "task_d90af2ef8229",
+          "runId": "run_e6054e76e9fc",
+          "role": "worker",
+          "parent": null,
+          "provider": null,
+          "host": {
+            "kind": "remote",
+            "id": "ssh-oci-coding-worker"
+          },
+          "workspace": {
+            "id": "314e7b89-8f19-4535-9443-22b342aedff7::/home/developer/projects/aurora/.git/aurora-lanes/product-native-service-20261009T131300Z",
+            "kind": "folder_or_worktree"
+          },
+          "stage": {
+            "worker": "succeeded",
+            "dispatch": "completed",
+            "detail": "settled",
+            "activity": "unknown"
+          },
+          "outcome": "succeeded",
+          "liveness": {
+            "verdict": "exited",
+            "source": "resource_release"
+          },
+          "evidence": {
+            "durable": true,
+            "liveStatus": "unavailable",
+            "lastObservedAt": null
+          },
+          "resource": {
+            "state": "released"
+          },
+          "nextAction": {
+            "kind": "none",
+            "argv": []
+          },
+          "attention": {
+            "categories": [
+              "root_completion"
+            ],
+            "requiresAction": false
+          }
+        }
+      },
+      {
+        "dispatchId": "ctx_3b4778e8ea52",
+        "taskId": "task_d90af2ef8229",
+        "runId": "run_e6054e76e9fc",
+        "workerState": "failed",
+        "dispatchStatus": "failed",
+        "agentTerminalHandle": "term_b88bc616-f3a7-451c-af00-36fd40dce86d",
+        "terminalState": "released",
+        "resource": {
+          "id": "wtr_15e5b4da3266",
+          "ownershipState": "released",
+          "releaseState": "released",
+          "retainedReason": null,
+          "terminalHandle": "term_b88bc616-f3a7-451c-af00-36fd40dce86d",
+          "worktreeId": "314e7b89-8f19-4535-9443-22b342aedff7::/home/developer/projects/aurora/.git/aurora-lanes/product-native-service-20261009T131300Z",
+          "endpointId": "f69558b6-f0b0-4431-ab90-99156cddcf39",
+          "endpointIncarnation": "ssh:ssh-oci-coding-worker@@pty2:47ec4130-fe3d-49e5-91b0-384bab6e8b15:25:c621b9c2-2e22-4ae8-81f6-43b7cd42750d",
+          "originDispatchId": "ctx_3b4778e8ea52",
+          "ownerDispatchId": "ctx_3b4778e8ea52",
+          "releaseRequestedAt": "2026-10-10 04:58:00",
+          "releaseCompletedAt": "2026-10-10 04:58:01",
+          "releaseError": null,
+          "recoveryAttemptCount": 0,
+          "lastRecoveryAt": null,
+          "archive": {
+            "source": "terminal",
+            "status": "captured"
+          }
+        },
+        "projection": {
+          "id": "ctx_3b4778e8ea52",
+          "dispatchId": "ctx_3b4778e8ea52",
+          "taskId": "task_d90af2ef8229",
+          "runId": "run_e6054e76e9fc",
+          "role": "worker",
+          "parent": null,
+          "provider": null,
+          "host": {
+            "kind": "remote",
+            "id": "ssh-oci-coding-worker"
+          },
+          "workspace": {
+            "id": "314e7b89-8f19-4535-9443-22b342aedff7::/home/developer/projects/aurora/.git/aurora-lanes/product-native-service-20261009T131300Z",
+            "kind": "folder_or_worktree"
+          },
+          "stage": {
+            "worker": "failed",
+            "dispatch": "failed",
+            "detail": "agent_readiness",
+            "activity": "unknown"
+          },
+          "outcome": "failed",
+          "liveness": {
+            "verdict": "exited",
+            "source": "resource_release"
+          },
+          "evidence": {
+            "durable": true,
+            "liveStatus": "unavailable",
+            "lastObservedAt": null
+          },
+          "resource": {
+            "state": "released"
+          },
+          "nextAction": {
+            "kind": "none",
+            "argv": []
+          },
+          "attention": {
+            "categories": [
+              "failure"
+            ],
+            "requiresAction": true
+          }
+        }
+      },
+      {
+        "dispatchId": "ctx_d8830b63c4fc",
+        "taskId": "task_3d9ac631ac01",
+        "runId": "run_e6054e76e9fc",
+        "workerState": "succeeded",
+        "dispatchStatus": "completed",
+        "agentTerminalHandle": "term_99320a9d-1dee-4dd8-a434-b60a2b9a8b15",
+        "terminalState": "released",
+        "resource": {
+          "id": "wtr_10f5fe1e0513",
+          "ownershipState": "released",
+          "releaseState": "released",
+          "retainedReason": null,
+          "terminalHandle": "term_99320a9d-1dee-4dd8-a434-b60a2b9a8b15",
+          "worktreeId": "314e7b89-8f19-4535-9443-22b342aedff7::/home/developer/projects/aurora/.git/aurora-lanes/product-native-handler-20261009T131300Z",
+          "endpointId": "f69558b6-f0b0-4431-ab90-99156cddcf39",
+          "endpointIncarnation": "ssh:ssh-oci-coding-worker@@pty2:47ec4130-fe3d-49e5-91b0-384bab6e8b15:24:db1e6d08-cf4b-4ad4-8cc2-99efe16ec59e",
+          "originDispatchId": "ctx_d8830b63c4fc",
+          "ownerDispatchId": "ctx_d8830b63c4fc",
+          "releaseRequestedAt": "2026-10-10 04:54:35",
+          "releaseCompletedAt": "2026-10-10 04:54:43",
+          "releaseError": null,
+          "recoveryAttemptCount": 0,
+          "lastRecoveryAt": null,
+          "archive": {
+            "source": "transcript",
+            "status": "captured"
+          }
+        },
+        "projection": {
+          "id": "ctx_d8830b63c4fc",
+          "dispatchId": "ctx_d8830b63c4fc",
+          "taskId": "task_3d9ac631ac01",
+          "runId": "run_e6054e76e9fc",
+          "role": "worker",
+          "parent": null,
+          "provider": null,
+          "host": {
+            "kind": "remote",
+            "id": "ssh-oci-coding-worker"
+          },
+          "workspace": {
+            "id": "314e7b89-8f19-4535-9443-22b342aedff7::/home/developer/projects/aurora/.git/aurora-lanes/product-native-handler-20261009T131300Z",
+            "kind": "folder_or_worktree"
+          },
+          "stage": {
+            "worker": "succeeded",
+            "dispatch": "completed",
+            "detail": "settled",
+            "activity": "unknown"
+          },
+          "outcome": "succeeded",
+          "liveness": {
+            "verdict": "exited",
+            "source": "resource_release"
+          },
+          "evidence": {
+            "durable": true,
+            "liveStatus": "unavailable",
+            "lastObservedAt": null
+          },
+          "resource": {
+            "state": "released"
+          },
+          "nextAction": {
+            "kind": "none",
+            "argv": []
+          },
+          "attention": {
+            "categories": [
+              "root_completion"
+            ],
+            "requiresAction": false
+          }
+        }
+      },
+      {
+        "dispatchId": "ctx_bc0c7a84aa72",
+        "taskId": "task_3d9ac631ac01",
+        "runId": "run_e6054e76e9fc",
+        "workerState": "failed",
+        "dispatchStatus": "failed",
+        "agentTerminalHandle": "term_79be10a4-c95c-4621-9554-7b9b081c9906",
+        "terminalState": "released",
+        "resource": {
+          "id": "wtr_9779b5ef17d3",
+          "ownershipState": "released",
+          "releaseState": "released",
+          "retainedReason": null,
+          "terminalHandle": "term_79be10a4-c95c-4621-9554-7b9b081c9906",
+          "worktreeId": "314e7b89-8f19-4535-9443-22b342aedff7::/home/developer/projects/aurora/.git/aurora-lanes/product-native-handler-20261009T131300Z",
+          "endpointId": "f69558b6-f0b0-4431-ab90-99156cddcf39",
+          "endpointIncarnation": "ssh:ssh-oci-coding-worker@@pty2:47ec4130-fe3d-49e5-91b0-384bab6e8b15:23:722e51e1-3522-4c1e-ac44-7f5d3e842f76",
+          "originDispatchId": "ctx_bc0c7a84aa72",
+          "ownerDispatchId": "ctx_bc0c7a84aa72",
+          "releaseRequestedAt": "2026-10-10 04:50:50",
+          "releaseCompletedAt": "2026-10-10 04:50:51",
+          "releaseError": null,
+          "recoveryAttemptCount": 0,
+          "lastRecoveryAt": null,
+          "archive": {
+            "source": "terminal",
+            "status": "captured"
+          }
+        },
+        "projection": {
+          "id": "ctx_bc0c7a84aa72",
+          "dispatchId": "ctx_bc0c7a84aa72",
+          "taskId": "task_3d9ac631ac01",
+          "runId": "run_e6054e76e9fc",
+          "role": "worker",
+          "parent": null,
+          "provider": null,
+          "host": {
+            "kind": "remote",
+            "id": "ssh-oci-coding-worker"
+          },
+          "workspace": {
+            "id": "314e7b89-8f19-4535-9443-22b342aedff7::/home/developer/projects/aurora/.git/aurora-lanes/product-native-handler-20261009T131300Z",
+            "kind": "folder_or_worktree"
+          },
+          "stage": {
+            "worker": "failed",
+            "dispatch": "failed",
+            "detail": "agent_readiness",
+            "activity": "unknown"
+          },
+          "outcome": "failed",
+          "liveness": {
+            "verdict": "exited",
+            "source": "resource_release"
+          },
+          "evidence": {
+            "durable": true,
+            "liveStatus": "unavailable",
+            "lastObservedAt": null
+          },
+          "resource": {
+            "state": "released"
+          },
+          "nextAction": {
+            "kind": "none",
+            "argv": []
+          },
+          "attention": {
+            "categories": [
+              "failure"
+            ],
+            "requiresAction": true
+          }
+        }
+      },
+      {
+        "dispatchId": "ctx_06633bd0535e",
+        "taskId": "task_0188fcefbe9d",
+        "runId": "run_e6054e76e9fc",
+        "workerState": "succeeded",
+        "dispatchStatus": "completed",
+        "agentTerminalHandle": "term_22b7bc52-9691-4f21-945a-694bd41fc289",
+        "terminalState": "released",
+        "resource": {
+          "id": "wtr_11c34c97686b",
+          "ownershipState": "released",
+          "releaseState": "released",
+          "retainedReason": null,
+          "terminalHandle": "term_22b7bc52-9691-4f21-945a-694bd41fc289",
+          "worktreeId": "314e7b89-8f19-4535-9443-22b342aedff7::/home/developer/projects/aurora/.git/aurora-lanes/lint",
+          "endpointId": "f69558b6-f0b0-4431-ab90-99156cddcf39",
+          "endpointIncarnation": "ssh:ssh-oci-coding-worker@@pty2:47ec4130-fe3d-49e5-91b0-384bab6e8b15:22:2f4351c5-7b39-4876-9f89-a979579b800a",
+          "originDispatchId": "ctx_16f34cc9f93d",
+          "ownerDispatchId": "ctx_06633bd0535e",
+          "releaseRequestedAt": "2026-10-10 04:47:56",
+          "releaseCompletedAt": "2026-10-10 04:48:08",
+          "releaseError": null,
+          "recoveryAttemptCount": 0,
+          "lastRecoveryAt": null,
+          "archive": {
+            "source": "transcript",
+            "status": "captured"
+          }
+        },
+        "projection": {
+          "id": "ctx_06633bd0535e",
+          "dispatchId": "ctx_06633bd0535e",
+          "taskId": "task_0188fcefbe9d",
+          "runId": "run_e6054e76e9fc",
+          "role": "worker",
+          "parent": null,
+          "provider": null,
+          "host": {
+            "kind": "remote",
+            "id": "ssh-oci-coding-worker"
+          },
+          "workspace": {
+            "id": "314e7b89-8f19-4535-9443-22b342aedff7::/home/developer/projects/aurora/.git/aurora-lanes/lint",
+            "kind": "folder_or_worktree"
+          },
+          "stage": {
+            "worker": "succeeded",
+            "dispatch": "completed",
+            "detail": "settled",
+            "activity": "unknown"
+          },
+          "outcome": "succeeded",
+          "liveness": {
+            "verdict": "exited",
+            "source": "resource_release"
+          },
+          "evidence": {
+            "durable": true,
+            "liveStatus": "unavailable",
+            "lastObservedAt": null
+          },
+          "resource": {
+            "state": "released"
+          },
+          "nextAction": {
+            "kind": "none",
+            "argv": []
+          },
+          "attention": {
+            "categories": [
+              "root_completion"
+            ],
+            "requiresAction": false
+          }
+        }
+      },
+      {
+        "dispatchId": "ctx_08dde97f59ba",
+        "taskId": "task_b0122388f365",
+        "runId": "run_e6054e76e9fc",
+        "workerState": "succeeded",
+        "dispatchStatus": "completed",
+        "agentTerminalHandle": "term_22b7bc52-9691-4f21-945a-694bd41fc289",
+        "terminalState": "retained",
+        "resource": null,
+        "projection": {
+          "id": "ctx_08dde97f59ba",
+          "dispatchId": "ctx_08dde97f59ba",
+          "taskId": "task_b0122388f365",
+          "runId": "run_e6054e76e9fc",
+          "role": "worker",
+          "parent": null,
+          "provider": null,
+          "host": {
+            "kind": "local",
+            "id": "local"
+          },
+          "workspace": {
+            "id": "314e7b89-8f19-4535-9443-22b342aedff7::/home/developer/projects/aurora/.git/aurora-lanes/lint",
+            "kind": "folder_or_worktree"
+          },
+          "stage": {
+            "worker": "succeeded",
+            "dispatch": "completed",
+            "detail": "settled",
+            "activity": "unknown"
+          },
+          "outcome": "succeeded",
+          "liveness": {
+            "verdict": "unverifiable",
+            "reason": "missing_status"
+          },
+          "evidence": {
+            "durable": true,
+            "liveStatus": "unavailable",
+            "lastObservedAt": null
+          },
+          "resource": {
+            "state": "absent",
+            "reason": "not_materialized"
+          },
+          "nextAction": {
+            "kind": "none",
+            "argv": []
+          },
+          "attention": {
+            "categories": [
+              "unverifiable",
+              "root_completion"
+            ],
+            "requiresAction": true
+          }
+        }
+      },
+      {
+        "dispatchId": "ctx_39164c6720c0",
+        "taskId": "task_5731c004dc96",
+        "runId": "run_e6054e76e9fc",
+        "workerState": "succeeded",
+        "dispatchStatus": "completed",
+        "agentTerminalHandle": "term_e0919121-93cb-4cf8-9b68-eaa3e328f988",
+        "terminalState": "released",
+        "resource": {
+          "id": "wtr_dbd19515ffb8",
+          "ownershipState": "released",
+          "releaseState": "released",
+          "retainedReason": null,
+          "terminalHandle": "term_e0919121-93cb-4cf8-9b68-eaa3e328f988",
+          "worktreeId": "314e7b89-8f19-4535-9443-22b342aedff7::/home/developer/projects/aurora/.git/aurora-lanes/product-native-handler-20261009T131300Z",
+          "endpointId": "f69558b6-f0b0-4431-ab90-99156cddcf39",
+          "endpointIncarnation": "ssh:ssh-oci-coding-worker@@pty2:47ec4130-fe3d-49e5-91b0-384bab6e8b15:21:99925a8d-2a1a-49a0-a6f8-8949dacc8bda",
+          "originDispatchId": "ctx_99f4285129d8",
+          "ownerDispatchId": "ctx_39164c6720c0",
+          "releaseRequestedAt": "2026-10-10 04:32:11",
+          "releaseCompletedAt": "2026-10-10 04:32:17",
+          "releaseError": null,
+          "recoveryAttemptCount": 0,
+          "lastRecoveryAt": null,
+          "archive": {
+            "source": "transcript",
+            "status": "captured"
+          }
+        },
+        "projection": {
+          "id": "ctx_39164c6720c0",
+          "dispatchId": "ctx_39164c6720c0",
+          "taskId": "task_5731c004dc96",
+          "runId": "run_e6054e76e9fc",
+          "role": "worker",
+          "parent": null,
+          "provider": null,
+          "host": {
+            "kind": "remote",
+            "id": "ssh-oci-coding-worker"
+          },
+          "workspace": {
+            "id": "314e7b89-8f19-4535-9443-22b342aedff7::/home/developer/projects/aurora/.git/aurora-lanes/product-native-handler-20261009T131300Z",
+            "kind": "folder_or_worktree"
+          },
+          "stage": {
+            "worker": "succeeded",
+            "dispatch": "completed",
+            "detail": "settled",
+            "activity": "unknown"
+          },
+          "outcome": "succeeded",
+          "liveness": {
+            "verdict": "exited",
+            "source": "resource_release"
+          },
+          "evidence": {
+            "durable": true,
+            "liveStatus": "unavailable",
+            "lastObservedAt": null
+          },
+          "resource": {
+            "state": "released"
+          },
+          "nextAction": {
+            "kind": "none",
+            "argv": []
+          },
+          "attention": {
+            "categories": [
+              "root_completion"
+            ],
+            "requiresAction": false
+          }
+        }
+      },
+      {
+        "dispatchId": "ctx_ae5008655499",
+        "taskId": "task_14015f9c24c6",
+        "runId": "run_e6054e76e9fc",
+        "workerState": "succeeded",
+        "dispatchStatus": "completed",
+        "agentTerminalHandle": "term_d07c8a5c-7041-4b11-9d06-1c92d0cafe47",
+        "terminalState": "released",
+        "resource": {
+          "id": "wtr_4132957ed903",
+          "ownershipState": "released",
+          "releaseState": "released",
+          "retainedReason": null,
+          "terminalHandle": "term_d07c8a5c-7041-4b11-9d06-1c92d0cafe47",
+          "worktreeId": "314e7b89-8f19-4535-9443-22b342aedff7::/home/developer/projects/aurora/.git/aurora-lanes/product-native-service-20261009T131300Z",
+          "endpointId": "f69558b6-f0b0-4431-ab90-99156cddcf39",
+          "endpointIncarnation": "ssh:ssh-oci-coding-worker@@pty2:47ec4130-fe3d-49e5-91b0-384bab6e8b15:20:09baaee8-573a-47f3-91cf-88c1b0c149e4",
+          "originDispatchId": "ctx_2a55baa27f8c",
+          "ownerDispatchId": "ctx_ae5008655499",
+          "releaseRequestedAt": "2026-10-10 04:32:19",
+          "releaseCompletedAt": "2026-10-10 04:32:20",
+          "releaseError": null,
+          "recoveryAttemptCount": 0,
+          "lastRecoveryAt": null,
+          "archive": {
+            "source": "transcript",
+            "status": "captured"
+          }
+        },
+        "projection": {
+          "id": "ctx_ae5008655499",
+          "dispatchId": "ctx_ae5008655499",
+          "taskId": "task_14015f9c24c6",
+          "runId": "run_e6054e76e9fc",
+          "role": "worker",
+          "parent": null,
+          "provider": null,
+          "host": {
+            "kind": "remote",
+            "id": "ssh-oci-coding-worker"
+          },
+          "workspace": {
+            "id": "314e7b89-8f19-4535-9443-22b342aedff7::/home/developer/projects/aurora/.git/aurora-lanes/product-native-service-20261009T131300Z",
+            "kind": "folder_or_worktree"
+          },
+          "stage": {
+            "worker": "succeeded",
+            "dispatch": "completed",
+            "detail": "settled",
+            "activity": "unknown"
+          },
+          "outcome": "succeeded",
+          "liveness": {
+            "verdict": "exited",
+            "source": "resource_release"
+          },
+          "evidence": {
+            "durable": true,
+            "liveStatus": "unavailable",
+            "lastObservedAt": null
+          },
+          "resource": {
+            "state": "released"
+          },
+          "nextAction": {
+            "kind": "none",
+            "argv": []
+          },
+          "attention": {
+            "categories": [
+              "root_completion"
+            ],
+            "requiresAction": false
+          }
+        }
+      },
+      {
+        "dispatchId": "ctx_f04283cf05ee",
+        "taskId": "task_b01053f95910",
+        "runId": "run_e6054e76e9fc",
+        "workerState": "succeeded",
+        "dispatchStatus": "completed",
+        "agentTerminalHandle": "term_e0919121-93cb-4cf8-9b68-eaa3e328f988",
+        "terminalState": "retained",
+        "resource": null,
+        "projection": {
+          "id": "ctx_f04283cf05ee",
+          "dispatchId": "ctx_f04283cf05ee",
+          "taskId": "task_b01053f95910",
+          "runId": "run_e6054e76e9fc",
+          "role": "worker",
+          "parent": null,
+          "provider": null,
+          "host": {
+            "kind": "local",
+            "id": "local"
+          },
+          "workspace": {
+            "id": "314e7b89-8f19-4535-9443-22b342aedff7::/home/developer/projects/aurora/.git/aurora-lanes/product-native-handler-20261009T131300Z",
+            "kind": "folder_or_worktree"
+          },
+          "stage": {
+            "worker": "succeeded",
+            "dispatch": "completed",
+            "detail": "settled",
+            "activity": "unknown"
+          },
+          "outcome": "succeeded",
+          "liveness": {
+            "verdict": "unverifiable",
+            "reason": "missing_status"
+          },
+          "evidence": {
+            "durable": true,
+            "liveStatus": "unavailable",
+            "lastObservedAt": null
+          },
+          "resource": {
+            "state": "absent",
+            "reason": "not_materialized"
+          },
+          "nextAction": {
+            "kind": "none",
+            "argv": []
+          },
+          "attention": {
+            "categories": [
+              "unverifiable",
+              "root_completion"
+            ],
+            "requiresAction": true
+          }
+        }
+      },
+      {
+        "dispatchId": "ctx_add7b691ab69",
+        "taskId": "task_2562072b0f12",
+        "runId": "run_e6054e76e9fc",
+        "workerState": "succeeded",
+        "dispatchStatus": "completed",
+        "agentTerminalHandle": "term_d07c8a5c-7041-4b11-9d06-1c92d0cafe47",
+        "terminalState": "retained",
+        "resource": null,
+        "projection": {
+          "id": "ctx_add7b691ab69",
+          "dispatchId": "ctx_add7b691ab69",
+          "taskId": "task_2562072b0f12",
+          "runId": "run_e6054e76e9fc",
+          "role": "worker",
+          "parent": null,
+          "provider": null,
+          "host": {
+            "kind": "local",
+            "id": "local"
+          },
+          "workspace": {
+            "id": "314e7b89-8f19-4535-9443-22b342aedff7::/home/developer/projects/aurora/.git/aurora-lanes/product-native-service-20261009T131300Z",
+            "kind": "folder_or_worktree"
+          },
+          "stage": {
+            "worker": "succeeded",
+            "dispatch": "completed",
+            "detail": "settled",
+            "activity": "unknown"
+          },
+          "outcome": "succeeded",
+          "liveness": {
+            "verdict": "unverifiable",
+            "reason": "missing_status"
+          },
+          "evidence": {
+            "durable": true,
+            "liveStatus": "unavailable",
+            "lastObservedAt": null
+          },
+          "resource": {
+            "state": "absent",
+            "reason": "not_materialized"
+          },
+          "nextAction": {
+            "kind": "none",
+            "argv": []
+          },
+          "attention": {
+            "categories": [
+              "unverifiable",
+              "root_completion"
+            ],
+            "requiresAction": true
+          }
+        }
+      },
+      {
+        "dispatchId": "ctx_86de018e2a6e",
+        "taskId": "task_b4cd3d4e19c7",
+        "runId": "run_e6054e76e9fc",
+        "workerState": "succeeded",
+        "dispatchStatus": "completed",
+        "agentTerminalHandle": "term_e0919121-93cb-4cf8-9b68-eaa3e328f988",
+        "terminalState": "retained",
+        "resource": null,
+        "projection": {
+          "id": "ctx_86de018e2a6e",
+          "dispatchId": "ctx_86de018e2a6e",
+          "taskId": "task_b4cd3d4e19c7",
+          "runId": "run_e6054e76e9fc",
+          "role": "worker",
+          "parent": null,
+          "provider": null,
+          "host": {
+            "kind": "local",
+            "id": "local"
+          },
+          "workspace": {
+            "id": "314e7b89-8f19-4535-9443-22b342aedff7::/home/developer/projects/aurora/.git/aurora-lanes/product-native-handler-20261009T131300Z",
+            "kind": "folder_or_worktree"
+          },
+          "stage": {
+            "worker": "succeeded",
+            "dispatch": "completed",
+            "detail": "settled",
+            "activity": "unknown"
+          },
+          "outcome": "succeeded",
+          "liveness": {
+            "verdict": "unverifiable",
+            "reason": "missing_status"
+          },
+          "evidence": {
+            "durable": true,
+            "liveStatus": "unavailable",
+            "lastObservedAt": null
+          },
+          "resource": {
+            "state": "absent",
+            "reason": "not_materialized"
+          },
+          "nextAction": {
+            "kind": "none",
+            "argv": []
+          },
+          "attention": {
+            "categories": [
+              "unverifiable",
+              "root_completion"
+            ],
+            "requiresAction": true
+          }
+        }
+      },
+      {
+        "dispatchId": "ctx_16f34cc9f93d",
+        "taskId": "task_10a677fca8e0",
+        "runId": "run_e6054e76e9fc",
+        "workerState": "succeeded",
+        "dispatchStatus": "completed",
+        "agentTerminalHandle": "term_22b7bc52-9691-4f21-945a-694bd41fc289",
+        "terminalState": "retained",
+        "resource": null,
+        "projection": {
+          "id": "ctx_16f34cc9f93d",
+          "dispatchId": "ctx_16f34cc9f93d",
+          "taskId": "task_10a677fca8e0",
+          "runId": "run_e6054e76e9fc",
+          "role": "worker",
+          "parent": null,
+          "provider": null,
+          "host": {
+            "kind": "local",
+            "id": "local"
+          },
+          "workspace": {
+            "id": "314e7b89-8f19-4535-9443-22b342aedff7::/home/developer/projects/aurora/.git/aurora-lanes/lint",
+            "kind": "folder_or_worktree"
+          },
+          "stage": {
+            "worker": "succeeded",
+            "dispatch": "completed",
+            "detail": "settled",
+            "activity": "unknown"
+          },
+          "outcome": "succeeded",
+          "liveness": {
+            "verdict": "unverifiable",
+            "reason": "missing_status"
+          },
+          "evidence": {
+            "durable": true,
+            "liveStatus": "unavailable",
+            "lastObservedAt": null
+          },
+          "resource": {
+            "state": "absent",
+            "reason": "not_materialized"
+          },
+          "nextAction": {
+            "kind": "none",
+            "argv": []
+          },
+          "attention": {
+            "categories": [
+              "unverifiable",
+              "root_completion"
+            ],
+            "requiresAction": true
+          }
+        }
+      },
+      {
+        "dispatchId": "ctx_99f4285129d8",
+        "taskId": "task_7f8254bf3a67",
+        "runId": "run_e6054e76e9fc",
+        "workerState": "succeeded",
+        "dispatchStatus": "completed",
+        "agentTerminalHandle": "term_e0919121-93cb-4cf8-9b68-eaa3e328f988",
+        "terminalState": "retained",
+        "resource": null,
+        "projection": {
+          "id": "ctx_99f4285129d8",
+          "dispatchId": "ctx_99f4285129d8",
+          "taskId": "task_7f8254bf3a67",
+          "runId": "run_e6054e76e9fc",
+          "role": "worker",
+          "parent": null,
+          "provider": null,
+          "host": {
+            "kind": "local",
+            "id": "local"
+          },
+          "workspace": {
+            "id": "314e7b89-8f19-4535-9443-22b342aedff7::/home/developer/projects/aurora/.git/aurora-lanes/product-native-handler-20261009T131300Z",
+            "kind": "folder_or_worktree"
+          },
+          "stage": {
+            "worker": "succeeded",
+            "dispatch": "completed",
+            "detail": "settled",
+            "activity": "unknown"
+          },
+          "outcome": "succeeded",
+          "liveness": {
+            "verdict": "unverifiable",
+            "reason": "missing_status"
+          },
+          "evidence": {
+            "durable": true,
+            "liveStatus": "unavailable",
+            "lastObservedAt": null
+          },
+          "resource": {
+            "state": "absent",
+            "reason": "not_materialized"
+          },
+          "nextAction": {
+            "kind": "none",
+            "argv": []
+          },
+          "attention": {
+            "categories": [
+              "unverifiable",
+              "root_completion"
+            ],
+            "requiresAction": true
+          }
+        }
+      },
+      {
+        "dispatchId": "ctx_2a55baa27f8c",
+        "taskId": "task_4c1c30d5580f",
+        "runId": "run_e6054e76e9fc",
+        "workerState": "succeeded",
+        "dispatchStatus": "completed",
+        "agentTerminalHandle": "term_d07c8a5c-7041-4b11-9d06-1c92d0cafe47",
+        "terminalState": "retained",
+        "resource": null,
+        "projection": {
+          "id": "ctx_2a55baa27f8c",
+          "dispatchId": "ctx_2a55baa27f8c",
+          "taskId": "task_4c1c30d5580f",
+          "runId": "run_e6054e76e9fc",
+          "role": "worker",
+          "parent": null,
+          "provider": null,
+          "host": {
+            "kind": "local",
+            "id": "local"
+          },
+          "workspace": {
+            "id": "314e7b89-8f19-4535-9443-22b342aedff7::/home/developer/projects/aurora/.git/aurora-lanes/product-native-service-20261009T131300Z",
+            "kind": "folder_or_worktree"
+          },
+          "stage": {
+            "worker": "succeeded",
+            "dispatch": "completed",
+            "detail": "settled",
+            "activity": "unknown"
+          },
+          "outcome": "succeeded",
+          "liveness": {
+            "verdict": "unverifiable",
+            "reason": "missing_status"
+          },
+          "evidence": {
+            "durable": true,
+            "liveStatus": "unavailable",
+            "lastObservedAt": null
+          },
+          "resource": {
+            "state": "absent",
+            "reason": "not_materialized"
+          },
+          "nextAction": {
+            "kind": "none",
+            "argv": []
+          },
+          "attention": {
+            "categories": [
+              "unverifiable",
+              "root_completion"
+            ],
+            "requiresAction": true
+          }
+        }
+      },
+      {
+        "dispatchId": "ctx_37b4d0a3c14f",
+        "taskId": "task_d7ea336050cf",
+        "runId": "run_e6054e76e9fc",
+        "workerState": "ready",
+        "dispatchStatus": "dispatched",
+        "agentTerminalHandle": "term_2eab47ed-ab9b-4e35-bd9b-fc068c60e3fc",
+        "terminalState": "retained",
+        "resource": {
+          "id": "wtr_c4722d5dafee",
+          "ownershipState": "user_owned",
+          "releaseState": "retained",
+          "retainedReason": "user_takeover",
+          "terminalHandle": "term_2eab47ed-ab9b-4e35-bd9b-fc068c60e3fc",
+          "worktreeId": "314e7b89-8f19-4535-9443-22b342aedff7::/home/developer/projects/aurora",
+          "endpointId": "f69558b6-f0b0-4431-ab90-99156cddcf39",
+          "endpointIncarnation": "ssh:ssh-oci-coding-worker@@pty2:47ec4130-fe3d-49e5-91b0-384bab6e8b15:19:37e50d9c-6cf5-4e28-a63b-f2bc3eed5661",
+          "originDispatchId": "ctx_37b4d0a3c14f",
+          "ownerDispatchId": "ctx_37b4d0a3c14f",
+          "releaseRequestedAt": null,
+          "releaseCompletedAt": null,
+          "releaseError": null,
+          "recoveryAttemptCount": 0,
+          "lastRecoveryAt": null,
+          "archive": {
+            "source": null,
+            "status": null
+          }
+        },
+        "projection": {
+          "id": "ctx_37b4d0a3c14f",
+          "dispatchId": "ctx_37b4d0a3c14f",
+          "taskId": "task_d7ea336050cf",
+          "runId": "run_e6054e76e9fc",
+          "role": "worker",
+          "parent": null,
+          "provider": {
+            "id": "codex",
+            "model": "gpt-6.1-sol"
+          },
+          "host": {
+            "kind": "remote",
+            "id": "ssh-oci-coding-worker"
+          },
+          "workspace": {
+            "id": "314e7b89-8f19-4535-9443-22b342aedff7::/home/developer/projects/aurora",
+            "kind": "folder_or_worktree"
+          },
+          "stage": {
+            "worker": "ready",
+            "dispatch": "dispatched",
+            "detail": "input_accepted",
+            "activity": "working"
+          },
+          "outcome": "in_progress",
+          "liveness": {
+            "verdict": "live",
+            "observedAt": 1792012391673,
+            "source": "agent_status"
+          },
+          "evidence": {
+            "durable": true,
+            "liveStatus": "fresh",
+            "lastObservedAt": 1792012391673
+          },
+          "resource": {
+            "state": "user_owned"
+          },
+          "nextAction": {
+            "kind": "inspect",
+            "argv": [
+              "orchestration",
+              "worker-show",
+              "--dispatch",
+              "ctx_37b4d0a3c14f"
+            ]
+          },
+          "attention": {
+            "categories": [
+              "input"
+            ],
+            "requiresAction": true
+          }
+        }
+      },
+      {
+        "dispatchId": "ctx_5038dd9c932e",
+        "taskId": "task_7f8254bf3a67",
+        "runId": "run_e6054e76e9fc",
+        "workerState": "failed",
+        "dispatchStatus": "failed",
+        "agentTerminalHandle": "term_a5943e6f-ebd2-406f-8ccb-8a5d48c4e48b",
+        "terminalState": "released",
+        "resource": {
+          "id": "wtr_209e62632338",
+          "ownershipState": "released",
+          "releaseState": "released",
+          "retainedReason": null,
+          "terminalHandle": "term_a5943e6f-ebd2-406f-8ccb-8a5d48c4e48b",
+          "worktreeId": "314e7b89-8f19-4535-9443-22b342aedff7::/home/developer/projects/aurora/.git/aurora-lanes/product-native-handler-20261009T131300Z",
+          "endpointId": "f69558b6-f0b0-4431-ab90-99156cddcf39",
+          "endpointIncarnation": "ssh:ssh-oci-coding-worker@@pty2:47ec4130-fe3d-49e5-91b0-384bab6e8b15:18:bf891f65-10fd-4b1d-bf7e-0de1329ddca0",
+          "originDispatchId": "ctx_5038dd9c932e",
+          "ownerDispatchId": "ctx_5038dd9c932e",
+          "releaseRequestedAt": "2026-10-10 04:08:14",
+          "releaseCompletedAt": "2026-10-10 04:08:14",
+          "releaseError": null,
+          "recoveryAttemptCount": 0,
+          "lastRecoveryAt": null,
+          "archive": {
+            "source": "terminal",
+            "status": "captured"
+          }
+        },
+        "projection": {
+          "id": "ctx_5038dd9c932e",
+          "dispatchId": "ctx_5038dd9c932e",
+          "taskId": "task_7f8254bf3a67",
+          "runId": "run_e6054e76e9fc",
+          "role": "worker",
+          "parent": null,
+          "provider": null,
+          "host": {
+            "kind": "remote",
+            "id": "ssh-oci-coding-worker"
+          },
+          "workspace": {
+            "id": "314e7b89-8f19-4535-9443-22b342aedff7::/home/developer/projects/aurora/.git/aurora-lanes/product-native-handler-20261009T131300Z",
+            "kind": "folder_or_worktree"
+          },
+          "stage": {
+            "worker": "failed",
+            "dispatch": "failed",
+            "detail": "agent_readiness",
+            "activity": "unknown"
+          },
+          "outcome": "failed",
+          "liveness": {
+            "verdict": "exited",
+            "source": "resource_release"
+          },
+          "evidence": {
+            "durable": true,
+            "liveStatus": "unavailable",
+            "lastObservedAt": null
+          },
+          "resource": {
+            "state": "released"
+          },
+          "nextAction": {
+            "kind": "none",
+            "argv": []
+          },
+          "attention": {
+            "categories": [
+              "failure"
+            ],
+            "requiresAction": true
+          }
+        }
+      },
+      {
+        "dispatchId": "ctx_070b1c8b7ea4",
+        "taskId": "task_4c1c30d5580f",
+        "runId": "run_e6054e76e9fc",
+        "workerState": "failed",
+        "dispatchStatus": "failed",
+        "agentTerminalHandle": "term_e4bf1031-6bd8-4f8d-ae81-dd992697119e",
+        "terminalState": "released",
+        "resource": {
+          "id": "wtr_ba508cb30a3b",
+          "ownershipState": "released",
+          "releaseState": "released",
+          "retainedReason": null,
+          "terminalHandle": "term_e4bf1031-6bd8-4f8d-ae81-dd992697119e",
+          "worktreeId": "314e7b89-8f19-4535-9443-22b342aedff7::/home/developer/projects/aurora/.git/aurora-lanes/product-native-service-20261009T131300Z",
+          "endpointId": "f69558b6-f0b0-4431-ab90-99156cddcf39",
+          "endpointIncarnation": "ssh:ssh-oci-coding-worker@@pty2:47ec4130-fe3d-49e5-91b0-384bab6e8b15:17:5d1603c8-7f1a-47b5-8053-51e5dca95c13",
+          "originDispatchId": "ctx_070b1c8b7ea4",
+          "ownerDispatchId": "ctx_070b1c8b7ea4",
+          "releaseRequestedAt": "2026-10-10 04:08:01",
+          "releaseCompletedAt": "2026-10-10 04:08:02",
+          "releaseError": null,
+          "recoveryAttemptCount": 0,
+          "lastRecoveryAt": null,
+          "archive": {
+            "source": "terminal",
+            "status": "captured"
+          }
+        },
+        "projection": {
+          "id": "ctx_070b1c8b7ea4",
+          "dispatchId": "ctx_070b1c8b7ea4",
+          "taskId": "task_4c1c30d5580f",
+          "runId": "run_e6054e76e9fc",
+          "role": "worker",
+          "parent": null,
+          "provider": null,
+          "host": {
+            "kind": "remote",
+            "id": "ssh-oci-coding-worker"
+          },
+          "workspace": {
+            "id": "314e7b89-8f19-4535-9443-22b342aedff7::/home/developer/projects/aurora/.git/aurora-lanes/product-native-service-20261009T131300Z",
+            "kind": "folder_or_worktree"
+          },
+          "stage": {
+            "worker": "failed",
+            "dispatch": "failed",
+            "detail": "agent_readiness",
+            "activity": "unknown"
+          },
+          "outcome": "failed",
+          "liveness": {
+            "verdict": "exited",
+            "source": "resource_release"
+          },
+          "evidence": {
+            "durable": true,
+            "liveStatus": "unavailable",
+            "lastObservedAt": null
+          },
+          "resource": {
+            "state": "released"
+          },
+          "nextAction": {
+            "kind": "none",
+            "argv": []
+          },
+          "attention": {
+            "categories": [
+              "failure"
+            ],
+            "requiresAction": true
+          }
+        }
+      },
+      {
+        "dispatchId": "ctx_9a2b5bce7eea",
+        "taskId": "task_d7ea336050cf",
+        "runId": "run_e6054e76e9fc",
+        "workerState": "failed",
+        "dispatchStatus": "failed",
+        "agentTerminalHandle": "term_4f0947f9-9f4b-47f1-872f-fd0495d51783",
+        "terminalState": "released",
+        "resource": {
+          "id": "wtr_6850806ee9b7",
+          "ownershipState": "released",
+          "releaseState": "released",
+          "retainedReason": null,
+          "terminalHandle": "term_4f0947f9-9f4b-47f1-872f-fd0495d51783",
+          "worktreeId": "314e7b89-8f19-4535-9443-22b342aedff7::/home/developer/projects/aurora",
+          "endpointId": "f69558b6-f0b0-4431-ab90-99156cddcf39",
+          "endpointIncarnation": "ssh:ssh-oci-coding-worker@@pty2:47ec4130-fe3d-49e5-91b0-384bab6e8b15:16:3e12425c-0601-4e73-abb5-b5c2f8678a85",
+          "originDispatchId": "ctx_9a2b5bce7eea",
+          "ownerDispatchId": "ctx_9a2b5bce7eea",
+          "releaseRequestedAt": "2026-10-10 04:07:49",
+          "releaseCompletedAt": "2026-10-10 04:07:50",
+          "releaseError": null,
+          "recoveryAttemptCount": 0,
+          "lastRecoveryAt": null,
+          "archive": {
+            "source": "terminal",
+            "status": "captured"
+          }
+        },
+        "projection": {
+          "id": "ctx_9a2b5bce7eea",
+          "dispatchId": "ctx_9a2b5bce7eea",
+          "taskId": "task_d7ea336050cf",
+          "runId": "run_e6054e76e9fc",
+          "role": "worker",
+          "parent": null,
+          "provider": null,
+          "host": {
+            "kind": "remote",
+            "id": "ssh-oci-coding-worker"
+          },
+          "workspace": {
+            "id": "314e7b89-8f19-4535-9443-22b342aedff7::/home/developer/projects/aurora",
+            "kind": "folder_or_worktree"
+          },
+          "stage": {
+            "worker": "failed",
+            "dispatch": "failed",
+            "detail": "agent_readiness",
+            "activity": "unknown"
+          },
+          "outcome": "failed",
+          "liveness": {
+            "verdict": "exited",
+            "source": "resource_release"
+          },
+          "evidence": {
+            "durable": true,
+            "liveStatus": "unavailable",
+            "lastObservedAt": null
+          },
+          "resource": {
+            "state": "released"
+          },
+          "nextAction": {
+            "kind": "none",
+            "argv": []
+          },
+          "attention": {
+            "categories": [
+              "failure"
+            ],
+            "requiresAction": true
+          }
+        }
+      },
+      {
+        "dispatchId": "ctx_d0d23422b291",
+        "taskId": "task_d7ea336050cf",
+        "runId": "run_e6054e76e9fc",
+        "workerState": "failed",
+        "dispatchStatus": "failed",
+        "agentTerminalHandle": "term_276a3e36-1d15-44bb-beb7-f714d30e1796",
+        "terminalState": "released",
+        "resource": {
+          "id": "wtr_6bcc3a8b23c8",
+          "ownershipState": "released",
+          "releaseState": "released",
+          "retainedReason": null,
+          "terminalHandle": "term_276a3e36-1d15-44bb-beb7-f714d30e1796",
+          "worktreeId": "314e7b89-8f19-4535-9443-22b342aedff7::/home/developer/projects/aurora",
+          "endpointId": "f69558b6-f0b0-4431-ab90-99156cddcf39",
+          "endpointIncarnation": "ssh:ssh-oci-coding-worker@@pty2:47ec4130-fe3d-49e5-91b0-384bab6e8b15:15:8db4f901-19ea-487f-b48b-81a444c82801",
+          "originDispatchId": "ctx_d0d23422b291",
+          "ownerDispatchId": "ctx_d0d23422b291",
+          "releaseRequestedAt": "2026-10-10 04:06:19",
+          "releaseCompletedAt": "2026-10-10 04:06:21",
+          "releaseError": null,
+          "recoveryAttemptCount": 0,
+          "lastRecoveryAt": null,
+          "archive": {
+            "source": "terminal",
+            "status": "captured"
+          }
+        },
+        "projection": {
+          "id": "ctx_d0d23422b291",
+          "dispatchId": "ctx_d0d23422b291",
+          "taskId": "task_d7ea336050cf",
+          "runId": "run_e6054e76e9fc",
+          "role": "worker",
+          "parent": null,
+          "provider": null,
+          "host": {
+            "kind": "remote",
+            "id": "ssh-oci-coding-worker"
+          },
+          "workspace": {
+            "id": "314e7b89-8f19-4535-9443-22b342aedff7::/home/developer/projects/aurora",
+            "kind": "folder_or_worktree"
+          },
+          "stage": {
+            "worker": "failed",
+            "dispatch": "failed",
+            "detail": "agent_readiness",
+            "activity": "unknown"
+          },
+          "outcome": "failed",
+          "liveness": {
+            "verdict": "exited",
+            "source": "resource_release"
+          },
+          "evidence": {
+            "durable": true,
+            "liveStatus": "unavailable",
+            "lastObservedAt": null
+          },
+          "resource": {
+            "state": "released"
+          },
+          "nextAction": {
+            "kind": "none",
+            "argv": []
+          },
+          "attention": {
+            "categories": [
+              "failure"
+            ],
+            "requiresAction": true
+          }
+        }
+      }
+    ],
+    "counts": {
+      "retained": 76,
+      "released": 53
+    },
+    "page": {
+      "limit": 100,
+      "total": 129,
+      "hasMore": false,
+      "nextCursor": null
+    },
+    "scope": {
+      "run": "run_e6054e76e9fc",
+      "source": "flag"
+    }
+  },
+  "_meta": {
+    "runtimeId": "5168da61-e878-402a-92a3-5ea447243a89"
+  }
+}

@@ -1,0 +1,12 @@
+{
+  "controlDeadline": "2026-10-22T05:35:00Z",
+  "explicitNewline": true,
+  "host": "ssh:ssh-sem-notebook-personal",
+  "incarnation": "328cd72f-c7ea-49ff-a2db-b9275b085037",
+  "remoteResult": "/home/developer/projects/aurora/thesis/phone-notebook/20261020/evidence/launch-repair-update-v146.json",
+  "rootAdmissionMessage": "owner normal single update: prior verification0installattempts; scoped existingJava17 env fixed no rebuild or securitychange",
+  "script": "scripts/launch_repair_update_v146.py",
+  "scriptSha256": "4c5c3de436c3d6bae6b343738e0218aaf29e334521e2f029f5f9a5026fdc5d72",
+  "singleSend": true,
+  "terminal": "term_a2ed5feb-7c92-48e4-bd88-d1b0e6737989"
+}

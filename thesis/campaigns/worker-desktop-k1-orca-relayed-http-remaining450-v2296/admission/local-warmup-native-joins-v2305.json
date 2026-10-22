@@ -1,0 +1,310 @@
+{
+  "sourcePrefixBytes": 234980,
+  "sourcePrefixSha256": "59d9f62561177d22030a6faf18a50441c7b1f69ccf9726c71105e18b6349f83f",
+  "actualLocalWarmupJoins": [
+    {
+      "harnessCaseId": "audio-campaign-v2296-0001",
+      "handler": "stt.model_invoke",
+      "spanId": "e3b627cbf8bc47c093cc395cf3229382",
+      "correlationId": "audio-campaign-411ac28b1d1a41cf846e4d28ef7e7d1e",
+      "events": [
+        "span_start",
+        "span_end"
+      ]
+    },
+    {
+      "harnessCaseId": "audio-campaign-v2296-0001",
+      "handler": "resolved_chat_model.astream",
+      "spanId": "755004c145664f96b6807ed5d2fb863c",
+      "correlationId": "audio-campaign-411ac28b1d1a41cf846e4d28ef7e7d1e",
+      "events": [
+        "span_start",
+        "span_end"
+      ]
+    },
+    {
+      "harnessCaseId": "audio-campaign-v2296-0002",
+      "handler": "stt.model_invoke",
+      "spanId": "586f6d911aa447c18797f32184e15b32",
+      "correlationId": "audio-campaign-05d5e14a4f3f4b2aa2a7dc55aeece399",
+      "events": [
+        "span_start",
+        "span_end"
+      ]
+    },
+    {
+      "harnessCaseId": "audio-campaign-v2296-0002",
+      "handler": "resolved_chat_model.astream",
+      "spanId": "aa37011924af446f8bdb641d4b694cdb",
+      "correlationId": "audio-campaign-05d5e14a4f3f4b2aa2a7dc55aeece399",
+      "events": [
+        "span_start",
+        "span_end"
+      ]
+    },
+    {
+      "harnessCaseId": "audio-campaign-v2296-0003",
+      "handler": "stt.model_invoke",
+      "spanId": "f73c3b13066d4f3c8457d74785792cc5",
+      "correlationId": "audio-campaign-0501f76419f340d7ac82e74082d73cfa",
+      "events": [
+        "span_start",
+        "span_end"
+      ]
+    },
+    {
+      "harnessCaseId": "audio-campaign-v2296-0003",
+      "handler": "resolved_chat_model.astream",
+      "spanId": "89aaae9ae7ec40b1b86426a18488ce2e",
+      "correlationId": "audio-campaign-0501f76419f340d7ac82e74082d73cfa",
+      "events": [
+        "span_start",
+        "span_end"
+      ]
+    },
+    {
+      "harnessCaseId": "audio-campaign-v2296-0004",
+      "handler": "stt.model_invoke",
+      "spanId": "48f6785d8a154e48964f3ea8559d542c",
+      "correlationId": "audio-campaign-cff5ab5918164c0999b9d24f38a347f7",
+      "events": [
+        "span_start",
+        "span_end"
+      ]
+    },
+    {
+      "harnessCaseId": "audio-campaign-v2296-0004",
+      "handler": "resolved_chat_model.astream",
+      "spanId": "1aec339c5246470a95c5bffcb50822f4",
+      "correlationId": "audio-campaign-cff5ab5918164c0999b9d24f38a347f7",
+      "events": [
+        "span_start",
+        "span_end"
+      ]
+    },
+    {
+      "harnessCaseId": "audio-campaign-v2296-0005",
+      "handler": "stt.model_invoke",
+      "spanId": "c3ccd16e910f41b6a58ef141d23b67b4",
+      "correlationId": "audio-campaign-bd93ccaf43894bd9834c1d11d5124c64",
+      "events": [
+        "span_start",
+        "span_end"
+      ]
+    },
+    {
+      "harnessCaseId": "audio-campaign-v2296-0005",
+      "handler": "resolved_chat_model.astream",
+      "spanId": "2014a31a3e2d44baacbc1dd5e1ed1da7",
+      "correlationId": "audio-campaign-bd93ccaf43894bd9834c1d11d5124c64",
+      "events": [
+        "span_start",
+        "span_end"
+      ]
+    },
+    {
+      "harnessCaseId": "audio-campaign-v2296-0006",
+      "handler": "stt.model_invoke",
+      "spanId": "8b20b3781f0a4eaaaa34c841bc94260f",
+      "correlationId": "audio-campaign-59a874a2674d4a96a378f7c4da8ac286",
+      "events": [
+        "span_start",
+        "span_end"
+      ]
+    },
+    {
+      "harnessCaseId": "audio-campaign-v2296-0006",
+      "handler": "resolved_chat_model.astream",
+      "spanId": "4912e4729fe74e83afc37828728b35ac",
+      "correlationId": "audio-campaign-59a874a2674d4a96a378f7c4da8ac286",
+      "events": [
+        "span_start",
+        "span_end"
+      ]
+    },
+    {
+      "harnessCaseId": "audio-campaign-v2296-0007",
+      "handler": "stt.model_invoke",
+      "spanId": "61064590306b4699bb1ec8b57c5c16d0",
+      "correlationId": "audio-campaign-dbf6bcfbd9584094a93cef150a939a26",
+      "events": [
+        "span_start",
+        "span_end"
+      ]
+    },
+    {
+      "harnessCaseId": "audio-campaign-v2296-0007",
+      "handler": "resolved_chat_model.astream",
+      "spanId": "acb2f8ede90a436892aac2ff66a629e1",
+      "correlationId": "audio-campaign-dbf6bcfbd9584094a93cef150a939a26",
+      "events": [
+        "span_start",
+        "span_end"
+      ]
+    },
+    {
+      "harnessCaseId": "audio-campaign-v2296-0008",
+      "handler": "stt.model_invoke",
+      "spanId": "8a8a3904cf344b57bfa787acc6109caa",
+      "correlationId": "audio-campaign-c90878058f5540b8942dbde9a71dfef6",
+      "events": [
+        "span_start",
+        "span_end"
+      ]
+    },
+    {
+      "harnessCaseId": "audio-campaign-v2296-0008",
+      "handler": "resolved_chat_model.astream",
+      "spanId": "d83ae9e540d747279246baa80a7193fa",
+      "correlationId": "audio-campaign-c90878058f5540b8942dbde9a71dfef6",
+      "events": [
+        "span_start",
+        "span_end"
+      ]
+    },
+    {
+      "harnessCaseId": "audio-campaign-v2296-0009",
+      "handler": "stt.model_invoke",
+      "spanId": "3f9a4bed4a4b436dae47b4a99524cfc2",
+      "correlationId": "audio-campaign-060348ce747443cbb8b483ef0c75dfb7",
+      "events": [
+        "span_start",
+        "span_end"
+      ]
+    },
+    {
+      "harnessCaseId": "audio-campaign-v2296-0009",
+      "handler": "resolved_chat_model.astream",
+      "spanId": "5bd8ad5d637c4298ae7881b8dc6baef8",
+      "correlationId": "audio-campaign-060348ce747443cbb8b483ef0c75dfb7",
+      "events": [
+        "span_start",
+        "span_end"
+      ]
+    },
+    {
+      "harnessCaseId": "audio-campaign-v2296-0010",
+      "handler": "stt.model_invoke",
+      "spanId": "5eec1d92b36e40208a524b148ba8dcf7",
+      "correlationId": "audio-campaign-0ce8a166724e493da492ae9544b5274a",
+      "events": [
+        "span_start",
+        "span_end"
+      ]
+    },
+    {
+      "harnessCaseId": "audio-campaign-v2296-0010",
+      "handler": "resolved_chat_model.astream",
+      "spanId": "bc2f92e9528049c1a0a4b7480a6fa3ff",
+      "correlationId": "audio-campaign-0ce8a166724e493da492ae9544b5274a",
+      "events": [
+        "span_start",
+        "span_end"
+      ]
+    },
+    {
+      "harnessCaseId": "audio-campaign-v2296-0011",
+      "handler": "stt.model_invoke",
+      "spanId": "c08ec0c5acdc47cb9bb17e287bdfbd4c",
+      "correlationId": "audio-campaign-fe759dc110b840509cdbb649a814d595",
+      "events": [
+        "span_start",
+        "span_end"
+      ]
+    },
+    {
+      "harnessCaseId": "audio-campaign-v2296-0011",
+      "handler": "resolved_chat_model.astream",
+      "spanId": "3f93f9b930714c458f0399681621408c",
+      "correlationId": "audio-campaign-fe759dc110b840509cdbb649a814d595",
+      "events": [
+        "span_start",
+        "span_end"
+      ]
+    },
+    {
+      "harnessCaseId": "audio-campaign-v2296-0012",
+      "handler": "stt.model_invoke",
+      "spanId": "6adf3859f863494aa3dc8a0a4bbe2ec5",
+      "correlationId": "audio-campaign-c056b75897304d29bdfa90251eff52ca",
+      "events": [
+        "span_start",
+        "span_end"
+      ]
+    },
+    {
+      "harnessCaseId": "audio-campaign-v2296-0012",
+      "handler": "resolved_chat_model.astream",
+      "spanId": "e8523a95dbe14561b20b2dd01f746681",
+      "correlationId": "audio-campaign-c056b75897304d29bdfa90251eff52ca",
+      "events": [
+        "span_start",
+        "span_end"
+      ]
+    },
+    {
+      "harnessCaseId": "audio-campaign-v2296-0013",
+      "handler": "stt.model_invoke",
+      "spanId": "c893fe58eee34621a29dbfbbb8031bac",
+      "correlationId": "audio-campaign-a7f22f0c92dd4f888a944441a84f004e",
+      "events": [
+        "span_start",
+        "span_end"
+      ]
+    },
+    {
+      "harnessCaseId": "audio-campaign-v2296-0013",
+      "handler": "resolved_chat_model.astream",
+      "spanId": "59b2f71bd138491aa66bad746a2d003e",
+      "correlationId": "audio-campaign-a7f22f0c92dd4f888a944441a84f004e",
+      "events": [
+        "span_start",
+        "span_end"
+      ]
+    },
+    {
+      "harnessCaseId": "audio-campaign-v2296-0014",
+      "handler": "stt.model_invoke",
+      "spanId": "5a4c180f22344e70aa155231f8326689",
+      "correlationId": "audio-campaign-586c83763d914be89e85d155a86f8d98",
+      "events": [
+        "span_start",
+        "span_end"
+      ]
+    },
+    {
+      "harnessCaseId": "audio-campaign-v2296-0014",
+      "handler": "resolved_chat_model.astream",
+      "spanId": "c313741ad85a445295c87e8487e1b53e",
+      "correlationId": "audio-campaign-586c83763d914be89e85d155a86f8d98",
+      "events": [
+        "span_start",
+        "span_end"
+      ]
+    },
+    {
+      "harnessCaseId": "audio-campaign-v2296-0015",
+      "handler": "stt.model_invoke",
+      "spanId": "349c6afce5df4277b3c3a17ff7eba2e5",
+      "correlationId": "audio-campaign-0656937eef5f44c39ad1dcdf1ffebc14",
+      "events": [
+        "span_start",
+        "span_end"
+      ]
+    },
+    {
+      "harnessCaseId": "audio-campaign-v2296-0015",
+      "handler": "resolved_chat_model.astream",
+      "spanId": "265332b6032241e3ac529af81500e550",
+      "correlationId": "audio-campaign-0656937eef5f44c39ad1dcdf1ffebc14",
+      "events": [
+        "span_start",
+        "span_end"
+      ]
+    }
+  ],
+  "localNativeJoins": 30,
+  "remoteNativeJoins": 15,
+  "totalNativeJoins": 45,
+  "positiveGaps": 0
+}

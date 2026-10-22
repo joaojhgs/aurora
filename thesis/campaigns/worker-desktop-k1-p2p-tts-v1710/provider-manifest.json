@@ -1,0 +1,85 @@
+{
+  "schema": "aurora.k1.mesh_provider.v1",
+  "at": "2026-10-20T03:41:24.085968+00:00",
+  "privateRoot": "/home/developer/projects/aurora/.git/aurora-handoff-import-20261006/k1-mesh-provider-v1710",
+  "output": "/home/developer/projects/aurora/thesis/campaigns/worker-desktop-k1-p2p-tts-v1710/provider",
+  "sourceRoot": "/home/developer/projects/aurora/thesis/sources/personal-p2p-tts-wiring-v1706/source",
+  "sourceInventory": {
+    "root": "/home/developer/projects/aurora/thesis/sources/personal-p2p-tts-wiring-v1706/source",
+    "inventory_path": "/home/developer/projects/aurora/thesis/sources/personal-p2p-tts-wiring-v1706/source-inventory.json",
+    "inventory_sha256": "6fe434a7d3f07350ba7e8c9fce00414bb5cff8a1ee69b33eafbace73c5473b82"
+  },
+  "hookRoot": "/home/developer/projects/aurora/.git/aurora-handoff-import-20261006/distributed-k3-http-provider-v1680/hook",
+  "config": "/home/developer/projects/aurora/.git/aurora-handoff-import-20261006/k1-mesh-provider-v1710/config.json",
+  "configSha256": "8fb168df7a62d04c99c16a61c1fc3b5a18500ebf2e0009c0cb41c1e9069ec27c",
+  "controllerSha256": "7e924a34e2c4b2b75f0d8dab29deb81be9b5d113e42b2035a5b4df37bd2f9ed5",
+  "existingEnvFile": "/home/developer/projects/aurora/.git/aurora-handoff-import-20261006/mesh-pair-control-v1535/personal-node-v1539/.env",
+  "existingDataDir": "/home/developer/projects/aurora/.git/aurora-handoff-import-20261006/mesh-pair-control-v1535/personal-node-v1539/data",
+  "expectedStablePeerId": "aurora-276bb04e1276201922851f6a222110de",
+  "expectedRequesterPeerId": "aurora-03a910366bf721d72a9ef481d2e08fbd",
+  "lifetimeSeconds": 72840,
+  "noRequesterDeadlineSeconds": 1800,
+  "lockPaths": [
+    "/tmp/aurora-global-build.lock"
+  ],
+  "retiredPredecessorPids": [
+    2991328,
+    2991345,
+    2991329,
+    2960427,
+    3154651,
+    3154667,
+    3159861,
+    3159877
+  ],
+  "actualFiles": {
+    "model": {
+      "path": "/home/developer/projects/aurora/.git/aurora-handoff-import-20261006/piper-asset-recovery-v1109/models/en_US-ljspeech-medium.onnx",
+      "bytes": 63531379,
+      "sha256": "6f52a751e2349abe7a76735eb09dc1875298c77ea2342ffd2fef79ff81b87f22"
+    },
+    "voiceConfig": {
+      "path": "/home/developer/projects/aurora/.git/aurora-handoff-import-20261006/piper-asset-recovery-v1109/models/en_US-ljspeech-medium.onnx.json",
+      "bytes": 4972,
+      "sha256": "141d612cc0a95ed7efc1ca936b845c2364967f2e9217c5dbfcf69fc4d6c65860"
+    },
+    "piperExecutable": {
+      "path": "/home/developer/projects/aurora/.git/aurora-handoff-import-20261006/k1-provider-recovery-v1120/env/bin/piper",
+      "bytes": 389,
+      "sha256": "182cb51358f0ff104ee258f67f06c410243b81cee056552468977d6bca4cdf46"
+    }
+  },
+  "actualFileReceiptSha256": "71d85fb0e08bd918f51f7a67a97353d82665a31df56632ab96e3fcf50e0f5760",
+  "remoteMeshTtsReceiver": {
+    "config_sha256": "141d612cc0a95ed7efc1ca936b845c2364967f2e9217c5dbfcf69fc4d6c65860",
+    "hardware_fingerprint_sha256": "d5e5c8c5f35f4b5e98fce3fe328dd006aae23ebebe99e822a703b2a7cd38d957",
+    "model_sha256": "6f52a751e2349abe7a76735eb09dc1875298c77ea2342ffd2fef79ff81b87f22",
+    "provider_class": "app.services.tts.providers.piper.PiperTTSProvider",
+    "receiver_id": "personal-k1-mesh-tts-v1710",
+    "sample_rate": 22050,
+    "source_sha256": "6fe434a7d3f07350ba7e8c9fce00414bb5cff8a1ee69b33eafbace73c5473b82",
+    "use_cuda": false,
+    "peer_id_sha256": "77421aa81ce7ae2e865455348e9aa5ae17013d8f5e1f72d38d71d09f110ef868"
+  },
+  "runtimeVersions": {
+    "ctranslate2": "4.7.1",
+    "faster-whisper": "1.1.1",
+    "llama-cpp-python": "0.3.19",
+    "numpy": "2.2.6",
+    "onnxruntime": "1.20.1",
+    "piper-tts": "1.2.0"
+  },
+  "environment": {
+    "AURORA_STT_WHISPER_DOWNLOAD_ROOT": "/home/developer/projects/aurora/.git/aurora-handoff-import-20261006/k1-provider-recovery-v1120/models/whisper-base",
+    "GGML_VK_VISIBLE_DEVICES": "1",
+    "MKL_NUM_THREADS": "2",
+    "OMP_NUM_THREADS": "2",
+    "OPENBLAS_NUM_THREADS": "2"
+  },
+  "resourceSampler": "/home/developer/projects/aurora/.git/aurora-handoff-import-20261006/distributed-k3-http-provider-v1680/resource_sample.py",
+  "routeObserver": "/home/developer/projects/aurora/.git/aurora-handoff-import-20261006/mesh-pair-control-v1535/route-observer-v890.py",
+  "python": "/home/developer/projects/aurora/.git/aurora-handoff-import-20261006/k1-provider-recovery-v1120/env/bin/python",
+  "newOrcaWorker": false,
+  "pairingOrGrantMutation": false,
+  "credentialFileCopied": false
+}

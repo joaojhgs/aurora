@@ -1,0 +1,27 @@
+{
+  "at": "2026-10-21T16:20:42.646660+00:00",
+  "status": "FAILED_STARTUP_WARMUP_RETAINED_REQUESTER_EOF_VERIFIED",
+  "epoch": "V2220",
+  "targetMeasured": 900,
+  "newMeasured": 0,
+  "excludedWarmupsAttempted": 1,
+  "excludedWarmupsFailed": 1,
+  "failure": {
+    "stage": "tts",
+    "code": "remote_http_status",
+    "httpStatus": 401
+  },
+  "localSTTTranscriptCorrect": true,
+  "localLLMAnswerCorrect": true,
+  "outputAudioPresent": false,
+  "audioAbsenceExpectedForRejectedTTS": true,
+  "indexedPhysicalFiles": 39,
+  "indexedPhysicalBytes": 743156,
+  "hashMismatches": [],
+  "requesterActorsNaturallyAbsent": true,
+  "sameDesktopProviderRetained": true,
+  "replacementEpoch": "V2224",
+  "oldManifestNotModified": true,
+  "failedMeasured180NotRetried": true,
+  "noDataDeleted": true
+}

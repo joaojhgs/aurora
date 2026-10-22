@@ -1,0 +1,8 @@
+{
+  "bytes": 2291,
+  "copyOnly": true,
+  "custody": "Notebook result persisted and fsynced before relay; remote receipt in same output",
+  "localPath": "/home/developer/projects/aurora/thesis/phone-notebook/20261020/evidence/existing-adb-controller-20261021T2228/result.json",
+  "remotePath": "/home/developer/projects/aurora/thesis/phone-notebook/20261020/evidence/existing-adb-controller-20261021T2228.json",
+  "sha256": "d42768184524f0fa844a2fd2ba6cbf1bb8cf92f9e58992ea72e350d7b4d54d81"
+}

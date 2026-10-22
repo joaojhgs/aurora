@@ -1,0 +1,13 @@
+{
+  "at": "2026-10-22T12:29:40.954459+00:00",
+  "scope": "Future unlaunched P2P preparation only",
+  "reason": "Actual current stat-only scan projects remaining current data39.6MB beyond available headroom and future915pairs355.8MB; require declared whole-condition reserve, not16MiB minimum",
+  "currentFrozenSourceOrManifestChanged": false,
+  "futureFiles": {
+    "prepare_worker.py": "778be07554ad0905af9927a308deb82cafb172afa4ddbf07058ac20615e75714",
+    "provider_prepare.py": "4f64dbf955473ab3c3744c29fab58fe96784ccecb2cae42be856793b7d229227",
+    "README.md": "f2c6625fd2d544c38de514f53da70ac8329e6e5126efbd84f7b85c70c20260a9"
+  },
+  "noNewLifecycleTestsOrModelCalls": true,
+  "noCleanupPermissionInferred": true
+}

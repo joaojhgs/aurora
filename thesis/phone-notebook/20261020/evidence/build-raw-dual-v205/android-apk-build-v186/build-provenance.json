@@ -1,0 +1,134 @@
+{
+  "generatedAt": "2026-10-22T06:26:42.024Z",
+  "bundleMode": "android-client-voice-live-test",
+  "kind": "apk",
+  "buildMode": "debug",
+  "target": "aarch64",
+  "targets": [
+    "aarch64"
+  ],
+  "configPath": "<temp-android-client-config>",
+  "sourceConfigPath": "<repo-root>/apps/aurora-tauri/src-tauri/tauri.android-client.conf.json",
+  "sourceConfigWritten": false,
+  "sourceConfigPresentAfterBuild": false,
+  "configSha256": "f237e5eb463abdc25b75f4774438b392b4c2e6afcf75bdd6fb7e6fa99fc6971d",
+  "config": {
+    "build": {
+      "beforeBuildCommand": null,
+      "frontendDist": "/home/developer/projects/aurora/thesis/phone-notebook/20261020/deployment/ebde3a8acf6315f920d03593845f17a1fc65a733/android-apk-build-v186/tmp/aurora-android-client-apk-VCen7T/dist"
+    },
+    "app": {
+      "security": {
+        "capabilities": [
+          "aurora-android-thin",
+          "aurora-mobile-mesh",
+          {
+            "identifier": "aurora-android-voice-live-e2e-capability",
+            "description": "Debug-only capability for the maintained Android native voice live test.",
+            "windows": [
+              "main"
+            ],
+            "platforms": [
+              "android"
+            ],
+            "permissions": [
+              "aurora-android-voice-live-e2e"
+            ]
+          }
+        ],
+        "csp": "default-src 'self'; connect-src 'self' http://ipc.localhost http://127.0.0.1:* http://localhost:* ws://127.0.0.1:* ws://localhost:* https: wss:; img-src 'self' data: blob:; media-src 'self' blob: mediastream:; style-src 'self' 'unsafe-inline'; script-src 'self'; worker-src 'self' blob:"
+      }
+    },
+    "bundle": {
+      "externalBin": [],
+      "resources": {},
+      "longDescription": "Aurora Android client packages the shared WebView HTTP/WebRTC app without Python service resources or external binaries. Gateway and signaling endpoints are configured at runtime during onboarding and are not compiled into the artifact."
+    }
+  },
+  "prepareReport": {
+    "generatedAt": "2026-10-22T06:22:37.323Z",
+    "bundleMode": "android-client-voice-live-test",
+    "configPath": "<temp-android-client-config>",
+    "connectSrc": [
+      "'self'",
+      "http://ipc.localhost",
+      "http://127.0.0.1:*",
+      "http://localhost:*",
+      "ws://127.0.0.1:*",
+      "ws://localhost:*",
+      "https:",
+      "wss:"
+    ],
+    "connectionMode": "runtime-configurable",
+    "gatewayOrigin": null,
+    "signalingOrigin": null,
+    "runtimeConfiguredEndpoints": true,
+    "expectedCapabilities": [
+      "aurora-android-thin",
+      "aurora-mobile-mesh",
+      "aurora-android-voice-live-e2e-capability"
+    ],
+    "voiceLiveTest": true,
+    "pythonSidecarStaged": false,
+    "externalBin": [],
+    "resources": {},
+    "secretsRedacted": true
+  },
+  "command": [
+    "pnpm",
+    "tauri",
+    "android",
+    "build",
+    "--debug",
+    "--features",
+    "android-voice-live-test",
+    "--apk",
+    "--target",
+    "aarch64",
+    "--config",
+    "<temp-android-client-config>"
+  ],
+  "artifactRoot": "<repo-root>/apps/aurora-tauri/src-tauri/gen/android/app/build/outputs",
+  "cleanBuildOutputs": true,
+  "expectedCapabilities": [
+    "aurora-android-thin",
+    "aurora-mobile-mesh",
+    "aurora-android-voice-live-e2e-capability"
+  ],
+  "voiceLiveTest": true,
+  "nativeSpeechRuntime": {
+    "abis": [
+      "arm64-v8a"
+    ],
+    "libraries": [
+      "libonnxruntime.so",
+      "libsherpa-onnx-c-api.so"
+    ],
+    "sourceDirectoriesRedacted": true
+  },
+  "llamaCppRuntime": {
+    "targets": [
+      {
+        "target": "android-arm64",
+        "version": "0.4.1",
+        "sourceCommit": "b29c606e28a01b1bc8c1351026a0fa6e616bf6c4",
+        "linkKind": "static",
+        "staticLibraries": [
+          "libllama-common.a",
+          "libllama-common-base.a",
+          "libllama.a",
+          "libggml.a",
+          "libggml-cpu.a",
+          "libggml-base.a",
+          "libcpp-httplib.a"
+        ]
+      }
+    ],
+    "staticLink": true,
+    "sourceDirectoriesRedacted": true
+  },
+  "pythonSidecarStaged": false,
+  "externalBin": [],
+  "resources": {},
+  "secretsRedacted": true
+}

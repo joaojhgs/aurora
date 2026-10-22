@@ -1,0 +1,30 @@
+{
+  "at": "2026-10-18T22:23:31.709068+00:00",
+  "status": "ACTUAL_SAME_PERSONAL_CONTROL_RECOVERED_ORIGINAL_PROVIDER_HELD",
+  "acceptedCommandRequest": "32a39b1d-9c3f-4de7-b07c-2b58cb385131",
+  "cursor": "56954",
+  "nativeRootStatus": "ACTIVE_SAME_ORIGINAL_GOAL",
+  "resumedBlockedAuditFresh": true,
+  "sameOriginalProvider": true,
+  "sameForwardPid": 421717,
+  "sameForwardStartTicks": 104535394,
+  "providerDeadlineUnchanged": "2026-10-19T00:08:53.328388+00:00",
+  "providerRemainingSecondsAtLocalReview": 6321.619327,
+  "old184ConservativeForecastSeconds": 8238.719302368001,
+  "old184AdmissionFits": false,
+  "proposedFinitePrefix120ForecastSeconds": 5790.469110239999,
+  "proposedFinitePrefixRange": [
+    717,
+    836
+  ],
+  "remainingAfterPrefixStillRequired": [
+    837,
+    900
+  ],
+  "conditionTarget900Unchanged": true,
+  "proposalNotLaunched": true,
+  "brokerRecoveryClaimed": false,
+  "newModelRequests": 0,
+  "oldRejectedCommandsNotResent": true,
+  "historicalCdacUnknownUnresent": true
+}

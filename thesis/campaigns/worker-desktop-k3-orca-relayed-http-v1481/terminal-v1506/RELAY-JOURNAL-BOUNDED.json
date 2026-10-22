@@ -1,0 +1,28 @@
+{
+  "at": "2026-10-18T13:15:30.334796+00:00",
+  "host": "code-worker",
+  "scope": "One bounded existing worker forward journal read; no route/credentials/lifecycle change",
+  "command": [
+    "journalctl",
+    "--user",
+    "-u",
+    "orca-network-aurora-tts",
+    "--since",
+    "2026-10-18 12:51:30 UTC",
+    "--until",
+    "2026-10-18 12:53:30 UTC",
+    "--no-pager",
+    "-n",
+    "120",
+    "-o",
+    "short-iso"
+  ],
+  "exitCode": 0,
+  "stdout": "-- No entries --\n",
+  "stderr": "",
+  "requesterFailureAt": "2026-10-18T12:52:47UTC",
+  "route": "desktop-aurora-tts",
+  "forwardPid": 421717,
+  "forwardFd1": "socket:[23797452]",
+  "forwardFd2": "socket:[23797452]"
+}

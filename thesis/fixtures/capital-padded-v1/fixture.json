@@ -1,0 +1,20 @@
+{
+  "schema": "aurora.thesis.fixed-audio.v1",
+  "audio": "input.wav",
+  "bytes": 219794,
+  "sha256": "da0ecc4ad0885746ab6e716585473917ab2b543a505bf0db09ebacfaa7943cbb",
+  "sampleRate": 22050,
+  "channels": 1,
+  "sampleWidthBytes": 2,
+  "frames": 109875,
+  "referenceTranscript": "What is the capital of France? Answer with only the city name.",
+  "referenceTranscriptSHA256": "34b681e385feb3500c9e9849d30f5bac982716c4e4938cdb04c5fdc617cff624",
+  "expectedReplyWords": [
+    "paris"
+  ],
+  "predicate": "Exact normalized reference words, exact one-word answer, correlated actual STT/LLM/TTS and valid non-silent audio; no injected transcript/answer.",
+  "provenance": "Agent-authored factual question, synthetic speech from the already-pinned Piper LJSpeech medium voice. This qualified version adds1s leading and0.5s trailing silence to the preserved original speech samples; no personal recording.",
+  "qualifiedSetupSHA256": "b36d6585b8f7fb4b87b54dceda813eaa42b0bd03c62ee3209bed1e0755a26ae3",
+  "modelWeightsBundled": false,
+  "modelLicenseRecords": "Pending complete model-source/license inventory; do not infer weight license from synthetic content."
+}

@@ -1,0 +1,198 @@
+{
+  "analysisSourceSha256": "6fdb7c4d815b000889fd975e094887e22ecc8bfa0217a7f0531f5ce17f4a8f73",
+  "at": "2026-10-18T07:26:29.243050+00:00",
+  "clockPolicy": "Recorded same-host Python monotonic timestamps only. No cross-host subtraction or interpolation.",
+  "measured": 900,
+  "newMeasurements": 0,
+  "outcomes": {
+    "completed_correct": 797,
+    "failed": 103
+  },
+  "quantileMethod": "Hyndman-Fan Type7, h=(n-1)*p, linear interpolation; resource units follow each field name, not latency milliseconds",
+  "resources": {
+    "provider": {
+      "networkScopes": [
+        "aggregate_interface_counters_not_per_request_attribution"
+      ],
+      "prefixEndByte": 204281750,
+      "retainedSamples": 46851,
+      "skipped": {},
+      "trailingUnterminatedBytesExcluded": 0
+    },
+    "requester": {
+      "networkScopes": [
+        "aggregate_interface_counters_not_per_request_attribution"
+      ],
+      "prefixEndByte": 33537078,
+      "retainedSamples": 25962,
+      "skipped": {},
+      "trailingUnterminatedBytesExcluded": 0
+    }
+  },
+  "schema": "aurora.k2.saved-resource-windows.v1",
+  "scope": "Samples inside actual case/model intervals, not exclusive per-request resource attribution. Parent receiver CPU excludes separately spawned Piper processes. Network counters are namespace-wide; interfaces are separate and must not be summed. GPU observations are per recorded DRM device. Missing/unsupported or unsampled fields stay null. Short model windows can have zero samples.",
+  "seconds": 6.996424169046804,
+  "sutCalls": 0,
+  "windows": {
+    "provider.llm_model": {
+      "casesWithNativeWindow": 900,
+      "casesWithSamples": 285,
+      "casesWithTwoSamples": 29,
+      "measuredCaseDenominator": 900,
+      "resourceQuantiles": {
+        "meanCpuCoresOverObservedSpan": {
+          "denominator": 29,
+          "p50_ms": 1.0407794847574574,
+          "p90_ms": 1.0632686830287055,
+          "p95_ms": 1.076721853186174
+        },
+        "minimumHostAvailableMemoryBytes": {
+          "denominator": 285,
+          "p50_ms": 25310269440.0,
+          "p90_ms": 25392045260.8,
+          "p95_ms": 25400845926.4
+        },
+        "peakProcessVmRSS_kB": {
+          "denominator": 285,
+          "p50_ms": 1202716.0,
+          "p90_ms": 1207804.0,
+          "p95_ms": 1207880.0
+        },
+        "processCpuSecondsObserved": {
+          "denominator": 29,
+          "p50_ms": 1.05,
+          "p90_ms": 1.072,
+          "p95_ms": 1.086
+        }
+      }
+    },
+    "provider.native_case_window": {
+      "casesWithNativeWindow": 900,
+      "casesWithSamples": 900,
+      "casesWithTwoSamples": 900,
+      "measuredCaseDenominator": 900,
+      "resourceQuantiles": {
+        "meanCpuCoresOverObservedSpan": {
+          "denominator": 900,
+          "p50_ms": 0.05693002748350536,
+          "p90_ms": 0.2284974434196395,
+          "p95_ms": 0.24571881794633663
+        },
+        "minimumHostAvailableMemoryBytes": {
+          "denominator": 900,
+          "p50_ms": 25227726848.0,
+          "p90_ms": 25296147251.2,
+          "p95_ms": 25306544537.6
+        },
+        "peakProcessVmRSS_kB": {
+          "denominator": 900,
+          "p50_ms": 1202716.0,
+          "p90_ms": 1207804.0,
+          "p95_ms": 1207856.0
+        },
+        "processCpuSecondsObserved": {
+          "denominator": 900,
+          "p50_ms": 0.695,
+          "p90_ms": 2.89,
+          "p95_ms": 2.98
+        }
+      }
+    },
+    "provider.tts_model": {
+      "casesWithNativeWindow": 797,
+      "casesWithSamples": 797,
+      "casesWithTwoSamples": 583,
+      "measuredCaseDenominator": 900,
+      "resourceQuantiles": {
+        "meanCpuCoresOverObservedSpan": {
+          "denominator": 583,
+          "p50_ms": 0.029699126318526742,
+          "p90_ms": 0.4266114537541678,
+          "p95_ms": 0.7830012809110868
+        },
+        "minimumHostAvailableMemoryBytes": {
+          "denominator": 797,
+          "p50_ms": 25225441280.0,
+          "p90_ms": 25298951372.8,
+          "p95_ms": 25307804467.2
+        },
+        "peakProcessVmRSS_kB": {
+          "denominator": 797,
+          "p50_ms": 1202716.0,
+          "p90_ms": 1206480.0,
+          "p95_ms": 1206500.0
+        },
+        "processCpuSecondsObserved": {
+          "denominator": 583,
+          "p50_ms": 0.03,
+          "p90_ms": 0.504000000000002,
+          "p95_ms": 0.96
+        }
+      }
+    },
+    "requester.full_attempt": {
+      "casesWithNativeWindow": 900,
+      "casesWithSamples": 900,
+      "casesWithTwoSamples": 900,
+      "measuredCaseDenominator": 900,
+      "resourceQuantiles": {
+        "meanCpuCoresOverObservedSpan": {
+          "denominator": 900,
+          "p50_ms": 0.312631868321953,
+          "p90_ms": 0.35688459010458284,
+          "p95_ms": 0.4307431443667338
+        },
+        "minimumHostAvailableMemoryBytes": {
+          "denominator": 900,
+          "p50_ms": 4228546560.0,
+          "p90_ms": 4435352780.8,
+          "p95_ms": 4485507481.6
+        },
+        "peakProcessVmRSS_kB": {
+          "denominator": 900,
+          "p50_ms": 1023680.0,
+          "p90_ms": 1067945.6,
+          "p95_ms": 1083562.1999999997
+        },
+        "processCpuSecondsObserved": {
+          "denominator": 900,
+          "p50_ms": 8.64,
+          "p90_ms": 9.602,
+          "p95_ms": 9.9
+        }
+      }
+    },
+    "requester.stt_model": {
+      "casesWithNativeWindow": 900,
+      "casesWithSamples": 900,
+      "casesWithTwoSamples": 900,
+      "measuredCaseDenominator": 900,
+      "resourceQuantiles": {
+        "meanCpuCoresOverObservedSpan": {
+          "denominator": 900,
+          "p50_ms": 0.8982257538187175,
+          "p90_ms": 0.9745698399847715,
+          "p95_ms": 1.0055074107884259
+        },
+        "minimumHostAvailableMemoryBytes": {
+          "denominator": 900,
+          "p50_ms": 4242667520.0,
+          "p90_ms": 4457839411.2,
+          "p95_ms": 4508905676.8
+        },
+        "peakProcessVmRSS_kB": {
+          "denominator": 900,
+          "p50_ms": 1023680.0,
+          "p90_ms": 1067945.6,
+          "p95_ms": 1083562.1999999997
+        },
+        "processCpuSecondsObserved": {
+          "denominator": 900,
+          "p50_ms": 6.41,
+          "p90_ms": 7.981000000000001,
+          "p95_ms": 8.420499999999999
+        }
+      }
+    }
+  }
+}

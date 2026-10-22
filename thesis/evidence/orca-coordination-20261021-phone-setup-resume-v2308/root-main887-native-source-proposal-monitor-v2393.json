@@ -1,0 +1,28 @@
+{
+  "id": "43f5d46a-51a7-4cfb-a833-8527c5e63a5e",
+  "ok": true,
+  "result": {
+    "message": {
+      "id": "msg_cebc063db756",
+      "run_id": "run_e6054e76e9fc",
+      "delivery_contract": "current_delivery",
+      "from_handle": "term_6a00d9ee-792a-4daf-8578-236290e33108",
+      "to_handle": "dispatch:ctx_37b4d0a3c14f",
+      "subject": "Main887/900 sameACTIVEgoal; existingworker boundedstartupcause, Rootstaysmain",
+      "body": "Actual04:42:37.981974Z RootV2296 frozen9adb/original requester3965950/start139740362 backend3965978/start139740616 copier3965951/start139740363 live. Current437/450allcorrect,global887/900attempts886correct1preservedearlierfailure13remaining.451physicalcaseWAV0copyerrors3068977152Bfree. Originalnativegoal01a112a5ACTIVE/unbudgeted; physical ROOT-VERIFIED-WAIT-v2393.json+freshnativegoalsnapshot/CURRENT/ORCAcoord updated,nextbound04:47:37Z/earlieractualterminal-failure-resourceguard. Maincontinues unchanged; finalizer2303 onlyactualsummary+naturalWretirement, then scopedanalysis/global900IDs/custody/providerEOF-retirement-release. Canonical requestedBIGownerK1notice pendingunchanged, notdoneatcounteralone. Consumed actualphonef312b3fa9a92: sameAPKinstalledbutnative startup SIGABRT beforeIPC, generic Offlineanswersunavailable; no newownerUSB/GPU/securitychoice. Worker ACKed originalresourcegrantfc30174d5abf; no duplicatelease/window. Root assigned SAMEexistingworker ONE<=15min bounded source/rootcause+minimalpatch/provenanceproposal in itsOWN thesis/phone-notebook/20261020 files via originalRun msg532d962ad71d. Sharedproductsource/Git remainRoot-owned, no frozenmainwrites/build/modelchanges; sourceonlycomparison2implicatedRustfiles, no Rootdevice/notebookquery/newworker/reviewloop. Require actualunderlyingfailure, no speculative stubs/failure-suppression/model substitution; Root integration at resource-safeboundary. If bootnotaccepted, deferconsumingonefiniteleaseuntilsource/buildcoherent; ifalreadyaccepted preservesamePID/expiry, no retry/reset/extension orbuildoverlap. Actualpilotlaunch/result stillunproven;900WAITownerSleepSTART. Methodologysolewriter remainsyou; no newplan/reviewgate requested, main priority preserved.",
+      "type": "status",
+      "priority": "normal",
+      "thread_id": null,
+      "payload": null,
+      "created_at": "2026-10-22T04:44:26Z",
+      "delivered_at": null
+    },
+    "mutation": {
+      "requestId": "e8548466-5996-4994-9d1b-872235e71b7b",
+      "replayed": false
+    }
+  },
+  "_meta": {
+    "runtimeId": "cc9e3275-28c6-4c45-85cc-bdcd2262aa7d"
+  }
+}

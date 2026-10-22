@@ -1,0 +1,12 @@
+{
+  "controlDeadline": "2026-10-22T05:15:00Z",
+  "explicitNewline": true,
+  "host": "ssh:ssh-sem-notebook-personal",
+  "incarnation": "328cd72f-c7ea-49ff-a2db-b9275b085037",
+  "remoteResult": "/home/developer/projects/aurora/thesis/phone-notebook/20261020/evidence/diagnose-native-storage-v115.json",
+  "rootAdmissionMessage": "owner-expanded-native-app-fix-scoped-debug-model-storage-diagnosis-no-privilege-or-security-change",
+  "script": "scripts/diagnose_native_storage_v115.py",
+  "scriptSha256": "a2bbe84ee7efd68d853b0ed2f897ce9d2865d8598c34f49e4dc2d0e761a4135b",
+  "singleSend": true,
+  "terminal": "term_a2ed5feb-7c92-48e4-bd88-d1b0e6737989"
+}

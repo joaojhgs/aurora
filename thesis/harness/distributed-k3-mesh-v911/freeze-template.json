@@ -1,0 +1,95 @@
+{
+  "schema": "aurora.distributed_k3_mesh_condition.v1",
+  "cohortId": null,
+  "comparisonFamilyId": "aurora-full-audio-capital-padded-base-qwen-piper-v1",
+  "measurementPlan": {
+    "plannedWarmups": 15,
+    "plannedMeasuredPerCondition": 900,
+    "requestCapSeconds": 180,
+    "conditionOverallCapSeconds": 57600
+  },
+  "audio": {
+    "wavSha256": "da0ecc4ad0885746ab6e716585473917ab2b543a505bf0db09ebacfaa7943cbb",
+    "wavBytes": 219794,
+    "sampleRate": 22050,
+    "channels": 1,
+    "sampleWidthBytes": 2
+  },
+  "candidateManifestSha256": "ce75b965ee5879ebece6ea7dfe133441547d20ccf89ecd5d66ea510bd9645e60",
+  "meshSttPeerIdSha256": null,
+  "meshAssistantPeerIdSha256": null,
+  "meshTtsPeerIdSha256": null,
+  "meshAuthorityBinding": "existing_authorized_peer_session",
+  "remoteReceivers": {
+    "stt": {
+      "receiver_id": null,
+      "source_sha256": null,
+      "provider_class": null,
+      "model_sha256": "d01c3014881c9c6f3133c182f3d2887eb6ca1c789a7538c5c007196857a0a6a9",
+      "config_sha256": null,
+      "peer_id_sha256": null,
+      "constructor_directory": null,
+      "tokenizer_sha256": null,
+      "vocabulary_sha256": null
+    },
+    "assistant": {
+      "receiver_id": null,
+      "source_sha256": null,
+      "provider_class": null,
+      "model_sha256": "57d1997790d1744fba5b40a7317df71ea5e2acee28c47e78f0cce39c0703f8cf",
+      "config_sha256": null,
+      "peer_id_sha256": null
+    },
+    "tts": {
+      "receiver_id": null,
+      "source_sha256": null,
+      "provider_class": null,
+      "model_sha256": "6f52a751e2349abe7a76735eb09dc1875298c77ea2342ffd2fef79ff81b87f22",
+      "config_sha256": null,
+      "peer_id_sha256": null
+    }
+  },
+  "remoteAssistantConfigBinding": {
+    "config_sha256": null,
+    "automatic_tts_readback": false,
+    "effective_llm_settings": {
+      "model_path": null,
+      "n_gpu_layers": null,
+      "n_ctx": null,
+      "n_batch": null,
+      "n_threads": null,
+      "temperature": null,
+      "max_tokens": null,
+      "seed": null,
+      "top_p": null,
+      "top_k": null,
+      "repeat_penalty": null,
+      "min_p": null,
+      "chat_format": null
+    }
+  },
+  "remoteAssistantResponseIdentity": {
+    "provider": null,
+    "model": null
+  },
+  "sourceClosure": {
+    "equivalenceVerified": false,
+    "cpuSourceRoot": null,
+    "cpuSourceInventorySha256": null
+  },
+  "implementation": {
+    "receiverProofSha256": "99dd072d63910e1bc82c7ef30652531c45fa4e5ec27cf09044fff5f02d3ff626"
+  },
+  "models": {
+    "stt": "d01c3014881c9c6f3133c182f3d2887eb6ca1c789a7538c5c007196857a0a6a9",
+    "llm": "57d1997790d1744fba5b40a7317df71ea5e2acee28c47e78f0cce39c0703f8cf",
+    "tts": "6f52a751e2349abe7a76735eb09dc1875298c77ea2342ffd2fef79ff81b87f22",
+    "ttsConfig": null
+  },
+  "runtime": {
+    "venvExecutable": null,
+    "resolvedInterpreterSha256": null
+  },
+  "runtimeConfigSha256": null,
+  "status": "template_only_not_launchable"
+}

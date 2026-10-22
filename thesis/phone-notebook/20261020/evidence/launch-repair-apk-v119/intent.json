@@ -1,0 +1,12 @@
+{
+  "controlDeadline": "2026-10-22T05:20:00Z",
+  "explicitNewline": true,
+  "host": "ssh:ssh-sem-notebook-personal",
+  "incarnation": "328cd72f-c7ea-49ff-a2db-b9275b085037",
+  "remoteResult": "/home/developer/projects/aurora/thesis/phone-notebook/20261020/evidence/launch-repair-apk-v119.json",
+  "rootAdmissionMessage": "owner direct repair cycle authorization; existing bounded local build lane msg_25376e75fa33; monitor msg_726df30f6084; owner hardstop11:57:25.269652Z",
+  "script": "scripts/launch_repair_apk_v119.py",
+  "scriptSha256": "e74a1ab436c2fdd052ce497d106b61f9c61b67d504639f486956818f726e8974",
+  "singleSend": true,
+  "terminal": "term_a2ed5feb-7c92-48e4-bd88-d1b0e6737989"
+}

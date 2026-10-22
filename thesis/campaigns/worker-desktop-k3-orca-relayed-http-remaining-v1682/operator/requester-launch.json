@@ -1,0 +1,21 @@
+{
+  "at": "2026-10-20T00:44:09.909447+00:00",
+  "conditionTargetMeasured": 900,
+  "controllerPid": 2202799,
+  "controllerStartTicks": 123551050,
+  "credentialsCopied": false,
+  "excludedWarmups": 15,
+  "frozenManifestSha256": "32c5ac87c8cd765f0117a0312b6941c8f69c7731dfe66987826311e74e34b506",
+  "globalBuildLock": "Same locked descriptor handed to controller; parent closed its copy without unlocking",
+  "newMeasuredObserved": 0,
+  "plannedMeasured": 160,
+  "priorAttemptedMeasured": 740,
+  "priorCorrect": 725,
+  "priorFailed": 15,
+  "providerManifestSha256": "61fe867af6495a6e130c1148b73b97ac3ca14755dbcba9a034a155d04fa2d62e",
+  "providerReceiverPid": 2991345,
+  "providerRestarted": false,
+  "requiredNativeJoins": 45,
+  "startupIsNotAcceptance": true,
+  "status": "REMAINING160_CONTROLLER_LAUNCHED_NEW_WARMUP_GATE_PENDING"
+}

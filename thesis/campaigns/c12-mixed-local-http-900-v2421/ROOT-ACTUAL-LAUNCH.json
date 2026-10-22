@@ -1,0 +1,21 @@
+{
+  "at": "2026-10-22T07:17:24.007580+00:00",
+  "pid": 259717,
+  "startTicks": 143190459,
+  "manifestSha256": "3817e5a54ef45cf806bd337689e0172ec7185d12fdcd54f1a342d07bdac321dd",
+  "providerController": {
+    "pid": 2516853,
+    "startTicks": 40883437,
+    "state": "R"
+  },
+  "providerReceiver": {
+    "pid": 2516854,
+    "startTicks": 40883514
+  },
+  "warmupPairs": 15,
+  "measuredPairs": 900,
+  "measuredAdmitted": false,
+  "status": "ACTUAL_REQUESTER_LAUNCHED_NORMAL_WARMUP_GATE_PENDING",
+  "newWorker": false,
+  "absoluteDeadlineUtc": "2026-10-22T21:14:51.316179+00:00"
+}

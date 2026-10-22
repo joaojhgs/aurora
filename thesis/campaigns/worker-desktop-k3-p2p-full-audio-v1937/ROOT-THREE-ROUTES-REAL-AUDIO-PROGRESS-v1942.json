@@ -1,0 +1,61 @@
+{
+  "at": "2026-10-20T21:50:51.213477+00:00",
+  "routeStatus": "existing_exact_peers_both_normal_routes_admitted",
+  "routeKeys": [
+    "assistant",
+    "stt",
+    "tts"
+  ],
+  "routeAdmissionModelCalls": 0,
+  "warmups": [
+    {
+      "path": ".git/aurora-handoff-import-20261006/distributed-k3-mesh-cell-v1937/campaign/attempts/attempt-0001-warmup.jsonl",
+      "status": "completed_correct",
+      "durationMs": 15406.939205,
+      "outputAudio": {
+        "file": "audio/d79a2cc3206f5ac8386d7c5c651221356b1c2101671d9b34fc3e335f39f63e88.wav",
+        "sha256": "d79a2cc3206f5ac8386d7c5c651221356b1c2101671d9b34fc3e335f39f63e88"
+      }
+    },
+    {
+      "path": ".git/aurora-handoff-import-20261006/distributed-k3-mesh-cell-v1937/campaign/attempts/attempt-0002-warmup.jsonl",
+      "status": "completed_correct",
+      "durationMs": 11859.273254,
+      "outputAudio": {
+        "file": "audio/68ce091fe209d5367bf3eb8feb763a89b9c70473f7774fbb2edd87ed4c44c36c.wav",
+        "sha256": "68ce091fe209d5367bf3eb8feb763a89b9c70473f7774fbb2edd87ed4c44c36c"
+      }
+    },
+    {
+      "path": ".git/aurora-handoff-import-20261006/distributed-k3-mesh-cell-v1937/campaign/attempts/attempt-0003-warmup.jsonl",
+      "status": "completed_correct",
+      "durationMs": 11837.540903,
+      "outputAudio": {
+        "file": "audio/59fa0a8334b7774f86749667cb5cbfc9f8633d4fc92ff52e19661a3978a972b4.wav",
+        "sha256": "59fa0a8334b7774f86749667cb5cbfc9f8633d4fc92ff52e19661a3978a972b4"
+      }
+    },
+    {
+      "path": ".git/aurora-handoff-import-20261006/distributed-k3-mesh-cell-v1937/campaign/attempts/attempt-0004-warmup.jsonl",
+      "status": "completed_correct",
+      "durationMs": 11671.845214,
+      "outputAudio": {
+        "file": "audio/82b08a00a9f5cd8d090467a89f3c86f89e906952b014e57f219a3589a61d3d39.wav",
+        "sha256": "82b08a00a9f5cd8d090467a89f3c86f89e906952b014e57f219a3589a61d3d39"
+      }
+    },
+    {
+      "path": ".git/aurora-handoff-import-20261006/distributed-k3-mesh-cell-v1937/campaign/attempts/attempt-0005-warmup.jsonl",
+      "status": "completed_correct",
+      "durationMs": 11767.351478,
+      "outputAudio": {
+        "file": "audio/9730508847f1d0a454173d83f779cc680fee9ea0b8f8c4e0424a1d562109086c.wav",
+        "sha256": "9730508847f1d0a454173d83f779cc680fee9ea0b8f8c4e0424a1d562109086c"
+      }
+    }
+  ],
+  "measuredAttempted": 0,
+  "ordinaryWarmupTargetExcluded": 15,
+  "noNewPilotOrRerun": true,
+  "conditionSha256": "79353b2ca8f11e8fec36513cc07cc653bf1ef919de48eb958f6c2581794c4b06"
+}

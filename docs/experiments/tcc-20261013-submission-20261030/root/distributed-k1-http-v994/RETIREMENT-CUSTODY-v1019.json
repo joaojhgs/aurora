@@ -1,0 +1,10 @@
+{
+  "schema": "aurora.evidence.addendum.v1",
+  "originalManifestPreserved": "MANIFEST.json",
+  "file": "provider-positive-retirement-v1017.json",
+  "bytes": 1875,
+  "sha256": "140f0403ecdf4a733646112c7ea158d378649be78b971115b186782d09bf30f7",
+  "originalFilesPreserved": true,
+  "scope": "Controlled cleanup of terminal failed test receiver; no Orca session or agent stop; no benchmark repeat",
+  "rawResourcesCustody": "Original Personal runtime/resources.jsonl preserved; final bulk transfer pending; no missing successful distributed measurements because measured count is zero"
+}

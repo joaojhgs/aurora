@@ -1,0 +1,19 @@
+{
+  "at": "2026-10-22T12:11:33.080224+00:00",
+  "currentWork": "saved receipt reconciliation and public data custody only; no new phone tests",
+  "actualFinalApkBuildExit": 0,
+  "actualSameSignedUpdate": "Success11:52:55Z; installed hash verified",
+  "actualLastRemotePilot": "failed android_file_audio_route_unavailable before audio",
+  "actualSavedDataCheck": "61 files lengths and SHA256 matched COPY-MANIFEST; ZIP236203 bytes SHA90e4441fd579cfe6e894693ea3403b6e69da84a300f0f7407da6c18548598c91",
+  "makeCheckDocs": {
+    "exit": 2,
+    "result": "failed",
+    "reportedFindings": "broken runner-report.md link and generated/report artifacts under docs/experiments/tcc-20261013-submission-20261030, outside this lane; not changed",
+    "largeOutputTruncated": true,
+    "rerunNotNeededWithoutRelevantChanges": true
+  },
+  "ownedFolderBytes": 25288988,
+  "workerDiskFreeBytes": 2340515840,
+  "postWindowPhoneOrInferenceCommands": 0,
+  "postWindowCleanupException": "normal HOME only after verified provider closure; saved separate receipt"
+}

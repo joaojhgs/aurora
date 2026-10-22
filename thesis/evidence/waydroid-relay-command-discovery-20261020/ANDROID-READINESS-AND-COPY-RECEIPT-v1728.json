@@ -1,0 +1,43 @@
+{
+  "at": "2026-10-20T05:02:30.303480+00:00",
+  "status": "ANDROID_READINESS_UNKNOWN_OWNING_HOST_EXECUTION_REQUIRED",
+  "existingSshTarget": "ssh-1786238480967-semdev",
+  "existingControl": "term_d5651d8d-58e2-4b38-85e2-51c668cc933c/inc034ff933-61a3-4c74-b5ad-98a75e8ac21c",
+  "actualHost": "personal.skyron-server",
+  "exactCommand": [
+    "/usr/bin/distrobox-host-exec",
+    "waydroid",
+    "status"
+  ],
+  "exitCode": 127,
+  "stdout": "",
+  "stderr": "",
+  "bridgePreflight": "Installed distrobox1.7.0 source/help verified; existing host-spawn1.5.0 satisfies required1.5.0, no installer invoked.",
+  "newDeviceOrModelTests": 0,
+  "nativeHostStatusAttempts": 1,
+  "permissionCredentialAccessOrServiceChanges": false,
+  "scientificAndroidMeasuredSamples": 0,
+  "deviceAbsenceProven": false,
+  "scope": "Bridge did not return native host status. This does not establish that Waydroid or the emulator is absent.",
+  "requiredCapability": "Owning-Orca original approved SSH execution-host observer/binding must return a bounded native Waydroid/ADB state read on the existing host. Restore read capability through established Coding/owning-host route, not a new target, credentials, direct-IP guess, or emulator reset.",
+  "previousExactObserverFailure": "99984f91-feb3-4b9b-a09a-6a6522293f08 Execution-host observation failed",
+  "canonicalCopies": [
+    {
+      "path": "thesis/evidence/waydroid-relay-command-discovery-20261020/INSTALLED-HOST-BRIDGE-HELP.json",
+      "bytes": 2280,
+      "sha256": "8b69c2be13d47d837057cd820292d6506e38ea330d26ad8607f6fd0e9e97575f"
+    },
+    {
+      "path": "thesis/evidence/waydroid-relay-command-discovery-20261020/INSTALLED-HOST-BRIDGE-SOURCE.json",
+      "bytes": 7347,
+      "sha256": "fb50f572d99b300e24e1ebfdae424bd52e77d0d7f77bc15022474e9a185afd0d"
+    },
+    {
+      "path": "thesis/evidence/waydroid-relay-command-discovery-20261020/ACTUAL-NATIVE-WAYDROID-STATUS.json",
+      "bytes": 399,
+      "sha256": "07f6b4687a9f5b20c08277ba1094bfe242a18022c9016f13a3c42992e1e9016c"
+    }
+  ],
+  "noFurtherUnchangedProbes": true,
+  "wDCurrentConditionBlocked": false
+}

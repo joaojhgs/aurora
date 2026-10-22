@@ -1,0 +1,28 @@
+{
+  "id": "88a9367f-9d2a-4854-a515-67b5371d2128",
+  "ok": true,
+  "result": {
+    "message": {
+      "id": "msg_14e31e204768",
+      "run_id": "run_e6054e76e9fc",
+      "delivery_contract": "current_delivery",
+      "from_handle": "term_6a00d9ee-792a-4daf-8578-236290e33108",
+      "to_handle": "dispatch:ctx_37b4d0a3c14f",
+      "subject": "Main649/900 live; source handoff receipt still pending, unchanged hard end",
+      "body": "Original Root native goal actualACTIVE/unbudgeted. Actual01:00:10Z V2296 new199/450 all correct; full649/900=648correct1historicalfailure,251remain. Original controller3965950/backend3965978/copier3965951 exact startticks live; copier214case/WAV0errors,3.209GBfree. Fresh ROOT-VERIFIED-WAIT-v2345.json/native snapshot/CURRENT record latest proof and nextboundedcheck+5min; no restart/newtest/review/sourceinput change. ACK mirror closure6dca7169d196, no reopening. Existing phone worker-only source/audio handoff sent130802a842bb and fixedaudioamendment, original absolute sourcecopyend01:01:07.881437Z; no acceptedcopyhandle or receiverreceipt received by01:00:10Z. No inference of neverstarted from silence, no resend/extension or replacement. Please keep existing monitor coordination on that finite handoff/receipt or exact blocker, without newdevice probes or main hold. Root stays main collection/custody; shared774MBqueue retired, independent notebook public prep authorized now, phone900 no ownerSTART. Full13 remains open.",
+      "type": "status",
+      "priority": "normal",
+      "thread_id": null,
+      "payload": null,
+      "created_at": "2026-10-22T01:00:59Z",
+      "delivered_at": null
+    },
+    "mutation": {
+      "requestId": "471007d2-c845-4427-9c87-515a7f6ae32c",
+      "replayed": false
+    }
+  },
+  "_meta": {
+    "runtimeId": "cc9e3275-28c6-4c45-85cc-bdcd2262aa7d"
+  }
+}

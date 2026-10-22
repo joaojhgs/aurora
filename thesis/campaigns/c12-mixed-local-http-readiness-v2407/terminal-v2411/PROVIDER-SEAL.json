@@ -1,0 +1,100 @@
+{
+  "host": "personal.skyron-server",
+  "at": "2026-10-22T06:29:25.456401+00:00",
+  "oldActorsAbsent": true,
+  "signalsSent": 1,
+  "nativeOpen": 0,
+  "pilotLocalOutcome": "failed",
+  "pilotLocalFailure": "Harness used untrusted external input instead of internal UserInput; not model-quality inference",
+  "archive": "/home/developer/projects/aurora/thesis/campaigns/c12-mixed-local-http-readiness-v2407/provider/terminal-v2411/provider-raw-v2407.tar.gz",
+  "bytes": 87080,
+  "sha256": "666e569aa81bee4bf7cf64afbd07d3a3dd1df2ea8cdaa06b0b4d3a42a5b48193",
+  "files": {
+    "terminal.json": {
+      "bytes": 435,
+      "sha256": "d6f899f7e898085b3b7fc2daf23a1710d91cc6a895e1648528aa7e3d9106ddaf"
+    },
+    "runtime-versions.json": {
+      "bytes": 211,
+      "sha256": "14cfdbcf654cf0aa19f85b87603aa8071b07312ef76f486c596dfdce604499b4"
+    },
+    "assistant-identity.json": {
+      "bytes": 1418,
+      "sha256": "a4745d2ce07caee2a46b983d6cfc915ed934ba232b0c6eb1df1c9221e2fdb70b"
+    },
+    "STATUS.json": {
+      "bytes": 161095,
+      "sha256": "49e8688afab8dcc20175d4ab410431494a7ef2034d03d45c04a0d7b7e246d872"
+    },
+    "receiver-identity.json": {
+      "bytes": 1373,
+      "sha256": "786df0ff0d389534122d7e81027f0f9248d378b18e0a1771d93eadd44c0b8d80"
+    },
+    "stt-identity.json": {
+      "bytes": 1400,
+      "sha256": "5b80274bb0ae46a230ebdb6918bfc883388e3014175c9906761a069b0c166a83"
+    },
+    "LOCAL-DRIVER-ARMED.json": {
+      "bytes": 111,
+      "sha256": "2ff09017d9def44ab4222e5b3143cb301d5b979efff1a2e0f892c89b26b5b9c3"
+    },
+    "provider-manifest.json": {
+      "bytes": 9141,
+      "sha256": "c819d75ea03fe49046f9500768a2ae5916e4ea71c2b05c66d552314c96d80062"
+    },
+    "controller-launch.json": {
+      "bytes": 302,
+      "sha256": "08f61d80042df6a87c3c32435b0e5f364f2c01af551164a500291707fa48678c"
+    },
+    "voice-stages.jsonl": {
+      "bytes": 25099,
+      "sha256": "8d247c82ee47b4af0a2d5687bb7a60a468bf9d8912fa6f62d0d46e37fef5f364"
+    },
+    "ROOT-RETIRE-INTENT-v2411.json": {
+      "bytes": 156,
+      "sha256": "8cc8b3cb648c26d4b4df17120dd48b42226b6532fb026506242a4eec9e5e7ea4"
+    },
+    "voice-stages.status.json": {
+      "bytes": 134,
+      "sha256": "4d18cacffbb613ca3413bce7abd818ae0da9f1e7e5afcfc23b84c33ed2111b96"
+    },
+    "binding-guard-diagnostic.jsonl": {
+      "bytes": 0,
+      "sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+    },
+    "RESULT-desktop-local.json": {
+      "bytes": 2280,
+      "sha256": "192596c8254954695af1599db45770c28ccb0e72b1525b18973f0e7590168a51"
+    },
+    "actual-provider-bindings.jsonl": {
+      "bytes": 2946,
+      "sha256": "d425a868c89cfe2dffd75043fa51fcaa7b60145d4bc0d74fbb458b4e218df007"
+    },
+    "ROOT-LAUNCH-INTENT.json": {
+      "bytes": 156,
+      "sha256": "b7967cf8989ec6f8f37eac245a3cea5118a3812a4421126debc7a66775aee07e"
+    },
+    "PILOT-TRIGGER.json": {
+      "bytes": 268,
+      "sha256": "dd96bcc0fa8d80b114ef88e46600f4f217ecdd9c76d5d345c1f52946b523bfc7"
+    },
+    "ROOT-LAUNCH.json": {
+      "bytes": 475,
+      "sha256": "424c40f0f42e092da1748c3da8595352a1b536a130493172ed692ef76c8b91aa"
+    },
+    "resources.jsonl": {
+      "bytes": 2049148,
+      "sha256": "964c1d980cbb31f4507fb7fdc49e38062a5ad4ae4a0a55626625dc41d384451d"
+    },
+    "READINESS-MANIFEST.json": {
+      "bytes": 2980,
+      "sha256": "38ee90a5c07c791ddc1cd3f39bd5e50b9894743b7c0f924fdeed56645118025a"
+    },
+    "ACTUAL-FILES.json": {
+      "bytes": 1932,
+      "sha256": "985fc50a52153d3bae6cd0a75a98f288327273128de4313f83dadd5d9274cbee"
+    }
+  },
+  "allRawPreserved": true,
+  "clockExtended": false
+}

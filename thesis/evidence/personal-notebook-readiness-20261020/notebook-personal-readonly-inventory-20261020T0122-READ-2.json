@@ -1,0 +1,35 @@
+{
+  "id": "76ad5f70-d80a-4492-b678-c9fca5a7e09e",
+  "ok": true,
+  "result": {
+    "terminal": {
+      "handle": "term_f40f2bd6-0f71-4484-8347-ac221cf6ce9b",
+      "status": "running",
+      "tail": [
+        "",
+        "",
+        "",
+        "",
+        "",
+        "",
+        "",
+        "",
+        "",
+        "Traceback (most recent call last):",
+        "  File \"<stdin>\", line 2, in <module>",
+        "  File \"<string>\", line 31, in <module>",
+        "AssertionError"
+      ],
+      "truncated": false,
+      "limited": false,
+      "oldestCursor": "0",
+      "nextCursor": "17",
+      "latestCursor": "17",
+      "returnedLineCount": 13,
+      "source": "stream"
+    }
+  },
+  "_meta": {
+    "runtimeId": "cc9e3275-28c6-4c45-85cc-bdcd2262aa7d"
+  }
+}

@@ -1,0 +1,24 @@
+{
+  "playwright_report_sha256": "db5d0dcf9bce3323cb7852b0e36040a42511fb2f470213a9214ab105926d5e00",
+  "safe_rows": [
+    {
+      "condition": "browser-webrtc-mesh",
+      "workload": "orbit-exact-v1",
+      "attempt": 1,
+      "warmupCount": 0,
+      "outcome": "no_completion",
+      "requestId": "79e720be-b9b0-4f96-a94f-d28b7d50c5c8",
+      "sessionId": "848cc586-58d5-4917-964c-686ae22bff3c",
+      "correlationId": null,
+      "messageId": null,
+      "modelLabel": null,
+      "exactResponse": false,
+      "completionCount": 0,
+      "requesterDispatchToTypedCompletionMs": null,
+      "errorCode": null
+    }
+  ],
+  "errors": [
+    "Error: expect(received).toBe(expected) // Object.is equality\n\nExpected: \"completed_exact\"\nReceived: \"no_completion\"\n\n  103 |       body: JSON.stringify(safeRow),\n  104 |     })\n> 105 |     expect(row.outcome).toBe('completed_exact')\n      |                         ^\n  106 |     expect(row.requestId).toBeTruthy()\n  107 |     expect(row.sessionId).toBeTruthy()\n  108 |     expect(row.correlationId).toBe(row.requestId)\n    at /home/developer/projects/aurora/tests/e2e/hosted_peer/hosted-peer-live-shell.spec.ts:105:25"
+  ]
+}

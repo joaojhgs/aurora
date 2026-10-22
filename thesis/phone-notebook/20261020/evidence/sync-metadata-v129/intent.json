@@ -1,0 +1,12 @@
+{
+  "controlDeadline": "2026-10-22T05:25:00Z",
+  "explicitNewline": true,
+  "host": "ssh:ssh-sem-notebook-personal",
+  "incarnation": "328cd72f-c7ea-49ff-a2db-b9275b085037",
+  "remoteResult": "/home/developer/projects/aurora/thesis/phone-notebook/20261020/evidence/sync-metadata-v129.json",
+  "rootAdmissionMessage": "copy-only bounded owner window and source/readiness metadata to both repositories",
+  "script": "scripts/sync_metadata_v129.py",
+  "scriptSha256": "05ac062159c7704bf834d413cfd093e48ccf7c8d896607ff7815a7262ff271d3",
+  "singleSend": true,
+  "terminal": "term_a2ed5feb-7c92-48e4-bd88-d1b0e6737989"
+}

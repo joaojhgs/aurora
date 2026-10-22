@@ -1,0 +1,20 @@
+{
+  "at": "2026-10-18T14:34:45.092645+00:00",
+  "status": "RAW_CONTROL_STDOUT_VERIFIED",
+  "ok": true,
+  "markerObservedAsStandaloneOutput": true,
+  "nextCursor": "47860",
+  "newOutputLines": 2,
+  "errorCode": null,
+  "errorMessage": null,
+  "result": {
+    "send": {
+      "handle": "term_d5651d8d-58e2-4b38-85e2-51c668cc933c",
+      "accepted": true,
+      "bytesWritten": 43
+    }
+  },
+  "newModelRequests": 0,
+  "originalMetadataPendingNotResent": true,
+  "freshMetadataReadmissionStillRequired": true
+}

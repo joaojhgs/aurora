@@ -1,0 +1,24 @@
+{
+  "id": "ad7927f4-fb9c-490d-b5b8-06589512f4a5",
+  "ok": true,
+  "result": {
+    "terminal": {
+      "handle": "term_d5651d8d-58e2-4b38-85e2-51c668cc933c",
+      "status": "running",
+      "tail": [
+        "",
+        "AURORA_RAW_CONTROL_RESULT_V1522"
+      ],
+      "truncated": false,
+      "limited": false,
+      "oldestCursor": "47548",
+      "nextCursor": "47860",
+      "latestCursor": "47860",
+      "returnedLineCount": 2,
+      "source": "stream"
+    }
+  },
+  "_meta": {
+    "runtimeId": "cc9e3275-28c6-4c45-85cc-bdcd2262aa7d"
+  }
+}

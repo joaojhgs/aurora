@@ -1,0 +1,20 @@
+{
+  "authoritative_path": "/home/developer/Documents/Obsidian Vault Origin/5-full-notes/faculdade/tcc/future-work-test-requirements.md",
+  "lines": 1430,
+  "sha256": "bef4786c5b6869396ae4b86e06ed0171d6873a9e9d3e7a69ac1f1930d52a7558",
+  "root_fullread_message": "msg_75018b382fda",
+  "root_message_created_at": "2026-10-14T21:20:10Z",
+  "monitor_mail_ack": "delivery_ba0c35561db8",
+  "root_inbound_delivery_ack": "delivery_d024df64afe8",
+  "appended_lines_fullread": 22,
+  "old1408_prefix_verified": true,
+  "no_further_commits_push_submission_confirmed": true,
+  "existing_history_preserved": true,
+  "root_native_goal": "01a112a5-d6bb-74e2-bf7c-ace73cb513b5",
+  "monitor_reply": "msg_95f7e7a38fb6",
+  "whole_gpu_voice_surface_seal": false,
+  "phase2_measured_allowed": false,
+  "run": "run_e6054e76e9fc",
+  "task": "task_d7ea336050cf",
+  "dispatch": "ctx_37b4d0a3c14f"
+}

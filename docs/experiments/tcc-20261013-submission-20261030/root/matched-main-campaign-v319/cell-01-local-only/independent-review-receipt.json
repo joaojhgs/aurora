@@ -1,0 +1,6 @@
+{
+  "review": "PASS actual artifacts",
+  "review_sha256": "11f1a1ff6889377a79e24647a1ea930c3558765bfdf5651e9e035dd35aa0f837",
+  "whole_campaign_complete": false,
+  "scope": "one local main session:5warm/100measured/105captures; cleanupthreadsUNVERIFIED"
+}

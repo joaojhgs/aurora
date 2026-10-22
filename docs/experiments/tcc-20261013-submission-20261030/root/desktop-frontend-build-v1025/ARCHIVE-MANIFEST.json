@@ -1,0 +1,13 @@
+{
+  "at": "2026-10-16T11:36:59.353638+00:00",
+  "scope": "Current SDK+Vite frontend build, dev-only file-audio hook retained; no native app/model/performance acceptance",
+  "buildReceipt": "BUILD-RECEIPT.json",
+  "archive": "FRONTEND-DIST-v1025.tar.gz",
+  "bytes": 2210497,
+  "sha256": "f36b9750913a232486db7bf3c68a8f145f3640bc4e360513ec044c7ff0392d17",
+  "artifactFiles": 77,
+  "artifactRawBytes": 7634298,
+  "allSourceInputsVerifiedBeforeAndAfter": true,
+  "preexistingSDKDistPreserved": "preserved-sdk-dist-before-build/",
+  "noRuntimeRoleCompileOverride": true
+}

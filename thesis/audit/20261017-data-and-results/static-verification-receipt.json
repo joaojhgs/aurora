@@ -1,0 +1,18 @@
+{
+  "at": "2026-10-17T22:30:10.781428+00:00",
+  "command": [
+    ".venv/bin/ruff",
+    "check",
+    "--select",
+    "F",
+    "thesis/audit/20261017-data-and-results"
+  ],
+  "existingAnalysisSmokeRerun": false,
+  "exitCode": 0,
+  "initialFindings": "Unused imports, including the seal helper import, and an extraneous f-string prefix corrected before final static acceptance. No analysis smoke failure or replay.",
+  "repoWideTestsOrBuildsRun": false,
+  "scopeReason": "audit-only saved-data tooling; production code unchanged and Root owns live executable/device reservations",
+  "stderr": "",
+  "stdout": "All checks passed!\n",
+  "syntaxParse": "all owned Python files passed"
+}

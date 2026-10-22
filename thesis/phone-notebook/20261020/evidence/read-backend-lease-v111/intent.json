@@ -1,0 +1,12 @@
+{
+  "controlDeadline": "2026-10-22T05:05:00Z",
+  "explicitNewline": true,
+  "host": "ssh:ssh-sem-notebook-personal",
+  "incarnation": "328cd72f-c7ea-49ff-a2db-b9275b085037",
+  "remoteResult": "/home/developer/projects/aurora/thesis/phone-notebook/20261020/evidence/read-backend-lease-v111.json",
+  "rootAdmissionMessage": "msg_fc30174d5abf-reconcile-single-actual-boot-no-relaunch",
+  "script": "scripts/read_backend_lease_v111.py",
+  "scriptSha256": "4bb431bd7d2cda169c8ecee980470cac16ac74004cddb99513fd3d70bc65dbd3",
+  "singleSend": true,
+  "terminal": "term_a2ed5feb-7c92-48e4-bd88-d1b0e6737989"
+}

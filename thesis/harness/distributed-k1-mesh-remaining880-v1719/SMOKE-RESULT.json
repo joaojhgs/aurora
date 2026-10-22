@@ -1,0 +1,31 @@
+{
+  "at": "2026-10-20T04:29:17.433097+00:00",
+  "command": "flock -n /tmp/aurora-global-build.lock .git/aurora-handoff-import-20261006/cpu-audio-campaign-v491/env/bin/python thesis/harness/distributed-k1-mesh-remaining880-v1719/smoke_adapter.py",
+  "actualNativeExecSession": 79028,
+  "status": "PASS",
+  "cases": [
+    {
+      "case": "successful_exact_peer",
+      "outcome": "ok",
+      "calls": 1
+    },
+    {
+      "case": "structured_exact_peer_preaccept_denial",
+      "outcome": "preaccept_capability_changed",
+      "calls": 1
+    },
+    {
+      "case": "ambiguous_failure_stays_hard_stop",
+      "outcome": "exact_remote_peer_call_not_confirmed",
+      "calls": 1
+    },
+    {
+      "case": "wrong_peer_never_classified_recoverable",
+      "outcome": "exact_remote_peer_call_not_confirmed",
+      "calls": 1
+    }
+  ],
+  "sutCalls": 0,
+  "networkCalls": 0,
+  "modelCalls": 0
+}

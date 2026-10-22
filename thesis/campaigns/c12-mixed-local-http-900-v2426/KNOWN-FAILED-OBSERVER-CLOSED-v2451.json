@@ -1,0 +1,17 @@
+{
+  "at": "2026-10-22T11:02:07.933434+00:00",
+  "knownOutcome": "Actual remote traceback before seal writes; no new model or remote command",
+  "onlyLocalCompletedObservationHelper": [
+    {
+      "pid": 453672,
+      "startTicks": 144530228,
+      "args": [
+        "/usr/bin/python3",
+        "/home/developer/projects/aurora/thesis/harness/orca_copy_control_enter_v2449.py",
+        "c12-terminal-seal-v2450"
+      ]
+    }
+  ],
+  "signalsToSutOrWorkers": 0,
+  "localObserverEndedAfterKnownFailure": true
+}

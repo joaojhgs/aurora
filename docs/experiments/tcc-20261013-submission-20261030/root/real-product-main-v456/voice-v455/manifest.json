@@ -1,0 +1,27 @@
+{
+  "files": {
+    "supervisor.py": {
+      "sha256": "0c019f4207cb2f613b93635e6186733a77455f2988bc27d5bab1e68bdb4e551a",
+      "bytes": 8049
+    },
+    "backend-controller.py": {
+      "sha256": "9887d8a3dfe8d949babc7d68938ea84cc3989042dfe6e0fcf8dee12750e414f6",
+      "bytes": 7165
+    },
+    "source_guard_v455.py": {
+      "sha256": "8e4f7c64a055c61ee1ba6d509c924ad63fae753ff52a6e5493d02f6d354b7695",
+      "bytes": 1588
+    },
+    "driver.py": {
+      "sha256": "5a972c610663168be107cc2cbf9c3f2dcd6cca33c9df8611a7a591818ed81d05",
+      "bytes": 35710
+    }
+  },
+  "parentCapSeconds": 900,
+  "UISetupCapSeconds": 180,
+  "UIFlowCapSeconds": 180,
+  "globalActualTranscriptionOrdinal": 8,
+  "nextGate": "one normal-navigation actual full product flow only",
+  "measurementStarted": false,
+  "phase2Allowed": false
+}

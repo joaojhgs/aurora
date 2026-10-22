@@ -1,0 +1,14 @@
+[
+  {
+    "path": "apps/aurora-web/tsconfig.json",
+    "exact_owned_delta_restored": true,
+    "before_sha256": "d63b43c400eb176524330f77dc0cd8bfb7bfed2dc1dd064df9730a93d3298a09",
+    "generated_sha256": "dd26351d97939b84ddd3d0f99870133e59144f305046279eb99aa7d9a91d8b8b"
+  },
+  {
+    "path": "apps/aurora-web/next-env.d.ts",
+    "exact_owned_delta_restored": true,
+    "before_sha256": "7b550dda9686c16f36a17bf9051d5dbf31e98555b30d114ac49fc49a1e712651",
+    "generated_sha256": "54178b6796d1bfa28b77b0b1ca665d9c190a8cf71f50981566fde068f4b7b109"
+  }
+]

@@ -1,0 +1,21 @@
+{
+  "message": "msg_7ff59a3b7f67",
+  "at": "2026-10-15T02:35:56Z",
+  "failedSetup": "V476",
+  "controllerPID": 2894885,
+  "childPID": 2894901,
+  "terminalAt": "2026-10-15T02:33:58.480831Z",
+  "durationSeconds": 0.012655,
+  "exitCode": -2,
+  "error": "Sampler OSError16 EBUSY reading /sys/class/drm/card1/device/gpu_busy_percent",
+  "backendLogBytes": 0,
+  "observerStarted": false,
+  "pilotStarted": false,
+  "actualSTTLLMTTSRan": false,
+  "nMeasured": 0,
+  "ownedPIDsAbsentAt": "2026-10-15T02:35:14Z",
+  "globalAndGPULocksFree": true,
+  "next": "Private V477 per-counter OSError -> NULL plus path/errno, source delta review only; same fullaudio pilot/model/settings and finite caps; not launched yet",
+  "actualGPUAvailabilityInferred": false,
+  "phase2MeasuredAllowed": false
+}

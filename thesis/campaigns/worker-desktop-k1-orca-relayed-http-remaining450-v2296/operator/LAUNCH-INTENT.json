@@ -1,0 +1,8 @@
+{
+  "at": "2026-10-21T21:42:23.032361+00:00",
+  "frozenManifestSha256": "9adbf9ba3a7ec0948a087edad3655cf94ee344b3a2371a78d15f188f44150d42",
+  "maximumControllerPopen": 1,
+  "maximumCopierPopen": 1,
+  "maximumProofFinalizerPopen": 1,
+  "newOrcaWorkers": 0
+}

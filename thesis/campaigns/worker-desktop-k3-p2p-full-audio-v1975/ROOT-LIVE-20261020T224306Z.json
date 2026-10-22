@@ -1,0 +1,112 @@
+{
+  "at": "2026-10-20T22:43:06.867528+00:00",
+  "warmups": {
+    "attempted": 12,
+    "correct": 9,
+    "failed": 3
+  },
+  "measured": {
+    "attempted": 0,
+    "correct": 0,
+    "failed": 0
+  },
+  "actors": {
+    "3147698": {
+      "state": "S",
+      "sameStart": true
+    },
+    "3147699": {
+      "state": "S",
+      "sameStart": true
+    },
+    "3147700": {
+      "state": "S",
+      "sameStart": true
+    }
+  },
+  "custody": {
+    "sequence": 3,
+    "completedCases": {
+      "attempt-0001-warmup.jsonl": {
+        "audio": null,
+        "audioSha256": null,
+        "case": "thesis/campaigns/worker-desktop-k3-p2p-full-audio-v1975/attempts/attempt-0001-warmup.jsonl",
+        "caseSha256": "fd8e7417428844acd993eb222d479b6dcf206fd511a57a890ec3544035fb9e14",
+        "phase": "warmup",
+        "status": "failed"
+      },
+      "attempt-0002-warmup.jsonl": {
+        "audio": "thesis/campaigns/worker-desktop-k3-p2p-full-audio-v1975/audio/3b278861ca7709d58d50a6b0a207622673dc46aec7bb3c2e1cb6c5428e8dd905.wav",
+        "audioSha256": "3b278861ca7709d58d50a6b0a207622673dc46aec7bb3c2e1cb6c5428e8dd905",
+        "case": "thesis/campaigns/worker-desktop-k3-p2p-full-audio-v1975/attempts/attempt-0002-warmup.jsonl",
+        "caseSha256": "067b5d62db38874e0c94e1c076ce0bf7d2657c9ef647651b36bec426a4e58569",
+        "phase": "warmup",
+        "status": "completed_correct"
+      },
+      "attempt-0003-warmup.jsonl": {
+        "audio": "thesis/campaigns/worker-desktop-k3-p2p-full-audio-v1975/audio/abdec2018cf797cbb6b231dc2a46f6f687f05d21c7fc240b86979ef290b74aca.wav",
+        "audioSha256": "abdec2018cf797cbb6b231dc2a46f6f687f05d21c7fc240b86979ef290b74aca",
+        "case": "thesis/campaigns/worker-desktop-k3-p2p-full-audio-v1975/attempts/attempt-0003-warmup.jsonl",
+        "caseSha256": "4fb4c9ae4ab3f4e2786460de27e3b5fd03b1001e811d9aed7fe0ad84c06628f9",
+        "phase": "warmup",
+        "status": "completed_correct"
+      },
+      "attempt-0004-warmup.jsonl": {
+        "audio": "thesis/campaigns/worker-desktop-k3-p2p-full-audio-v1975/audio/7385f24feccfb531cabfe66b2887e1658ae8557ccd439927379ce2ab902e1da8.wav",
+        "audioSha256": "7385f24feccfb531cabfe66b2887e1658ae8557ccd439927379ce2ab902e1da8",
+        "case": "thesis/campaigns/worker-desktop-k3-p2p-full-audio-v1975/attempts/attempt-0004-warmup.jsonl",
+        "caseSha256": "78c1d30a4c0cd56569c762c1b81cd1c89ba2b1eaf18b5e45eace6b140d2810de",
+        "phase": "warmup",
+        "status": "completed_correct"
+      },
+      "attempt-0005-warmup.jsonl": {
+        "audio": null,
+        "audioSha256": null,
+        "case": "thesis/campaigns/worker-desktop-k3-p2p-full-audio-v1975/attempts/attempt-0005-warmup.jsonl",
+        "caseSha256": "b971e96ef78d9afc4eaf368020cb954ec9a48748c035c3879b91cf2d62af8315",
+        "phase": "warmup",
+        "status": "failed"
+      },
+      "attempt-0006-warmup.jsonl": {
+        "audio": "thesis/campaigns/worker-desktop-k3-p2p-full-audio-v1975/audio/1d5bc324271f39d572a78e0d8a9216b32fe7ca33bc68ec3ca3e05159569c1eae.wav",
+        "audioSha256": "1d5bc324271f39d572a78e0d8a9216b32fe7ca33bc68ec3ca3e05159569c1eae",
+        "case": "thesis/campaigns/worker-desktop-k3-p2p-full-audio-v1975/attempts/attempt-0006-warmup.jsonl",
+        "caseSha256": "91f06115030bdba4fdb24eab4257a15ec7130260d2fca0402ca5854430eba71a",
+        "phase": "warmup",
+        "status": "completed_correct"
+      },
+      "attempt-0007-warmup.jsonl": {
+        "audio": "thesis/campaigns/worker-desktop-k3-p2p-full-audio-v1975/audio/c93cf89037b8668eccf4dd2e16fa202149d6524bbf41258c49339654d8b7ef8a.wav",
+        "audioSha256": "c93cf89037b8668eccf4dd2e16fa202149d6524bbf41258c49339654d8b7ef8a",
+        "case": "thesis/campaigns/worker-desktop-k3-p2p-full-audio-v1975/attempts/attempt-0007-warmup.jsonl",
+        "caseSha256": "d652931ddaadf66a2a43c08fcbf5b09e0eb6deeaa0933985185e7e9da0fe74c2",
+        "phase": "warmup",
+        "status": "completed_correct"
+      },
+      "attempt-0008-warmup.jsonl": {
+        "audio": "thesis/campaigns/worker-desktop-k3-p2p-full-audio-v1975/audio/e42dfe2bc1fb1004afde1b32cfcd934dc711b0e23915c479b5f6d070621db5fd.wav",
+        "audioSha256": "e42dfe2bc1fb1004afde1b32cfcd934dc711b0e23915c479b5f6d070621db5fd",
+        "case": "thesis/campaigns/worker-desktop-k3-p2p-full-audio-v1975/attempts/attempt-0008-warmup.jsonl",
+        "caseSha256": "6649f3a612f9253282d9f44a41674a9f2d4268df997e01c8e27d9b25d8feb98e",
+        "phase": "warmup",
+        "status": "completed_correct"
+      },
+      "attempt-0009-warmup.jsonl": {
+        "audio": null,
+        "audioSha256": null,
+        "case": "thesis/campaigns/worker-desktop-k3-p2p-full-audio-v1975/attempts/attempt-0009-warmup.jsonl",
+        "caseSha256": "f27f6b301ebac0b9ed458407260888c8b0be245805605fd5c54b26ae243e8d22",
+        "phase": "warmup",
+        "status": "failed"
+      }
+    }
+  },
+  "custodyFileCount": 52,
+  "lastCase": {
+    "ordinal": 12,
+    "phase": "warmup",
+    "status": "completed_correct",
+    "failure": null,
+    "flow_duration_ms": 13189.120022
+  }
+}

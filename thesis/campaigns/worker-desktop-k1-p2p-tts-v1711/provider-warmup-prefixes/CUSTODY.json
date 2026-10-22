@@ -1,0 +1,25 @@
+{
+  "at": "2026-10-20T03:57:04.547404+00:00",
+  "files": {
+    "actual-provider-bindings.jsonl": {
+      "bytes": 11295,
+      "prefix": true,
+      "sha256": "cdb1e53a3eaba806e8befed65edcf3562fe0428db16c0bed1e05270180d33cba",
+      "terminalEOF": false
+    },
+    "receiver-identity.json": {
+      "bytes": 1523,
+      "prefix": false,
+      "sha256": "3318be5214d1437123b1d7602f0c1a0f5f287755a1e554a582714ff84fdd4454",
+      "terminalEOF": false
+    },
+    "voice-stages.jsonl": {
+      "bytes": 72825,
+      "prefix": true,
+      "sha256": "a51ce441803a892598f561316b86bc9a85364bf67b71df54467322316c412780",
+      "terminalEOF": false
+    }
+  },
+  "prefixesOnly": true,
+  "sutCalls": 0
+}

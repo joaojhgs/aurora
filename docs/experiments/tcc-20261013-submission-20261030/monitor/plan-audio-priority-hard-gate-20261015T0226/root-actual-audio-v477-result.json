@@ -1,0 +1,80 @@
+{
+  "message": "msg_43c565c4379a",
+  "createdAt": "2026-10-15T02:38:39Z",
+  "placement": "original Personal desktop",
+  "version": "V477",
+  "controllerPID": 2896027,
+  "childPID": 2896043,
+  "launchedAt": "2026-10-15T02:36:30Z",
+  "terminalAt": "2026-10-15T02:37:02.371832Z",
+  "controllerSeconds": 32.094766,
+  "exitCode": 1,
+  "childAbsent": true,
+  "input": {
+    "bytes": 193068,
+    "frames": 96512,
+    "durationSeconds": 4.376961,
+    "sampleRate": 22050,
+    "channels": 1,
+    "encoding": "PCM16",
+    "sha256": "2f6361506708d0a3065a339d168c9db5412e343683dd9b4080471d8948bf82ae"
+  },
+  "actualChain": true,
+  "correlation": "wav-flow-564fc2196d6e4d91a3c77ef08c7dcc16",
+  "flowMs": 16854.171509,
+  "flowBoundary": "excludes setup/shutdown; no playback claim",
+  "stt": {
+    "ms": 3385.51,
+    "engine": "faster_whisper/CTranslate2",
+    "device": "CPU",
+    "compute": "int8_float32",
+    "transcript": "apply with exactly this single word and no punctuation or bit."
+  },
+  "llm": {
+    "ms": 11164.149,
+    "engine": "QwenChatLlamaCpp",
+    "constructorGPUSetting": 100,
+    "actualGPUOffloadProven": false,
+    "actualGPUOffloadLogLines": 0,
+    "reply": "I am ready to apply the requested tool. Please specify the tool name or action you wish to perform.",
+    "filteredArgs": {
+      "seed": null,
+      "n_threads": null
+    },
+    "declaredArgs": {
+      "seed": 42,
+      "n_threads": 2
+    },
+    "typedCohortEquivalenceClaim": false
+  },
+  "tts": {
+    "ms": 2222.815,
+    "engine": "actual Piper CLI",
+    "modelConfigExecutableOutputBound": true,
+    "outputBytes": 246316,
+    "frames": 123136,
+    "sampleRate": 22050,
+    "channels": 1,
+    "encoding": "PCM16",
+    "validNonSilent": true,
+    "sha256": "7557b916c4bd4087f10f06cb41a156cada24f43c9e80deb71624cc4088cff63e"
+  },
+  "pilot": {
+    "attempt": 1,
+    "correct": 0,
+    "failed": 1,
+    "timeout": 0,
+    "nMeasured": 0,
+    "globalActualVoiceAttempt": 9
+  },
+  "observer": {
+    "events": 20,
+    "bytes": 16641,
+    "complete": true,
+    "errors": 0
+  },
+  "next": "one finite source-only decode/resample audit by same existing Luna; concrete bug or UNKNOWN; no model/phrase/flag/timeout ladder",
+  "phase2MeasuredAllowed": false,
+  "fullIndividualSeal": false,
+  "fullGoalComplete": false
+}

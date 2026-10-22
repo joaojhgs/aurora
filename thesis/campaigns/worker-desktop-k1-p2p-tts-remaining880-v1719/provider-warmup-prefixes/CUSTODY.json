@@ -1,0 +1,37 @@
+{
+  "at": "2026-10-20T04:48:18.345722+00:00",
+  "files": {
+    "STATUS.json": {
+      "bytes": 99269,
+      "prefix": false,
+      "sha256": "0016670002e4d889a86598031d162e1aa48dc864f0a6ec427832087f1b022cfe",
+      "terminalEOF": false
+    },
+    "actual-provider-bindings.jsonl": {
+      "bytes": 36897,
+      "prefix": true,
+      "sha256": "dbe128d69dd22c99e7c33eb65cab58f04889d8cb0042692b8e7844979434aa98",
+      "terminalEOF": false
+    },
+    "controller-launch.json": {
+      "bytes": 302,
+      "prefix": false,
+      "sha256": "852e3d0be04836ddbd551ff207778c2da8b22c7c61b8bec971da25f0ec85e945",
+      "terminalEOF": false
+    },
+    "receiver-identity.json": {
+      "bytes": 1523,
+      "prefix": false,
+      "sha256": "3318be5214d1437123b1d7602f0c1a0f5f287755a1e554a582714ff84fdd4454",
+      "terminalEOF": false
+    },
+    "voice-stages.jsonl": {
+      "bytes": 237895,
+      "prefix": true,
+      "sha256": "f943410816b252f64a31f3436845a1c0b633250f6946adcaa3d1b6f586a7de45",
+      "terminalEOF": false
+    }
+  },
+  "prefixesOnly": true,
+  "sutCalls": 0
+}

@@ -1,0 +1,42 @@
+{
+  "at": "2026-10-20T21:33:15.903064+00:00",
+  "status": "K3_ZERO_AUDIO_ROUTE_ADMISSION_STOP_STT_SHARING_AND_TASK_CONSENT_FIX_PENDING",
+  "nativeGoalThread": "01a112a5-d6bb-74e2-bf7c-ace73cb513b5",
+  "nativeGoalStatus": "active",
+  "counts": {
+    "warmupsAttempted": 0,
+    "measuredAttempted": 0,
+    "measuredTarget": 900,
+    "measuredUnattempted": 900
+  },
+  "conditionSha256": "540a35ffa68bf41f321562d28601bd281cabfa51b0c55539d77a6c7ba9d1f674",
+  "cause": {
+    "sttRoute": "selector_service_missing/service_not_advertised",
+    "providerSttShare": false,
+    "missingRequiredTaskPermission": "Transcription.Transcribe",
+    "llmAndTtsRoutes": "admitted"
+  },
+  "authority": "ordinary approved-pair task consent and sharing authorized owner methodology30.56.1; no new credentials/security grant",
+  "providerReservation": "HELD, exact same161159/161160 current liveness reconciliation in progress; do not infer release",
+  "requester": "controller/backend/finalizer naturally retired after model-free route setup timeout; no audio samples",
+  "phoneSetup": {
+    "taskId": "task_e35b809903c1",
+    "dispatchId": "ctx_104db5d889d2",
+    "terminal": "term_1f27be31-0284-4366-bb91-30fe538cd30e",
+    "incarnation": "3bb8c5e5-3bed-4460-8906-9d06f0b3be71",
+    "launch": {
+      "agent": "codex",
+      "model": "gpt-6.1-sol",
+      "effort": "xhigh"
+    },
+    "state": "ready",
+    "turnStart": "observed",
+    "ownedPaths": [
+      "thesis/phone-notebook/20261020/"
+    ],
+    "deploymentShaPending": true,
+    "actualPairing": "not yet verified",
+    "overnightWindow": "not provided; measured runner must refuse missing finite window"
+  },
+  "sourceIntegration": "Root-only coherent source commits and feature branch push newly owner-authorized; worker+desktop dirty/frozen input reconciliation in progress; no concurrent Git writer"
+}

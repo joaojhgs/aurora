@@ -1,0 +1,89 @@
+{
+  "at": "2026-10-22T01:13:59.126370+00:00",
+  "state": "PENDING_NOT_TRIGGERED",
+  "notificationId": "owner-k1-http-complete-msg_dd7d643976ce",
+  "ownerRequestMessage": "msg_dd7d643976ce",
+  "runId": "run_e6054e76e9fc",
+  "rootNativeGoal": "01a112a5-d6bb-74e2-bf7c-ace73cb513b5",
+  "originalMonitorDispatch": "ctx_37b4d0a3c14f",
+  "trigger": [
+    "Existing K1 HTTP condition reaches900attempted with exact remaining451-900 closed; historical and new failures preserved, no successful top-up",
+    "Existing final raw/audio/stage/resource custody and scoped saved-data analysis actually SEALED",
+    "Actual owned provider/requester/copy finalization and resource-release receipt available"
+  ],
+  "route": "Publish actual final condition/epoch counts, paths/hashes and retirement/release receipts through original Orca Run and original monitor to Coding; monitor deduplicates and verifies Coding delivery",
+  "notCompleteFrom": [
+    "terminal summary alone",
+    "worker turn stop",
+    "permission or planned finalizer",
+    "message accepted to monitor without confirmed Coding delivery"
+  ],
+  "dedupe": "One milestone notification; preserve accepted request/message IDs, reconcile uncertain delivery before any resend; remain pending until Coding delivery verified",
+  "existingFinalizer": "thesis/harness/finish_k1_http_epoch_v2303.py",
+  "newScientificGates": 0,
+  "newTestsOrReruns": 0,
+  "nativeFull13GoalRemainsActive": true,
+  "mainAtRecording": {
+    "at": "2026-10-22T01:13:59.123971+00:00",
+    "classification": "VERIFIED_WAIT",
+    "manifestSha256": "9adbf9ba3a7ec0948a087edad3655cf94ee344b3a2371a78d15f188f44150d42",
+    "actors": [
+      {
+        "pid": 3965950,
+        "expectedStartTicks": 139740362,
+        "state": "S",
+        "startTicks": 139740362,
+        "matches": true
+      },
+      {
+        "pid": 3965978,
+        "expectedStartTicks": 139740616,
+        "state": "S",
+        "startTicks": 139740616,
+        "matches": true
+      },
+      {
+        "pid": 3965951,
+        "expectedStartTicks": 139740363,
+        "state": "S",
+        "startTicks": 139740363,
+        "matches": true
+      }
+    ],
+    "epochMeasured": {
+      "attempted": 213,
+      "correct": 213,
+      "failed": 0,
+      "incorrect": 0,
+      "timeouts": 0,
+      "planned": 450
+    },
+    "conditionCountsOnly": {
+      "attempted": 663,
+      "correct": 662,
+      "failed": 1,
+      "incorrect": 0,
+      "unattempted": 237,
+      "planned": 900
+    },
+    "copier": {
+      "receipt": "thesis/campaigns/worker-desktop-k1-orca-relayed-http-remaining450-v2296/receipts/000211.json",
+      "sha256": "b6532465f86cec0fad39355df2b5908702ed7b733b534db66bacc4107ec6fa1c",
+      "cases": 228,
+      "WAV": 228,
+      "errors": [],
+      "freeBytes": 3194769408
+    },
+    "terminalSummaryPresent": false,
+    "observationOnly": true,
+    "newSutCalls": 0,
+    "processSignals": 0,
+    "measurementInputsNotModifiedByThisObserver": true
+  },
+  "monitorCanonicalDedupKey": "run_e6054e76e9fc:K1_HTTP_FULL900_FINAL_SEAL_RELEASE:OWNER_REQUEST_20261022",
+  "rootNotificationIdRole": "Internal execution-evidence correlation only; not a second external owner-notification key",
+  "monitorContractMessage": "msg_b7092e90c09a",
+  "monitorContractReceipt": "thesis/campaigns/worker-desktop-k1-orca-relayed-http-remaining450-v2296/OWNER-MILESTONE-MONITOR-CONTRACT-ORCA-v2348.json",
+  "notificationEmitterOwner": "Original monitor emits/deduplicates BIG milestone through Coding after Root actual seal/release evidence; retain pending until Coding delivery verified",
+  "correlatedAt": "2026-10-22T01:16:08.761659+00:00"
+}

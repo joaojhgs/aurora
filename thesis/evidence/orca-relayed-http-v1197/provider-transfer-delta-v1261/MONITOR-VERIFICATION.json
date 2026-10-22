@@ -1,0 +1,55 @@
+{
+  "observedAt": "2026-10-17T21:21:59.606838+00:00",
+  "run": "run_e6054e76e9fc",
+  "task": "task_d7ea336050cf",
+  "dispatch": "ctx_37b4d0a3c14f",
+  "actualDeltaCustody": "thesis/evidence/orca-relayed-http-v1197/provider-transfer-delta-v1261/CUSTODY.json",
+  "status": "complete_checkpoint_copy",
+  "finishedAt": "2026-10-17T21:19:36.081605+00:00",
+  "snapshotAt": "2026-10-17T21:18:06.289638+00:00",
+  "checkpointSequence": 49,
+  "baseline": {
+    "path": "thesis/evidence/orca-relayed-http-v1197/provider-transfer-v1232/extracted",
+    "rawFiles": 56,
+    "rawPayloadBytes": 43117024,
+    "manifestSHA256": "5f29a553048441503ba0d231ec78e857f2a9ef3355a931dcae9d0db360ee760b"
+  },
+  "delta": {
+    "path": "thesis/evidence/orca-relayed-http-v1197/provider-transfer-delta-v1261/extracted",
+    "rawFiles": 111,
+    "rawPayloadBytes": 9820717,
+    "allNewPhysicalDestinationsChecked": 114,
+    "archiveBytes": 611064,
+    "archiveSHA256_RootVerified": "00932123309ae0094b4439e723f3b5996b81cfdbb52d752a997c0403c40cbc2d",
+    "pages": 7
+  },
+  "combinedCoverage": {
+    "rawFiles": 167,
+    "rawPayloadBytes": 52937741,
+    "overlappingMemberKeys": 0,
+    "exactFullSnapshotKeyAndIdentityMatch": true,
+    "prefixes": {
+      "actual-provider-bindings.jsonl": {
+        "chunks": 49,
+        "endByte": 62970,
+        "sourceObservedBytes": 62970,
+        "incomplete": true
+      },
+      "resources.jsonl": {
+        "chunks": 58,
+        "endByte": 52305234,
+        "sourceObservedBytes": 52305234,
+        "incomplete": true
+      },
+      "voice-stages.jsonl": {
+        "chunks": 49,
+        "endByte": 395305,
+        "sourceObservedBytes": 395305,
+        "incomplete": true
+      }
+    }
+  },
+  "independentMonitorScope": "New114 destination containment/existence/sizes and combined baseline+delta metadata/hash-chain/prefix coverage. Root transfer verified raw-file hashes. Monitor did not rehash archive/models/WAVs or earlier43MB baseline; no new tests/replay/SUT/Personal commands.",
+  "issues": [],
+  "conclusion": "Baseline plus delta physically retained through snapshot; later tail remains active Personal repo, condition not sealed. CurrentK1 and original runtime ownership preserved."
+}

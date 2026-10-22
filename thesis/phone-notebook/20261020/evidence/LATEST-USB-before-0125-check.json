@@ -1,0 +1,415 @@
+{
+  "schema": "aurora.phone_notebook.owner_fixed_wifi_setup.v1",
+  "at": "2026-10-22T00:16:58.244920+00:00",
+  "status": "USB_AUTHORIZED_SAVED_WIFI_LAN_SELECTED_WAITING_EXACT_STAGING",
+  "operations": {
+    "owner-fixed-now-20261022T001309": {
+      "result": {
+        "appInstallsOrLaunches": 0,
+        "at": "2026-10-22T00:13:17.587617+00:00",
+        "controllerOverrides": {
+          "ADB_SERVER_PORT": null,
+          "ADB_SERVER_SOCKET": null,
+          "ANDROID_ADB_SERVER_PORT": null
+        },
+        "host": "skyron-notebook",
+        "inventory": {
+          "at": "2026-10-22T00:13:17.577539+00:00",
+          "command": [
+            "/home/developer/Android/Sdk/platform-tools/adb",
+            "devices",
+            "-l"
+          ],
+          "exit": 0,
+          "stderr": "",
+          "stdout": "List of devices attached\nKBX8LNFUBE5XGQRG       device usb:3-1 product:rodin_global model:2412DPC0AG device:rodin transport_id:2\n\n"
+        },
+        "knownOwnerSerial": "KBX8LNFUBE5XGQRG",
+        "modelCalls": 0,
+        "permissionsAccountsMountsKeysNetworkChanged": false,
+        "properties": {
+          "ro.build.version.release": {
+            "at": "2026-10-22T00:13:17.687032+00:00",
+            "command": [
+              "/home/developer/Android/Sdk/platform-tools/adb",
+              "-s",
+              "KBX8LNFUBE5XGQRG",
+              "shell",
+              "getprop",
+              "ro.build.version.release"
+            ],
+            "exit": 0,
+            "stderr": "",
+            "stdout": "16\n"
+          },
+          "ro.build.version.sdk": {
+            "at": "2026-10-22T00:13:17.723156+00:00",
+            "command": [
+              "/home/developer/Android/Sdk/platform-tools/adb",
+              "-s",
+              "KBX8LNFUBE5XGQRG",
+              "shell",
+              "getprop",
+              "ro.build.version.sdk"
+            ],
+            "exit": 0,
+            "stderr": "",
+            "stdout": "36\n"
+          },
+          "ro.product.cpu.abilist": {
+            "at": "2026-10-22T00:13:17.661854+00:00",
+            "command": [
+              "/home/developer/Android/Sdk/platform-tools/adb",
+              "-s",
+              "KBX8LNFUBE5XGQRG",
+              "shell",
+              "getprop",
+              "ro.product.cpu.abilist"
+            ],
+            "exit": 0,
+            "stderr": "",
+            "stdout": "arm64-v8a\n"
+          },
+          "ro.product.manufacturer": {
+            "at": "2026-10-22T00:13:17.593373+00:00",
+            "command": [
+              "/home/developer/Android/Sdk/platform-tools/adb",
+              "-s",
+              "KBX8LNFUBE5XGQRG",
+              "shell",
+              "getprop",
+              "ro.product.manufacturer"
+            ],
+            "exit": 0,
+            "stderr": "",
+            "stdout": "Xiaomi\n"
+          },
+          "ro.product.model": {
+            "at": "2026-10-22T00:13:17.635784+00:00",
+            "command": [
+              "/home/developer/Android/Sdk/platform-tools/adb",
+              "-s",
+              "KBX8LNFUBE5XGQRG",
+              "shell",
+              "getprop",
+              "ro.product.model"
+            ],
+            "exit": 0,
+            "stderr": "",
+            "stdout": "2412DPC0AG\n"
+          }
+        },
+        "schema": "aurora.phone_notebook.owner_fixed_usb_check.v4",
+        "selectedState": {
+          "at": "2026-10-22T00:13:17.582530+00:00",
+          "command": [
+            "/home/developer/Android/Sdk/platform-tools/adb",
+            "-s",
+            "KBX8LNFUBE5XGQRG",
+            "get-state"
+          ],
+          "exit": 0,
+          "stderr": "",
+          "stdout": "device\n"
+        },
+        "status": "REACHABLE_AUTHORIZED",
+        "usbControlOnly": true,
+        "usbNode": {
+          "canRead": true,
+          "canWrite": true,
+          "exists": true,
+          "gid": 1002,
+          "manufacturer": "Xiaomi",
+          "mode": "crw-rw----",
+          "path": "/dev/bus/usb/003/014",
+          "product": "POCO X7 Pro",
+          "serial": "KBX8LNFUBE5XGQRG",
+          "sysfsDevice": "3-1",
+          "uid": 65534
+        },
+        "usbPath": {
+          "at": "2026-10-22T00:13:17.588599+00:00",
+          "command": [
+            "/home/developer/Android/Sdk/platform-tools/adb",
+            "-s",
+            "KBX8LNFUBE5XGQRG",
+            "get-devpath"
+          ],
+          "exit": 0,
+          "stderr": "",
+          "stdout": "usb:3-1\n"
+        },
+        "wirelessConnectAttempted": false
+      },
+      "receipt": {
+        "bytes": 2712,
+        "copyOnly": true,
+        "custody": "Notebook result persisted and fsynced before relay; remote receipt in same output",
+        "localPath": "/home/developer/projects/aurora/thesis/phone-notebook/20261020/evidence/owner-fixed-now-20261022T001309/result.json",
+        "remotePath": "/home/developer/projects/aurora/thesis/phone-notebook/20261020/evidence/owner-fixed-now-20261022T001309.json",
+        "sha256": "64b15178f9255510668e23502d6ffd34409b7632107ca92a7ed63f823f18151f"
+      }
+    },
+    "saved-wifi-after-fix-20261022T001345": {
+      "result": {
+        "after": {
+          "argv": [
+            "/home/developer/Android/Sdk/platform-tools/adb",
+            "-H",
+            "127.0.0.1",
+            "-P",
+            "5037",
+            "-s",
+            "KBX8LNFUBE5XGQRG",
+            "shell",
+            "settings",
+            "get",
+            "global",
+            "wifi_on"
+          ],
+          "exit": 0,
+          "stderr": "",
+          "stdout": "1\n"
+        },
+        "at": "2026-10-22T00:13:53.871803+00:00",
+        "authority": "Owner explicitly authorizes ordinary Wi-Fi ON and already-saved home-network auto-connect for this phone",
+        "before": {
+          "argv": [
+            "/home/developer/Android/Sdk/platform-tools/adb",
+            "-H",
+            "127.0.0.1",
+            "-P",
+            "5037",
+            "-s",
+            "KBX8LNFUBE5XGQRG",
+            "shell",
+            "settings",
+            "get",
+            "global",
+            "wifi_on"
+          ],
+          "exit": 0,
+          "stderr": "",
+          "stdout": "0\n"
+        },
+        "cellularTransfersOrTestTraffic": false,
+        "doneAt": "2026-10-22T00:14:02.357558+00:00",
+        "enable": {
+          "argv": [
+            "/home/developer/Android/Sdk/platform-tools/adb",
+            "-H",
+            "127.0.0.1",
+            "-P",
+            "5037",
+            "-s",
+            "KBX8LNFUBE5XGQRG",
+            "shell",
+            "svc",
+            "wifi",
+            "enable"
+          ],
+          "exit": 0,
+          "stderr": "",
+          "stdout": ""
+        },
+        "networksListedOrCredentialsRequested": false,
+        "observations": [
+          {
+            "addresses": {
+              "argv": [
+                "/home/developer/Android/Sdk/platform-tools/adb",
+                "-H",
+                "127.0.0.1",
+                "-P",
+                "5037",
+                "-s",
+                "KBX8LNFUBE5XGQRG",
+                "shell",
+                "ip",
+                "-o",
+                "-4",
+                "addr",
+                "show",
+                "dev",
+                "wlan0"
+              ],
+              "exit": 0,
+              "stderr": "",
+              "stdout": ""
+            },
+            "at": "2026-10-22T00:13:56.044977+00:00"
+          },
+          {
+            "addresses": {
+              "argv": [
+                "/home/developer/Android/Sdk/platform-tools/adb",
+                "-H",
+                "127.0.0.1",
+                "-P",
+                "5037",
+                "-s",
+                "KBX8LNFUBE5XGQRG",
+                "shell",
+                "ip",
+                "-o",
+                "-4",
+                "addr",
+                "show",
+                "dev",
+                "wlan0"
+              ],
+              "exit": 0,
+              "stderr": "",
+              "stdout": ""
+            },
+            "at": "2026-10-22T00:13:58.087168+00:00"
+          },
+          {
+            "addresses": {
+              "argv": [
+                "/home/developer/Android/Sdk/platform-tools/adb",
+                "-H",
+                "127.0.0.1",
+                "-P",
+                "5037",
+                "-s",
+                "KBX8LNFUBE5XGQRG",
+                "shell",
+                "ip",
+                "-o",
+                "-4",
+                "addr",
+                "show",
+                "dev",
+                "wlan0"
+              ],
+              "exit": 0,
+              "stderr": "",
+              "stdout": ""
+            },
+            "at": "2026-10-22T00:14:00.115602+00:00"
+          },
+          {
+            "addresses": {
+              "argv": [
+                "/home/developer/Android/Sdk/platform-tools/adb",
+                "-H",
+                "127.0.0.1",
+                "-P",
+                "5037",
+                "-s",
+                "KBX8LNFUBE5XGQRG",
+                "shell",
+                "ip",
+                "-o",
+                "-4",
+                "addr",
+                "show",
+                "dev",
+                "wlan0"
+              ],
+              "exit": 0,
+              "stderr": "",
+              "stdout": "37: wlan0    inet 192.168.1.94/24 brd 192.168.1.255 scope global dynamic wlan0\\       valid_lft 3599sec preferred_lft 3599sec\n"
+            },
+            "at": "2026-10-22T00:14:02.200813+00:00"
+          }
+        ],
+        "routeToNotebook": {
+          "argv": [
+            "/home/developer/Android/Sdk/platform-tools/adb",
+            "-H",
+            "127.0.0.1",
+            "-P",
+            "5037",
+            "-s",
+            "KBX8LNFUBE5XGQRG",
+            "shell",
+            "ip",
+            "-4",
+            "route",
+            "get",
+            "192.168.1.250"
+          ],
+          "exit": 0,
+          "stderr": "",
+          "stdout": "192.168.1.250 dev wlan0 table 1000000037 src 192.168.1.94 uid 2000 \n    cache \n"
+        },
+        "schema": "aurora.phone_notebook.saved_wifi_enable.v7",
+        "state": {
+          "argv": [
+            "/home/developer/Android/Sdk/platform-tools/adb",
+            "-H",
+            "127.0.0.1",
+            "-P",
+            "5037",
+            "-s",
+            "KBX8LNFUBE5XGQRG",
+            "get-state"
+          ],
+          "exit": 0,
+          "stderr": "",
+          "stdout": "device\n"
+        },
+        "status": "SAVED_WIFI_LAN_ROUTE_SELECTED"
+      },
+      "receipt": {
+        "bytes": 2798,
+        "copyOnly": true,
+        "custody": "Notebook result persisted and fsynced before relay; remote receipt in same output",
+        "localPath": "/home/developer/projects/aurora/thesis/phone-notebook/20261020/evidence/saved-wifi-after-fix-20261022T001345/result.json",
+        "remotePath": "/home/developer/projects/aurora/thesis/phone-notebook/20261020/evidence/saved-wifi-after-fix-20261022T001345.json",
+        "sha256": "f66c2e22c9f8a7632044242514904c0114b5049b04b2c67bc2b7f0c315bf1256"
+      }
+    },
+    "offline-binary-readiness-20261022T001646": {
+      "result": {
+        "at": "2026-10-22T00:16:54.009663+00:00",
+        "binaryImport": {
+          "exit": 0,
+          "guardStop": null,
+          "peakSampledRssBytes": 265809920,
+          "stderr": "",
+          "stdout": "{\"imports\": [\"ctranslate2\", \"numpy\", \"onnxruntime\", \"faster_whisper\", \"piper.voice\"], \"cpuComputeTypes\": [\"float32\", \"int8\", \"int8_float32\"], \"onnxAvailableProviders\": [\"AzureExecutionProvider\", \"CPUExecutionProvider\"], \"modelsLoaded\": 0}\n"
+        },
+        "doneAt": "2026-10-22T00:16:58.244920+00:00",
+        "existingApprovedSourceSshConfigOnly": {
+          "configuredHostAliasResolved": false,
+          "connectionAttempted": false,
+          "exit": 0,
+          "keysInspected": false,
+          "selectedNonsecretFields": {
+            "hostname": "ssh-oci-coding-worker",
+            "port": "22",
+            "user": "developer"
+          }
+        },
+        "modelBytesRead": 0,
+        "modelCalls": 0,
+        "networkRequests": 0,
+        "notebookRouteToPhone": {
+          "exit": 0,
+          "packetsSent": 0,
+          "stderr": "",
+          "stdout": "192.168.1.94 dev wlp4s0 src 192.168.1.250 uid 1001 \n    cache \n"
+        },
+        "ownBuildOrInferenceProcessesActive": 0,
+        "resourceAdmission": "msg_fb6e25f5d33a",
+        "schema": "aurora.phone_notebook.offline_binary_readiness.v10",
+        "sharedVenvModified": false
+      },
+      "receipt": {
+        "bytes": 1095,
+        "copyOnly": true,
+        "custody": "Notebook result persisted and fsynced before relay; remote receipt in same output",
+        "localPath": "/home/developer/projects/aurora/thesis/phone-notebook/20261020/evidence/offline-binary-readiness-20261022T001646/result.json",
+        "remotePath": "/home/developer/projects/aurora/thesis/phone-notebook/20261020/evidence/offline-binary-readiness-20261022T001646.json",
+        "sha256": "116e7e2376777e0c0a24f71a0b57af38ac912e3fb62c826e66d7af7211673c17"
+      }
+    }
+  },
+  "queuedResourceHandoff": "PENDING-RESOURCE-HANDOFF.json",
+  "actualHttpOrP2pVerified": false,
+  "nativePilotCalls": 0,
+  "overnightStarted": false
+}

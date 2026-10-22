@@ -1,0 +1,59 @@
+{
+  "observed_at": "2026-10-14T16:50:34.858845+00:00",
+  "root_message": "msg_4dad0ee86828",
+  "ack_delivery": "delivery_7c93efd0a5b0",
+  "failed_bundle_receipt": {
+    "path": ".git/aurora-handoff-import-20261006/desktop-source-delta-v409-failed-receipt.json",
+    "sha256": "3db46d94477c17f205be42c8e99d0d26bb48256f1137149ffdaddbe066669a99",
+    "actual": {
+      "recordedAt": "2026-10-14T16:45:29.721911+00:00",
+      "attempt": "bounded_bundle_delta",
+      "outcome": "subprocess_timeout_10_seconds",
+      "declaredTimeoutSeconds": 10,
+      "source_or_refs_mutated": false,
+      "artifactExists": false,
+      "partialBytes": null,
+      "activeGitOnlyMetadata": [],
+      "next": "do_not_repeat_bundle; existing_public_source_runtime_equivalence_plus_frozen21_overlay"
+    }
+  },
+  "actual_base_fetch": {
+    "path": ".git/aurora-handoff-import-20261006/desktop-source-prerequisite-actual-v409.json",
+    "sha256": "a1529b4e156a5667394b1225370939032b3d34bb488e0cba6037115c395bba63",
+    "actual": {
+      "after_present": true,
+      "before_present": false,
+      "benchmark_started": false,
+      "fetch_exit_code": 0,
+      "inference_started": false,
+      "kind": "aurora_root_published_source_prerequisite",
+      "prerequisite": "c0f4c0013cea5bb11ef81297194d0dc142a47bc4",
+      "recorded_at": "2026-10-14T16:44:30.999287+00:00",
+      "source_changes": false,
+      "stderr_bytes": 0,
+      "stdout_bytes": 0
+    }
+  },
+  "root_expected_source": "5782746afba213f6b36907db2f09f0017625e218",
+  "root_reports_runtime_diff_zero": true,
+  "receiver_runtime_tree_verification": "pending",
+  "overlay_root_report": {
+    "files": 21,
+    "uncompressed_bytes": 1225827,
+    "zip_bytes": 417213,
+    "zip_sha256": "2e01ba643dbd8856f4dc09a274222a3582b9bbe4374e159ea904d2d4806e9f12",
+    "assembly_seconds": 0.17,
+    "source_model_config_env_exclusions": [
+      "model artifacts",
+      "config.json",
+      ".env"
+    ],
+    "frames": 13,
+    "frame_size": 32768,
+    "actual_frame_ack_required": true
+  },
+  "transport_wholehash_receiver_verification": "pending",
+  "benchmark_started": false,
+  "dual_barrier_ready": false,
+  "monitor_activity": "read-only receipt and report; no artifact creation/transfer/source mutation"
+}

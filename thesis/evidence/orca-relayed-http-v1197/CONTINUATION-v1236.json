@@ -1,0 +1,62 @@
+{
+  "at": "2026-10-17T20:48:36.401583+00:00",
+  "classification": "PROGRESS: real provider raw transfer, verified and independently reviewed; healthy current condition continues",
+  "currentOriginalPids": [
+    {
+      "matches": true,
+      "pid": 430655,
+      "startTicks": "104608580",
+      "state": "S"
+    },
+    {
+      "matches": true,
+      "pid": 430656,
+      "startTicks": "104608648",
+      "state": "S"
+    },
+    {
+      "matches": true,
+      "pid": 442775,
+      "startTicks": "104723117",
+      "state": "S"
+    },
+    {
+      "matches": true,
+      "pid": 421717,
+      "startTicks": "104535394",
+      "state": "S"
+    }
+  ],
+  "independentReview": {
+    "bytes": 3084,
+    "canonical": "thesis/evidence/orca-relayed-http-v1197/provider-transfer-v1232/MONITOR-VERIFICATION-v1236.json",
+    "sha256": "4c71f2f50d2284c16ee983cf3d6137e64430fe53e591596768c509ee08440789",
+    "source": ".omx/evidence/orca-monitor-20261010/PROVIDER-WORKER-CUSTODY-VERIFIED-20261017T2046.json",
+    "verdict": "No problems; all59extracted paths/sizes,27pages and3prefixchains consistent; no repeated43MB rehash or SUT calls"
+  },
+  "nativeGoalStatus": "active",
+  "nextCheck": "2026-10-17T20:50:00+00:00 original progress/startticks/copyerrors only",
+  "nextProviderTransfer": "Delta-only new immutable chunk keys after existing checkpoint12; not a full-prefix repeat",
+  "oldRecoveryGaps": "V799original130072923B archive UNKNOWN/unrecovered; C06final/raw/bytes/denominator UNKNOWN",
+  "progress": {
+    "attempted": 48,
+    "last_attempt_file": "attempts/attempt-0048-measured.jsonl",
+    "last_attempt_status": "completed_correct",
+    "measured_attempted": 33,
+    "planned_measured": 900,
+    "planned_warmups": 15,
+    "status": "running",
+    "unattempted_measured": 867,
+    "warmups_attempted": 15
+  },
+  "providerWorkerRawBytes": 43117024,
+  "providerWorkerRawFiles": 56,
+  "providerWorkerThrough": "2026-10-17T20:40:55.137447+00:00",
+  "requesterCopiedBytes": 5980325,
+  "requesterCopyErrors": [],
+  "requesterPhysicalAudio": 47,
+  "requesterPhysicalCases": 47,
+  "scope": "Same original full13; no replacement, resume, new worker/forward or closed-run replay",
+  "transferReceipt": "thesis/evidence/orca-relayed-http-v1197/provider-transfer-v1232/CUSTODY.json",
+  "transferStatus": "complete_checkpoint_copy, control released"
+}

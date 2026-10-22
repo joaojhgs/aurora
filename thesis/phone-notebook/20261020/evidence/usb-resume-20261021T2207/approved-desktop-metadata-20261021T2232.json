@@ -1,0 +1,26 @@
+{
+  "id": "0c742c47-1712-46cd-bf41-083ee8712f16",
+  "ok": true,
+  "result": {
+    "targets": [
+      {
+        "id": "ssh-vnc:WyJzc2gtMTc4NjIzODQ4MDk2Ny1zZW1kZXYiLCJtYWluIl0",
+        "label": "personal-distrobox · Main desktop",
+        "viewOnly": false,
+        "executionHostId": "ssh-1786238480967-semdev"
+      },
+      {
+        "id": "ssh-vnc:WyJzc2gtMTc4NjIzODQ4MDk2Ny1zZW1kZXYiLCJnYW1lIl0",
+        "label": "personal-distrobox · K-style game",
+        "viewOnly": false,
+        "executionHostId": "ssh-1786238480967-semdev"
+      }
+    ],
+    "unavailableHosts": [
+      "ssh-1786238480967-semdev"
+    ]
+  },
+  "_meta": {
+    "runtimeId": "cc9e3275-28c6-4c45-85cc-bdcd2262aa7d"
+  }
+}

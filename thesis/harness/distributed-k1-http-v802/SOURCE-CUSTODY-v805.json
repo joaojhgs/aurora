@@ -1,0 +1,32 @@
+{
+  "at": "2026-10-16T02:30:33.781107+00:00",
+  "files": [
+    {
+      "source": ".git/aurora-handoff-import-20261006/distributed-k1-http-prep-v802/runner.py",
+      "canonicalCopy": "thesis/harness/distributed-k1-http-v802/runner.py",
+      "bytes": 64870,
+      "sha256": "45d2c3f4df7353c2fc162c6986d125096b64216a76575a8a1d5bae4e5c154b0f"
+    },
+    {
+      "source": ".git/aurora-handoff-import-20261006/distributed-k1-http-prep-v802/tts_http_adapter.py",
+      "canonicalCopy": "thesis/harness/distributed-k1-http-v802/tts_http_adapter.py",
+      "bytes": 4791,
+      "sha256": "81a44fb0180fe540c087ba1f81410e07f51f6c6d96eee2eeffb49f471da2e49c"
+    },
+    {
+      "source": ".git/aurora-handoff-import-20261006/distributed-k1-http-prep-v802/README.md",
+      "canonicalCopy": "thesis/harness/distributed-k1-http-v802/README.md",
+      "bytes": 4070,
+      "sha256": "cfbd652455367d7dbed571bb34dc82f611553504a459f9f7629bd4e5431f9d30"
+    },
+    {
+      "source": ".git/aurora-handoff-import-20261006/distributed-k1-http-prep-v802/REPORT.md",
+      "canonicalCopy": "thesis/harness/distributed-k1-http-v802/REPORT.md",
+      "bytes": 3366,
+      "sha256": "e7f4561d04dfd40037913abc617011bb60fd12cd1b55c66fa2da47a2d9b4b621"
+    }
+  ],
+  "reviewSHA256": "a679a69087cc2d55c2520328e86835ace9dc3dab808ffc66ed1fbc5cc2ac1bc1",
+  "scope": "requester runner/HTTP adapter module source approval only; controller/bootstrap/realroute/receiverproof unintegrated",
+  "runtimeExecuted": false
+}

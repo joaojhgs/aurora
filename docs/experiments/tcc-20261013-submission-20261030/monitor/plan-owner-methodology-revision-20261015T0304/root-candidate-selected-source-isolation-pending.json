@@ -1,0 +1,39 @@
+{
+  "rootMessage": "msg_a3c5b9703a92",
+  "selectedBeforePilot": true,
+  "task": "What is the capital of France? Answer with only the city name.",
+  "expectedReply": "Paris",
+  "criteria": "all transcript words and single-word Paris; no hints/substitution",
+  "input": {
+    "provenance": "Root one-time synthetic Piper generation",
+    "bytes": 153644,
+    "durationSeconds": 3.482993,
+    "sha256": "139fa0c34b6d18600ad9608fd2d11c9389cae2f5f548ce0f4f23b735b176f0b3"
+  },
+  "modelSelection": "Same accurate/base CPU STT, Qwen and Piper; no new weights for first candidate",
+  "beforeResources": {
+    "home": "322.9MB",
+    "shm": "560.4MB",
+    "memory": "3.30GB"
+  },
+  "sourceIsolation": {
+    "issue": "candidate config ancestor symlinks forwarded four writes to old owned source-v436",
+    "activeRuntime": false,
+    "repair": "materialize candidate ancestors, restore exact four old preimages; c0f blobs equal preimages",
+    "restorationConfinementVerified": false
+  },
+  "planned": {
+    "pilots": 1,
+    "flowCapSeconds": 180,
+    "controllerCapSeconds": 300,
+    "nMeasured": 0,
+    "effectiveSeed": 42,
+    "threads": 2,
+    "verbose": true
+  },
+  "newCohortId": null,
+  "frozenManifestPath": null,
+  "frozenManifestSHA256": null,
+  "cohortReplacementApplied": false,
+  "phase2MeasuredAllowed": false
+}

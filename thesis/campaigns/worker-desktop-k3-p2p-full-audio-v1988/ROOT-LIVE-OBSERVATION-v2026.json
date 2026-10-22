@@ -1,0 +1,171 @@
+{
+  "at": "2026-10-20T23:31:47.722696+00:00",
+  "observationStartedAt": "2026-10-20T23:31:47.699893+00:00",
+  "observationEndedAt": "2026-10-20T23:31:47.722696+00:00",
+  "source": "fresh primary case files, custody CURRENT and /proc; no previous receipt reused",
+  "primaryCasesDirectory": "/home/developer/projects/aurora/.git/aurora-handoff-import-20261006/distributed-k3-mesh-cell-v1988/campaign/attempts",
+  "primaryProgressPath": "/home/developer/projects/aurora/.git/aurora-handoff-import-20261006/distributed-k3-mesh-cell-v1988/campaign/progress.json",
+  "custodyCurrentPath": "/home/developer/projects/aurora/thesis/campaigns/worker-desktop-k3-p2p-full-audio-v1988/CURRENT.json",
+  "status": "running",
+  "actors": {
+    "3154212": {
+      "state": "S",
+      "startTicks": 131502232,
+      "sameStart": true
+    },
+    "3154248": {
+      "state": "S",
+      "startTicks": 131502574,
+      "sameStart": true
+    },
+    "3154213": {
+      "state": "S",
+      "startTicks": 131502236,
+      "sameStart": true
+    }
+  },
+  "measured": {
+    "attempted": 192,
+    "correct": 180,
+    "incorrect": 0,
+    "failed": 12,
+    "timeouts": 0,
+    "remaining": 708
+  },
+  "custody": {
+    "sequence": 43,
+    "cases": 207,
+    "audio": 193,
+    "files": 681
+  },
+  "freeBytes": 4143525888,
+  "measuredNonCorrect": [
+    {
+      "phase_index": 15,
+      "status": "failed",
+      "failure": {
+        "code": "preaccept_capability_changed",
+        "stage": "stt"
+      },
+      "timeout": false,
+      "partial_quality_incorrect": false
+    },
+    {
+      "phase_index": 24,
+      "status": "failed",
+      "failure": {
+        "code": "preaccept_capability_changed",
+        "stage": "stt"
+      },
+      "timeout": false,
+      "partial_quality_incorrect": false
+    },
+    {
+      "phase_index": 28,
+      "status": "failed",
+      "failure": {
+        "code": "preaccept_capability_changed",
+        "stage": "stt"
+      },
+      "timeout": false,
+      "partial_quality_incorrect": false
+    },
+    {
+      "phase_index": 54,
+      "status": "failed",
+      "failure": {
+        "code": "preaccept_capability_changed",
+        "stage": "stt"
+      },
+      "timeout": false,
+      "partial_quality_incorrect": false
+    },
+    {
+      "phase_index": 66,
+      "status": "failed",
+      "failure": {
+        "code": "preaccept_capability_changed",
+        "stage": "stt"
+      },
+      "timeout": false,
+      "partial_quality_incorrect": false
+    },
+    {
+      "phase_index": 70,
+      "status": "failed",
+      "failure": {
+        "code": "preaccept_capability_changed",
+        "stage": "stt"
+      },
+      "timeout": false,
+      "partial_quality_incorrect": false
+    },
+    {
+      "phase_index": 82,
+      "status": "failed",
+      "failure": {
+        "code": "preaccept_capability_changed",
+        "stage": "stt"
+      },
+      "timeout": false,
+      "partial_quality_incorrect": false
+    },
+    {
+      "phase_index": 140,
+      "status": "failed",
+      "failure": {
+        "code": "preaccept_capability_changed",
+        "stage": "stt"
+      },
+      "timeout": false,
+      "partial_quality_incorrect": false
+    },
+    {
+      "phase_index": 144,
+      "status": "failed",
+      "failure": {
+        "code": "preaccept_capability_changed",
+        "stage": "stt"
+      },
+      "timeout": false,
+      "partial_quality_incorrect": false
+    },
+    {
+      "phase_index": 159,
+      "status": "failed",
+      "failure": {
+        "code": "preaccept_capability_changed",
+        "stage": "tts"
+      },
+      "timeout": false,
+      "partial_quality_incorrect": false
+    },
+    {
+      "phase_index": 176,
+      "status": "failed",
+      "failure": {
+        "code": "preaccept_capability_changed",
+        "stage": "stt"
+      },
+      "timeout": false,
+      "partial_quality_incorrect": false
+    },
+    {
+      "phase_index": 188,
+      "status": "failed",
+      "failure": {
+        "code": "preaccept_capability_changed",
+        "stage": "stt"
+      },
+      "timeout": false,
+      "partial_quality_incorrect": false
+    }
+  ],
+  "priorCheckpointMeasuredCount": 190,
+  "newMeasuredAttempts": 2,
+  "classification": "verified_wait",
+  "nextRoutineCheckUtc": "2026-10-20T23:36:47.722696+00:00",
+  "nativeGoalThreadId": "01a112a5-d6bb-74e2-bf7c-ace73cb513b5",
+  "phoneTaskSeparate": true,
+  "sutCalls": 0
+}

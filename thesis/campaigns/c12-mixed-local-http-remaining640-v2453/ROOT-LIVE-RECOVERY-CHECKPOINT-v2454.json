@@ -1,0 +1,84 @@
+{
+  "at": "2026-10-22T11:15:41.782554+00:00",
+  "current": {
+    "at": "2026-10-22T11:15:26.429675+00:00",
+    "companion": {
+      "measured": {
+        "attempted": 0,
+        "correct": 0,
+        "failed": 0,
+        "harnessErrorsIncludedInFailed": 0,
+        "incorrectIncludedInFailed": 0,
+        "offered": 0,
+        "planned": 640,
+        "timeouts": 0,
+        "unstarted": 640
+      },
+      "warmup": {
+        "attempted": 5,
+        "correct": 5,
+        "failed": 0,
+        "harnessErrorsIncludedInFailed": 0,
+        "incorrectIncludedInFailed": 0,
+        "offered": 5,
+        "planned": 15,
+        "timeouts": 0,
+        "unstarted": 10
+      }
+    },
+    "completePairedCapsules": 5,
+    "elapsedSeconds": 216.190375271,
+    "lastIndex": 5,
+    "lastNativeParent": "6520f144bd733533548bbc8ee0b0df3e",
+    "lastOrdinal": 5,
+    "manifestSha256": "3bfca19d2dd0a9eec3981eae256168a5badd9ac2bb58a270ff8a55df1d986cce",
+    "phase": "warmup",
+    "pid": 462924,
+    "primary": {
+      "measured": {
+        "attempted": 0,
+        "correct": 0,
+        "failed": 0,
+        "harnessErrorsIncludedInFailed": 0,
+        "incorrectIncludedInFailed": 0,
+        "offered": 0,
+        "planned": 640,
+        "timeouts": 0,
+        "unstarted": 640
+      },
+      "warmup": {
+        "attempted": 5,
+        "correct": 5,
+        "failed": 0,
+        "harnessErrorsIncludedInFailed": 0,
+        "incorrectIncludedInFailed": 0,
+        "offered": 5,
+        "planned": 15,
+        "timeouts": 0,
+        "unstarted": 10
+      }
+    },
+    "status": "running"
+  },
+  "originalRequester": {
+    "pid": 462924,
+    "startTicks": 144596371,
+    "state": "S",
+    "present": true
+  },
+  "providerController": {
+    "pid": 2866664,
+    "startTicks": 42281259,
+    "lastActualArmedProof": "PROVIDER-ACTUAL-LAUNCH.json"
+  },
+  "providerReceiver": {
+    "pid": 2866665,
+    "startTicks": 42281319
+  },
+  "terminalPresent": false,
+  "recoveryExceptionPresent": false,
+  "diskFreeBytes": 2415366144,
+  "nextMaximumObservationUtc": "2026-10-22T11:20:41.782660+00:00",
+  "phoneDelegatedExclusively": "term_1f27be31-0284-4366-bb91-30fe538cd30e",
+  "sameNativeGoalStatus": "active"
+}

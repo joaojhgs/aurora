@@ -1,0 +1,68 @@
+{
+  "observed_at": "2026-10-14T11:40:35.587247+00:00",
+  "cell": "04-api",
+  "terminal": {
+    "status": "completed",
+    "child_exit_code": 0,
+    "exit_code": 0,
+    "started_at": "2026-10-14T10:41:53.147158+00:00",
+    "finished_at": "2026-10-14T11:39:15.053469+00:00",
+    "elapsed_seconds": 3441.906089172,
+    "receipt_validation": {
+      "validated": true,
+      "failure_classes": [],
+      "expected_requests": 105,
+      "expected_provider_captures": 105,
+      "capture_join": "request_ordinal",
+      "raw_artifacts_retained": true
+    },
+    "detached_group_cleanup": []
+  },
+  "request_count": 105,
+  "measured_count": 100,
+  "warmup_count": 5,
+  "measured_outcomes": {
+    "correct_success": 100
+  },
+  "warmup_outcomes": {
+    "correct_success": 5
+  },
+  "all_predicates_passed": true,
+  "all_identifiers_nonempty": true,
+  "all_request_ids_unique": true,
+  "all_deadlines_180s": true,
+  "all_intervals_within_deadline": true,
+  "warmup_order_matches_plan": true,
+  "capture_count": 105,
+  "all_captured": true,
+  "all_three_hashes_match": true,
+  "capture_ordinal_complete": true,
+  "capture_request_ordinal_complete": true,
+  "quantile_method": "Hyndman-Fan Type 7",
+  "population": "success-only one loaded-host session, 5 warmups excluded; no pooled/causal claim",
+  "derived_ms": {
+    "p50": 31975.320043,
+    "p90": 36250.76030560001,
+    "p95": 37587.2728986,
+    "p99": 42562.29094756
+  },
+  "summary_keys": [],
+  "request_sha256": "a581da30801319172e040fbcc521c2f9dda737a6e7dc408c6cb63439b7d5a678",
+  "result_sha256": "f5d13343cd95ee8609295dadda16c110e8a2fdad373eb70a3eace5c7a9301b4f",
+  "live_provider_capture_sha256": "fadc779e24b0adc04de7db6bc23581a321c8d7ee7636e6318ccb2adb1e5301af",
+  "next_cell_resources_exists": true,
+  "campaign_result_exists": false,
+  "runId": "run_e6054e76e9fc",
+  "taskId": "task_d7ea336050cf",
+  "dispatchId": "ctx_37b4d0a3c14f",
+  "notification": "msg_be6bb43a809b",
+  "notificationReadConfirmed": false,
+  "completedMeasuredActual": 400,
+  "independentlyReviewedMeasuredTotal": 300,
+  "plannedMeasuredTotal": 900,
+  "rootExportREADMEFullRead": true,
+  "independentArtifactReview": "pending",
+  "cleanupQualification": "Supervisor returned; internal threads unverified",
+  "nextCell": "05-mesh",
+  "nextCellPhase": "prebaseline"
+}

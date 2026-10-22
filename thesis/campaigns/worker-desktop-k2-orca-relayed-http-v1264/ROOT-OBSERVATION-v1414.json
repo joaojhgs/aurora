@@ -1,0 +1,46 @@
+{
+  "at": "2026-10-18T00:06:04.508392+00:00",
+  "progress": {
+    "attempted": 59,
+    "last_attempt_file": "attempts/attempt-0059-measured.jsonl",
+    "last_attempt_status": "completed_correct",
+    "measured_attempted": 44,
+    "planned_measured": 900,
+    "planned_warmups": 15,
+    "status": "running",
+    "unattempted_measured": 856,
+    "warmups_attempted": 15
+  },
+  "measuredOutcomeCounts": {
+    "completed_correct": 44
+  },
+  "custody": {
+    "cases": 58,
+    "audio": 58,
+    "updatedAt": "2026-10-18T00:05:52.188425+00:00",
+    "errors": [],
+    "pendingStatic": []
+  },
+  "processes": {
+    "588011": {
+      "same": true,
+      "state": "S",
+      "startTicks": 105853078
+    },
+    "588053": {
+      "same": true,
+      "state": "S",
+      "startTicks": 105853326
+    },
+    "588276": {
+      "same": true,
+      "state": "S",
+      "startTicks": 105855021
+    },
+    "421717": {
+      "same": true,
+      "state": "S",
+      "startTicks": 104535394
+    }
+  }
+}

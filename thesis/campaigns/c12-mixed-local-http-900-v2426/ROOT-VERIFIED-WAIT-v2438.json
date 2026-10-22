@@ -1,0 +1,80 @@
+{
+  "at": "2026-10-22T08:47:54.953173+00:00",
+  "classification": "VERIFIED_WAIT",
+  "nativeGoalId": "01a112a5-d6bb-74e2-bf7c-ace73cb513b5",
+  "nativeGoalStatus": "active",
+  "requester": {
+    "pid": 281887,
+    "startTicks": 143363140,
+    "state": "S"
+  },
+  "actualCurrent": {
+    "at": "2026-10-22T08:47:26.144647+00:00",
+    "companion": {
+      "measured": {
+        "attempted": 90,
+        "correct": 90,
+        "failed": 0,
+        "harnessErrorsIncludedInFailed": 0,
+        "incorrectIncludedInFailed": 0,
+        "offered": 90,
+        "planned": 900,
+        "timeouts": 0,
+        "unstarted": 810
+      },
+      "warmup": {
+        "attempted": 1,
+        "correct": 1,
+        "failed": 0,
+        "harnessErrorsIncludedInFailed": 0,
+        "incorrectIncludedInFailed": 0,
+        "offered": 1,
+        "planned": 1,
+        "timeouts": 0,
+        "unstarted": 0
+      }
+    },
+    "completePairedCapsules": 91,
+    "elapsedSeconds": 3668.774180945,
+    "lastIndex": 90,
+    "lastNativeParent": "d691cd91a9604f6327331950c781fd85",
+    "lastOrdinal": 91,
+    "manifestSha256": "316d4cc09adc44d0104dca8ac1f2a966347588ffef37bc2fa809ec14fd5efff8",
+    "phase": "measured",
+    "pid": 281887,
+    "primary": {
+      "measured": {
+        "attempted": 90,
+        "correct": 90,
+        "failed": 0,
+        "harnessErrorsIncludedInFailed": 0,
+        "incorrectIncludedInFailed": 0,
+        "offered": 90,
+        "planned": 900,
+        "timeouts": 0,
+        "unstarted": 810
+      },
+      "warmup": {
+        "attempted": 1,
+        "correct": 1,
+        "failed": 0,
+        "harnessErrorsIncludedInFailed": 0,
+        "incorrectIncludedInFailed": 0,
+        "offered": 1,
+        "planned": 1,
+        "timeouts": 0,
+        "unstarted": 0
+      }
+    },
+    "status": "running"
+  },
+  "sameFrozenSourceSettingsFloorAndMasterClock": true,
+  "newInferenceTestsBuildsWorkersOrDeviceReads": 0,
+  "nextMaximumCheck": "2026-10-22T08:52:54.953173+00:00",
+  "earlierCheck": "Actual terminal/failure, stale progress/resource alarm or actual owner response",
+  "storageAuthorization": "Still PENDING on exactly935297024B webpack cache contents; no inferred approval, no deletion, no repeat question",
+  "mainCampaignIsNotHeldByPermissionOrPhone": true,
+  "existingRecordsReconciliation": "PER291 conditional plan/source correction already independently approved; Stage2 acceptance and linked QA/PR/tracker workflow remain recorded boundaries. No new review/source edit/test or gate introduced.",
+  "mail": "delivery_5f31717e53e7 fully read and acknowledged; new batch empty; no outstanding delivery ACK",
+  "freeBytes": 2635628544
+}

@@ -1,0 +1,24 @@
+{
+  "observed_at": "2026-10-14T17:47:38.378626+00:00",
+  "authoritative_plan": "/home/developer/Documents/Obsidian Vault Origin/5-full-notes/faculdade/tcc/future-work-test-requirements.md",
+  "before_sha256": "b7efb40b33ae4ea952569706c97bb1dbe7583351e009d882213afed409f4a189",
+  "after_sha256": "7028f770457f08fd64e7b2221572a45932bfb4576ff5b27082696b1522d0223e",
+  "before_lines": 1323,
+  "after_lines": 1351,
+  "backup": "docs/experiments/tcc-20261013-submission-20261030/monitor/plan-session-method-20261014T1745/plan.before.md",
+  "complete_reviewable_copy": "docs/experiments/tcc-20261013-submission-20261030/monitor/plan-session-method-20261014T1745/plan.after.md",
+  "reversible_diff": "docs/experiments/tcc-20261013-submission-20261030/monitor/plan-session-method-20261014T1745/plan.diff",
+  "root_accepted_nudge": "msg_4d23640a566f",
+  "root_implemented_review": "msg_131ab04ffb57",
+  "checks": {
+    "all_original_T_sections": true,
+    "has_900_per_condition": true,
+    "fresh_epochs": true,
+    "cpu_extra_preserved": true,
+    "both_barrier": true,
+    "full_voice_required": true,
+    "no_ios": true,
+    "first_failure_preserved": true
+  },
+  "mutations": "existing fullplan and unique own report artifacts only; no source/tests/goals/ledger/commit/push"
+}

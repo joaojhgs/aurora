@@ -1,0 +1,32 @@
+{
+  "at": "2026-10-20T02:57:06.172055+00:00",
+  "phase": "K3_900_COLLECTED_RAW_CUSTODY_NATIVE_AND_RESOURCE_ANALYSIS_COMPLETE",
+  "nativeGoal": "01a112a5-d6bb-74e2-bf7c-ace73cb513b5",
+  "nativeGoalStatus": "active",
+  "attempted": 900,
+  "correct": 885,
+  "answerFormatFailures": 12,
+  "transportFailures": 3,
+  "timeouts": 0,
+  "unattempted": 0,
+  "requesterEpoch": {
+    "measured": 160,
+    "correct": 160,
+    "excludedWarmups": 15,
+    "nativeModelJoins": 480,
+    "physicalCases": 175,
+    "physicalWavs": 175
+  },
+  "allRequesterAndProviderActorsRetired": true,
+  "providerTransferredRawFiles": 389,
+  "providerTransferredRawBytes": 30254315,
+  "providerCustody": "thesis/campaigns/worker-desktop-k3-orca-relayed-http-remaining-v1682/provider-transfer-post900-20261020/CUSTODY.json",
+  "providerCoverageChain": "thesis/campaigns/worker-desktop-k3-orca-relayed-http-remaining-v1682/provider-transfer-post900-20261020/COVERAGE-CHAIN.json",
+  "nativeAnalysis": "thesis/campaigns/worker-desktop-k3-orca-relayed-http-remaining-v1682/terminal-20261020T0213/native-analysis/SUMMARY.json",
+  "resourceAnalysis": "thesis/campaigns/worker-desktop-k3-orca-relayed-http-remaining-v1682/terminal-20261020T0213/resource-analysis/SUMMARY.json",
+  "combined900Analysis": "thesis/campaigns/worker-desktop-k3-orca-relayed-http-remaining-v1682/condition-900-analysis/SUMMARY.json",
+  "combined900Review": "PASS original Sol single bounded saved-data review; physically copied condition-900-analysis/review",
+  "nextAction": "K3closed. CurrentactualP2P V1711 mainflow warmups/proof then900; see live CURRENT",
+  "pendingAcceptedControlOperation": null,
+  "newMeasurementsDuringAnalysis": 0
+}

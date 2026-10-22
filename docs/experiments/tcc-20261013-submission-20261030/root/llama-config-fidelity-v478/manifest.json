@@ -1,0 +1,104 @@
+{
+  "at": "2026-10-15T02:48:30.908281+00:00",
+  "sourceFixReviewed": true,
+  "targetedTestPassed": true,
+  "documentationGatePassed": false,
+  "newAudioRuns": 0,
+  "files": [
+    {
+      "path": "README.md",
+      "bytes": 2041,
+      "sha256": "3fd7f8cbc40d33e432cc23046740ed80d62a0f09bae68254189c0e17809d5fb2"
+    },
+    {
+      "path": "REVIEW.md",
+      "bytes": 3297,
+      "sha256": "bbc89368fbc0bef3d6f6fe2b9669808dc219be917a9ea72599a158a3cd63423d"
+    },
+    {
+      "path": "before.json",
+      "bytes": 567,
+      "sha256": "f37149dc735eba6abc83960226b899f40dacdf2bd0a8ba109a9f7d21519b455c"
+    },
+    {
+      "path": "config_defaults.json.diff",
+      "bytes": 430,
+      "sha256": "fbceafd1c74cd3f53be4f2c35b7d38117c6badff78fcbf24f71dddef6e29ccbb"
+    },
+    {
+      "path": "config_schema.json.diff",
+      "bytes": 1223,
+      "sha256": "3cf5256d4f804d9c3576f5706ee7cc3a746b74c75183df6736232a3f8c1210c2"
+    },
+    {
+      "path": "docs-check.json",
+      "bytes": 155,
+      "sha256": "5be13b1f87358d96044421b998341a002b3ebf91aea6a09749a89882a2260918"
+    },
+    {
+      "path": "docs-check.log",
+      "bytes": 148162,
+      "sha256": "aa59e3736a3c90000c004241c30e19e63aee1e76f0c177ff6eb8ef8a26491938"
+    },
+    {
+      "path": "generation.log",
+      "bytes": 1341,
+      "sha256": "84603dcbb9ab79cb1a2036c2035e6e013d78190d63d5d0d1017f5edb870137d6"
+    },
+    {
+      "path": "keys.py.diff",
+      "bytes": 1432,
+      "sha256": "5c1c4ff9b868780afcb359147c28b58369aab162fcd91301764db27cfd20ece9"
+    },
+    {
+      "path": "models.py.diff",
+      "bytes": 548,
+      "sha256": "98198a1ca1095f2d97a7e8fd633ca4a1d4795225e996a1f83a09f2f7409f0816"
+    },
+    {
+      "path": "source/app/services/config/config_defaults.json",
+      "bytes": 14254,
+      "sha256": "1ddb323235b97b1211bcfbf97ca0b6167f2a42a48b76e7fa0db9dda3767939a8"
+    },
+    {
+      "path": "source/app/services/config/config_schema.json",
+      "bytes": 86603,
+      "sha256": "558cf9641fcb050c60768c845ddb94558e6a1fe4656547a2e3efc638850969af"
+    },
+    {
+      "path": "source/app/shared/config/keys.py",
+      "bytes": 72060,
+      "sha256": "c14fb6252fa88e337b1a27d2fd20976ad98b4a59ef8a75065f9afac7de08d269"
+    },
+    {
+      "path": "source/app/shared/config/models.py",
+      "bytes": 37108,
+      "sha256": "00fb3ef21b4477f8d02cd1d47c702edadae982608ff4a28f72609a0e83f3f59f"
+    },
+    {
+      "path": "source/tests/unit/orchestrator/test_llama_configured_options_product.py",
+      "bytes": 8554,
+      "sha256": "55fa269116be506b86b8a02bfde184b6620fe9486bbbe72602785c628d0be2ff"
+    },
+    {
+      "path": "source-final.json",
+      "bytes": 567,
+      "sha256": "ac204296bb16ab2194a4e976e99685f626fe86168e76042e1cb02c50c919d205"
+    },
+    {
+      "path": "targeted-test.json",
+      "bytes": 469,
+      "sha256": "7a394a9ccd13a16ccb07ce93f8d8892ef8b6bc6c5dc039251f3069f0a2b7e873"
+    },
+    {
+      "path": "targeted-test.log",
+      "bytes": 28679,
+      "sha256": "ab6f3340a20e54729d6a2e8370afae12e3201ccba6c76679f0b91b7988edd8f5"
+    },
+    {
+      "path": "test_llama_configured_options_product.py.diff",
+      "bytes": 1431,
+      "sha256": "bf9826e59c4818ccda0dbc8cd7dea5ad89fdd08b2678abb2fd2816377733d9b2"
+    }
+  ]
+}

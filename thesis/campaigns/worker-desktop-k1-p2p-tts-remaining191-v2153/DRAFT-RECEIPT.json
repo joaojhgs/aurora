@@ -1,0 +1,14 @@
+{
+  "at": "2026-10-21T02:58:16.074657+00:00",
+  "globalIndices": [
+    710,
+    900
+  ],
+  "manifestSha256": "d753203e4a53f12ed983a98d776a811d241d0d6bc6061b28e3c1480a077a17d3",
+  "modelCalls": 0,
+  "newOrcaWorker": false,
+  "plannedMeasured": 191,
+  "priorElapsedIncludingRecoverySeconds": 83559.392523,
+  "providerDeadlineUtc": "2026-10-21T12:41:24.961804+00:00",
+  "status": "FROZEN_NOT_LAUNCHED"
+}

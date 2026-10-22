@@ -1,0 +1,14 @@
+{
+  "ok": true,
+  "exitCode": 0,
+  "rawLosslessGzip": "/home/developer/projects/aurora/.git/aurora-handoff-import-20261006/c12-v2453-pair-0045-page-00-SEND.raw.gz",
+  "uncompressedBytes": 948,
+  "uncompressedSha256": "719b8d8a7c80644c4fab7a3c2a4a8b5a2db120ee81aacf00b7f5e2c834b111ba",
+  "stdoutBytes": 881,
+  "stderrBytes": 59,
+  "id": "8c0f9775-19ab-4938-990a-2991277a67ea",
+  "error": null,
+  "nextCursor": null,
+  "source": null,
+  "returnedLineCount": null
+}

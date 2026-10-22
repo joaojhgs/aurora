@@ -1,0 +1,12 @@
+{
+  "controlDeadline": "2026-10-22T01:52:30.248032+00:00",
+  "explicitNewline": true,
+  "host": "ssh:ssh-sem-notebook-personal",
+  "incarnation": "328cd72f-c7ea-49ff-a2db-b9275b085037",
+  "remoteResult": "/home/developer/projects/aurora/thesis/phone-notebook/20261020/evidence/assemble-exact-repair-20261022T014230.json",
+  "rootAdmissionMessage": "owner-notebook-local-source-assembly-repair-git-mode-canonical-no-new-transfer",
+  "script": "scripts/execute_source_assembly_v38.py",
+  "scriptSha256": "a95915c660085a22380006c6f2066cde36268a5443bd29157ecb5c84c7064baf",
+  "singleSend": true,
+  "terminal": "term_a2ed5feb-7c92-48e4-bd88-d1b0e6737989"
+}

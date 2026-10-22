@@ -1,0 +1,18 @@
+{
+  "pid": 442775,
+  "startTicks": "104723117",
+  "source": "thesis/harness/custody_v1197.py",
+  "sourceSha256": "1a72257b97be43d80361794b0d5bc23e28faef3b8e411d2fb94a176f873d93bf",
+  "argv": [
+    "python3",
+    "/home/developer/projects/aurora/thesis/harness/custody_v1197.py",
+    "--follow"
+  ],
+  "scope": "Original Root data copier only; no SUTcalls, services, agents or terminal control",
+  "intervalSeconds": 60,
+  "outerSeconds": 60000,
+  "prefixReadCapPerFileBytes": 4194304,
+  "freeSpaceFloorBytes": 2147483648,
+  "retries": "One attempt/file/checkpoint; errors retained, next checkpoint retries; bounded by60000s",
+  "possibleConfound": "Additional local disk reads/writes, all concurrent measured cases retained"
+}

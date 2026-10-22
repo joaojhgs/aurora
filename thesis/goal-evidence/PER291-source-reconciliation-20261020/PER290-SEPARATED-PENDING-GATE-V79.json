@@ -1,0 +1,18 @@
+{
+  "schema": "aurora.g007-g011-separated-pending-gate.v79",
+  "issue": "PER-290",
+  "durableGoal": "G011-per-290-per-288-add-lightweight-node",
+  "status": "pending",
+  "originalGate": {
+    "gate_id": "PER290-ANDROID-PACKAGED",
+    "status": "pending",
+    "command": null,
+    "exit_code": null,
+    "notes": "Connected capture source committed and focused checks pass; Android toolchain and device unavailable on this host."
+  },
+  "originalRecord": ".omx/evidence/receiving-session-20261006/native-speech-routing-acceptance.v1.json",
+  "originalRecordSha256": "4d6826b5850bdcf2c7c338e7d9a8e7069b8080d70708398c6842a19253057bcd",
+  "originalGateProvenanceCommit": "a2eeeb68f9669062c53cf49ba53a40b9af154e24",
+  "reviewSha256": "c96aa3ec8455e19c1444ae912e12d3f3f74bb295024cd17933e458a5913ba027",
+  "scope": "Notification microphone capture and encrypted transcript persistence/reopen remain G11/G13 acceptance; no PASS or runtime evidence introduced."
+}

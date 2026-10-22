@@ -1,0 +1,115 @@
+{
+  "observedAt": "2026-10-20T13:29:03.450429+00:00",
+  "runId": "run_e6054e76e9fc",
+  "taskId": "task_d7ea336050cf",
+  "dispatchId": "ctx_37b4d0a3c14f",
+  "nativeGoal": "01a123ff-19ba-7332-a2f7-346a722af79f",
+  "scope": "Bounded read-only changed failure after closed691 observation and following already-saved distinct case only.",
+  "changedSavedData": [
+    {
+      "failed": {
+        "path": "thesis/campaigns/worker-desktop-k1-p2p-tts-remaining880-v1719/attempts/attempt-0689-measured.jsonl",
+        "bytes": 3960,
+        "sha256": "fad8d7425868e01ed441987b516e49ea306a9f0b9ed87610553590427b7b786e",
+        "conditionMeasuredIndex": 694,
+        "phaseIndex": 674,
+        "ordinal": 689,
+        "status": "failed",
+        "failure": {
+          "code": "remote_mesh_preaccept_capability_changed",
+          "stage": "tts"
+        },
+        "consecutivePreacceptRejections": 1,
+        "timeout": false,
+        "withinRequestDeadline": true,
+        "correctness": {
+          "assistant_reply_matches_expected_words": true,
+          "transcript_matches_reference_words": true
+        },
+        "flowDurationMs": 49602.678464,
+        "outputAudio": null,
+        "correlation": {
+          "correlation_id": "audio-campaign-1ca22f084def4dd7804de86da40b0a4d",
+          "request_id": "audio-request-dce5d618868842ad89aec06417eb1b81",
+          "session_id": "audio-session-21ebac50d0bc40569708c5429fb87a3a"
+        },
+        "stageSummary": {
+          "assistant": {
+            "status": "completed",
+            "duration_ms": 34474.246474,
+            "error_category": null,
+            "audio_bytes": null
+          },
+          "stt": {
+            "status": "completed",
+            "duration_ms": 12404.082508,
+            "error_category": null,
+            "audio_bytes": null
+          },
+          "tts": {
+            "status": "failed",
+            "duration_ms": 2723.717037,
+            "error_category": "preaccept_capability_changed",
+            "audio_bytes": null
+          }
+        }
+      },
+      "following": {
+        "path": "thesis/campaigns/worker-desktop-k1-p2p-tts-remaining880-v1719/attempts/attempt-0690-measured.jsonl",
+        "bytes": 4918,
+        "sha256": "70f18eaba14b9d0536e931001a6dea803b26eb8749c076c539390a9cb5c4595f",
+        "conditionMeasuredIndex": 695,
+        "phaseIndex": 675,
+        "ordinal": 690,
+        "status": "completed_correct",
+        "failure": null,
+        "consecutivePreacceptRejections": 0,
+        "timeout": false,
+        "withinRequestDeadline": true,
+        "correctness": {
+          "all_expected": true,
+          "assistant_reply_matches_expected_words": true,
+          "transcript_matches_reference_words": true
+        },
+        "flowDurationMs": 48710.052146,
+        "outputAudio": {
+          "file": "audio/790785359a7b2d1debdba7f0299b4368209e39939f7cf42ee398e02ed56f180e.wav",
+          "sha256": "790785359a7b2d1debdba7f0299b4368209e39939f7cf42ee398e02ed56f180e"
+        },
+        "correlation": {
+          "correlation_id": "audio-campaign-11e2d60c35d747829311e05b783e8964",
+          "request_id": "audio-request-5096cd7cdd3d48e88f89fd883949e17b",
+          "session_id": "audio-session-33ff043ff5284d51bd86b34969d3b661"
+        },
+        "stageSummary": {
+          "assistant": {
+            "status": "completed",
+            "duration_ms": 33861.196059,
+            "error_category": null,
+            "audio_bytes": null
+          },
+          "stt": {
+            "status": "completed",
+            "duration_ms": 10065.684334,
+            "error_category": null,
+            "audio_bytes": null
+          },
+          "tts": {
+            "status": "completed",
+            "duration_ms": 4782.253826,
+            "error_category": null,
+            "audio_bytes": 32300
+          }
+        }
+      }
+    }
+  ],
+  "limitations": {
+    "exactReceiverCause": "UNKNOWN",
+    "verbatimQueryResult": "UNKNOWN under old adapter",
+    "audioCheck": "Case metadata only; no separate audio reread/playback claim."
+  },
+  "policy": "Retain all failures in denominator; existing three-consecutive stop unchanged; no replay, top-up, model/source/policy change, test or new gate.",
+  "executionOwner": "Original Root only",
+  "needsAdditionalReview": false
+}

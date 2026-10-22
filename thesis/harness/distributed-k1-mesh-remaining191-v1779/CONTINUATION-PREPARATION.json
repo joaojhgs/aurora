@@ -1,0 +1,32 @@
+{
+  "at": "2026-10-20T13:55:51.051894+00:00",
+  "status": "PREPARED_NOT_LAUNCHED",
+  "priorCondition": {
+    "planned": 900,
+    "attempted": 709,
+    "correct": 697,
+    "failed": 12,
+    "timeoutFlagged": 1,
+    "unattempted": 191
+  },
+  "candidate": "thesis/harness/distributed-k1-mesh-remaining191-v1779",
+  "diffSha256": "6b079b538e56e887d7c462ee7fc67905fa6bbfaf947be478570a4fe858047ccd",
+  "newMeasured": 191,
+  "newGlobalIndices": [
+    710,
+    900
+  ],
+  "excludedWarmups": 15,
+  "proposedConditionSeconds": 15000,
+  "proposedOuterSeconds": 15240,
+  "freshCumulative72000ClockAndProviderExpiryAdmissionRequired": true,
+  "workerSeal": "thesis/campaigns/worker-desktop-k1-p2p-tts-remaining880-v1719/terminal-v1777/seal/REQUESTER-SEAL.json",
+  "providerMetadata": "thesis/campaigns/worker-desktop-k1-p2p-tts-remaining880-v1719/PERSONAL-PROVIDER-RECONCILIATION-v1778.json",
+  "request709SavedData": "thesis/campaigns/worker-desktop-k1-p2p-tts-remaining880-v1719/REQUEST709-DESKTOP-SAVED-RECONCILIATION-v1778.json",
+  "exact709AcceptanceOrCause": "UNKNOWN",
+  "sourceOnly": true,
+  "modelCalls": 0,
+  "originalFrozenDataModified": false,
+  "newOrcaWorker": false,
+  "nextExecutableGate": "Finish new operator/custody/finalizer mapping, fresh original provider/resource/clock admission, launch requester once, ordinary15 correlated warmups before191measured."
+}

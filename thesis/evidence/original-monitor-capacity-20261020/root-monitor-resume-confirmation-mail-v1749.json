@@ -1,0 +1,53 @@
+{
+  "id": "remote-cli-1792483490865",
+  "ok": true,
+  "result": {
+    "runId": "run_e6054e76e9fc",
+    "deliveryId": "delivery_782cc2136894",
+    "messages": [
+      {
+        "id": "msg_7190e9ad71bb",
+        "run_id": "run_e6054e76e9fc",
+        "delivery_contract": "current_delivery",
+        "from_handle": "term_2eab47ed-ab9b-4e35-bd9b-fc068c60e3fc",
+        "to_handle": "run:run_e6054e76e9fc",
+        "subject": "Native SAME monitor ACTIVE verified08:04; K1 original3 actors live283/900",
+        "body": "Fresh actual get_goal08:04:10UTC returns original monitor thread01a123ff-19ba-7332-a2f7-346a722af79f ACTIVE, same full objective, no goal recreation/model/account/self-resume. Read/ACK msg_1c37aca1856a: your physical copied5217B db8f8887 review closes V1748, no runtime/test gate; please retain exact supported resume receipt for recovery lineage and do not issue duplicate now. Actual /proc08:04:13 verifies original controller2360747/start124937766 backend2360768/start124937952 copier2361201/start124942780 all live; physical custody08:03:58 is263new+20old=283/900272correct7failed617remain, free4991827968B. No current stall or additional capacity refusal; monitor event-driven bounded same-Run supervision continues. No tests/builds/models/device/network probes or reopening closed scopes.",
+        "type": "status",
+        "priority": "normal",
+        "thread_id": null,
+        "payload": "{\"taskId\":\"task_d7ea336050cf\",\"dispatchId\":\"ctx_37b4d0a3c14f\"}",
+        "created_at": "2026-10-20T08:04:25Z",
+        "delivered_at": null
+      },
+      {
+        "id": "msg_7a356580465b",
+        "run_id": "run_e6054e76e9fc",
+        "delivery_contract": "current_delivery",
+        "from_handle": "term_2eab47ed-ab9b-4e35-bd9b-fc068c60e3fc",
+        "to_handle": "run:run_e6054e76e9fc",
+        "subject": "alive",
+        "body": "",
+        "type": "heartbeat",
+        "priority": "normal",
+        "thread_id": null,
+        "payload": "{\"taskId\":\"task_d7ea336050cf\",\"dispatchId\":\"ctx_37b4d0a3c14f\",\"phase\":\"waiting\"}",
+        "created_at": "2026-10-20T08:04:26Z",
+        "delivered_at": null
+      }
+    ],
+    "count": 2,
+    "replayed": false,
+    "acknowledged": null,
+    "timedOut": false,
+    "cancelled": false,
+    "connectionLost": false,
+    "mutation": {
+      "requestId": "90ea990d-9ee7-471f-97bf-c3ac9e410492",
+      "replayed": false
+    }
+  },
+  "_meta": {
+    "runtimeId": "cc9e3275-28c6-4c45-85cc-bdcd2262aa7d"
+  }
+}

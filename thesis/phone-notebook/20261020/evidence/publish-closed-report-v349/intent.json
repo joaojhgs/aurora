@@ -1,0 +1,12 @@
+{
+  "controlDeadline": "2026-10-22T12:16:23.038450+00:00",
+  "explicitNewline": true,
+  "host": "ssh:ssh-sem-notebook-personal",
+  "incarnation": "328cd72f-c7ea-49ff-a2db-b9275b085037",
+  "remoteResult": "/home/developer/projects/aurora/thesis/phone-notebook/20261020/evidence/publish-closed-report-v349.json",
+  "rootAdmissionMessage": "Post-window DATA CUSTODY ONLY: assemble verified public report chunks, retain previous owned reports, copy already closed own public ZIP bytes; zero phone/build/model/service/network test commands; providers retired and phone hard stop unchanged",
+  "script": "scripts/publish_closed_report_v349.py",
+  "scriptSha256": "639daf5ebbf3d67b27b4309d5fc3987a5863b0f15359395d7ec9f7e20ce581e3",
+  "singleSend": true,
+  "terminal": "term_a2ed5feb-7c92-48e4-bd88-d1b0e6737989"
+}

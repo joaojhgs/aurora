@@ -1,0 +1,62 @@
+{
+  "at": "2026-10-16T01:51:38.909591+00:00",
+  "files": [
+    {
+      "source": ".git/aurora-handoff-import-20261006/browser-launch-api-prep-v794/bootstrap.py",
+      "canonicalCopy": "thesis/harness/browser-ui-v794/bootstrap.py",
+      "bytes": 2219,
+      "sha256": "9920c1d8ddc358d7e28a19b4c2ace882552f5a1ac39a14e933467521017dbec9"
+    },
+    {
+      "source": ".git/aurora-handoff-import-20261006/browser-launch-api-prep-v794/controller.py",
+      "canonicalCopy": "thesis/harness/browser-ui-v794/controller.py",
+      "bytes": 37040,
+      "sha256": "11a0f3aa4df927af88e2b94fb879dfe4ca70d5d90dfd33b4c73618536ba22676"
+    },
+    {
+      "source": ".git/aurora-handoff-import-20261006/browser-launch-api-prep-v794/expected-provider-identity.json",
+      "canonicalCopy": "thesis/harness/browser-ui-v794/expected-provider-identity.json",
+      "bytes": 735,
+      "sha256": "6a73785e32a79c0d82296e7f05e2f9a44d2a727bfc73cb99f15ddbcde5d34f77"
+    },
+    {
+      "source": ".git/aurora-handoff-import-20261006/browser-launch-api-prep-v794/gate.py",
+      "canonicalCopy": "thesis/harness/browser-ui-v794/gate.py",
+      "bytes": 6853,
+      "sha256": "5647de41533d0b3a198b0ba95eca88717c364a995c2df5985164a08de52f945e"
+    },
+    {
+      "source": ".git/aurora-handoff-import-20261006/browser-launch-api-prep-v794/hook/aurora_voice_telemetry_v430.py",
+      "canonicalCopy": "thesis/harness/browser-ui-v794/hook/aurora_voice_telemetry_v430.py",
+      "bytes": 15228,
+      "sha256": "9c6eccc91edb5136c95982b6b04fd770ee78ca365558fe347a25908f5818bc6d"
+    },
+    {
+      "source": ".git/aurora-handoff-import-20261006/browser-launch-api-prep-v794/hook/bindings.py",
+      "canonicalCopy": "thesis/harness/browser-ui-v794/hook/bindings.py",
+      "bytes": 3596,
+      "sha256": "d4a2ee4b9419b3be9713c55c5ffbdb3cdf29847f7a4be44e22ae64458d2471e0"
+    },
+    {
+      "source": ".git/aurora-handoff-import-20261006/browser-launch-api-prep-v794/hook/observer.py",
+      "canonicalCopy": "thesis/harness/browser-ui-v794/hook/observer.py",
+      "bytes": 12656,
+      "sha256": "ce614d6e00bfd425a966eb3165f8b75e3269b956ef288c15f0cf31fd96e4e51a"
+    },
+    {
+      "source": ".git/aurora-handoff-import-20261006/browser-launch-api-prep-v794/stage_freeze.py",
+      "canonicalCopy": "thesis/harness/browser-ui-v794/stage_freeze.py",
+      "bytes": 25321,
+      "sha256": "d26ade387f73f4a6ad1d8bfa84bec9ff70f07da256ac8d92348d254aa1b1efd3"
+    },
+    {
+      "source": ".git/aurora-handoff-import-20261006/browser-launch-api-prep-v794/voice-flow.mjs",
+      "canonicalCopy": "thesis/harness/browser-ui-v794/voice-flow.mjs",
+      "bytes": 53962,
+      "sha256": "aafc4b2471d01160bf86f43d1d23fd56c488e1ae37c32a3a5d9a66f2de1c2741"
+    }
+  ],
+  "reviewSHA256": "33b0094bff0570dd7d4bbad0ec85989233800545d6d215de18cb04172dae5014",
+  "scope": "exact reviewed source copies, actual freeze/warmups pending; not standalone portable environment",
+  "runtimeLaunched": false
+}

@@ -1,0 +1,30 @@
+{
+  "at": "2026-10-20T06:22:32.194629+00:00",
+  "status": "EXISTING_PERSONAL_NOTEBOOK_ASSET_READ_COMPLETE_NO_LANE_ADMITTED",
+  "host": "ssh:ssh-sem-notebook-personal",
+  "terminal": "term_f40f2bd6-0f71-4484-8347-ac221cf6ce9b",
+  "incarnation": "633939eb-60f4-4bc0-9a0c-5941dc6db36a",
+  "result": {
+    "path": "thesis/evidence/personal-notebook-readiness-20261020/notebook-readonly-assets-v1737.json",
+    "bytes": 2782,
+    "sha256": "0b40a5d782ba5e85fc8b12deddab234dbb6ff5cd5318f01b485eea52764b0366"
+  },
+  "coordinationReceipts": [
+    {
+      "path": "thesis/evidence/personal-notebook-readiness-20261020/notebook-readonly-assets-v1737-SHOW-FENCE.json",
+      "bytes": 1343,
+      "sha256": "e0a6fda02527a96fccfc46d225a1e2cf6de47115f1061bb4b65dbc7a2d9e43a9"
+    },
+    {
+      "path": "thesis/evidence/personal-notebook-readiness-20261020/notebook-readonly-assets-v1737-SEND.json",
+      "bytes": 290,
+      "sha256": "b4b563c5babac31093e7e29ab768c035722f8ccd436315bd17857793a16d2525"
+    }
+  ],
+  "newEvidence": "Six known matching model paths absent; eight exact uv llama0.3.19 package-cache roots absent; no whole-host/cache/model absence conclusion. Existing cc/c++ on shell PATH; cmake/ninja/nvcc/nvidia-smi/piper not found on that PATH, other locations unverified. Prior five package versions remain separate provenance.",
+  "resources": "At read:17.8GB available memory,102.2GB repo free, low aggregate load. No physical quiet lease, accelerator or runtime admission follows.",
+  "remainingEngineering": "After original serial/network isolation admission, stage the exact licensed canonical assets and qualified source; install/build the matching local runtime using existing approved tools if needed; use same frozen workload/settings and ordinary finite native-telemetry readiness. Do not substitute smaller models or paid API.",
+  "buildsInstallsTransfersNetworkTestsOrInference": 0,
+  "companyScopeAccess": false,
+  "modelWeightsRead": false
+}

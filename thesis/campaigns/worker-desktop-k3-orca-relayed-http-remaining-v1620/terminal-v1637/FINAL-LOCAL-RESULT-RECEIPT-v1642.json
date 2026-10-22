@@ -1,0 +1,41 @@
+{
+  "at": "2026-10-18T23:21:13.164954+00:00",
+  "result": "thesis/campaigns/worker-desktop-k3-orca-relayed-http-remaining-v1620/terminal-v1637/RESULTS-v1642.md",
+  "resultBytes": 4838,
+  "resultSha256": "9497deccbf28fe22d44fb4768848f63c330860151322ae158745ca4e6a2cbe38",
+  "analysis": "thesis/campaigns/worker-desktop-k3-orca-relayed-http-remaining-v1620/terminal-v1637/requester-analysis-v1642/SUMMARY.json",
+  "measured": {
+    "attempted": 24,
+    "correct": 11,
+    "failedOrInterrupted": 13,
+    "incorrect": 0,
+    "outcomes": {
+      "completed_correct": 11,
+      "failed": 13
+    },
+    "partialQualityFailure": 12,
+    "timeoutFlagAbsent": 0,
+    "timeouts": 0,
+    "transportFailure": 1
+  },
+  "budget": {
+    "actualChargeSeconds": 1121.5566352849999,
+    "capSeconds": 57600,
+    "conditionSeconds": 1104.201375728,
+    "cumulativeUsedSeconds": 24715.685852618004,
+    "priorUsedSeconds": 23594.129217333004,
+    "remainingSeconds": 32884.314147382,
+    "setupSeconds": 17.104950936,
+    "shutdownSeconds": 0.250308621
+  },
+  "newMeasurements": 0,
+  "newWorkers": 0,
+  "checks": {
+    "entrypointSavedDataRun": 0,
+    "ruff": 0,
+    "globalDocsCheck": {
+      "exitCode": 1,
+      "scope": "Existing experiment report placement and historical broken link; no cleanup authorized/attempted"
+    }
+  }
+}

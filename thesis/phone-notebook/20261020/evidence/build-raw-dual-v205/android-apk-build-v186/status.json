@@ -1,0 +1,62 @@
+{
+  "applicationSourceIdentity": "ebde3a8acf6315f920d03593845f17a1fc65a733 + source-closure-overlay-v2383 + android-bundled-model-rename-v1 + android-node-policy-initial-publication-v2 + android-finite-file-audio-v3",
+  "buildDeadlineUtc": "2026-10-22T06:42:36.645846+00:00",
+  "buildPid": 233640,
+  "buildStartedAt": "2026-10-22T06:22:36.645834+00:00",
+  "canonicalAppPreserved": true,
+  "command": [
+    "node",
+    "apps/aurora-tauri/scripts/build-android-client-bundle.mjs",
+    "--kind",
+    "apk",
+    "--voice-live-test",
+    "--target",
+    "aarch64"
+  ],
+  "elapsedSeconds": 432.4406612349994,
+  "exit": 0,
+  "finishedAt": "2026-10-22T06:26:46.912931+00:00",
+  "log": "/home/developer/projects/aurora/thesis/phone-notebook/20261020/deployment/ebde3a8acf6315f920d03593845f17a1fc65a733/android-apk-build-v186/build.log",
+  "logSha256": "553f1a48972d1338094aef4024bbc54af93715050314b805bd711a531526ed65",
+  "maxJobs": 2,
+  "maxOwnedTreeRssBytes": 8589934592,
+  "modelCalls": 0,
+  "ownBuildChildrenActive": false,
+  "ownedBuildTreeRssBytes": 204468224,
+  "peakOwnedBuildTreeRssBytes": 5423538176,
+  "pid": 227138,
+  "resources": {
+    "at": "2026-10-22T06:26:43.107915+00:00",
+    "diskFreeBytes": 59049648128,
+    "load": [
+      6.08447265625,
+      4.10302734375,
+      2.9091796875
+    ],
+    "maxSensorC": 79.85,
+    "memAvailableBytes": 23978897408
+  },
+  "startTicks": "3056453",
+  "startedAt": "2026-10-22T06:19:34.472896+00:00",
+  "status": "ANDROID_VOICE_LIVE_APK_BUILT",
+  "targetedFileAudioTests": {
+    "elapsedSeconds": 182.10397264399944,
+    "exit": -15,
+    "log": "/home/developer/projects/aurora/thesis/phone-notebook/20261020/deployment/ebde3a8acf6315f920d03593845f17a1fc65a733/android-apk-build-v186/file-audio-tests.log",
+    "sha256": "2fe7e3dd63094da38ae0b36e23d66cbe4668ad365d5974b685607e792b6b3964",
+    "timeout": true
+  },
+  "temperaturePolicy": "observe_only_owner_correction",
+  "testApplicationId": "dev.aurora.desktop.phonenotebook",
+  "testCommand": [
+    "cargo",
+    "test",
+    "--offline",
+    "--manifest-path",
+    "/home/developer/projects/aurora/thesis/phone-notebook/20261020/deployment/ebde3a8acf6315f920d03593845f17a1fc65a733/android-build-ebde-v2383-native-rename-v1/apps/aurora-tauri/src-tauri/Cargo.toml",
+    "--lib",
+    "file_audio_sharing_tests",
+    "--",
+    "--test-threads=1"
+  ]
+}

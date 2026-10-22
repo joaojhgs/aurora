@@ -1,0 +1,65 @@
+{
+  "at": "2026-10-18T22:38:34.185950+00:00",
+  "status": "ACTUAL_V1620_LAUNCHED_NEW_ORDINARY_WARMUP_GATE_PENDING",
+  "launch": {
+    "at": "2026-10-18T22:37:12.627482+00:00",
+    "conditionTargetMeasured": 900,
+    "controllerPid": 1501375,
+    "controllerStartTicks": 114149321,
+    "credentialsCopied": false,
+    "excludedWarmups": 15,
+    "frozenManifestSha256": "4f1a09e7ac7dedeaeae6c1bef5a364d4a007e9249aec74f20a0b63b6375a6279",
+    "globalBuildLock": "Same locked descriptor handed to controller; parent closed its copy without unlocking",
+    "newMeasuredObserved": 0,
+    "plannedMeasured": 96,
+    "priorAttemptedMeasured": 716,
+    "priorCorrect": 714,
+    "priorFailed": 2,
+    "providerManifestSha256": "b4b95d579c29695832c05d96692f2f15fd51cf3258333b9175091ab357280887",
+    "providerReceiverPid": 1227894,
+    "providerRestarted": false,
+    "requiredNativeJoins": 45,
+    "startupIsNotAcceptance": true,
+    "status": "REMAINING96_CONTROLLER_LAUNCHED_NEW_WARMUP_GATE_PENDING"
+  },
+  "processes": {
+    "controller": {
+      "pid": 1501375,
+      "startTicks": 114149321,
+      "state": "S"
+    },
+    "backend": {
+      "pid": 1501420,
+      "startTicks": 114149815,
+      "state": "S"
+    },
+    "copier": {
+      "pid": 1501376,
+      "startTicks": 114149322,
+      "state": "S"
+    },
+    "finalizer": {
+      "pid": 1501377,
+      "startTicks": 114149324,
+      "state": "S"
+    }
+  },
+  "sameProviderAndForward": true,
+  "currentMeasured": 0,
+  "newOrdinaryWarmupsPlanned": 15,
+  "requiredNativeJoins": 45,
+  "oldConditionAttempts": 716,
+  "oldCorrect": 714,
+  "oldFailures": 2,
+  "nextIndices": [
+    717,
+    812
+  ],
+  "remainingAfterWindow": [
+    813,
+    900
+  ],
+  "conditionTarget": 900,
+  "sourceReviewClosed": "ORIGINAL-SOL-REVIEW-RECEIPT-v1624.json",
+  "personalControlReservedFor": "Actual V1620finalizer, no competing sends untilactualproof/result/cursorrelease"
+}

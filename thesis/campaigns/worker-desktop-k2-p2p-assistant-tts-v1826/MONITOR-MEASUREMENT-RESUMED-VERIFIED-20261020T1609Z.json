@@ -1,0 +1,146 @@
+{
+  "admission": {
+    "actualGpu": {
+      "actualOffloadedLayers": 25,
+      "actualTotalLayers": 25,
+      "backend": "Vulkan",
+      "configuredLayers": 100,
+      "receiverPid": 3938202,
+      "receiverStartTicks": 26503353
+    },
+    "at": "2026-10-20T16:06:00.462156+00:00",
+    "budgetForecastSecondsWith20PercentPlus300": 19623.937121543993,
+    "bytes": 4765,
+    "forecastIsNotCompletionOrGuaranteedEta": true,
+    "path": "thesis/campaigns/worker-desktop-k2-p2p-assistant-tts-v1826/ORDINARY-WARMUP-ADMISSION.json",
+    "sha256": "260853de251d6ec7344839d5860613191eeaa23272fd66d612df35cea3101c1b",
+    "status": "K2_15_ORDINARY_WARMUPS_REMOTE_NATIVE_GPU_ROUTE_PROOF_PUBLISHED",
+    "strictNativeModelJoins": 30,
+    "warmupP95MsHF7": 17892.534371799993
+  },
+  "currentActorProof": {
+    "backend": {
+      "pid": 2830763,
+      "startTicks": 129050436,
+      "state": "S"
+    },
+    "controller": {
+      "pid": 2830732,
+      "startTicks": 129050331,
+      "state": "S"
+    },
+    "copier": {
+      "pid": 2831081,
+      "startTicks": 129052325,
+      "state": "S"
+    },
+    "finalizer": {
+      "pid": 2831977,
+      "startTicks": 129058953,
+      "state": "retired normally after actual proof publication"
+    },
+    "observedAt": "2026-10-20T16:07:45.722609+00:00",
+    "provider": {
+      "pid": 3938202,
+      "source": "actual native/GPU proof and successful correlated audio; no extra remote command",
+      "startTicks": 26503353
+    }
+  },
+  "dispatch": "ctx_37b4d0a3c14f",
+  "firstAudio": {
+    "bytes": 30764,
+    "headerRead": {
+      "channels": 1,
+      "compression": "NONE",
+      "frames": 15360,
+      "sampleRate": 22050,
+      "sampleWidthBytes": 2
+    },
+    "notPhysicalMicOrAcousticPlaybackClaim": true,
+    "path": "thesis/campaigns/worker-desktop-k2-p2p-assistant-tts-v1826/audio/29b6decab8923036b69793b1755c7e5b8a460a9a979ad7b05eac27291181a5a8.wav",
+    "sha256": "29b6decab8923036b69793b1755c7e5b8a460a9a979ad7b05eac27291181a5a8"
+  },
+  "firstMeasured": {
+    "allExpected": true,
+    "assistantReplyCorrect": true,
+    "bytes": 6167,
+    "completeByCustodyObservation": "2026-10-20T16:07:04.055427+00:00",
+    "correlationId": "audio-campaign-1e39ec269e224651a42c2fa441472a15",
+    "flowDurationMs": 15645.661279,
+    "flowEndNs": 1290836905032886,
+    "flowStartNs": 1290821259371607,
+    "harnessCaseId": "audio-campaign-v1731-0016",
+    "path": "thesis/campaigns/worker-desktop-k2-p2p-assistant-tts-v1826/attempts/attempt-0016-measured.jsonl",
+    "phase": "measured",
+    "phaseIndex": 1,
+    "requestId": "audio-request-e70f71b064af48cab0e498e8cc68aa4a",
+    "requesterClock": "Python process2830763monotonic",
+    "sha256": "00ca1cc15afd778c46cd9190126cadb9c199e08aa281f7e4049f51c616341c39",
+    "stagesMs": {
+      "remoteAssistant": 5545.761309,
+      "remoteTts": 2197.850899,
+      "stt": 7900.349698
+    },
+    "status": "completed_correct",
+    "timeout": false,
+    "transcriptCorrect": true
+  },
+  "frozenManifestSha256": "a653d60065616e34844d956d1ed47038aa94f3ff876c36bf3a98e904ca838641",
+  "hosts": {
+    "provider": {
+      "alias": "personal.skyron-server",
+      "approvedHost": "ssh:ssh-1786238480967-semdev",
+      "stages": "actual QwenLLM Vulkan25/25 plus PiperTTSCPU"
+    },
+    "requester": {
+      "alias": "code-worker",
+      "approvedHost": "ssh:ssh-oci-coding-worker",
+      "stages": "actual STT CPU"
+    }
+  },
+  "latestVerifiedCount": {
+    "correct": 4,
+    "custodyIndex": "thesis/campaigns/worker-desktop-k2-p2p-assistant-tts-v1826/CURRENT.json",
+    "failed": 0,
+    "measured": 4,
+    "target": 900,
+    "unattempted": 896,
+    "updatedAt": "2026-10-20T16:07:04.055427+00:00",
+    "warmupsCorrect": 15,
+    "warmupsExcluded": true
+  },
+  "launchAt": "2026-10-20T16:00:42.722889+00:00",
+  "monitorActions": "Read existing repo raw case/admission/native proof/audio header+SHA and exact actor identities only; no SUT/model/test/source/network/device/remote commands. This is one pending owner-requested resumption result, not worker_done or goalcompletion.",
+  "monitorNativeGoal": "01a123ff-19ba-7332-a2f7-346a722af79f",
+  "nativeProof": {
+    "bytes": 66429,
+    "calls": 30,
+    "cohortMatches": true,
+    "generatorSha256": "3bb4af79cf2579023c0f1ff2025f69367717d49db7d09831c682c1bf52fc441f",
+    "path": "thesis/campaigns/worker-desktop-k2-p2p-assistant-tts-v1826/ordinary-warmup-proof-v1826/remote-warmup-proof.json",
+    "pathEvidence": "actual selected/nominated ICE pairs before/after native model calls, direct snapshots; not continuous route stability or HTTP-as-mesh",
+    "routeGate": "passed",
+    "sha256": "e95e22998292ee5035b243f5a97dfd6825a8ef36403304a525b88a04ed8e6490"
+  },
+  "observedAt": "2026-10-20T16:08:44.435808+00:00",
+  "preservedScope": {
+    "fullNonIosMatrix": "unfinished, keep all applicable Android/otherpairs/multiprovider/stages/load/recovery/privacy requirements",
+    "k1": {
+      "attempted": 709,
+      "correct": 697,
+      "failed": 12,
+      "remainingOpen": 191
+    },
+    "newOuterCapSeconds": 52200,
+    "oldSetupFailuresAndExcludedPostmortemWarmupsRetained": true,
+    "originalBudgetSeconds": 57600,
+    "originalK2BudgetStart": "2026-10-20T14:46:52.056334+00:00",
+    "providerExpiryUtc": "2026-10-21T07:05:10.563606+00:00"
+  },
+  "requestFulfilled": "Owner's pending request to report fully resumed measurement after ordinary native/GPU warmup gate plus first new measured completion",
+  "root": "term_6a00d9ee-792a-4daf-8578-236290e33108",
+  "rootNativeGoal": "01a112a5-d6bb-74e2-bf7c-ace73cb513b5",
+  "run": "run_e6054e76e9fc",
+  "scope": "K2 actual production P2P audio pipeline W->D, remote LLM+TTS; not aggregate/fullmatrixcompletion",
+  "task": "task_d7ea336050cf"
+}

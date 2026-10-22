@@ -1,0 +1,67 @@
+{
+  "at": "2026-10-20T04:40:34.226139+00:00",
+  "status": "SOURCE_ONLY_NEXT_K2_ADMISSION_FACTS_NO_LAUNCH",
+  "nextCumulativeCondition": "STT=worker;LLM+TTS=Personal; actual typed P2P Orchestrator.ExternalUserInput then TTS.Synthesize",
+  "existingIntegratedCandidate": {
+    "runner.py": {
+      "path": "thesis/harness/distributed-k2-mesh-v905/runner.py",
+      "sha256": "362ce8f30f60c49cfd0c4ad64525091ecd29b16819a2fa5813cf7826cc7a2fac"
+    },
+    "controller.py": {
+      "path": "thesis/harness/distributed-k2-mesh-v905/controller.py",
+      "sha256": "39e6b6c7a9b95c57cda54cd673622a202379483920d63a20088c6c3809853024"
+    },
+    "k2_composition.py": {
+      "path": "thesis/harness/distributed-k2-mesh-v905/k2_composition.py",
+      "sha256": "d61de004741b6ffe13424dd67705a296b7f1cb32547f4c4f0443c7fc8f7b09a3"
+    },
+    "mesh_stage_adapter.py": {
+      "path": "thesis/harness/distributed-k2-mesh-v905/mesh_stage_adapter.py",
+      "sha256": "89c9dabcadede2d1376434b81011527b916efb31a46e7bc5d92453832117c902"
+    },
+    "receiver_proof.py": {
+      "path": "thesis/harness/distributed-k2-mesh-v905/receiver_proof.py",
+      "sha256": "51219585bd3cc2c11a2e49c7ecaaecde3c55c30669e40a179e21094b3b81cd83"
+    },
+    "mesh_route_observer.py": {
+      "path": "thesis/harness/distributed-k2-mesh-v905/mesh_route_observer.py",
+      "sha256": "db390cdc4e05718e111037b3118573aab5ee9215c57b8e4398767a8b07e6ce7a"
+    },
+    "route_observation_sink.py": {
+      "path": "thesis/harness/distributed-k2-mesh-v905/route_observation_sink.py",
+      "sha256": "e85cbd14637af7f9939b07163ee2571ee561c98b52adf179bc72a7e01589ad8f"
+    },
+    "candidate-manifest.json": {
+      "path": "thesis/harness/distributed-k2-mesh-v905/candidate-manifest.json",
+      "sha256": "ce75b965ee5879ebece6ea7dfe133441547d20ccf89ecd5d66ea510bd9645e60"
+    },
+    "candidate-input.wav": {
+      "path": "thesis/harness/distributed-k2-mesh-v905/candidate-input.wav",
+      "sha256": "da0ecc4ad0885746ab6e716585473917ab2b543a505bf0db09ebacfaa7943cbb"
+    }
+  },
+  "sameAudioAndTaskAsCurrentK1": true,
+  "existingCandidateHas": {
+    "strictRealAudioFullFlow": true,
+    "separateExactPeerForAssistantAndTts": true,
+    "noTransparentFallbackOrRetry": true,
+    "fifteenWarmupsBefore900Measured": true,
+    "requiredRemoteNativeJoins": 30,
+    "requiredLocalSttNativeJoins": 15,
+    "nativeEffectiveLlamaConstructorSettingsChecked": true,
+    "beforeAfterRouteObservationsRequiredPerRemoteStage": true
+  },
+  "unchangedProductionReadinessFixSource": "thesis/sources/python-audio-p2p-tts-wiring-v1706/source + Personal sibling; same3file TTS fix, no next-cell source modified",
+  "futureOnlyRemainingInputs": [
+    "After current K1 natural terminal/seal, release its test provider at supported safe boundary before replacing the test runtime; preserve originals/results and no Orca-agent lifecycle action.",
+    "Build next frozen condition from actual closed K2HTTP effective CPU-STT/VulkanLLM25/25/PiperCPU settings, exact hashes and same fixed task; no closed baseline replay.",
+    "Enable Orchestrator+TTS using original approved task identities/scopes; no new grant/security changes.",
+    "Pin actual existing route runtime paths/source hashes in next manifest, rather than claiming template placeholders are admitted.",
+    "Collect15ordinary fullaudio warmups +15localSTT/30actualremote model joins+exactpeer/route proof, freeze prospective finite budget before900."
+  ],
+  "importantBoundary": "No K2 model, tests, new provider or control send while current K1 owns both hosts. This file is implementation preparation only, not methodology-plan replacement or scientific admission.",
+  "sutCalls": 0,
+  "sourceChanges": 0,
+  "tests": 0,
+  "newOrcaWorkers": 0
+}

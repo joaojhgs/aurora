@@ -1,0 +1,92 @@
+{
+  "at": "2026-10-22T05:37:37.867013+00:00",
+  "status": "REQUESTER_PROVIDER_PREFIX_AND_SAVED_ANALYSIS_VERIFIED",
+  "nativeGoalThread": "01a112a5-d6bb-74e2-bf7c-ace73cb513b5",
+  "manifestSha256": "9adbf9ba3a7ec0948a087edad3655cf94ee344b3a2371a78d15f188f44150d42",
+  "epochMeasured": 450,
+  "epochCorrect": 450,
+  "globalAttempted": 900,
+  "globalCorrect": 899,
+  "globalFailed": 1,
+  "nativeGaps": [],
+  "requesterActorsAbsent": true,
+  "providerManifestSha256": "0f4a4bf0e7638b63b8d046331e1e7393e4f108f406802f0e4f0d543feca5ffa2",
+  "prefixArchiveSha256": "3a22bd10761d9fa54755d319b4ef86fb8c7319da906b4716fb2bb1f67f7e19dc",
+  "prefixSealSha256": "ac73dafcfc45a051797e394b981feacbb09f7932422aedda7197ae75fa1e5720",
+  "requesterTerminal": {
+    "at": "2026-10-22T04:58:12.365245+00:00",
+    "status": "REQUESTER_TERMINAL_AND_PHYSICAL_CUSTODY_SEALED",
+    "manifestSha256": "9adbf9ba3a7ec0948a087edad3655cf94ee344b3a2371a78d15f188f44150d42",
+    "requesterActorsAbsent": true,
+    "requesterActors": [
+      {
+        "pid": 3965950,
+        "expectedStartTicks": 139740362,
+        "state": "ABSENT"
+      },
+      {
+        "pid": 3965978,
+        "expectedStartTicks": 139740616,
+        "state": "ABSENT"
+      },
+      {
+        "pid": 3965951,
+        "expectedStartTicks": 139740363,
+        "state": "ABSENT"
+      }
+    ],
+    "epochMeasured": {
+      "attempted": 450,
+      "correct": 450,
+      "failed": 0,
+      "incorrect": 0,
+      "timeouts": 0,
+      "planned": 450,
+      "unattempted": 0
+    },
+    "conditionCountsOnly": {
+      "attempted": 900,
+      "correct": 899,
+      "failed": 1,
+      "incorrect": 0,
+      "unattempted": 0,
+      "target": 900
+    },
+    "failureCodes": {},
+    "excludedWarmups": 15,
+    "caseRecords": 465,
+    "actualWAV": 465,
+    "verifiedFiles": 3109,
+    "verifiedBytes": 57157775,
+    "snapshotSha256": "2c145d404460de3879d6f4c65b321566be6693359cb17c391557fdcc6c02b7ac",
+    "sourceCheckpointSha256": "c60fc1590c30e197049da0461866451b8119db63838d0e611abe36331a0c9522",
+    "requesterNativeResourcePrefixEOF": [
+      {
+        "name": "voice-stages.jsonl",
+        "bytes": 5463285,
+        "sourceEOFVerified": true
+      },
+      {
+        "name": "actual-provider-bindings.jsonl",
+        "bytes": 2143,
+        "sourceEOFVerified": true
+      },
+      {
+        "name": "resources.jsonl",
+        "bytes": 33397127,
+        "sourceEOFVerified": true
+      }
+    ],
+    "controllerExitCode": 0,
+    "terminalStatus": "completed_all_correct",
+    "terminalStopReason": null,
+    "newInference": 0,
+    "nativeGoalMutations": 0,
+    "noLatencyPooling": true
+  },
+  "analysisSummarySha256": "250da0112cbbbf73d00d35e78cbcca58626eca740edd620a91bc4195869b5148",
+  "providerCustodySha256": "fdcd61fc89b66c301b516406dbb468a91e7f8b294a0e3eb016053da9d5ac63dd",
+  "newInference": 0,
+  "allOldFailuresPreserved": true,
+  "full13AndRemainingMatrixStillOpen": true
+}

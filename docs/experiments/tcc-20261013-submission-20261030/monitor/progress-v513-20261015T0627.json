@@ -1,0 +1,62 @@
+{
+  "at": "2026-10-15T06:27:00Z",
+  "run": "run_e6054e76e9fc",
+  "task": "task_d7ea336050cf",
+  "dispatch": "ctx_37b4d0a3c14f",
+  "monitorGoal": {
+    "thread": "01a123ff-19ba-7332-a2f7-346a722af79f",
+    "status": "active",
+    "budget": null
+  },
+  "rootGoal": {
+    "thread": "01a112a5-d6bb-74e2-bf7c-ace73cb513b5",
+    "lastVerified": "active",
+    "receipt": "msg_71c7eb3c62d8"
+  },
+  "progress": {
+    "observedAt": "2026-10-15T06:21:00Z",
+    "desktopGPU": {
+      "measuredRecorded": 847,
+      "nPlanned": 900,
+      "warmupsComplete": 15,
+      "controller": 2910571,
+      "child": 2910591,
+      "live": true,
+      "aggregateOutcomeCounts": null
+    },
+    "workerCPU": {
+      "measuredRecorded": 168,
+      "nPlanned": 900,
+      "warmupsComplete": 15,
+      "controller": 2232517,
+      "child": 2232566,
+      "live": true,
+      "aggregateOutcomeCounts": null
+    },
+    "latestOutcomeOnly": "completed_correct",
+    "noFinalPercentilesOrSeals": true
+  },
+  "plan": {
+    "path": "/home/developer/Documents/Obsidian Vault Origin/5-full-notes/faculdade/tcc/future-work-test-requirements.md",
+    "sha256": "d216a47aec3a68995d9d2a57f9b88d4be177ccdae6469f98ca3956d44e775c0a",
+    "rootAck": "msg_928d2d7b5383"
+  },
+  "voiceSourceReview": {
+    "path": ".git/aurora-handoff-import-20261006/product-voice-route-admission-v512/SOURCE.md",
+    "sha256": "3d3aa498e3a51a664bd2fbcdc385e1d2cd1fa6af5e48dcfb501438117920b3bf",
+    "fullReadAndHashVerified": true,
+    "status": "closed_unknown",
+    "facts": [
+      "V466 failed before transcription with generic capture failure/timeout; cause not established.",
+      "Production getUserMedia->PCM->transcribeVoiceAudio route exists.",
+      "Maintained fake-media browser test uses demo transcription, not real frozen-WAV full audio pipeline.",
+      "No grounded correction or currently admitted real frozen-WAV fullchain driver established.",
+      "No unchanged failed probe repeated; no owner fixture/model choice required."
+    ]
+  },
+  "next": "Root alone finishes same controllers unchanged, retires and seals actual raw/outcomes/Type7. Same-desktop ordinaryUI fullaudio readiness may precede HTTP900 only with admitted real route or grounded correction; no duplicate closed probes. Already-reviewed HTTP individual route remains executable fallback priority if voice admission remains unknown, not replacement for voice acceptance.",
+  "crossDeviceMeasuredAllowed": false,
+  "iosActive": false,
+  "monitorTestsOrSourceEdits": 0,
+  "workerDoneSent": false
+}

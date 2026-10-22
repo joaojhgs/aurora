@@ -1,0 +1,47 @@
+{
+  "at": "2026-10-21T19:26:16.704871+00:00",
+  "actors": [
+    {
+      "pid": 3751414,
+      "state": "S",
+      "startTicks": 137933512,
+      "matches": true
+    },
+    {
+      "pid": 3751426,
+      "state": "R",
+      "startTicks": 137933748,
+      "matches": true
+    },
+    {
+      "pid": 3751415,
+      "state": "S",
+      "startTicks": 137933513,
+      "matches": true
+    }
+  ],
+  "progress": {
+    "attempted": 190,
+    "last_attempt_file": "attempts/attempt-0190-measured.jsonl",
+    "last_attempt_status": "completed_correct",
+    "measured_attempted": 175,
+    "planned_measured": 270,
+    "planned_warmups": 15,
+    "status": "running",
+    "unattempted_measured": 95,
+    "warmups_attempted": 15
+  },
+  "measuredStatuses": {
+    "completed_correct": 175
+  },
+  "custody": {
+    "sequence": 165,
+    "at": "2026-10-21T19:25:46.323192+00:00",
+    "receipt": "thesis/campaigns/worker-desktop-k1-orca-relayed-http-first270-v2234/receipts/000165.json",
+    "receiptHashMatches": true,
+    "errors": [],
+    "cases": 189,
+    "audio": 189
+  },
+  "terminal": false
+}

@@ -1,0 +1,35 @@
+{
+  "at": "2026-10-17T22:25:22.481497+00:00",
+  "reviewOwner": "Original Root, separate from auditor writer",
+  "scope": "Bounded source/manifest validation of V491 allocation and exact C06 selected-row recovery; no replay of full saved-data smoke",
+  "v491": "VERIFIED one LocalBus CPU condition900measured+15excluded warmups; distinct V317nine-cell typed study",
+  "c06RecoveredRows": [
+    {
+      "caseId": "c06-app900-v1058-measured-0104",
+      "ordinal": 104,
+      "source": "docs/experiments/tcc-20261013-submission-20261030/root/native-desktop-sdk-audio900-v1068/RUNNING-v1075.json",
+      "sourceSHA256": "87ed6b5552190d1798ca9ac40a7a076eab084472804aceabd1623c5e915484d8"
+    },
+    {
+      "caseId": "c06-app900-v1058-measured-0159",
+      "ordinal": 159,
+      "source": "docs/experiments/tcc-20261013-submission-20261030/root/native-desktop-sdk-audio900-v1068/RUNNING-v1079.json",
+      "sourceSHA256": "02a34f1d30b8842bc083f77a7115eeb8dd886cb545d731ea324aa898482e3a38"
+    },
+    {
+      "caseId": "c06-app900-v1058-measured-0218",
+      "ordinal": 218,
+      "source": "docs/experiments/tcc-20261013-submission-20261030/root/native-desktop-sdk-audio900-v1068/RUNNING-v1083.json",
+      "sourceSHA256": "06289d640eb220aba0bcae690e35cf9e9d2ce594ba11cf7f6bada392190f437f"
+    },
+    {
+      "caseId": "c06-app900-v1058-measured-0272",
+      "ordinal": 272,
+      "source": "docs/experiments/tcc-20261013-submission-20261030/root/native-desktop-sdk-audio900-v1068/RUNNING-v1085.json",
+      "sourceSHA256": "6bde86ff7f20e56e3efb4234f00d98f806d5d26f5c38083b3e066d677d471d9d"
+    }
+  ],
+  "c06FinalPopulation": "UNKNOWN; no cohort percentile or missing-final-count inference",
+  "extraMeasurements": 0,
+  "auditFullCompletion": "PENDING final reports/receipt"
+}

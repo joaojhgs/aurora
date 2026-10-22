@@ -1,0 +1,23 @@
+{
+  "objective": "tcc:20261013:submission-20261030",
+  "serial_owner": "same original Aurora Root01a112a5",
+  "files_sha256": {
+    "integration.json": "4baaf1f483614e2d53dc8022be763371858135c6691c2b7e29f62d79ca01ac70",
+    "checks.json": "cb913e5e62e28c4a88107fcc4c01d1a7a6bee1a7229b47447b66b9a2c74ce934",
+    "heredoc-parse.json": "114e5c814172655fae29fcdb48d979b94451edbecfab844ba0a83cb88c7243b0",
+    "sol-review.md": "52780fdde5109a424ce3822b6163a45245a63d3f624ab0ffd6ee9f6b50853365",
+    "bash-parse.log": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+    "source/scripts/hosted_peer_e2e.sh": "36d9e2907d9f19590f3552d2ea2aefad27cdb6f2c09d8e2cdfac748dccf0a267",
+    "source/tests/e2e/hosted_peer/hosted-peer-live-shell.spec.ts": "a257aa79f03423fa412ffa53099f124910c248a3c3591924e9e3688de0891b2b",
+    "source/tests/e2e/hosted_peer/hosted-peer-live-helpers.ts": "fc1a89f4925ea419f3eb14b68568a95b04d5a8375fbf1ff512f81e199a35b6cd"
+  },
+  "log_exports": {
+    "bash-parse.log": {
+      "private_original_sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+      "export_sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+      "withheld_lines": 0
+    }
+  },
+  "private_browser_bodies_exported": false,
+  "source_and_raw_failed_history_preserved": true
+}

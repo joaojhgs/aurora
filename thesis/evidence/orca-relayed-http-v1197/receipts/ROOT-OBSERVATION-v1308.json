@@ -1,0 +1,48 @@
+{
+  "at": "2026-10-17T22:00:31Z",
+  "classification": "VERIFIED_WAIT_ORIGINAL_RUN_AND_BOUNDED_ADMISSION_ROUTE_DISCOVERY",
+  "progress": {
+    "attempted": 132,
+    "last_attempt_file": "attempts/attempt-0132-measured.jsonl",
+    "last_attempt_status": "completed_correct",
+    "measured_attempted": 117,
+    "planned_measured": 900,
+    "planned_warmups": 15,
+    "status": "running",
+    "unattempted_measured": 783,
+    "warmups_attempted": 15
+  },
+  "originalProcesses": {
+    "430655": {
+      "present": true,
+      "state": "S",
+      "startTicks": 104608580,
+      "sameProcess": true
+    },
+    "430656": {
+      "present": true,
+      "state": "S",
+      "startTicks": 104608648,
+      "sameProcess": true
+    },
+    "442775": {
+      "present": true,
+      "state": "S",
+      "startTicks": 104723117,
+      "sameProcess": true
+    },
+    "421717": {
+      "present": true,
+      "state": "S",
+      "startTicks": 104535394,
+      "sameProcess": true
+    }
+  },
+  "copierCheckpointAt": "2026-10-17T22:00:22.657332+00:00",
+  "physicalCompletedCases": 132,
+  "freeBytes": 7170486272,
+  "summaryPresent": false,
+  "noNewInferenceOrWorkloadCalls": true,
+  "nextOrdinaryObservationUtc": "2026-10-17T22:10:00Z",
+  "watchUtc": "2026-10-17T22:15:00Z"
+}

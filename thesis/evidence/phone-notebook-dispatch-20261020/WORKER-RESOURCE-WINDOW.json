@@ -1,0 +1,28 @@
+{
+  "id": "488698c8-a810-40ca-9e7a-04e9428d328d",
+  "ok": true,
+  "result": {
+    "message": {
+      "id": "msg_241213ebc84e",
+      "run_id": "run_e6054e76e9fc",
+      "delivery_contract": "current_delivery",
+      "from_handle": "term_6a00d9ee-792a-4daf-8578-236290e33108",
+      "to_handle": "dispatch:ctx_104db5d889d2",
+      "subject": "Notebook bounded read/secure setup control window admitted; no build or measurement",
+      "body": "Root confirms actual launch + exclusive fileclaims. You have model-free PersonalNOTEBOOK existing plain control window NOW through2026-10-20T22:02:00Z for bounded hardware/load/storage/runtime/assets/approvedLAN/ADB-mdns metadata and ordinary secureUI pairing setup; Root will not send to notebookterm meanwhile. Revalidate exactterm_f40f2bd6-0f71-4484-8347-ac221cf6ce9b/inc633939eb-60f4-4bc0-9a0c-5941dc6db36a/ssh:ssh-sem-notebook-personal before single sends, readbefore/onecommandatatime, no blindresendunknown/no controls on desktop. No benchmark/build/modeldownload/bulktransfer yet; sourceSHA remains pendingRoot integration. You may create smallisolated setupfiles in owned folder and prepareworkingguarded scripts. Securephonepair approvals/codes only supportedsecureUI; no plaintextcode/chat/log. If unknown phoneaddress, report nonsecretIP:connectport/model need toRoot forCoding, no scan guesses. Please ACK realidentity/currentbranch+HEAD and do usefulboundeddiscovery now, report after~10min or exactcapabilitygap. Overnightfinite ownerwindow is requested via monitor/Coding; do not assume duration or measuredstart. No needwaitidleforSHA: prepare/read/discover now. Also report pre-existing productsourceownerchanges needed by notebook without modifying sharedsources/Git.",
+      "type": "status",
+      "priority": "normal",
+      "thread_id": null,
+      "payload": null,
+      "created_at": "2026-10-20T21:31:29Z",
+      "delivered_at": null
+    },
+    "mutation": {
+      "requestId": "218b4e1d-75b3-4baa-aa8d-cb0ec9d6fd17",
+      "replayed": false
+    }
+  },
+  "_meta": {
+    "runtimeId": "cc9e3275-28c6-4c45-85cc-bdcd2262aa7d"
+  }
+}

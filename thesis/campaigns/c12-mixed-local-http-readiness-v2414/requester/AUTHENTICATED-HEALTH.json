@@ -1,0 +1,14 @@
+{
+  "at": "2026-10-22T06:38:55.176535+00:00",
+  "authorizationChanges": false,
+  "bodyBytes": 10766,
+  "bodySha256": "98bb70c63139a97370b3fed513bc7ccb62e0d6f6390060463b02fd289ba5f326",
+  "credentialsCopiedOrLogged": false,
+  "durationMs": 6029.369086,
+  "existingApprovedPeer": "aurora-276bb04e1276201922851f6a222110de",
+  "httpStatus": 200,
+  "newInference": 0,
+  "path": "/api/services",
+  "route": "existing desktop-aurora-tts / worker127.0.0.1:18000",
+  "status": "EXISTING_PEER_BEARER_PROTECTED_HTTP_READ_PASSED"
+}

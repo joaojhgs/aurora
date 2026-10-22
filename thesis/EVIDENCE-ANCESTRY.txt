@@ -1,0 +1,455 @@
+ebde3a8acf6315f920d03593845f17a1fc65a733 test(experiments): retain matched-input measurement tools
+e5745babb13b69f44aef4df1a7bc6b4b58aadc7d fix(ui): preserve profile settings and focused voice recovery
+1c2f2da9d1eaa2a0b31db09c914f43834285dafb fix(speech): preserve runtime capabilities and gateway lifecycle
+cbac78fe3fb2b73100bfaa9dc198fb6bff689840 fix(speech): preserve assistant correlation through TTS lifecycle
+5782746afba213f6b36907db2f09f0017625e218 chore(aurora): record owner-corrected Orca ADB route and monitor relay
+18c19b344924e674cb55907069230ef610c30c04 chore(aurora): preserve native blocked goal and resume prerequisites
+ec6c40ef1ddc26c2b430fc4dc2c1515bc83053e2 chore(aurora): retain closed Assistant route lookup on resume
+03906a4ad9be592cebef54301c89d4ed844041e7 chore(aurora): record real ARM64 native inference main pass
+dcdbc99a01642e93afb2802fa80c8dfeaa6e5d59 chore(aurora): checkpoint iOS main pass and bounded Android access
+edb4f19d6556eecbe89dbd32018de5a3969dea94 docs(aurora): retain reviewed CI fix and current main boundaries
+25c7b56ad5694b1faa5d6b639f6e9fb6f84236c5 fix(ci): install CPU chat backend and refresh maintained guards
+6ba6b3235d3ea860d5d79709ed28388cbc5a8a1d docs(aurora): retain reviewed foreground error-code repair and current main
+04e2e77cf0054f800ec974d91244b6eff10d2ac5 fix(ui): preserve typed foreground assistant failure codes
+5d4e7b284c36bb62e0a4a80b39305af8b66be8e8 docs(aurora): retain Android settings main pass and native failure boundaries
+8011fb49ce2c156464dd9c34d479c7e04010aaf9 docs(aurora): persist single consolidated PR and original main-flow validation
+b926b00b258c3367ef8dd5fe09acf31cea4e96ee docs(aurora): checkpoint published G1 main repair and affected Android run
+686d167291cc6da4ec4592363e907d10a0a2241b docs(aurora): checkpoint current mobile mains and reviewed G1 correction
+4198bbb383eb5e36013f75ebf5138cbebffef079 fix(android): verify draft continuity after real settings change
+46d73e51aa6138494f4e596d46d580f14741d7fc Checkpoint published main failure boundaries and closed iOS baseline
+c83f22a5266d9b669030aba99b4e513a41a6328d Bound Android browser main before its result watchdog expires
+4815c1e827b7205867f344ce2dd6bef0b96d8d72 Record missing iOS speech readiness conditions on main-flow timeout
+2bd4197eb4692faf9a0af4b0828528c52f2a79a4 Checkpoint completed desktop CI and remaining mobile mains
+1a713d4e510689a91b0ee7332ffa8882cca1b574 Checkpoint closed speech findings and verified compiler pass
+bddde6d4b3a1eea05607d9498160dc6eb0e52e68 Checkpoint important native integration, compiler repair and same Orca goal
+3f6496e2517b503cba67ca26bcddd75809a2cfcf Fix native speech build rejected by unused Gateway binding
+bad2533e96f7ac370c81c0953221cbc750533b7d Carry finite Assistant error codes into existing Android failure reports
+ce8041b02f07dbebca95738c43442b15bbbb9b6e Retain bounded draft-state observation on Android main failure
+2e1b6c34afeef717f73038e07c8dbbeebacf1577 Connect Android native speech stages to authorized mesh providers
+550470e3a62dacd5aeeb1f929c7fa5dccf125103 fix(gateway): redact speech text in denied RPC audits
+df51ee4622248a3cee530b0d116ebbe321a34567 fix(speech): reject mismatched native stage resources
+e76ae2fb3fd18dd459aae9efbdea69c83a7dd351 docs(aurora): checkpoint reviewed current main repairs and Orca continuation
+49d9ce6073377d0e35411ac37d2414b6b563ecf4 fix(android): retain offline answer state on main failure
+fdbe23269b00a2226930210fc4cc43e0519194b1 fix(ios): retain native main architecture failure check
+b20b9a9465b40164dba96933a13225916b5af4f3 fix(android): preserve draft checks across completed config refresh
+19eec69f078e74c52f5988cdd35abab2cbacfc1f docs(aurora): persist current native-main publication and Orca continuation
+a2ca15dd65610aec7dd266616935155327e0ca20 fix(android): retain safe main-flow failure locations
+ba33516c71a16726fad7bfac222cb3e95500f632 fix(ios): run foreground offline voice without cloud credentials
+ea89fe6ce5fbf762e6cb5f0c5a9cdc7285aae0c4 docs: checkpoint published iOS main setup and current platform outcomes
+0858e99d73031899e8b2e98abf511d893468dd73 fix(ios): connect native voice main to its real service prerequisites
+361af442153e2b04c077a09baf1ad55d9bfdf6db fix(ios): honor saved Gateway connection policy for speech readiness
+1c8db70571b06d34ff176a26eddb9b26e17206d8 docs(aurora): close local archive gates and retain native main failure
+2f3133b08f25a0e8a1625f8bb8bd3ba164d6cd1e docs(aurora): checkpoint reviewed independent main publication
+689001f949356a3f0a01991276c9f3ce83502c18 test(android): run independent speech after verified settings cleanup
+628391acdd3b74a68ff31d3edeb6f82fcc3b58ba docs(aurora): retain original Orca recovery and platform closures
+5e22649602dd2d15bf674cdc869346bfb68637f0 docs(aurora): retain repaired iOS setup and current main validation
+fdd02dd28811a6f68b12b0a0ffaa2d0a37b82e2a fix(ios): allow speech setup before native capture is ready
+6949b3f470caae18968c7b656920996564f0ba80 docs(aurora): retain current main passes and reviewed correction delivery
+6bd20c871128f3a5b31e54ff64de18c1905bf2de fix(android): refresh offline onboarding after chained main cleanup
+d6738f2f8b954c06515e8de62e30b6db1671ec36 docs(handoff): record corrected native main and preserve running Android flow
+aceca1abf5c28e505bae2e6abd099e1df4e87fd3 fix(ios): keep Cactus math compatible with the app deployment floor
+6402593fc7dcab12265eeb0a734aa41dacdef60d fix(ios): link Accelerate into the generated app
+0ef603c94730625a696c6dd244034e476668b44a test(android): isolate pinned model preparation in bundle fixture
+b7f4dfd61ec87dbe9258942a89e3d8485d7b138a docs(handoff): record published native product flow and remaining main gates
+7f732702441c3637746493e11d3ea2b16ead21c7 feat(native): connect mobile engines to offline Assistant and Settings
+7c4fdedc2393a5a8821f6e2601b18e63110d43b7 feat(inference): install the pinned Cactus backend on iOS
+725c64e0f374169f1443691a271d3bdb0d7a5154 docs(handoff): close mobile mains and record required engine progress
+6ef87efda355f14f50fb7906addbd9d39320e979 feat(inference): connect optional Android Needle action backend
+1142b3668843023a9aa5daf8593a05792793b932 fix(android): seed voice setup from the owned invite
+08466a9b38bab1c1b8d9d9ab41bf4c4a8cb3ac30 docs(aurora): checkpoint corrected connection main publication
+11c9234ee7b3ed5bff3b626f76ef5f4457d55927 fix(android): opt owned loopback profile into debug signaling
+ff93cd9e904cc5bdb61eb81faa6b64d907482eba docs(aurora): close current mobile main-flow runs
+51f8da8a6d01d0df8d654d5d12edb98553f7d745 fix(android): preserve imported offline main failure phase
+5f90d7c07bbe9c602ee6d3b309d18b054e3ca99d checkpoint(goals): retain current desktop and web main passes
+a708ae6d0bcce17ccbfe2cd20ef3855750dcd503 checkpoint(goals): retain iOS main limits and close original visual lookup
+794b273a890e09346792b4888ee5871fd3507f96 checkpoint(goals): advance independent Android main and close stale mobile waits
+3573fb590265dc32898bf453d2bb19236cb5e8b7 test(android): run offline assistant main after connected cleanup
+61793ada484a579ca9ea11ae2daff632c7cb2583 checkpoint(goals): record bounded event and speech source reviews
+53e61211c13ea7e12aa74e76338e6ec7f3894ffa checkpoint(goals): preserve current mobile mains and separate speech scope
+ea7e5d1ca009798e718727afd9c2f6cd373b6f4c fix(mobile): unblock native iOS main and retain console state
+eb93a5c5ce334a487db4d163a89499a4495bc7a6 docs: record reviewed archive delivery and close native main waits
+16dbb7cd112c318606fc9722059243ba05a677cb checkpoint(goals): accept maintainability implementation and retain current mains
+1f56586a934b3405a3e91ec41b0667ea71329996 test(frontend): check packaged Android console state through live config updates
+2cd59631c6adefcceda9f2e9e7a3b4bd69129e52 fix(android): retain safe pairing failure categories in native main
+daba95c9fb5494ef721025ec6db70d1d79fb546d checkpoint(goals): retain current Android primary and reviewed iOS successor
+e5a6dfe1960a571b2de992c624ed9f5438fbb590 fix(ios): retain bounded native speech setup failure details
+09ff234bcde4c665f97b9e47bc445184934a103a chore(goals): bound current mains and separate shell acceptance
+9c6604db48adcc4157c051626afe3b2534eca991 docs(aurora): record current main-flow publication and serial iOS reservation
+b6aa20ea18170bd54a16b7b7c8c9185ef13ccf9a fix(android): provision pinned Chromium before native main flow
+91210d63224c7684bad5c74adf10ea0963f0d3d4 docs(goal): close current frontend CI and retain mobile main waits
+cb8cddfc4611e86e2131f77c4c03c8c73dd70b2b docs(goal): retain compiled product and current main-flow coordination
+01e9631f88cca156e80e8cee211009f8d7cd7725 test(sdk): settle peer epoch cleanup before handshake assertions
+e2c5a0f7d6e0452aa096a17c0186d1cf9c5e91b0 test(android): require Tooling for the connected native main
+98b2bd144c41dc32bfbcdde2e06c51316a4ea897 test(speech): connect the maintained Android main to a real hosted consumer
+05ab4d7e3975c0a9794d21300a95ce05a21bc322 feat(voice): save profile-owned speech sharing choices in Settings
+7b1c5d25ed43fbc4e15c9df3ba89fc8c35b3bb6a fix(ios): use profile-backed preferences in the native voice main flow
+627b49e80641d5af343489cab21466fff8e41ded feat(speech): serve foreground peer speech with native stage ownership
+b9d4446e2b03856ce2c20d3c663c1a583e65b0d5 docs: reconcile current thirteen-goal product status
+798c2540181249791f4f2357b5d39d7a2d4f1e07 docs: checkpoint remaining native peer speech main flow
+df49ff00b6045af852736bfb7c0edb5cc4add049 docs(goal): preserve Orca ownership and corrected mobile main runs
+894aafcbb86747e40c057d752b393437ca80cfbf test(mobile): align existing gates with connected Assistant main
+75766554cad7c20cbaed8b106849cf8a60174d0f docs(delivery): record published stack and exact mobile guard blockers
+2b15e4d77c8543f98fb1caf7d3f7378b1e2b6847 ci(android): connect the existing voice main to its owned peer
+eb706672b3199615ebf615cb815e18c0ffc356f3 fix(android): establish voice main route and explicit restarts
+6e4fee45ab5f7a1ba70299630a4fb168343fcea1 docs(aurora): checkpoint terminal mobile main setup failures
+8bd45a0ef7b65bff19464ab7cc0d0c27685def5e fix(ios): identify redacted native main setup failures
+be2d8ca64477c3080611cb36d5adafd41de310ee fix(android): bind transcript recording main to the selected user
+a132faf3dcfac5446f4207a13291c3fd5b159e9f fix(android): restore empty profiles and report main cleanup failures
+fcbf64ca704f5600f64d4e7d81df932a68173334 docs(aurora): persist original Orca coordination across pending goals
+c448ecb783f7609f88c038ed69c934e5fda210fc docs(aurora): record published mobile fixes and bounded main-flow progress
+9ae521c323b8607268066ef16a4f521aa22a4ad8 fix(ios): convert fixture admission errors to the native status type
+c7e847fb05c161457e4bce65fd3da70479d877c6 fix(android): preserve Gradle outputs during repeated Cargo staging
+78c727b6ac7c6646d7bad5fb22f3a097bb81a4d4 docs(aurora): checkpoint reviewed Android fix and bounded performance review
+0b4eaacf3ae3cf74abee29f01cf9d315f5642436 docs(aurora): checkpoint published stack and passed native CI
+f46ea6b8105b47238acf990497efe7fbc7aae75e fix(ios): disambiguate finite PCM guards for the Swift compiler
+56f4a3c0e294def396bfcae24a71b89164509343 fix(ci): align required aliases with their canonical PR triggers
+f1ddcbf185b6131b14709e3f13bbab1e699f0de9 fix(android): accept the successful UIAutomator hierarchy footer
+7bd853e9a41422351ba5129a5e4237337357f77e fix(speech): scope native feature imports and observer test support
+81dfcbd61017e794190c50b2b8814be3c3b00530 docs: checkpoint reviewed native CI primaries and stable Apple main
+ed29e18f279e6997c09f09451e482ccda9d2ac35 docs(aurora): checkpoint published main-flow repairs and exact Apple run
+8f29ffddfb8f18773a4b375cbd7bfae7ff868875 fix(ios): forward pinned inference path into Xcode Cargo
+73e9b5ec64960d2dca504b4d40f4f05303e238aa fix(android): sync generated dependency projects after Cargo
+78ec9dfed603946892308c602e474a034199090c fix(voice): clear lifecycle and policy Clippy blockers
+143916dd9d9a918b69bd7ae0227a93236d53b8bf docs(aurora): record recovered PR publication and running iOS main
+b7af305c905e95adb2dc08ca9ee6efca283f1e62 docs(goal): retain reviewed source successors and publication blocker
+8159538eb1146272c59b6eddf9cc6c2a954b39de fix(ios): require inference sources when restoring cached runtime
+d7a9ae40ceee7c71bf4f2d74684d73f558e78cfb fix(ui): preserve Python read-aloud and serialized policy saves
+bba57b9b5f3dca8c9656869a2faaeeae47f5793e fix(android): build offline inference only when packaged
+53fa7225dae8a24c32c3a6d511cfb495ab3e08c1 fix(ci): gate native inference helpers and pin desktop driver
+8818ff8171453fd72c1a06cf659dbe1ad92997ac fix(ui): bind native speech through the app client factory
+1cac081e3a7fccb5e861312ed5912480816bd798 test(sdk): declare ready speech capabilities in TTS host fixtures
+25b55a0c7ee3c534651a68e2e5ea2f5b90dcd4e3 fix(android): validate staged vendor sources and current route fixtures
+32c24899373c4ce18b9523a17f94a16b3b3f3dd8 fix(ci): use checkout Python and supported Android SDK packages
+00e2292c86f4c4a74da41deef57397010f384d8b fix(ios): compare static archive members after installation
+3efc9405bc95636fc1c7bc49e5a5c1d94271312d docs(delivery): record published stack and single Apple main reservation
+cb79f5a1a0fe3681efd0b6b4196079cb9dd84fec docs(delivery): record bounded Android outcome and publishable draft stack
+cefc65873c41f5cba3d4a610611f96ced39f1cbf docs(delivery): preserve Orca resume rules and bounded owner correction
+9229c41b94d47b03c7271785230477aad78745dc fix(mobile): retain saved device identity for new local profiles
+68d6535444c49c880a15dbea9b3f187a243b5d69 fix(ci): use available Android tools and preserve iOS main timeout
+6d736be60a5bfa676a78ab08217a84a1e98194c8 docs(delivery): record four drafts and important archive closure blocker
+fac1a99491c9eddf7f60a91407f43e784872d0fe test(android): use profile-backed onboarding preferences
+688c8b81cb2279ce74c40cf169b46fa1bfdd828f docs(validation): record native APK pass and exact main reservation
+026fbeb2c184e85ce59ab1df5c5e43ebe8be1635 fix(tauri): give command manifest static storage
+53ffcd3ad78c1049685183b71916859c31b89786 docs(delivery): persist current stack and Orca main-flow limits
+039e0df08d09b8847e776c1a4990caffe3708093 test(android): exercise genuine offline Assistant setup
+d7296de8dda58f4e5c82c6506bca0a094eeac166 docs: finalize verified Aurora draft review stack
+bc25d74a5720f4a85579484323e275a48405fe75 docs: checkpoint important Aurora main-flow delivery
+de902ea0f9e8c1ef425cd1408276cf6cbcdaa379 fix(ios): prepare genuine offline speech main flow
+ea1b7f08e7d400b84f1d9d01d43475d6bdb94236 feat(mobile): set up on-device answers without an invite
+53b61289a13d1e834b7188214db25f56ded49404 fix(ios): allow baseline profile persistence
+89be0565236c8950cbe1b76f6539b949ce33a849 docs(goal): settle bounded Android observations and advance iOS flow
+38ed78ec62fc13efa9d686d3891a058bda67a851 perf(ui): overlap initial account and status checks
+09db638e44dd30ea961fb707710b661be27edc5d docs(goal): checkpoint reviewed main harness slices and Orca recovery
+377aa65d1a5a37c6cce39fcc8f6d489efcdec807 fix(test): wait for offline Settings save to finish
+1080bf9d67c87e815a832f81c0449e56bc9308c3 fix(test): detach native event collector for main replay
+afbcb1867377918d03c2273e2b29e063fdaa6f38 docs(aurora): close bounded Android diagnostic and prepare plan delivery
+99ea64943041d805b1315721e630ec8a5857afff docs(aurora): record the current startup and tracker delivery gaps
+f6f05c4e9ccb02853c9d6aef28798eede3712b67 docs(archive): prepare the scoped PER-289 review handoff
+32c7b001f09de96ed33a0a8a7fb696376bbd0286 docs(aurora): persist Orca resource caps and main-flow outcomes
+8131ed77e412960fbc419a310335e853bda71013 test(android): classify the existing pairing failure diagnostic
+94f7de4e4b720c700631039cb33249b13f4be436 test(android): use the owned empty Assistant for the main flow
+db35b831a13b59a27ee847a08ae14feef9fca16e ci(ios): prepare opt-in native Assistant main flow
+4e4783a06005751107c361565a8076149a46d6cf docs(goal): preserve main-flow delivery and Orca resumption
+79e5841c0dcc8ce2c8fee8e4a7404bb0f20b5194 test(ios): drive one native voice Assistant main flow
+f0229ec6f8080c159a8802c4b840dc6336aa487a docs(goal): record iOS source delivery and preserve Orca recovery
+45a6dd760f2f4eaa2dd7a08ce2ab27b686089589 feat(ios): add opt-in PCM input for protected voice sessions
+f5486a72257007109d4ed5073e2aca126e6cc7ca docs(goal): preserve Orca main-flow owners and bounded recovery
+63929e535752cac39ae257c2768383a73146d547 fix(android): open mobile conversation history in offline main flow
+3f60247d4f057e8f7a44f2b6dbdec1c508fb1c1b docs(goal): persist Orca main-flow progress and current platform gaps
+1bb22801c7d8c77ed5243750e26b478eb5e242d4 fix(assistant): enable encrypted offline chat without device actions
+f515dc173e92a3adcbea843b444f1e6bebcaf6f6 fix(android): return serializable readiness values in main flows
+eadb3fc17a01e9384cdb84b5da3d41d44d03c965 fix(ios): deliver native transcription to the Assistant once
+bcf81568506157373eb3c310a4621f5ee7a8ed50 docs(goal): persist Orca ownership and scoped main acceptance
+ca984b669acd4f531067fdda1cb30b143754b5b2 fix(android): await completed invite and offline settings readiness
+8bada86a8ecd9680bfb2b224802172050d558045 docs(goal): preserve Orca continuation and passing archive main flow
+cbf29221ba9c54a0723f95355d5784be6e3bc15a fix(ui): enable owned Android invitations and local assistant settings
+2dfa2cc8b794849707d002061b820601984c3032 docs(goal): record native main blockers and bounded Orca continuation
+afde53da95af66b5e329c2544af74427e741c327 docs(goal): checkpoint real Android question and navigation passes
+9e42d312478fce543d01996120a5a0f83308296b fix(tauri): retain active native mesh profile in UI controller
+94c1c3bec0c3e468860f7b0ea66d23acda6a24cc Wait for rendered Android offline navigation controls
+2a184e00c3fda8253334d62edaba2e8204a2ad20 Checkpoint Orca main-flow prerequisites and reviewed Android startup fixes
+668fa0a477be962fd6bf83d3a268fc922e7aa708 fix(inference): correct the pinned LiteRT model digest
+157f8466d27eea7c791d0d126a93a77a7d538d8a fix(android): target the selected user in main-flow harnesses
+c8ded040846ecebe45ef54804958fbc8c5cb15d0 Return native LiteRT completion result
+1930fadfa86ef190630834b2671b178ea1ea8bd7 Stage Android dependencies with Kotlin 2.4 DSL
+5c154c817b1c8460e0ca34ed4973bc72f20e34a1 Record reviewed native routes and bounded Orca main-flow continuation
+c67f7df151f874098c0d4bb3699e3f038740c365 Migrate generated Android Kotlin compiler options
+8d0d47ea9226b8d93b7478860a24a6b4ad98639e Align Android Kotlin compiler with LiteRT metadata
+40dbe707834b0dfb652b8f83cb6990f5442efb01 Fix native mesh invite surface and broker selection
+4cf1f8a533b2ab8d761ec3283b74d3bc198de784 fix(android): save mesh invites through native profile
+73fda4c1a6ad915ab4326b6a591ed08ae2b51000 fix(android): scope pairing restart to current user
+4a04a2c48f592bc2085ece073c3325a62d9ca970 fix(android): restart app after profile setup before pairing
+f69ab474fc53d26606df58fb856ed4532eb63e44 chore(aurora): checkpoint reviewed native integration and main-flow gaps
+512f85f5008d3d66d976dc9ab5a86c2e0306078a fix(android): stage pinned LiteRT app dependency
+1285e32588f01b56a06394d7c1c5495b1473214a fix(android): close LiteRT host resources safely
+2575b8e7ed0421a1907b709a7d2da0c998760c88 feat(android): route local inference through LiteRT
+718cc5f2e8fe8e71aa425f1c060f95742c0b304f fix(android): hydrate pairing controls and adapt HTTP responses
+dc1b39434f69a71ac57b0122abb9dd7046f2f80c Fix canonical Android voice profile setup and verify publication
+532f1c739837fd454498fb6240862f6037c6f128 Diagnose native profile publication through the packaged main flow
+4bee143350d586969fc605112c878ccab5133504 fix(aurora): refresh mobile profile without blocking native startup
+1e31524f2c65409bd932e7d8dabdbd79ed33130b chore(aurora): checkpoint bounded LiteRT work and native rebuild recovery
+8461354a03fa615f36f42d8c6d24e2e7740f380e chore(aurora): persist Orca main-flow continuation and source closeouts
+a3d490c7cb7436a5a0751bde915c7a86a50a3100 test(android): select one connected voice main flow
+f456294c9e9d120e731b04533e64f0d670c298d7 fix(android): restore admitted voice session without launch crash
+3b79f21a564121fe8e994c8f7c34d89d78dc2e1a fix(test): provide embeddings for real native-turn stack startup
+f9ec47da613d3b7d5bbd5d28f67791fbc437dba2 test(android): prepare reviewed recording and offline main flows
+b5f4453477b4537e8b3e242a50593c4701219356 fix(android): compile native speech admission and async inference commands
+821934033e6844315f9f44229da42d9fea4e1bef docs(goal): persist Orca workers and bounded monitoring for Aurora
+7473d228e62e958c35f46b0205c76d781c4d54d3 docs(android): record full Orca ADB recovery and verified build source
+6093e7d907a7646fee680d1612da40521ef700a4 docs(delivery): prepare preserved PR stack and iOS publication plan
+255dbdf7b2d578a2bf7d1555f0e4e5987880ff2f evidence: record genuine pinned native Piper TTS main flow
+c7099332850224dc2a920b5eff42c36ed22d1e79 docs(platform): record iOS gate repair and Orca Android access
+166383eaff40674dcd6dbbbd0f94da83979b1f25 fix(ios): check profile routing in its native adapter
+e6e3bf76aa4887b23de1ce0f364d8373b69d750a docs(inference): close bounded mobile build connection
+8713d2968b92264e4b8acc6817dd9785b379fa26 fix(mobile): prepare pinned inference runtime for client bundles
+4669540aa606287d4c5e57db291054f67418c356 docs(archive): close bounded transcript search repair
+739f848d953486f0be417c97430a509fe8b4730d fix(sdk): find transcript recordings beyond first search page
+d0c68dcc5a8167e31643c3b46c4147fd47dd1c18 docs(speech): record real native Whisper main flow and host gap
+0b864e4eed1b9dc64b5916fdd6ee7b70e56e6323 test(speech): add installed-model STT main-flow runner
+7349e9c5e9d1c6361fb642f7266e53748381984d docs(inference): close bounded engine attempt and move to speech main flow
+2b69eb3a3d430334f63eb582af15bfc5076430b5 feat(inference): report approved results and defer uncertain actions
+3ec46c162a3cd71c1e4a14e75a6f6068bfb12de9 docs(inference): checkpoint reviewed composite main flows and move to engine backend
+825722f03fc968cfd73687216ff677994195be70 fix(inference): keep composite model and device through tool approval
+9feb0d18b46a988d61dd9d3b03ba07c4e4eb9c2f docs(aurora): checkpoint reviewed PER-291 plan and next slice
+35973dee721e2db39da0622e5caf2e02dc3e9208 docs(per-291): deliver reviewed transcript library plan
+b434edd2d50b195a5110b9de67db4e82b0fef873 docs(goal): checkpoint actual blocked native aggregate status
+9e1db22fec81370ff93689ccfa313d23c3823b86 docs(handoff): close unchanged main-flow checks and record runtime blockers
+8ac267e3389d2e91f2a6b471f969176fbc21501f docs(handoff): distinguish implemented main flows from acceptance gaps
+49e89ca2de3dfa30783ebccc82c51b15fdbd45f8 docs(handoff): checkpoint verified offline assistant main flows
+5f19fd07e92d2d5c20074b94b357d28a31e6032a feat(ui): connect mobile offline assistant settings and chat
+d400b532b6b7e32905c2861083b5a5cd21e7661c feat(native): add pinned offline llama.cpp assistant engine
+af4ce897bab10b45809d6a17b23960c4caa8e013 feat(sdk): connect local inference to assistant approval flow
+637225f91992c86d0acdd67a1802077be36c9a2f docs(handoff): checkpoint connected finite speech product flows
+37a727a7644f6aaf8eceff9ef2f2ce94ece2691e feat(voice): connect desktop speech hosts and selected mesh stages
+401a0daa28a3dd4008cebab53dc8e4a1cec46fb8 feat(mesh): connect browser speech hosting to saved sharing settings
+31a4ff9bbece0d1c9f53c51a1e65867cbca6af6a feat(tts): preserve selected model in typed synthesis requests
+5f8e18d24f09c0dc5449ce8fe6beb02081bb2564 docs(handoff): checkpoint connected recording and browser speech fixes
+aced6ca6ed709b08c5a1c5f0ab70582ec0fc58a4 feat(voice-web): connect bounded local transcription and lifecycle cancellation
+8e02199919cb6bea6b1139fba26330ec89376775 fix(voice): connect mobile stage selection and recording drain
+1082e156e76f944c9d27a207f4675f1c4f7b1ea4 handoff: checkpoint focused speech disposition and remaining acceptance
+a2eeeb68f9669062c53cf49ba53a40b9af154e24 handoff: validate native speech acceptance without releasing pending work
+178d75d600f0c789065e4d99c843f7f703a5cb2a docs: describe connected Android transcript recording
+48229ef8bc5a4c3d0fcef1bd8b1c057a6fc3435a handoff: checkpoint connected Android transcription feature
+a7f9891308aab77ad81c51c4f3bb4e0480b8bc38 feat(voice): connect Android recording settings, notification and encrypted archive
+b7b3a36e54b8457b34ad27e1e2a86ca5bb93e2ea handoff: checkpoint reviewed transcript archive foundation
+9857ee9740c37b3f6d202fa19956b5de9d070e96 storage: connect transcript repositories across browser and native backends
+87070475709856f887daf12dab78495fba510e7a storage: register additive transcript archive migration
+fd616737b707ea7dc02fa6bba594ba7ee4ee5b61 voice: add revisioned background transcription preferences
+da62278e3bacbd1b4c4c2cbd281701edcf826ed5 sdk: add encrypted transcript sessions and ordered segments
+0989e4a7a63e9350411fd494d4cc9a07695e104d docs: checkpoint reviewed speech lifecycle hooks
+e330c7a6857582c65ada638dc9613ce96cdb66cc feat(native): add passive speech lifecycle observation
+2ec4ce830c0a10cfc6796ddcbad44cfe13eda4b4 feat(speech): observe real speech lifecycle boundaries
+0410e03a55d67e8cbd09ad5ef42bf024237db4a7 docs: checkpoint connected speech product delivery
+49c65c6271de10b9a61a6a14512e6a6894c95f64 fix(tts): restore ducked volume after playback stop
+66be2875e874b91e6d1e38010bbbd4c12c5d8faf fix(stt): drain transcription before native capture handoff
+ea67e3abc6dda5812c20f5b7ee5daf7bcf32d74c fix(tts): bound PCM playback and shutdown
+c76d2e47fcae7aabf084acea9e1338e666b0cb0b docs(goal): checkpoint connected native speech settings
+0949f59d3d0dd7477f0e29c70ddf63b2f24d6c1e chore(native): refresh speech policy permissions
+c98b8e75d60dfd4e1967ff89c153c266764c92eb feat(tauri): drain iOS voice sessions before profile changes
+98a6f136a5ee0232033b7f1c7f60111f7ad44642 feat(native): bind mobile speech policy to profiles
+6fc3aa8f38eb13599f9dc64a110b2b878895cf42 feat(ui): connect native speech policy settings
+ea38437a5623bd82bee36d757b24d5f93c24c605 chore(handoff): checkpoint connected assistant product flow
+e3505101c19c55b01d67c8dd922372bf84848bfc chore(contracts): refresh inference source locations
+0a9d8ddea402563dd45fa8981040415e5b8b2440 fix(tts): retain PCM worker until its write stops
+bf8201c9cac426838345d63a61e3d6e0e785521a feat(orchestrator): bind inference to request completion
+56209e637dd39d161461585bb5241e4abdb332ad fix(orchestrator): connect native completion to assistant flow
+25ce4448ec291fbf5a40ce9b122f379dbc0ac0cd docs(speech): checkpoint reviewed request-local native completion
+db3924e27d7e5a0fc1b24e91b60d57dd7fe92b01 feat(orchestrator): own native work per request and Llama context
+a0cc28507ccad51cc69d1ddb103a9aaed5ed899a docs: record local provider retirement validation checkpoint
+dbc9d6f6c91c4e9b70336c255e44ed5fa626bee8 fix(orchestrator): retire local provider work before close
+aa39305f7b95c7c98a1edff2bf17f0eb4bd3e409 docs(voice): preserve reviewed mobile close validation checkpoint
+b5b577b01abf59f60a695e0b5cb7394e353b86a0 feat(voice): retain terminal mobile session close results
+7419e76b273929d3c90f280397474f42fd0a6623 docs(handoff): checkpoint validated native publication fencing
+b544a7b7dd4c995405a426bc8c78b245ace558ae feat(native): fence profile-owned publications
+8918a058ff1c640776e8ef10fb458557d042b4bf docs: checkpoint reviewed native actor shutdown
+e6e589631be33eaec3464cd5e1c8d5b3817eb57e fix(tauri): await owned native voice shutdown
+32386c16e9c5323958028b2321d26c46fd88d9cf docs(nsr04): checkpoint joined mesh stream cleanup
+c4b698196799091b06cd04a745ff8306babfcba5 fix(native): retain mesh subscription close ownership
+ec75832ece6dbcbb8c4d76ec273f35c532cc93b3 docs(nsr04): record genuine linked ARM Tauri mesh baseline
+d3386fa5cbd6f5634f72d8f9bbffb0065422a795 docs: correct cleanup outcome receipt artifact names
+ed349b34557e04a0026c92b65e3d0ffe8acf07ad docs: checkpoint reviewed generation cleanup reporting
+d79a4bf43e5b8cc3094ef6519fa8ba9159bf13ac feat(voice-core): expose generation cleanup callback reports
+5e387fc2f096b723fe2376200ed9ccbd986eb255 docs: checkpoint genuine ARM speech runtime and Tauri compile
+b82bed13510e31c8b8b2f54be79b572ad0be8981 docs(voice): checkpoint reviewed ARM64 compile prerequisites
+f0e9868195448f96d1918a54c98ab4f6ea40f6b5 feat(voice): add Linux ARM64 native Sherpa target
+4f7dbaf48f34573ce842a972ff7053a7e30c4803 feat(native): confirm private OS-local settings root before store use
+4083c9aedf3027907225fa968dc237f1cb0e2dca feat(native): provision private profile settings root
+3dc1fcf97775746e5c2f3c9a4178b3e27d4c8179 feat(native): integrate validated canonical profile file storage
+4ee5f5dfb100f512c6ebf851f3392922ea1c7fe9 feat(native): add canonical runtime profile file store
+bc07212af4db0384712801755f0c10cce3d8b6df docs(handoff): checkpoint coordinator profile validation
+cbb34f1fc37584a1dea6b9e81c9355aa73e93171 feat(native): validate profiles before coordinator transitions
+524410aad1f34a9f1a902475792f101426899af4 Export canonical profile validation and checkpoint verified sources
+56d2802d45d82392d95fb576bb202e59b1121c5d feat(native): validate canonical runtime profiles
+8b7094c8dd8151b0abe374a7ecbe5f3864017689 Add strict profile JSON and shared text compatibility checks
+b392df04b38d0236eb1381abbbe17f486592586a Wire verified SDK native read receipts into transport and exports
+4961cf074b6142936e80485c399893d5081272d0 Add SDK access to native node settings
+80ae3b799c2598ca6f7d21cab94879633cfe33d5 Record verified native quarantine recovery checkpoint
+756b09d29057832732c7fda7c74ad425d2af704b fix(native): preserve policy quarantine after profile refresh
+91a74dc3598b13d0fe0f9d25c41f026dc0cca18b Export verified native draft registry and preserve review checkpoint
+3fd51a7790e62ce2122f8e9ebada4acb75d244f5 feat(native): add bounded node config draft handles
+ba6fecc9e88991c0a256845b605e638a4b3da776 feat(native): export and checkpoint profile coordinator
+b93f5ade882ee4051d779ba8b02d05bda4fe16b9 Add portable profile and policy transition coordination
+48981a1dfd7f6a0737f3c333218e42decca58ec8 feat(native): export and checkpoint profile ownership
+aceb4448d5d1cfa57b570635c4c98cc7e2144bd4 feat(native): isolate local policy by selected node
+bb4b71ee6a71eb267edadc9cb1c06148830504f2 docs: correct ambient capture guidance and preserve Android repair review
+29c38e43b582eaa25dfef5a902df241a85cda473 chore: checkpoint real hosted bilateral pairing validation
+97bfccde189a58a938b59eccca1d3f6d6d61f989 docs(handoff): record exact app-pinned JSON helper checks
+f43dabda916a56d458e04cac3d8dfb04f4990051 docs(handoff): checkpoint reviewed response JSON boundary
+7bff6d49421513dd5a6e9326d6ded9049ac9d777 fix(tauri): preserve generic gateway response JSON shape
+182e53bfcb95e32a4d8d4394a03a1e6753bd5e04 Store review inputs as text evidence and retain generated visuals locally
+e9d86cc572a194a80f489e7fc39700bee3f5fe81 Record native request text validation and the frontend assertion follow-up
+a07009873c4e9eed48ad8ed0581168418b10f4ac feat(tauri): carry generic Gateway requests as JSON text
+463506a5b14931e68af92a201fbd914bf4e9fe47 fix(tauri): send authorization requests as bounded JSON text
+f36d86b1dd3408f70f08506ab1c95dc42445980b Expose the shared JSON text decoder to native command adapters
+5ab4e1b949ed5cdecacc07170c427c019f1615e4 docs(handoff): checkpoint reviewed Stage 2 harness and copy gates
+576ed38bde07f29feaba4201cd6ed042da0ee552 chore(aurora): record authority gates and existing UI blockers
+2b9b2e260ec899265ce7ec1111078e2f04434f88 docs: checkpoint native policy store validation
+5118fbeb3b205c346001984f8918a7b04db4ea17 feat(native): add profile-scoped node config owner
+bba3e3e827d309b5001db792a105882b97ad81bb Record native policy owner checks and stale-selection gap
+db24703132f1376b2bc4a59234480a965afada91 Record reviewed JSON text and retention validation
+4affde82edb86d8d1d73b47e91964f205ea7a4b8 Retain node policy bytes during SDK loading
+a584323be178d13b3757e60584ae874c3dd11e02 Preserve JSON shape across Rust text boundaries
+61808d9ed827f75862325a6b5bbbb081b2ce1ec8 chore: preserve native text-boundary checkpoint artifact
+35a732f75f3707daeff1008300d0c5323d438cb4 chore: record native transport text-boundary failures
+e586bc598776548ee4038158fcfd182d315cefbe chore: checkpoint shared JSON decoder candidate gates
+d68701c827b73995a9c0768f79bfa40a2f488cb2 chore: checkpoint verified WASM object preservation
+f96e00d95604fb6179b66ccd976bc424b62c269c fix(mesh-authority): preserve opaque JS JSON objects
+84251e2e558de2576b272526f14f59af8c9b62ca chore: checkpoint reviewed opaque contract repair
+240d9bf6f0e8e5ef6959bf1d33570dba837eb11b Preserve opaque contract JSON through generated typed normalization
+7cf1fb27be532cea022bcca84630c5fbfa7ad27d chore: record browser and nullable contract repair gates
+2c30e02d19d5435e90eec860edda770ee7d9e090 chore: checkpoint Rust policy validation and ingress blockers
+0f2bbbba9fcc4eb8cdb5e1e2eb27948858126008 chore: checkpoint verified STT lifecycle integration
+2e86f20c987ab8a9ebea1b488b2d35f7e804fc7f docs: describe STT lifecycle ownership
+9dd23f45656a9885121803b39e45ebf14eb30d2d fix: serialize service lifecycle and retire STT startup owners
+7850a73cfd26b2ac31ca10b8cbf1a331758f3e77 docs: checkpoint verified finite transcription revision guards
+4cf8309dd421103d9c13b7cefce45a67d758b878 Document finite STT revision fencing
+a08fb9fc67db9fd2d15c8c6fb3a02a12befc7ec8 fix(stt): retire finite work across model reloads and enable changes
+67d08f1ab32161bbcc33455c3570ded939612f3d docs: checkpoint verified finite transcription execution
+6af3e9cabadc5627df9c9f99837de25a854a32c6 docs(speech): record finite STT execution safeguards
+ea2e3d904f492258e269efde6e859e75d61e248d fix(stt): isolate finite transcription work and redact logs
+ace59f631aa8c63c7813426c6b53492996d8fc31 chore: record finite voice and hosted validation checkpoint
+2d875799810196015fa4acd92848884888d3684a docs(tts): document finite voice readiness guard
+75e79b0258e9f1c25e65287886a7e5d1305c826d fix(tts): validate selected voice before finite synthesis
+b3687296928a77c67498496a542e977b1bbe8e69 chore(evidence): checkpoint speech SDK and generation guards
+950444cdda6abdff7d1dfa93df0d931a3801e6bf Guard finite TTS output against generation changes
+67d2512ba1d04c1219c18f7fb89e2423bc7be922 docs(speech): describe finite capability metadata boundary
+e71a03e47cf84cf10c5d6e18d044b9c4e956945f feat(sdk): parse speech stage manifest metadata
+f4389a5a338f0f045aacb96ef843eaa37409c4f4 docs: checkpoint speech discovery prerequisites
+81e8999aa84e04ab27ed0fdaf8890362cd37da99 feat(tts): announce finite runtime speech capability
+808da8cf7943c34ac575a6084a6539ab070ffa50 feat(mesh): project recipient-filtered speech metadata
+364d4e5c9052c9a88e2e3c4169f2d3be201eaceb chore(evidence): checkpoint reviewed speech announcements
+bc3e87e96af3f6c0b1809caa4a357f055dd9e398 feat(gateway): announce runtime speech stage capabilities
+8cc45ae81af03eb53d2ec2d4e473c743826a0082 chore(evidence): checkpoint reviewed speech export wrapper
+5b930366ce43fa923274ef3f787e7134b2dcabba feat(contracts): add detached speech capability export
+5fbf8a3098989999be9f913f0a21099b968c54b6 test(ui): align diagnostics label expectation
+2eb603e6c6feb740f930d91cb83737dcd77423ff fix(ui): name diagnostic app issues for users
+bb3e858b2aa65c9644d79f5b301e5b36454f7f7a fix(ui): repair shell fixtures and keep support copy readable
+9181fc8b16b25b195e2ac74f42fe5051d5503b53 test(sdk): align mesh fixtures with current contract frames
+4e9bd04cadae68433a3913507542e594b167c2e8 docs(handoff): checkpoint passing hosted frontend repair
+bf80408e9566a52a775a95327621f2494e0647bd fix(ui): gate optional TTS audio on selected peer
+906e9f0dccb19a669209d9c64448df9aa4d5ae2d docs(handoff): checkpoint reviewed readiness repair and live rejection
+8e681ef262cc6fb70bccf8473921e34ba3a58a8f fix(ui): preserve mesh subscription readiness
+140fc803866bb8121e0f23ac8312dddf4d88367d docs(omx): record assistant subscription readiness failure
+82c8c05d07b79eccb5028daabbe5cb41df191e66 chore: record hosted assistant delivery diagnostic
+5a1807f55dc0ae6c71999be3dd5f66d0f2bcf526 docs(omx): checkpoint frontend validation and live response failure
+79ffe8fea6e126bb97c8e16881ece982b1e6edc4 test(contracts): pin gateway status event contract
+c305df1f2420a7bbefc201b748333509a4854040 chore(contracts): synchronize Gateway status event artifacts
+fddb9ce5c956c029bf4d65006b31571fcbcef9b9 Restore Admin overview link text leading
+1cf9dfbd7baae02ac9763373595f45e1e8982335 Prune the unused assistant stream store API
+4563316c725e131f35ec60f7ed24edd94e9cf320 Recover native event transport loss from snapshots
+bbe6d74f9da9ee73899273cb79029c664b67802d Guard concurrent mesh pairing approvals
+06e0ed0a86101c07d1a2393bcb75eaab7b1240b6 Reconcile reviewed static markup fingerprints
+3882cd01ff8a6b97a480cf0eddf023ab39cc8803 Clarify conversation loading and gateway capability expectations
+90106988d64ef8913f2276506c383b2db1e48f36 fix(tauri): type native turn test helpers
+6a389b4cec1ed8ebdfae2ab4c354d8dfc6cd633f docs(omx): record real hosted acceptance success
+e0f17568f9def409d48f0a75294d5f8334e10930 Update workflow policy guards
+9df42bfd46d32240d94f59c7dd9fee2446c19fb4 Track authorized gateway status publisher
+831688a6ad3fc1af3cb83750224c894ef1139b88 Repair assistant recovery and history races
+03f6dd253d3e2502a5be612ca289441f982fa5db docs(omx): checkpoint receiving-session validation
+eb4ff58e61d2fa7acc5b025e4bb51a3378bc6a7c fix(orchestrator): avoid dynamic provider owner lookups
+532dc16e55fb968811857b72d4180492b84de875 test(ui): cover mesh feature privacy and pairing retry
+7a9954e015afb801e26aea80dda6c2f55fb8cc25 fix(policy): allow preserved handoff receipt
+e0abf840ec8014c4b9a67307b07a91bb2d7d7ccd test: tighten gateway and streaming quality gates
+2c5950824e5349e689790f56139e53a641e801d9 fix(ui): clarify degraded status badge copy
+9728729b0b817b0240cecfab7a1a7b28658772f2 PER278 preserve native stream failures
+38f1796528e73008d58a0455ffe558d7f235fee5 checkpoint: include handoff verification reports
+38b46b452deb277eaa80dd3ae2193db9eb44ecf3 checkpoint: record final handoff ledger annotation
+5e6ebfe30d12735a5d81221405d57dbf70df99db checkpoint: record independent handoff review
+e2446a91c12baf16e76a1460daa45c861ca98e38 checkpoint: clarify handoff provenance maps
+01f35e27b3c766eda30fb06511a6b2e0aa47f40e checkpoint: refresh portable source manifests
+a691c59e60db2890c579fc44f8a0605fc8124afe checkpoint: refresh Git branch map
+e13c888a712e73ce5216aa1f7c6dd5e15b9efe8a checkpoint: preserve selected textual source candidates
+21143e1189cb7b557669e46a457439af5124b7ab checkpoint: preserve nested task plans
+8fdbcf414941e0e96752e886ce6fb362bcb466d0 checkpoint: preserve orphan source candidates
+934f3c5c061772242c923a10d6746a20815abc47 checkpoint: preserve durable handoff metadata
+54eb133e8bbb43673c485d931c8313fa23b636a4 checkpoint: preserve handoff guidance updates
+60551ddd2656013fe9cf62d7fb614d78cc70367c checkpoint: record Git handoff inventory
+d8f734cd191256523009f1f748ce84c947e959ea checkpoint: preserve backend integration source
+7b3cf46a90e85abb6883dd5ecddab5e9714de216 checkpoint: preserve frontend integration source
+d7b79613b3e8bdc3eea7905128a7b639675af7ac fix(sdk): complete authenticated hello and deferred status subscriptions
+f18cee8b625f5ce8e2f5d99f1bf1971bb173218e test(android): consolidate native turn acceptance harness
+4e90aafa4c543ccc4655df681c19d1f75828b439 feat(ui): finalize responsive layout and loading visual gate
+805137fc524ad76a8022904619397fe141c69416 feat(native): persist structured local-data errors
+c2895a3c42c5f0a0a142c00293830af5fe485a43 feat(ui): add paginated local history adapters
+467e848ff47089491ed2b6a4693b554caa7a13a0 feat(sdk): add scoped history transaction scheduling
+865c08171b99ed1c79ebf9e78235c40f4c326368 refactor(ui): extract voice settings operations
+d4759151787c5c8468687b1bcef4058e1f65195d test(ui): cover stream fallback recovery
+4c41c7ce6e0d3280e4cd508dab6ddceec5daa428 fix(ui): recover explicit native background results
+65e8eea3036b05d78a111dcb9b58f61e804d9b59 test(tauri): validate lazy route loading
+6d841db6c19351ad9e53e7859f77f11f7a51f3d2 feat(gateway): enforce status event control plane
+9ec303972bb52ba96d3d5218b10f9985dcfcfb2f feat(mesh): propagate gateway status events
+1edf82ec45516434a1fe0fc83cf19358268a8080 fix(ui): guard concurrent pending peer actions
+ae36ca034a2a77dbf30368222dc6433a87318977 test(ui): refresh approved semantic theme baselines
+f682928b71c0c01529506e5abed9a90ac978cbc3 build(ui): regenerate semantic styles
+a48f25c01aa71967642f3066d150ec66d96738db style(ui): refine voice confirmation focus
+aa66f68120541675b3bb52645534d2aad30a7d97 test(ui): capture closed managed voice state
+f883d71cf66a0c6e5111f4f6bab9ce5024835b0d test(ui): add managed voice visual fixture
+a6e16ab9de5bf834fccae10761e57b7d8a9ef7e1 test(ui): verify composited theme contrast
+e0722ceaf44de8086c9ddc0fd9fafbc48ccbf11e test(ui): enforce rendered theme contrast
+dcf10c01facaa9b190c9b300bb8e0893266b38a6 style(ui): highlight active navigation route
+b73b175dbf9496538728116773fa6ef1398975d2 fix(ui): repair mobile navigation drawer surface
+95d2b0312ea10182763fe16feabb3b87784cb1d9 style(ui): soften managed voice panel border
+7670afcdc201a8f2366bf128cfa5bdc78fe54dcb style(ui): repair semantic theme surfaces
+e7bc0273ff25d4d95a6ccbef00f0ea79f28b4dd3 test(ui): assert theme contrast and component radius
+d61da491881fb2c81c77bfe0d28e953734da8496 test(hosted-peer): accept current empty tool-source copy
+86a7d5710fbf06d5cf6813cff81e7c8dc111c140 style(ui): integrate approved frontend polish
+d6893dba70eb9a74de7b3a4a9369fcf96c5ed441 refactor(ui): extract assistant voice lifecycle hook
+e2698ea3d9e6fe5720cbe7670375138c8a3cabee refactor(ui): finish assistant composition extraction (PER-282)
+b179b78ad954582731855fd592c87e6b469bb670 fix(ui): restore responsive mobile visual parity (PER-279)
+1d087b09b1205132446028ebd21ba271d1622adf chore(ui): prune unused packages and document ownership (PER-279)
+6a2a5e336fd04d08b4e89236f9b42db510de8428 refactor(ui): generate shell and assistant styles (PER-279)
+0b24c30c47742a5ca7a7d08222dea866650f9ed4 refactor(web): generate development preview control styles (PER-279)
+6eeb27398810fef099d26584bc471f40d2fa8ca9 refactor(ui): generate device-choice and tool-detail styles (PER-279)
+4daac1e9eeccbfdd95b18bb17ff670877dcb95d6 test(ui): cover loading notices and expanded tool details (PER-279)
+5d08bfff2a2d6fdc5332847c63dae743aeecefa6 refactor(ui): generate recorder styles with exact visual parity (PER-279)
+a54ff17ae35f5a1ee1fefa1a5d4668672bb6ae42 refactor(ui): author route sheet styles with generated utilities (PER-279)
+7abf73b06e27c8658c046ae2ef22cf4b1f9315df test(ui): audit constant class strings with bounded lexical resolution (PER-279)
+a8c7025f2ace4b71408489a692a002027a6927c7 test(ui): capture device-choice and recorder states before CSS ports (PER-279)
+c82e4da0ab3b970bde2c26d91134f976b446e10c test(ui): reject missing styles and new legacy CSS usage (PER-279)
+5fbb160e676cb9a291d1a8717ac53ecdcc9a0b94 test(perf): add assistant and Waydroid measurement harnesses (PER-277)
+2612e031ce1139bfeb32179016ef9cc194bc4332 refactor(web): share startup screens and route copy projection (PER-282)
+656d73e0115942e9418ce473fcb344c806826e35 refactor(ui): extract model and settings controls (PER-282)
+a7ef9f11c0a8d4568af4a5418c9a2716f3f1e6ce test(visual): accept consolidated UI baselines (PER-279)
+d8ad111ec396ab27a536052583cc148fcbc7f806 style(ui): generate shared Tailwind stylesheet (PER-279)
+ae56160415a540d33cd30c00578f19974f14a0d3 style(ui): remove unreachable assistant UI tokens (PER-279)
+b3adf0249d9e49a22eac84d53a08ed4d2e2821db feat(tauri): wire scoped shell state and native resume events (PER-278)
+9944f188ccdd7d69d971d0ac50d889c3e628734b feat(web): share scoped shell and route resource state (PER-278)
+485f2cd7e2334e33a2f2f7e3d96a69f463bfbac9 refactor(ui): separate assistant history voice and execution state (PER-278)
+502a83b981e7fcd67084095a91bb2964b603123a refactor(ui): split voice settings and native event projection (PER-278)
+c4d6e3d1a55aa655220adda34518e647a0d4f75b refactor(ui): split mesh roster and diagnostics resources (PER-278)
+061144358f6ca88a4e6935a9242c53cc326b85cd feat(ui): migrate route resources to scoped queries (PER-278)
+afce5b736a2f22b723652a7ebb3e08e944a489c1 feat(native): publish bounded events with snapshot recovery (PER-281)
+6ed34f9cd00d4ac6b9af30137c141d258e77d203 feat(ui): add scoped query and live event state (PER-278)
+e45c266fcb876f596d1aa691a2952dc11891c403 feat(ui): centralize feature route metadata (PER-282)
+9d2f5a9db13af132234aed836cc4fc1394273a40 feat(sdk): recover bounded native events on resume (PER-281)
+37f48e7d74d53fbff41e1a3875f53f421fb3cee0 fix(sdk): forward model catalog abort signals (PER-278)
+0cb3dc86a313360c1064509b766a7d71732ee73d fix(ui): recognize product-safe copy callbacks held in refs
+e29fa2d00db06c007a5a510cce6fc91dbac22a21 test(sdk): cover native event envelope and recovery parity (PER-281)
+36bad74a090c8c06193bd31c32238a5cd08b152d fix(sdk): cancel pending tool policy and approval writes (PER-278)
+efc63cd1c863108c7c5a1395767d53cb0f89e6c0 fix(sdk): cancel scoped admin actions and history reads (PER-278)
+396a838445dcb3ea5e659d433ebf46847fb2dda2 fix(sdk): isolate cached reads and extend query cancellation (PER-278)
+8d014f0f3df9a3d97d17269a978392460cabd129 fix(sdk): propagate caller cancellation through query reads
+0622875c2854693cc8e4a553f7a197976a9217fb fix(sdk): activate event subscriptions before awaiting readiness (PER-278)
+53a5174e58ec8355dd092c2d63dad2b029775ffa test(stt): isolate service startup fixtures
+88b35024102045767a23dbc41528f621005a91a2 feat(sdk): add replayable native event subscriptions (PER-281)
+d97b83a7f6e74a83ccfe338e6c39b2bdb806509e test(ui): lock cross-surface visual baselines (PER-279)

@@ -1,0 +1,41 @@
+{
+  "observed_at": "2026-10-14T16:06:08.147638+00:00",
+  "source_path": ".git/aurora-handoff-import-20261006/desktop-headless-vulkan-actual-v408.json",
+  "source_sha256": "8ded1ad0e8bd35995a1bfb15095621b94128be2220f9ca7f2256faa2223d63a7",
+  "actual_recorded_at": "2026-10-14T15:58:17.705369+00:00",
+  "readiness_command_exit_code": 0,
+  "devices": [
+    {
+      "vendorID": "0x1002",
+      "deviceID": "0x15d8",
+      "deviceType": "PHYSICAL_DEVICE_TYPE_INTEGRATED_GPU",
+      "deviceName": "AMD Radeon Vega 11 Graphics (RADV RAVEN)",
+      "driverName": "radv",
+      "driverInfo": "Mesa 25.2.8-0ubuntu0.24.04.2",
+      "deviceUUID": "00000000-0a00-0000-0000-000000000000"
+    },
+    {
+      "vendorID": "0x1002",
+      "deviceID": "0x7480",
+      "deviceType": "PHYSICAL_DEVICE_TYPE_DISCRETE_GPU",
+      "deviceName": "AMD Radeon RX 7600 (RADV NAVI33)",
+      "driverName": "radv",
+      "driverInfo": "Mesa 25.2.8-0ubuntu0.24.04.2",
+      "deviceUUID": "00000000-0300-0000-0000-000000000000"
+    },
+    {
+      "vendorID": "0x10005",
+      "deviceID": "0x0000",
+      "deviceType": "PHYSICAL_DEVICE_TYPE_CPU",
+      "deviceName": "llvmpipe (LLVM 20.1.2, 256 bits)",
+      "driverName": "llvmpipe",
+      "driverInfo": "Mesa 25.2.8-0ubuntu0.24.04.2 (LLVM 20.1.2)",
+      "deviceUUID": "6d657361-3235-2e32-2e38-2d3075627500"
+    }
+  ],
+  "inference_started": false,
+  "source_changes": false,
+  "persistent_environment_changes": false,
+  "measured_gpu_baseline_launch_verified": false,
+  "dual_completion_barrier_ready": false
+}

@@ -1,0 +1,79 @@
+{
+  "at": "2026-10-18T14:15:27.402431+00:00",
+  "status": "CLOSED_OPERATIONAL_LOGS_PHYSICALLY_RETAINED",
+  "files": [
+    {
+      "source": "/home/developer/projects/aurora/.git/aurora-handoff-import-20261006/distributed-k3-orca-relayed-http-cell-v1481/backend.private.log",
+      "sourceInode": 1665798,
+      "sourceBytes": 45517,
+      "sourceSha256": "8a9b64a8f05857edba51f3eb8546e36a46b2dc5bfc2be2c963f6c52ba225671f",
+      "destination": "thesis/campaigns/worker-desktop-k3-orca-relayed-http-v1481/terminal-v1506/closed-operational-logs-v1513/backend.log",
+      "bytes": 45517,
+      "sha256": "8a9b64a8f05857edba51f3eb8546e36a46b2dc5bfc2be2c963f6c52ba225671f",
+      "credentialOccurrencesRedacted": 0,
+      "completeClosedSource": true
+    },
+    {
+      "source": "/home/developer/projects/aurora/.git/aurora-handoff-import-20261006/distributed-k3-orca-relayed-launch-v1481/controller.private.log",
+      "sourceInode": 1665787,
+      "sourceBytes": 0,
+      "sourceSha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+      "destination": "thesis/campaigns/worker-desktop-k3-orca-relayed-http-v1481/terminal-v1506/closed-operational-logs-v1513/controller.log",
+      "bytes": 0,
+      "sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+      "credentialOccurrencesRedacted": 0,
+      "completeClosedSource": true
+    },
+    {
+      "source": "/home/developer/projects/aurora/.git/aurora-handoff-import-20261006/distributed-k3-orca-relayed-http-cell-v1481/control-launch.json",
+      "sourceInode": 1666877,
+      "sourceBytes": 1317,
+      "sourceSha256": "87146c2316ebf234c529b1e57635d3d199203f9069e41e3635f4e141791dd196",
+      "destination": "thesis/campaigns/worker-desktop-k3-orca-relayed-http-v1481/terminal-v1506/closed-operational-logs-v1513/control-launch.json",
+      "bytes": 1317,
+      "sha256": "87146c2316ebf234c529b1e57635d3d199203f9069e41e3635f4e141791dd196",
+      "credentialOccurrencesRedacted": 0,
+      "completeClosedSource": true
+    },
+    {
+      "source": "/home/developer/projects/aurora/.git/aurora-handoff-import-20261006/distributed-k3-orca-relayed-http-cell-v1481/runtime-versions.json",
+      "sourceInode": 1665803,
+      "sourceBytes": 176,
+      "sourceSha256": "006e743ce16c27dbdb3361687f3d0aadc84737e9d919db683a760be697193f49",
+      "destination": "thesis/campaigns/worker-desktop-k3-orca-relayed-http-v1481/terminal-v1506/closed-operational-logs-v1513/runtime-versions.json",
+      "bytes": 176,
+      "sha256": "006e743ce16c27dbdb3361687f3d0aadc84737e9d919db683a760be697193f49",
+      "credentialOccurrencesRedacted": 0,
+      "completeClosedSource": true
+    },
+    {
+      "source": "/home/developer/projects/aurora/.git/aurora-handoff-import-20261006/distributed-k3-orca-relayed-launch-v1481/requester-launch.json",
+      "sourceInode": 1665788,
+      "sourceBytes": 661,
+      "sourceSha256": "8342aa9207063b84042b9772cb70ed172e1fe3b29d35f98c0b1c69bff658d341",
+      "destination": "thesis/campaigns/worker-desktop-k3-orca-relayed-http-v1481/terminal-v1506/closed-operational-logs-v1513/requester-launch.json",
+      "bytes": 661,
+      "sha256": "8342aa9207063b84042b9772cb70ed172e1fe3b29d35f98c0b1c69bff658d341",
+      "credentialOccurrencesRedacted": 0,
+      "completeClosedSource": true
+    },
+    {
+      "source": "/home/developer/projects/aurora/.git/aurora-handoff-import-20261006/distributed-k3-orca-relayed-launch-v1481/operator-launch.json",
+      "sourceInode": 1665793,
+      "sourceBytes": 423,
+      "sourceSha256": "f00baa4e3f801d50f8d1d688d224bd36b008a77b8e91ddb09953bf68ca0b1452",
+      "destination": "thesis/campaigns/worker-desktop-k3-orca-relayed-http-v1481/terminal-v1506/closed-operational-logs-v1513/operator-launch.json",
+      "bytes": 423,
+      "sha256": "f00baa4e3f801d50f8d1d688d224bd36b008a77b8e91ddb09953bf68ca0b1452",
+      "credentialOccurrencesRedacted": 0,
+      "completeClosedSource": true
+    }
+  ],
+  "bytes": 48094,
+  "diskFreeBefore": 5939068928,
+  "diskFreeAfter": 5939007488,
+  "freeFloor": 2147483648,
+  "newModelRequests": 0,
+  "sourceProcessesRemainAbsent": true,
+  "originalPrivateSourcesUnchanged": true
+}

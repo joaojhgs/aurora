@@ -1,0 +1,10 @@
+{
+  "exitCode": 1,
+  "elapsedSeconds": 3.755220361,
+  "finishedAt": "2026-10-14T00:21:17.244463+00:00",
+  "sourceHashes": {
+    "scripts/experiments/assistant_measurement_records.py": "b728a8ec83ccbc527110f5835a9b048262de1c07418fa1c0ac2f61a42d2db099",
+    "tests/unit/tools/test_assistant_measurement_records.py": "724e0bd92fe11926194b4ccd35fdf59df7985c692a6d766d6f5531a21efb8a31"
+  },
+  "benchmarkRequests": 0
+}

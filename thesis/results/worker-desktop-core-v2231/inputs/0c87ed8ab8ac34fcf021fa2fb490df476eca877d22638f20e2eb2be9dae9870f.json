@@ -1,0 +1,240 @@
+{
+  "at": "2026-10-21T02:18:17.508207+00:00",
+  "status": "saved_requester_and_native_analysis_complete",
+  "conditionTarget": 900,
+  "measuredAttempted": 900,
+  "correctFullAudio": 773,
+  "failed": 127,
+  "partialAssistantQualityFailuresIncludedInFailed": 55,
+  "failureCodes": {
+    "preaccept_capability_changed": 71,
+    "mesh_request_timeout_ambiguous": 1,
+    "assistant_reply_predicate_failed": 55
+  },
+  "timeoutsIncludedInFailed": 1,
+  "remaining": 0,
+  "warmupsExcluded": 35,
+  "warmupCorrect": 30,
+  "latency": {
+    "correctFullAudioOnly": {
+      "n": 773,
+      "units": "ms",
+      "estimator": "Hyndman-Fan type 7",
+      "p50": 12482.77534,
+      "p90": 13919.323345600002,
+      "p95": 14665.765187399998,
+      "p99": 17466.009490199973
+    },
+    "allAttemptsTimeToOutcomeNotAllFullAudio": {
+      "n": 900,
+      "units": "ms",
+      "estimator": "Hyndman-Fan type 7",
+      "p50": 12381.121251,
+      "p90": 13778.362976900002,
+      "p95": 14558.63578895,
+      "p99": 17173.06683689999
+    },
+    "failedTimeToOutcome": {
+      "n": 127,
+      "units": "ms",
+      "estimator": "Hyndman-Fan type 7",
+      "p50": 4569.831089,
+      "p90": 11008.217274999999,
+      "p95": 11754.386394899999,
+      "p99": 13884.257440299993
+    }
+  },
+  "requesterStageLatencyOnCorrectFullAudio": {
+    "stt": {
+      "n": 773,
+      "units": "ms",
+      "estimator": "Hyndman-Fan type 7",
+      "p50": 4498.792839,
+      "p90": 5593.9147302,
+      "p95": 6126.5183538,
+      "p99": 9384.249325199966
+    },
+    "assistant": {
+      "n": 773,
+      "units": "ms",
+      "estimator": "Hyndman-Fan type 7",
+      "p50": 5474.521158,
+      "p90": 5966.6579268000005,
+      "p95": 6432.7827362,
+      "p99": 7128.10714948
+    },
+    "tts": {
+      "n": 773,
+      "units": "ms",
+      "estimator": "Hyndman-Fan type 7",
+      "p50": 2354.177654,
+      "p90": 3024.5316278000014,
+      "p95": 3358.8117516,
+      "p99": 3868.083148359999
+    }
+  },
+  "nativeStageLatencyOnCorrectFullAudio": {
+    "stt": {
+      "n": 773,
+      "units": "ms",
+      "estimator": "Hyndman-Fan type 7",
+      "p50": 3310.917723,
+      "p90": 3513.5055776,
+      "p95": 3571.7147992,
+      "p99": 3699.8986237599997
+    },
+    "assistant": {
+      "n": 773,
+      "units": "ms",
+      "estimator": "Hyndman-Fan type 7",
+      "p50": 266.700425,
+      "p90": 344.72149380000116,
+      "p95": 786.5993135999983,
+      "p99": 1564.5491350799994
+    },
+    "tts": {
+      "n": 773,
+      "units": "ms",
+      "estimator": "Hyndman-Fan type 7",
+      "p50": 1661.398452,
+      "p90": 1842.8484214000002,
+      "p95": 1923.2253918,
+      "p99": 2307.0729828799995
+    }
+  },
+  "custody": [
+    {
+      "epoch": "parent",
+      "files": 960,
+      "verifiedBytes": 17577980,
+      "cases": 293,
+      "audioFiles": 271,
+      "stateSha256": "c76bdfdf9f21eef9cf5afa5bf24564c7376139fc2f4b1397dfe2bc8f14a97478"
+    },
+    {
+      "epoch": "remaining624",
+      "files": 1980,
+      "verifiedBytes": 34988875,
+      "cases": 642,
+      "audioFiles": 532,
+      "stateSha256": "781ebb3a7fbaa7cb7aee8cc8f9a60e2b57c2b1f21c4074c3ed5ec7f4b1ea960e"
+    }
+  ],
+  "providerArchive": {
+    "path": "thesis/campaigns/worker-desktop-k3-p2p-full-audio-v2043/provider-prefix-transfer-v2129/provider-prefix-v2128.tar.gz",
+    "sha256": "462847fd5b22695873aee2fae763025012f9abf08ad888fb2bb67e6cc09c4559",
+    "members": [
+      {
+        "name": "raw/provider-manifest.json",
+        "bytes": 7720,
+        "sha256": "716b893424f28ef19a1820820000c8a30fb6adbf87252c9f65e1bca30e717bb9"
+      },
+      {
+        "name": "raw/controller-launch.json",
+        "bytes": 300,
+        "sha256": "709e177210d5782ecc89852ee7231b256100dab321e9d27aa9262838641df8ef"
+      },
+      {
+        "name": "raw/receiver-identity.json",
+        "bytes": 1372,
+        "sha256": "37e4c22e225c8f863dd3ed7645633b2fad56525497faf7937fb5b0a41c63de72"
+      },
+      {
+        "name": "raw/assistant-identity.json",
+        "bytes": 1417,
+        "sha256": "724ecceadfd25a49647315e9c3f9a6a56a0d93e57609897d683e91ea6dc575c7"
+      },
+      {
+        "name": "raw/stt-identity.json",
+        "bytes": 1399,
+        "sha256": "9444b654369a01f07128d8829882fcd982dcf0d0a49446da37545ba6f042c17a"
+      },
+      {
+        "name": "raw/runtime-versions.json",
+        "bytes": 210,
+        "sha256": "7e90ffef48ceeb59038664d0f5c75f71096e5eb6e5362894307353b40ee7c40a"
+      },
+      {
+        "name": "raw/ACTUAL-FILES-v1965.json",
+        "bytes": 2221,
+        "sha256": "bff2a1486e4042787590fa8c9bb08c879317eca656e616cce54087488941741f"
+      },
+      {
+        "name": "raw/PREPARATION-v1965.json",
+        "bytes": 9631,
+        "sha256": "b4b853275d86b949af57b0fa188407dcb5c16b44303c0c0ed94d06376a8afd3a"
+      },
+      {
+        "name": "raw/ROOT-ADMISSION-v1966.json",
+        "bytes": 8872,
+        "sha256": "35c2c553c8ed1bbd4c3c462bfc0a7d72cd20a1daa56a50ef1c526bb23b9c84a4"
+      },
+      {
+        "name": "raw/ROOT-LAUNCH-v1966.json",
+        "bytes": 275,
+        "sha256": "eb4f9e0379276e7a6be22aa27f40ff193a2434a9b0da690bf5d590e6d097aa9b"
+      },
+      {
+        "name": "raw/STATUS.json",
+        "bytes": 161090,
+        "sha256": "75413a87f4acbbabb68f3419f12c43c437c24b9c72bd60bbadc719d6c40ba1e5"
+      },
+      {
+        "name": "raw/voice-stages.jsonl",
+        "bytes": 11572367,
+        "sha256": "e8ef8cdbaefcf334f20919edab6e557e6d42a1d15b0539e1004b14e7173531af"
+      },
+      {
+        "name": "raw/actual-provider-bindings.jsonl",
+        "bytes": 616507,
+        "sha256": "fcb59a35c3297db3b0f3ddde9f373d3b66141e5290705a12112ed3d2d078260d"
+      },
+      {
+        "name": "raw/binding-guard-diagnostic.jsonl",
+        "bytes": 180004,
+        "sha256": "47c2f71ecd0e5b36fd08d671833139075c4a494d2a1ee012e3ddca1ce46d2ef0"
+      },
+      {
+        "name": "raw/resources.jsonl",
+        "bytes": 60192634,
+        "sha256": "deea4953de24c550650734f98c18387efa184a09fb566c23dba3d8bf15fd5fe7"
+      }
+    ]
+  },
+  "nativePairsInSnapshotAllScopes": 4272,
+  "joinedNativePairsCurrent935Cases": 2530,
+  "providerResources": {
+    "identityMatchedSamples": 13826,
+    "excludedIdentityOrPrestartup": 0,
+    "counterErrorFields": {
+      "gpu.vendor": 96782
+    }
+  },
+  "requesterResources": {
+    "parent": {
+      "identityMatchedSamples": 3700,
+      "excludedIdentityOrPrestartup": 0,
+      "counterErrorFields": {
+        "gpu.vendor": 3700
+      }
+    },
+    "remaining624": {
+      "identityMatchedSamples": 7721,
+      "excludedIdentityOrPrestartup": 0,
+      "counterErrorFields": {
+        "gpu.vendor": 7721
+      }
+    }
+  },
+  "gaps": [],
+  "qualityFailureCause": "UNKNOWN; predicate failures are retained outcomes, response hashes alone are not a causal diagnosis",
+  "clockPolicy": "Requester durations use W monotonic; native durations and resources use D monotonic; no cross-host subtraction",
+  "routeLimit": "Before/after selected-pair observations only; no pair ID or continuous route/direct-or-TURN purity claim",
+  "epochPolicy": "Same effective setup, parent1\u2013276 plus continuation277\u2013900; raw histories and each manifest preserved; no failed-index retry or success top-up",
+  "helper": {
+    "path": "thesis/harness/analyze_k2_mesh_saved_v1904.py",
+    "sha256": "aefa658239e4e8fab1e4690a6e6156448314f60e4d5c377defe7b0cf49748ed4"
+  },
+  "sutCalls": 0,
+  "elapsedSeconds": 5.176314614946023
+}

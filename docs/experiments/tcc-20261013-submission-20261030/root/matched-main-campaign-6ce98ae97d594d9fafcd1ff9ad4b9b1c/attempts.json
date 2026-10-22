@@ -1,0 +1,200 @@
+[
+  {
+    "baseline_seconds": 300,
+    "cell_cap_seconds": 6000,
+    "child_exit_code": 0,
+    "elapsed_seconds": 3301.3687037839554,
+    "exit_code": 0,
+    "finished_at": "2026-10-14T08:26:50.206878+00:00",
+    "index": 1,
+    "planned_measured": 100,
+    "planned_warmups": 5,
+    "receipt_validation": {
+      "expected_provider_captures": 105,
+      "expected_requests": 105,
+      "failure_classes": [],
+      "raw_artifacts_retained": true,
+      "validated": true
+    },
+    "request_deadline_ms": 180000,
+    "route": "local-only",
+    "started_at": "2026-10-14T07:31:48.837938+00:00",
+    "status": "completed"
+  },
+  {
+    "baseline_seconds": 300,
+    "cell_cap_seconds": 6000,
+    "child_exit_code": 0,
+    "elapsed_seconds": 3420.9904636449646,
+    "exit_code": 0,
+    "finished_at": "2026-10-14T09:28:51.397408+00:00",
+    "index": 2,
+    "planned_measured": 100,
+    "planned_warmups": 5,
+    "receipt_validation": {
+      "expected_provider_captures": 105,
+      "expected_requests": 105,
+      "failure_classes": [],
+      "raw_artifacts_retained": true,
+      "validated": true
+    },
+    "request_deadline_ms": 180000,
+    "route": "api",
+    "started_at": "2026-10-14T08:31:50.406722+00:00",
+    "status": "completed"
+  },
+  {
+    "baseline_seconds": 300,
+    "cell_cap_seconds": 6000,
+    "child_exit_code": 0,
+    "elapsed_seconds": 3781.1296130020637,
+    "exit_code": 0,
+    "finished_at": "2026-10-14T10:36:52.948081+00:00",
+    "index": 3,
+    "planned_measured": 100,
+    "planned_warmups": 5,
+    "receipt_validation": {
+      "expected_provider_captures": 105,
+      "expected_requests": 105,
+      "failure_classes": [],
+      "raw_artifacts_retained": true,
+      "validated": true
+    },
+    "request_deadline_ms": 180000,
+    "route": "mesh",
+    "started_at": "2026-10-14T09:33:51.818243+00:00",
+    "status": "completed"
+  },
+  {
+    "baseline_seconds": 300,
+    "cell_cap_seconds": 6000,
+    "child_exit_code": 0,
+    "elapsed_seconds": 3441.906089172,
+    "exit_code": 0,
+    "finished_at": "2026-10-14T11:39:15.053469+00:00",
+    "index": 4,
+    "planned_measured": 100,
+    "planned_warmups": 5,
+    "receipt_validation": {
+      "expected_provider_captures": 105,
+      "expected_requests": 105,
+      "failure_classes": [],
+      "raw_artifacts_retained": true,
+      "validated": true
+    },
+    "request_deadline_ms": 180000,
+    "route": "api",
+    "started_at": "2026-10-14T10:41:53.147158+00:00",
+    "status": "completed"
+  },
+  {
+    "baseline_seconds": 300,
+    "cell_cap_seconds": 6000,
+    "child_exit_code": 0,
+    "elapsed_seconds": 3858.0613120039925,
+    "exit_code": 0,
+    "finished_at": "2026-10-14T12:48:33.381881+00:00",
+    "index": 5,
+    "planned_measured": 100,
+    "planned_warmups": 5,
+    "receipt_validation": {
+      "expected_provider_captures": 105,
+      "expected_requests": 105,
+      "failure_classes": [],
+      "raw_artifacts_retained": true,
+      "validated": true
+    },
+    "request_deadline_ms": 180000,
+    "route": "mesh",
+    "started_at": "2026-10-14T11:44:15.320345+00:00",
+    "status": "completed"
+  },
+  {
+    "baseline_seconds": 300,
+    "cell_cap_seconds": 6000,
+    "child_exit_code": 0,
+    "elapsed_seconds": 3331.3531272929395,
+    "exit_code": 0,
+    "finished_at": "2026-10-14T13:49:04.951833+00:00",
+    "index": 6,
+    "planned_measured": 100,
+    "planned_warmups": 5,
+    "receipt_validation": {
+      "expected_provider_captures": 105,
+      "expected_requests": 105,
+      "failure_classes": [],
+      "raw_artifacts_retained": true,
+      "validated": true
+    },
+    "request_deadline_ms": 180000,
+    "route": "local-only",
+    "started_at": "2026-10-14T12:53:33.598436+00:00",
+    "status": "completed"
+  },
+  {
+    "baseline_seconds": 300,
+    "cell_cap_seconds": 6000,
+    "child_exit_code": 0,
+    "elapsed_seconds": 3884.3179996180115,
+    "exit_code": 0,
+    "finished_at": "2026-10-14T14:58:49.571579+00:00",
+    "index": 7,
+    "planned_measured": 100,
+    "planned_warmups": 5,
+    "receipt_validation": {
+      "expected_provider_captures": 105,
+      "expected_requests": 105,
+      "failure_classes": [],
+      "raw_artifacts_retained": true,
+      "validated": true
+    },
+    "request_deadline_ms": 180000,
+    "route": "mesh",
+    "started_at": "2026-10-14T13:54:05.253329+00:00",
+    "status": "completed"
+  },
+  {
+    "baseline_seconds": 300,
+    "cell_cap_seconds": 6000,
+    "child_exit_code": 0,
+    "elapsed_seconds": 3374.5153014989337,
+    "exit_code": 0,
+    "finished_at": "2026-10-14T16:00:04.338141+00:00",
+    "index": 8,
+    "planned_measured": 100,
+    "planned_warmups": 5,
+    "receipt_validation": {
+      "expected_provider_captures": 105,
+      "expected_requests": 105,
+      "failure_classes": [],
+      "raw_artifacts_retained": true,
+      "validated": true
+    },
+    "request_deadline_ms": 180000,
+    "route": "local-only",
+    "started_at": "2026-10-14T15:03:49.822615+00:00",
+    "status": "completed"
+  },
+  {
+    "baseline_seconds": 300,
+    "cell_cap_seconds": 6000,
+    "child_exit_code": 0,
+    "elapsed_seconds": 3371.053035762976,
+    "exit_code": 0,
+    "finished_at": "2026-10-14T17:01:15.591014+00:00",
+    "index": 9,
+    "planned_measured": 100,
+    "planned_warmups": 5,
+    "receipt_validation": {
+      "expected_provider_captures": 105,
+      "expected_requests": 105,
+      "failure_classes": [],
+      "raw_artifacts_retained": true,
+      "validated": true
+    },
+    "request_deadline_ms": 180000,
+    "route": "api",
+    "started_at": "2026-10-14T16:05:04.537766+00:00",
+    "status": "completed"
+  }
+]

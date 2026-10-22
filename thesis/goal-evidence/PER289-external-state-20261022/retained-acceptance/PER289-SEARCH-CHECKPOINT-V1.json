@@ -1,0 +1,105 @@
+{
+  "capturedAt": "2026-10-10T01:40:04.216533+00:00",
+  "task": "PER-289",
+  "sourceCommit": "739f848d953486f0be417c97430a509fe8b4730d",
+  "workerCustodyCommit": "12dc76fa5bb62d366dfc4f9bf055606620c5a43c",
+  "result": "Transcript search pages the existing scoped repository beyond the first500 recordings, bounded by canonical5000 archive sessions and existing segment/result/decrypt budgets. Transcript hits include parent sessionId.",
+  "validation": {
+    "capturedAt": "2026-10-10T01:37:58.208296+00:00",
+    "soleSerialValidator": "Root",
+    "sourceHeadBeforeCommit": "d0c68dcc5a8167e31643c3b46c4147fd47dd1c18",
+    "sourcePaths": [
+      {
+        "path": "packages/aurora-sdk/src/local-data/search.ts",
+        "sha256": "13cf66e1e2a457d67a6238d409bf7fe0c87a899ad2e18568987ab6f4d29162c0"
+      },
+      {
+        "path": "packages/aurora-sdk/tests/local-data-product-transcripts.test.ts",
+        "sha256": "3da77655f02d79767ad2deadc78536252dce7a50196692714772f9393c7189bd"
+      }
+    ],
+    "steps": [
+      {
+        "name": "search-main",
+        "command": [
+          "pnpm",
+          "--filter",
+          "@aurora/client",
+          "exec",
+          "vitest",
+          "run",
+          "--maxWorkers=1",
+          "tests/local-data-product-transcripts.test.ts",
+          "--testNamePattern",
+          "finds and identifies|searches only authorized"
+        ],
+        "exitCode": 0,
+        "seconds": 1.52,
+        "log": "/home/developer/projects/aurora/.git/aurora-handoff-import-20261006/PER289-SEARCH-MAIN-V1-search-main.log",
+        "logSha256": "03bb34f571862494231e282c6ada31cf56a8f5c67f506f96014a816a55d2b6e5"
+      },
+      {
+        "name": "sdk-typecheck",
+        "command": [
+          "pnpm",
+          "--filter",
+          "@aurora/client",
+          "typecheck"
+        ],
+        "exitCode": 0,
+        "seconds": 15.34,
+        "log": "/home/developer/projects/aurora/.git/aurora-handoff-import-20261006/PER289-SEARCH-MAIN-V1-sdk-typecheck.log",
+        "logSha256": "fb99aaf05faa6c772c24184659a282e4c589f80a33037f579e585c8f31bab53b"
+      },
+      {
+        "name": "sdk-build",
+        "command": [
+          "pnpm",
+          "--filter",
+          "@aurora/client",
+          "build"
+        ],
+        "exitCode": 0,
+        "seconds": 13.13,
+        "log": "/home/developer/projects/aurora/.git/aurora-handoff-import-20261006/PER289-SEARCH-MAIN-V1-sdk-build.log",
+        "logSha256": "0709120929f450918ae0dfbf21b18436d72df2b8c705b4f2989f22322842efb5"
+      }
+    ],
+    "boundary": "Platform-independent SDK search via typed repository. One beyond-first-page main flow plus retained authorization/AAD check. No UI screen, packaged platform or original whole-task acceptance."
+  },
+  "validationLogs": {
+    "search-main": "\n RUN  v4.1.9 /home/developer/projects/aurora/packages/aurora-sdk\n\n\n Test Files  1 passed (1)\n      Tests  2 passed | 3 skipped (5)\n   Start at  01:37:29\n   Duration  645ms (transform 259ms, setup 0ms, import 395ms, tests 79ms, environment 0ms)\n\n",
+    "sdk-typecheck": "\n> @aurora/client@1.0.0 typecheck /home/developer/projects/aurora/packages/aurora-sdk\n> tsc --noEmit --incremental false\n\n",
+    "sdk-build": "\n> @aurora/client@1.0.0 build /home/developer/projects/aurora/packages/aurora-sdk\n> tsc -p tsconfig.build.json\n\n"
+  },
+  "independentReview": {
+    "capturedAt": "2026-10-10T01:38:59.183809+00:00",
+    "reviewThread": "01a12375-86cc-7843-ac11-4ea3c9b14523",
+    "actualModel": "gpt-6.1-sol",
+    "actualEffort": "high",
+    "inputSha256": "9ef4fabdb99e9403a14881a4621661909cf26af4a851dd638a95c0a4a82cb08d",
+    "toolItems": 0,
+    "verdict": "APPROVE",
+    "reviewedSources": [
+      {
+        "path": "packages/aurora-sdk/src/local-data/search.ts",
+        "sha256": "13cf66e1e2a457d67a6238d409bf7fe0c87a899ad2e18568987ab6f4d29162c0"
+      },
+      {
+        "path": "packages/aurora-sdk/tests/local-data-product-transcripts.test.ts",
+        "sha256": "3da77655f02d79767ad2deadc78536252dce7a50196692714772f9393c7189bd"
+      }
+    ],
+    "workerCustodyCommit": "12dc76fa5bb62d366dfc4f9bf055606620c5a43c"
+  },
+  "nativeGoalSnapshot": "PER289-SEARCH-NATIVE-GOAL-V1.json",
+  "closedForThisPass": true,
+  "notClaimed": [
+    "whole-archive library search with filters and resumable budget cursor",
+    "PER-291 screen implementation",
+    "packaged platform acceptance",
+    "whole-task acceptance",
+    "aggregate completion"
+  ],
+  "next": "Remaining important work has explicit platform/runtime/prerequisite boundaries. Do not repeat passing unchanged checks."
+}

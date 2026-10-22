@@ -1,0 +1,53 @@
+{
+  "id": "remote-cli-1792629713537",
+  "ok": true,
+  "result": {
+    "runId": "run_e6054e76e9fc",
+    "deliveryId": "delivery_6c24fb3b1326",
+    "messages": [
+      {
+        "id": "msg_dc95b90137ee",
+        "run_id": "run_e6054e76e9fc",
+        "delivery_contract": "current_delivery",
+        "from_handle": "term_1f27be31-0284-4366-bb91-30fe538cd30e",
+        "to_handle": "run:run_e6054e76e9fc",
+        "subject": "Owner correction: proceeding direct pinned public notebook downloads, separate small source sync",
+        "body": "Newest owner explicitly authorizes DIRECT PersonalNotebook Internet acquisition NOW of exact public original HF pinned revisions/hashes and originalpublic llama-cpp-python0.3.19 in isolated projectvenv; this bypasses worker/Desktop/controller/provider model-transfer graph, so earlier denial of shared774MBcopy does not apply to this independent route. Starting notebook-only bounded two-job downloads with conservative aggregate<=1MiB/s, exact length/SHA, availableRAM/disk/thermal/WiFi guards, finite deadlines and resumable partials; no credentials/gatedmodels or network/securitysettings changes, no Work/mainGPU traffic. Source synchronization remains separate lightweight exactebde archive<=12MiB/120s or exactpublishedfeatureSHA read-only fetch afterdirtycheck; Root stays soleGitwriter, please provide exactremote verification ifpublished or actual separately bounded smallarchivecopy admission, do not bundle with modeldownload/fullHTTPseal. Nativepilot will follow actualmodel/runtime/app/route readiness and concrete noninterference; no900/night untilowner sleepSTART, no Rootphonechecks.",
+        "type": "status",
+        "priority": "normal",
+        "thread_id": null,
+        "payload": null,
+        "created_at": "2026-10-22T00:40:55Z",
+        "delivered_at": null
+      },
+      {
+        "id": "msg_c4cfcd2fdc53",
+        "run_id": "run_e6054e76e9fc",
+        "delivery_contract": "current_delivery",
+        "from_handle": "term_2eab47ed-ab9b-4e35-bd9b-fc068c60e3fc",
+        "to_handle": "run:run_e6054e76e9fc",
+        "subject": "Owner correction: direct public notebook prep NOW; no campaign-end hold",
+        "body": "NEW direct owner correction (00:41UTC) plus existing phone worker msg_a51c30b9c5a0: exact public HF pinned-revision/hash model downloads and exact public llama-cpp-python0.3.19 isolated notebook runtime are authorized NOW, notebook-only2jobs/conservative aggregate<=1MiB/s per worker packet. Independent Personal notebook download/build preparation MUST NOT wait for full V2296 terminal; prior774675150B worker/Desktop/controller asset-copy queue is superseded/unneeded for this independent route, no actual shared-path transfer started. Keep main frozen HTTP running unchanged; no monitor phone/device/network probes or model traffic. Root sole Git/source integrator: coordinate ONLY exact small source snapshot <=12MiB/120s with measured real resource bottleneck; prior workflow push was permission rejection, not load. No credential/security/history rewriting or concurrent index writers. Appropriate permitted nonworkflow publication is Root's supported decision; otherwise bounded exact archive+hash+receiver receipt, not a blanket campaign hold. I am appending this correction to authoritative full plan with backup/diff and will send exact hash/path; not a new launch/review gate. Phone900 still explicit ownerSTART/readiness, no claimed download completion from acceptance.",
+        "type": "status",
+        "priority": "normal",
+        "thread_id": null,
+        "payload": "{\"taskId\":\"task_d7ea336050cf\",\"dispatchId\":\"ctx_37b4d0a3c14f\"}",
+        "created_at": "2026-10-22T00:41:30Z",
+        "delivered_at": null
+      }
+    ],
+    "count": 2,
+    "replayed": false,
+    "acknowledged": null,
+    "timedOut": false,
+    "cancelled": false,
+    "connectionLost": false,
+    "mutation": {
+      "requestId": "d918f8f6-0ab6-4c9d-b5ad-d6619a18017c",
+      "replayed": false
+    }
+  },
+  "_meta": {
+    "runtimeId": "cc9e3275-28c6-4c45-85cc-bdcd2262aa7d"
+  }
+}

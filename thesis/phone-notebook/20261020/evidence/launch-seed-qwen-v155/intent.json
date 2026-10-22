@@ -1,0 +1,12 @@
+{
+  "controlDeadline": "2026-10-22T05:40:00Z",
+  "explicitNewline": true,
+  "host": "ssh:ssh-sem-notebook-personal",
+  "incarnation": "328cd72f-c7ea-49ff-a2db-b9275b085037",
+  "remoteResult": "/home/developer/projects/aurora/thesis/phone-notebook/20261020/evidence/launch-seed-qwen-v155.json",
+  "rootAdmissionMessage": "owner exact existing public model asset setup authorized; notebook to attached phone USB only bounded180s no shared network/build/inference",
+  "script": "scripts/launch_seed_qwen_v155.py",
+  "scriptSha256": "77624c8fa3e74707b842edb0366908a420af89518c2ad0ee90374f453bf6fbaf",
+  "singleSend": true,
+  "terminal": "term_a2ed5feb-7c92-48e4-bd88-d1b0e6737989"
+}

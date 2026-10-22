@@ -1,0 +1,32 @@
+{
+  "schema": "aurora.worker-cpu-finalizer-native-parser-main.v764",
+  "at": "2026-10-16T00:22:20.949022+00:00",
+  "source": "/home/developer/projects/aurora/thesis/harness/worker-cpu-v737/post_terminal.py",
+  "sourceSHA256": "1b9ef010c8c83dfab6f3a77f1da85a2238ec6a7d04c72465cd8ea91bb32c2150",
+  "checkSourceSHA256": "a710a6931a3345d652f7ccdd317b5c58ed40495495461e0bac4ade408f203bab",
+  "command": [
+    "/home/developer/projects/aurora/.venv/bin/python",
+    "/home/developer/projects/aurora/.git/aurora-handoff-import-20261006/cpu-finalizer-parser-check-v764.py"
+  ],
+  "durationSeconds": 0.04911401204299182,
+  "exitCode": 0,
+  "scope": "ONE pure native parser main-flow fixture using actual observer shape: decimal-string timestamps and correlation IDs without native harness case labels.",
+  "syntheticInput": {
+    "excludedWarmupCases": 1,
+    "measuredCases": 1,
+    "measuredExactHandlers": 5,
+    "boundaryRows": 12
+  },
+  "assertions": [
+    "all five handler spans survive integer-string parsing",
+    "unique actual correlation binds attempt; native case ID remains null",
+    "durations use one PID/recorder/clock/correlation/span pair",
+    "warmup does not enter measured history or quantiles",
+    "native missing IDs remain null and counted"
+  ],
+  "newMeasuredRequests": 0,
+  "modelsOrServicesLoaded": false,
+  "archiveAuditExecuted": false,
+  "realRawDataRead": false,
+  "actualFinalizationExecuted": false
+}

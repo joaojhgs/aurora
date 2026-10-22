@@ -1,0 +1,77 @@
+{
+  "at": "2026-10-22T08:30:55.019845+00:00",
+  "classification": "PROGRESS_THIS_TURN_AND_CURRENT_VERIFIED_WAIT",
+  "actualCodeDelivered": "thesis/harness/c12_terminal_custody_v2436.py",
+  "codeVerification": "FINALIZER-PREPARATION-v2436.json",
+  "actualCollection": {
+    "at": "2026-10-22T08:30:28.380637+00:00",
+    "companion": {
+      "measured": {
+        "attempted": 65,
+        "correct": 65,
+        "failed": 0,
+        "harnessErrorsIncludedInFailed": 0,
+        "incorrectIncludedInFailed": 0,
+        "offered": 65,
+        "planned": 900,
+        "timeouts": 0,
+        "unstarted": 835
+      },
+      "warmup": {
+        "attempted": 1,
+        "correct": 1,
+        "failed": 0,
+        "harnessErrorsIncludedInFailed": 0,
+        "incorrectIncludedInFailed": 0,
+        "offered": 1,
+        "planned": 1,
+        "timeouts": 0,
+        "unstarted": 0
+      }
+    },
+    "completePairedCapsules": 66,
+    "elapsedSeconds": 2651.010110505,
+    "lastIndex": 65,
+    "lastNativeParent": "2c84d4b0932c897a513aae38fed0af51",
+    "lastOrdinal": 66,
+    "manifestSha256": "316d4cc09adc44d0104dca8ac1f2a966347588ffef37bc2fa809ec14fd5efff8",
+    "phase": "measured",
+    "pid": 281887,
+    "primary": {
+      "measured": {
+        "attempted": 65,
+        "correct": 65,
+        "failed": 0,
+        "harnessErrorsIncludedInFailed": 0,
+        "incorrectIncludedInFailed": 0,
+        "offered": 65,
+        "planned": 900,
+        "timeouts": 0,
+        "unstarted": 835
+      },
+      "warmup": {
+        "attempted": 1,
+        "correct": 1,
+        "failed": 0,
+        "harnessErrorsIncludedInFailed": 0,
+        "incorrectIncludedInFailed": 0,
+        "offered": 1,
+        "planned": 1,
+        "timeouts": 0,
+        "unstarted": 0
+      }
+    },
+    "status": "running"
+  },
+  "requester": {
+    "pid": 281887,
+    "startTicks": 143363140,
+    "state": "S"
+  },
+  "sourceSettingsClocksUnchanged": true,
+  "nextMaximumCheck": "2026-10-22T08:35:55.019845+00:00",
+  "earlierCheck": "Actual terminal, stale progress, failure or resource alarm",
+  "capacityCoordination": "Original monitor accepted enqueue recorded in root-c12-finalizer-and-storage-v2436.json; no deletion or floor change. Continue healthy original campaign.",
+  "nativeGoal": "Same full13 ACTIVE/unbudgeted; supported annotate_ledger accepted ULTRAGOAL-CUSTODY-PROGRESS-v2436.json",
+  "phoneBoundary": "Existing delegated worker only; no Root device/setup commands"
+}

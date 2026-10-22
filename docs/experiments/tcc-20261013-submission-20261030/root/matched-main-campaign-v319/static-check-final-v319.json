@@ -1,0 +1,10 @@
+{
+  "runner_sha256": "c372126ca09f5f0f184f59fc7e2874f7f009125b210b1cc7ba4b96ce9141658f",
+  "Sol_review_sha256": "9cdaaf2fee5da76f52980f578703470b8c6eb8472075658fd3ed603c0445b762",
+  "verdict": "APPROVE",
+  "campaign_and_launcher_AST": "PASS",
+  "critical_syntax_Ruff": "PASS",
+  "tool_chunk": "d478b5",
+  "main_selector": "exactly1test; priorretainedselectorreceipt",
+  "no_pilot_replay": true
+}

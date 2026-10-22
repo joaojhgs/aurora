@@ -1,0 +1,219 @@
+{
+  "id": "f4dc144f-9595-4e41-8e38-613d7cb32153",
+  "ok": true,
+  "result": {
+    "dispatch": {
+      "id": "ctx_37b4d0a3c14f",
+      "runId": "run_e6054e76e9fc",
+      "taskId": "task_d7ea336050cf",
+      "task_id": "task_d7ea336050cf",
+      "contractVersion": 1,
+      "assigneeHandle": "term_2eab47ed-ab9b-4e35-bd9b-fc068c60e3fc",
+      "assigneePaneKey": "012973e7-fec0-48be-9587-06bf47823aa0:8f67f02b-58f5-4ed4-a7e8-0042dae84d0e",
+      "processIncarnation": "ssh:ssh-oci-coding-worker@@pty2:47ec4130-fe3d-49e5-91b0-384bab6e8b15:19:37e50d9c-6cf5-4e28-a63b-f2bc3eed5661",
+      "capabilityRevokedAt": null,
+      "retryOfDispatchId": "ctx_9a2b5bce7eea",
+      "creatorDispatchId": null,
+      "hostScope": {
+        "kind": "ssh",
+        "targetId": "ssh-oci-coding-worker"
+      },
+      "status": "dispatched",
+      "failureCount": 0,
+      "lastFailure": null,
+      "terminationReason": null,
+      "depth": 1,
+      "dispatchedAt": "2026-10-10 04:07:52",
+      "completedAt": null,
+      "createdAt": "2026-10-10 04:07:52",
+      "lastHeartbeatAt": "2026-10-20T19:52:32Z"
+    },
+    "worker": {
+      "dispatchId": "ctx_37b4d0a3c14f",
+      "runtimeEpoch": "f69558b6-f0b0-4431-ab90-99156cddcf39",
+      "state": "ready",
+      "stage": "input_accepted",
+      "worktreeId": "314e7b89-8f19-4535-9443-22b342aedff7::/home/developer/projects/aurora",
+      "agentTerminalHandle": "term_2eab47ed-ab9b-4e35-bd9b-fc068c60e3fc",
+      "setupState": "not_applicable",
+      "effects": [
+        {
+          "kind": "worktree",
+          "action": "reused",
+          "id": "314e7b89-8f19-4535-9443-22b342aedff7::/home/developer/projects/aurora"
+        },
+        {
+          "kind": "setup",
+          "action": "not_applicable",
+          "state": "not_applicable"
+        },
+        {
+          "kind": "terminal",
+          "role": "agent",
+          "action": "created",
+          "id": "term_2eab47ed-ab9b-4e35-bd9b-fc068c60e3fc",
+          "surface": "background",
+          "warning": "Terminal term_2eab47ed-ab9b-4e35-bd9b-fc068c60e3fc is running, but Orca could not make it discoverable. Run `orca terminal focus --terminal term_2eab47ed-ab9b-4e35-bd9b-fc068c60e3fc` to reveal and focus it."
+        },
+        {
+          "kind": "dispatch_input",
+          "role": "agent",
+          "id": "term_2eab47ed-ab9b-4e35-bd9b-fc068c60e3fc",
+          "state": "accepted"
+        }
+      ],
+      "residualResources": [
+        {
+          "kind": "terminal",
+          "role": "agent",
+          "action": "created",
+          "id": "term_2eab47ed-ab9b-4e35-bd9b-fc068c60e3fc",
+          "surface": "background",
+          "warning": "Terminal term_2eab47ed-ab9b-4e35-bd9b-fc068c60e3fc is running, but Orca could not make it discoverable. Run `orca terminal focus --terminal term_2eab47ed-ab9b-4e35-bd9b-fc068c60e3fc` to reveal and focus it."
+        }
+      ],
+      "startOptions": {
+        "worktree": "id:314e7b89-8f19-4535-9443-22b342aedff7::/home/developer/projects/aurora",
+        "mode": {
+          "mode": "terminal",
+          "preferred": "terminal",
+          "reason": "user_default",
+          "detail": "Started a terminal agent worker, the default for new agent tabs in your settings."
+        },
+        "resolvedWorktreeId": "314e7b89-8f19-4535-9443-22b342aedff7::/home/developer/projects/aurora",
+        "name": null,
+        "repo": null,
+        "baseBranch": null,
+        "terminal": null,
+        "agent": "codex",
+        "launch": {
+          "requested": {
+            "agent": "codex",
+            "model": "gpt-6.1-sol",
+            "effort": "xhigh"
+          },
+          "effective": {
+            "agent": "codex",
+            "model": "gpt-6.1-sol",
+            "effort": "xhigh"
+          }
+        },
+        "timeoutMs": 45000,
+        "setup": "not_applicable",
+        "setupSource": "existing_worktree"
+      },
+      "lastError": null,
+      "createdAt": "2026-10-10 04:07:52",
+      "updatedAt": "2026-10-10 04:07:58"
+    },
+    "projection": {
+      "id": "ctx_37b4d0a3c14f",
+      "dispatchId": "ctx_37b4d0a3c14f",
+      "taskId": "task_d7ea336050cf",
+      "runId": "run_e6054e76e9fc",
+      "role": "worker",
+      "parent": null,
+      "provider": {
+        "id": "codex",
+        "model": "gpt-6.1-sol"
+      },
+      "host": {
+        "kind": "remote",
+        "id": "ssh-oci-coding-worker"
+      },
+      "workspace": {
+        "id": "314e7b89-8f19-4535-9443-22b342aedff7::/home/developer/projects/aurora",
+        "kind": "folder_or_worktree"
+      },
+      "stage": {
+        "worker": "ready",
+        "dispatch": "dispatched",
+        "detail": "input_accepted",
+        "activity": "working"
+      },
+      "outcome": "in_progress",
+      "liveness": {
+        "verdict": "live",
+        "observedAt": 1792526089634,
+        "source": "agent_status"
+      },
+      "evidence": {
+        "durable": true,
+        "liveStatus": "fresh",
+        "lastObservedAt": 1792526089634
+      },
+      "resource": {
+        "state": "user_owned",
+        "id": "wtr_c4722d5dafee",
+        "ownerDispatchId": "ctx_37b4d0a3c14f",
+        "releaseState": "retained",
+        "terminalState": "retained"
+      },
+      "nextAction": {
+        "kind": "inspect",
+        "argv": [
+          "orchestration",
+          "worker-show",
+          "--dispatch",
+          "ctx_37b4d0a3c14f"
+        ]
+      },
+      "attention": {
+        "categories": [
+          "input"
+        ],
+        "requiresAction": true
+      }
+    },
+    "terminal": {
+      "handle": "term_2eab47ed-ab9b-4e35-bd9b-fc068c60e3fc",
+      "ptyId": "ssh:ssh-oci-coding-worker@@pty2:47ec4130-fe3d-49e5-91b0-384bab6e8b15:19",
+      "incarnationId": "37e50d9c-6cf5-4e28-a63b-f2bc3eed5661",
+      "orphaned": false,
+      "worktreeId": "314e7b89-8f19-4535-9443-22b342aedff7::/home/developer/projects/aurora",
+      "worktreePath": "/home/developer/projects/aurora",
+      "branch": "refs/heads/codex/aurora-native-speech-routing-20261007",
+      "tabId": "012973e7-fec0-48be-9587-06bf47823aa0",
+      "leafId": "8f67f02b-58f5-4ed4-a7e8-0042dae84d0e",
+      "title": "\u2819 Report task outcome | aurora",
+      "connected": true,
+      "writable": true,
+      "lastOutputAt": 1792526099600,
+      "preview": "essagestillreachedthismonitorandwas  acknowledgd. Thisis not vidence thatthe monitor stopped.\u2022Working (11m 29s \u2022 esc to interrupt)  \u2514 Tip: Use /statusline to configure which items appear in the status line.\u2022\u2022\u2022\u2022\u2022\u2022\u2022WWoWorWorkWork30WorkiWorkinWorkingorkingrkingkingkingingngngg\u2022\u20221\u2022\u2022\u2022\u2022\u2022\u2022\u20222\u2022\u20223\u2022\u2022\u2022\u2022\u2022\u2022\u2022\u2022WWWo",
+      "executionHostId": "ssh:ssh-oci-coding-worker",
+      "agentIdentity": "codex",
+      "paneRuntimeId": -1,
+      "rendererGraphEpoch": 0,
+      "agentWait": null
+    },
+    "observation": {
+      "status": "live",
+      "exactWorker": true,
+      "agentWait": null
+    },
+    "terminalResource": {
+      "id": "wtr_c4722d5dafee",
+      "ownershipState": "user_owned",
+      "releaseState": "retained",
+      "retainedReason": "user_takeover",
+      "terminalHandle": "term_2eab47ed-ab9b-4e35-bd9b-fc068c60e3fc",
+      "worktreeId": "314e7b89-8f19-4535-9443-22b342aedff7::/home/developer/projects/aurora",
+      "endpointId": "f69558b6-f0b0-4431-ab90-99156cddcf39",
+      "endpointIncarnation": "ssh:ssh-oci-coding-worker@@pty2:47ec4130-fe3d-49e5-91b0-384bab6e8b15:19:37e50d9c-6cf5-4e28-a63b-f2bc3eed5661",
+      "originDispatchId": "ctx_37b4d0a3c14f",
+      "ownerDispatchId": "ctx_37b4d0a3c14f",
+      "releaseRequestedAt": null,
+      "releaseCompletedAt": null,
+      "releaseError": null,
+      "recoveryAttemptCount": 0,
+      "lastRecoveryAt": null,
+      "archive": {
+        "source": null,
+        "status": null
+      }
+    }
+  },
+  "_meta": {
+    "runtimeId": "cc9e3275-28c6-4c45-85cc-bdcd2262aa7d"
+  }
+}

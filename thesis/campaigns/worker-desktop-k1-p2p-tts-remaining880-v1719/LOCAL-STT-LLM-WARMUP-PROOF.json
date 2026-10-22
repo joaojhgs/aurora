@@ -1,0 +1,117 @@
+{
+  "actual_llm_cpu_binding": true,
+  "actual_piper_cpu_binding": false,
+  "actual_provider_record_sha256": "453a795aa44a73ac3ee41f88d336034827e290d6b3a95b63f78b460fc475db9f",
+  "actual_stt_cpu_binding": true,
+  "all_expected_predicates": true,
+  "native_stt_llm_spans": true,
+  "planned_and_correct_warmups": 15,
+  "status": "passed",
+  "warmup_cases": [
+    {
+      "correctness_complete": true,
+      "correlation_id": "audio-campaign-d043e1d9665740afaeb4a5927100cf54",
+      "harness_case_id": "audio-campaign-v1719-0001",
+      "local_bus_stages_complete": true,
+      "native_spans_complete": true
+    },
+    {
+      "correctness_complete": true,
+      "correlation_id": "audio-campaign-44c3d94922a3411988e4879171dce303",
+      "harness_case_id": "audio-campaign-v1719-0002",
+      "local_bus_stages_complete": true,
+      "native_spans_complete": true
+    },
+    {
+      "correctness_complete": true,
+      "correlation_id": "audio-campaign-0b054bd8f8924304ae19b7913106e968",
+      "harness_case_id": "audio-campaign-v1719-0003",
+      "local_bus_stages_complete": true,
+      "native_spans_complete": true
+    },
+    {
+      "correctness_complete": true,
+      "correlation_id": "audio-campaign-2a62a2f81f784b879f6f6d611a423887",
+      "harness_case_id": "audio-campaign-v1719-0004",
+      "local_bus_stages_complete": true,
+      "native_spans_complete": true
+    },
+    {
+      "correctness_complete": true,
+      "correlation_id": "audio-campaign-69c7edf587c6468c87661023965d5e1a",
+      "harness_case_id": "audio-campaign-v1719-0005",
+      "local_bus_stages_complete": true,
+      "native_spans_complete": true
+    },
+    {
+      "correctness_complete": true,
+      "correlation_id": "audio-campaign-b1379c3524e5473c8a3d2fefc289c529",
+      "harness_case_id": "audio-campaign-v1719-0006",
+      "local_bus_stages_complete": true,
+      "native_spans_complete": true
+    },
+    {
+      "correctness_complete": true,
+      "correlation_id": "audio-campaign-e06c2fd1417b4a03a2b5cb9308132a76",
+      "harness_case_id": "audio-campaign-v1719-0007",
+      "local_bus_stages_complete": true,
+      "native_spans_complete": true
+    },
+    {
+      "correctness_complete": true,
+      "correlation_id": "audio-campaign-fb2a3398bbef4034bc5d93063f11f26e",
+      "harness_case_id": "audio-campaign-v1719-0008",
+      "local_bus_stages_complete": true,
+      "native_spans_complete": true
+    },
+    {
+      "correctness_complete": true,
+      "correlation_id": "audio-campaign-fca4729104814b6d9a0a3ee88b2d5a88",
+      "harness_case_id": "audio-campaign-v1719-0009",
+      "local_bus_stages_complete": true,
+      "native_spans_complete": true
+    },
+    {
+      "correctness_complete": true,
+      "correlation_id": "audio-campaign-831a9a2124574862a580be714de7e620",
+      "harness_case_id": "audio-campaign-v1719-0010",
+      "local_bus_stages_complete": true,
+      "native_spans_complete": true
+    },
+    {
+      "correctness_complete": true,
+      "correlation_id": "audio-campaign-147021632b654ef091da2ebebba0186a",
+      "harness_case_id": "audio-campaign-v1719-0011",
+      "local_bus_stages_complete": true,
+      "native_spans_complete": true
+    },
+    {
+      "correctness_complete": true,
+      "correlation_id": "audio-campaign-7f01ebb027464430bd5b3e9beb88137a",
+      "harness_case_id": "audio-campaign-v1719-0012",
+      "local_bus_stages_complete": true,
+      "native_spans_complete": true
+    },
+    {
+      "correctness_complete": true,
+      "correlation_id": "audio-campaign-a3af48990d5d4b73aec479042c2fa4b1",
+      "harness_case_id": "audio-campaign-v1719-0013",
+      "local_bus_stages_complete": true,
+      "native_spans_complete": true
+    },
+    {
+      "correctness_complete": true,
+      "correlation_id": "audio-campaign-c2eaf4bf74a74c8cbe4250085d3b9a5c",
+      "harness_case_id": "audio-campaign-v1719-0014",
+      "local_bus_stages_complete": true,
+      "native_spans_complete": true
+    },
+    {
+      "correctness_complete": true,
+      "correlation_id": "audio-campaign-433924e034334cc999c1ac827c990d18",
+      "harness_case_id": "audio-campaign-v1719-0015",
+      "local_bus_stages_complete": true,
+      "native_spans_complete": true
+    }
+  ]
+}

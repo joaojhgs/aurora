@@ -1,0 +1,14 @@
+{
+  "at": "2026-10-16T15:35:19.744597+00:00",
+  "scope": "Main existing-profile reuse resets user preferences; same test count, no new edge matrix",
+  "files": [
+    {
+      "path": "apps/aurora-tauri/src/aurora-client.ts",
+      "sha256": "9d87cab15f19343b6e0174cb835ed28d99d8ed6d8f7ca1483f7191af73fbb076"
+    },
+    {
+      "path": "apps/aurora-tauri/src/offline-profile-main.test.ts",
+      "sha256": "9d3f724b36217b920b8dd321ab08e000d0549eb70591e5c4392164c5240785f3"
+    }
+  ]
+}

@@ -1,0 +1,12 @@
+{
+  "controlDeadline": "2026-10-22T11:10:00Z",
+  "explicitNewline": true,
+  "host": "ssh:ssh-sem-notebook-personal",
+  "incarnation": "328cd72f-c7ea-49ff-a2db-b9275b085037",
+  "remoteResult": "/home/developer/projects/aurora/thesis/phone-notebook/20261020/evidence/finish-supported-pairing-v303.json",
+  "rootAdmissionMessage": "owner-authorized ordinary supported secure UI pairing and scoped normal admin approval with existing key; no code/credential export",
+  "script": "scripts/finish_supported_pairing_v303.py",
+  "scriptSha256": "604f9771e41b875b051f443e3456cac16493bd175be98bef90c8d5806e79d68d",
+  "singleSend": true,
+  "terminal": "term_a2ed5feb-7c92-48e4-bd88-d1b0e6737989"
+}

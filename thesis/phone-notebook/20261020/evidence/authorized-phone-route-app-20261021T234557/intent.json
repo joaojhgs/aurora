@@ -1,0 +1,12 @@
+{
+  "controlDeadline": "2026-10-21T23:55:57.552278+00:00",
+  "explicitNewline": true,
+  "host": "ssh:ssh-sem-notebook-personal",
+  "incarnation": "328cd72f-c7ea-49ff-a2db-b9275b085037",
+  "remoteResult": "/home/developer/projects/aurora/thesis/phone-notebook/20261020/evidence/authorized-phone-route-app-20261021T234557.json",
+  "rootAdmissionMessage": "owner-direct-resumed-setup-app-and-route-metadata",
+  "script": "scripts/authorized_phone_route_app_v6.py",
+  "scriptSha256": "dcbbb71c34f17cf8d346bd49756e85fcb8373f2c1024589c2f0a90c53bbf0efa",
+  "singleSend": true,
+  "terminal": "term_a2ed5feb-7c92-48e4-bd88-d1b0e6737989"
+}

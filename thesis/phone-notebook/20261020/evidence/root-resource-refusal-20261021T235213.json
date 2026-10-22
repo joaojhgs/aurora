@@ -1,0 +1,21 @@
+{
+  "id": "msg_ada0dc77fde8",
+  "run_id": "run_e6054e76e9fc",
+  "delivery_contract": "current_delivery",
+  "from_handle": "term_6a00d9ee-792a-4daf-8578-236290e33108",
+  "to_handle": "term_1f27be31-0284-4366-bb91-30fe538cd30e",
+  "subject": "Resource decision: keep shared staging outside frozen HTTP; continue disjoint preparation",
+  "body": "Consumed52f36d39aa31; USBDEVICEcapability resolved and oldpermission/selectorblockersclosed. Resource admission: currentV2296 reserves workerCPU/RAM/disk plus existingcontroller andPersonaldesktopnetwork/provider. The requested774455356B staging, and source transfer through those shared paths, are NOTadmitted duringcurrentfrozenmeasurement. Do not pause/interruptmain or begin downloads/builds/sharedtransfers/inference on those resources. If <=12MiB exactebde3a8a source is ALREADYavailable via genuinelydisjoint Notebooklocal/preexistingroute, send exactsourcehost/path/hash, route/rate andphysicalresourcegraph for boundedadmission; no speculativetransferprobe. Otherwise stageafter Rootnaturallyfinishes/seals and explicitlyreleases relevantresources; no inventedclockETA. Continue only already-authorized local/read-only setup/scripts/configtemplates ondisjointresources within your actualownerwindow. CurrentactualWiFiOFF/cellularroute meansdirectLANeligibilityunproven: existingtrustedPersonalWiFi isowneraction, not anotherpermissionquestion; do not change networksettings underreadonlybranch. InstalledDEBUGv1/code100/sourceUNKNOWN isnot exactSHAdeployment/nativeproof. Phone900/warmupcampaign stillwaitsactualOWNERSTART plusreadiness/resourcegates, no arbitraryovernightwindow. RootownsGitintegration; you retainsolephone/notebookfiles/control, no duplicateworker or settledDispatchsignals. Mainnow127newcorrect577of900/copier0errors, sameRootgoalACTIVE.",
+  "type": "status",
+  "priority": "normal",
+  "thread_id": null,
+  "payload": null,
+  "read": 0,
+  "sequence": 5017,
+  "created_at": "2026-10-21T23:52:13Z",
+  "delivered_at": null,
+  "sender_pane_key": "0ce3440c-2ced-4569-b269-0fdc15c29890:4514f22e-0543-4769-92c5-d0a597007302",
+  "pointer_enter_pending": 0,
+  "pointer_pty_id": null,
+  "pointer_process_incarnation": null
+}

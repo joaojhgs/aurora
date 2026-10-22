@@ -1,0 +1,105 @@
+{
+  "at": "2026-10-21T01:28:03.359975+00:00",
+  "status": "QUEUED_RETAINED_DATA_PREPARATION_ONLY_NOT_ADMITTED",
+  "methodology": "thesis/methodology/owner-requirements-20261021-aba3306d.md \u00a730.72",
+  "next": "K1 actual P2P only191/global710\u2013900 after K3 natural terminal, custody/resource reconciliation and prospective admission",
+  "parentMeasured": {
+    "attempted": 709,
+    "correct": 697,
+    "failed": 12,
+    "failed709NotReplayed": true
+  },
+  "previousContinuationNewMeasured": 0,
+  "oldLifecycleExpiredUtc": "2026-10-20T23:55:24.085968+00:00",
+  "oldLifecycleMustNotBeRevived": true,
+  "allRetainedK1ControllerRecords": [
+    {
+      "path": ".git/aurora-handoff-import-20261006/distributed-k1-mesh-cell-v1698/control-launch.json",
+      "sha256": "729c9c315263d780452580ffd8a9cc6080fd997f3cfde81be9bc63bcd80ac9cb",
+      "controller_pid": 2305892,
+      "child_pid": 2305924,
+      "started_at": "2026-10-20T03:12:58.401901+00:00",
+      "finished_at": "2026-10-20T03:12:59.419596+00:00",
+      "exit_code": 1,
+      "condition_cap_seconds": 57600,
+      "planned_measured": 900,
+      "recordedElapsedSeconds": 1.017695
+    },
+    {
+      "path": ".git/aurora-handoff-import-20261006/distributed-k1-mesh-cell-v1700/control-launch.json",
+      "sha256": "403b38fcd02ebddd86e2622332e03997836574a0d662fdf6c97d54acc2f6995c",
+      "controller_pid": 2306990,
+      "child_pid": 2307005,
+      "started_at": "2026-10-20T03:14:41.211934+00:00",
+      "finished_at": "2026-10-20T03:16:10.459339+00:00",
+      "exit_code": 1,
+      "condition_cap_seconds": 57600,
+      "planned_measured": 900,
+      "recordedElapsedSeconds": 89.247405
+    },
+    {
+      "path": ".git/aurora-handoff-import-20261006/distributed-k1-mesh-cell-v1702/control-launch.json",
+      "sha256": "7a84e0544b2119b4b2a832460d14c843e1c23ba2f14551fa73a2d434c5aa944b",
+      "controller_pid": 2309829,
+      "child_pid": 2309839,
+      "started_at": "2026-10-20T03:19:17.685739+00:00",
+      "finished_at": "2026-10-20T03:21:45.888011+00:00",
+      "exit_code": 1,
+      "condition_cap_seconds": 57600,
+      "planned_measured": 900,
+      "recordedElapsedSeconds": 148.202272
+    },
+    {
+      "path": ".git/aurora-handoff-import-20261006/distributed-k1-mesh-cell-v1711/control-launch.json",
+      "sha256": "5a99851a1ca26a621c3342c61fc31e598a5a34d514b6053e47e00e28b821257a",
+      "controller_pid": 2326088,
+      "child_pid": 2326096,
+      "started_at": "2026-10-20T03:45:37.741863+00:00",
+      "finished_at": "2026-10-20T04:12:17.685092+00:00",
+      "exit_code": 1,
+      "condition_cap_seconds": 72000,
+      "planned_measured": 900,
+      "recordedElapsedSeconds": 1599.943229
+    },
+    {
+      "path": ".git/aurora-handoff-import-20261006/distributed-k1-mesh-cell-v1719/control-launch.json",
+      "sha256": "3c8a14e3a58dbd5698819814c865705089f155745fd2bc95d8ded9911a1cd7a5",
+      "controller_pid": 2360747,
+      "child_pid": 2360768,
+      "started_at": "2026-10-20T04:35:18.930944+00:00",
+      "finished_at": "2026-10-20T13:37:02.418577+00:00",
+      "exit_code": 1,
+      "condition_cap_seconds": 68000,
+      "planned_measured": 880,
+      "recordedElapsedSeconds": 32503.487633
+    },
+    {
+      "path": ".git/aurora-handoff-import-20261006/distributed-k1-mesh-cell-v1779/control-launch.json",
+      "sha256": "184ca12720723352a28c22b458a48a8f0ca365eae8cd937ec8ccfdfaa757673c",
+      "controller_pid": 2747722,
+      "child_pid": 2747791,
+      "started_at": "2026-10-20T14:08:14.339839+00:00",
+      "finished_at": "2026-10-20T14:11:18.082042+00:00",
+      "exit_code": 1,
+      "condition_cap_seconds": 15000,
+      "planned_measured": 191,
+      "recordedElapsedSeconds": 183.742203
+    }
+  ],
+  "actualRecordedControllerSecondsSum": 34525.640437,
+  "historicalFrozenBudget": {
+    "manifest": "thesis/campaigns/worker-desktop-k1-p2p-tts-remaining191-v1779/condition-frozen.json",
+    "sha256": "9b9e9c0a5d7c74295d0bb91e88dcdc53966283c21a86aa32bcaa785f5f0d2af1",
+    "conditionCapSeconds": 72000,
+    "retainedPriorUsedSecondsAtV1779": 37329.251693,
+    "v1779ActualElapsedSeconds": 183.742203,
+    "conservativeCarryForwardSeconds": 37512.993896,
+    "remainingUnderOriginalCapBeforeAnyNewAllocationSeconds": 34487.006104,
+    "method": "Preserve historical priorUsedSeconds including its earlier accounting; add actual terminal V1779 elapsed. Do not reset charges or substitute sum-of-controller-duration for historical frozen accounting. Final cumulative/allocation admission remains prospective."
+  },
+  "sourceClosure": "a38421a03ffafb73a4c469aa7c82fb299210eedd6fe97809beb3c508782883d4",
+  "resourceAdmission": "NOT DONE: currentK3 resources reserved; no provider read, local model startup or network test traffic",
+  "phoneSeparate": true,
+  "sutCalls": 0,
+  "newWorkers": 0
+}

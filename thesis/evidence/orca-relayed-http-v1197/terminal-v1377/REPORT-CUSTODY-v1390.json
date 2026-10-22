@@ -1,0 +1,18 @@
+{
+  "at": "2026-10-17T23:38:08.190132+00:00",
+  "records": [
+    {
+      "path": "docs/experiments/tcc-20261013-submission-20261030/root/distributed-k1-orca-relayed-http-v1197/REPORT.md",
+      "bytes": 6601,
+      "sha256": "615c56858273c61488ebdeb41c1cba2ddc35ae7bef42fe0fefc172e133c35c90"
+    },
+    {
+      "path": "thesis/evidence/orca-relayed-http-v1197/terminal-v1377/REPORT.md",
+      "bytes": 4878,
+      "sha256": "ef856ac8aa400f382c11e212a1f718c5bbbb145cb4f5a2784df52c77b9ca3226"
+    }
+  ],
+  "newMeasurements": 0,
+  "analysisReplays": 0,
+  "basis": "Existing final180saved-case analysis/SUMMARY.json and actual terminal SEAL"
+}

@@ -1,0 +1,155 @@
+{
+  "at": "2026-10-20T15:14:27.406125+00:00",
+  "status": "K2_TASK_CONSENT_APPLIED_NEW_PROVIDER_AND_REQUESTER_ACTUALLY_LAUNCHED",
+  "nativeGoal": "01a112a5-d6bb-74e2-bf7c-ace73cb513b5",
+  "nativeGoalStatus": "active",
+  "manifestSha256": "5df0f670e88e15aee0b4f8836b78e85b35a446f318a6c6362bf846f795ac1712",
+  "requester": {
+    "at": "2026-10-20T15:12:22.584751+00:00",
+    "conditionManifestSha256": "5df0f670e88e15aee0b4f8836b78e85b35a446f318a6c6362bf846f795ac1712",
+    "controllerPid": 2798068,
+    "controllerStartTicks": 128760317,
+    "excludedWarmups": 15,
+    "measurementAdmitted": false,
+    "newWorker": false,
+    "plannedMeasured": 900,
+    "provider": {
+      "pid": 3929330,
+      "startTicks": 26455069,
+      "state": "S"
+    }
+  },
+  "helpers": {
+    "at": "2026-10-20T15:12:43.824376+00:00",
+    "helpers": {
+      "copier": {
+        "pid": 2798347,
+        "startTicks": 128762441
+      },
+      "finalizer": {
+        "pid": 2798348,
+        "startTicks": 128762441
+      }
+    },
+    "conditionManifestSha256": "5df0f670e88e15aee0b4f8836b78e85b35a446f318a6c6362bf846f795ac1712"
+  },
+  "consent": {
+    "status": "NORMAL_EXISTING_TEST_PAIR_TASK_CONSENT_APPLIED_VERIFIED",
+    "peerId": "aurora-03a910366bf721d72a9ef481d2e08fbd",
+    "localStablePeerId": "aurora-276bb04e1276201922851f6a222110de",
+    "beforePermissions": [
+      "Gateway.GetRegistry",
+      "Gateway.GetMeshStatus",
+      "TTS.Synthesize"
+    ],
+    "afterPermissions": [
+      "Gateway.GetRegistry",
+      "Gateway.GetMeshStatus",
+      "TTS.Synthesize",
+      "Orchestrator.ExternalUserInput"
+    ],
+    "reversePermissionsUnchanged": [
+      "Gateway.GetRegistry",
+      "Gateway.GetMeshStatus",
+      "TTS.Synthesize"
+    ],
+    "scope": "Only Orchestrator.ExternalUserInput added to same approved test pair",
+    "mutationMethod": "Auth.MeshUpdatePeerPermissions",
+    "mutationCalls": 1,
+    "newIdentity": false,
+    "newCredential": false,
+    "modelServicesStarted": [],
+    "modelCalls": 0,
+    "networkListenerStarted": false,
+    "directPermissionDBEdits": false,
+    "at": "2026-10-20T15:07:08.796983+00:00",
+    "host": "personal.skyron-server",
+    "previousProviderTerminal": {
+      "at": "2026-10-20T14:45:10.393005+00:00",
+      "controllerPid": 3904749,
+      "elapsedSeconds": 1316.154908431985,
+      "exitCode": 0,
+      "finishedAt": "2026-10-20T15:07:06.547877+00:00",
+      "host": "personal.skyron-server",
+      "manifestSha256": "f4b28b1eff80041aca0ad8b2031cd7a80de25fa6f10e96ca9cca45ffbbbb2fa0",
+      "measurementStartedByController": false,
+      "receiverAbsent": true,
+      "receiverPid": 3904779,
+      "receiverStartTicks": 26303135
+    },
+    "providerConfigUnchanged": true
+  },
+  "plannedMeasured": 900,
+  "plannedExcludedWarmups": 15,
+  "measurementAdmitted": false,
+  "actualGpuProof": "PENDING_ORDINARY_WARMUPS",
+  "priorK2Epochs": {
+    "1748": {
+      "warmups": 0,
+      "measured": 0,
+      "cause": "Runtime prefix alias mismatch; fixed metadata same interpreter"
+    },
+    "1796": {
+      "warmups": 0,
+      "measured": 0,
+      "cause": "Existing pair TTS-only permission; normal task consent now applied"
+    }
+  },
+  "K1": {
+    "attempted": 709,
+    "correct": 697,
+    "failed": 12,
+    "unattempted": 191,
+    "status": "OPEN_PARTIAL_SEALED"
+  },
+  "cumulativeCap": {
+    "newOuterCapSeconds": 55200,
+    "originalCapSeconds": 57600,
+    "originalStartUtc": "2026-10-20T14:46:52.056334+00:00",
+    "priorElapsedSeconds": 1505.987667,
+    "providerAbsoluteDeadlineNotExtended": true
+  },
+  "copies": [
+    {
+      "path": "thesis/campaigns/worker-desktop-k2-p2p-assistant-tts-v1807/launch-metadata/requester-launch.json",
+      "bytes": 400,
+      "sha256": "d6d1e7e86bac0c507ddddb81f3625b2541103482c8dbfafbb9ef3cca26dff4e7"
+    },
+    {
+      "path": "thesis/campaigns/worker-desktop-k2-p2p-assistant-tts-v1807/launch-metadata/custody-finalizer-LAUNCH-v1809.json",
+      "bytes": 316,
+      "sha256": "530c8dee006edb72a69f0d38d2f77e66730d6370b8f8de136bb9d0f33ad22cc9"
+    },
+    {
+      "path": "thesis/campaigns/worker-desktop-k2-p2p-assistant-tts-v1807/launch-metadata/provider-admission.json",
+      "bytes": 7151,
+      "sha256": "62e3a49fbb6061945bd3e812ed3a983c2a3daf8f52d9cb9272b6e335037d6c04"
+    },
+    {
+      "path": "thesis/campaigns/worker-desktop-k2-p2p-assistant-tts-v1807/launch-metadata/k2-task-consent-control-v1805-RESULT.json",
+      "bytes": 1357,
+      "sha256": "ee40812d8a29acebc6bdcfa42b3996c32b02a8a3a9fdde179de7aca72b5c494f"
+    },
+    {
+      "path": "thesis/campaigns/worker-desktop-k2-p2p-assistant-tts-v1807/launch-metadata/k2-normal-task-consent-v1804-RESULT.json",
+      "bytes": 607,
+      "sha256": "3eae03934ba1603f7724d7f215a5496a7e08eb2fd8412130056548248ce50542"
+    },
+    {
+      "path": "thesis/campaigns/worker-desktop-k2-p2p-assistant-tts-v1807/launch-metadata/k2-consented-provider-launch-v1806-RESULT.json",
+      "bytes": 600,
+      "sha256": "983649dfe26a73dca0fb842f96197a859f3c7f644e520587629307bf4de982e4"
+    },
+    {
+      "path": "thesis/campaigns/worker-desktop-k2-p2p-assistant-tts-v1807/source-review/K2-V1787-REVIEW-CORRECTION-ACTUAL-RUNTIME-PREFIX-20261020T1449Z.md",
+      "bytes": 3697,
+      "sha256": "525b51390a87efa06f95f136616a5618e0d172ea6d8c74b0fbf0f1723691d2f2"
+    },
+    {
+      "path": "thesis/campaigns/worker-desktop-k2-p2p-assistant-tts-v1807/source-review/K2-V1796-CANONICAL-RUNTIME-METADATA-DELTA-CLOSED-20261020T1452Z.json",
+      "bytes": 2541,
+      "sha256": "1d159cb7c6a65c1cd0ed36decfe8784e53866212b6bff59b54699c46b7703cd1"
+    }
+  ],
+  "controlReservation": "Original Personal plain shell reserved solely current finalizer2798348/start128762441, no competing sends until exact result/cursor release"
+}

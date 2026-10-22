@@ -1,0 +1,14 @@
+[
+  {
+    "source": ".git/aurora-handoff-import-20261006/root-k1-http-routes-v2202.json",
+    "destination": "thesis/evidence/k1-http-remaining720-admission-v2204/ORCA-ROUTES.json",
+    "bytes": 413,
+    "sha256": "0b7f06e86b0647178315980471e6568c2dba91d38acc9a9c740c7686496fec87"
+  },
+  {
+    "source": ".git/aurora-handoff-import-20261006/k1-http-listener-v2205-RESULT.json",
+    "destination": "thesis/evidence/k1-http-remaining720-admission-v2204/CURRENT-LISTENER.json",
+    "bytes": 1026,
+    "sha256": "5c6df790da552fc67ae0db895170687ff7dc98c138c1d829235efd4a351a195a"
+  }
+]

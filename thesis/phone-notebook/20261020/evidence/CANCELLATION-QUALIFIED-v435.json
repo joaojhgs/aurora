@@ -1,0 +1,20 @@
+{
+  "at": "2026-10-22T14:29:21.788070+00:00",
+  "status": "ACTUAL_NATIVE_GENERATION_CANCELLATION_AND_CLOSURE_VERIFIED",
+  "sessionId": "phone-cancel-d22a93560d5e4a60a397ddade89d6f14",
+  "correlationId": "webrtc-wpfat085bes-mvjmx5ld",
+  "nativeSpanId": "51e3d7cc710646d8a45d1bbf0640c3e8",
+  "nativePid": 417363,
+  "observedOutcome": "canceled",
+  "observedReasonCode": "cancelled",
+  "cancelControlElapsedMs": 5014.899999976158,
+  "originalRequestTerminal": true,
+  "unclosedOwnSpans": 0,
+  "namespaceRemoved": true,
+  "priorQualificationLabelParserBug": "Harness expected cancelled but recorder canonical outcome is canceled, with reason_code cancelled; original raw and failed labels preserved, no inference rerun.",
+  "cohortEpoch": "embedded-gguf-control-capacity-v431",
+  "modelsConcurrent": 1,
+  "apiCapacity": 2,
+  "referenceMatched": false,
+  "sourceReceipt": "evidence/read-native-cancel-v434/result.json"
+}

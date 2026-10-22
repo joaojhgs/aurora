@@ -1,0 +1,40 @@
+{
+  "actualOffloadedLayers": 25,
+  "actualSttComputeType": "int8_float32",
+  "actualSttDevice": "cpu",
+  "actualTotalLayers": 25,
+  "at": "2026-10-20T00:52:28.102621+00:00",
+  "calls": 45,
+  "forecastWith20PercentMarginPlus300Seconds": 6176.905088217601,
+  "measurementAdmission": "Unchanged reviewed runner must independently verify the published proof before measured1",
+  "modelCallsByFinalizer": 0,
+  "nativeProofHandlers": [
+    "stt.model_invoke",
+    "resolved_chat_model.astream",
+    "tts.model_invoke"
+  ],
+  "nextPersonalCursor": "74900",
+  "ordinaryWarmupP95MsType7": 30608.8806678,
+  "proofSha256": "e28082eceab9d637e8bbd7bf274159681434cb4cc6f22cfb448f8201ca99f7ea",
+  "providerDeadlineUtc": "2026-10-20T03:42:15.698294+00:00",
+  "providerReceiverPid": 2991345,
+  "providerRemainingSecondsAtCheck": 10203.26265,
+  "status": "K3_15_EXCLUDED_WARMUPS_45_NATIVE_JOINS_PROOF_PUBLISHED",
+  "warmupDurationsMs": [
+    29485.977939,
+    29559.092114,
+    29563.792588,
+    29581.891768,
+    29651.512736,
+    29659.391884,
+    29705.814469,
+    29834.878654,
+    29870.597335,
+    29903.56541,
+    29910.798366,
+    30172.991221,
+    30203.046439,
+    30368.91096,
+    31168.809986
+  ]
+}

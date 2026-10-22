@@ -1,0 +1,29 @@
+{
+  "at": "2026-10-21T00:06:20.438441+00:00",
+  "status": "FIRST_NEW_GLOBAL277_CORRECT_AUDIO_PHYSICAL_CUSTODY_VERIFIED",
+  "globalMeasuredIndex": 277,
+  "localMeasuredIndex": 1,
+  "flowDurationMs": 13222.887472,
+  "correctness": {
+    "all_expected": true,
+    "assistant_reply_matches_expected_words": true,
+    "transcript_matches_reference_words": true
+  },
+  "physicalCase": "thesis/campaigns/worker-desktop-k3-p2p-full-audio-v2043/attempts/attempt-0019-measured.jsonl",
+  "physicalCaseBytes": 5746,
+  "physicalCaseSha256": "81128dab2004b30f3d248ef4d6bf602bc2dd5947258ad73d10394c75df31370c",
+  "physicalAudio": "thesis/campaigns/worker-desktop-k3-p2p-full-audio-v2043/audio/e13c40d518933ea41da1a7423a3511f58d6ee5260b3560a0d602a1466f3c66c2.wav",
+  "physicalAudioBytes": 30252,
+  "physicalAudioSha256": "e13c40d518933ea41da1a7423a3511f58d6ee5260b3560a0d602a1466f3c66c2",
+  "audioFormat": {
+    "channels": 1,
+    "sampleWidth": 2,
+    "sampleRate": 22050,
+    "frames": 15104
+  },
+  "old276Preserved": true,
+  "oldFailuresRetained": 20,
+  "sameOriginalProviderPid": 251473,
+  "newMeasuredSource": "count/globalmapping only;all model/audio/execution source/settings unchanged",
+  "newNativeAdmissionProof": "d4f66435ec3492ed20ae2a2d6eef81601153ec373442a4edab62c6d141097b32"
+}

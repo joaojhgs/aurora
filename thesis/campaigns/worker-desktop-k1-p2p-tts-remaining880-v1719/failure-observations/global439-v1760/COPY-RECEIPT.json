@@ -1,0 +1,8 @@
+{
+  "at": "2026-10-20T10:14:11.437264+00:00",
+  "source": ".omx/evidence/orca-monitor-20261010/K1-NEW-FAILURE-439-AND-CONTINUATION-20261020T100823Z.json",
+  "physicalCopy": "thesis/campaigns/worker-desktop-k1-p2p-tts-remaining880-v1719/failure-observations/global439-v1760/K1-NEW-FAILURE-439-AND-CONTINUATION-20261020T100823Z.json",
+  "bytes": 4378,
+  "sha256": "c9ebc5d1764979eeee19f1ef82649eadb19babeb678ebee5fa24822a27ed0c16",
+  "scope": "Original monitor one saved-data verification of isolated failure and existing declared continuation; no new test, source review, cohort or gate."
+}

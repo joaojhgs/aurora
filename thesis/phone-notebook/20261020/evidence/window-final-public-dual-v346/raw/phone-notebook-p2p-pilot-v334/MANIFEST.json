@@ -1,0 +1,34 @@
+{
+  "schema": "aurora.phone_notebook.native_p2p_pilot.v1",
+  "runId": "phone-notebook-46993c330865450ea9cd4961041c441b",
+  "setupPilot": true,
+  "measuredCase": false,
+  "nodeControllerSha256": "dea511f9d699b392a29f33b48eb004b7430d70670cd15dc41be08f2b2e259e65",
+  "priorDomPreflightFailurePreserved": "phone-notebook-p2p-pilot-v324",
+  "sourceIdentity": "ebde3a8acf6315f920d03593845f17a1fc65a733 + source-closure-overlay-v2383 + android-bundled-model-rename-v1 + android-node-policy-initial-publication-v2 + android-finite-file-audio-v3 + android-finite-file-audio-v3a + android-k3-sdk-file-audio-v4 + android-k3-sdk-mode-v4a + android-k3-sdk-build-flag-v5 + android-k3-native-surface-v6 + android-native-pairing-role-v7 + isolated-workspace-resolution-v7a + unchanged-voice-package-reuse-v7b + android-sdk-speech-binding-v8",
+  "installedApkSha256": "fedfc7d87b498c03ab2a5ca95aeac6f0782bf6d84a2d18465b7edfeb05553ded",
+  "providerSourceSha": "ebde3a8acf6315f920d03593845f17a1fc65a733",
+  "providerConfigSha256": "196d7e7ad31087629b41ffa58cb6d4e9d74655e11d9a33a7211bce08ef50e39b",
+  "providerFeatureConsentReceipt": "TASK-VOICE-EXPORT-RECEIPT-v311.json",
+  "priorDifferentPolicyFailurePreserved": "phone-notebook-p2p-pilot-v306",
+  "providerEpoch": {
+    "job": "notebook-owner-service-v286",
+    "pid": 337356,
+    "startTicks": "4575233"
+  },
+  "expectedNotebookPeer": "aurora-300a1d58e0c0da3e84580e1f7da7747a",
+  "inputPath": "/home/developer/projects/aurora/thesis/phone-notebook/20261020/deployment/ebde3a8acf6315f920d03593845f17a1fc65a733/source-delta-v33-copy-v2353-20261022/ORIGINAL-FIXED-INPUT.wav",
+  "inputSha256": "da0ecc4ad0885746ab6e716585473917ab2b543a505bf0db09ebacfaa7943cbb",
+  "caseDeadlineUtc": "2026-10-22T11:50:24.058886+00:00",
+  "ownerHardStopUtc": "2026-10-22T11:57:25.269652Z",
+  "adbRole": "Control/fixture load/custody only, outside measured native boundary",
+  "modelPins": {
+    "stt": "d01c3014881c9c6f3133c182f3d2887eb6ca1c789a7538c5c007196857a0a6a9",
+    "llm": "57d1997790d1744fba5b40a7317df71ea5e2acee28c47e78f0cce39c0703f8cf",
+    "tts": "6f52a751e2349abe7a76735eb09dc1875298c77ea2342ffd2fef79ff81b87f22",
+    "ttsConfig": "141d612cc0a95ed7efc1ca936b845c2364967f2e9217c5dbfcf69fc4d6c65860"
+  },
+  "modelSubstitutions": false,
+  "quantileEstimatorForFutureCollection": "Hyndman-Fan type7; pilot alone is not a distribution",
+  "resourceAdmission": "ROOT-PHONE-OWNER-WINDOW-FOOTPRINT-v2398.json"
+}

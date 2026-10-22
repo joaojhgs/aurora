@@ -1,0 +1,38 @@
+{
+  "benchmark_started": false,
+  "caps": {
+    "mem_available_floor_bytes": 10737418240,
+    "owned_directory_bytes": 4294967296,
+    "tmp_free_floor_bytes": 3221225472,
+    "wall_seconds": 300
+  },
+  "child_pid": 2691905,
+  "child_startticks": "62561564",
+  "elapsed_seconds": 8.272825474967249,
+  "environment": "/tmp/aurora-root-gpu-primary-v409/env",
+  "exit_code": 0,
+  "finished_at": "2026-10-14T17:01:55.380446+00:00",
+  "kind": "aurora_root_gpu_app_dependency_setup",
+  "last_resources": {
+    "mem_available_bytes": 20593336320,
+    "owned_logical_bytes": 1630242616,
+    "tmp_free_bytes": 13856239616
+  },
+  "log_bytes": 3779,
+  "log_sha256": "e46efea081fe82705ea1ccbf71490c21e76ee40b03811743f5b858b958f43ab4",
+  "log_tail": "ogleapis-common-protos==1.72.0\n + greenlet==3.3.0\n + grpcio==1.76.0\n + h11==0.16.0\n + httpcore==1.0.9\n + httplib2==0.31.0\n + httptools==0.7.1\n + httpx==0.28.1\n + httpx-sse==0.4.3\n + humanfriendly==10.0\n + idna==3.11\n + ifaddr==0.2.0\n + jiter==0.12.0\n + jsonpatch==1.33\n + jsonpointer==3.0.0\n + jsonschema==4.25.1\n + jsonschema-specifications==2025.9.1\n + langchain==0.3.25\n + langchain-community==0.3.24\n + langchain-core==0.3.62\n + langchain-google-community==2.0.7\n + langchain-mcp-adapters==0.2.0\n + langchain-openai==0.3.18\n + langchain-text-splitters==0.3.8\n + langgraph==0.4.6\n + langgraph-checkpoint==2.0.26\n + langgraph-prebuilt==0.2.3\n + langgraph-sdk==0.1.51\n + langsmith==0.3.8\n + lxml==6.0.2\n - markupsafe==3.0.4\n + markupsafe==3.0.2\n + marshmallow==3.26.2\n + mcp==1.25.0\n + multidict==6.7.0\n + mypy-extensions==1.1.0\n - numpy==2.4.6\n + numpy==2.2.6\n + openai==1.82.0\n + orjson==3.11.5\n + ormsgpack==1.12.1\n + packaging==24.2\n + paho-mqtt==2.1.0\n + passlib==1.7.4\n + primp==0.15.0\n + propcache==0.4.1\n + proto-plus==1.27.0\n + protobuf==6.33.2\n + psutil==7.2.0\n + pyasn1==0.6.1\n + pyasn1-modules==0.4.2\n + pycparser==2.23\n + pydantic==2.12.5\n + pydantic-core==2.41.5\n + pydantic-settings==2.12.0\n + pyee==13.0.0\n + pyjwt==2.10.1\n + pylibsrtp==1.0.0\n + pyopenssl==25.3.0\n + pyparsing==3.3.1\n + python-dateutil==2.9.0.post0\n + python-dotenv==1.2.1\n + python-multipart==0.0.21\n + pytz==2025.2\n + pyyaml==6.0.3\n + referencing==0.37.0\n + regex==2024.11.6\n + requests==2.32.3\n + requests-toolbelt==1.0.0\n + rpds-py==0.30.0\n + rsa==4.9.1\n + six==1.17.0\n + sniffio==1.3.1\n + sqlalchemy==2.0.38\n + sqlite-vec==0.1.6\n + sse-starlette==3.0.4\n + starlette==0.50.0\n + tenacity==9.1.2\n + tiktoken==0.8.0\n + tqdm==4.67.1\n - typing-extensions==4.16.0\n + typing-extensions==4.15.0\n + typing-inspect==0.9.0\n + typing-inspection==0.4.2\n + uritemplate==4.2.0\n + urllib3==2.3.0\n + uvicorn==0.40.0\n + uvloop==0.22.1\n + watchfiles==1.1.1\n + websockets==14.2\n + xxhash==3.6.0\n + yarl==1.22.0\n + zstandard==0.23.0\n",
+  "outcome": "dependencies_installed",
+  "process_group": 2691905,
+  "recorded_at": "2026-10-14T17:01:47.107508+00:00",
+  "requirements_bytes": 101822,
+  "requirements_sha256": "4eb7c9c1045e133cfee4ac74a05ec0e5db3fc7b1fb009b28642a0a87869519c9",
+  "source": "/home/developer/projects/aurora/.git/aurora-root-gpu-primary-v408/source-v409",
+  "source_changed": false,
+  "steps": [
+    {
+      "exit_code": 0,
+      "name": "frozen_requirements_export",
+      "stderr_tail": ""
+    }
+  ]
+}

@@ -1,0 +1,119 @@
+{
+  "at": "2026-10-17T23:23:33.751884+00:00",
+  "url": "http://127.0.0.1:18000/api/Gateway/GetMeshStatus",
+  "method": "POST",
+  "body": {},
+  "documentedReadOnly": true,
+  "modelCalls": 0,
+  "authMutation": false,
+  "existingApprovedCredentialOnly": true,
+  "secretOutput": false,
+  "status": 200,
+  "bytes": 5563,
+  "sha256": "41bdf6631a8748c9f87c11d0f16f12a689eba9d700b17a5735350782fb83fec3",
+  "path": "thesis/campaigns/worker-desktop-paired-http-p2p-v1376/EXISTING-PROVIDER-MESH-STATUS-v1380.json",
+  "local": {
+    "mesh_enabled": false,
+    "mesh_started": false,
+    "webrtc_started": false,
+    "peer_id": null,
+    "node_name": "",
+    "peer_selection": "lowest_latency",
+    "version_policy": "compatible",
+    "shared_modules": [],
+    "routed_modules": []
+  },
+  "peerCount": 0,
+  "routeCount": 8,
+  "routingSummaries": [
+    {
+      "service_id": "DB",
+      "service_label": "",
+      "configured": true,
+      "prefer": "local",
+      "fallback": "local",
+      "policy_revision": 1,
+      "eligible_provider_ids": [],
+      "ineligible_provider_ids": [],
+      "reason_codes": []
+    },
+    {
+      "service_id": "Orchestrator",
+      "service_label": "",
+      "configured": true,
+      "prefer": "local",
+      "fallback": "local",
+      "policy_revision": 1,
+      "eligible_provider_ids": [],
+      "ineligible_provider_ids": [],
+      "reason_codes": []
+    },
+    {
+      "service_id": "STTCoordinator",
+      "service_label": "",
+      "configured": true,
+      "prefer": "local",
+      "fallback": "local",
+      "policy_revision": 1,
+      "eligible_provider_ids": [],
+      "ineligible_provider_ids": [],
+      "reason_codes": []
+    },
+    {
+      "service_id": "Scheduler",
+      "service_label": "",
+      "configured": true,
+      "prefer": "local",
+      "fallback": "local",
+      "policy_revision": 1,
+      "eligible_provider_ids": [],
+      "ineligible_provider_ids": [],
+      "reason_codes": []
+    },
+    {
+      "service_id": "TTS",
+      "service_label": "",
+      "configured": true,
+      "prefer": "local",
+      "fallback": "local",
+      "policy_revision": 1,
+      "eligible_provider_ids": [],
+      "ineligible_provider_ids": [],
+      "reason_codes": []
+    },
+    {
+      "service_id": "Tooling",
+      "service_label": "",
+      "configured": true,
+      "prefer": "local",
+      "fallback": "local",
+      "policy_revision": 1,
+      "eligible_provider_ids": [],
+      "ineligible_provider_ids": [],
+      "reason_codes": []
+    },
+    {
+      "service_id": "Transcription",
+      "service_label": "",
+      "configured": true,
+      "prefer": "local",
+      "fallback": "local",
+      "policy_revision": 1,
+      "eligible_provider_ids": [],
+      "ineligible_provider_ids": [],
+      "reason_codes": []
+    },
+    {
+      "service_id": "WakeWord",
+      "service_label": "",
+      "configured": true,
+      "prefer": "local",
+      "fallback": "local",
+      "policy_revision": 1,
+      "eligible_provider_ids": [],
+      "ineligible_provider_ids": [],
+      "reason_codes": []
+    }
+  ],
+  "elapsedSeconds": 5.999399780994281
+}

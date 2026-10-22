@@ -1,0 +1,8 @@
+{
+  "startedAt": "2026-10-15T03:36:14.002863+00:00",
+  "finishedAt": "2026-10-15T03:36:15.783826+00:00",
+  "exitCode": 0,
+  "modelLoads": 0,
+  "measuredRequests": 0,
+  "purpose": "match additionally observed desktop backend dependencies; preserve oldenvironment"
+}

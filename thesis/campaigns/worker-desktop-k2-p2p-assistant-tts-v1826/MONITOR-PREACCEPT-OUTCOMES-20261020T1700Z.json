@@ -1,0 +1,53 @@
+{
+  "at": "2026-10-20T17:00:14.951087+00:00",
+  "run": "run_e6054e76e9fc",
+  "task": "task_d7ea336050cf",
+  "dispatch": "ctx_37b4d0a3c14f",
+  "condition": "K2 P2P V1826 frozen a653d60065616e34844d956d1ed47038aa94f3ff876c36bf3a98e904ca838641",
+  "kind": "new observed measured failures retained; no mutation or replay",
+  "cases": [
+    {
+      "phase_index": 174,
+      "path": "thesis/campaigns/worker-desktop-k2-p2p-assistant-tts-v1826/attempts/attempt-0189-measured.jsonl",
+      "bytes": 5182,
+      "sha256": "4b70adf9999896fbab762db0cc90bea1c8c42b24a745ef92a9e04253a816db49"
+    },
+    {
+      "phase_index": 189,
+      "path": "thesis/campaigns/worker-desktop-k2-p2p-assistant-tts-v1826/attempts/attempt-0204-measured.jsonl",
+      "bytes": 5183,
+      "sha256": "34dc2df432b1c87a2fd1d26c793df1c083e67e0919458cab40a5de3c0be2e24f"
+    }
+  ],
+  "sharedFacts": {
+    "status": "failed",
+    "failure": {
+      "code": "preaccept_capability_changed",
+      "stage": "tts"
+    },
+    "timeout": false,
+    "transcriptCorrect": true,
+    "assistantReplyCorrect": true,
+    "outputAudio": null,
+    "physicalRepoCopy": true,
+    "hashesMatchCopierIndex": true
+  },
+  "processEvidence": {
+    "at": "2026-10-20T17:00:05.004274Z",
+    "controller": [
+      2830732,
+      129050331
+    ],
+    "backend": [
+      2830763,
+      129050436
+    ],
+    "copier": [
+      2831081,
+      129052325
+    ],
+    "allSameLive": true
+  },
+  "interpretation": "Two observed preaccept TTS failures are measured denominator outcomes. These facts do not establish causal lease/projection/model-quality diagnosis. Original Root screen already shows bounded saved-failure/frozen-policy inspection; no competing diagnosis or new review matrix started.",
+  "recommendedAction": "Retain both raw failures; continue only according to existing frozen finite failure policy. No automatic retry/top-up/new baseline, source change, guard relaxation, restart or device/network probe. If policy terminal occurs, reconcile exact terminal and remaining unattempted indices through Root."
+}

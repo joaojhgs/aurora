@@ -1,0 +1,1 @@
+{"external_user_input_announced": true, "first_missing_boundary": null, "generated_path_method": "POST", "orchestrator_present": true, "post_route_generated": true, "ready": true, "routes_snapshot_status": "observed", "schema_version": "aurora.assistant.gateway_route_readiness.v1", "service_snapshot_status": "observed"}

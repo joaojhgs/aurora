@@ -1,0 +1,25 @@
+{
+  "at": "2026-10-17T23:45:15.469941+00:00",
+  "progress": {
+    "attempted": 16,
+    "last_attempt_file": "attempts/attempt-0016-measured.jsonl",
+    "last_attempt_status": "completed_correct",
+    "measured_attempted": 1,
+    "planned_measured": 900,
+    "planned_warmups": 15,
+    "status": "running",
+    "unattempted_measured": 899,
+    "warmups_attempted": 15
+  },
+  "lastCase": {
+    "ordinal": 16,
+    "phase": "measured",
+    "status": "completed_correct",
+    "flow_duration_ms": 29957.647257,
+    "correctness": {
+      "all_expected": true,
+      "assistant_reply_matches_expected_words": true,
+      "transcript_matches_reference_words": true
+    }
+  }
+}

@@ -1,0 +1,6 @@
+{
+  "maximumSends": 1,
+  "commandSha256": "e818b5c81f91abb80dd98dd163651d467fe2b960dadc0bd9978483f745823e97",
+  "authProof": "AUTH-PRETRIGGER.json",
+  "exactProviderPidStartGuard": true
+}

@@ -1,0 +1,60 @@
+{
+  "schema_version": "aurora.assistant.measurement_summary.v1",
+  "quantile_method": "type7_linear_interpolation",
+  "group_count": 1,
+  "groups": [
+    {
+      "schema_version": "aurora.assistant.measurement_summary.v1",
+      "quantile_method": "type7_linear_interpolation",
+      "group": {
+        "config_sha256": "cd8f7071cc628b1c8bed3694e1362a6015144e7a92893f33866bf903add6ca79",
+        "host_id_pseudonym": "2321bb722b1e93cd",
+        "model_id": "qwen3.5-0.8b-q4_0-gguf",
+        "model_sha256": "57d1997790d1744fba5b40a7317df71ea5e2acee28c47e78f0cce39c0703f8cf",
+        "route": "python_local_bus",
+        "session_id": "pilot-run-d85fee96ce1a402ab04adf4dde7d4c68",
+        "source_commit": "5782746afba213f6b36907db2f09f0017625e218",
+        "surface": "python-production-local",
+        "workload_id": "public-exact-answer-orbit-v1",
+        "workload_sha256": "0f3b83f8fbf0e55e7b7faf8a75e99f42fdad42128b908e7f7c18cd4d8faeed86"
+      },
+      "n_raw_records": 105,
+      "n_warmup": 5,
+      "warmup_counts": {
+        "cancelled": 0,
+        "correct_success": 5,
+        "excluded": 0,
+        "failure": 0,
+        "incorrect_answer": 0,
+        "infeasible": 0,
+        "timeout": 0
+      },
+      "n_total": 100,
+      "n_excluded": 0,
+      "n_eligible": 100,
+      "counts": {
+        "cancelled": 0,
+        "correct_success": 100,
+        "failure": 0,
+        "incorrect_answer": 0,
+        "infeasible": 0,
+        "timeout": 0
+      },
+      "n_success": 100,
+      "n_success_denominator": 100,
+      "correct_success_rate": 1.0,
+      "correct_success_latency_ms": {
+        "p50": 30492.3428095,
+        "p90": 34627.554536100004,
+        "p95": 36737.9242766
+      },
+      "correct_success_latency_n": 100,
+      "exclusion_reasons_predeclared": {},
+      "censored_outcomes_retained": {
+        "timeout": 0,
+        "cancelled": 0,
+        "infeasible": 0
+      }
+    }
+  ]
+}

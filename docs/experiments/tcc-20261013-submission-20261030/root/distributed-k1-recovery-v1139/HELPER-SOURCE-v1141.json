@@ -1,0 +1,8 @@
+{
+  "index": "https://download.pytorch.org/whl/cpu/torch/",
+  "wheel": "https://download-r2.pytorch.org/whl/cpu/torch-2.14.1%2Bcpu-cp311-cp311-manylinux_2_28_x86_64.whl#sha256=5e38154c8896d426a5df58bf2276b603e82184dfae4f54d77dbb212f36e34f37",
+  "selectedVersion": "2.14.1+cpu",
+  "samePublicVersionAsExistingWorker": "2.14.1",
+  "scope": "Text-splitting helper only; actual LLM stays same Vulkan0.3.19/QwenGGUF; no driver/system modification",
+  "pinSha256": "5e38154c8896d426a5df58bf2276b603e82184dfae4f54d77dbb212f36e34f37"
+}

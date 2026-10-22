@@ -1,0 +1,84 @@
+{
+  "at": "2026-10-16T04:33:29.794094+00:00",
+  "source": ".git/aurora-handoff-import-20261006/distributed-k1-mesh-prep-v869",
+  "destination": "thesis/harness/distributed-k1-mesh-v869",
+  "status": "SOURCE_APPROVED_NO_RUNTIME_OR_LIVE_ROUTE_ACCEPTANCE",
+  "review": ".git/aurora-handoff-import-20261006/distributed-k1-mesh-review-v871/SOL-REVIEW.md",
+  "reviewSha256": "22a4ab7aa0b7b2a8a1d6f8051172c8b1cd08a554d4f64fc6901d944e2df98223",
+  "files": [
+    {
+      "path": "README.md",
+      "bytes": 5755,
+      "sha256": "8e50aae1678a12bf5d7df74433981b5de89a9f946055ecee5a5f67e179b85e97"
+    },
+    {
+      "path": "REPORT.md",
+      "bytes": 2406,
+      "sha256": "45711a7e7a4a81f3f4fd1ab390a829d6a9637e0c7d5d83f8beea752a2f902f75"
+    },
+    {
+      "path": "requester/aurora_voice_telemetry_v430.py",
+      "bytes": 11584,
+      "sha256": "8129ffe7591a47a0107ede53b101aead9fc1f58b92f0c0c4203176cc7608325d"
+    },
+    {
+      "path": "requester/bindings.py",
+      "bytes": 5492,
+      "sha256": "79558452e6f61268ad246476ca848e060b8ea808e15091bc53a3c4e0e28b1647"
+    },
+    {
+      "path": "requester/bootstrap.py",
+      "bytes": 1950,
+      "sha256": "5f3f18d935466b3ea670af4caff79a801ea1c7a3c6471b4644b8864ad0c7b883"
+    },
+    {
+      "path": "requester/candidate-input.wav",
+      "bytes": 219794,
+      "sha256": "da0ecc4ad0885746ab6e716585473917ab2b543a505bf0db09ebacfaa7943cbb"
+    },
+    {
+      "path": "requester/candidate-manifest.json",
+      "bytes": 220,
+      "sha256": "ce75b965ee5879ebece6ea7dfe133441547d20ccf89ecd5d66ea510bd9645e60"
+    },
+    {
+      "path": "requester/controller.py",
+      "bytes": 16146,
+      "sha256": "809bedd7aec6636b4382ab944b3bf65c0da57361d1a1252dd21884963c884a4f"
+    },
+    {
+      "path": "requester/freeze-template.json",
+      "bytes": 2153,
+      "sha256": "2c5d5c35d034de813890d2637b067adff17ae541b072c3ee07c680407b4be1ee"
+    },
+    {
+      "path": "requester/observer.py",
+      "bytes": 11873,
+      "sha256": "784cc4bffc0d6824bbe378d17a7f632d587ca0a315896b048b2ebef727082df5"
+    },
+    {
+      "path": "requester/receiver_proof.py",
+      "bytes": 13293,
+      "sha256": "04c5f9f781bbf53b0db9103372cb27cd1b5c68c3b0c3973cf98f3fda97e6affb"
+    },
+    {
+      "path": "requester/resource_sample.py",
+      "bytes": 7475,
+      "sha256": "8f62ec378e74036d4539d9159e3caf29b8fd7a9115de1ab0f482dfd58b6e1857"
+    },
+    {
+      "path": "requester/runner.py",
+      "bytes": 65661,
+      "sha256": "46d77b55dfb0687a249845c70f14201be19bd4b859a2855477b613539691518a"
+    },
+    {
+      "path": "requester/tts_mesh_adapter.py",
+      "bytes": 4307,
+      "sha256": "1db8cb386a37c680bec6e03135ee007f6b76a850a85c4e1eedda6562c0895ceb"
+    }
+  ],
+  "runtimeOrTestExecuted": false,
+  "methodologyModified": false,
+  "measuredCases": 0,
+  "selectedIceEvidence": "observer868 separate pending review; no actual ICE route claim"
+}

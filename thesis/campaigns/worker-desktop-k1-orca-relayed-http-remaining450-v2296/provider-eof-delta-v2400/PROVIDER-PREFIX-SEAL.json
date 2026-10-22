@@ -1,0 +1,58 @@
+{
+  "at": "2026-10-22T05:41:14.628953+00:00",
+  "status": "original_provider_eof_delta_sealed",
+  "actors": [
+    {
+      "pid": 1820862,
+      "state": "absent",
+      "sameStart": false
+    },
+    {
+      "pid": 1820863,
+      "state": "absent",
+      "sameStart": false
+    }
+  ],
+  "providerRetired": true,
+  "reservationPreserved": true,
+  "rootPhysicalReservationHeldForNextCondition": true,
+  "oldFixedPrefixSealSha256": "ac73dafcfc45a051797e394b981feacbb09f7932422aedda7197ae75fa1e5720",
+  "oldFixedPrefixArchiveSha256": "3a22bd10761d9fa54755d319b4ef86fb8c7319da906b4716fb2bb1f67f7e19dc",
+  "oldPrefixPlusDeltaReconstructsEof": true,
+  "files": [
+    {
+      "name": "snapshots/STATUS.json",
+      "source": "/home/developer/projects/aurora/thesis/campaigns/worker-desktop-k1-http-provider-v2296/provider/STATUS.json",
+      "bytes": 161095,
+      "sha256": "554682a09ddc25a961d74e252d7962534547a203eb22faf2fccfa6de26acef4e",
+      "terminalEOF": true
+    },
+    {
+      "name": "delta/resources.jsonl.tail",
+      "source": "/home/developer/projects/aurora/thesis/campaigns/worker-desktop-k1-http-provider-v2296/provider/resources.jsonl",
+      "startByte": 113316229,
+      "endByte": 124438276,
+      "bytes": 11122047,
+      "sha256": "a306a4e7e404bc2ad705358b30a63597b8fc9a8ae0260dff12e7cc7ad5e64572",
+      "terminalEOF": true,
+      "fullSourceSha256": "08336fa771b66c8f6c6eaced47461024d29c2a4aca50c490709ac7f047df37b1"
+    },
+    {
+      "name": "snapshots/terminal.json",
+      "source": "/home/developer/projects/aurora/thesis/campaigns/worker-desktop-k1-http-provider-v2296/provider/terminal.json",
+      "bytes": 437,
+      "sha256": "b2f9c391fc8e5113b4918fafd0499085a2294e7300eb81e5bbddd89bdb1f8b79",
+      "terminalEOF": true
+    }
+  ],
+  "rawPayloadBytes": 11283579,
+  "originalFilesPreserved": true,
+  "K1MeasuredAttempted": 900,
+  "K1Correct": 899,
+  "K1Failed": 1,
+  "K1Remaining": 0,
+  "signalsSent": 1,
+  "newInference": 0,
+  "newOrcaWorkers": 0,
+  "oldEffectiveDeadlineUnchanged": "2026-10-22T08:31:16.563152+00:00"
+}

@@ -1,0 +1,61 @@
+{
+  "schema": "aurora.root.owner-window-resource-admission.v1",
+  "at": "2026-10-22T05:27:31.558247+00:00",
+  "state": "RESOURCE_ADMITTED_ACTUAL_READINESS_AND_MEASURED_LAUNCH_NOT_CLAIMED",
+  "run": "run_e6054e76e9fc",
+  "nativeRootGoal": "01a112a5-d6bb-74e2-bf7c-ace73cb513b5",
+  "task": "task_e35b809903c1",
+  "terminal": "term_1f27be31-0284-4366-bb91-30fe538cd30e",
+  "ownerWindowMessages": [
+    "msg_0741ef4cc5f5",
+    "msg_26afff0ebc56",
+    "msg_fd3cf1300719"
+  ],
+  "ownerWindow": {
+    "startUtc": "2026-10-22T04:57:25.269652+00:00",
+    "stopUtc": "2026-10-22T11:57:25.269652+00:00",
+    "includesSetupPilotsAndCollection": true,
+    "noExtension": true,
+    "previousAwaitSleepStartGateSupersededOnlyWithinThisReportedExplicitWindow": true,
+    "exactSavedOwnerReceiptMustBeReferencedInWorkerLaunchManifest": true
+  },
+  "resources": {
+    "physicalDevices": [
+      "approved Personal notebook",
+      "owner POCO KBX8LNFUBE5XGQRG"
+    ],
+    "notebookCpuThreads": 2,
+    "notebookAvailableRamFloorBytes": 8589934592,
+    "notebookDiskFreeFloorBytes": 2147483648,
+    "oneActiveNotebookInferenceServiceAtATime": true,
+    "noCompilerInferenceOverlap": true,
+    "notebookGpuReservedForThisDeclaredLane": true,
+    "phoneExclusiveDuringMeasuredWindows": true,
+    "normalOsProtectionTemperatureBatteryRamAndStorageGuards": true,
+    "mainWorkerDesktopProvidersAndGpuNotGranted": true,
+    "globalRootBuildLockAndWaydroidNotTransferred": true
+  },
+  "executionConditions": [
+    "Prior v2391 lease was reported normally closed04:47:57 with ownedProcessClosed=true; preserve exact receipt and do not reuse/reset its clock",
+    "Existing worker owns isolated source fixes and necessary ordinary same-signed app update; source/mirror permission is not a gate",
+    "Freeze exact source/overlay/package/APK/audio/model/decoding/effective backend/hardware/route manifest before eligibility",
+    "Actual native authenticated route, correct meaningful transcript/answer, valid WAV and stage/resource correlations must pass before measured collection",
+    "Finite declared readiness pilots only; stop checking once the main flow is established, no expanding edge cases",
+    "900 measured per applicable declared new condition plus excluded warmups; preserve every failure/timeout and outcome denominator, no unlike cohort pooling",
+    "Local phone baseline and K1 require actual phone LLM; K2 requires phone STT only; K3 requires no phone model stage; do not block K2/K3 on phone LLM",
+    "Actual LAN/overlay/direct/relay topology must be recorded; ADB is control rather than measurement transport",
+    "Keep disjoint-resource graph from current Root work; coordinate actual shared measured resources through original monitor or use declared controlled contention rather than silently mixing runs",
+    "Copiers and raw/audio/stage/resources/frozen inputs physically under repo thesis on both hosts from first cases, with atomic checksums and finite resumable epochs",
+    "At or before11:57:25.269652Z normal owned-service retirement and phone return/release with actual PID/receipt; no automatic time extension or occupation after window"
+  ],
+  "boundaries": {
+    "sameTaskNoNewWorkerOrGoal": true,
+    "rootLaterCanonicalGitIntegrationOnly": true,
+    "monitorSoleMethodologyPlanWriter": true,
+    "noCompanySecurityDriverCredentialAccountBrokerOrPublicExposureChanges": true,
+    "preserveExistingAppUserDataSigningKeysAndAllOldEvidence": true,
+    "noSilentModelBackendSubstitution": true,
+    "mainV2296MeasurementsAndClocksUnchanged": true,
+    "rootUnbudgetedNativeGoalAndFull13RemainIntact": true
+  }
+}

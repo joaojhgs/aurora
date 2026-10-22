@@ -1,0 +1,95 @@
+{
+  "observed_at": "2026-10-14T15:48:02.860639+00:00",
+  "plan_sha256": "b7efb40b33ae4ea952569706c97bb1dbe7583351e009d882213afed409f4a189",
+  "branch": "codex/aurora-native-speech-routing-20261007",
+  "head": "5782746afba213f6b36907db2f09f0017625e218",
+  "dirty_porcelain_rows_default": 43,
+  "files": {
+    "plan.two-phase.diff": {
+      "bytes": 11382,
+      "sha256": "6ce3245f40664ca633bc06298b93455f952d6b17869b2e6ee00771c877c8af96"
+    },
+    "personal-capability-provenance.json": {
+      "bytes": 883,
+      "sha256": "9f495e370e497d91979b302c13c948e61e0747faf67fab78f57368501d21e8d6"
+    },
+    "before-receipt.json": {
+      "bytes": 754,
+      "sha256": "d98762dfa3e4765361dba10262f25f2ecbb6163d12e171018db5e76fbdc05e73"
+    },
+    "plan.after.md": {
+      "bytes": 114624,
+      "sha256": "a8ffab9ed36f50fda0181df19f1f54b2ec1a44b34ac6e3535dd23d50379aa9ed"
+    },
+    "document-checks.json": {
+      "bytes": 748,
+      "sha256": "80d1b6974645254530179f546199f5a19e8d23eab501469f0637de4209ee3fa1"
+    },
+    "dual-completion-barrier.json": {
+      "bytes": 399,
+      "sha256": "4cb0b1dafeac05b592dd9a6058371a182a2e7bd4a1000c1c390813e649682da5"
+    },
+    "personal-desktop-capability.json": {
+      "bytes": 3515,
+      "sha256": "e99e9eb59c3e6176a89b29a14134760c1008917f16370c3ef07754c6fed07b3b"
+    },
+    "plan.before-gpu.md": {
+      "bytes": 114624,
+      "sha256": "a8ffab9ed36f50fda0181df19f1f54b2ec1a44b34ac6e3535dd23d50379aa9ed"
+    },
+    "personal-gpu-capability-request-receipt.json": {
+      "bytes": 883,
+      "sha256": "0465904ecc66d5e269a8b64f66d2de130bdb8aaf4d128730f2f5663cf83052f3"
+    },
+    "plan.diff": {
+      "bytes": 58232,
+      "sha256": "0deeba5a59cdb334dd59638714573a33e7cbf27c3154d5d6ea9a599ea5999fce"
+    },
+    "plan.before.md": {
+      "bytes": 84694,
+      "sha256": "a2615d9a744f4f5413ab9fee70b0a6928266d203682b8d7814eb2b5798d440d5"
+    },
+    "gpu-scheduling-section.md": {
+      "bytes": 9585,
+      "sha256": "f4a6c2871e95c20a4026b889393d2058a87b612dd1fbfe4a6cf96011a5018c71"
+    },
+    "current-plan-receipt.json": {
+      "bytes": 840,
+      "sha256": "963e19638ce3b3d93e463edde8719d950d40177572951901419f73080f26cec8"
+    },
+    "plan.gpu.diff": {
+      "bytes": 17148,
+      "sha256": "6984fd1ffe18e86962bc679a0a03a8a2029cbd81557d90b2d7674cec80562ca9"
+    },
+    "coverage-manifest.jsonl": {
+      "bytes": 32697,
+      "sha256": "612e989d72caeb573e8c03c0bcea08f7a8a29a2b5a7a6da54e42d8d8cf6ae2bf"
+    },
+    "plan.current.md": {
+      "bytes": 128587,
+      "sha256": "b7efb40b33ae4ea952569706c97bb1dbe7583351e009d882213afed409f4a189"
+    },
+    "plan.before-two-phase.md": {
+      "bytes": 124243,
+      "sha256": "51f3701a16487ea1edab69e3035b9fb6ebf369debea757733d668f4be9d8675d"
+    },
+    "node-pair-coverage.jsonl": {
+      "bytes": 5856,
+      "sha256": "f7d88e7a2236f3af452ba3f4405ea83849710296fa0745d9d849e974738ad581"
+    },
+    "plan-update-receipt.json": {
+      "bytes": 975,
+      "sha256": "477479e5085c559b8c59a9070f72e959da3d8cab9412647e46f355d915078c94"
+    },
+    "README.md": {
+      "bytes": 4095,
+      "sha256": "0e3c86a92aaba6f8389a373a412e2b2672e6e9f4eef7e6a08d5cb251035c7ebc"
+    },
+    "amendment-section.md": {
+      "bytes": 28012,
+      "sha256": "adce48403c547f7fd719a26c118d9cb28db80354ade7271a0e5dbbe87bc3a8f5"
+    }
+  },
+  "gpu_launch_verified": false,
+  "dual_barrier_ready": false
+}

@@ -1,0 +1,12 @@
+{
+  "controlDeadline": "2026-10-22T10:35:00Z",
+  "explicitNewline": true,
+  "host": "ssh:ssh-sem-notebook-personal",
+  "incarnation": "328cd72f-c7ea-49ff-a2db-b9275b085037",
+  "remoteResult": "/home/developer/projects/aurora/thesis/phone-notebook/20261020/evidence/copy-pairing-test-inputs-v279-00.json",
+  "rootAdmissionMessage": "existing-v2398 missing immutable test-only source closure",
+  "script": "scripts/copy_pairing_test_inputs_v279_00.py",
+  "scriptSha256": "7179378ec6cc73b810796345a65b1bb6296da0c25d408e34df6ac769b523d2c6",
+  "singleSend": true,
+  "terminal": "term_a2ed5feb-7c92-48e4-bd88-d1b0e6737989"
+}

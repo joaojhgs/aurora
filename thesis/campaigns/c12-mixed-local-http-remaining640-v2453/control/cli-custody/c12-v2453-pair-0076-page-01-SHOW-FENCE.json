@@ -1,0 +1,14 @@
+{
+  "ok": true,
+  "exitCode": 0,
+  "rawLosslessGzip": "/home/developer/projects/aurora/.git/aurora-handoff-import-20261006/c12-v2453-pair-0076-page-01-SHOW-FENCE.raw.gz",
+  "uncompressedBytes": 1372,
+  "uncompressedSha256": "5a390594724d672878fd63950de1ab75944261a1be3341c8feaeba7535e31380",
+  "stdoutBytes": 1305,
+  "stderrBytes": 59,
+  "id": "c783138f-4cf0-41d1-964a-aabb2dd0ea19",
+  "error": null,
+  "nextCursor": null,
+  "source": null,
+  "returnedLineCount": null
+}

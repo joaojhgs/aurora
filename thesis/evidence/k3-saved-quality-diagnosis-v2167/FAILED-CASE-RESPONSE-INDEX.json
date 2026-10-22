@@ -1,0 +1,387 @@
+[
+  {
+    "case": "thesis/campaigns/worker-desktop-k3-p2p-full-audio-v2043/attempts/attempt-0590-measured.jsonl",
+    "globalIndex": 848,
+    "correlationId": "audio-campaign-cd48e180913a4c5189dd88e1c197f0a9",
+    "responseSha256": "a1b7eb2ee7a6aded8dda4e6cf30826f5afffb28a5597ee9389e91eb326d4e319",
+    "responseChars": 31
+  },
+  {
+    "case": "thesis/campaigns/worker-desktop-k3-p2p-full-audio-v2043/attempts/attempt-0594-measured.jsonl",
+    "globalIndex": 852,
+    "correlationId": "audio-campaign-517b27ccd7b642bf81de2f27ef6ded24",
+    "responseSha256": "a1b7eb2ee7a6aded8dda4e6cf30826f5afffb28a5597ee9389e91eb326d4e319",
+    "responseChars": 31
+  },
+  {
+    "case": "thesis/campaigns/worker-desktop-k3-p2p-full-audio-v2043/attempts/attempt-0589-measured.jsonl",
+    "globalIndex": 847,
+    "correlationId": "audio-campaign-5725327b2e7f495bbe5adfc8e7ace201",
+    "responseSha256": "a1b7eb2ee7a6aded8dda4e6cf30826f5afffb28a5597ee9389e91eb326d4e319",
+    "responseChars": 31
+  },
+  {
+    "case": "thesis/campaigns/worker-desktop-k3-p2p-full-audio-v2043/attempts/attempt-0619-measured.jsonl",
+    "globalIndex": 877,
+    "correlationId": "audio-campaign-e604894558d04af19ee8b4ca6b0e86f4",
+    "responseSha256": "a1b7eb2ee7a6aded8dda4e6cf30826f5afffb28a5597ee9389e91eb326d4e319",
+    "responseChars": 31
+  },
+  {
+    "case": "thesis/campaigns/worker-desktop-k3-p2p-full-audio-v2043/attempts/attempt-0604-measured.jsonl",
+    "globalIndex": 862,
+    "correlationId": "audio-campaign-10a7a37fd7c94a2ebafcb23f51576068",
+    "responseSha256": "a1b7eb2ee7a6aded8dda4e6cf30826f5afffb28a5597ee9389e91eb326d4e319",
+    "responseChars": 31
+  },
+  {
+    "case": "thesis/campaigns/worker-desktop-k3-p2p-full-audio-v2043/attempts/attempt-0608-measured.jsonl",
+    "globalIndex": 866,
+    "correlationId": "audio-campaign-7b1a5fc82c554de3870fa552b2afacf5",
+    "responseSha256": "a1b7eb2ee7a6aded8dda4e6cf30826f5afffb28a5597ee9389e91eb326d4e319",
+    "responseChars": 31
+  },
+  {
+    "case": "thesis/campaigns/worker-desktop-k3-p2p-full-audio-v2043/attempts/attempt-0633-measured.jsonl",
+    "globalIndex": 891,
+    "correlationId": "audio-campaign-7e7fc00d80f0415f86763cd3368c946c",
+    "responseSha256": "a1b7eb2ee7a6aded8dda4e6cf30826f5afffb28a5597ee9389e91eb326d4e319",
+    "responseChars": 31
+  },
+  {
+    "case": "thesis/campaigns/worker-desktop-k3-p2p-full-audio-v2043/attempts/attempt-0591-measured.jsonl",
+    "globalIndex": 849,
+    "correlationId": "audio-campaign-50cca5f51bd44f5dafd365c20c9c5115",
+    "responseSha256": "a1b7eb2ee7a6aded8dda4e6cf30826f5afffb28a5597ee9389e91eb326d4e319",
+    "responseChars": 31
+  },
+  {
+    "case": "thesis/campaigns/worker-desktop-k3-p2p-full-audio-v2043/attempts/attempt-0626-measured.jsonl",
+    "globalIndex": 884,
+    "correlationId": "audio-campaign-42b3a117a7aa4349bcdbbd673fba2f05",
+    "responseSha256": "a1b7eb2ee7a6aded8dda4e6cf30826f5afffb28a5597ee9389e91eb326d4e319",
+    "responseChars": 31
+  },
+  {
+    "case": "thesis/campaigns/worker-desktop-k3-p2p-full-audio-v2043/attempts/attempt-0635-measured.jsonl",
+    "globalIndex": 893,
+    "correlationId": "audio-campaign-65cdde2943ef484abeb1ce514183dc4d",
+    "responseSha256": "a1b7eb2ee7a6aded8dda4e6cf30826f5afffb28a5597ee9389e91eb326d4e319",
+    "responseChars": 31
+  },
+  {
+    "case": "thesis/campaigns/worker-desktop-k3-p2p-full-audio-v2043/attempts/attempt-0629-measured.jsonl",
+    "globalIndex": 887,
+    "correlationId": "audio-campaign-33397041913241728a31d5c7cd3bed42",
+    "responseSha256": "a1b7eb2ee7a6aded8dda4e6cf30826f5afffb28a5597ee9389e91eb326d4e319",
+    "responseChars": 31
+  },
+  {
+    "case": "thesis/campaigns/worker-desktop-k3-p2p-full-audio-v2043/attempts/attempt-0631-measured.jsonl",
+    "globalIndex": 889,
+    "correlationId": "audio-campaign-27da797c347f4d48a9b2e1c8ff853cb4",
+    "responseSha256": "a1b7eb2ee7a6aded8dda4e6cf30826f5afffb28a5597ee9389e91eb326d4e319",
+    "responseChars": 31
+  },
+  {
+    "case": "thesis/campaigns/worker-desktop-k3-p2p-full-audio-v2043/attempts/attempt-0632-measured.jsonl",
+    "globalIndex": 890,
+    "correlationId": "audio-campaign-6e73a321e7c043e4b50d088fdc3157bf",
+    "responseSha256": "a1b7eb2ee7a6aded8dda4e6cf30826f5afffb28a5597ee9389e91eb326d4e319",
+    "responseChars": 31
+  },
+  {
+    "case": "thesis/campaigns/worker-desktop-k3-p2p-full-audio-v2043/attempts/attempt-0628-measured.jsonl",
+    "globalIndex": 886,
+    "correlationId": "audio-campaign-9a1651f63b024b8095d4ecbf450c86b0",
+    "responseSha256": "a1b7eb2ee7a6aded8dda4e6cf30826f5afffb28a5597ee9389e91eb326d4e319",
+    "responseChars": 31
+  },
+  {
+    "case": "thesis/campaigns/worker-desktop-k3-p2p-full-audio-v2043/attempts/attempt-0630-measured.jsonl",
+    "globalIndex": 888,
+    "correlationId": "audio-campaign-4b103678a3ff4e00b00afce2f896f399",
+    "responseSha256": "a1b7eb2ee7a6aded8dda4e6cf30826f5afffb28a5597ee9389e91eb326d4e319",
+    "responseChars": 31
+  },
+  {
+    "case": "thesis/campaigns/worker-desktop-k3-p2p-full-audio-v2043/attempts/attempt-0617-measured.jsonl",
+    "globalIndex": 875,
+    "correlationId": "audio-campaign-acdb1630b28242c0a665b07c0e07e0e6",
+    "responseSha256": "a1b7eb2ee7a6aded8dda4e6cf30826f5afffb28a5597ee9389e91eb326d4e319",
+    "responseChars": 31
+  },
+  {
+    "case": "thesis/campaigns/worker-desktop-k3-p2p-full-audio-v2043/attempts/attempt-0593-measured.jsonl",
+    "globalIndex": 851,
+    "correlationId": "audio-campaign-5c522a5ab926488b91f245955a34ea3f",
+    "responseSha256": "a1b7eb2ee7a6aded8dda4e6cf30826f5afffb28a5597ee9389e91eb326d4e319",
+    "responseChars": 31
+  },
+  {
+    "case": "thesis/campaigns/worker-desktop-k3-p2p-full-audio-v2043/attempts/attempt-0639-measured.jsonl",
+    "globalIndex": 897,
+    "correlationId": "audio-campaign-af3382761b6f433eace2c96dea62f9e1",
+    "responseSha256": "a1b7eb2ee7a6aded8dda4e6cf30826f5afffb28a5597ee9389e91eb326d4e319",
+    "responseChars": 31
+  },
+  {
+    "case": "thesis/campaigns/worker-desktop-k3-p2p-full-audio-v2043/attempts/attempt-0602-measured.jsonl",
+    "globalIndex": 860,
+    "correlationId": "audio-campaign-dee730fd66694d0f92591e98a8a96a18",
+    "responseSha256": "a1b7eb2ee7a6aded8dda4e6cf30826f5afffb28a5597ee9389e91eb326d4e319",
+    "responseChars": 31
+  },
+  {
+    "case": "thesis/campaigns/worker-desktop-k3-p2p-full-audio-v2043/attempts/attempt-0620-measured.jsonl",
+    "globalIndex": 878,
+    "correlationId": "audio-campaign-86f9569abafe46a1b990f8d66617672e",
+    "responseSha256": "a1b7eb2ee7a6aded8dda4e6cf30826f5afffb28a5597ee9389e91eb326d4e319",
+    "responseChars": 31
+  },
+  {
+    "case": "thesis/campaigns/worker-desktop-k3-p2p-full-audio-v2043/attempts/attempt-0605-measured.jsonl",
+    "globalIndex": 863,
+    "correlationId": "audio-campaign-0d3a2bb4c3f14ebd946d4c677711e5f3",
+    "responseSha256": "a1b7eb2ee7a6aded8dda4e6cf30826f5afffb28a5597ee9389e91eb326d4e319",
+    "responseChars": 31
+  },
+  {
+    "case": "thesis/campaigns/worker-desktop-k3-p2p-full-audio-v2043/attempts/attempt-0623-measured.jsonl",
+    "globalIndex": 881,
+    "correlationId": "audio-campaign-6bda0cdb9822463daab9a38e4f4a1a0d",
+    "responseSha256": "a1b7eb2ee7a6aded8dda4e6cf30826f5afffb28a5597ee9389e91eb326d4e319",
+    "responseChars": 31
+  },
+  {
+    "case": "thesis/campaigns/worker-desktop-k3-p2p-full-audio-v2043/attempts/attempt-0601-measured.jsonl",
+    "globalIndex": 859,
+    "correlationId": "audio-campaign-ed05d1ee6858472495023231825ae431",
+    "responseSha256": "a1b7eb2ee7a6aded8dda4e6cf30826f5afffb28a5597ee9389e91eb326d4e319",
+    "responseChars": 31
+  },
+  {
+    "case": "thesis/campaigns/worker-desktop-k3-p2p-full-audio-v2043/attempts/attempt-0609-measured.jsonl",
+    "globalIndex": 867,
+    "correlationId": "audio-campaign-3f93d88ccce8462a8576440d850b0c62",
+    "responseSha256": "a1b7eb2ee7a6aded8dda4e6cf30826f5afffb28a5597ee9389e91eb326d4e319",
+    "responseChars": 31
+  },
+  {
+    "case": "thesis/campaigns/worker-desktop-k3-p2p-full-audio-v2043/attempts/attempt-0641-measured.jsonl",
+    "globalIndex": 899,
+    "correlationId": "audio-campaign-50a6d54691f94710b08396c7016ef775",
+    "responseSha256": "a1b7eb2ee7a6aded8dda4e6cf30826f5afffb28a5597ee9389e91eb326d4e319",
+    "responseChars": 31
+  },
+  {
+    "case": "thesis/campaigns/worker-desktop-k3-p2p-full-audio-v2043/attempts/attempt-0600-measured.jsonl",
+    "globalIndex": 858,
+    "correlationId": "audio-campaign-8d0b111263944fb5b4dde30d21245547",
+    "responseSha256": "a1b7eb2ee7a6aded8dda4e6cf30826f5afffb28a5597ee9389e91eb326d4e319",
+    "responseChars": 31
+  },
+  {
+    "case": "thesis/campaigns/worker-desktop-k3-p2p-full-audio-v2043/attempts/attempt-0638-measured.jsonl",
+    "globalIndex": 896,
+    "correlationId": "audio-campaign-1f74617f4f994f42a1bf9895b7765468",
+    "responseSha256": "a1b7eb2ee7a6aded8dda4e6cf30826f5afffb28a5597ee9389e91eb326d4e319",
+    "responseChars": 31
+  },
+  {
+    "case": "thesis/campaigns/worker-desktop-k3-p2p-full-audio-v2043/attempts/attempt-0587-measured.jsonl",
+    "globalIndex": 845,
+    "correlationId": "audio-campaign-c322604621c54d48b0ae507dcc237475",
+    "responseSha256": "a1b7eb2ee7a6aded8dda4e6cf30826f5afffb28a5597ee9389e91eb326d4e319",
+    "responseChars": 31
+  },
+  {
+    "case": "thesis/campaigns/worker-desktop-k3-p2p-full-audio-v2043/attempts/attempt-0618-measured.jsonl",
+    "globalIndex": 876,
+    "correlationId": "audio-campaign-6340b5ff38b9467c8c8a18a1cc63d86e",
+    "responseSha256": "a1b7eb2ee7a6aded8dda4e6cf30826f5afffb28a5597ee9389e91eb326d4e319",
+    "responseChars": 31
+  },
+  {
+    "case": "thesis/campaigns/worker-desktop-k3-p2p-full-audio-v2043/attempts/attempt-0610-measured.jsonl",
+    "globalIndex": 868,
+    "correlationId": "audio-campaign-6fb87760dd1e47fd86be05186f1137ad",
+    "responseSha256": "a1b7eb2ee7a6aded8dda4e6cf30826f5afffb28a5597ee9389e91eb326d4e319",
+    "responseChars": 31
+  },
+  {
+    "case": "thesis/campaigns/worker-desktop-k3-p2p-full-audio-v2043/attempts/attempt-0642-measured.jsonl",
+    "globalIndex": 900,
+    "correlationId": "audio-campaign-482ca67f7ec14538b8f829e513a29bb0",
+    "responseSha256": "a1b7eb2ee7a6aded8dda4e6cf30826f5afffb28a5597ee9389e91eb326d4e319",
+    "responseChars": 31
+  },
+  {
+    "case": "thesis/campaigns/worker-desktop-k3-p2p-full-audio-v2043/attempts/attempt-0611-measured.jsonl",
+    "globalIndex": 869,
+    "correlationId": "audio-campaign-96dc02e48a43452593194ea012e570bb",
+    "responseSha256": "a1b7eb2ee7a6aded8dda4e6cf30826f5afffb28a5597ee9389e91eb326d4e319",
+    "responseChars": 31
+  },
+  {
+    "case": "thesis/campaigns/worker-desktop-k3-p2p-full-audio-v2043/attempts/attempt-0588-measured.jsonl",
+    "globalIndex": 846,
+    "correlationId": "audio-campaign-0e64ea006827472bafa8495e00d6f8a2",
+    "responseSha256": "a1b7eb2ee7a6aded8dda4e6cf30826f5afffb28a5597ee9389e91eb326d4e319",
+    "responseChars": 31
+  },
+  {
+    "case": "thesis/campaigns/worker-desktop-k3-p2p-full-audio-v2043/attempts/attempt-0616-measured.jsonl",
+    "globalIndex": 874,
+    "correlationId": "audio-campaign-fc68b5dca1ce4e8b9834de83f20cf421",
+    "responseSha256": "a1b7eb2ee7a6aded8dda4e6cf30826f5afffb28a5597ee9389e91eb326d4e319",
+    "responseChars": 31
+  },
+  {
+    "case": "thesis/campaigns/worker-desktop-k3-p2p-full-audio-v2043/attempts/attempt-0596-measured.jsonl",
+    "globalIndex": 854,
+    "correlationId": "audio-campaign-156a98a6c0e64979898fbd8cde5ee407",
+    "responseSha256": "a1b7eb2ee7a6aded8dda4e6cf30826f5afffb28a5597ee9389e91eb326d4e319",
+    "responseChars": 31
+  },
+  {
+    "case": "thesis/campaigns/worker-desktop-k3-p2p-full-audio-v2043/attempts/attempt-0592-measured.jsonl",
+    "globalIndex": 850,
+    "correlationId": "audio-campaign-a506d0a87c3f44ea972f3d47ce6d6213",
+    "responseSha256": "a1b7eb2ee7a6aded8dda4e6cf30826f5afffb28a5597ee9389e91eb326d4e319",
+    "responseChars": 31
+  },
+  {
+    "case": "thesis/campaigns/worker-desktop-k3-p2p-full-audio-v2043/attempts/attempt-0612-measured.jsonl",
+    "globalIndex": 870,
+    "correlationId": "audio-campaign-5eeecd06dc6c47d2816b512c6fbd5e20",
+    "responseSha256": "a1b7eb2ee7a6aded8dda4e6cf30826f5afffb28a5597ee9389e91eb326d4e319",
+    "responseChars": 31
+  },
+  {
+    "case": "thesis/campaigns/worker-desktop-k3-p2p-full-audio-v2043/attempts/attempt-0637-measured.jsonl",
+    "globalIndex": 895,
+    "correlationId": "audio-campaign-c78062014a7440efa19183daab7164f9",
+    "responseSha256": "a1b7eb2ee7a6aded8dda4e6cf30826f5afffb28a5597ee9389e91eb326d4e319",
+    "responseChars": 31
+  },
+  {
+    "case": "thesis/campaigns/worker-desktop-k3-p2p-full-audio-v2043/attempts/attempt-0615-measured.jsonl",
+    "globalIndex": 873,
+    "correlationId": "audio-campaign-d32c6403b06940e5bd94fda7da22d8c9",
+    "responseSha256": "a1b7eb2ee7a6aded8dda4e6cf30826f5afffb28a5597ee9389e91eb326d4e319",
+    "responseChars": 31
+  },
+  {
+    "case": "thesis/campaigns/worker-desktop-k3-p2p-full-audio-v2043/attempts/attempt-0597-measured.jsonl",
+    "globalIndex": 855,
+    "correlationId": "audio-campaign-c7a3973debd54ab9b44df54ae7655699",
+    "responseSha256": "a1b7eb2ee7a6aded8dda4e6cf30826f5afffb28a5597ee9389e91eb326d4e319",
+    "responseChars": 31
+  },
+  {
+    "case": "thesis/campaigns/worker-desktop-k3-p2p-full-audio-v2043/attempts/attempt-0622-measured.jsonl",
+    "globalIndex": 880,
+    "correlationId": "audio-campaign-37fd5c68b1a4496e96a01695747cfbe3",
+    "responseSha256": "a1b7eb2ee7a6aded8dda4e6cf30826f5afffb28a5597ee9389e91eb326d4e319",
+    "responseChars": 31
+  },
+  {
+    "case": "thesis/campaigns/worker-desktop-k3-p2p-full-audio-v2043/attempts/attempt-0624-measured.jsonl",
+    "globalIndex": 882,
+    "correlationId": "audio-campaign-437ef1c114cc4acfba2e2a6cf36503d5",
+    "responseSha256": "a1b7eb2ee7a6aded8dda4e6cf30826f5afffb28a5597ee9389e91eb326d4e319",
+    "responseChars": 31
+  },
+  {
+    "case": "thesis/campaigns/worker-desktop-k3-p2p-full-audio-v2043/attempts/attempt-0586-measured.jsonl",
+    "globalIndex": 844,
+    "correlationId": "audio-campaign-c5abf1623eb04c66ba6ffe06c5948cd3",
+    "responseSha256": "a1b7eb2ee7a6aded8dda4e6cf30826f5afffb28a5597ee9389e91eb326d4e319",
+    "responseChars": 31
+  },
+  {
+    "case": "thesis/campaigns/worker-desktop-k3-p2p-full-audio-v2043/attempts/attempt-0621-measured.jsonl",
+    "globalIndex": 879,
+    "correlationId": "audio-campaign-fb598b747afb4579932b1760aeda7e98",
+    "responseSha256": "a1b7eb2ee7a6aded8dda4e6cf30826f5afffb28a5597ee9389e91eb326d4e319",
+    "responseChars": 31
+  },
+  {
+    "case": "thesis/campaigns/worker-desktop-k3-p2p-full-audio-v2043/attempts/attempt-0598-measured.jsonl",
+    "globalIndex": 856,
+    "correlationId": "audio-campaign-c8d1fcdd28a44a9fbfebb9769bc0e41c",
+    "responseSha256": "a1b7eb2ee7a6aded8dda4e6cf30826f5afffb28a5597ee9389e91eb326d4e319",
+    "responseChars": 31
+  },
+  {
+    "case": "thesis/campaigns/worker-desktop-k3-p2p-full-audio-v2043/attempts/attempt-0599-measured.jsonl",
+    "globalIndex": 857,
+    "correlationId": "audio-campaign-555f109b104e46dc800cf0ee30171c5c",
+    "responseSha256": "a1b7eb2ee7a6aded8dda4e6cf30826f5afffb28a5597ee9389e91eb326d4e319",
+    "responseChars": 31
+  },
+  {
+    "case": "thesis/campaigns/worker-desktop-k3-p2p-full-audio-v2043/attempts/attempt-0595-measured.jsonl",
+    "globalIndex": 853,
+    "correlationId": "audio-campaign-842f2dc6663244baba9f6e87f9d2ec17",
+    "responseSha256": "a1b7eb2ee7a6aded8dda4e6cf30826f5afffb28a5597ee9389e91eb326d4e319",
+    "responseChars": 31
+  },
+  {
+    "case": "thesis/campaigns/worker-desktop-k3-p2p-full-audio-v2043/attempts/attempt-0607-measured.jsonl",
+    "globalIndex": 865,
+    "correlationId": "audio-campaign-10a014b0ac7e49749e45189a40df2ea2",
+    "responseSha256": "a1b7eb2ee7a6aded8dda4e6cf30826f5afffb28a5597ee9389e91eb326d4e319",
+    "responseChars": 31
+  },
+  {
+    "case": "thesis/campaigns/worker-desktop-k3-p2p-full-audio-v2043/attempts/attempt-0625-measured.jsonl",
+    "globalIndex": 883,
+    "correlationId": "audio-campaign-d1b5620fabc540bdb9b3a54eeb2c6497",
+    "responseSha256": "a1b7eb2ee7a6aded8dda4e6cf30826f5afffb28a5597ee9389e91eb326d4e319",
+    "responseChars": 31
+  },
+  {
+    "case": "thesis/campaigns/worker-desktop-k3-p2p-full-audio-v2043/attempts/attempt-0627-measured.jsonl",
+    "globalIndex": 885,
+    "correlationId": "audio-campaign-9c0d172174e646ac836e2b1d0441e35b",
+    "responseSha256": "a1b7eb2ee7a6aded8dda4e6cf30826f5afffb28a5597ee9389e91eb326d4e319",
+    "responseChars": 31
+  },
+  {
+    "case": "thesis/campaigns/worker-desktop-k3-p2p-full-audio-v2043/attempts/attempt-0603-measured.jsonl",
+    "globalIndex": 861,
+    "correlationId": "audio-campaign-563af2e337e143039f87816dc1df53ea",
+    "responseSha256": "a1b7eb2ee7a6aded8dda4e6cf30826f5afffb28a5597ee9389e91eb326d4e319",
+    "responseChars": 31
+  },
+  {
+    "case": "thesis/campaigns/worker-desktop-k3-p2p-full-audio-v2043/attempts/attempt-0606-measured.jsonl",
+    "globalIndex": 864,
+    "correlationId": "audio-campaign-b4b049fefa47489b8435dff09c091be1",
+    "responseSha256": "a1b7eb2ee7a6aded8dda4e6cf30826f5afffb28a5597ee9389e91eb326d4e319",
+    "responseChars": 31
+  },
+  {
+    "case": "thesis/campaigns/worker-desktop-k3-p2p-full-audio-v2043/attempts/attempt-0636-measured.jsonl",
+    "globalIndex": 894,
+    "correlationId": "audio-campaign-9c8fa845e2fa491788918f3955ab281d",
+    "responseSha256": "a1b7eb2ee7a6aded8dda4e6cf30826f5afffb28a5597ee9389e91eb326d4e319",
+    "responseChars": 31
+  },
+  {
+    "case": "thesis/campaigns/worker-desktop-k3-p2p-full-audio-v2043/attempts/attempt-0614-measured.jsonl",
+    "globalIndex": 872,
+    "correlationId": "audio-campaign-459eab49f4b94b2593e7be24da1d2779",
+    "responseSha256": "a1b7eb2ee7a6aded8dda4e6cf30826f5afffb28a5597ee9389e91eb326d4e319",
+    "responseChars": 31
+  },
+  {
+    "case": "thesis/campaigns/worker-desktop-k3-p2p-full-audio-v2043/attempts/attempt-0640-measured.jsonl",
+    "globalIndex": 898,
+    "correlationId": "audio-campaign-c0edd6f96c084f53ac25af239a9eddc1",
+    "responseSha256": "a1b7eb2ee7a6aded8dda4e6cf30826f5afffb28a5597ee9389e91eb326d4e319",
+    "responseChars": 31
+  }
+]

@@ -1,0 +1,139 @@
+{
+  "at": "2026-10-21T21:59:55.708076+00:00",
+  "status": "FRESH15_NATIVE_CAPACITY_ADMITTED_AND_FIRST451_CORRECT_CASE_WAV_PHYSICALLY_VERIFIED",
+  "cohort": "V2296",
+  "manifestSha256": "9adbf9ba3a7ec0948a087edad3655cf94ee344b3a2371a78d15f188f44150d42",
+  "nativeGoalThread": "01a112a5-d6bb-74e2-bf7c-ace73cb513b5",
+  "nativeGoalStatus": "active",
+  "nativeGoalBudget": null,
+  "warmups": {
+    "attempted": 15,
+    "correct": 15,
+    "failed": 0,
+    "excludedFromMeasured": true,
+    "actualLocalNativeJoins": 30,
+    "actualRemoteNativeJoins": 15,
+    "nativeJoinGaps": 0
+  },
+  "capacity": {
+    "at": "2026-10-21T21:55:55.789156+00:00",
+    "status": "REMOTE_NATIVE_AND_CAPACITY_PROOF_READY_LOCAL_RUNNER_GATE_STILL_ENFORCED",
+    "warmups": 15,
+    "correct": 15,
+    "failed": 0,
+    "newMeasuredObserved": 0,
+    "observedWarmupP95Ms": 59144.6501161,
+    "estimator": "Hyndman-Fan Type7",
+    "forecastReferenceSeconds": 60.3053512957,
+    "remaining450ForecastSeconds": 33044.889699677995,
+    "availableWindows": {
+      "conditionConservativeRemainingSeconds": 38189.784156,
+      "providerRemainingMinus180Seconds": 37940.773996,
+      "rootRemainingMinus2400Seconds": 39812.244156,
+      "conditionAccountingRemainingMinus180Seconds": 51003.662258634
+    },
+    "capacityAdmitted": true,
+    "receiver": {
+      "pid": 1820863,
+      "state": "S",
+      "startTicks": 37439818
+    },
+    "physicalSourceCopies": [
+      {
+        "path": "thesis/campaigns/worker-desktop-k1-orca-relayed-http-remaining450-v2296/provider-warmup-source/voice-stages.jsonl",
+        "bytes": 72825,
+        "sha256": "655952091afad5f51dc66043ccbfdfe1ca10c2c8746055e987ea714f3955612e",
+        "sourceOffset": 0,
+        "sourceThrough": 72825
+      },
+      {
+        "path": "thesis/campaigns/worker-desktop-k1-orca-relayed-http-remaining450-v2296/provider-warmup-source/actual-provider-bindings.jsonl",
+        "bytes": 12116,
+        "sha256": "6cc4bca81dd9163ece6e4250c9e165845331f983e58c1caaefd746629df07f52",
+        "sourceOffset": 0,
+        "sourceThrough": 12116
+      },
+      {
+        "path": "thesis/campaigns/worker-desktop-k1-orca-relayed-http-remaining450-v2296/provider-warmup-source/receiver-identity.json",
+        "bytes": 1373,
+        "sha256": "7e48f6c187888b6b777b3052eed4b537cce524a46577aee71e449f66d68f8e11",
+        "sourceOffset": 0,
+        "sourceThrough": 1373
+      }
+    ],
+    "localGate": "Requester runner independently enforces actual local STT/LLM binding/native proof before first451",
+    "newInferenceByFinalizer": 0,
+    "sameRemoteOperationSendCount": 1
+  },
+  "firstNewMeasured": {
+    "globalIndex": 451,
+    "case": "thesis/campaigns/worker-desktop-k1-orca-relayed-http-remaining450-v2296/attempts/attempt-0016-measured.jsonl",
+    "caseSha256": "1bc9c08c7ebdd40ff89185dfed3f260e812421de283c6ac45f3fbd852d4bebb1",
+    "caseBytes": 4820,
+    "status": "completed_correct",
+    "flowDurationMs": 50832.801262,
+    "correctness": {
+      "all_expected": true,
+      "assistant_reply_matches_expected_words": true,
+      "transcript_matches_reference_words": true
+    },
+    "audio": "thesis/campaigns/worker-desktop-k1-orca-relayed-http-remaining450-v2296/audio/ae3a557525055e3e930e9e0091aa52cd032c20865b5dc047f385efa08426878f.wav",
+    "audioSha256": "ae3a557525055e3e930e9e0091aa52cd032c20865b5dc047f385efa08426878f",
+    "audioBytes": 30764,
+    "wav": {
+      "frames": 15360,
+      "sampleRate": 22050,
+      "channels": 1,
+      "sampleWidthBytes": 2
+    }
+  },
+  "epochMeasuredSnapshot": {
+    "attempted": 4,
+    "correct": 4,
+    "failed": 0,
+    "incorrect": 0,
+    "planned": 450
+  },
+  "conditionCountsSnapshot": {
+    "attempted": 454,
+    "correct": 453,
+    "failed": 1,
+    "incorrect": 0,
+    "remaining": 446,
+    "target": 900
+  },
+  "requesterActors": [
+    {
+      "pid": 3965950,
+      "startTicks": 139740362,
+      "state": "S"
+    },
+    {
+      "pid": 3965978,
+      "startTicks": 139740616,
+      "state": "S"
+    },
+    {
+      "pid": 3965951,
+      "startTicks": 139740363,
+      "state": "S"
+    }
+  ],
+  "copier": {
+    "receipt": "thesis/campaigns/worker-desktop-k1-orca-relayed-http-remaining450-v2296/receipts/000018.json",
+    "receiptSha256": "795cd48892f2a0d501b041613fc897581c2ff98037bfc096d4e98eee02a87948",
+    "cases": 19,
+    "WAV": 19,
+    "errors": [],
+    "freeBytes": 3413602304
+  },
+  "nextBoundedCheckUtc": "2026-10-21T22:04:55.708076+00:00",
+  "earlierCheck": "actual failure/terminal/guard; no relaunch or source alteration",
+  "postterminalHelper": "thesis/harness/finish_k1_http_epoch_v2303.py (prepared only; actual terminal and same W actors natural retirement required)",
+  "newOrcaWorkers": 0,
+  "noHistoricalFailureRetry": true,
+  "noLatencyPooling": true,
+  "phoneDelegatedToExistingWorker": true,
+  "methodologyMirror": "thesis/methodology/owner-requirements-20261021-1f24fe5b.md",
+  "receiptWriterNote": "Existing copier-owned physical admission copies reconciled by exact SHA; first local record assembly stopped on an exists assertion only, not a SUT failure, no copy overwritten and no inference repeated."
+}

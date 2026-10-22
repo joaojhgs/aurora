@@ -1,0 +1,14 @@
+{
+  "at": "2026-10-20T03:04:06.454668+00:00",
+  "host": "personal.skyron-server",
+  "expectedHistoricalWaydroidSerial": "192.168.240.112:5555",
+  "adbExecutable": "/usr/bin/adb",
+  "daemonStartedOrReset": false,
+  "deviceConnectOrInstall": false,
+  "physicalAlias": "Same Personal desktop as inference provider; shared CPU/GPU/RAM/disk/network",
+  "modelOrAppTraffic": 0,
+  "existingAdbServerEndpoint": "tcp:localhost:5037",
+  "adbHostStatus": "OKAY",
+  "devicesLong": "",
+  "status": "historical_binding_not_listed_in_existing_server_device_state_unknown"
+}

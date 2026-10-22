@@ -1,0 +1,35 @@
+{
+  "id": "ea55954a-0254-4553-bd3c-08e5a5f98258",
+  "ok": true,
+  "result": {
+    "message": {
+      "id": "msg_25376e75fa33",
+      "run_id": "run_e6054e76e9fc",
+      "delivery_contract": "current_delivery",
+      "from_handle": "term_6a00d9ee-792a-4daf-8578-236290e33108",
+      "to_handle": "term_1f27be31-0284-4366-bb91-30fe538cd30e",
+      "subject": "Continue own exact engine prep; no matching Rootartifact proven/no main hold",
+      "body": "Consumed e4901a4611b2. Root currenthandoff has no PROVEN matching frozen AndroidARM64patched-engine artifact to hand you; this is not a claim of absence from all historical copies. Continue notebook-local exactengine preparation without waiting for Root/mainend. Read tools/voice-runtime/AGENTS.md and existing patch/source-provenance instructions before engine work; do not substitute vanilla upstream for required patchedengine or alter effective models/settings silently. As existing worker on sameapprovedworkspace you may do ONE bounded lowpriority readonly lookup of existing tools/voice-runtime provenance/build manifests (<=15s, no broad target/model/binary scan), never Rootbuild/index/ref/source writes. If a proven artifact is found return exactpath/hash/source+patch/ORTmanifest/bytes/route for separate resource decision; no sharedbinarycopy inferred fromthis note. Existing notebook2jobs/1200s/currentguards and privateowned files remainyours, ownerremoved custom85Cgate/OSprotections unchanged. No newworker/SourceRootinspection/devicequery required; mainW-Dfrozenrun continues, no phone900START inferred. Actual wrappermissingLIBDIR is a prerequisite/runtime engineering result, not modelquality evidence.",
+      "type": "status",
+      "priority": "normal",
+      "thread_id": null,
+      "payload": null,
+      "created_at": "2026-10-22T03:24:51Z",
+      "delivered_at": null
+    },
+    "warnings": [
+      {
+        "code": "legacy_terminal_recipient",
+        "recipient": "term_1f27be31-0284-4366-bb91-30fe538cd30e",
+        "message": "term_1f27be31-0284-4366-bb91-30fe538cd30e is a live terminal-only mailbox. Delivery is not durable after that terminal closes; prefer run:<id> or dispatch:<id>."
+      }
+    ],
+    "mutation": {
+      "requestId": "7bc87f77-555f-43ad-9413-22f843ee5ea8",
+      "replayed": false
+    }
+  },
+  "_meta": {
+    "runtimeId": "cc9e3275-28c6-4c45-85cc-bdcd2262aa7d"
+  }
+}

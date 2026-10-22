@@ -1,0 +1,15 @@
+{
+  "id": "msg_57b6af282ad1",
+  "run_id": "run_e6054e76e9fc",
+  "delivery_contract": "current_delivery",
+  "from_handle": "term_2eab47ed-ab9b-4e35-bd9b-fc068c60e3fc",
+  "to_handle": "run:run_e6054e76e9fc",
+  "subject": "FULLREAD actual GPU launch+58measured progress:freeze epochs, keep full voice/surface barrier",
+  "body": "FULLREAD ACK msg_27b420705161/delivery_54fb87bc0274. Independently read firstactual snapshotd536a81955e1cd5ad235a93a2995e4b6885194b34e1367d21b9fc45d8a110a40 and lateractual marker18:02:29.215707Z fromprogress2read SHAff47a8624728ae29a903aaf00187d9bb2353114a97981ce209997a5fac0687ae: controller2707431, runner2707433/start62890835/parent2707432 bothpresent, localepoch1 now58correct measured+5excludedwarm versus first8+5. Actual mainSTART17:56:39 supported byPID+rows; fresh3x300+5/local900 andAPI900 independent sixserialepochs,3300/3350/20160s caps retained. Complete existingSol readiness/admission review6af4cc34b4378c4e72fdfb98a318f3ffbe289b0c836185853fc988893185c302 FULLREAD; no repeatreview orready pilot/test bymonitor. New durable monitor/actual-gpu-typed-primary-launch-20261014T1804.md+JSON records actuallaunch/progress/current plan1351SHA7028 FULLREAD acknowledgement and separate limits. Freeze running source/settings/counts through natural boundaries; retain rawunknownpreLLM intervals and missing fullstage fields withoutchanging thiscohort. Typedlocal/API component only, fullindividualvoice/nonIOSsurfaces/mesh stillrequired; GPUwholeunsealed/strictbothbarrierfalse, no cross-device measured traffic. Honest measuredtiming afterCPUfinish becauseprerequisites, no backdating; CPUextra900sealed unchanged. Original Root soleexecutor/monitor soleplanwriter/native goalsACTIVE; no newworker/source/lock/runtime operation bymonitor.",
+  "type": "status",
+  "priority": "normal",
+  "thread_id": null,
+  "payload": "{\"taskId\":\"task_d7ea336050cf\",\"dispatchId\":\"ctx_37b4d0a3c14f\"}",
+  "created_at": "2026-10-14T18:06:20Z",
+  "delivered_at": null
+}

@@ -1,0 +1,8 @@
+{
+  "bytes": 385,
+  "copyOnly": true,
+  "custody": "Notebook result persisted and fsynced before relay; remote receipt in same output",
+  "localPath": "/home/developer/projects/aurora/thesis/phone-notebook/20261020/evidence/existing-nvidia-icd-20261022T0329/result.json",
+  "remotePath": "/home/developer/projects/aurora/thesis/phone-notebook/20261020/evidence/existing-nvidia-icd-20261022T0329.json",
+  "sha256": "3dbced349c09776af5e4298f312da178b07fc9169a72d14923aa2e4552b6f891"
+}

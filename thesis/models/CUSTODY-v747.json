@@ -1,0 +1,10 @@
+{
+  "schema": "aurora.thesis.provenance-custody.v1",
+  "at": "2026-10-15T23:08:12.944920+00:00",
+  "source": ".git/aurora-handoff-import-20261006/model-provenance-readonly-v741/REPORT.json",
+  "canonical": "thesis/models/provenance-v741.json",
+  "bytes": 9093,
+  "sha256": "16f8d85f21641da3fa77eed5b862083f3793c0d3fba4aca03005257c5e7dea19",
+  "weightsCopiedOrRehashed": false,
+  "licenseClaims": "Only locally retained evidence in source; missing licenses/build source flags explicitly unresolved; no package-version-to-native-build equivalence inference."
+}

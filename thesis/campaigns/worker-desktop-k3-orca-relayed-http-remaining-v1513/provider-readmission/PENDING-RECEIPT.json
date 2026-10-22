@@ -1,0 +1,41 @@
+{
+  "at": "2026-10-18T14:03:52.546921+00:00",
+  "status": "PENDING_ORCA_TERMINAL_PROMPT_NO_READMISSION_RESULT_NO_LAUNCH",
+  "requestId": "cdac7533-7309-4015-be6f-69bae4a8f0ee",
+  "originalTerminal": "term_d5651d8d-58e2-4b38-85e2-51c668cc933c",
+  "incarnation": "034ff933-61a3-4c74-b5ad-98a75e8ac21c",
+  "cursor": "47858",
+  "supportedSameIdRetryCount": 1,
+  "freshResends": 0,
+  "lastReadNewOutputLines": 0,
+  "providerAbsentInferred": false,
+  "newModelRequests": 0,
+  "providerReservation": "HELD",
+  "copies": [
+    {
+      "path": "thesis/campaigns/worker-desktop-k3-orca-relayed-http-remaining-v1513/provider-readmission/SHOW-FENCE.json",
+      "bytes": 1307,
+      "sha256": "e0dfb83e644ae2eaeec21f827fe9be4db68c308b58886919b11e4b4fb4438927"
+    },
+    {
+      "path": "thesis/campaigns/worker-desktop-k3-orca-relayed-http-remaining-v1513/provider-readmission/SEND.json",
+      "bytes": 3249,
+      "sha256": "4f1426dc15a79d5403d07330a7cda13fda97ca8503b8624f7e4be704ab18a6a2"
+    },
+    {
+      "path": "thesis/campaigns/worker-desktop-k3-orca-relayed-http-remaining-v1513/provider-readmission/RETRY-SAME.json",
+      "bytes": 3465,
+      "sha256": "c162677636e47bdeb60060d40f9a834ff97c937ba8997ff11c8dc5a1d87047d5"
+    },
+    {
+      "path": "thesis/campaigns/worker-desktop-k3-orca-relayed-http-remaining-v1513/provider-readmission/READ-RECONCILE.json",
+      "bytes": 484,
+      "sha256": "a0ee38eda7212a847838d967dddf3ae82c3aa080cf32b8eee3d24f1e0c35cf9b"
+    },
+    {
+      "path": "thesis/campaigns/worker-desktop-k3-orca-relayed-http-remaining-v1513/provider-readmission/REQUEST-STATE.json",
+      "bytes": 753,
+      "sha256": "43537be509a08065e96fb549a42a4b8a474fb9e75c91cbe42639fcfa50c5d977"
+    }
+  ]
+}

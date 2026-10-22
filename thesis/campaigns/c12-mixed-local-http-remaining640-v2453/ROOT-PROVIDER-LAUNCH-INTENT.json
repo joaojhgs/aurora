@@ -1,0 +1,25 @@
+{
+  "at": "2026-10-22T11:08:01.630806+00:00",
+  "commandPath": "/home/developer/projects/aurora/.git/aurora-handoff-import-20261006/c12-remaining640-prepare-launch-v2453-command.txt",
+  "commandSha256": "3381062f492b319a6afda0e90f03dfd676b3c7d11b49b8fe83dbbb9fef9b0279",
+  "maximumProviderPopen": 1,
+  "terminal": "term_d5651d8d-58e2-4b38-85e2-51c668cc933c",
+  "incarnation": "034ff933-61a3-4c74-b5ad-98a75e8ac21c",
+  "sameOrcaRun": "run_e6054e76e9fc",
+  "newWorker": false,
+  "sourceHashes": {
+    "local_composition.py": "aaf9585ad24429c44ea5ed78b00a7ad49369f324528f901ac46a56eae9b22ba0",
+    "local_producer.py": "05b97cb34a0caa0695c160ef2fe954a8e2adb8f6f51e057229f8b633f5f9e762",
+    "campaign.py": "869090e10d905852dfbdfe626bbe2256c01f71ab5cd89148690cfecc02a4e366",
+    "stage_adapter.py": "f678712c75a50146194ccb34331fab8d995f057461e565be99be8d69c2b364a6",
+    "warmup_gate.py": "98d8998a11ebf56f5e110c6c4185e1ec3dbe1f1b37f77b875a27d7a9ff422746",
+    "requester_controller.py": "95f2b7f33e18d33532538cb8e7087e27809bb88cfc511ca4f2fb66f3d3e47a53",
+    "collect_pair.py": "f7efcd8d6bddb41a5322c9e5039a6ef4274d4cd386354dc1545ba0320035f38d",
+    "queue_observer.py": "a57ef99e9c48bd7442068d5ea8f8bee016141fbc5f4efd8f9a7e78a1a5631afb",
+    "provider_controller.py": "fa94acde611d40061d4aa0dcd647c5e66f1c5315ca0129d615c3ff585dee87b5",
+    "paired_case.py": "0aa71849448d2f046a18defe59a805de6973b8df56d0fc22e3626cd5ed1d7da6",
+    "k3_composition.py": "777bfb6abf34a1485a38c1076c86a06776de4017f1f27715b326403aba15effa",
+    "prepare_and_launch.py": "3e6ed76441ff60a8d37149e27866a1af6a4c2a9bc84df4cb7322e99529fcc0d0"
+  },
+  "sourceReleaseVerified": true
+}

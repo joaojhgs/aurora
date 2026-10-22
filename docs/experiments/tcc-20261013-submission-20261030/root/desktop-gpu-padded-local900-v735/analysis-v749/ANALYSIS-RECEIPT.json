@@ -1,0 +1,39 @@
+{
+  "schema": "aurora.saved-analysis-command.v749",
+  "at": "2026-10-15T23:15:32.474933+00:00",
+  "command": [
+    "/home/developer/projects/aurora/.venv/bin/python",
+    "thesis/analysis/native_span_metrics_v2.py",
+    "--history",
+    "docs/experiments/tcc-20261013-submission-20261030/root/desktop-gpu-padded-local900-v735/NATIVE-STAGE-CASE-HISTORY.json",
+    "--output-dir",
+    "docs/experiments/tcc-20261013-submission-20261030/root/desktop-gpu-padded-local900-v735/analysis-v749",
+    "--cohort",
+    "aurora-padded-local900-v735-partial",
+    "--expected-measured",
+    "274",
+    "--excluded-warmups",
+    "15",
+    "--receiver-pid",
+    "3295224"
+  ],
+  "python": "3.11.17 (main, Oct  3 2026, 01:03:29) [Clang 22.1.3 ]",
+  "exitCode": 0,
+  "durationSeconds": 0.12398717796895653,
+  "analysisSourceSHA256": "b8fc433bae6e941bd8829df1fa65a5df42af94f2a45d1f3e7174aca8767a7932",
+  "reviewSHA256": "b2b80a535f7baa6790c0069696ef5647d7e029ea25177b28d86aee17eaa5c7ef",
+  "newMeasuredRequests": 0,
+  "rawZipAuditReplayed": false,
+  "outputs": [
+    {
+      "path": "docs/experiments/tcc-20261013-submission-20261030/root/desktop-gpu-padded-local900-v735/analysis-v749/NATIVE-SPAN-METRICS-v2.json",
+      "bytes": 3057,
+      "sha256": "738ba01d9cc2da0a8c88f1d5d3a385bf68072c313ca97bf7193c6917e69e1be5"
+    },
+    {
+      "path": "docs/experiments/tcc-20261013-submission-20261030/root/desktop-gpu-padded-local900-v735/analysis-v749/native-span-durations-v2.csv",
+      "bytes": 325744,
+      "sha256": "11235e4bb98c7a106d796bde8aee7f89a91309d822b84fd938b0b37b4bac6560"
+    }
+  ]
+}

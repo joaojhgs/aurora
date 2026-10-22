@@ -1,0 +1,16 @@
+{
+  "status": "PASS",
+  "scope": "Original allow/deny guard outcomes preserved; bounded metadata emitted with no payload/credential output",
+  "before": [
+    true,
+    false
+  ],
+  "after": [
+    true,
+    false
+  ],
+  "rows": 2,
+  "inferenceCalls": 0,
+  "modelServicesStarted": 0,
+  "schema": "synthetic delegation check only"
+}

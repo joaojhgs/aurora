@@ -1,0 +1,41 @@
+--- v1910/controller.py
++++ v1919/controller.py
+@@ -83,6 +83,7 @@
+     adapter_sha = os.environ.get("AURORA_K3_ADAPTER_SHA256", "")
+     composition_sha = os.environ.get("AURORA_K3_COMPOSITION_SHA256", "")
+     receiver_proof_sha = os.environ.get("AURORA_K3_RECEIVER_PROOF_SHA256", "")
++    stt_peer = os.environ.get("AURORA_K3_MESH_STT_PEER_ID", "")
+     assistant_peer = os.environ.get("AURORA_K3_MESH_ASSISTANT_PEER_ID", "")
+     tts_peer = os.environ.get("AURORA_K3_MESH_TTS_PEER_ID", "")
+     route_observer_sha = os.environ.get("AURORA_K3_ROUTE_OBSERVER_SHA256", "")
+@@ -103,7 +104,8 @@
+         raise ValueError("required_staged_input_missing_or_symlinked")
+     if output.is_symlink() or not output.is_absolute() or output.exists():
+         raise ValueError("private_output_must_be_new_and_absolute")
+-    if (not re.fullmatch(r"[A-Za-z0-9][A-Za-z0-9._:-]{0,127}", assistant_peer)
++    if (not re.fullmatch(r"[A-Za-z0-9][A-Za-z0-9._:-]{0,127}", stt_peer)
++            or not re.fullmatch(r"[A-Za-z0-9][A-Za-z0-9._:-]{0,127}", assistant_peer)
+             or not re.fullmatch(r"[A-Za-z0-9][A-Za-z0-9._:-]{0,127}", tts_peer)):
+         raise ValueError("independently_admitted_exact_mesh_peers_required")
+     require_hash(pathlib.Path(__file__), control_sha, "controller_hash_mismatch")
+@@ -149,9 +151,11 @@
+     require_hash(ROOT / "resource_sample.py", cohort.get("implementation", {}).get("resourceSamplerSha256", ""), "resource_sampler_hash_mismatch")
+     sample_resources = runpy.run_path(str(ROOT / "resource_sample.py"))["sample_resources"]
+     receivers = cohort.get("remoteReceivers")
+-    if (not isinstance(receivers, dict) or set(receivers) != {"assistant", "tts"}
++    if (not isinstance(receivers, dict) or set(receivers) != {"stt", "assistant", "tts"}
++            or not isinstance(receivers.get("stt"), dict)
+             or not isinstance(receivers.get("assistant"), dict)
+             or not isinstance(receivers.get("tts"), dict)
++            or receivers["stt"].get("peer_id_sha256") != hashlib.sha256(stt_peer.encode()).hexdigest()
+             or receivers["assistant"].get("peer_id_sha256") != hashlib.sha256(assistant_peer.encode()).hexdigest()
+             or receivers["tts"].get("peer_id_sha256") != hashlib.sha256(tts_peer.encode()).hexdigest()):
+         raise ValueError("independent_remote_receiver_bindings_missing")
+@@ -227,6 +231,7 @@
+         "AURORA_K3_ADAPTER_SHA256": adapter_sha,
+         "AURORA_K3_COMPOSITION_SHA256": composition_sha,
+         "AURORA_K3_RECEIVER_PROOF_SHA256": receiver_proof_sha,
++        "AURORA_K3_MESH_STT_PEER_ID": stt_peer,
+         "AURORA_K3_MESH_ASSISTANT_PEER_ID": assistant_peer,
+         "AURORA_K3_MESH_TTS_PEER_ID": tts_peer,
+         "AURORA_K3_ROUTE_OBSERVER_PATH": str(ROUTE_OBSERVER),

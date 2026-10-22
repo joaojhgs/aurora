@@ -1,0 +1,11 @@
+{
+  "nativeGoal": "01a112a5-d6bb-74e2-bf7c-ace73cb513b5",
+  "cohort": "V1264",
+  "measuredAttempted": 900,
+  "correct": 797,
+  "failed": 103,
+  "requesterOwnedGroupsEmpty": true,
+  "reviewClosed": true,
+  "validationSha256": "910992937bdd8235d01d953eb9ac771df2c5409466ad2f075230bf020f64b8d4",
+  "reviewClosureSha256": "dbffc75aaec60cfc41948c471a69e94ad8959fdefa01197fcb66ba8097d51cda"
+}

@@ -1,0 +1,13 @@
+{
+  "at": "2026-10-17T17:56:02.199398+00:00",
+  "host": "personal.skyron-server",
+  "controllerPresent": true,
+  "ready": {
+    "identity_sha256": "bf934ac3e83f57e5732c631c5c106496ed8a7359aef1b4b2b5442cae586a7300",
+    "manifest_sha256": "450ee5af677a229e93f75c093e4e5ee3135c25b223f0d73f713f0c31f56c4cae",
+    "receiver_pid": 261790,
+    "status": "tcp_listener_ready"
+  },
+  "privateLogTailsExcluded": true,
+  "terminalAtObservation": null
+}

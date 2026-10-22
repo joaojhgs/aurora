@@ -1,0 +1,29 @@
+{
+  "scope": "One bounded post-terminal provider diagnostic log tail; original full sources remain on Personal canonical custody",
+  "observedAt": "2026-10-18T13:03:32.245371+00:00",
+  "files": {
+    "SEND.json": {
+      "bytes": 882,
+      "sha256": "87c6b72c8c22c13017b1e8ceca443f10e7575e67fc3b35dbc872c260eaaba3c9"
+    },
+    "RESULT.json": {
+      "bytes": 109700,
+      "sha256": "4febce9104e5d2d1ae7144cd4a003c4fe2e7db54a441c84fded10ca1fbe79d11"
+    },
+    "SHOW-FENCE.json": {
+      "bytes": 1311,
+      "sha256": "a4eb741729a7bfbc31a35fbe42eaeb0ee206bd98a6630163b2e8eaa37e3859a8"
+    },
+    "COMMAND.txt": {
+      "bytes": 2612,
+      "sha256": "8ee03feb741890c76bef30818f0d0980da973037708e5caf516283020436bf4f"
+    }
+  },
+  "latestPersonalCursor": "33713",
+  "credentialRelatedLinesOmittedRemotely": true,
+  "supplementalBearerValuePatternDetected": false,
+  "newSutCalls": 0,
+  "settingsOrLifecycleChanges": 0,
+  "providerReservation": "HELD",
+  "activeSourceAndTailCoverageLimitsPreserved": true
+}

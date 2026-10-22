@@ -1,0 +1,44 @@
+{
+  "afterPermissions": [
+    "Gateway.GetRegistry",
+    "Gateway.GetMeshStatus",
+    "TTS.Synthesize",
+    "Orchestrator.use"
+  ],
+  "at": "2026-10-20T15:28:18.480071+00:00",
+  "beforePermissions": [
+    "Gateway.GetRegistry",
+    "Gateway.GetMeshStatus",
+    "TTS.Synthesize"
+  ],
+  "contract": {
+    "method": "Orchestrator.ExternalUserInput",
+    "requiredPermissions": [
+      "Orchestrator.use"
+    ],
+    "source": "/home/developer/projects/aurora/thesis/sources/python-audio-p2p-tts-wiring-v1706/source/app/services/orchestrator/service.py",
+    "sourceSha256": "0b77092091946b94130945b3bfb670a922a209b846d5ffe30e23f75b52f982f3",
+    "unusedMethodNamePermissionRemoved": "Orchestrator.ExternalUserInput"
+  },
+  "directPermissionDBEdits": false,
+  "host": "code-worker",
+  "localStablePeerId": "aurora-03a910366bf721d72a9ef481d2e08fbd",
+  "modelCalls": 0,
+  "modelServicesStarted": [],
+  "mutationCalls": 1,
+  "mutationMethod": "Auth.MeshUpdatePeerPermissions",
+  "networkListenerStarted": false,
+  "newCredential": false,
+  "newIdentity": false,
+  "normalModelFreeBothRoutesAdmitted": true,
+  "peerId": "aurora-276bb04e1276201922851f6a222110de",
+  "reversePermissionsUnchanged": [
+    "Gateway.GetRegistry",
+    "Gateway.GetMeshStatus",
+    "TTS.Synthesize"
+  ],
+  "routeProof": "/home/developer/projects/aurora/thesis/evidence/k2-peer-consent-20261020/worker-control-v1816/NORMAL-MODEL-FREE-ROUTE-ADMISSION.json",
+  "scope": "Only deployed required Orchestrator.use replaces unused method-name scope on same approved test pair",
+  "scopeSide": "worker local authority for existing Personal peer",
+  "status": "NORMAL_EXISTING_TEST_PAIR_TASK_CONSENT_APPLIED_VERIFIED"
+}

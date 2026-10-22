@@ -1,0 +1,27 @@
+{
+  "quantile_method": "Type7 h=(n-1)p linear interpolation on correct_success only",
+  "n_planned_observations": 2,
+  "n_observed_attempts": 2,
+  "n_dispatched_model_requests": 2,
+  "n_correct_success": 2,
+  "n_measured_failure": 0,
+  "n_readiness_infeasible": 0,
+  "n_explicit_timeout": 0,
+  "n_warmup": 0,
+  "n_provider_invocations": 2,
+  "successful_reply_ms": [
+    49178,
+    33531
+  ],
+  "separate_readiness_wait_ms": [
+    1928,
+    0
+  ],
+  "p50_ms": 41354.5,
+  "p90_ms": 47613.3,
+  "p95_ms": 48395.65,
+  "stable_tail_claim": false,
+  "all_condition_input_join_complete": true,
+  "actual_captured_inputs_match_local_api": true,
+  "association_rule": "serial ordered successful attempts; equal invocation counts, ordinal0..n-1, no extra calls; provider request_ordinal remains null (not imputed)"
+}

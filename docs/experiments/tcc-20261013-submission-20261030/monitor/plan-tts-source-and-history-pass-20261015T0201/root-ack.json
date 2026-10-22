@@ -1,0 +1,13 @@
+{
+  "message": "msg_0fe36244fa15",
+  "at": "2026-10-15T02:04:14Z",
+  "delivery": "delivery_dc511e829b85",
+  "section": "30.12",
+  "lines": 1591,
+  "newLinesRead": 25,
+  "sha256": "89dc0888a710ac6b52d0b85943c29565d404b2b8809c86252ff97f0d8cb6e32e",
+  "old1566PrefixUnchanged": true,
+  "diffSha256": "6d794261e3cbd33c5c86b3ea0a4a4859439b28fdf6a4e919146dc84c9d56e17d",
+  "fullReceiptRead": true,
+  "fullDiffRead": true
+}

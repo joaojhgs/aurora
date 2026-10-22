@@ -1,0 +1,73 @@
+{
+  "at": "2026-10-17T23:18:25.485091+00:00",
+  "state": "TERMINAL_PARTIAL_SEALED_NOT900_COMPLETE",
+  "measured": {
+    "attempted": 180,
+    "completed_correct": 179,
+    "completed_incorrect": 0,
+    "failed_or_interrupted": 1,
+    "planned": 900,
+    "timeouts": 0,
+    "unattempted": 720
+  },
+  "warmups": {
+    "attempted": 15,
+    "completed_correct": 15,
+    "completed_incorrect": 0,
+    "failed_or_interrupted": 0,
+    "planned": 15,
+    "timeouts": 0,
+    "unattempted": 0
+  },
+  "caseCopies": 195,
+  "audioFiles": 194,
+  "controllerExitCode": 1,
+  "controllerFinishedAt": "2026-10-17T22:54:31.298859+00:00",
+  "sourceFrozenManifestSha256": "6bc65cf5cc3c4eddb90b80b0764a01e6a9fc4afbed66f33c731e3ab58528e101",
+  "requesterPrefixes": {
+    "actual-provider-bindings.jsonl": {
+      "endByte": 2139,
+      "sourceBytes": 2139,
+      "completeBytes": true
+    },
+    "resources.jsonl": {
+      "endByte": 12933739,
+      "sourceBytes": 12933739,
+      "completeBytes": true
+    },
+    "voice-stages.jsonl": {
+      "endByte": 2288325,
+      "sourceBytes": 2288325,
+      "completeBytes": true
+    }
+  },
+  "providerCoverageChain": "thesis/evidence/orca-relayed-http-v1197/provider-transfer-delta-v1372/COVERAGE-CHAIN.json",
+  "providerSnapshotAt": "2026-10-17T22:57:38.966787+00:00",
+  "providerRawFiles": 456,
+  "providerRawBytes": 79276145,
+  "records": [
+    {
+      "source": ".git/aurora-handoff-import-20261006/distributed-k1-orca-relayed-http-cell-v1197/campaign/summary.json",
+      "destination": "thesis/evidence/orca-relayed-http-v1197/terminal-v1377/summary.json",
+      "bytes": 45803,
+      "sha256": "641c6fc03929cd7c455d4b9f6460dd9923925069e99da69023079ae88b37563b"
+    },
+    {
+      "source": ".git/aurora-handoff-import-20261006/distributed-k1-orca-relayed-http-cell-v1197/campaign/progress.json",
+      "destination": "thesis/evidence/orca-relayed-http-v1197/terminal-v1377/progress.json",
+      "bytes": 225,
+      "sha256": "8e09a060a376ef1df843b370200a40adfe3629fb1e44d8b4ec8c66f6a938e0cb"
+    },
+    {
+      "source": ".git/aurora-handoff-import-20261006/distributed-k1-orca-relayed-http-cell-v1197/control-launch.json",
+      "destination": "thesis/evidence/orca-relayed-http-v1197/terminal-v1377/control-launch.json",
+      "bytes": 1020,
+      "sha256": "503325dbc60b608f0478f638cfe2b031f725ba35c5b5ecb2e43bce4b5d85a8ba"
+    }
+  ],
+  "requesterSnapshotSHA256": "03160c705d78bd5bcd8e2c54672cdc71cf259b236450722b2765489d9223299a",
+  "newMeasurementsOrReplay": 0,
+  "providerProcessesAndReservation": "Original261665/261790/429068 verified alive22:57:46, unchanged450ee5af manifest; not stopped or restarted",
+  "localOwnedProcessGroups": "430655/430656/442775 empty as independently observed; global provider ownership retained",
+  "scope": "Final requester outcome and immutable bytes sealed; provider coverage timestamp is separate from terminal whole900 success."
+}

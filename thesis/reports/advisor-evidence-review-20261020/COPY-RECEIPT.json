@@ -1,0 +1,33 @@
+{
+  "at": "2026-10-20T03:55:13.686374+00:00",
+  "copyWriter": "Original Root",
+  "sourceAuthor": "Original monitor",
+  "files": [
+    {
+      "source": ".omx/evidence/orca-monitor-20261010/ADVISOR-EARLY-EVIDENCE-REVIEW-BRIEF-20261020T0228.md",
+      "destination": "thesis/reports/advisor-evidence-review-20261020/ADVISOR-EARLY-EVIDENCE-REVIEW-BRIEF-20261020T0228.md",
+      "bytes": 10186,
+      "sha256": "1a1cba5902222199914c24b4879855d9948020ce59aa52ff6d759fc1a6d9ecfc"
+    },
+    {
+      "source": ".omx/evidence/orca-monitor-20261010/FINITE-COVERAGE-REGISTRY-20261020T0230.json",
+      "destination": "thesis/reports/advisor-evidence-review-20261020/FINITE-COVERAGE-REGISTRY-20261020T0230.json",
+      "bytes": 31062,
+      "sha256": "b1cb3d2c2ee74b5c3f5be04fb5481af2f6a276d8b69bb67ebe35521b5d1e30d4"
+    },
+    {
+      "source": ".omx/evidence/orca-monitor-20261010/DEADLINE-FINITE-MATRIX-AND-RESOURCE-CRITICAL-PATH-20261020T0223.md",
+      "destination": "thesis/reports/advisor-evidence-review-20261020/DEADLINE-FINITE-MATRIX-AND-RESOURCE-CRITICAL-PATH-20261020T0223.md",
+      "bytes": 18793,
+      "sha256": "f669408f6c1a8111b462b1d0fca57e8455fd2f43c5a3c973ee9fd334e2685bf9"
+    },
+    {
+      "source": ".omx/evidence/orca-monitor-20261010/OWNER-STATUS-FULL-MATRIX-20261020T0243.md",
+      "destination": "thesis/reports/advisor-evidence-review-20261020/OWNER-STATUS-FULL-MATRIX-20261020T0243.md",
+      "bytes": 5007,
+      "sha256": "22526e2fb42e13d1be55d8554af051b8702b564cd4fc6473286e8ff3470feb08"
+    }
+  ],
+  "externalDelivery": false,
+  "publicationOrCanonicalManuscriptEdit": false
+}

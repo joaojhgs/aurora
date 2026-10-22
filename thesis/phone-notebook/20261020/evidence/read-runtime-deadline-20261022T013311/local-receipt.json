@@ -1,0 +1,8 @@
+{
+  "bytes": 5786,
+  "copyOnly": true,
+  "custody": "Notebook result persisted and fsynced before relay; remote receipt in same output",
+  "localPath": "/home/developer/projects/aurora/thesis/phone-notebook/20261020/evidence/read-runtime-deadline-20261022T013311/result.json",
+  "remotePath": "/home/developer/projects/aurora/thesis/phone-notebook/20261020/evidence/read-runtime-deadline-20261022T013311.json",
+  "sha256": "f1720aea8b59275ecfc4e1690ab3be34c424808363aef1f85edf78529b8003e5"
+}

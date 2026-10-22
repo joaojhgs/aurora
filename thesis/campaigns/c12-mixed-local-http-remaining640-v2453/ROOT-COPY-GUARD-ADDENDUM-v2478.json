@@ -1,0 +1,138 @@
+{
+  "at": "2026-10-22T14:43:09.279520+00:00",
+  "classification": "VERIFIED_LIVE_WAIT_AND_EXISTING_COPY_GUARD_EVENT",
+  "previousTurnClassification": "PROGRESS: actual2MiBphysical storage allocation granted/ACKed within sharedreserve, existing Main requester confirmed live",
+  "specificLiveHandle": {
+    "pid": 462924,
+    "startTicks": 144596371,
+    "state": "S"
+  },
+  "current": {
+    "at": "2026-10-22T14:42:56.659598+00:00",
+    "companion": {
+      "measured": {
+        "attempted": 286,
+        "correct": 286,
+        "failed": 0,
+        "harnessErrorsIncludedInFailed": 0,
+        "incorrectIncludedInFailed": 0,
+        "offered": 286,
+        "planned": 640,
+        "timeouts": 0,
+        "unstarted": 354
+      },
+      "warmup": {
+        "attempted": 15,
+        "correct": 15,
+        "failed": 0,
+        "harnessErrorsIncludedInFailed": 0,
+        "incorrectIncludedInFailed": 0,
+        "offered": 15,
+        "planned": 15,
+        "timeouts": 0,
+        "unstarted": 0
+      }
+    },
+    "completePairedCapsules": 301,
+    "elapsedSeconds": 12666.421016857,
+    "lastIndex": 286,
+    "lastNativeParent": "e6850abaf415b04f67cef35a1ae5590a",
+    "lastOrdinal": 301,
+    "manifestSha256": "3bfca19d2dd0a9eec3981eae256168a5badd9ac2bb58a270ff8a55df1d986cce",
+    "phase": "measured",
+    "pid": 462924,
+    "primary": {
+      "measured": {
+        "attempted": 286,
+        "correct": 286,
+        "failed": 0,
+        "harnessErrorsIncludedInFailed": 0,
+        "incorrectIncludedInFailed": 0,
+        "offered": 286,
+        "planned": 640,
+        "timeouts": 0,
+        "unstarted": 354
+      },
+      "warmup": {
+        "attempted": 15,
+        "correct": 15,
+        "failed": 0,
+        "harnessErrorsIncludedInFailed": 0,
+        "incorrectIncludedInFailed": 0,
+        "offered": 15,
+        "planned": 15,
+        "timeouts": 0,
+        "unstarted": 0
+      }
+    },
+    "status": "running"
+  },
+  "priorRetainedMeasuredPerStream": 260,
+  "conditionCorrectPerStream": {
+    "primary": 546,
+    "companion": 546
+  },
+  "terminalPresent": false,
+  "activeErrorPresent": false,
+  "freeBytes": 2158153728,
+  "diskFreeFloorBytes": 2147483648,
+  "mainSourceSettingsCountsClocksFloorChanged": false,
+  "newCompletedControlCustody": "control-link-receipts/20261022T144308.984632Z.json",
+  "newFilesLinked": 242,
+  "newBytesHashed": 1460133,
+  "oldFilesRehashed": 0,
+  "newPayloadAllocations": 0,
+  "newWorkersReviewsModelsBuildsOrDeviceCommands": 0,
+  "rootPhoneNotebookReads": 0,
+  "phoneOwner": "term_1f27be31-0284-4366-bb91-30fe538cd30e",
+  "sourceHandoff": "ebde+v2383 closed",
+  "jointWorkerStorageBudget": "JOINT-WORKER-STORAGE-BUDGET-v2477.json",
+  "sharedStorageAdmissionReplyPending": false,
+  "independentNotebookReadinessNotBlanketHeld": true,
+  "originalMonitorMailbox": "All5messages read/ACK delivery_01cd086eb7bb; grant/ACK timing reconciled CLOSED, complete30.87methodology physically mirrored once",
+  "exactUnusedWebpackCachePermission": "PENDING; no deletion/reask/implicit approval",
+  "nextSutAction": "Keep original Main/custody first; after actual fullcondition/EOF/normalretirementrelease admit preparedP2P with realcapacity. Same phone worker continues authorized finite collection after frozenmanifest/native15warmup admission under granted2MiBguard, no additional Root/user permission/Main-end dependency.",
+  "nextMaximumObservationUtc": "2026-10-22T14:48:09.279520+00:00",
+  "jointAdditionalCapacityNeededNowBytes": 324874240,
+  "phoneTrialQualification": "Monitor-reported embedded-GGUF-template cohort referenceMatched900=false, requester valid31788B WAV at6836.2ms,0measured; not matched900 or provider-native acceptance",
+  "mailAck": "delivery_c6f3fbb13940",
+  "headroomAboveFloorBytes": 10670080,
+  "capacityObservation": "CAPACITY-DELTA-v2476.json:13,651,968B decline14:04:47->14:06:28, then10,657,792B rebound by14:08:08; volatile peak cause UNATTRIBUTED, no Root deletion or experiment changes",
+  "storageOperationGuidance": "Avoid NEW unadmitted bulk transfer/ZIP/base64/extract peaks; retain existing raw/audio physically on approved repo paths, no worker/provider/session stop; prospective900 remains unadmitted by joint reserve",
+  "jointTotalOutstandingReservationBytes": 335544320,
+  "phoneWorkerMetadataStorageGateCleared": true,
+  "phoneMeasuredConditionAdmitted": false,
+  "phoneWorkerNewPhysicalCreditBytes": 2097152,
+  "phoneCreditSource": "Within existing64MiBshared-controls reserve; prior100MiB additional bulk envelope superseded",
+  "phoneAdmissionReceipt": "PHONE-LIMITED-WORKER-STORAGE-ADMISSION-v2477.json",
+  "phoneGuard": "Netnewphysical<=2MiB incl all owned metadata/temp/directory/copy peaks and onepilotWAV<=100KiB insidecredit; eachwrite free>2GiB+16MiB+nextpeak, else defer Workercopy and retain Notebookraw",
+  "phonePrimaryRawCustody": "Existing approved Notebook Aurora repo thesis, bounded48MiB proposed collection incl raw/WAV/stage/resource/frozeninputs/harness; second full Workerraw explicitlypending, not a blanket Main-endgate",
+  "phoneWorkerActualAcknowledgement": "msg_bf7a675f0e75; fresh physical baseline WORKER-LIMITED-ALLOCATION-v426.json and guards acknowledged; pilot ZIP58592B onepayload/noextraction",
+  "phoneNativePilotProof": "Original monitor msg_a31c56a6b2af independently CLOSED saved3native stage joins+sameopaqueclock+10payloadhashes+validWAV/RMS/sourceconfig once, no repeatproof needed",
+  "phoneRemainingGate": "Worker finalizing exact immutable v431 manifest and finite15excludedwarmups+900attempt K3P2P runner; no actual launch/warmup/measurement receipt yet, no launch inferred. Same weights/source/audio, GGUFembedded+APIcapacity2+modelconcurrency1 distinctrefMatchedfalse; existing18:21:09hardstop",
+  "phoneReferenceMatched900": false,
+  "phoneOwnerHardStopUtc": "2026-10-22T18:21:09.788710+00:00",
+  "rootAdmissionMessageIds": [
+    "msg_b70a5b5bbb2c",
+    "msg_116670c92086"
+  ],
+  "monitorRaceCorrection": "msg_d093fa8832b2 accepted; pendingallocation request superseded by actualgrant/workerACK",
+  "latestMethodology": {
+    "path": "thesis/methodology/owner-requirements-20261022-5ede48f6.md",
+    "bytes": 927587,
+    "sha256": "5ede48f62218bbb5bd1577e986028f22d9d19b6a11efae18ba15e86eebc79147",
+    "prior918313PrefixPreserved": true,
+    "new9274ByteAmendmentReadInFull": true,
+    "receipt": "METHODOLOGY-MIRROR-RECEIPT-v2478.json"
+  },
+  "methodologyMirrorAck": "msg_a20c6764fd3c",
+  "phoneCancellationQualification": "WORKER-REPORTED actual v433/v434 cancel passed same span outcome canceled/reason cancelled, no unclosed span/namespace; original falseharnesslabel/failures preserved, v435 saved reconciliation no rerun; Root no device/source investigation",
+  "phoneWorkerCopyGuardClosedAtObservation": true,
+  "phoneCopyGuardThresholdBeforeNextPeakBytes": 2164260864,
+  "phoneCopyGuardReceipt": "WORKER-COPY-GUARD-OBSERVATION-v2478.json",
+  "phoneCopyGuardMessageIds": {
+    "root-copy-guard-monitor-v2478": "msg_dd9ccf7bb993",
+    "root-copy-guard-phone-v2478": "msg_5f286bb66fe7"
+  },
+  "phoneCopyGuardSemantics": "Existing2MiBcredit remains granted; if eachwrite guard fails defer NEW Workercopy and marksecondarypending, retain fullraw on approvedNotebookrepo; existing N-only native/manifest/warmup/collection lane remains authorized within original guards/window. No Main-end hold/newpermission, no measuredlaunch inferred."
+}

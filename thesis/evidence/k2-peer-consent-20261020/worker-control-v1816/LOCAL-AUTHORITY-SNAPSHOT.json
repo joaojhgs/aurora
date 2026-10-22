@@ -1,0 +1,16 @@
+{
+  "authorities": [
+    {
+      "auth_grant_revision": 3,
+      "disposition": "present",
+      "effective_permissions": [
+        "Gateway.GetMeshStatus",
+        "Gateway.GetRegistry",
+        "Orchestrator.use",
+        "TTS.Synthesize"
+      ],
+      "peer_id": "aurora-276bb04e1276201922851f6a222110de",
+      "state": "active"
+    }
+  ]
+}

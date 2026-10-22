@@ -1,0 +1,106 @@
+{
+  "archivePR": 175,
+  "archiveHead": "14df693f0d3f00aa7468ec7be8f64438fec014da",
+  "productPR": 177,
+  "productHead": "3541face7066fb597d9ddad9c00f81f87104b459",
+  "reviewedRoot": "1f56586a934b3405a3e91ec41b0667ea71329996",
+  "topology": "frontend174 -> archive175 foundation -> product177 shared authoritative node policy; conditional plan176 remains on archive175",
+  "decision": "Deliver PER289 scope5 through explicit linked product177 dependency, preserving the existing one authoritative Rust policy/config owner. No code copying, alternate archive policy/schema, new PR, source push, workflow change or replay. Archive175 alone is not whole PER289 delivery.",
+  "scopeBoundary": "Archive foundation/native writer is in175. Existing default-off backgroundTranscription requested-policy and separate capability/effective-state contract are in177. Recording UI/capture remainPER290; genuine mic is not PER289 acceptance.",
+  "currentProof": "Closed root parity/config/archive/DATA checks and independent Sol d9ff0181 technical approval. Exact-head QA->architect/tracker lifecycle remains pending. Native Android/iOS current jobs remain live.",
+  "paths": [
+    {
+      "path": "packages/aurora-sdk/src/node-config.ts",
+      "archive": "100644 blob 9b8c120dff6b6071637ade0e104172a48bb0c8c7\tpackages/aurora-sdk/src/node-config.ts",
+      "product": "100644 blob 7b5abfbb98c0ba419e5cba922c93aafefd8c8ab3\tpackages/aurora-sdk/src/node-config.ts",
+      "reviewedRoot": "100644 blob 7b5abfbb98c0ba419e5cba922c93aafefd8c8ab3\tpackages/aurora-sdk/src/node-config.ts",
+      "productEqualsReviewedRoot": true
+    },
+    {
+      "path": "packages/aurora-sdk/src/background-transcription.ts",
+      "archive": null,
+      "product": "100644 blob b91c1a79c9916035af9c382dfd1a2d8e49b4de4e\tpackages/aurora-sdk/src/background-transcription.ts",
+      "reviewedRoot": "100644 blob b91c1a79c9916035af9c382dfd1a2d8e49b4de4e\tpackages/aurora-sdk/src/background-transcription.ts",
+      "productEqualsReviewedRoot": true
+    },
+    {
+      "path": "packages/aurora-sdk/src/native-node-config.ts",
+      "archive": null,
+      "product": "100644 blob 5ca045f277618d9d181dbde8fbca421deebab49d\tpackages/aurora-sdk/src/native-node-config.ts",
+      "reviewedRoot": "100644 blob 5ca045f277618d9d181dbde8fbca421deebab49d\tpackages/aurora-sdk/src/native-node-config.ts",
+      "productEqualsReviewedRoot": true
+    },
+    {
+      "path": "packages/aurora-sdk/src/index.ts",
+      "archive": "100644 blob c0da56aa93fc73a943564162ab70385ddd48201d\tpackages/aurora-sdk/src/index.ts",
+      "product": "100644 blob 9c86d2499b790a3fd4d6a73d5f33a029547a9fed\tpackages/aurora-sdk/src/index.ts",
+      "reviewedRoot": "100644 blob 9c86d2499b790a3fd4d6a73d5f33a029547a9fed\tpackages/aurora-sdk/src/index.ts",
+      "productEqualsReviewedRoot": true
+    },
+    {
+      "path": "packages/aurora-sdk/tests/background-transcription.test.ts",
+      "archive": null,
+      "product": "100644 blob 3b8b748e47964267595c419ac06b7c555f7a9700\tpackages/aurora-sdk/tests/background-transcription.test.ts",
+      "reviewedRoot": "100644 blob 3b8b748e47964267595c419ac06b7c555f7a9700\tpackages/aurora-sdk/tests/background-transcription.test.ts",
+      "productEqualsReviewedRoot": true
+    },
+    {
+      "path": "packages/aurora-sdk/tests/node-config.test.ts",
+      "archive": "100644 blob ea7cda0c920b74b50279584ea9932a6c4c083138\tpackages/aurora-sdk/tests/node-config.test.ts",
+      "product": "100644 blob 5ca93ee9c6cc5d1cdbdc61f4847cb69389d7fcc2\tpackages/aurora-sdk/tests/node-config.test.ts",
+      "reviewedRoot": "100644 blob 5ca93ee9c6cc5d1cdbdc61f4847cb69389d7fcc2\tpackages/aurora-sdk/tests/node-config.test.ts",
+      "productEqualsReviewedRoot": true
+    },
+    {
+      "path": "packages/aurora-sdk/tests/native-node-config.test.ts",
+      "archive": null,
+      "product": "100644 blob 24346b4ca655d4a88cf2a0559d8ac9f7265363d4\tpackages/aurora-sdk/tests/native-node-config.test.ts",
+      "reviewedRoot": "100644 blob 24346b4ca655d4a88cf2a0559d8ac9f7265363d4\tpackages/aurora-sdk/tests/native-node-config.test.ts",
+      "productEqualsReviewedRoot": true
+    },
+    {
+      "path": "packages/aurora-sdk/tests/node-config-rust-validation-parity.test.ts",
+      "archive": null,
+      "product": "100644 blob 5b3e980028360c94b55c082ea6e7c24c59ac36dd\tpackages/aurora-sdk/tests/node-config-rust-validation-parity.test.ts",
+      "reviewedRoot": "100644 blob 5b3e980028360c94b55c082ea6e7c24c59ac36dd\tpackages/aurora-sdk/tests/node-config-rust-validation-parity.test.ts",
+      "productEqualsReviewedRoot": true
+    },
+    {
+      "path": "rust/crates/aurora-voice-core/src/node_policy.rs",
+      "archive": null,
+      "product": "100644 blob 22dff19d31d78992dadf12ad336190bc2cab43a1\trust/crates/aurora-voice-core/src/node_policy.rs",
+      "reviewedRoot": "100644 blob 22dff19d31d78992dadf12ad336190bc2cab43a1\trust/crates/aurora-voice-core/src/node_policy.rs",
+      "productEqualsReviewedRoot": true
+    },
+    {
+      "path": "rust/crates/aurora-voice-core/tests/node_policy.rs",
+      "archive": null,
+      "product": "100644 blob 5b2c19f882465c995fe5a90d686f3d3687fecd31\trust/crates/aurora-voice-core/tests/node_policy.rs",
+      "reviewedRoot": "100644 blob 5b2c19f882465c995fe5a90d686f3d3687fecd31\trust/crates/aurora-voice-core/tests/node_policy.rs",
+      "productEqualsReviewedRoot": true
+    },
+    {
+      "path": "rust/crates/aurora-voice-core/tests/fixtures/node_policy_cross_language_vectors.json",
+      "archive": null,
+      "product": "100644 blob cfdd425ab84c3fa6d357e5805c2e61104c2a5420\trust/crates/aurora-voice-core/tests/fixtures/node_policy_cross_language_vectors.json",
+      "reviewedRoot": "100644 blob cfdd425ab84c3fa6d357e5805c2e61104c2a5420\trust/crates/aurora-voice-core/tests/fixtures/node_policy_cross_language_vectors.json",
+      "productEqualsReviewedRoot": true
+    },
+    {
+      "path": "rust/crates/aurora-voice-core/tests/fixtures/node_policy_v2_default.json",
+      "archive": null,
+      "product": "100644 blob 5e9e3a530bcb6c7ed72cdb23ba8f42bd7605957e\trust/crates/aurora-voice-core/tests/fixtures/node_policy_v2_default.json",
+      "reviewedRoot": "100644 blob 5e9e3a530bcb6c7ed72cdb23ba8f42bd7605957e\trust/crates/aurora-voice-core/tests/fixtures/node_policy_v2_default.json",
+      "productEqualsReviewedRoot": true
+    },
+    {
+      "path": "apps/aurora-tauri/src-tauri/src/native_node_config.rs",
+      "archive": null,
+      "product": "100644 blob 91bb3ea74f2968d2cd718fa5ea3832f0f94cc5d2\tapps/aurora-tauri/src-tauri/src/native_node_config.rs",
+      "reviewedRoot": "100644 blob 91bb3ea74f2968d2cd718fa5ea3832f0f94cc5d2\tapps/aurora-tauri/src-tauri/src/native_node_config.rs",
+      "productEqualsReviewedRoot": true
+    }
+  ],
+  "exactSourceRows": 13,
+  "initialDraft": "V78 initial map retained null placeholders for two mistaken locations; this V78B corrected source map uses actual SDK test/helper paths and requires every published source row present."
+}

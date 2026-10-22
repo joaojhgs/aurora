@@ -1,0 +1,26 @@
+{
+  "at": "2026-10-18T16:26:14.077718+00:00",
+  "pid": 1299825,
+  "startTicks": 111923466,
+  "argv": [
+    "/home/developer/projects/aurora/.git/aurora-handoff-import-20261006/cpu-audio-campaign-v491/env/bin/python",
+    "/home/developer/projects/aurora/thesis/harness/mesh_pair_control_v1535.py",
+    "--private-dir",
+    "/home/developer/projects/aurora/.git/aurora-handoff-import-20261006/mesh-pair-control-v1535/worker-node-v1538",
+    "--source-root",
+    "/home/developer/projects/aurora/.git/aurora-handoff-import-20261006/cpu-full-audio-v490/source",
+    "--parameters",
+    "/home/developer/projects/aurora/.git/aurora-handoff-import-20261006/mesh-pair-control-v1535/room-parameters.json",
+    "--role",
+    "worker",
+    "--permissions",
+    "Gateway.GetRegistry",
+    "Gateway.GetMeshStatus",
+    "TTS.Synthesize"
+  ],
+  "sourceSha256": "451bad645cd3f898375433296971ce8f06b718e812423369ddfdbf48710c54eb",
+  "finiteControlSeconds": 600,
+  "modelCalls": 0,
+  "newOrcaWorker": false,
+  "frozenK3Touched": false
+}

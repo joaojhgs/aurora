@@ -1,0 +1,22 @@
+{
+  "at": "2026-10-20T15:47:28.023358+00:00",
+  "status": "SOURCE_PREPARED_NOT_LAUNCHED",
+  "actualSavedDataQualification": "thesis/evidence/k2-native-proof-handler-qualification-v1823/QUALIFICATION-RECEIPT.json",
+  "qualifiedNativeModelJoins": 30,
+  "qualificationModelCalls": 0,
+  "old15AllCorrect": true,
+  "nativeGpuOffload25of25": true,
+  "receiverProofSha256": "3bb4af79cf2579023c0f1ff2025f69367717d49db7d09831c682c1bf52fc441f",
+  "collectorSha256": "4fe67e67ad34159ebeda14ac96ff0bcccf758adbe38d734e662558077b8f86e8",
+  "changes": [
+    "TTSnativehandlerfilter2lines",
+    "collectoronlygeneratorpin",
+    "stricteroutercap52200chargealloriginalwalltime",
+    "futureoperationnames1826avoidaccepted1787collision",
+    "newpaths1826only"
+  ],
+  "allRunnerAdapterCompositionBootstrapBindingsTelemetryUnchanged": true,
+  "targetMeasured": 900,
+  "standardExcludedWarmups": 15,
+  "oldInputManifestAndCasesPreserved": true
+}

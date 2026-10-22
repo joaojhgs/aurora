@@ -1,0 +1,18 @@
+{
+  "kind": "desktop_gpu_readiness_startup_failure_v412",
+  "files": [
+    {
+      "name": "README.md",
+      "bytes": 1091,
+      "sha256": "4bf90115a9f7409291a5fe1422c98d7357482946d4830ce16cc9b2876adc455d"
+    },
+    {
+      "name": "actual-readiness-startup.json",
+      "bytes": 9751,
+      "sha256": "e75e180d724cea0f2b3089ed89fd35837ce9c70135ced5acf5418ead2893087b"
+    }
+  ],
+  "CPUExtraFinishedSealedReviewed": true,
+  "GPUPrimaryFinishedSealed": false,
+  "crossDeviceMeasuredAllowed": false
+}

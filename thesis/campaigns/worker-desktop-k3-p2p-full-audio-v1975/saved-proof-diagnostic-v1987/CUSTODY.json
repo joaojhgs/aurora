@@ -1,0 +1,17 @@
+{
+  "at": "2026-10-20T22:48:56.026047+00:00",
+  "source": "/home/developer/projects/aurora/thesis/campaigns/worker-desktop-k3-p2p-full-audio-v1975/saved-proof-diagnostic-v1987",
+  "files": {
+    "proof.json": {
+      "bytes": 101220,
+      "sha256": "09d6b2878972286f0f4386b25bf290ad1ed4af6885bbf8cb001381dfd2ebd8ae"
+    },
+    "RESULT.json": {
+      "bytes": 3796,
+      "sha256": "c7e11ebd407ece3ae41c3912c153affe41b1722bf325d414fc6a3683fa82e5cc"
+    }
+  },
+  "status": "SAVED_NATIVE_PROOF_RECONCILIATION_PASS_NOT_LIVE_ADMISSION",
+  "modelCalls": 0,
+  "liveGatePublished": false
+}

@@ -1,0 +1,16 @@
+{
+  "schema_version": "aurora.production_full_voice_pilot.v1",
+  "input_audio_sha256": "2f6361506708d0a3065a339d168c9db5412e343683dd9b4080471d8948bf82ae",
+  "sample_rate": 22050,
+  "channels": 1,
+  "expected_answer": "ORBIT",
+  "transcription_model": "realtime",
+  "tts_model_id": "piper:standard:piper:en-us:sha256:aad4e8f1d39f9532e8cabf24",
+  "tts_voice": "standard:piper:en-us",
+  "language": "en-US",
+  "assistant_model_id_sha256": "31aa84f5edb7729b511e4a0a359bcce541960b365b1a3208577ec171544083ae",
+  "assistant_generation_settings_sha256": "f4cf841be947416a1b8428d372c2018993e0e76d7eed021b6e395c68eec0e046",
+  "stt_model_asset_sha256": "dcb76c6586fc06cbdac6dd21f14cfd129cc4cdd9dce19bf4ffa62e59cbe6e6d1",
+  "tts_model_asset_sha256": "6f52a751e2349abe7a76735eb09dc1875298c77ea2342ffd2fef79ff81b87f22",
+  "backend_config_sha256": "6654f873c5c4ff6ea94e0514d907fdcffbe015b029a196b298984e214a3d94f5"
+}

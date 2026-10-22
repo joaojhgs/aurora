@@ -1,0 +1,30 @@
+{
+  "at": "2026-10-22T11:18:43.547509+00:00",
+  "command": "UV_NO_SYNC=1 make check-docs",
+  "exitCode": 2,
+  "status": "FAILED_HISTORICAL_DOCS_ARTIFACT_POLICY_AND_LINKS",
+  "observedExamples": [
+    "docs/experiments/tcc-20261013-submission-20261030/root/matched-main-campaign-v319/runner-report.md:3 -> campaign.py broken historical link",
+    "Many preserved generated JSON/report artifacts under docs/experiments conflict with generic current-docs hygiene policy"
+  ],
+  "scope": "No broad cleanup, relocation, deletion or repeated docs check; owner requires preserving scientific evidence. This is not a SUT admission gate.",
+  "addedCurrentHeaderLinkCheck": [
+    {
+      "target": "campaigns/c12-mixed-local-http-900-v2426/RESOURCE-RELEASE.json",
+      "exists": true
+    },
+    {
+      "target": "campaigns/c12-mixed-local-http-remaining640-v2453/ROOT-ACTUAL-RECOVERY-LAUNCH-v2454.json",
+      "exists": true
+    },
+    {
+      "target": "../docs/experiments/tcc-20261013-submission-20261030/root/CURRENT.md",
+      "exists": true
+    },
+    {
+      "target": "methodology/owner-requirements-20261022-376660b9.md",
+      "exists": true
+    }
+  ],
+  "currentFrozenRunSourceSettingsChanged": false
+}

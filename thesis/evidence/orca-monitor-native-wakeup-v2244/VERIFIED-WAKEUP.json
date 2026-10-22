@@ -1,0 +1,17 @@
+{
+  "at": "2026-10-21T17:13:28.781934+00:00",
+  "status": "SAME_ORIGINAL_MONITOR_WORKING_PURSUING_ORIGINAL_GOAL",
+  "terminal": "term_2eab47ed-ab9b-4e35-bd9b-fc068c60e3fc",
+  "incarnation": "37e50d9c-6cf5-4e28-a63b-f2bc3eed5661",
+  "nativeGoal": "01a123ff-19ba-7332-a2f7-346a722af79f",
+  "acceptedRequest": "51ca813a-6535-4199-9e94-a1e7a24080ba",
+  "commandSends": 1,
+  "nativeGoalStatus": "active as freshly reported by original monitor; UIWorking/Pursuinggoal independently verified",
+  "actualNativeSnapshotAwaited": true,
+  "initialAcceptedOnlyReceiptResolvedByActualUIProgress": true,
+  "retryOrDuplicateSends": 0,
+  "newWorkersTasksGoalsOrLifecycleAdoption": 0,
+  "rootNativeGoalUntouched": true,
+  "rootMainExperimentNotInterrupted": true,
+  "screenSha256": "dd1129e55f6d8b9cc86656a7c46bba11d73c4a4070a376f33830292aeb6d0291"
+}

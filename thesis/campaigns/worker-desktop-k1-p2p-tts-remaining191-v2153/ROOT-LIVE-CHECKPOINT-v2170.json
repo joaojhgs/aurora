@@ -1,0 +1,39 @@
+{
+  "at": "2026-10-21T03:30:23.212413+00:00",
+  "warmups": 15,
+  "warmupsCorrect": 15,
+  "warmupsFailed": 0,
+  "newMeasured": 24,
+  "newCorrect": 24,
+  "newFailed": 0,
+  "remaining": 167,
+  "actors": {
+    "3332811": {
+      "state": "S",
+      "sameStart": true
+    },
+    "3332919": {
+      "state": "S",
+      "sameStart": true
+    },
+    "3333678": {
+      "state": "S",
+      "sameStart": true
+    }
+  },
+  "summary": null,
+  "historicalAuxiliaryFailureResolved": true,
+  "admissionExists": true,
+  "classification": "verified_wait",
+  "nativeGoalThreadId": "01a112a5-d6bb-74e2-bf7c-ace73cb513b5",
+  "manifestSha256": "d753203e4a53f12ed983a98d776a811d241d0d6bc6061b28e3c1480a077a17d3",
+  "parentMeasured": {
+    "attempted": 709,
+    "correct": 697,
+    "failed": 12,
+    "timeouts": 1
+  },
+  "sutCallsByObservation": 0,
+  "scope": "Same frozen K1 actualP2P epoch, only global710–900, no retry of prior709 or closed900 conditions",
+  "nextRoutineCheckUtc": "2026-10-21T03:35:23.212Z"
+}

@@ -1,0 +1,39 @@
+{
+  "files": [
+    {
+      "path": "thesis/harness/prepare_k1_http_provider_v2220.py",
+      "bytes": 5680,
+      "sha256": "28ac2e890d7d63af26d7e04941bce605da12cce483cbd928b8b3ed5797bfbf85"
+    },
+    {
+      "path": "thesis/harness/launch_k1_http_provider_v2220.py",
+      "bytes": 3931,
+      "sha256": "c76b3f5e17210962c3f1e112ce16985f9f68241b6f092d2c2a366f9bcf911c5e"
+    },
+    {
+      "path": "thesis/harness/custody_k1_http_requester_v2220.py",
+      "bytes": 17569,
+      "sha256": "5f40002c846a21825fc6f08fd4f1aaad8b2d18ac9a5b6ae6bd03acc5b35d1d56"
+    },
+    {
+      "path": "thesis/harness/k1_http_partial300_root_v2220.py",
+      "bytes": 12201,
+      "sha256": "c919464c1d9da34d2e8ec1f82588b4e1cb78d29a6c7270287625816168360ecb"
+    },
+    {
+      "path": "thesis/harness/k1_http_warmup_finalize_v2220.py",
+      "bytes": 8158,
+      "sha256": "70fd3d547e6032f6ad84b0e77767cb9b2d2e1a01fc96c133a26ea56bab503c4e"
+    },
+    {
+      "path": "thesis/harness/drive_k1_http_partial300_v2221.py",
+      "bytes": 7884,
+      "sha256": "7463ed58faabae394e3044b24fe13dbf283530ca7006bd1ad6e878bb4c95ad44"
+    }
+  ],
+  "syntax": "AST passed",
+  "rootClockReset": false,
+  "source": "same400file app snapshot/current models/settings",
+  "newWorker": false,
+  "newRuntime": 0
+}

@@ -1,0 +1,42 @@
+{
+  "at": "2026-10-16T15:26:13.422288+00:00",
+  "records": [
+    {
+      "source": ".git/aurora-handoff-import-20261006/per282-closeout-v1091/frontend-pr-state.json",
+      "path": "frontend-pr-state.json",
+      "bytes": 319,
+      "sha256": "81f89b6ba858381a635deed497bd751064ad46ba6f0831303a9c37502fbb1e32"
+    },
+    {
+      "source": ".git/aurora-handoff-import-20261006/per282-closeout-v1091/product-pr-current.json",
+      "path": "product-pr-current.json",
+      "bytes": 4759,
+      "sha256": "cb12eaf86c25ae589a217e81cb5b6efc58b245a618d8b06bc2585d4944edb9b4"
+    },
+    {
+      "source": ".git/aurora-handoff-import-20261006/per282-closeout-v1091/PR-ANCESTRY.json",
+      "path": "PR-ANCESTRY.json",
+      "bytes": 525,
+      "sha256": "a9ed5052b2d115d00862d163dc96d45d65c9f53cb52cda6284d1fdf64a87bf2e"
+    },
+    {
+      "source": ".git/aurora-handoff-import-20261006/per282-closeout-v1091/ISSUE-READ-RESULT.json",
+      "path": "ISSUE-READ-RESULT.json",
+      "bytes": 505,
+      "sha256": "2c3c83a9f0b29da7c247a50befa68ad3c03019cb0852326face78a7918924689"
+    },
+    {
+      "source": ".git/aurora-handoff-import-20261006/per282-closeout-v1091/PREPARED-COMMENT.md",
+      "path": "PREPARED-COMMENT.md",
+      "bytes": 1138,
+      "sha256": "3b779c4302756ead7bd85562cc513cef935598859f378b65aa6d1df66ce38ea5"
+    },
+    {
+      "source": ".git/aurora-handoff-import-20261006/per282-closeout-v1091/DELIVERY-STATE.json",
+      "path": "DELIVERY-STATE.json",
+      "bytes": 1259,
+      "sha256": "ecd42ead040df0daefaf3b84e8710854a63f213598ec617bdd9274c25b24197c"
+    }
+  ],
+  "privateDebugRawExcluded": true
+}

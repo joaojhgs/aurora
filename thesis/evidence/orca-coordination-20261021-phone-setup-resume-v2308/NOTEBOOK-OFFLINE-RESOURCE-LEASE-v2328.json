@@ -1,0 +1,54 @@
+{
+  "schema": "aurora.disjoint_setup_resource_lease.v2328",
+  "state": "ADMITTED_NOTEBOOK_LOCAL_OFFLINE_PREPARATION_ONLY",
+  "createdAtUtc": "2026-10-21T23:59:55.341599+00:00",
+  "absoluteDeadlineUtc": "2026-10-22T00:19:55.341599+00:00",
+  "nativeGoalThread": "01a112a5-d6bb-74e2-bf7c-ace73cb513b5",
+  "nativeGoalBudget": "unbudgeted unchanged; this is only a finite resource lease",
+  "run": "run_e6054e76e9fc",
+  "rootExecutionOwner": "term_6a00d9ee-792a-4daf-8578-236290e33108",
+  "existingSetupOwner": "term_1f27be31-0284-4366-bb91-30fe538cd30e",
+  "authorityReceiptMessages": [
+    "msg_d8fca341321f",
+    "msg_6cee935c4b39"
+  ],
+  "scope": "Existing approved Personal notebook container only; no Work, additional agent/Task/Dispatch/controller or host-namespace change",
+  "admitted": [
+    "Notebook-local exact-source/cache/toolchain preparation and isolated offline venv/package/build work using already-local approved inputs only",
+    "Aurora builds only from exact authorized ebde3a8acf6315f920d03593845f17a1fc65a733 source if it is already locally present; old/unpinned app is not proof",
+    "Use owned isolated deployment/build paths; preserve all dirty work and no Git/index/root lockfile writes"
+  ],
+  "caps": {
+    "cpuCores": 2,
+    "rssBytes": 4294967296,
+    "durationSeconds": 1200,
+    "minimumAvailableMemoryBytesBeforeStart": 8589934592,
+    "minimumFreeDiskBytes": 2147483648
+  },
+  "admissionGuards": [
+    "Confirm actual approved Personal notebook identity and physically disjoint CPU/RAM/disk from current worker/Desktop SUT",
+    "No network fetch/download/install fallback; absent local inputs remain pending",
+    "No W/desktop/controller source or model reads/transfers, no shared-service/broker or measurement traffic",
+    "If guards cannot pass, do not launch; preserve exact blocker",
+    "At expiry retire only own setup/build subprocesses safely; never unrelated agents/services or current SUT"
+  ],
+  "notAdmittedNow": [
+    "Source transfer <=12MiB/120s through current shared worker/controller/Desktop paths",
+    "774455356-byte assets/runtime staging through those reserved paths",
+    "Any shared worker/Desktop build, download, inference or measured traffic",
+    "Phone/native app/model inference pilot or warmups/900 campaign before concrete pinned inputs/readiness/resource admission; 900 campaign also still requires actual owner sleep/start signal"
+  ],
+  "sharedResourceConflict": "Frozen V2296 currently reserves worker CPU/RAM/disk and worker-controller-Personal-desktop application network/provider; bulk transfer/build on that graph changes undeclared measured load. No main pause or manifest/source/settings change authorized.",
+  "possibleEarlierTransfer": "Provide exact source host/path/hash and existing route/rate/physical resource graph once; genuinely disjoint already-local/existing route can be admitted separately without a probe. Otherwise Root releases relevant resources after current natural finish/seal. No invented ETA.",
+  "phoneStateLastReported": {
+    "observedAtUtc": "2026-10-21T23:54:12+00:00",
+    "state": "USB re-enumerated003/012 inaccessible to current Personal container; existing LIBUSB server empty/get-stateNotFound; agentWiFi script stopped before configuration",
+    "ownerAuthority": "Existing direct owner now authorized saved trusted WiFi enable and real setup/pilot in its own lane; do not ask permission again",
+    "missingCapabilityAction": "Owner/operator restore already-authorized access for current USB node or expose existing approved controller; no agent permissions/mount/namespace/security/account/keys/controller restart changes",
+    "qualification": "This is the latest received actual receipt, supersedes23:44 success; later real evidence may supersede it. It is not an unauthorized-dialog claim or new permission request."
+  },
+  "rootPhoneChecks": 0,
+  "mainFrozenCondition": "V2296 unchanged",
+  "mainRunPaused": false,
+  "newWorkers": 0
+}

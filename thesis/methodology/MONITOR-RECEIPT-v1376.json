@@ -1,0 +1,31 @@
+{
+  "at": "2026-10-17T23:01:11.640520+00:00",
+  "section": "30.53",
+  "path": "/home/developer/Documents/Obsidian Vault Origin/5-full-notes/faculdade/tcc/future-work-test-requirements.md",
+  "bytes": 535754,
+  "sha256": "7641b88cf16590a4e4bf0cb4487024f4ae659fff47f7ccab31dbfeacaac2294e",
+  "previousBytes": 533768,
+  "previousSHA256": "dc8aaed743aa0a37c378115cead9098ea940c255f172848ee2927449fbcf46ea",
+  "pre30_53PrefixBytesPreserved": 524442,
+  "backup": ".omx/evidence/orca-monitor-20261010/authoritative-plan-before-30.53-terminal-correction-20261017T230111.md",
+  "patch": ".omx/evidence/orca-monitor-20261010/authoritative-plan-30.53-terminal-correction-20261017T230111.patch",
+  "RootQuestion": "msg_80478d6dc73b",
+  "RootNextCellACK": "PENDING",
+  "terminalRootMessage": "msg_8983120c2ce0",
+  "independentSnapshotAt": "2026-10-17T23:00:17.063932Z",
+  "K1State": {
+    "status": "stopped_system_failure",
+    "stopReason": "remote_transport_error",
+    "measuredAttempted": 180,
+    "measuredCorrect": 179,
+    "measuredFailed": 1,
+    "excludedWarmupsCorrect": 15,
+    "unattemptedMeasured": 720,
+    "caseCopies": 195,
+    "audioFiles": 194,
+    "copyErrors": [],
+    "originalRequesterControllerBackendCopier": "absent in proc",
+    "originalForward": "421717/start104535394 LIVE"
+  },
+  "scope": "Owner six-cell same-pair HTTP/P2P priority persisted with changed terminal facts. No interference, process/control/SUT action or automatic replay; Root retains sole reconciliation."
+}

@@ -1,0 +1,12 @@
+{
+  "controlDeadline": "2026-10-22T01:11:43.364433+00:00",
+  "explicitNewline": true,
+  "host": "ssh:ssh-sem-notebook-personal",
+  "incarnation": "328cd72f-c7ea-49ff-a2db-b9275b085037",
+  "remoteResult": "/home/developer/projects/aurora/thesis/phone-notebook/20261020/evidence/fresh-usb-thermal-20261022T010143.json",
+  "rootAdmissionMessage": "owner-latest-direct-public-setup",
+  "script": "scripts/fresh_usb_thermal_v15.py",
+  "scriptSha256": "2021e25ee4380d2e01c445619aac8f7f4f8b00e50b9c9ecbc2e371e411b294d3",
+  "singleSend": true,
+  "terminal": "term_a2ed5feb-7c92-48e4-bd88-d1b0e6737989"
+}

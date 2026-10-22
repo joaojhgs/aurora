@@ -1,0 +1,195 @@
+{
+  "schema": "aurora.phone_notebook.raw_export.v1",
+  "at": "2026-10-22T08:52:52.527398+00:00",
+  "files": [
+    {
+      "path": "android-apk-build-v221/status.json",
+      "bytes": 2103,
+      "sha256": "22882d590de8596745a6c112ccb0d366324ad2eac94a31c8dafe3fe48c3dd662",
+      "notebookOriginalPrefixBytes": 2103,
+      "notebookOriginalPrefixSha256": "22882d590de8596745a6c112ccb0d366324ad2eac94a31c8dafe3fe48c3dd662",
+      "activeAppendPrefix": false,
+      "mutableStatusSnapshot": false,
+      "secretAssignmentLinesOmitted": 0
+    },
+    {
+      "path": "android-apk-build-v221/build.log",
+      "bytes": 131940,
+      "sha256": "b5b65dfb77e806cbe1b820953ad82a6d31dd054191fa9c8247b03cbb85c12911",
+      "notebookOriginalPrefixBytes": 131858,
+      "notebookOriginalPrefixSha256": "59b0e0932f6cd181f0f3caa60602bc557a8995557298d3c10738a526e0670f2e",
+      "activeAppendPrefix": false,
+      "mutableStatusSnapshot": false,
+      "secretAssignmentLinesOmitted": 2
+    },
+    {
+      "path": "android-apk-build-v221/route-tests.log",
+      "bytes": 619,
+      "sha256": "90f18569b5e2db6127525a45e2dd6093c80313d15a67f4a5c04ca7452cbde4f7",
+      "notebookOriginalPrefixBytes": 619,
+      "notebookOriginalPrefixSha256": "90f18569b5e2db6127525a45e2dd6093c80313d15a67f4a5c04ca7452cbde4f7",
+      "activeAppendPrefix": false,
+      "mutableStatusSnapshot": false,
+      "secretAssignmentLinesOmitted": 0
+    },
+    {
+      "path": "android-apk-build-v221/typecheck.log",
+      "bytes": 247,
+      "sha256": "3c615fd113d63190ea2a093347d4584036f30da3fc24dcbb470721c9e7506033",
+      "notebookOriginalPrefixBytes": 247,
+      "notebookOriginalPrefixSha256": "3c615fd113d63190ea2a093347d4584036f30da3fc24dcbb470721c9e7506033",
+      "activeAppendPrefix": false,
+      "mutableStatusSnapshot": false,
+      "secretAssignmentLinesOmitted": 0
+    },
+    {
+      "path": "android-apk-build-v231/status.json",
+      "bytes": 1943,
+      "sha256": "b6c07e0ea5632c0bb1070eee221180a6db81a9fbc2e3f9e81b3c3ba9bba6970e",
+      "notebookOriginalPrefixBytes": 1943,
+      "notebookOriginalPrefixSha256": "b6c07e0ea5632c0bb1070eee221180a6db81a9fbc2e3f9e81b3c3ba9bba6970e",
+      "activeAppendPrefix": false,
+      "mutableStatusSnapshot": false,
+      "secretAssignmentLinesOmitted": 0
+    },
+    {
+      "path": "android-apk-build-v231/build.log",
+      "bytes": 131940,
+      "sha256": "b1b34d785ed3f745c7fc716873e9a6d26118ba6b55e038c8414d71a9865d2f4d",
+      "notebookOriginalPrefixBytes": 131858,
+      "notebookOriginalPrefixSha256": "8b7ecc362989d9faa4a0201f554a37c8b2e46caa4f61eaa246370e3bbbe197c3",
+      "activeAppendPrefix": false,
+      "mutableStatusSnapshot": false,
+      "secretAssignmentLinesOmitted": 2
+    },
+    {
+      "path": "android-apk-build-v242/status.json",
+      "bytes": 2269,
+      "sha256": "81b59e1114ec11791ebcc4192a2d6a532f5ceb7df2564b20b40ce2193b08e359",
+      "notebookOriginalPrefixBytes": 2269,
+      "notebookOriginalPrefixSha256": "81b59e1114ec11791ebcc4192a2d6a532f5ceb7df2564b20b40ce2193b08e359",
+      "activeAppendPrefix": false,
+      "mutableStatusSnapshot": false,
+      "secretAssignmentLinesOmitted": 0
+    },
+    {
+      "path": "android-apk-build-v242/build.log",
+      "bytes": 131940,
+      "sha256": "318350f90969eb5028ca35b37badfe9b2047b42f3c0ec1405ad624f8c1e2bbe3",
+      "notebookOriginalPrefixBytes": 131858,
+      "notebookOriginalPrefixSha256": "e320bbd84b58cd9cd0d25294b34d4b06ee7e9f6e85061a95a41f68d03ba9ee9a",
+      "activeAppendPrefix": false,
+      "mutableStatusSnapshot": false,
+      "secretAssignmentLinesOmitted": 2
+    },
+    {
+      "path": "android-apk-build-v242/route-tests.log",
+      "bytes": 621,
+      "sha256": "04bd2741186aecd3c6d7999b4e8f14d0bb735135891104aff0c2ad77bd713af0",
+      "notebookOriginalPrefixBytes": 621,
+      "notebookOriginalPrefixSha256": "04bd2741186aecd3c6d7999b4e8f14d0bb735135891104aff0c2ad77bd713af0",
+      "activeAppendPrefix": false,
+      "mutableStatusSnapshot": false,
+      "secretAssignmentLinesOmitted": 0
+    },
+    {
+      "path": "android-apk-build-v242/typecheck.log",
+      "bytes": 247,
+      "sha256": "3c615fd113d63190ea2a093347d4584036f30da3fc24dcbb470721c9e7506033",
+      "notebookOriginalPrefixBytes": 247,
+      "notebookOriginalPrefixSha256": "3c615fd113d63190ea2a093347d4584036f30da3fc24dcbb470721c9e7506033",
+      "activeAppendPrefix": false,
+      "mutableStatusSnapshot": false,
+      "secretAssignmentLinesOmitted": 0
+    },
+    {
+      "path": "sdk-update-v224/status.json",
+      "bytes": 2967,
+      "sha256": "a39bce3e58c23aef1e4f2364003d7e4cddbde0ace6793b2d0d6b4c50f12e609e",
+      "notebookOriginalPrefixBytes": 2967,
+      "notebookOriginalPrefixSha256": "a39bce3e58c23aef1e4f2364003d7e4cddbde0ace6793b2d0d6b4c50f12e609e",
+      "activeAppendPrefix": false,
+      "mutableStatusSnapshot": false,
+      "secretAssignmentLinesOmitted": 0
+    },
+    {
+      "path": "sdk-update-v235/status.json",
+      "bytes": 2998,
+      "sha256": "56f534f666e9f958f205fa23d913a7d3ddeb97672fce3f6f7e1a3184201cece2",
+      "notebookOriginalPrefixBytes": 2998,
+      "notebookOriginalPrefixSha256": "56f534f666e9f958f205fa23d913a7d3ddeb97672fce3f6f7e1a3184201cece2",
+      "activeAppendPrefix": false,
+      "mutableStatusSnapshot": false,
+      "secretAssignmentLinesOmitted": 0
+    },
+    {
+      "path": "sdk-update-v245/status.json",
+      "bytes": 3029,
+      "sha256": "68a6d2eb05b6f6a7259b86c098d2071349ec5208484597d5c857c6e5fc7db826",
+      "notebookOriginalPrefixBytes": 3029,
+      "notebookOriginalPrefixSha256": "68a6d2eb05b6f6a7259b86c098d2071349ec5208484597d5c857c6e5fc7db826",
+      "activeAppendPrefix": false,
+      "mutableStatusSnapshot": false,
+      "secretAssignmentLinesOmitted": 0
+    },
+    {
+      "path": "notebook-owner-service-v225/status.json",
+      "bytes": 2165,
+      "sha256": "8f65083430ad51014956d7c4343a87c8dcf21c483d36f4d74ad828a5d5b83b6c",
+      "notebookOriginalPrefixBytes": 2165,
+      "notebookOriginalPrefixSha256": "8f65083430ad51014956d7c4343a87c8dcf21c483d36f4d74ad828a5d5b83b6c",
+      "activeAppendPrefix": false,
+      "mutableStatusSnapshot": true,
+      "secretAssignmentLinesOmitted": 0
+    },
+    {
+      "path": "notebook-owner-service-v225/native-stage.jsonl",
+      "bytes": 2302,
+      "sha256": "b8bc1f89ab16f1b7758b49ecefceda2b38ded4e7a9f7decb0e4e671660509f50",
+      "notebookOriginalPrefixBytes": 2302,
+      "notebookOriginalPrefixSha256": "b8bc1f89ab16f1b7758b49ecefceda2b38ded4e7a9f7decb0e4e671660509f50",
+      "activeAppendPrefix": true,
+      "mutableStatusSnapshot": false,
+      "secretAssignmentLinesOmitted": 0
+    },
+    {
+      "path": "notebook-owner-service-v225/actual-provider-bindings.jsonl",
+      "bytes": 857,
+      "sha256": "84b3456044e53893e4b90bda7efef569c7bc01e8ff15388110b81dee38eac095",
+      "notebookOriginalPrefixBytes": 857,
+      "notebookOriginalPrefixSha256": "84b3456044e53893e4b90bda7efef569c7bc01e8ff15388110b81dee38eac095",
+      "activeAppendPrefix": true,
+      "mutableStatusSnapshot": false,
+      "secretAssignmentLinesOmitted": 0
+    },
+    {
+      "path": "notebook-owner-service-v225/resources.jsonl",
+      "bytes": 165971,
+      "sha256": "6449cb7fccb08044c4e3410759a94f9a77d6b3b42a793264be8e45ac9ef85310",
+      "notebookOriginalPrefixBytes": 165971,
+      "notebookOriginalPrefixSha256": "6449cb7fccb08044c4e3410759a94f9a77d6b3b42a793264be8e45ac9ef85310",
+      "activeAppendPrefix": true,
+      "mutableStatusSnapshot": false,
+      "secretAssignmentLinesOmitted": 0
+    },
+    {
+      "path": "notebook-owner-service-v225/production-redacted.log",
+      "bytes": 53714,
+      "sha256": "06529cb304473205b22ec728ea6a3cb51fac5e16da9d4e44324295a0e9a45383",
+      "notebookOriginalPrefixBytes": 53714,
+      "notebookOriginalPrefixSha256": "06529cb304473205b22ec728ea6a3cb51fac5e16da9d4e44324295a0e9a45383",
+      "activeAppendPrefix": true,
+      "mutableStatusSnapshot": false,
+      "secretAssignmentLinesOmitted": 0
+    },
+    {
+      "path": "android-apk-build-v242/build-provenance.json",
+      "bytes": 4114,
+      "sha256": "d190550a9542b71b5ff0b78895622b912a7c93a90b1cabaabc3310e863b568ea"
+    }
+  ],
+  "copyOnly": true,
+  "originalsPreserved": true,
+  "noApkModelConfigEnvOrUserdataTransfer": true,
+  "activePrefixesNeverClaimedClosed": true
+}

@@ -1,0 +1,8 @@
+{
+  "bytes": 3299,
+  "copyOnly": true,
+  "custody": "Notebook result persisted and fsynced before relay; remote receipt in same output",
+  "localPath": "/home/developer/projects/aurora/thesis/phone-notebook/20261020/evidence/open-mesh-after-update-v298/result.json",
+  "remotePath": "/home/developer/projects/aurora/thesis/phone-notebook/20261020/evidence/open-mesh-after-update-v298.json",
+  "sha256": "7795dbef1549247558ee14affb2409f2aeb96e3ceab1abeeca5480b256ff82ff"
+}

@@ -1,0 +1,36 @@
+{
+  "id": "d2e5bbdf-d7fb-4380-98be-3a2ff2413d57",
+  "ok": true,
+  "result": {
+    "terminal": {
+      "handle": "term_d5651d8d-58e2-4b38-85e2-51c668cc933c",
+      "status": "running",
+      "tail": [
+        "",
+        "",
+        "",
+        "",
+        "",
+        "",
+        "",
+        "",
+        "",
+        "",
+        "Traceback (most recent call last):",
+        "  File \"<stdin>\", line 2, in <module>",
+        "  File \"<string>\", line 52, in <module>",
+        "AssertionError: Existing approved auth binding missing"
+      ],
+      "truncated": false,
+      "limited": false,
+      "oldestCursor": "74044",
+      "nextCursor": "74786",
+      "latestCursor": "74786",
+      "returnedLineCount": 14,
+      "source": "stream"
+    }
+  },
+  "_meta": {
+    "runtimeId": "cc9e3275-28c6-4c45-85cc-bdcd2262aa7d"
+  }
+}

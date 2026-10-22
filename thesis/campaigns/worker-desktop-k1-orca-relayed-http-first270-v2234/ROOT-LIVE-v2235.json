@@ -1,0 +1,48 @@
+{
+  "at": "2026-10-21T16:44:01.654265+00:00",
+  "status": "V2234_CURRENT_RECEIVER_SCHEMA_PREFLIGHT_PASSED_REAL_WARMUPS_RUNNING",
+  "nativeGoalThread": "01a112a5-d6bb-74e2-bf7c-ace73cb513b5",
+  "nativeGoalStatus": "active",
+  "previousGoalTurnClassification": "progress: actual authentication recovery/new valid flows, not a repeated test plan",
+  "thisGoalTurnProgress": "Saved six-condition index+reproduction,15actual native45joined, fixed receiver preflight before inference, started affected V2234 on SAMEprovider",
+  "controller": {
+    "pid": 3751414,
+    "startTicks": 137933512
+  },
+  "backend": {
+    "pid": 3751426,
+    "startTicks": 137933748
+  },
+  "copier": {
+    "pid": 3751415,
+    "startTicks": 137933513
+  },
+  "finalizer": {
+    "pid": 3751416,
+    "startTicks": 137933514
+  },
+  "manifestSha256": "11bbea3fc1e45e65da1ecb7b501aee77739870cb087d792e5bc5197f9b1027be",
+  "sameProvider": {
+    "pid": 1440196,
+    "startTicks": 35427408,
+    "deadlineUtc": "2026-10-21T22:45:52.468654+00:00"
+  },
+  "countsObserved": {
+    "excludedWarmups": 1,
+    "correct": 1,
+    "failed": 0,
+    "newMeasured": 0
+  },
+  "newMeasuredPlanned": 270,
+  "firstGlobal": 181,
+  "lastGlobal": 450,
+  "conditionTarget": 900,
+  "parentRetainedMeasured": 180,
+  "originalParentFailed": 1,
+  "oldWarmupsNotCountedAsMeasured": true,
+  "rootDeadlineNotReset": "2026-10-21T23:36:07.231887+00:00",
+  "nextReadOnlyCheckAt": "2026-10-21T16:49:01.654265+00:00",
+  "immediateOn": "terminal/error/nativeproofcompletion",
+  "nextAction": "Continue same frozen real15warmups then native+capacity gate and firstnew181; no extra tests/provider restart/phonework",
+  "savedResultsIndex": "thesis/results/worker-desktop-core-v2231/inventory.json"
+}

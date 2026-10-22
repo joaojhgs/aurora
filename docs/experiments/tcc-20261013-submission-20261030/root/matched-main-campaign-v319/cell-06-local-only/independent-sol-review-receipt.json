@@ -1,0 +1,8 @@
+{
+  "review_sha256": "e758a47c10f006976accb49ba082eac4acebeea332cc90459b082eb60a5a7135",
+  "review_bytes": 4825,
+  "verdict": "approve_actual_closed_cell",
+  "final_data_manifest_sha256": "f35e565f6462e0deeb2478bfd2cdaa361edeb16c3077512b612da94dab94f9da",
+  "model_or_test_replay": false,
+  "internal_thread_cleanup": "supervisor_returned_unverified"
+}

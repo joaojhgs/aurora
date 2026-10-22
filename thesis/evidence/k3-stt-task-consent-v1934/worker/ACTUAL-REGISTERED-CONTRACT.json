@@ -1,0 +1,14 @@
+{
+  "method": "Transcription.Transcribe",
+  "priorPermissionsPreserved": [
+    "Gateway.GetRegistry",
+    "Gateway.GetMeshStatus",
+    "TTS.Synthesize",
+    "Orchestrator.use"
+  ],
+  "requiredPermissions": [
+    "Transcription.Transcribe"
+  ],
+  "source": "/home/developer/projects/aurora/thesis/sources/k3-stt-runtime-v1907/worker/source/app/services/stt_transcription/service.py",
+  "sourceSha256": "becf4222d99b02dbc4cac03ad098f275ccb288ceb35f44e945a521701ecaaf49"
+}

@@ -1,0 +1,131 @@
+{
+  "archive": "thesis/evidence/k3-retired-provider-custody-v1964/provider-1/provider.tar.gz",
+  "bytes": 457015,
+  "sha256": "7bd9662a1614660fd9a8acf38dae2a7a0a8587e7d7cb0e8e5abaaf8a00d86615",
+  "rawMembers": 17,
+  "rawBytes": 8093640,
+  "allRawMemberHashesVerified": true,
+  "sealOriginalSha256": "6fe7f695f0e5af08cdea3e2b338903d9099da8cbd16823f4b4266a7cb5289086",
+  "sealTrailingRepresentation": "'\\n'",
+  "metadataNote": "Original seal is valid JSON with a normal newline. Original archive/seal/raw member bytes remain unchanged; canonical seal copy contains the same parsed object.",
+  "files": [
+    {
+      "member": "ACTUAL-FILES-v1912.json",
+      "bytes": 2221,
+      "sha256": "989081631a65f5d5494a3d9b9e369d2bbb62f6bb8c14e53aa37e21d10d3fc368"
+    },
+    {
+      "member": "PREPARATION-v1912.json",
+      "bytes": 8840,
+      "sha256": "537b17bba18ef42a2bf73aab03e04614e3d3dd948b1cb354d4e50be4530696d0"
+    },
+    {
+      "member": "ROOT-ADMISSION-v1914.json",
+      "bytes": 8272,
+      "sha256": "239c310e8773661a04a505c6b64bd2df505f843fb7b2613bbae5554bcaf6b9be"
+    },
+    {
+      "member": "ROOT-LAUNCH-INTENT-v1914.json",
+      "bytes": 183,
+      "sha256": "7191ca082821d081b8e3c30f6b7567468b51e048eb88d9d5a97fe8fc0d670c0b"
+    },
+    {
+      "member": "ROOT-LAUNCH-v1914.json",
+      "bytes": 275,
+      "sha256": "2ccd20103416a7d25c3677064767dd53676f260ed71abcf19e14e00481a417eb"
+    },
+    {
+      "member": "STATUS.json",
+      "bytes": 161081,
+      "sha256": "f9eec249869dcbfa2b4f20bcef3fbba284443feda2d0bd719a7a808c58700bab"
+    },
+    {
+      "member": "actual-provider-bindings.jsonl",
+      "bytes": 819,
+      "sha256": "e98e3e508de67ffa5788a3f08dfafa19751f045bf5721a9bd1007ad4a405a49f"
+    },
+    {
+      "member": "assistant-identity.json",
+      "bytes": 1417,
+      "sha256": "6f1ad2702ddb4860ddf57d54566b8b4a5febfcfb117d750871c7d0e6c6be1554"
+    },
+    {
+      "member": "controller-launch.json",
+      "bytes": 300,
+      "sha256": "79ddd84d907dd7157775bf941ebcdb4e7fd01354e2acdcc3e3242681f4529fbb"
+    },
+    {
+      "member": "provider-manifest.json",
+      "bytes": 7138,
+      "sha256": "ff1d2edc13fe65e646dccad691f4c0a3f83f31b224b796ef5f752402ce298e69"
+    },
+    {
+      "member": "receiver-identity.json",
+      "bytes": 1372,
+      "sha256": "5f02bde5cc7867a42ed0c42f7c851b1c7744a57255e3cf4d3f785f91850400e4"
+    },
+    {
+      "member": "resources.jsonl",
+      "bytes": 7899549,
+      "sha256": "7e7dd7c04b9e2d6515d33036d9799e06980e4dbcb8dba6bb1535e693ecb6992d"
+    },
+    {
+      "member": "runtime-versions.json",
+      "bytes": 210,
+      "sha256": "078733593a3d1af44ffa754d8dafac30459e993b219da96295614854c1cd2e57"
+    },
+    {
+      "member": "stt-identity.json",
+      "bytes": 1399,
+      "sha256": "153f8a3da48253e0c936a6f40afef97e35cd98c54b221d8c0eee49af7f044a56"
+    },
+    {
+      "member": "terminal.json",
+      "bytes": 435,
+      "sha256": "4f691037cb48c0dff29f93335bfe31611288824097a5011dd9053835ec89dbef"
+    },
+    {
+      "member": "voice-stages.jsonl",
+      "bytes": 0,
+      "sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+    },
+    {
+      "member": "voice-stages.status.json",
+      "bytes": 129,
+      "sha256": "33092f425f332f5fd463fbc1b5a24197757503094adc77bc92d814f09735bb68"
+    }
+  ],
+  "pages": [
+    {
+      "offset": 0,
+      "bytes": 98304,
+      "sha256": "b05a0d4db723501f4239891b23e4f35d7e9d758392496204b97bacdd3d64c1a0"
+    },
+    {
+      "offset": 98304,
+      "bytes": 98304,
+      "sha256": "b01b1b322cdfd90fa1dce63b46d5542d7da090ba3a89a1f0d9ae252911f59e0b"
+    },
+    {
+      "offset": 196608,
+      "bytes": 98304,
+      "sha256": "a07e937f1f34c79d66ccaa082d2d84680148f7d3a71e6b62f2509da36eee15df"
+    },
+    {
+      "offset": 294912,
+      "bytes": 98304,
+      "sha256": "0b02626e6e0cc72c456f46053c004ba90f8f74709373fb5df787e3f380d083bb"
+    },
+    {
+      "offset": 393216,
+      "bytes": 63799,
+      "sha256": "a5e75160bceb187a9ab5da9370c0b30785bd2ae3491b8dd894740576ba976b24"
+    }
+  ],
+  "originalsPreserved": true,
+  "duplicateUncompressedRawBytes": 0,
+  "sealTrailingOrdinals": [
+    10
+  ],
+  "noteCorrectionReceipt": "NOTE-CORRECTION.json"
+}

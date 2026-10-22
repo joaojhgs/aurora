@@ -1,0 +1,65 @@
+{
+  "copyOnly": true,
+  "files": [
+    {
+      "source": ".git/aurora-handoff-import-20261006/notebook-root-readonly-control-20261020T0121-INTENT.json",
+      "destination": "thesis/evidence/personal-notebook-readiness-20261020/notebook-root-readonly-control-20261020T0121-INTENT.json",
+      "bytes": 506,
+      "sha256": "625eac5fbbfa88267fbaeb0155b97e962d3bae9b2d9664264bcea26330b05eab"
+    },
+    {
+      "source": ".git/aurora-handoff-import-20261006/notebook-root-readonly-control-20261020T0121.json",
+      "destination": "thesis/evidence/personal-notebook-readiness-20261020/notebook-root-readonly-control-20261020T0121.json",
+      "bytes": 1055,
+      "sha256": "a02bf0e07f6c7ea1319089abe510c29948023e644ed829d2c65fb4c22a5bd630"
+    },
+    {
+      "source": ".git/aurora-handoff-import-20261006/notebook-root-control-show-20261020T0121.json",
+      "destination": "thesis/evidence/personal-notebook-readiness-20261020/notebook-root-control-show-20261020T0121.json",
+      "bytes": 1269,
+      "sha256": "07f69ea74dbce9eed06e2113771aad63e29085102c388ef4ec137a57388dfa92"
+    },
+    {
+      "source": ".git/aurora-handoff-import-20261006/notebook-root-control-initial-read-20261020T0121.json",
+      "destination": "thesis/evidence/personal-notebook-readiness-20261020/notebook-root-control-initial-read-20261020T0121.json",
+      "bytes": 714,
+      "sha256": "bdb0846285df2ee29157866afb9f426e1f36b3a428e1298532347ac21beaf809"
+    },
+    {
+      "source": ".git/aurora-handoff-import-20261006/notebook-aurora-existing-worktree-20261020T0119.json",
+      "destination": "thesis/evidence/personal-notebook-readiness-20261020/notebook-aurora-existing-worktree-20261020T0119.json",
+      "bytes": 1981,
+      "sha256": "af5bca85e3ead0db12e14e1acab542c25e0ba806f7095df42fbfe8c0cbae8bdb"
+    },
+    {
+      "source": ".git/aurora-handoff-import-20261006/notebook-aurora-existing-terminals-20261020T0118.json",
+      "destination": "thesis/evidence/personal-notebook-readiness-20261020/notebook-aurora-existing-terminals-20261020T0118.json",
+      "bytes": 1206,
+      "sha256": "80808db0e90052e41b2e166b5e20a9b3e0beba52a1258e33676835b13f4c50d7"
+    },
+    {
+      "source": ".git/aurora-handoff-import-20261006/notebook-approved-host-metadata-20261020T0116.json",
+      "destination": "thesis/evidence/personal-notebook-readiness-20261020/notebook-approved-host-metadata-20261020T0116.json",
+      "bytes": 245,
+      "sha256": "4ecf8a996cc076db3abbc2afe0737e2610025ffe9901008a211490cfc53f795c"
+    },
+    {
+      "source": ".git/aurora-handoff-import-20261006/notebook-personal-readonly-inventory-20261020T0122-READ-2.json",
+      "destination": "thesis/evidence/personal-notebook-readiness-20261020/notebook-personal-readonly-inventory-20261020T0122-READ-2.json",
+      "bytes": 765,
+      "sha256": "4970736431392702ca3f9e6c1320932db8a5c4b7dc826dba597f1ddd63888bca"
+    },
+    {
+      "source": ".git/aurora-handoff-import-20261006/notebook-personal-readonly-inventory-r2-20261020T0124-RESULT.json",
+      "destination": "thesis/evidence/personal-notebook-readiness-20261020/notebook-personal-readonly-inventory-r2-20261020T0124-RESULT.json",
+      "bytes": 8628,
+      "sha256": "8759445a35a8c96ebe006b6adfa520a7f160a9f363a575a5223bb20de48530c3"
+    },
+    {
+      "source": ".git/aurora-handoff-import-20261006/notebook-matched-runtime-metadata-r2-20261020T0128-RESULT.json",
+      "destination": "thesis/evidence/personal-notebook-readiness-20261020/notebook-matched-runtime-metadata-r2-20261020T0128-RESULT.json",
+      "bytes": 1993,
+      "sha256": "e01b4644e658412fb9ed074db17b5e84b97a5c1aeb6968c25fcede5cc8f6ddde"
+    }
+  ]
+}

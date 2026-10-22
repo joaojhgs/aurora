@@ -1,0 +1,37 @@
+{
+  "at": "2026-10-18T17:09:07.513327+00:00",
+  "status": "PREPARED_NOT_LAUNCHED_REVIEW_AND_FRESH_PROVIDER_ADMISSION_PENDING",
+  "plannedMeasured": 184,
+  "range": [
+    717,
+    900
+  ],
+  "priorAttempts": 716,
+  "priorCorrect": 714,
+  "priorFailed": 2,
+  "freshExcludedWarmups": 15,
+  "strictNativeWarmupJoins": 45,
+  "scienceComparison": "k3_remaining_root_v1562 --draft passed exact effective scientific parameters equality against parent, normalizing only prior local token migration. No model/audio/settings/backend/predicate/route placement changes.",
+  "configReference": "Existing same private runtime-config.json SHA2b8cc043fc75c8978e2528379badb9fff7cd2ad2bc82729e61c560d35bbd1cc1; reuse protected ORIGINAL V1513 stage absent.env localtoken in memory; no key reset/credential export/hash.",
+  "cumulativeBudget": {
+    "originalCapSeconds": 57600,
+    "priorUsedIncludingSetupWarmupsShutdownSeconds": 22863.568940656,
+    "remainingSeconds": 34736.431059344,
+    "effectiveControllerCap": "min(57840, same provider actual remaining absolute lifetime minus180s, remaining cumulative condition budget minus180s)",
+    "prewarmupPlanningBudgetSeconds": 8238.719302368001,
+    "newWarmupAdmission": "Recompute184*p95*1.2+300 from15actual excluded warmups and require provider lifetime. Existing same providerdeadline00:08:53UTC preserved."
+  },
+  "recoveryAdmissionEvidence": {
+    "sameProviderRead": "v1548 actualsamePID/start/config/manifest; a new freshness read is required beforelaunch",
+    "existingKeyHealth": "Existing18000route GET200at16:48:49,0models aftertransientcontrolwrite rejection; furtherhealthread onceatlaunch",
+    "underlyingAssistantDeliveryFailureCause": "UNKNOWN, no causality/model-quality conclusion",
+    "maximumNewLaunches": 1,
+    "noAutomaticRetry": true
+  },
+  "modelRequests": 0,
+  "actualLaunch": false,
+  "sourceDiff": "thesis/campaigns/worker-desktop-k3-orca-relayed-http-remaining-v1562/BOUNDED-SOURCE-DIFF-v1562.patch",
+  "sourceDiffBytes": 29802,
+  "operatorPins": "thesis/campaigns/worker-desktop-k3-orca-relayed-http-remaining-v1562/execution-sources-v1562/MANIFEST.json",
+  "oldSourcesAndResultsPreserved": true
+}

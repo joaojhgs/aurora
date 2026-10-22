@@ -1,0 +1,12 @@
+{
+  "controlDeadline": "2026-10-22T04:30:00Z",
+  "explicitNewline": true,
+  "host": "ssh:ssh-sem-notebook-personal",
+  "incarnation": "328cd72f-c7ea-49ff-a2db-b9275b085037",
+  "remoteResult": "/home/developer/projects/aurora/thesis/phone-notebook/20261020/evidence/prepare-production-wasm-cache-v75.json",
+  "rootAdmissionMessage": "owner-pinned-frontend-build-dependency-preparation",
+  "script": "scripts/prepare_root_cargo_cache_v75.py",
+  "scriptSha256": "92f8e5abe07daef5e1e52ce3a3ca255a008883f3d68bb538d62ca17a57e4ed25",
+  "singleSend": true,
+  "terminal": "term_a2ed5feb-7c92-48e4-bd88-d1b0e6737989"
+}

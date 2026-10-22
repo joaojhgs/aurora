@@ -1,0 +1,20 @@
+{
+  "command": [
+    "pnpm",
+    "--filter",
+    "@aurora/ui",
+    "exec",
+    "vitest",
+    "run",
+    "--environment",
+    "node",
+    "--no-file-parallelism",
+    "tests/runtime-profile.test.ts",
+    "tests/onboarding-and-mesh-baseline.test.tsx"
+  ],
+  "startedAt": "2026-10-16T14:32:29.038611+00:00",
+  "endedAt": "2026-10-16T14:32:43.491262+00:00",
+  "exitCode": 0,
+  "error": null,
+  "log": ".git/aurora-handoff-import-20261006/desktop-local-profile-integration-v1081/shared-ui-test.log"
+}

@@ -1,0 +1,71 @@
+{
+  "at": "2026-10-22T04:58:12.365245+00:00",
+  "status": "REQUESTER_TERMINAL_AND_PHYSICAL_CUSTODY_SEALED",
+  "manifestSha256": "9adbf9ba3a7ec0948a087edad3655cf94ee344b3a2371a78d15f188f44150d42",
+  "requesterActorsAbsent": true,
+  "requesterActors": [
+    {
+      "pid": 3965950,
+      "expectedStartTicks": 139740362,
+      "state": "ABSENT"
+    },
+    {
+      "pid": 3965978,
+      "expectedStartTicks": 139740616,
+      "state": "ABSENT"
+    },
+    {
+      "pid": 3965951,
+      "expectedStartTicks": 139740363,
+      "state": "ABSENT"
+    }
+  ],
+  "epochMeasured": {
+    "attempted": 450,
+    "correct": 450,
+    "failed": 0,
+    "incorrect": 0,
+    "timeouts": 0,
+    "planned": 450,
+    "unattempted": 0
+  },
+  "conditionCountsOnly": {
+    "attempted": 900,
+    "correct": 899,
+    "failed": 1,
+    "incorrect": 0,
+    "unattempted": 0,
+    "target": 900
+  },
+  "failureCodes": {},
+  "excludedWarmups": 15,
+  "caseRecords": 465,
+  "actualWAV": 465,
+  "verifiedFiles": 3109,
+  "verifiedBytes": 57157775,
+  "snapshotSha256": "2c145d404460de3879d6f4c65b321566be6693359cb17c391557fdcc6c02b7ac",
+  "sourceCheckpointSha256": "c60fc1590c30e197049da0461866451b8119db63838d0e611abe36331a0c9522",
+  "requesterNativeResourcePrefixEOF": [
+    {
+      "name": "voice-stages.jsonl",
+      "bytes": 5463285,
+      "sourceEOFVerified": true
+    },
+    {
+      "name": "actual-provider-bindings.jsonl",
+      "bytes": 2143,
+      "sourceEOFVerified": true
+    },
+    {
+      "name": "resources.jsonl",
+      "bytes": 33397127,
+      "sourceEOFVerified": true
+    }
+  ],
+  "controllerExitCode": 0,
+  "terminalStatus": "completed_all_correct",
+  "terminalStopReason": null,
+  "newInference": 0,
+  "nativeGoalMutations": 0,
+  "noLatencyPooling": true
+}

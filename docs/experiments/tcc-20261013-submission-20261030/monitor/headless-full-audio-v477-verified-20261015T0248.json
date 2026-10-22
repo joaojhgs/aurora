@@ -1,0 +1,13 @@
+{
+  "status": "Current bounded check",
+  "at": "2026-10-15T02:47:25.546922+00:00",
+  "package": "docs/experiments/tcc-20261013-submission-20261030/root/headless-full-audio-v477",
+  "manifestSha256": "bcca2e64746b8b9f3f251abf9c4ee3d9714a6e4cb3b1d56f81f2c4ea288d7b21",
+  "listedMembersVerified": 31,
+  "totalFilesObserved": 33,
+  "allListedBytesAndHashesMatch": true,
+  "readmeSha256": "bde7191e099cb95ea8b0c304f06bbdc77c4cced4c547e41c14e6b53e8e88762b",
+  "rootMessage": "msg_29577e0c5b26",
+  "scope": "one real causal fullaudio pilot, taskcorrectnessFAIL, actualGPUoffloadunproven,0measured; artifactverificationonly no tests/modelcalls/replay",
+  "phase2MeasuredAllowed": false
+}

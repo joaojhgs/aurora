@@ -1,0 +1,21 @@
+{
+  "sourceReceipt": "v1062-native-ui-main-terminal-RESULT.json",
+  "files": [
+    {
+      "path": "TERMINAL.json",
+      "bytes": 2952,
+      "sha256": "7c6a68c9e76bf7528bcfbc7d41e4e1f07c00743792cf6e67a5d417604e6771c1"
+    },
+    {
+      "path": "summary.json",
+      "bytes": 765,
+      "sha256": "e61e8b8b1bf9ee4929c044f74552b9f80501a6420a56f53b13eb0dcc05f87e9c"
+    },
+    {
+      "path": "saved-window.json",
+      "bytes": 1186,
+      "sha256": "f51fb62fdc6ffb52597e562192213a224b7f9512291920a990db286cadccf83b"
+    }
+  ],
+  "rawPrivateRetained": "/tmp/aurora-root-c06-current-source-v1019/.artifacts/native-ui-main-v1060"
+}

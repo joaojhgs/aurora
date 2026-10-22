@@ -1,0 +1,1124 @@
+{
+  "schema": "aurora.phone_notebook.usb_resume_readiness.v2",
+  "at": "2026-10-22T06:03:30.933157+00:00",
+  "authority": "Direct owner resumption on2026-10-21; previous failed Dispatch remains settled and no lifecycle signals are reused",
+  "status": "SECOND_REPAIR_NORMAL_UPDATE_VERIFIED_NATIVE_POLICY_AND_LLM_PROBE_RUNNING",
+  "phone": {
+    "adbSerial": "KBX8LNFUBE5XGQRG",
+    "currentSelectedState": "device",
+    "currentInventory": "List of devices attached\nKBX8LNFUBE5XGQRG       device usb:3-1 product:rodin_global model:2412DPC0AG device:rodin transport_id:3\n\n",
+    "currentUsbExposure": [
+      {
+        "node": "/dev/bus/usb/003/015",
+        "product": "POCO X7 Pro",
+        "read": true,
+        "sysfs": "3-1",
+        "write": true
+      }
+    ],
+    "currentObservedAt": "2026-10-22T04:10:22.437216+00:00",
+    "controllerEndpoint": "127.0.0.1:5037",
+    "controllerPid": 48127,
+    "controllerExecutable": "/usr/lib/android-sdk/platform-tools/adb",
+    "authorizationDialogObserved": false,
+    "currentWifiOrLanState": "Unknown while phone unreachable;00:14 saved-WiFi route remains historical",
+    "lastKnownAuthorizedMetadataAt": "2026-10-22T00:14:02Z",
+    "lastKnownAuthorizedMetadata": {
+      "physicalUsbProduct": "POCO X7 Pro",
+      "manufacturer": "Xiaomi",
+      "usbInterface": {
+        "canRead": true,
+        "canWrite": true,
+        "exists": true,
+        "gid": 1002,
+        "manufacturer": "Xiaomi",
+        "mode": "crw-rw----",
+        "path": "/dev/bus/usb/003/014",
+        "product": "POCO X7 Pro",
+        "serial": "KBX8LNFUBE5XGQRG",
+        "sysfsDevice": "3-1",
+        "uid": 65534
+      },
+      "adbSerial": "KBX8LNFUBE5XGQRG",
+      "adbAuthorizationState": "device",
+      "abi": "arm64-v8a",
+      "androidVersion": "16",
+      "appBuild": {
+        "package": "dev.aurora.desktop",
+        "versionName": "1.0.0",
+        "versionCode": 100,
+        "debuggable": true,
+        "lastUpdateTime": "2026-08-27 18:11:40",
+        "apkBytes": 529739457,
+        "apkSha256": null,
+        "hashNotComputedReason": "APK exceeds bounded128MiB local hash guard; no APK copied"
+      },
+      "appSourceSha": null,
+      "phonePersonalContentRead": false,
+      "wirelessEndpointAttempted": false,
+      "hardwareUsbSerial": "KBX8LNFUBE5XGQRG",
+      "adbSelectedState": {
+        "at": "2026-10-22T00:13:17.582530+00:00",
+        "command": [
+          "/home/developer/Android/Sdk/platform-tools/adb",
+          "-s",
+          "KBX8LNFUBE5XGQRG",
+          "get-state"
+        ],
+        "exit": 0,
+        "stderr": "",
+        "stdout": "device\n"
+      },
+      "androidApi": 36,
+      "model": "2412DPC0AG",
+      "wifiEnabled": true,
+      "wifiIpv4": "192.168.1.94/24",
+      "routeToNotebookInterface": "wlan0",
+      "battery": {
+        "AC powered": "false",
+        "USB powered": "true",
+        "Wireless powered": "false",
+        "health": "2",
+        "level": "76",
+        "scale": "100",
+        "status": "2",
+        "temperature": "346"
+      },
+      "wifiEnableAuthorizedByOwner": true,
+      "wifiEnableAttemptReached": true,
+      "wifiStateCurrent": "ON_AND_SAVED_WIFI_CONNECTED_20261022T001402UTC"
+    },
+    "personalContentRead": false,
+    "currentState": "device",
+    "observedAt": "2026-10-22T02:53:35.719163+00:00",
+    "adbAuthorizationState": "device",
+    "usbPermissionActionPending": false,
+    "model": "2412DPC0AG",
+    "abi": "arm64-v8a",
+    "wifiIpv4": "192.168.1.94/24"
+  },
+  "notebook": {
+    "terminal": "term_a2ed5feb-7c92-48e4-bd88-d1b0e6737989",
+    "incarnation": "328cd72f-c7ea-49ff-a2db-b9275b085037",
+    "host": "ssh:ssh-sem-notebook-personal",
+    "readiness": {
+      "branch": {
+        "exit": 0,
+        "stderr": "",
+        "stdout": "feat/ui-multi-platform-integration\n"
+      },
+      "freeDiskBytes": 101167779840,
+      "head": {
+        "exit": 0,
+        "stderr": "",
+        "stdout": "df23fd6e1f80e87dc45b6221bed87c00b4187e66\n"
+      },
+      "load": [
+        1.37353515625,
+        1.72900390625,
+        1.9013671875
+      ],
+      "trackedDirtyPaths": {
+        "exit": 0,
+        "stderr": "",
+        "stdout": ".claude/skills/gitnexus/debugging/SKILL.md\n.claude/skills/gitnexus/exploring/SKILL.md\n.claude/skills/gitnexus/impact-analysis/SKILL.md\n.claude/skills/gitnexus/refactoring/SKILL.md\nCLAUDE.md\napps/aurora-tauri/src-tauri/gen/schemas/desktop-schema.json\napps/aurora-tauri/src-tauri/gen/schemas/linux-schema.json\nreports/webrtc-interop/direct/report.json\nreports/webrtc-interop/firefox-direct/report.json\nreports/webrtc-interop/firefox-stun/report.json\nreports/webrtc-interop/firefox-turn/report.json\nreports/webrtc-interop/stun/report.json\nreports/webrtc-interop/turn/report.json\nreports/webrtc-interop/webkit-direct/report.json\nreports/webrtc-interop/webkit-stun/report.json\nreports/webrtc-interop/webkit-turn/report.json\n"
+      }
+    },
+    "assetsAndRuntime": {
+      "actualLoadedBackend": "UNPROVEN",
+      "at": "2026-10-21T22:14:00.152853+00:00",
+      "freeDiskBytes": 101195849728,
+      "host": "skyron-notebook",
+      "load": [
+        1.09814453125,
+        1.48583984375,
+        1.71875
+      ],
+      "memory": {
+        "MemAvailableBytes": 19329454080,
+        "MemTotalBytes": 32792059904
+      },
+      "modelCalls": 0,
+      "namedAssets": [
+        {
+          "exists": false,
+          "path": "/home/developer/projects/aurora/.artifacts/local-inference/models/Qwen3.5-0.8B-Q4_0.gguf"
+        },
+        {
+          "exists": false,
+          "path": "/home/developer/projects/aurora/.git/aurora-handoff-import-20261006/k1-provider-recovery-v1120/models/Qwen3.5-0.8B-Q4_0.gguf"
+        },
+        {
+          "exists": false,
+          "path": "/home/developer/projects/aurora/.git/aurora-handoff-import-20261006/cpu-full-audio-v483/models/en_US-ljspeech-medium.onnx"
+        },
+        {
+          "exists": false,
+          "path": "/home/developer/projects/aurora/.git/aurora-handoff-import-20261006/cpu-full-audio-v483/models/en_US-ljspeech-medium.onnx.json"
+        },
+        {
+          "exists": false,
+          "path": "/home/developer/projects/aurora/thesis/harness/distributed-k2-mesh-v1731/candidate-input.wav"
+        },
+        {
+          "exists": false,
+          "path": "/home/developer/.cache/huggingface/hub/models--Systran--faster-whisper-base/blobs/d01c3014881c9c6f3133c182f3d2887eb6ca1c789a7538c5c007196857a0a6a9"
+        },
+        {
+          "exists": false,
+          "path": "/home/developer/.cache/huggingface/hub/models--Systran--faster-whisper-base/snapshots/ebe41f70d5b6dfa9166e2c581c45c9c0cfc57b66/model.bin"
+        },
+        {
+          "exists": false,
+          "path": "/home/developer/.cache/huggingface/hub/models--ggml-org--Qwen3.5-0.8B-GGUF/snapshots/9447f74101aeb4e93621884dfa36ee8effb8831b/Qwen3.5-0.8B-Q4_0.gguf"
+        }
+      ],
+      "namedLlamaCaches": [
+        {
+          "exists": false,
+          "path": "/home/developer/.cache/uv/wheels-v4/pypi/llama-cpp-python"
+        },
+        {
+          "exists": false,
+          "path": "/home/developer/.cache/uv/wheels-v5/pypi/llama-cpp-python"
+        },
+        {
+          "exists": false,
+          "path": "/home/developer/.cache/uv/sdists-v8/pypi/llama-cpp-python"
+        },
+        {
+          "exists": false,
+          "path": "/home/developer/.cache/uv/sdists-v9/pypi/llama-cpp-python"
+        }
+      ],
+      "newDownloadsOrInstalls": 0,
+      "packages": {
+        "ctranslate2": "4.7.1",
+        "faster-whisper": "1.1.1",
+        "llama-cpp-python": null,
+        "numpy": "2.2.6",
+        "onnxruntime": "1.20.1",
+        "piper-tts": "1.2.0"
+      },
+      "policy": "Only explicit known model/cache names statted; no whole-host scan, model bytes read or provider changes",
+      "schema": "aurora.phone_notebook.asset_readiness.v2",
+      "tools": {
+        "c++": "/usr/bin/c++",
+        "cc": "/usr/bin/cc",
+        "cmake": null,
+        "ninja": null,
+        "nvidia-smi": null,
+        "piper": null,
+        "uv": "/home/developer/.asdf/shims/uv",
+        "vulkaninfo": null
+      }
+    },
+    "codingAgentStarted": false,
+    "isolatedProjectPython": {
+      "androidSdk": {
+        "buildTools": [
+          "35.0.0",
+          "36.0.0"
+        ],
+        "ndk": [
+          "27.0.12077973"
+        ],
+        "platforms": [
+          "android-35",
+          "android-36"
+        ],
+        "root": "/home/developer/Android/Sdk"
+      },
+      "at": "2026-10-21T23:56:23.090732+00:00",
+      "builds": 0,
+      "createProjectVenv": {
+        "argv": [
+          "/home/developer/projects/aurora/.venv/bin/python",
+          "-m",
+          "venv",
+          "--without-pip",
+          "/home/developer/projects/aurora/thesis/phone-notebook/20261020/deployment/ebde3a8acf6315f920d03593845f17a1fc65a733/.venv"
+        ],
+        "exit": 0,
+        "stderr": "",
+        "stdout": ""
+      },
+      "doneAt": "2026-10-21T23:56:23.188252+00:00",
+      "exactLocalSource": {
+        "argv": [
+          "git",
+          "cat-file",
+          "-t",
+          "ebde3a8acf6315f920d03593845f17a1fc65a733"
+        ],
+        "exit": 128,
+        "stderr": "fatal: git cat-file: could not get object info\n",
+        "stdout": ""
+      },
+      "gitWritten": false,
+      "gpuNodes": [
+        {
+          "device": "0x1681",
+          "name": "card1",
+          "renderNodes": [
+            "card1",
+            "controlD65",
+            "renderD128"
+          ],
+          "vendor": "0x1002"
+        },
+        {
+          "device": "0x25a2",
+          "name": "card2",
+          "renderNodes": [
+            "card2",
+            "controlD66",
+            "renderD129"
+          ],
+          "vendor": "0x10de"
+        }
+      ],
+      "host": "skyron-notebook",
+      "isolatedPython": {
+        "argv": [
+          "/home/developer/projects/aurora/thesis/phone-notebook/20261020/deployment/ebde3a8acf6315f920d03593845f17a1fc65a733/.venv/bin/python",
+          "--version"
+        ],
+        "exit": 0,
+        "stderr": "",
+        "stdout": "Python 3.11.14\n"
+      },
+      "modelCalls": 0,
+      "nativeRuntimeCandidates": [
+        {
+          "exists": false,
+          "path": "/home/developer/projects/aurora/.artifacts/local-inference/runtime/android-arm64/aurora-llama-runtime.json"
+        },
+        {
+          "exists": false,
+          "path": "/home/developer/projects/aurora/.artifacts/sherpa-onnx/native-runtime-build/runtime/aarch64-linux-android/lib/libsherpa-onnx-c-api.so"
+        },
+        {
+          "exists": true,
+          "path": "/home/developer/projects/aurora/apps/aurora-tauri/src-tauri/gen/android/app/build/outputs/apk"
+        }
+      ],
+      "networkRequests": 0,
+      "notebookHead": {
+        "argv": [
+          "git",
+          "rev-parse",
+          "HEAD"
+        ],
+        "exit": 0,
+        "stderr": "",
+        "stdout": "df23fd6e1f80e87dc45b6221bed87c00b4187e66\n"
+      },
+      "requirements": {
+        "path": "/home/developer/projects/aurora/thesis/phone-notebook/20261020/deployment/ebde3a8acf6315f920d03593845f17a1fc65a733/requirements-model-runtime.txt",
+        "sha256": "61f22319a7447278c8a50e3377ed857ad7645ffc4310c8d6e658ff9fcc72ae14"
+      },
+      "resources": {
+        "diskFreeBytes": 101128228864,
+        "load": [
+          2.3740234375,
+          2.07177734375,
+          1.95654296875
+        ],
+        "memory": {
+          "MemAvailable": 18376118272,
+          "MemTotal": 32792059904
+        }
+      },
+      "schema": "aurora.phone_notebook.offline_local_setup.v8",
+      "sharedProjectVenvModified": false,
+      "status": "ISOLATED_PROJECT_VENV_CREATED_INSTALL_AND_SOURCE_REQUIRE_RESOURCE_RELEASE",
+      "tools": {
+        "cargo": "/home/developer/.cargo/bin/cargo",
+        "cmake": null,
+        "java": "/home/developer/.asdf/shims/java",
+        "ninja": null,
+        "node": "/home/developer/.asdf/shims/node",
+        "pnpm": "/home/developer/.asdf/shims/pnpm",
+        "rsync": "/usr/bin/rsync",
+        "rustc": "/home/developer/.cargo/bin/rustc",
+        "scp": "/usr/bin/scp",
+        "uv": "/home/developer/.asdf/shims/uv"
+      },
+      "trackedDirtyPaths": {
+        "argv": [
+          "git",
+          "diff",
+          "--name-only"
+        ],
+        "exit": 0,
+        "stderr": "",
+        "stdout": ".claude/skills/gitnexus/debugging/SKILL.md\n.claude/skills/gitnexus/exploring/SKILL.md\n.claude/skills/gitnexus/impact-analysis/SKILL.md\n.claude/skills/gitnexus/refactoring/SKILL.md\nCLAUDE.md\napps/aurora-tauri/src-tauri/gen/schemas/desktop-schema.json\napps/aurora-tauri/src-tauri/gen/schemas/linux-schema.json\nreports/webrtc-interop/direct/report.json\nreports/webrtc-interop/firefox-direct/report.json\nreports/webrtc-interop/firefox-stun/report.json\nreports/webrtc-interop/firefox-turn/report.json\nreports/webrtc-interop/stun/report.json\nreports/webrtc-interop/turn/report.json\nreports/webrtc-interop/webkit-direct/report.json\nreports/webrtc-interop/webkit-stun/report.json\nreports/webrtc-interop/webkit-turn/report.json\n"
+      }
+    },
+    "offlineRuntimePreparation": {
+      "operation": "admitted-offline-runtime-20261022T000353",
+      "receipt": {
+        "bytes": 3514,
+        "copyOnly": true,
+        "custody": "Notebook result persisted and fsynced before relay; remote receipt in same output",
+        "localPath": "/home/developer/projects/aurora/thesis/phone-notebook/20261020/evidence/admitted-offline-runtime-20261022T000353/result.json",
+        "remotePath": "/home/developer/projects/aurora/thesis/phone-notebook/20261020/evidence/admitted-offline-runtime-20261022T000353.json",
+        "sha256": "d4d30eb494f60795e47f8729ad9e591eb8929eac6c317fd3531fcd6ebaeddd86"
+      },
+      "result": {
+        "absoluteDeadline": "2026-10-22T00:19:55.341599+00:00",
+        "actualTargetPackageVersions": {
+          "argv": [
+            "/home/developer/projects/aurora/thesis/phone-notebook/20261020/deployment/ebde3a8acf6315f920d03593845f17a1fc65a733/.venv/bin/python",
+            "-I",
+            "-B",
+            "-c",
+            "import importlib.metadata as m,json;print(json.dumps({n:m.version(n) for n in ['ctranslate2','faster-whisper','numpy','onnxruntime','piper-tts']}))"
+          ],
+          "exit": 0,
+          "stderr": "",
+          "stdout": "{\"ctranslate2\": \"4.7.1\", \"faster-whisper\": \"1.1.1\", \"numpy\": \"2.2.6\", \"onnxruntime\": \"1.20.1\", \"piper-tts\": \"1.2.0\"}\n"
+        },
+        "at": "2026-10-22T00:03:59.936795+00:00",
+        "builds": 0,
+        "diskFreeBytes": 101216288768,
+        "doneAt": "2026-10-22T00:04:00.170161+00:00",
+        "existingLocalToolExecutables": {
+          "cmake": null,
+          "ninja": null,
+          "pip": "/home/developer/.asdf/shims/pip",
+          "piper": "/home/developer/projects/aurora/.venv/bin/piper"
+        },
+        "existingRuntimeReadOnlyReuse": {
+          "matchedPackages": [
+            "ctranslate2",
+            "faster-whisper",
+            "numpy",
+            "onnxruntime",
+            "piper-tts"
+          ],
+          "origin": "/home/developer/projects/aurora/.venv/lib/python3.11/site-packages",
+          "pth": "/home/developer/projects/aurora/thesis/phone-notebook/20261020/deployment/ebde3a8acf6315f920d03593845f17a1fc65a733/.venv/lib/python3.11/site-packages/aurora-existing-pinned-runtime.pth",
+          "sharedVenvModified": false
+        },
+        "host": "skyron-notebook",
+        "leaseExpired": false,
+        "localLlamaCacheCandidates": [
+          {
+            "alreadyLocal": true,
+            "localVersions": [
+              "0.3.34-py3-none-manylinux2014_x86_64.manylinux_2_17_x86_64"
+            ],
+            "path": "/home/developer/.cache/uv/wheels-v5/index/90f53defd2e61fae/llama-cpp-python"
+          }
+        ],
+        "memAvailableBytes": 18406342656,
+        "modelCalls": 0,
+        "networkRequests": 0,
+        "ownBuildSubprocessesActive": 0,
+        "packages": {
+          "ctranslate2": {
+            "actualVersion": "4.7.1",
+            "expectedVersion": "4.7.1",
+            "matches": true,
+            "readOnlyExistingLocation": "/home/developer/projects/aurora/.venv/lib/python3.11/site-packages"
+          },
+          "faster-whisper": {
+            "actualVersion": "1.1.1",
+            "expectedVersion": "1.1.1",
+            "matches": true,
+            "readOnlyExistingLocation": "/home/developer/projects/aurora/.venv/lib/python3.11/site-packages"
+          },
+          "llama-cpp-python": {
+            "actualVersion": null,
+            "expectedVersion": "0.3.19",
+            "matches": false
+          },
+          "numpy": {
+            "actualVersion": "2.2.6",
+            "expectedVersion": "2.2.6",
+            "matches": true,
+            "readOnlyExistingLocation": "/home/developer/projects/aurora/.venv/lib/python3.11/site-packages"
+          },
+          "onnxruntime": {
+            "actualVersion": "1.20.1",
+            "expectedVersion": "1.20.1",
+            "matches": true,
+            "readOnlyExistingLocation": "/home/developer/projects/aurora/.venv/lib/python3.11/site-packages"
+          },
+          "piper-tts": {
+            "actualVersion": "1.2.0",
+            "expectedVersion": "1.2.0",
+            "matches": true,
+            "readOnlyExistingLocation": "/home/developer/projects/aurora/.venv/lib/python3.11/site-packages"
+          }
+        },
+        "physicalIdentity": {
+          "bootFingerprint": "22b1d3da8bd58ecd6644441489e9239b08e354f602a5b6c8a0faf34732dcfe67",
+          "cpu": "AMD Ryzen 5 7535HS with Radeon Graphics",
+          "differentKernelFromWorker": true,
+          "logicalCpu": 12,
+          "mainDesktopKnownGpu": "RX7600; notebook observed AMD1681/NVIDIA25a2, different device set",
+          "noWorkNamespaceAccess": true
+        },
+        "pythonBuildToolPackages": {
+          "cmake": null,
+          "ninja": null,
+          "pip": null,
+          "scikit-build-core": null,
+          "wheel": null
+        },
+        "resourceAdmission": "msg_fb6e25f5d33a",
+        "schema": "aurora.phone_notebook.offline_runtime.v9",
+        "sourceOrModelTransfers": 0,
+        "status": "LOCAL_LLAMA_CACHE_FOUND_REQUIRES_EXACT_VERSION_QUALIFICATION",
+        "twoCpuAffinity": [
+          0,
+          1
+        ],
+        "uvCacheDirectory": {
+          "argv": [
+            "uv",
+            "cache",
+            "dir"
+          ],
+          "exit": 0,
+          "stderr": "",
+          "stdout": "/home/developer/.cache/uv\n"
+        }
+      },
+      "qualifiedCacheResult": {
+        "expectedLlamaVersion": "0.3.19",
+        "foundLocalCachedVersions": [
+          "0.3.34"
+        ],
+        "exactVersionFoundInBoundedCatalog": false,
+        "substitutionInstalled": false,
+        "requiredSourceCommitAlreadyLocal": false,
+        "readOnlyReusedMatchingPackageCount": 5,
+        "newModelCalls": 0,
+        "newDownloads": 0,
+        "ownBuildProcessesActive": 0
+      }
+    },
+    "actualBinaryImportReadiness": {
+      "operation": "offline-binary-readiness-20261022T001646",
+      "receipt": {
+        "bytes": 1095,
+        "copyOnly": true,
+        "custody": "Notebook result persisted and fsynced before relay; remote receipt in same output",
+        "localPath": "/home/developer/projects/aurora/thesis/phone-notebook/20261020/evidence/offline-binary-readiness-20261022T001646/result.json",
+        "remotePath": "/home/developer/projects/aurora/thesis/phone-notebook/20261020/evidence/offline-binary-readiness-20261022T001646.json",
+        "sha256": "116e7e2376777e0c0a24f71a0b57af38ac912e3fb62c826e66d7af7211673c17"
+      },
+      "result": {
+        "at": "2026-10-22T00:16:54.009663+00:00",
+        "binaryImport": {
+          "exit": 0,
+          "guardStop": null,
+          "peakSampledRssBytes": 265809920,
+          "stderr": "",
+          "stdout": "{\"imports\": [\"ctranslate2\", \"numpy\", \"onnxruntime\", \"faster_whisper\", \"piper.voice\"], \"cpuComputeTypes\": [\"float32\", \"int8\", \"int8_float32\"], \"onnxAvailableProviders\": [\"AzureExecutionProvider\", \"CPUExecutionProvider\"], \"modelsLoaded\": 0}\n"
+        },
+        "doneAt": "2026-10-22T00:16:58.244920+00:00",
+        "existingApprovedSourceSshConfigOnly": {
+          "configuredHostAliasResolved": false,
+          "connectionAttempted": false,
+          "exit": 0,
+          "keysInspected": false,
+          "selectedNonsecretFields": {
+            "hostname": "ssh-oci-coding-worker",
+            "port": "22",
+            "user": "developer"
+          }
+        },
+        "modelBytesRead": 0,
+        "modelCalls": 0,
+        "networkRequests": 0,
+        "notebookRouteToPhone": {
+          "exit": 0,
+          "packetsSent": 0,
+          "stderr": "",
+          "stdout": "192.168.1.94 dev wlp4s0 src 192.168.1.250 uid 1001 \n    cache \n"
+        },
+        "ownBuildOrInferenceProcessesActive": 0,
+        "resourceAdmission": "msg_fb6e25f5d33a",
+        "schema": "aurora.phone_notebook.offline_binary_readiness.v10",
+        "sharedVenvModified": false
+      }
+    },
+    "publicAssets": {
+      "allExactVerified": true,
+      "totalBytes": 833499307,
+      "receipt": "ASSET-READINESS-20261022.json",
+      "runtimeBuildToolsInstalled": true,
+      "vulkanUserspaceExtracted": true,
+      "runtimeCompiled": false,
+      "runtimeStatus": "WAITING_FOR_BUILD_COOLING",
+      "actualMaxSensorC": 94.25,
+      "buildPilotThermalLimitC": 85
+    }
+  },
+  "source": {
+    "approvedLocalSourceSha": "ebde3a8acf6315f920d03593845f17a1fc65a733",
+    "remoteSha": null,
+    "notebookGitWritten": false,
+    "sourceDeploymentStarted": false,
+    "exactCommitAlreadyInNotebook": false,
+    "localObjectQueryExit": 128,
+    "exactLocalCommit": "ebde3a8acf6315f920d03593845f17a1fc65a733",
+    "deltaManifest": "source-delta-v28/DELTA-MANIFEST.json",
+    "deltaBytes": 3913736,
+    "notebookAssembled": true,
+    "resourceRequest": "msg_e667cdd018cc",
+    "root420sRequestDeniedBy": "msg_e9e166d77c50",
+    "sourceSha": "ebde3a8acf6315f920d03593845f17a1fc65a733",
+    "stagedSourcePath": "/home/developer/projects/aurora/thesis/phone-notebook/20261020/deployment/ebde3a8acf6315f920d03593845f17a1fc65a733/source-ebde3a8a-verified-v37",
+    "verifiedFiles": 1959,
+    "sourceInventorySha256": "88c7330effe93499e9c673921e9b12c90c54db53e572885f34bbd40644c8d47b",
+    "sourceCopyBytes": 3913736,
+    "sourceCopyFrames": 43,
+    "sourceCopyElapsedSeconds": 70.80041577600059,
+    "sourceCopyOutcome": "SOURCE_FILES_RECEIVED_HASH_VERIFIED"
+  },
+  "evidence": [
+    {
+      "operation": "usb-readiness-20261021T2211",
+      "path": "thesis/phone-notebook/20261020/evidence/usb-readiness-20261021T2211/result.json",
+      "remotePath": "/home/developer/projects/aurora/thesis/phone-notebook/20261020/evidence/usb-readiness-20261021T2211.json",
+      "sha256": "9bb63aca3464359701a2662ccf09180751b7114a9520da3e43d382078c6d62f7",
+      "bytes": 1593,
+      "bothHostCopy": true
+    },
+    {
+      "operation": "usb-visibility-20261021T2212",
+      "path": "thesis/phone-notebook/20261020/evidence/usb-visibility-20261021T2212/result.json",
+      "remotePath": "/home/developer/projects/aurora/thesis/phone-notebook/20261020/evidence/usb-visibility-20261021T2212.json",
+      "sha256": "bd8fc3012757ab60c9de28e24ba53e797da013715c6a2589359b4bd21bf5f718",
+      "bytes": 774,
+      "bothHostCopy": true
+    },
+    {
+      "operation": "notebook-assets-20261021T2215",
+      "path": "thesis/phone-notebook/20261020/evidence/notebook-assets-20261021T2215/result.json",
+      "remotePath": "/home/developer/projects/aurora/thesis/phone-notebook/20261020/evidence/notebook-assets-20261021T2215.json",
+      "sha256": "cd46dd98bcfc9851653f0e84bf28c7533bd23798a39d60a3fee0ca121b408867",
+      "bytes": 2434,
+      "bothHostCopy": true
+    },
+    {
+      "operation": "existing-adb-controller-20261021T2228",
+      "path": "thesis/phone-notebook/20261020/evidence/existing-adb-controller-20261021T2228/result.json",
+      "remotePath": "/home/developer/projects/aurora/thesis/phone-notebook/20261020/evidence/existing-adb-controller-20261021T2228.json",
+      "sha256": "d42768184524f0fa844a2fd2ba6cbf1bb8cf92f9e58992ea72e350d7b4d54d81",
+      "bytes": 2291,
+      "bothHostCopy": true
+    },
+    {
+      "operation": "usb-serial-state-20261021T2233",
+      "path": "thesis/phone-notebook/20261020/evidence/usb-serial-state-20261021T2233/result.json",
+      "remotePath": "/home/developer/projects/aurora/thesis/phone-notebook/20261020/evidence/usb-serial-state-20261021T2233.json",
+      "sha256": "c7f09822c90f4b7f2e3ea7ba1196fdd1757ed8fa33ea37350bf48f7dd05cb2ad",
+      "bytes": 522,
+      "bothHostCopy": true
+    },
+    {
+      "operation": "adb-server-usb-diagnosis-20261021T234436",
+      "path": "thesis/phone-notebook/20261020/evidence/adb-server-usb-diagnosis-20261021T234436/result.json",
+      "remotePath": "/home/developer/projects/aurora/thesis/phone-notebook/20261020/evidence/adb-server-usb-diagnosis-20261021T234436.json",
+      "sha256": "e6a38b554147ebe59df6524b28fcdec20d3f8a58bfef14d4544ca6956423ee44",
+      "bytes": 5121,
+      "bothHostCopy": true
+    },
+    {
+      "operation": "usb-authorized-readiness-20261021T234510",
+      "path": "thesis/phone-notebook/20261020/evidence/usb-authorized-readiness-20261021T234510/result.json",
+      "remotePath": "/home/developer/projects/aurora/thesis/phone-notebook/20261020/evidence/usb-authorized-readiness-20261021T234510.json",
+      "sha256": "cdd9a796dd8fbb0bafaf362ee3f216c37874997e42ca7704afe652949da6e55b",
+      "bytes": 2773,
+      "bothHostCopy": true
+    },
+    {
+      "operation": "authorized-phone-route-app-20261021T234557",
+      "path": "thesis/phone-notebook/20261020/evidence/authorized-phone-route-app-20261021T234557/result.json",
+      "remotePath": "/home/developer/projects/aurora/thesis/phone-notebook/20261020/evidence/authorized-phone-route-app-20261021T234557.json",
+      "sha256": "8d4a3342f722631f9f1e0b47297ecb6ee75baf24621f299fe6ffd0d86993d48b",
+      "bytes": 3883,
+      "bothHostCopy": true
+    },
+    {
+      "operation": "owner-enable-saved-wifi-20261021T235317",
+      "path": "thesis/phone-notebook/20261020/evidence/owner-enable-saved-wifi-20261021T235317/result.json",
+      "remotePath": "/home/developer/projects/aurora/thesis/phone-notebook/20261020/evidence/owner-enable-saved-wifi-20261021T235317.json",
+      "sha256": "5343e6a1a523456564bb018942830e1c4374c115b7091da0a48eac6adc0b8a89",
+      "bytes": 561,
+      "bothHostCopy": true
+    },
+    {
+      "operation": "setup-controller-refresh-20261021T235405",
+      "path": "thesis/phone-notebook/20261020/evidence/setup-controller-refresh-20261021T235405/result.json",
+      "remotePath": "/home/developer/projects/aurora/thesis/phone-notebook/20261020/evidence/setup-controller-refresh-20261021T235405.json",
+      "sha256": "08ea6b4abaf1bd0bcb821ce9ccec6e0fd93d68b2ec28021724d571cccb9c8a57",
+      "bytes": 5007,
+      "bothHostCopy": true
+    },
+    {
+      "operation": "notebook-offline-setup-20261021T235617",
+      "path": "thesis/phone-notebook/20261020/evidence/notebook-offline-setup-20261021T235617/result.json",
+      "remotePath": "/home/developer/projects/aurora/thesis/phone-notebook/20261020/evidence/notebook-offline-setup-20261021T235617.json",
+      "sha256": "2df959d179e23a107a7e8fcf084b64ef8bde4b57917360cf7c105ba99458c4ff",
+      "bytes": 3671,
+      "bothHostCopy": true
+    },
+    {
+      "operation": "saved-wifi-final-recheck-20261021T235938",
+      "path": "thesis/phone-notebook/20261020/evidence/saved-wifi-final-recheck-20261021T235938/result.json",
+      "remotePath": "/home/developer/projects/aurora/thesis/phone-notebook/20261020/evidence/saved-wifi-final-recheck-20261021T235938.json",
+      "sha256": "f15d8e5e44558fab6c5494f8b8431b8395dfd2188d9a54b11d0afd7b4d24cd0e",
+      "bytes": 561,
+      "bothHostCopy": true
+    },
+    {
+      "operation": "admitted-offline-runtime-20261022T000353",
+      "path": "thesis/phone-notebook/20261020/evidence/admitted-offline-runtime-20261022T000353/result.json",
+      "remotePath": "/home/developer/projects/aurora/thesis/phone-notebook/20261020/evidence/admitted-offline-runtime-20261022T000353.json",
+      "sha256": "d4d30eb494f60795e47f8729ad9e591eb8929eac6c317fd3531fcd6ebaeddd86",
+      "bytes": 3514,
+      "bothHostCopy": true
+    },
+    {
+      "operation": "owner-fixed-now-20261022T001309",
+      "path": "thesis/phone-notebook/20261020/evidence/owner-fixed-now-20261022T001309/result.json",
+      "remotePath": "/home/developer/projects/aurora/thesis/phone-notebook/20261020/evidence/owner-fixed-now-20261022T001309.json",
+      "sha256": "64b15178f9255510668e23502d6ffd34409b7632107ca92a7ed63f823f18151f",
+      "bytes": 2712,
+      "bothHostCopy": true
+    },
+    {
+      "operation": "saved-wifi-after-fix-20261022T001345",
+      "path": "thesis/phone-notebook/20261020/evidence/saved-wifi-after-fix-20261022T001345/result.json",
+      "remotePath": "/home/developer/projects/aurora/thesis/phone-notebook/20261020/evidence/saved-wifi-after-fix-20261022T001345.json",
+      "sha256": "f66c2e22c9f8a7632044242514904c0114b5049b04b2c67bc2b7f0c315bf1256",
+      "bytes": 2798,
+      "bothHostCopy": true
+    },
+    {
+      "operation": "offline-binary-readiness-20261022T001646",
+      "path": "thesis/phone-notebook/20261020/evidence/offline-binary-readiness-20261022T001646/result.json",
+      "remotePath": "/home/developer/projects/aurora/thesis/phone-notebook/20261020/evidence/offline-binary-readiness-20261022T001646.json",
+      "sha256": "116e7e2376777e0c0a24f71a0b57af38ac912e3fb62c826e66d7af7211673c17",
+      "bytes": 1095,
+      "bothHostCopy": true
+    }
+  ],
+  "nextBlocker": "Root source integration repair of unconditional native local-inference startup failure; finite isolated backend boot is underway",
+  "pilot": {
+    "authorizedByOwner": true,
+    "executed": false,
+    "reason": "USB/savedWiFi/route selection recovered; exactsource/assets/runtime transfer and qualified pinnedAPK/nativepilot await actualRootresource admission; no tests overcellular"
+  },
+  "overnight": {
+    "ownerStartSignal": null,
+    "plannedHours": [
+      7,
+      8
+    ],
+    "executedCases": 0
+  },
+  "changes": {
+    "permissionOrPrivilegeChanges": false,
+    "keysCopiedOrRead": false,
+    "otherNamespaceEntered": false,
+    "appInstallOrLaunch": false,
+    "modelCalls": 0,
+    "heavyBuildsTransfers": 0
+  },
+  "mainHttpCampaign": "Root continues independently; no pause or device task requested",
+  "controllerDiscovery": {
+    "ownerExplicitlyApproved": true,
+    "permissionAnswerPending": false,
+    "existingEndpoint": "127.0.0.1:5037",
+    "existingServerInventory": {
+      "at": "2026-10-22T00:13:17.577539+00:00",
+      "command": [
+        "/home/developer/Android/Sdk/platform-tools/adb",
+        "devices",
+        "-l"
+      ],
+      "exit": 0,
+      "stderr": "",
+      "stdout": "List of devices attached\nKBX8LNFUBE5XGQRG       device usb:3-1 product:rodin_global model:2412DPC0AG device:rodin transport_id:2\n\n"
+    },
+    "serverLocation": "SamePersonalPID39627/LIBUSB alive; noUSBFD after node re-enumeration to003/012 denied",
+    "configuredAlternateEndpoint": null,
+    "approvedOrcaDeviceProxy": "Historical empty inventory superseded by successful actual authorized Personal ADB",
+    "approvedPersonalHostDesktop": "none exposed; listed desktops belong to separate Root desktop and were not used",
+    "registeredPersonalNotebookTarget": "ssh:ssh-sem-notebook-personal only",
+    "hostBridgeExecutablesPresent": {
+      "distrobox-host-exec": "/usr/bin/distrobox-host-exec",
+      "flatpak-spawn": null,
+      "host-spawn": "/usr/bin/host-spawn"
+    },
+    "hostBridgeExecutablesUsed": false,
+    "noWholeHostAbsenceClaim": true
+  },
+  "minimalOwnerAction": null,
+  "latestOwnerFixedCheck": {
+    "operation": "usb-exact-serial-fixed-20261021T232759",
+    "freshControlDeadline": "2026-10-21T23:37:59.855047+00:00",
+    "controlAuthorization": "owner-direct-renewed-fixed-check-20261021",
+    "expiredOldGuardWasNotDeviceEvidence": true,
+    "receipt": {
+      "bytes": 2136,
+      "copyOnly": true,
+      "custody": "Notebook result persisted and fsynced before relay; remote receipt in same output",
+      "localPath": "/home/developer/projects/aurora/thesis/phone-notebook/20261020/evidence/usb-exact-serial-fixed-20261021T232759/result.json",
+      "remotePath": "/home/developer/projects/aurora/thesis/phone-notebook/20261020/evidence/usb-exact-serial-fixed-20261021T232759.json",
+      "sha256": "026d9d69ee6d655bb16e0ec81809d2533d1d1cb79d9b68694e3ab66f47069c47"
+    },
+    "result": {
+      "appInstallsOrLaunches": 0,
+      "at": "2026-10-21T23:28:05.323983+00:00",
+      "controllerOverrides": {
+        "ADB_SERVER_PORT": null,
+        "ADB_SERVER_SOCKET": null,
+        "ANDROID_ADB_SERVER_PORT": null
+      },
+      "existingServerMetadata": {
+        "at": "2026-10-21T23:28:05.324661+00:00",
+        "command": [
+          "/home/developer/Android/Sdk/platform-tools/adb",
+          "server-status"
+        ],
+        "exit": 0,
+        "stderr": "",
+        "stdout": "usb_backend: NATIVE\nmdns_backend: LIBADBMDNS\nversion: \"37.0.0\"\nbuild: \"14910828\"\nexecutable_absolute_path: \"/home/developer/Android/Sdk/platform-tools/adb\"\nlog_absolute_path: \"/tmp/adb.1001.log\"\nos: \"Linux 6.17.0-41-generic (x86_64)\"\ntrace_level: \"\"\nburst_mode: false\nmdns_enabled: true\nkeystore_path: \"/home/developer/.android/adbkey\"\nknown_hosts_path: \"/home/developer/.android/adb_known_hosts.pb\"\n"
+      },
+      "host": "skyron-notebook",
+      "inventory": {
+        "at": "2026-10-21T23:28:05.319106+00:00",
+        "command": [
+          "/home/developer/Android/Sdk/platform-tools/adb",
+          "devices",
+          "-l"
+        ],
+        "exit": 0,
+        "stderr": "",
+        "stdout": "List of devices attached\n\n"
+      },
+      "knownOwnerSerial": "KBX8LNFUBE5XGQRG",
+      "listener": {
+        "at": "2026-10-21T23:28:05.327064+00:00",
+        "command": [
+          "ss",
+          "-ltnp",
+          "sport = :5037"
+        ],
+        "exit": 0,
+        "stderr": "",
+        "stdout": "State  Recv-Q Send-Q Local Address:Port Peer Address:PortProcess\nLISTEN 0      128        127.0.0.1:5037      0.0.0.0:*    users:((\"adb\",pid=31031,fd=12))\n"
+      },
+      "modelCalls": 0,
+      "permissionsAccountsMountsKeysNetworkChanged": false,
+      "properties": {},
+      "schema": "aurora.phone_notebook.owner_fixed_usb_check.v4",
+      "selectedState": {
+        "at": "2026-10-21T23:28:05.321532+00:00",
+        "command": [
+          "/home/developer/Android/Sdk/platform-tools/adb",
+          "-s",
+          "KBX8LNFUBE5XGQRG",
+          "get-state"
+        ],
+        "exit": 1,
+        "stderr": "error: device 'KBX8LNFUBE5XGQRG' not found\n",
+        "stdout": ""
+      },
+      "status": "KNOWN_SERIAL_NOT_REACHABLE_ON_EXPOSED_CONTROLLER",
+      "usbControlOnly": true,
+      "usbNode": {
+        "canRead": false,
+        "canWrite": false,
+        "exists": true,
+        "gid": 65534,
+        "manufacturer": "Xiaomi",
+        "mode": "crw-rw----",
+        "path": "/dev/bus/usb/003/011",
+        "product": "POCO X7 Pro",
+        "serial": "KBX8LNFUBE5XGQRG",
+        "sysfsDevice": "3-1",
+        "uid": 65534
+      },
+      "wirelessConnectAttempted": false
+    }
+  },
+  "latestCheckAgain": {
+    "at": "2026-10-21T23:40:20.290383+00:00",
+    "operation": "owner-check-again-20261021T234015",
+    "resultPath": "/home/developer/projects/aurora/thesis/phone-notebook/20261020/evidence/owner-check-again-20261021T234015/result.json",
+    "status": "KNOWN_SERIAL_NOT_REACHABLE_ON_EXPOSED_CONTROLLER",
+    "receipt": {
+      "bytes": 2133,
+      "copyOnly": true,
+      "custody": "Notebook result persisted and fsynced before relay; remote receipt in same output",
+      "localPath": "/home/developer/projects/aurora/thesis/phone-notebook/20261020/evidence/owner-check-again-20261021T234015/result.json",
+      "remotePath": "/home/developer/projects/aurora/thesis/phone-notebook/20261020/evidence/owner-check-again-20261021T234015.json",
+      "sha256": "1c9f619a8610b1da38093e5f63f4f5a8086c1076185ed0d959ec2211b72b48b4"
+    },
+    "result": {
+      "appInstallsOrLaunches": 0,
+      "at": "2026-10-21T23:40:20.290383+00:00",
+      "controllerOverrides": {
+        "ADB_SERVER_PORT": null,
+        "ADB_SERVER_SOCKET": null,
+        "ANDROID_ADB_SERVER_PORT": null
+      },
+      "existingServerMetadata": {
+        "at": "2026-10-21T23:40:20.291167+00:00",
+        "command": [
+          "/home/developer/Android/Sdk/platform-tools/adb",
+          "server-status"
+        ],
+        "exit": 0,
+        "stderr": "",
+        "stdout": "usb_backend: NATIVE\nmdns_backend: LIBADBMDNS\nversion: \"37.0.0\"\nbuild: \"14910828\"\nexecutable_absolute_path: \"/home/developer/Android/Sdk/platform-tools/adb\"\nlog_absolute_path: \"/tmp/adb.1001.log\"\nos: \"Linux 6.17.0-41-generic (x86_64)\"\ntrace_level: \"\"\nburst_mode: false\nmdns_enabled: true\nkeystore_path: \"/home/developer/.android/adbkey\"\nknown_hosts_path: \"/home/developer/.android/adb_known_hosts.pb\"\n"
+      },
+      "host": "skyron-notebook",
+      "inventory": {
+        "at": "2026-10-21T23:40:20.284930+00:00",
+        "command": [
+          "/home/developer/Android/Sdk/platform-tools/adb",
+          "devices",
+          "-l"
+        ],
+        "exit": 0,
+        "stderr": "",
+        "stdout": "List of devices attached\n\n"
+      },
+      "knownOwnerSerial": "KBX8LNFUBE5XGQRG",
+      "listener": {
+        "at": "2026-10-21T23:40:20.295803+00:00",
+        "command": [
+          "ss",
+          "-ltnp",
+          "sport = :5037"
+        ],
+        "exit": 0,
+        "stderr": "",
+        "stdout": "State  Recv-Q Send-Q Local Address:Port Peer Address:PortProcess\nLISTEN 0      128        127.0.0.1:5037      0.0.0.0:*    users:((\"adb\",pid=31031,fd=12))\n"
+      },
+      "modelCalls": 0,
+      "permissionsAccountsMountsKeysNetworkChanged": false,
+      "properties": {},
+      "schema": "aurora.phone_notebook.owner_fixed_usb_check.v4",
+      "selectedState": {
+        "at": "2026-10-21T23:40:20.287721+00:00",
+        "command": [
+          "/home/developer/Android/Sdk/platform-tools/adb",
+          "-s",
+          "KBX8LNFUBE5XGQRG",
+          "get-state"
+        ],
+        "exit": 1,
+        "stderr": "error: device 'KBX8LNFUBE5XGQRG' not found\n",
+        "stdout": ""
+      },
+      "status": "KNOWN_SERIAL_NOT_REACHABLE_ON_EXPOSED_CONTROLLER",
+      "usbControlOnly": true,
+      "usbNode": {
+        "canRead": true,
+        "canWrite": true,
+        "exists": true,
+        "gid": 1002,
+        "manufacturer": "Xiaomi",
+        "mode": "crw-rw----",
+        "path": "/dev/bus/usb/003/011",
+        "product": "POCO X7 Pro",
+        "serial": "KBX8LNFUBE5XGQRG",
+        "sysfsDevice": "3-1",
+        "uid": 65534
+      },
+      "wirelessConnectAttempted": false
+    }
+  },
+  "latestAuthorizedUsb": {
+    "operation": "adb-server-usb-diagnosis-20261021T234436",
+    "receipt": {
+      "bytes": 5121,
+      "copyOnly": true,
+      "custody": "Notebook result persisted and fsynced before relay; remote receipt in same output",
+      "localPath": "/home/developer/projects/aurora/thesis/phone-notebook/20261020/evidence/adb-server-usb-diagnosis-20261021T234436/result.json",
+      "remotePath": "/home/developer/projects/aurora/thesis/phone-notebook/20261020/evidence/adb-server-usb-diagnosis-20261021T234436.json",
+      "sha256": "e6a38b554147ebe59df6524b28fcdec20d3f8a58bfef14d4544ca6956423ee44"
+    },
+    "serverPid": 39627,
+    "backend": "LIBUSB",
+    "serverChangedExternally": true,
+    "taskOwnedRestartPerformed": false
+  },
+  "measurementRoutes": {
+    "directLanHttpVerified": false,
+    "p2pVerified": false,
+    "usbControlOnly": true,
+    "wifiEnabled": true,
+    "notebookLan": "192.168.1.250/24",
+    "phoneSelectedRoute": "192.168.1.250devwlan0src192.168.1.94; reverse192.168.1.94devwlp4s0src192.168.1.250; no testpackets",
+    "phoneWifiLastObservedAt": "2026-10-22T00:14:02.357558+00:00",
+    "currentWifiState": "ON192.168.1.94/24"
+  },
+  "latestFinalizeSetupAttempt": {
+    "operations": [
+      "owner-enable-saved-wifi-20261021T235317",
+      "setup-controller-refresh-20261021T235405",
+      "notebook-offline-setup-20261021T235617"
+    ],
+    "resourceRefusalMessage": "msg_ada0dc77fde8",
+    "receiptBundle": "LATEST-USB-CHECK.json",
+    "lastBoundedRecheck": "saved-wifi-final-recheck-20261021T235938"
+  },
+  "resourceLease": {
+    "message": "msg_fb6e25f5d33a",
+    "deadline": "2026-10-22T00:19:55.341599+00:00",
+    "scope": "notebook-local offline prep max2CPU/4GiB; actualprepcompleted,zeroownedbuildchildren",
+    "sharedTransferOrPilotAdmitted": false
+  },
+  "pendingResourceHandoff": {
+    "schema": "aurora.phone_notebook.resource_handoff_queue.v1",
+    "status": "ENQUEUED_PENDING_ACTUAL_RESOURCE_RELEASE",
+    "ownerRequest": "continue now should be fix, finish setup; no900untilsleepstart",
+    "rootRequestMessage": "msg_bffcad56b7d4",
+    "createdAtUtc": "2026-10-22T00:13:03Z",
+    "monitorNotificationMessage": "msg_30f288b3477a",
+    "monitorNotificationAtUtc": "2026-10-22T00:17:05Z",
+    "usbRecoveryMessage": "msg_7114f34553d8",
+    "savedWifiSuccessMessage": "msg_2b55c7cce4ff",
+    "source": {
+      "exactLocalCommit": "ebde3a8acf6315f920d03593845f17a1fc65a733",
+      "remoteSha": null,
+      "maxBytes": 12582912,
+      "maxSeconds": 120
+    },
+    "assets": {
+      "exactBytesIncludingAudio": 774675150,
+      "maxBytesPerSecond": 2097152,
+      "maxSeconds": 600,
+      "manifest": "SETUP-DEPENDENCIES.json"
+    },
+    "notebookWork": {
+      "maxJobs": 2,
+      "maxSeconds": 1200,
+      "noModelRuntimeSubstitution": true
+    },
+    "releaseTrigger": "Root actual natural currentHTTP terminal+sealed state and explicit relevant resource release",
+    "actualUtcTransferWindow": null,
+    "currentActualReply": null,
+    "sourceOrModelTransferStarted": false,
+    "pilotStarted": false,
+    "ownerSleepStartSignal": null,
+    "noMainInterruption": true,
+    "settledDispatchReused": false
+  },
+  "updatedAtUtc": "2026-10-22T04:37:02.020988+00:00",
+  "latestState": "TEST_APK_INSTALLED_NATIVE_SETUP_HOOK_ABORT_BACKEND_BOOT_ISSUED",
+  "modelsNowVerified": true,
+  "modelAssetReceipt": "ASSET-READINESS-20261022.json",
+  "exactPublicBytesVerified": 833499307,
+  "nativeReadiness": false,
+  "latestPhoneState": "device",
+  "latestPhoneStateAt": "2026-10-22T04:10:22.437216+00:00",
+  "buildStatus": "ANDROID_VOICE_LIVE_APK_BUILT",
+  "buildThermalStopC": null,
+  "currentMaxSensorC": 90.75,
+  "buildDeadlineUtc": "2026-10-22T04:29:54.077196+00:00",
+  "buildFinishedAt": "2026-10-22T01:33:02.372182+00:00",
+  "ownBuildChildrenActive": false,
+  "allOwnAcquisitionJobsClosed": true,
+  "currentSetup": "CURRENT-SETUP.json",
+  "latestOwnerUpdate": "LATEST-OWNER-UPDATE.json",
+  "phoneState": "USB device; wlan0 192.168.1.94/24;72percent charging28.4C05:06:41",
+  "phoneStateAt": "2026-10-22T04:10:22.437216+00:00",
+  "notebookTemperatureC": 89.0,
+  "notebookLoad": [
+    2.4423828125,
+    3.158203125,
+    3.34228515625
+  ],
+  "temperaturePolicy": "observe_only_owner_correction",
+  "notebookTemperatureAdmissionC": null,
+  "ownerTemperaturePolicy": "OWNER-TEMPERATURE-POLICY.json",
+  "runtimeCompileState": "PINNED_VULKAN_RUNTIME_BUILT_IMPORTED_NO_MODEL_CALLS",
+  "gpuOffloadAvailable": true,
+  "androidPatchedArm64EngineBuilt": true,
+  "applicationSourceIdentity": "ebde3a8acf6315f920d03593845f17a1fc65a733 + source-closure-overlay-v2383",
+  "applicationBuildDirectory": "/home/developer/projects/aurora/thesis/phone-notebook/20261020/deployment/ebde3a8acf6315f920d03593845f17a1fc65a733/android-build-ebde-plus-v2383",
+  "sourceClosureResolved": true,
+  "sourceOverlayManifestSha256": "6fb03ee20bc4bed033b3edf49ef48d952583710cebfa34cbd81ffdeb928c0f87",
+  "sourceOverlayReceipt": "evidence/root-approved-source-closure-copy-v81/result.json",
+  "sourceClosureAuthority": "msg_40c878cce634",
+  "state": "TEST_APK_INSTALLED_NATIVE_SETUP_HOOK_ABORT_BACKEND_BOOT_ISSUED",
+  "gpuOffloadActuallyExercised": false,
+  "gpuDevicesObserved": [
+    "AMD Radeon 660M",
+    "NVIDIA GeForce RTX 3050 Laptop GPU"
+  ],
+  "gpuReadinessReceipt": "evidence/owner-fixed-fresh-check-v90/result.json",
+  "nativeHttpVerified": false,
+  "nativeP2pVerified": false,
+  "apkInstalledByThisLane": true,
+  "pilotCases": 0,
+  "modelCalls": 0,
+  "overnightCases": 0,
+  "ownerStartUtc": null,
+  "ownerEndUtc": null,
+  "currentBuildJob": null,
+  "buildMaxOwnedTreeRssBytes": 8589934592,
+  "freshReceipt": "evidence/owner-fixed-fresh-check-v90/result.json",
+  "mainCampaignUntouched": true,
+  "apkSha256": "549f760f5ceec5bce629a075f4e28df1ed74da4e503be0d15407ff7f3e4bd662",
+  "apkBytes": 747895794,
+  "apkBuildReceipt": "evidence/install-pinned-apk-v95/result.json",
+  "installError": null,
+  "canonicalInstalledAppPreserved": true,
+  "testApplicationId": "dev.aurora.desktop.phonenotebook",
+  "installedAppPackage": "dev.aurora.desktop.phonenotebook",
+  "installReceipt": "evidence/read-install-finish-v104/result.json",
+  "nativeAppLaunchReceipt": "evidence/launch-native-app-v105/result.json",
+  "nativeStartupFailure": "Tauri setup hook: Offline answers are unavailable; native SIGABRT",
+  "nativeStartupFailureReceipt": "evidence/read-exact-native-abort-v107/result.json",
+  "resourceAdmissionMessage": "msg_fc30174d5abf",
+  "resourceAdmissionReceipt": "evidence/ROOT-READINESS-ADMISSION-v2391.json",
+  "backendBootLaunchIntent": "evidence/launch-backend-readiness-v110/intent.json",
+  "sourceIdentity": "ebde3a8acf6315f920d03593845f17a1fc65a733 + source-closure-overlay-v2383 + android-bundled-model-rename-v1 + android-node-policy-initial-publication-v2",
+  "actualBuildReceipt": "evidence/read-repair-build-v128/result.json",
+  "buildJob": "android-apk-build-v126",
+  "nativeRustCompile": "completed1m03s actual05:09:42 observation",
+  "localPhoneLlm": "implemented and packaged; load/generate/cancel unvalidated",
+  "nativeAudioPilotCalls": 0,
+  "measuredCases": 0,
+  "updateWithoutOwnerInteraction": "UNPROVEN; repaired update not attempted yet",
+  "ownerWindow": "OWNER-AUTOMATIC-WINDOW-20261022.json",
+  "hardStopUtc": "2026-10-22T11:57:25.269652Z",
+  "oldBackendLeaseClosed": true,
+  "oldBackendLeaseNativeCalls": 0,
+  "startupTtsRequestsExcludedFromPilot": 1,
+  "newDownloads": 0,
+  "actualUpdateReceipt": "evidence/read-policy-update-v175/result.json",
+  "sameSigningCertificateSha256": "57bee2b41e922fd1ee2fb08e1839ec3d423d78cc361afc22e2f1d11672293963",
+  "normalUpdateAttempts": 1,
+  "normalUpdateExit": 0,
+  "installedApkMatchesBuilt": true,
+  "installerForegroundObserved": false,
+  "installerUiChecks": 13,
+  "ownerConsentAutomated": false,
+  "userdataWiped": false,
+  "nativePhoneLlmEnginesExposed": true,
+  "phoneQwenBytes": 563036064,
+  "phoneQwenSha256": "57d1997790d1744fba5b40a7317df71ea5e2acee28c47e78f0cce39c0703f8cf",
+  "phoneQwenPhysicalCopyReceipt": "evidence/reconcile-usb-model-v157/result.json",
+  "successfulNativePhoneModelLoads": 0,
+  "successfulNativePhoneGenerationCalls": 0,
+  "sourceV1Failure": "Native node policy initial publication failed; session_create unsupported_feature beforeload",
+  "rootSharedResourceDecisionRequest": "msg_204c54ccc425",
+  "ownerConditionalAutoStartAuthorized": true
+}

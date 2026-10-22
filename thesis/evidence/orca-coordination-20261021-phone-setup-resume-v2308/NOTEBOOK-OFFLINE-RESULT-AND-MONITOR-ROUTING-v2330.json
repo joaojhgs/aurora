@@ -1,0 +1,68 @@
+{
+  "id": "remote-cli-1792627948444",
+  "ok": true,
+  "result": {
+    "runId": "run_e6054e76e9fc",
+    "deliveryId": "delivery_b4083bbf9afa",
+    "messages": [
+      {
+        "id": "msg_6f78e7141989",
+        "run_id": "run_e6054e76e9fc",
+        "delivery_contract": "current_delivery",
+        "from_handle": "term_1f27be31-0284-4366-bb91-30fe538cd30e",
+        "to_handle": "run:run_e6054e76e9fc",
+        "subject": "Offline lease used: five exact pins usable; llama cache wrong version, USB/staging gates remain",
+        "body": "Usei a janela offline msg_fb6e25f5d33a: notebook skyron-notebook/Ryzen5 7535HS com kernel distinto do worker,18.41GBRAM dispon\u00edvel/101.22GBdisco,afinidade2CPUs; novo venv Python3.11.14 confirmou cinco vers\u00f5es fixadas por reutiliza\u00e7\u00e3o somente leitura da instala\u00e7\u00e3o existente,sem alterar venv compartilhado. Cat\u00e1logoUV local real cont\u00e9m apenas llama-cpp-python0.3.34 nos \u00edndices inspecionados,exigido0.3.19,n\u00e3o substitu\u00eddo; fonte exata ebde ausente gitcatfile128,sem build/download/modelo/piloto e zero subprocessos pr\u00f3prios ativos. Bloqueios externos inevit\u00e1veis continuam: USBreenumerou003/012sem acesso e get-state ainda device-not-found23:59:46,restaurar acessoPersonal j\u00e1 autorizado \u00e9 a\u00e7\u00e3o operador; fonte/modelos/runtime exatos aguardam libera\u00e7\u00e3o natural do caminho compartilhado,mainHTTP intacto,sem segundo worker_done; reporte atual e recibos f\u00edsicos em thesis/phone-notebook/20261020/REPORT.md.",
+        "type": "status",
+        "priority": "normal",
+        "thread_id": null,
+        "payload": null,
+        "created_at": "2026-10-22T00:05:22Z",
+        "delivered_at": null
+      },
+      {
+        "id": "msg_9b34d87a8d75",
+        "run_id": "run_e6054e76e9fc",
+        "delivery_contract": "current_delivery",
+        "from_handle": "term_2eab47ed-ab9b-4e35-bd9b-fc068c60e3fc",
+        "to_handle": "run:run_e6054e76e9fc",
+        "subject": "Event-time correction: current USB regression; permissions closed, offline NB lease bounded",
+        "body": "CORRECTION BY ACTUAL EVENT TIME: Root msg_cca87861d7f7 relays the newer 23:54:12 UTC USB regression (current node 003/012, mapped65534, Personal read/write false, existing LIBUSB39627 inventory empty/get-stateNotFound), which supersedes the 23:44 success regardless of later message timestamps; retain my earlier USB-success packet as history only. Owner real setup/pilot/pinned venv/APK/assets/saved trusted Wi-Fi enable permissions are already granted\u2014do not re-ask or characterize this as an unauthorized dialog; the missing capability is restoring already-authorized CURRENT USB access or exposing the existing approved controller, with no agent ACL/mount/namespace/security/account/key/controller changes. Root separately granted the SAME worker a Notebook-only OFFLINE already-local lease ending 2026-10-22 00:19:55.341599 UTC (2 CPU/4 GiB RSS, 8 GiB available RAM and2 GiB disk guards, exact cached ebde source, isolated owned paths/no Git writes/no downloads/shared W-D-controller traffic/inference); the monitor will watch its deadline without stopping/adopting another worker, while phone900 START remains unissued and main V2296 continues independently.",
+        "type": "escalation",
+        "priority": "high",
+        "thread_id": null,
+        "payload": "{\"taskId\":\"task_d7ea336050cf\",\"dispatchId\":\"ctx_37b4d0a3c14f\",\"reportPath\":\".omx/evidence/orca-monitor-20261010/PHONE-USB-REGRESSION-EVENTTIME-CORRECTION-AND-NB-LEASE-20261022T0006Z.json\"}",
+        "created_at": "2026-10-22T00:07:18Z",
+        "delivered_at": null
+      },
+      {
+        "id": "msg_aebf18b9dcab",
+        "run_id": "run_e6054e76e9fc",
+        "delivery_contract": "current_delivery",
+        "from_handle": "term_2eab47ed-ab9b-4e35-bd9b-fc068c60e3fc",
+        "to_handle": "run:run_e6054e76e9fc",
+        "subject": "Notebook lease deadline watch via existing Run; settled dispatch nudge fenced",
+        "body": "Monitor's one direct deadline nudge to old phone Dispatch ctx_104db5d889d2 was rejected BEFORE DELIVERY as dispatch_inactive (request 0426a3d7-ea72-4d46-8cab-c9368d62d60b); I will not retry/reopen it or create a worker. Use this supported existing Run route for the SAME owner-resumed phone terminal: Root's offline Notebook-only lease expires 2026-10-22 00:19:55.341599 UTC, and the monitor will check existing admission/owned PID/guard/closure receipts near 00:16:55; no new probe/build or review is requested just for monitoring. Please ensure that same worker receives/preserves its own finite guard and reports honest no-launch if cached exact-ebde inputs/resource guards are unavailable; only its OWN admitted setup/build subprocesses may retire safely at expiry, with no unrelated agent/service/user-session stop, no download/shared W-D-controller traffic/inference/Git writes, and no silent extension. This is a routing correction and deadline coordination only; current USB event-time regression and all already-granted owner permissions remain as in the v2328 packet, and main V2296 continues independently.",
+        "type": "status",
+        "priority": "normal",
+        "thread_id": null,
+        "payload": "{\"taskId\":\"task_d7ea336050cf\",\"dispatchId\":\"ctx_37b4d0a3c14f\",\"reportPath\":\".omx/evidence/orca-monitor-20261010/NOTEBOOK-LEASE-NUDGE-DISPATCH-FENCE-REROUTE-20261022T0008Z.json\"}",
+        "created_at": "2026-10-22T00:08:53Z",
+        "delivered_at": null
+      }
+    ],
+    "count": 3,
+    "replayed": false,
+    "acknowledged": null,
+    "timedOut": false,
+    "cancelled": false,
+    "connectionLost": false,
+    "mutation": {
+      "requestId": "1c1326ba-22ed-49f2-a8da-ad403c881481",
+      "replayed": false
+    }
+  },
+  "_meta": {
+    "runtimeId": "cc9e3275-28c6-4c45-85cc-bdcd2262aa7d"
+  }
+}

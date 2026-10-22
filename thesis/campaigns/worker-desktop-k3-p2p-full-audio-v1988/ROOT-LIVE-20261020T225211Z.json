@@ -1,0 +1,20 @@
+{
+  "at": "2026-10-20T22:52:11.764669+00:00",
+  "warmup": {
+    "attempted": 13,
+    "correct": 11,
+    "failed": 2
+  },
+  "measured": {
+    "attempted": 0,
+    "correct": 0,
+    "failed": 0
+  },
+  "custody": {
+    "sequence": 3,
+    "caseCount": 8,
+    "audioCount": 7,
+    "fileCount": 52
+  },
+  "freeBytes": 4175896576
+}

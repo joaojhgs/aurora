@@ -1,0 +1,100 @@
+{
+  "at": "2026-10-20T07:15:06.742674+00:00",
+  "status": "BOUNDED_COMPARISON_COMPLETE_NO_PHYSICAL_UPLINK_PROOF",
+  "nodes": [
+    {
+      "host": "notebook",
+      "path": "thesis/evidence/approved-node-network-admission-20261020/notebook-network-metadata-v1743-RESULT.json",
+      "bytes": 802,
+      "sha256": "2a3e9fa784d894b459eae0f1bad1737d89a8c95e36c50291f81737ab1cf8b82a",
+      "metadata": {
+        "at": "2026-10-20T07:09:38.862857+00:00",
+        "credentialsOutput": false,
+        "defaultIpv4RoutesInThisNamespace": [
+          {
+            "gateway": "192.168.1.1",
+            "interface": "wlp4s0",
+            "metric": "600"
+          }
+        ],
+        "host": "skyron-notebook",
+        "kernelBootIdSha256": "035ebf0a8973011cdd0565da648e30a8d3c8604cb34d3961e47e61213a0c171c",
+        "modelBuildInstallTransferOrServiceCalls": 0,
+        "networkNamespace": "net:[4026531833]",
+        "networkProbeTraffic": 0,
+        "proxyMetadata": {
+          "ALL_PROXY": {
+            "present": false
+          },
+          "HTTPS_PROXY": {
+            "present": false
+          },
+          "HTTP_PROXY": {
+            "present": false
+          },
+          "all_proxy": {
+            "present": false
+          },
+          "http_proxy": {
+            "present": false
+          },
+          "https_proxy": {
+            "present": false
+          }
+        },
+        "publicEgressOrPhysicalNetworkIndependenceProven": false,
+        "scope": "Approved Personal shell environment and its own namespace only; no connection/process/company inventory"
+      }
+    },
+    {
+      "host": "desktop",
+      "path": "thesis/evidence/approved-node-network-admission-20261020/desktop-network-metadata-v1743-RESULT.json",
+      "bytes": 809,
+      "sha256": "7cb58a87a79c87d0569df529e82c0652e0bc96d42563b4919176bf209bc0b232",
+      "metadata": {
+        "at": "2026-10-20T07:09:38.964993+00:00",
+        "credentialsOutput": false,
+        "defaultIpv4RoutesInThisNamespace": [
+          {
+            "gateway": "192.168.1.1",
+            "interface": "enp7s0",
+            "metric": "100"
+          }
+        ],
+        "host": "personal.skyron-server",
+        "kernelBootIdSha256": "eda35d3ed39b4ace73f0a95378bcf6382812a5ad8d8b73dfb2c81206465c1022",
+        "modelBuildInstallTransferOrServiceCalls": 0,
+        "networkNamespace": "net:[4026531833]",
+        "networkProbeTraffic": 0,
+        "proxyMetadata": {
+          "ALL_PROXY": {
+            "present": false
+          },
+          "HTTPS_PROXY": {
+            "present": false
+          },
+          "HTTP_PROXY": {
+            "present": false
+          },
+          "all_proxy": {
+            "present": false
+          },
+          "http_proxy": {
+            "present": false
+          },
+          "https_proxy": {
+            "present": false
+          }
+        },
+        "publicEgressOrPhysicalNetworkIndependenceProven": false,
+        "scope": "Approved Personal shell environment and its own namespace only; no connection/process/company inventory"
+      }
+    }
+  ],
+  "observed": "Both approved node environments have no HTTP/HTTPS/ALL proxy variables. N default interface wlp4s0; D enp7s0. Both namespace gateways are192.168.1.1; kernel boot hashes differ. These facts do not prove a shared or separate physical WAN.",
+  "admissionDecision": "Keep physical uplink/shared-service group UNKNOWN. No public-IP/throughput/connection probe, proxy override or host-list retry. Use any genuinely supplied existing resource-group evidence, otherwise first natural resource window for acquisition; do not hold K2 for N.",
+  "inputAcquisitionLaunched": false,
+  "noMoreUnchangedNetworkOrCacheProbes": true,
+  "rawProxyValuesCredentialsCompanyDataOutput": false,
+  "buildsInstallsModelsTransfersOrNetworkProbes": 0
+}

@@ -1,0 +1,8 @@
+{
+  "at": "2026-10-16T14:42:37.984339+00:00",
+  "source": ".git/aurora-handoff-import-20261006/v1083-c06-app900-progress-RESULT.json",
+  "destination": "docs/experiments/tcc-20261013-submission-20261030/root/native-desktop-sdk-audio900-v1068/RUNNING-v1083.json",
+  "bytes": 12796,
+  "sha256": "06289d640eb220aba0bcae690e35cf9e9d2ce594ba11cf7f6bada392190f437f",
+  "scope": "Dated live metadata only; no final outcome audit/percentiles"
+}

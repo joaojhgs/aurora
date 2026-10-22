@@ -1,0 +1,173 @@
+{
+  "at": "2026-10-20T21:48:14.786133+00:00",
+  "host": "personal.skyron-server",
+  "status": "K3_PROVIDER_LIVE_METADATA_ADMITTED",
+  "phase": "normal_services_live",
+  "manifestPath": "/home/developer/projects/aurora/thesis/campaigns/worker-desktop-k3-p2p-full-audio-v1935/provider/provider-manifest.json",
+  "manifestSha256": "016d461363c4f1d3baa2fbb67bf7a85c0aa79df1a0ebb419fc7d3f166a4de629",
+  "manifest": {
+    "actualFileReceiptSha256": "292868f1d4386c23a0011828e6aaef3a03c9fc1de2d516722dc7a0816573eaea",
+    "actualFiles": {
+      "llmModel": {
+        "bytes": 563036064,
+        "path": "/home/developer/projects/aurora/.git/aurora-handoff-import-20261006/k1-provider-recovery-v1120/models/Qwen3.5-0.8B-Q4_0.gguf",
+        "sha256": "57d1997790d1744fba5b40a7317df71ea5e2acee28c47e78f0cce39c0703f8cf"
+      },
+      "model": {
+        "bytes": 63531379,
+        "path": "/home/developer/projects/aurora/.git/aurora-handoff-import-20261006/piper-asset-recovery-v1109/models/en_US-ljspeech-medium.onnx",
+        "sha256": "6f52a751e2349abe7a76735eb09dc1875298c77ea2342ffd2fef79ff81b87f22"
+      },
+      "piperExecutable": {
+        "bytes": 389,
+        "path": "/home/developer/projects/aurora/.git/aurora-handoff-import-20261006/k1-provider-recovery-v1120/env/bin/piper",
+        "sha256": "182cb51358f0ff104ee258f67f06c410243b81cee056552468977d6bca4cdf46"
+      },
+      "sttModel": {
+        "bytes": 145217532,
+        "path": "/home/developer/projects/aurora/.git/aurora-handoff-import-20261006/k1-provider-recovery-v1120/models/whisper-base/model.bin",
+        "sha256": "d01c3014881c9c6f3133c182f3d2887eb6ca1c789a7538c5c007196857a0a6a9"
+      },
+      "voiceConfig": {
+        "bytes": 4972,
+        "path": "/home/developer/projects/aurora/.git/aurora-handoff-import-20261006/piper-asset-recovery-v1109/models/en_US-ljspeech-medium.onnx.json",
+        "sha256": "141d612cc0a95ed7efc1ca936b845c2364967f2e9217c5dbfcf69fc4d6c65860"
+      }
+    },
+    "at": "2026-10-20T21:46:41.538442+00:00",
+    "automaticTtsReadback": false,
+    "config": "/home/developer/projects/aurora/.git/aurora-handoff-import-20261006/k3-mesh-provider-v1935/config.json",
+    "configSha256": "1b2e464a9dd2a191954504161862d3aa19a991126eb2b08c4de55a40778fd002",
+    "controllerSha256": "5e9d2212b0ee59848396888da919ef6a4695349bc880930a00e1aa1acd383dcd",
+    "credentialFileCopied": false,
+    "deadlineNotExtended": true,
+    "environment": {
+      "AURORA_STT_WHISPER_DOWNLOAD_ROOT": "/home/developer/projects/aurora/.git/aurora-handoff-import-20261006/k1-provider-recovery-v1120/models/whisper-base",
+      "GGML_VK_VISIBLE_DEVICES": "1",
+      "MKL_NUM_THREADS": "2",
+      "OMP_NUM_THREADS": "2",
+      "OPENBLAS_NUM_THREADS": "2"
+    },
+    "existingDataDir": "/home/developer/projects/aurora/.git/aurora-handoff-import-20261006/mesh-pair-control-v1535/personal-node-v1539/data",
+    "existingEnvFile": "/home/developer/projects/aurora/.git/aurora-handoff-import-20261006/mesh-pair-control-v1535/personal-node-v1539/.env",
+    "expectedRequesterPeerId": "aurora-03a910366bf721d72a9ef481d2e08fbd",
+    "expectedStablePeerId": "aurora-276bb04e1276201922851f6a222110de",
+    "hookRoot": "/home/developer/projects/aurora/.git/aurora-handoff-import-20261006/distributed-k3-http-provider-v1680/hook",
+    "lifetimeSeconds": 53862,
+    "lockPaths": [
+      "/tmp/aurora-global-build.lock"
+    ],
+    "newOrcaWorker": false,
+    "noRequesterDeadlineSeconds": 1800,
+    "originalProviderAbsoluteDeadlineUtc": "2026-10-21T12:49:24.259537+00:00",
+    "originalProviderConservativeExpiryUtc": "2026-10-21T07:09:10.393005+00:00",
+    "output": "/home/developer/projects/aurora/thesis/campaigns/worker-desktop-k3-p2p-full-audio-v1935/provider",
+    "pairingOrGrantMutation": false,
+    "predecessorZeroAudioManifestSha256": "ff1d2edc13fe65e646dccad691f4c0a3f83f31b224b796ef5f752402ce298e69",
+    "privateRoot": "/home/developer/projects/aurora/.git/aurora-handoff-import-20261006/k3-mesh-provider-v1935",
+    "python": "/home/developer/projects/aurora/.git/aurora-handoff-import-20261006/k1-provider-recovery-v1120/env/bin/python",
+    "remoteAssistantEffectiveSettings": {
+      "chat_format": "chatml-function-calling",
+      "max_tokens": 128,
+      "min_p": 0.0,
+      "model_path": "/home/developer/projects/aurora/.git/aurora-handoff-import-20261006/k1-provider-recovery-v1120/models/Qwen3.5-0.8B-Q4_0.gguf",
+      "n_batch": 64,
+      "n_ctx": 4096,
+      "n_gpu_layers": 100,
+      "n_threads": 2,
+      "repeat_penalty": 1.0,
+      "seed": 42,
+      "temperature": 0.0,
+      "top_k": 1,
+      "top_p": 1.0
+    },
+    "remoteMeshAssistantReceiver": {
+      "config_sha256": "1b2e464a9dd2a191954504161862d3aa19a991126eb2b08c4de55a40778fd002",
+      "model_sha256": "57d1997790d1744fba5b40a7317df71ea5e2acee28c47e78f0cce39c0703f8cf",
+      "peer_id_sha256": "77421aa81ce7ae2e865455348e9aa5ae17013d8f5e1f72d38d71d09f110ef868",
+      "provider_class": "app.services.orchestrator.chat_llama_cpp.ChatLlamaCpp",
+      "receiver_id": "personal-k3-mesh-qwen-v1935",
+      "source_sha256": "25026c4031e07d2e7cdac2afe269f78611ed375e53d3b64cd751b31867a552cf"
+    },
+    "remoteMeshSttReceiver": {
+      "config_sha256": "1b2e464a9dd2a191954504161862d3aa19a991126eb2b08c4de55a40778fd002",
+      "model_sha256": "d01c3014881c9c6f3133c182f3d2887eb6ca1c789a7538c5c007196857a0a6a9",
+      "peer_id_sha256": "77421aa81ce7ae2e865455348e9aa5ae17013d8f5e1f72d38d71d09f110ef868",
+      "provider_class": "faster_whisper.transcribe.WhisperModel",
+      "receiver_id": "personal-k3-mesh-whisper-v1935",
+      "source_sha256": "25026c4031e07d2e7cdac2afe269f78611ed375e53d3b64cd751b31867a552cf"
+    },
+    "remoteMeshTtsReceiver": {
+      "config_sha256": "141d612cc0a95ed7efc1ca936b845c2364967f2e9217c5dbfcf69fc4d6c65860",
+      "model_sha256": "6f52a751e2349abe7a76735eb09dc1875298c77ea2342ffd2fef79ff81b87f22",
+      "peer_id_sha256": "77421aa81ce7ae2e865455348e9aa5ae17013d8f5e1f72d38d71d09f110ef868",
+      "provider_class": "app.services.tts.providers.piper.PiperTTSProvider",
+      "receiver_id": "personal-k3-mesh-piper-v1935",
+      "source_sha256": "25026c4031e07d2e7cdac2afe269f78611ed375e53d3b64cd751b31867a552cf"
+    },
+    "remoteSttEffectiveSettings": {
+      "compute_type": "int8",
+      "device": "cpu",
+      "enabled": true,
+      "model_size": "base",
+      "model_size_or_path": "/home/developer/projects/aurora/.git/aurora-handoff-import-20261006/k1-provider-recovery-v1120/models/whisper-base"
+    },
+    "resourceSampler": "/home/developer/projects/aurora/.git/aurora-handoff-import-20261006/distributed-k3-http-provider-v1680/resource_sample.py",
+    "retiredPredecessorPids": [
+      2991328,
+      2991329,
+      3929314,
+      3159877,
+      161159,
+      161160,
+      2960427,
+      3154667,
+      3904749,
+      3904779,
+      2991345,
+      3194385,
+      3929330,
+      3159861,
+      3194394,
+      3154651,
+      3938174,
+      3938202
+    ],
+    "routeObserver": "/home/developer/projects/aurora/.git/aurora-handoff-import-20261006/mesh-pair-control-v1535/route-observer-v890.py",
+    "runtimeVersions": {
+      "ctranslate2": "4.7.1",
+      "faster-whisper": "1.1.1",
+      "llama-cpp-python": "0.3.19",
+      "numpy": "2.2.6",
+      "onnxruntime": "1.20.1",
+      "piper-tts": "1.2.0"
+    },
+    "schema": "aurora.k3.mesh_provider.v1",
+    "sourceInventory": {
+      "inventory_path": "/home/developer/projects/aurora/thesis/sources/k3-stt-runtime-v1907/personal/source-inventory.json",
+      "inventory_sha256": "25026c4031e07d2e7cdac2afe269f78611ed375e53d3b64cd751b31867a552cf",
+      "root": "/home/developer/projects/aurora/thesis/sources/k3-stt-runtime-v1907/personal/source"
+    },
+    "sourceRoot": "/home/developer/projects/aurora/thesis/sources/k3-stt-runtime-v1907/personal/source",
+    "taskConsentReceipt": {
+      "path": "/home/developer/projects/aurora/thesis/evidence/k3-stt-task-consent-v1934/personal/RESULT.json",
+      "sha256": "ff11fb094d832c92fccbf298fd9cc3a11f2eb76cb13f376f75cb123521794c34"
+    }
+  },
+  "controller": {
+    "pid": 212716,
+    "state": "S",
+    "startTicks": 28836566
+  },
+  "providerDeadlineUtc": "2026-10-21T12:45:06.664473+00:00",
+  "configSha256": "1b2e464a9dd2a191954504161862d3aa19a991126eb2b08c4de55a40778fd002",
+  "oldK2ActorsAbsent": true,
+  "newWorker": false,
+  "sutRequests": 0,
+  "actualGpuAndOrdinaryWarmups": "PENDING",
+  "receiver": {
+    "pid": 212717,
+    "state": "S",
+    "startTicks": 28836628
+  }
+}

@@ -1,0 +1,1 @@
+{"at": "2026-10-20T00:15:51.578384+00:00", "normalPairingApprovalCommandWritten": true, "bothEndpointsSasComparedEqual": true, "peerId": "aurora-03a910366bf721d72a9ef481d2e08fbd", "permissions": ["Gateway.GetRegistry", "Gateway.GetMeshStatus", "TTS.Synthesize"], "actualAuthBusApproval": "PENDING process receipt", "newModelCalls": 0, "syntheticTrustTableWrites": false}

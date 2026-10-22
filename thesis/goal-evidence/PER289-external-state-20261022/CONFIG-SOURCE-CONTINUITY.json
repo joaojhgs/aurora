@@ -1,0 +1,115 @@
+{
+  "at": "2026-10-22T12:07:08.984264+00:00",
+  "mappingSource": ".omx/evidence/receiving-session-20261006/PER289-STACKED-CONFIG-DELIVERY-V78.json",
+  "currentPr": "c0f4c0013cea5bb11ef81297194d0dc142a47bc4",
+  "root": "ebde3a8acf6315f920d03593845f17a1fc65a733",
+  "rows": [
+    {
+      "path": "packages/aurora-sdk/src/node-config.ts",
+      "reviewedProductTreeEntry": "100644 blob 7b5abfbb98c0ba419e5cba922c93aafefd8c8ab3\tpackages/aurora-sdk/src/node-config.ts",
+      "currentPrTreeEntry": "100644 blob 7b5abfbb98c0ba419e5cba922c93aafefd8c8ab3\tpackages/aurora-sdk/src/node-config.ts",
+      "rootTreeEntry": "100644 blob 7b5abfbb98c0ba419e5cba922c93aafefd8c8ab3\tpackages/aurora-sdk/src/node-config.ts",
+      "currentPrMatchesReviewed": true,
+      "rootMatchesCurrentPr": true
+    },
+    {
+      "path": "packages/aurora-sdk/src/background-transcription.ts",
+      "reviewedProductTreeEntry": "100644 blob b91c1a79c9916035af9c382dfd1a2d8e49b4de4e\tpackages/aurora-sdk/src/background-transcription.ts",
+      "currentPrTreeEntry": "100644 blob b91c1a79c9916035af9c382dfd1a2d8e49b4de4e\tpackages/aurora-sdk/src/background-transcription.ts",
+      "rootTreeEntry": "100644 blob b91c1a79c9916035af9c382dfd1a2d8e49b4de4e\tpackages/aurora-sdk/src/background-transcription.ts",
+      "currentPrMatchesReviewed": true,
+      "rootMatchesCurrentPr": true
+    },
+    {
+      "path": "packages/aurora-sdk/src/native-node-config.ts",
+      "reviewedProductTreeEntry": "100644 blob 5ca045f277618d9d181dbde8fbca421deebab49d\tpackages/aurora-sdk/src/native-node-config.ts",
+      "currentPrTreeEntry": "100644 blob 5ca045f277618d9d181dbde8fbca421deebab49d\tpackages/aurora-sdk/src/native-node-config.ts",
+      "rootTreeEntry": "100644 blob 5ca045f277618d9d181dbde8fbca421deebab49d\tpackages/aurora-sdk/src/native-node-config.ts",
+      "currentPrMatchesReviewed": true,
+      "rootMatchesCurrentPr": true
+    },
+    {
+      "path": "packages/aurora-sdk/src/index.ts",
+      "reviewedProductTreeEntry": "100644 blob 9c86d2499b790a3fd4d6a73d5f33a029547a9fed\tpackages/aurora-sdk/src/index.ts",
+      "currentPrTreeEntry": "100644 blob 9c86d2499b790a3fd4d6a73d5f33a029547a9fed\tpackages/aurora-sdk/src/index.ts",
+      "rootTreeEntry": "100644 blob 9c86d2499b790a3fd4d6a73d5f33a029547a9fed\tpackages/aurora-sdk/src/index.ts",
+      "currentPrMatchesReviewed": true,
+      "rootMatchesCurrentPr": true
+    },
+    {
+      "path": "packages/aurora-sdk/tests/background-transcription.test.ts",
+      "reviewedProductTreeEntry": "100644 blob 3b8b748e47964267595c419ac06b7c555f7a9700\tpackages/aurora-sdk/tests/background-transcription.test.ts",
+      "currentPrTreeEntry": "100644 blob 3b8b748e47964267595c419ac06b7c555f7a9700\tpackages/aurora-sdk/tests/background-transcription.test.ts",
+      "rootTreeEntry": "100644 blob 3b8b748e47964267595c419ac06b7c555f7a9700\tpackages/aurora-sdk/tests/background-transcription.test.ts",
+      "currentPrMatchesReviewed": true,
+      "rootMatchesCurrentPr": true
+    },
+    {
+      "path": "packages/aurora-sdk/tests/node-config.test.ts",
+      "reviewedProductTreeEntry": "100644 blob 5ca93ee9c6cc5d1cdbdc61f4847cb69389d7fcc2\tpackages/aurora-sdk/tests/node-config.test.ts",
+      "currentPrTreeEntry": "100644 blob 5ca93ee9c6cc5d1cdbdc61f4847cb69389d7fcc2\tpackages/aurora-sdk/tests/node-config.test.ts",
+      "rootTreeEntry": "100644 blob 5ca93ee9c6cc5d1cdbdc61f4847cb69389d7fcc2\tpackages/aurora-sdk/tests/node-config.test.ts",
+      "currentPrMatchesReviewed": true,
+      "rootMatchesCurrentPr": true
+    },
+    {
+      "path": "packages/aurora-sdk/tests/native-node-config.test.ts",
+      "reviewedProductTreeEntry": "100644 blob 24346b4ca655d4a88cf2a0559d8ac9f7265363d4\tpackages/aurora-sdk/tests/native-node-config.test.ts",
+      "currentPrTreeEntry": "100644 blob 24346b4ca655d4a88cf2a0559d8ac9f7265363d4\tpackages/aurora-sdk/tests/native-node-config.test.ts",
+      "rootTreeEntry": "100644 blob 24346b4ca655d4a88cf2a0559d8ac9f7265363d4\tpackages/aurora-sdk/tests/native-node-config.test.ts",
+      "currentPrMatchesReviewed": true,
+      "rootMatchesCurrentPr": true
+    },
+    {
+      "path": "packages/aurora-sdk/tests/node-config-rust-validation-parity.test.ts",
+      "reviewedProductTreeEntry": "100644 blob 5b3e980028360c94b55c082ea6e7c24c59ac36dd\tpackages/aurora-sdk/tests/node-config-rust-validation-parity.test.ts",
+      "currentPrTreeEntry": "100644 blob 5b3e980028360c94b55c082ea6e7c24c59ac36dd\tpackages/aurora-sdk/tests/node-config-rust-validation-parity.test.ts",
+      "rootTreeEntry": "100644 blob 5b3e980028360c94b55c082ea6e7c24c59ac36dd\tpackages/aurora-sdk/tests/node-config-rust-validation-parity.test.ts",
+      "currentPrMatchesReviewed": true,
+      "rootMatchesCurrentPr": true
+    },
+    {
+      "path": "rust/crates/aurora-voice-core/src/node_policy.rs",
+      "reviewedProductTreeEntry": "100644 blob 22dff19d31d78992dadf12ad336190bc2cab43a1\trust/crates/aurora-voice-core/src/node_policy.rs",
+      "currentPrTreeEntry": "100644 blob 22dff19d31d78992dadf12ad336190bc2cab43a1\trust/crates/aurora-voice-core/src/node_policy.rs",
+      "rootTreeEntry": "100644 blob 22dff19d31d78992dadf12ad336190bc2cab43a1\trust/crates/aurora-voice-core/src/node_policy.rs",
+      "currentPrMatchesReviewed": true,
+      "rootMatchesCurrentPr": true
+    },
+    {
+      "path": "rust/crates/aurora-voice-core/tests/node_policy.rs",
+      "reviewedProductTreeEntry": "100644 blob 5b2c19f882465c995fe5a90d686f3d3687fecd31\trust/crates/aurora-voice-core/tests/node_policy.rs",
+      "currentPrTreeEntry": "100644 blob 5b2c19f882465c995fe5a90d686f3d3687fecd31\trust/crates/aurora-voice-core/tests/node_policy.rs",
+      "rootTreeEntry": "100644 blob 5b2c19f882465c995fe5a90d686f3d3687fecd31\trust/crates/aurora-voice-core/tests/node_policy.rs",
+      "currentPrMatchesReviewed": true,
+      "rootMatchesCurrentPr": true
+    },
+    {
+      "path": "rust/crates/aurora-voice-core/tests/fixtures/node_policy_cross_language_vectors.json",
+      "reviewedProductTreeEntry": "100644 blob cfdd425ab84c3fa6d357e5805c2e61104c2a5420\trust/crates/aurora-voice-core/tests/fixtures/node_policy_cross_language_vectors.json",
+      "currentPrTreeEntry": "100644 blob cfdd425ab84c3fa6d357e5805c2e61104c2a5420\trust/crates/aurora-voice-core/tests/fixtures/node_policy_cross_language_vectors.json",
+      "rootTreeEntry": "100644 blob cfdd425ab84c3fa6d357e5805c2e61104c2a5420\trust/crates/aurora-voice-core/tests/fixtures/node_policy_cross_language_vectors.json",
+      "currentPrMatchesReviewed": true,
+      "rootMatchesCurrentPr": true
+    },
+    {
+      "path": "rust/crates/aurora-voice-core/tests/fixtures/node_policy_v2_default.json",
+      "reviewedProductTreeEntry": "100644 blob 5e9e3a530bcb6c7ed72cdb23ba8f42bd7605957e\trust/crates/aurora-voice-core/tests/fixtures/node_policy_v2_default.json",
+      "currentPrTreeEntry": "100644 blob 5e9e3a530bcb6c7ed72cdb23ba8f42bd7605957e\trust/crates/aurora-voice-core/tests/fixtures/node_policy_v2_default.json",
+      "rootTreeEntry": "100644 blob 5e9e3a530bcb6c7ed72cdb23ba8f42bd7605957e\trust/crates/aurora-voice-core/tests/fixtures/node_policy_v2_default.json",
+      "currentPrMatchesReviewed": true,
+      "rootMatchesCurrentPr": true
+    },
+    {
+      "path": "apps/aurora-tauri/src-tauri/src/native_node_config.rs",
+      "reviewedProductTreeEntry": "100644 blob 91bb3ea74f2968d2cd718fa5ea3832f0f94cc5d2\tapps/aurora-tauri/src-tauri/src/native_node_config.rs",
+      "currentPrTreeEntry": "100644 blob 91bb3ea74f2968d2cd718fa5ea3832f0f94cc5d2\tapps/aurora-tauri/src-tauri/src/native_node_config.rs",
+      "rootTreeEntry": "100644 blob 91bb3ea74f2968d2cd718fa5ea3832f0f94cc5d2\tapps/aurora-tauri/src-tauri/src/native_node_config.rs",
+      "currentPrMatchesReviewed": true,
+      "rootMatchesCurrentPr": true
+    }
+  ],
+  "currentPrChangedComparedToReviewed": [],
+  "rootChangedComparedToCurrentPr": [],
+  "newTestsOrReviews": 0
+}

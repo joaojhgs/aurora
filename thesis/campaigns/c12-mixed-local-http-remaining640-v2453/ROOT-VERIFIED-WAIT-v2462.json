@@ -1,0 +1,91 @@
+{
+  "at": "2026-10-22T12:54:04.547254+00:00",
+  "classification": "VERIFIED_WAIT",
+  "previousTurnClassification": "PROGRESS: canonical reviewed factual plan correction adopted locally and newly completed raw controls retained; no task completion claimed",
+  "specificLiveHandle": {
+    "pid": 462924,
+    "startTicks": 144596371,
+    "state": "S"
+  },
+  "current": {
+    "at": "2026-10-22T12:54:01.088658+00:00",
+    "companion": {
+      "measured": {
+        "attempted": 131,
+        "correct": 131,
+        "failed": 0,
+        "harnessErrorsIncludedInFailed": 0,
+        "incorrectIncludedInFailed": 0,
+        "offered": 131,
+        "planned": 640,
+        "timeouts": 0,
+        "unstarted": 509
+      },
+      "warmup": {
+        "attempted": 15,
+        "correct": 15,
+        "failed": 0,
+        "harnessErrorsIncludedInFailed": 0,
+        "incorrectIncludedInFailed": 0,
+        "offered": 15,
+        "planned": 15,
+        "timeouts": 0,
+        "unstarted": 0
+      }
+    },
+    "completePairedCapsules": 146,
+    "elapsedSeconds": 6130.84968539,
+    "lastIndex": 131,
+    "lastNativeParent": "6e93240d37f1e8c58895d7b9dd471e35",
+    "lastOrdinal": 146,
+    "manifestSha256": "3bfca19d2dd0a9eec3981eae256168a5badd9ac2bb58a270ff8a55df1d986cce",
+    "phase": "measured",
+    "pid": 462924,
+    "primary": {
+      "measured": {
+        "attempted": 131,
+        "correct": 131,
+        "failed": 0,
+        "harnessErrorsIncludedInFailed": 0,
+        "incorrectIncludedInFailed": 0,
+        "offered": 131,
+        "planned": 640,
+        "timeouts": 0,
+        "unstarted": 509
+      },
+      "warmup": {
+        "attempted": 15,
+        "correct": 15,
+        "failed": 0,
+        "harnessErrorsIncludedInFailed": 0,
+        "incorrectIncludedInFailed": 0,
+        "offered": 15,
+        "planned": 15,
+        "timeouts": 0,
+        "unstarted": 0
+      }
+    },
+    "status": "running"
+  },
+  "priorRetainedMeasuredPerStream": 260,
+  "conditionCorrectPerStream": {
+    "primary": 391,
+    "companion": 391
+  },
+  "freeBytes": 2285133824,
+  "diskFreeFloorBytes": 2147483648,
+  "capacityRisk": "Existing STORAGE-OBSERVATION-v2460.json projection; exact935MB unused-webpack-cache permission remains pending; no deletion/reask",
+  "newCompletedControlCustody": "control-link-receipts/20261022T125124.285360Z.json",
+  "newControlFilesLinked": 132,
+  "newControlBytesHashed": 790217,
+  "oldFilesRehashed": 0,
+  "newPayloadAllocations": 0,
+  "originalRun": "run_e6054e76e9fc",
+  "rootNativeGoalThread": "01a112a5-d6bb-74e2-bf7c-ace73cb513b5",
+  "goalStatus": "active",
+  "mainSourceSettingsCountsClocksFloorChanged": false,
+  "newWorkersTestsDevicesBuildsInferenceOrPhoneOperations": 0,
+  "phoneOwner": "term_1f27be31-0284-4366-bb91-30fe538cd30e",
+  "nextAction": "Continue exact live main requester; after actual full900 terminal retrieve EOF, prove actor retirement and release, then admit prepared mixed-P2P condition on actual capacity. Do not launch competing desktop commands or repeat completed measurements.",
+  "nextMaximumObservationUtc": "2026-10-22T12:59:04.547254+00:00"
+}

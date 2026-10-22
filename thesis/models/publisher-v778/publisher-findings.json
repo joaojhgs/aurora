@@ -1,0 +1,69 @@
+{
+  "schema": "aurora.model-publisher-metadata-extract.v778",
+  "checkedAt": "2026-10-16T01:03:40Z",
+  "scope": "Exact retained Qwen GGUF and Piper LJSpeech ONNX provenance/license metadata only; no model bytes read or fetched",
+  "models": [
+    {
+      "role": "llm",
+      "artifact": "Qwen3.5-0.8B-Q4_0.gguf",
+      "bytes": 563036064,
+      "sha256": "57d1997790d1744fba5b40a7317df71ea5e2acee28c47e78f0cce39c0703f8cf",
+      "publisherRepository": "ggml-org/Qwen3.5-0.8B-GGUF",
+      "pinnedRevision": "9447f74101aeb4e93621884dfa36ee8effb8831b",
+      "pinnedArtifactUrl": "https://huggingface.co/ggml-org/Qwen3.5-0.8B-GGUF/resolve/9447f74101aeb4e93621884dfa36ee8effb8831b/Qwen3.5-0.8B-Q4_0.gguf",
+      "officialPublisherMetadata": {
+        "licenseTag": "apache-2.0",
+        "revisionPage": "https://huggingface.co/ggml-org/Qwen3.5-0.8B-GGUF/tree/9447f74101aeb4e93621884dfa36ee8effb8831b",
+        "artifactPage": "https://huggingface.co/ggml-org/Qwen3.5-0.8B-GGUF/blob/9447f74101aeb4e93621884dfa36ee8effb8831b/Qwen3.5-0.8B-Q4_0.gguf",
+        "pageShowsMatchingSha256": true
+      },
+      "localRetrievalEvidence": {
+        "receipt": ".artifacts/local-inference/models/model-receipt.json",
+        "receiptBytes": 531,
+        "receiptSha256": "abaf93295d0f9ef9eda8dc485dbd5dcfdf1a2eb84bee74d32bc0a476abccd9a7",
+        "receiptHasTimestamp": false,
+        "timestampedExactHashRetrieval": "docs/experiments/tcc-20261013-submission-20261030/root/cpu-extra-terminal-and-desktop-readiness-v409/desktop-model-source-actual-v409.json",
+        "timestampedRecordBytes": 1560,
+        "timestampedRecordSha256": "41ae5316752f04b70ea46acabe720de4fcdd8561348cd9d047556a9cab1e4282",
+        "retrievedAt": "2026-10-14T16:34:29.702659Z",
+        "completedAt": "2026-10-14T16:34:39.709256Z"
+      },
+      "remainingGap": "The GGUF artifact repository/revision and Apache-2.0 publisher metadata are mapped. The exact upstream Qwen base-weight revision used by the converter is not pinned in the retained receipt/model page. The old README lookup at the GGUF revision returned HTTP 404; this does not negate the current pinned-revision repository license metadata."
+    },
+    {
+      "role": "tts",
+      "artifact": "en_US-ljspeech-medium.onnx",
+      "bytes": 63531379,
+      "sha256": "6f52a751e2349abe7a76735eb09dc1875298c77ea2342ffd2fef79ff81b87f22",
+      "publisherRepository": "rhasspy/piper-voices",
+      "pinnedRevision": "c10ece1aade47bb51c153c893d14e5bf8e5b7117",
+      "pinnedArtifactUrl": "https://huggingface.co/rhasspy/piper-voices/resolve/c10ece1aade47bb51c153c893d14e5bf8e5b7117/en/en_US/ljspeech/medium/en_US-ljspeech-medium.onnx",
+      "officialPublisherMetadata": {
+        "repositoryLicenseTag": "mit",
+        "revisionPrefixObservedAtCurrentMain": "c10ece1",
+        "repositoryPage": "https://huggingface.co/rhasspy/piper-voices/tree/main",
+        "artifactPage": "https://huggingface.co/rhasspy/piper-voices/blob/main/en/en_US/ljspeech/medium/en_US-ljspeech-medium.onnx",
+        "pageShowsMatchingSha256": true
+      },
+      "voiceCard": {
+        "pinnedUrl": "https://huggingface.co/rhasspy/piper-voices/raw/c10ece1aade47bb51c153c893d14e5bf8e5b7117/en/en_US/ljspeech/medium/MODEL_CARD",
+        "bytes": 517,
+        "sha256": "fbee1529c89d36b3fe76d7e9f3f832dce17f44900a52d76a9bda735654766b4d",
+        "cardSaysDatasetLicense": "public domain",
+        "cardStatesVoiceTrainingOnLJSpeech": true,
+        "cardStatesSeparateWeightLicense": false
+      },
+      "localRetrievalEvidence": {
+        "receipt": "docs/experiments/tcc-20261013-submission-20261030/root/full-audio-worker-cpu-v490/preparation/v483/asset-stage.json",
+        "receiptBytes": 1560,
+        "receiptSha256": "9b65d9cff9c1567e037410862cd3907ca7a51b7dd2138bd6ba9d51f849013d85",
+        "retrievedAt": "2026-10-15T03:34:55.965633Z",
+        "completedAt": "2026-10-15T03:34:57.522712Z",
+        "downloadStatus": "exitCode 0; pinned SHA-256 and byte count matched"
+      },
+      "remainingGap": "The repository is tagged MIT and the pinned voice card identifies the dataset as public domain, but the card does not specify a distinct license for the ONNX weights. Do not treat the dataset statement alone as the voice artifact's license; seek explicit weight-level scope/attribution confirmation."
+    }
+  ],
+  "metadataByteHashNote": "The SHA-256 values above identify retained local retrieval/provenance records and the pinned Piper voice-card bytes. The approved web lookup exposed rendered publisher pages, not raw response bytes, so no byte hash is asserted for the upstream HTML/metadata response itself.",
+  "notPerformed": ["model weight reads or hashes", "downloads", "backend imports", "tests", "inference"]
+}

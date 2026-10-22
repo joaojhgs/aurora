@@ -1,0 +1,13 @@
+{
+  "schema": "aurora.thesis.analysis-doc-links.v761",
+  "at": "2026-10-16T00:10:13.012894+00:00",
+  "scope": "Only updated analysis/main README links; source/runtime tests not repeated",
+  "files": [
+    "thesis/README.md",
+    "thesis/analysis/README.md"
+  ],
+  "checked": 25,
+  "failures": [],
+  "newMeasuredRequests": 0,
+  "modelsOrServicesLoaded": false
+}

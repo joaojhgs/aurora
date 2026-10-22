@@ -1,0 +1,20 @@
+{
+  "at": "2026-10-17T22:43:16.802197+00:00",
+  "copiedOnly": true,
+  "noModelCalls": true,
+  "sameFrozenK1Audio": true,
+  "files": [
+    {
+      "source": "thesis/evidence/orca-relayed-http-v1197/harness/candidate-input.wav",
+      "destination": "thesis/campaigns/worker-desktop-k2-orca-relayed-http-v1264/inputs/candidate-input.wav",
+      "bytes": 219794,
+      "sha256": "da0ecc4ad0885746ab6e716585473917ab2b543a505bf0db09ebacfaa7943cbb"
+    },
+    {
+      "source": "thesis/evidence/orca-relayed-http-v1197/harness/candidate-input.wav",
+      "destination": ".git/aurora-handoff-import-20261006/distributed-k2-requester-prep-v1282/candidate-input.wav",
+      "bytes": 219794,
+      "sha256": "da0ecc4ad0885746ab6e716585473917ab2b543a505bf0db09ebacfaa7943cbb"
+    }
+  ]
+}

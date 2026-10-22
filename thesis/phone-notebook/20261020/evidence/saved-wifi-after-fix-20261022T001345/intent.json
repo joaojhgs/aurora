@@ -1,0 +1,12 @@
+{
+  "controlDeadline": "2026-10-22T00:23:45.180678+00:00",
+  "explicitNewline": true,
+  "host": "ssh:ssh-sem-notebook-personal",
+  "incarnation": "328cd72f-c7ea-49ff-a2db-b9275b085037",
+  "remoteResult": "/home/developer/projects/aurora/thesis/phone-notebook/20261020/evidence/saved-wifi-after-fix-20261022T001345.json",
+  "rootAdmissionMessage": "owner-direct-continue-setup-saved-home-wifi-already-authorized",
+  "script": "scripts/enable_saved_phone_wifi_v7.py",
+  "scriptSha256": "267cabfe135bd17278ff4cc08ee600a5fe8a2c589aadd48c8400ec5ea055bddc",
+  "singleSend": true,
+  "terminal": "term_a2ed5feb-7c92-48e4-bd88-d1b0e6737989"
+}

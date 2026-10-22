@@ -1,0 +1,37 @@
+{
+  "steps": [
+    {
+      "name": "ui-capture-tests-final",
+      "at": "2026-10-15T00:54:54.059413+00:00",
+      "command": [
+        "pnpm",
+        "exec",
+        "vitest",
+        "run",
+        "src/use-assistant-browser-capture.test.ts",
+        "--maxWorkers=1"
+      ],
+      "cwd": "/home/developer/projects/aurora/packages/aurora-ui",
+      "exitCode": 0,
+      "elapsedSeconds": 4.303568136063404,
+      "globalBuildLockHeld": true
+    },
+    {
+      "name": "ui-typecheck-final",
+      "at": "2026-10-15T00:54:58.363665+00:00",
+      "command": [
+        "pnpm",
+        "exec",
+        "tsc",
+        "--noEmit",
+        "--incremental",
+        "false"
+      ],
+      "cwd": "/home/developer/projects/aurora/packages/aurora-ui",
+      "exitCode": 0,
+      "elapsedSeconds": 48.52673281903844,
+      "globalBuildLockHeld": true
+    }
+  ],
+  "finished": true
+}

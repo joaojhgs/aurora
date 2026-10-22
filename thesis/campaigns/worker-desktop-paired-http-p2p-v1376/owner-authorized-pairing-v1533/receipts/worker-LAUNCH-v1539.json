@@ -1,0 +1,9 @@
+{
+  "at": "2026-10-18T16:28:04.849874+00:00",
+  "pid": 1301496,
+  "startTicks": 111934543,
+  "sourceSha256": "a69bcb36cfd6e0372cd28dfa4a8642d9c47e3510d213e6312e9fdb1a625e966f",
+  "sameTaskLocalIdentityRetained": true,
+  "newModelRequests": 0,
+  "newOrcaWorker": false
+}

@@ -1,0 +1,61 @@
+{
+  "status": "ACTUAL_FULL_NATIVE_FLOW_RAW_WAV_AND_PROVIDER_JOIN_VERIFIED",
+  "runId": "phone-notebook-8ea56b4c0ae84e4981be002681b188ef",
+  "nativeBoundaryElapsedMs": 6836.199999928474,
+  "allThreeProviderJoins": {
+    "stt": {
+      "correlationId": "webrtc-95dussstcxj-mvjlmo5z",
+      "spans": [
+        {
+          "id": "e1c5c42a82b1469188755436b6b2393f",
+          "handler": "Transcription.Transcribe",
+          "elapsedMs": 2284.635509,
+          "outcome": "completed"
+        },
+        {
+          "id": "5e2f827d6d3e4227b5808d56fa30f140",
+          "handler": "stt.model_invoke",
+          "elapsedMs": 2280.458153,
+          "outcome": "completed"
+        }
+      ]
+    },
+    "llm": {
+      "correlationId": "webrtc-girlgtgkmsl-mvjlmqfz",
+      "spans": [
+        {
+          "id": "e47b3c11844444b589d99e36de3df065",
+          "handler": "resolved_chat_model.astream",
+          "elapsedMs": 998.13453,
+          "outcome": "completed"
+        }
+      ]
+    },
+    "tts": {
+      "correlationId": "webrtc-gq10pa24kx4-mvjlmrbe",
+      "spans": [
+        {
+          "id": "82a398decf214643a556900b1ae6b70a",
+          "handler": "TTS.Synthesize",
+          "elapsedMs": 1016.540481,
+          "outcome": "completed"
+        },
+        {
+          "id": "c1c695e2ace145d5abb628f2483fb92d",
+          "handler": "tts.model_invoke",
+          "elapsedMs": 1016.162168,
+          "outcome": "completed"
+        }
+      ]
+    }
+  },
+  "nestedSpansNotSummed": true,
+  "wavSha256": "f77f674523a09d24b2d444b0888ada26347e3fe1c10ec3b9a5f6d62645c5bfb2",
+  "wavRms": 0.17996949077572094,
+  "bytes": 31788,
+  "custodyArchiveSha256": "7fd3125c6865795ba252aa81dcb1487f9a6f98f13c81ee690926df517e06b57f",
+  "bothHostsPhysicalRepo": true,
+  "referenceMatchedCohort": false,
+  "cancellationQualified": false,
+  "measuredCases": 0
+}

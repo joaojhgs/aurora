@@ -1,0 +1,13 @@
+# Owner-authorized matched Assistant main campaign V319
+
+Status: LIVE, started 2026-10-14 07:26:48 UTC in the existing Aurora Root thread. Main sample results and quantiles are pending. The closed local/API/mesh readiness pilots are retained separately and were not repeated.
+
+Root owns the serial executable/build lock and the original Orca monitor receives the actual handles and resource milestones. [Launch handle](launch-handle.json), [source/model/settings manifest](campaign-manifest.json), [independent Sol source approval and rejected-candidate history](independent-sol-source-review.md), and [actual syntax checks](static-check-final-v319.json) identify the exact run. The model is Qwen3.5-0.8B-Q4_0; request deadline is 180 seconds. Local-only, API and browser WebRTC mesh use the same actual provider input and settings; the fixed public workload asks for ORBIT.
+
+The finite nine cells are counterbalanced local/API/mesh, API/mesh/local, mesh/local/API. Each starts a fresh provider process, records a 300-second resource baseline at 1 Hz, then excludes five warmups and plans 100 measured requests. This plans 300 measured requests per route, not a current success claim. Cell cap is 6,000 seconds and campaign cap 56,700 seconds including a reserved finalization window. Conditions are explicitly loaded; no clean or exclusive host claim is made.
+
+Collection stops on the first incomplete, failed, timed-out, cancelled, source-changed, unmatched-input or unsafe-resource cell. Raw partial attempts, failure/timeout denominators, unattempted later cells, original histories and manifests are retained. Success quantiles will use the already-reviewed Type 7 method; warmups, errors, cancellation and infeasibility are excluded from success-only latency and reported separately. One-second CPU/memory/disk/network observations are host totals and do not identify per-route network overhead.
+
+Full browser reports, DOM, screenshots and credential-bearing logs stay private. Only allowlisted structured records, redacted logs and source/hash manifests will be exported. A successful scoped Compose down command is not independent proof that every container was reaped. Verified group-leader cleanup is not a claim about every descendant; the retained child sidecars govern shutdown limits.
+
+This campaign does not establish native/mobile voice, cross-region transport, thermal/Doze, source Astra aesthetic approval, or completion of the thirteen aggregate stories. Owner Section 25 authorizes this project-document artifact subtree. No publication, credential changes or thesis application occurred.

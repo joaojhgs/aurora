@@ -1,0 +1,95 @@
+{
+  "at": "2026-10-21T05:38:47.670131+00:00",
+  "status": "MEASURED_TARGET_900_COMPLETE_REQUESTER_RETIRED_CUSTODY_DRAINED",
+  "classification": "progress: original900 global indices reconciled, no retries/topups",
+  "measured": {
+    "attempted": 900,
+    "correct": 885,
+    "failed": 15,
+    "timeoutsIncludedInFailed": 1,
+    "remaining": 0
+  },
+  "failureCodes": {
+    "remote_mesh_exact_remote_peer_call_not_confirmed": 1,
+    "remote_mesh_preaccept_capability_changed": 13,
+    "remote_mesh_tts_timeout_ambiguous": 1
+  },
+  "epochs": [
+    {
+      "label": "first20",
+      "path": "thesis/campaigns/worker-desktop-k1-p2p-tts-v1711",
+      "manifestSha256": "04872dbd3948c13a4b269a1eb116f8b92fb3c369a8b0026cbbf339a2257009c1",
+      "measured": 20,
+      "statuses": {
+        "completed_correct": 19,
+        "failed": 1
+      },
+      "timeouts": 0,
+      "excludedWarmups": 15,
+      "caseRecords": 35,
+      "actualAudioFilesPresent": 34,
+      "custodyStateSha256": "d007d45092f98cd6cab861e538994c3c9b8d74db19900cbc43cfe29e5ff4475d"
+    },
+    {
+      "label": "next689",
+      "path": "thesis/campaigns/worker-desktop-k1-p2p-tts-remaining880-v1719",
+      "manifestSha256": "120dd99a4de0a242c30ebe4bb46d854ca77313c482a0c74f024edb624829a6e8",
+      "measured": 689,
+      "statuses": {
+        "completed_correct": 678,
+        "failed": 11
+      },
+      "timeouts": 1,
+      "excludedWarmups": 15,
+      "caseRecords": 704,
+      "actualAudioFilesPresent": 693,
+      "custodyStateSha256": "d7b970f57ddaa233096fe0e8ffd4a3c6bbdc96be973b7c80a13227da9c0ca089"
+    },
+    {
+      "label": "remaining191",
+      "path": "thesis/campaigns/worker-desktop-k1-p2p-tts-remaining191-v2153",
+      "manifestSha256": "d753203e4a53f12ed983a98d776a811d241d0d6bc6061b28e3c1480a077a17d3",
+      "measured": 191,
+      "statuses": {
+        "completed_correct": 188,
+        "failed": 3
+      },
+      "timeouts": 0,
+      "excludedWarmups": 15,
+      "caseRecords": 206,
+      "actualAudioFilesPresent": 203,
+      "custodyStateSha256": "338abca2bf5bc83fc2c9f723e53c3e15b5b260b7b1054beae451f35da64bb420"
+    }
+  ],
+  "excludedWarmupsInMeasuredEpochs": 45,
+  "additionalFailedStartupHistory": "V1779 separately retains3excludedwarmups=2correct1failed/0measured; V2143 zero requests. Not pooled into measured900.",
+  "workerActors": {
+    "3332811": "absent",
+    "3332919": "absent",
+    "3333678": "absent"
+  },
+  "controlFinishedAt": "2026-10-21T05:35:54.288249+00:00",
+  "controllerExitCode": 1,
+  "exitMeaning": "retained failed outcomes; measured_target_complete and shutdown_completed, not an inferred harness crash",
+  "summarySha256": "cef3983308ad07ec700324adcb2bc618feb701d821763c3a96a2f2691b36c78f",
+  "conditionManifestSha256": "d753203e4a53f12ed983a98d776a811d241d0d6bc6061b28e3c1480a077a17d3",
+  "currentCustody": {
+    "sequence": 158,
+    "cases": 206,
+    "audioFiles": 203,
+    "indexedFiles": 1687,
+    "indexedBytes": 23594945,
+    "errors": []
+  },
+  "latencyPolicy": "Report per-epoch quantiles with explicit source/provider-residency context; do not silently pool incompatible source/context percentiles or call E2E differences pure protocol overhead.",
+  "pending": [
+    "Explicit requester EOF seal and saved-data native/resource joins",
+    "Bounded original Personal provider/prefix/resource/deadline reconciliation",
+    "K1 Orca-relayed HTTP ONLY720 missing181-900 admission under plan30.72.3"
+  ],
+  "provider": "Existing original D251473/start29038457 remains reserved; no stop/restart/new traffic performed by this receipt",
+  "sutCalls": 0,
+  "sourceChanges": false,
+  "nativeGoal": "original full aggregate ACTIVE",
+  "freeBytes": 3841474560
+}

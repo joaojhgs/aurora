@@ -1,0 +1,87 @@
+{
+  "at": "2026-10-22T12:17:49.404747+00:00",
+  "requester": {
+    "pid": 462924,
+    "startTicks": 144596371,
+    "state": "S"
+  },
+  "current": {
+    "at": "2026-10-22T12:17:25.241858+00:00",
+    "companion": {
+      "measured": {
+        "attempted": 79,
+        "correct": 79,
+        "failed": 0,
+        "harnessErrorsIncludedInFailed": 0,
+        "incorrectIncludedInFailed": 0,
+        "offered": 79,
+        "planned": 640,
+        "timeouts": 0,
+        "unstarted": 561
+      },
+      "warmup": {
+        "attempted": 15,
+        "correct": 15,
+        "failed": 0,
+        "harnessErrorsIncludedInFailed": 0,
+        "incorrectIncludedInFailed": 0,
+        "offered": 15,
+        "planned": 15,
+        "timeouts": 0,
+        "unstarted": 0
+      }
+    },
+    "completePairedCapsules": 94,
+    "elapsedSeconds": 3935.002774658,
+    "lastIndex": 79,
+    "lastNativeParent": "44f978641f33170f5ed5908bc1a36af7",
+    "lastOrdinal": 94,
+    "manifestSha256": "3bfca19d2dd0a9eec3981eae256168a5badd9ac2bb58a270ff8a55df1d986cce",
+    "phase": "measured",
+    "pid": 462924,
+    "primary": {
+      "measured": {
+        "attempted": 79,
+        "correct": 79,
+        "failed": 0,
+        "harnessErrorsIncludedInFailed": 0,
+        "incorrectIncludedInFailed": 0,
+        "offered": 79,
+        "planned": 640,
+        "timeouts": 0,
+        "unstarted": 561
+      },
+      "warmup": {
+        "attempted": 15,
+        "correct": 15,
+        "failed": 0,
+        "harnessErrorsIncludedInFailed": 0,
+        "incorrectIncludedInFailed": 0,
+        "offered": 15,
+        "planned": 15,
+        "timeouts": 0,
+        "unstarted": 0
+      }
+    },
+    "status": "running"
+  },
+  "priorRetainedMeasuredPerStream": 260,
+  "combinedCorrectPerStream": {
+    "primary": 339,
+    "companion": 339
+  },
+  "freeBytes": 2331021312,
+  "terminalPresent": false,
+  "currentErrorPresent": false,
+  "nextMaximumObservationUtc": "2026-10-22T12:22:49.404747+00:00",
+  "mainSourceSettingsClocksChanged": false,
+  "turnClassification": "progress: bounded existing PER289 source/PR/current-admission reconciliation; corrected stale delivery facts and preserved accepted reviews without new tests",
+  "per289Evidence": "thesis/goal-evidence/PER289-external-state-20261022/READINESS-RECONCILIATION.json",
+  "formalPer289Complete": false,
+  "phoneWindow": "CLOSED; own worker reports0measured, pre-model entrypoint failure, both provider epochs retired and HOME return verified; no Root device reads",
+  "latestMethodology": {
+    "bytes": 915630,
+    "sha256": "ffdc2807d88127547fb856330d1d76885774c8b2ce15970e28dedcf0c31460cc"
+  },
+  "newSutTestsReviewsWorkersAuthChanges": 0
+}

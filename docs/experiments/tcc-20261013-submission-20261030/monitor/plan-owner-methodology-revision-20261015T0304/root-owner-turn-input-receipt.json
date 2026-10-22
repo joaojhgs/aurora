@@ -1,0 +1,11 @@
+{
+  "id": "0271e1ee-f21e-48ae-bafa-242cbc7f9951",
+  "requestId": "619d7117-45ab-4595-a622-bbd5c60a466a",
+  "accepted": true,
+  "stages": [
+    "input_accepted",
+    "turn_started"
+  ],
+  "processIncarnation": "fe7e63c7-d260-465f-b37e-f6fc78f8a1af",
+  "generation": 2
+}

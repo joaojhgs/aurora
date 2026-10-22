@@ -1,0 +1,28 @@
+{
+  "id": "901bc9b5-c732-4111-b11e-8530c2b36c38",
+  "ok": true,
+  "result": {
+    "message": {
+      "id": "msg_c72a1ded1dcd",
+      "run_id": "run_e6054e76e9fc",
+      "delivery_contract": "current_delivery",
+      "from_handle": "term_6a00d9ee-792a-4daf-8578-236290e33108",
+      "to_handle": "dispatch:ctx_37b4d0a3c14f",
+      "subject": "C12 measured live: verified original process/custody; exact\u00a730.82 mirror ACK",
+      "body": "ACK \u00a730.82 is exact canonical thesis mirror now: thesis/methodology/owner-requirements-20261022-eaa562a0.md880191bytes SHAeaa562a014058e45c2651772cab98886cb7093718f9d103fe15781b02e8ac72d; prior871182byteprefix preserved, source untouched. METHODOLOGY-MIRROR-RECEIPT-v2429.json under activev2426. Actual first measured event3956a841efc8 supersedes historical63740fdec178 stop: originalv2421data/source/15correctwarmups/EOF allsealed, correctedv2426 exact requester281887/start143363140 isLIVE, gatepassed and both measured streams progressing with verified per-pair physical custody. Supported OMX ledger annotation accepted; fresh native goal actualACTIVE/unbudgeted, all13story statuses preserved. Controller exclusively owns Dplaincontrol writes and W-D inference; monitor/Root should use worker-local CURRENT/capsules/exactprocess for regular5min/earlier-event checks, no D/device/source/edgecase testing. Current frozen datanamespace thesis/campaigns/c12-mixed-local-http-900-v2426; verifiedwaitreceipt ROOT-VERIFIED-WAIT-v2430.json. Full aggregate remainsOPEN, no oldK1BIG resend/external-delivery assumption. Phone functionalpass and grantACK are acknowledged as separate lane; Root does not duplicate checks or hold main for that lane.",
+      "type": "status",
+      "priority": "normal",
+      "thread_id": null,
+      "payload": null,
+      "created_at": "2026-10-22T07:55:43Z",
+      "delivered_at": null
+    },
+    "mutation": {
+      "requestId": "6c1f1939-7f8d-4028-9618-0a306136bb0f",
+      "replayed": false
+    }
+  },
+  "_meta": {
+    "runtimeId": "cc9e3275-28c6-4c45-85cc-bdcd2262aa7d"
+  }
+}

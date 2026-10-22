@@ -1,0 +1,127 @@
+{
+  "diskAfter": {
+    "free": 5689081856,
+    "total": 109128826880,
+    "used": 103422967808
+  },
+  "diskBefore": {
+    "free": 5689085952,
+    "total": 109128826880,
+    "used": 103422963712
+  },
+  "errors": [
+    {
+      "error": "[Errno 2] No such file or directory: '/home/developer/projects/aurora/.git/aurora-handoff-import-20261006/distributed-k3-orca-relayed-http-cell-v1610/actual-provider-bindings.jsonl'",
+      "source": "/home/developer/projects/aurora/.git/aurora-handoff-import-20261006/distributed-k3-orca-relayed-http-cell-v1610/actual-provider-bindings.jsonl"
+    },
+    {
+      "error": "[Errno 2] No such file or directory: '/home/developer/projects/aurora/.git/aurora-handoff-import-20261006/distributed-k3-orca-relayed-http-cell-v1610/transport-diagnostics.jsonl'",
+      "source": "/home/developer/projects/aurora/.git/aurora-handoff-import-20261006/distributed-k3-orca-relayed-http-cell-v1610/transport-diagnostics.jsonl"
+    }
+  ],
+  "expectedConditionSha256": "369f518fb7a67f3e5df44a6bd5039ef5fc3f64efddb91946f1c0623f11e3bc2b",
+  "finishedAt": "2026-10-18T22:29:47.121913+00:00",
+  "newFiles": [
+    {
+      "bytes": 1007,
+      "copiedAt": "2026-10-18T22:29:47.121821+00:00",
+      "credentialsRedacted": 0,
+      "destination": "thesis/campaigns/worker-desktop-k3-orca-relayed-http-remaining-v1610/prefixes/requesterCopier.private.log/000000001657-000000002664.chunk",
+      "endByte": 2664,
+      "incomplete": true,
+      "sha256": "89a147765f895aa1743e4c3bd018f1619b6cf8b63d3497c13c09756728694b18",
+      "source": "/home/developer/projects/aurora/.git/aurora-handoff-import-20261006/distributed-k3-orca-relayed-launch-v1610/requesterCopier.private.log",
+      "sourceInode": 2714584,
+      "sourceObservedBytes": 2664,
+      "sourceRawSha256": "89a147765f895aa1743e4c3bd018f1619b6cf8b63d3497c13c09756728694b18",
+      "startByte": 1657
+    }
+  ],
+  "pendingStatic": [
+    "/home/developer/projects/aurora/.git/aurora-handoff-import-20261006/distributed-k3-orca-relayed-launch-v1610/warmup-finalizer-result.json",
+    "/home/developer/projects/aurora/.git/aurora-handoff-import-20261006/distributed-k3-orca-relayed-http-cell-v1610/campaign/remote-warmup-proof.json",
+    "/home/developer/projects/aurora/.git/aurora-handoff-import-20261006/distributed-k3-orca-relayed-launch-v1610/proof-collection-request.json"
+  ],
+  "physicalPayloadBytes": 468801,
+  "possibleConfound": "Concurrent custody reads/writes; keep all affected measurements.",
+  "prefixes": {
+    "actual-provider-bindings.jsonl": {
+      "chunks": [],
+      "endByte": 0
+    },
+    "backend.private.log": {
+      "chunks": [
+        "thesis/campaigns/worker-desktop-k3-orca-relayed-http-remaining-v1610/prefixes/backend.private.log/000000000000-000000000268.chunk"
+      ],
+      "endByte": 268,
+      "incomplete": true,
+      "inode": 2714592,
+      "observedAt": "2026-10-18T22:29:47.117223+00:00",
+      "sourceObservedBytes": 268
+    },
+    "controller.private.log": {
+      "chunks": [],
+      "endByte": 0,
+      "incomplete": true,
+      "inode": 2714582,
+      "observedAt": "2026-10-18T22:29:47.117239+00:00",
+      "sourceObservedBytes": 0
+    },
+    "requesterCopier.private.log": {
+      "chunks": [
+        "thesis/campaigns/worker-desktop-k3-orca-relayed-http-remaining-v1610/prefixes/requesterCopier.private.log/000000000000-000000001657.chunk",
+        "thesis/campaigns/worker-desktop-k3-orca-relayed-http-remaining-v1610/prefixes/requesterCopier.private.log/000000001657-000000002664.chunk"
+      ],
+      "endByte": 2664,
+      "incomplete": true,
+      "inode": 2714584,
+      "observedAt": "2026-10-18T22:29:47.121838+00:00",
+      "sourceObservedBytes": 2664
+    },
+    "resources.jsonl": {
+      "chunks": [
+        "thesis/campaigns/worker-desktop-k3-orca-relayed-http-remaining-v1610/prefixes/resources.jsonl/000000000000-000000005125.chunk"
+      ],
+      "endByte": 5125,
+      "incomplete": true,
+      "inode": 2714593,
+      "observedAt": "2026-10-18T22:29:47.117197+00:00",
+      "sourceObservedBytes": 5125
+    },
+    "transport-diagnostics.jsonl": {
+      "chunks": [],
+      "endByte": 0
+    },
+    "voice-stages.jsonl": {
+      "chunks": [],
+      "endByte": 0,
+      "incomplete": true,
+      "inode": 2714595,
+      "observedAt": "2026-10-18T22:29:47.117154+00:00",
+      "sourceObservedBytes": 0
+    },
+    "warmupFinalizer.private.log": {
+      "chunks": [
+        "thesis/campaigns/worker-desktop-k3-orca-relayed-http-remaining-v1610/prefixes/warmupFinalizer.private.log/000000000000-000000001339.chunk"
+      ],
+      "endByte": 1339,
+      "incomplete": true,
+      "inode": 2714586,
+      "observedAt": "2026-10-18T22:29:47.121882+00:00",
+      "sourceObservedBytes": 1339
+    }
+  },
+  "previousReceipt": "thesis/campaigns/worker-desktop-k3-orca-relayed-http-remaining-v1610/receipts/000002.json",
+  "progressObservation": {
+    "note": "Copier observation only; no request denominator inferred",
+    "status": "awaiting_progress"
+  },
+  "providerCoverage": "Separate K3 provider custody; actual per-host prefix coverage must be joined explicitly.",
+  "reservedFreeBytes": 2147483648,
+  "retainedAudioBlobs": 0,
+  "retainedCases": 0,
+  "schema": "aurora.physical-custody-checkpoint.v1",
+  "sequence": 3,
+  "startedAt": "2026-10-18T22:29:47.104645+00:00",
+  "sutCalls": 0
+}

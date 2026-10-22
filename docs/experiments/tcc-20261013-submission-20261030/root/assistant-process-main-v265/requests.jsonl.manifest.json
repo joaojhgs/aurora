@@ -1,0 +1,60 @@
+{
+  "architecture_mode": "processes",
+  "auth_token_validation_exercised": false,
+  "cleanup_status": "shutdown_pending",
+  "config_sha256": "bc40f64987bf38806fb747a154f00e07f9c930048f4d98c3fd1eacd5e4a7a1bc",
+  "deadline_ms": 180000,
+  "driver_sha256": "165bfdcaea9048af2d25c2aef3db9abe9a101dc0e4733a586fed81990eeb5f22",
+  "failure_type": null,
+  "gateway_authentication": "api_key_system_identity",
+  "generation_settings": {
+    "chat_format": "chatml-function-calling",
+    "max_tokens": 128,
+    "min_p": 0.0,
+    "n_batch": 64,
+    "n_ctx": 4096,
+    "n_gpu_layers": 0,
+    "n_threads": 2,
+    "repeat_penalty": 1.0,
+    "seed": 42,
+    "temperature": 0.0,
+    "top_k": 1,
+    "top_p": 1.0
+  },
+  "manifest_phase": "pre_shutdown",
+  "measured_requests_per_route": 1,
+  "metric_definition": "reply latency; exact answer and persisted history gate correctness, DB readback time excluded",
+  "model_id": "qwen3.5-0.8b-q4_0-gguf",
+  "model_sha256": "57d1997790d1744fba5b40a7317df71ea5e2acee28c47e78f0cce39c0703f8cf",
+  "process_children_stopped": null,
+  "process_core_service_pids": {
+    "AuthService": 1075553,
+    "ConfigService": 1075539,
+    "DBService": 1075550,
+    "GatewayService": 1075576,
+    "OrchestratorService": 1075568
+  },
+  "process_core_services_live_before_shutdown": true,
+  "process_parent_pid": 1075523,
+  "record_helper_sha256": "2648b5579c487e15936bf2eafd70ae8b63db5567915ff4c1c1b318989da2a646",
+  "request_count": 3,
+  "request_flow_status_before_shutdown": "measured_predicate_failed",
+  "request_jsonl_sha256": "b61b03fb9020de09b5535dca709fcaafcbc24e515b11c9caa656c1aeb732debd",
+  "routes": [
+    "python_process_bus",
+    "python_gateway_api"
+  ],
+  "run_mode": "local_api_pilot",
+  "run_status": "awaiting_shutdown",
+  "schema_version": "aurora.assistant.local_api_pilot_manifest.v1",
+  "scope_limit": "same-host Python BullMQ process bus versus localhost Gateway API using API-key SYSTEM identity; Auth token validation is not exercised",
+  "source_commit": "5782746afba213f6b36907db2f09f0017625e218",
+  "study_session_id": "pilot-run-676404cc4f3f413eadf072f5860cfad5",
+  "warmups_per_run": 1,
+  "workload": {
+    "expected_sha256": "46d27380af82d6d618e163346c67dd7bc617d40836551d082e0aa6582b8bc934",
+    "predicate_id": "exact-answer-v1",
+    "prompt_sha256": "dcf0bf9982b7155c68f792031bd3a1e8e8e42a08a79fc4dd1136df8c602a6121"
+  },
+  "workload_id": "public-exact-answer-orbit-v1"
+}

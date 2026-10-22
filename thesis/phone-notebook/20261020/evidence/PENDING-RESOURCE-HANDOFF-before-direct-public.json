@@ -1,0 +1,36 @@
+{
+  "schema": "aurora.phone_notebook.resource_handoff_queue.v1",
+  "status": "ENQUEUED_PENDING_ACTUAL_RESOURCE_RELEASE",
+  "ownerRequest": "continue now should be fix, finish setup; no900untilsleepstart",
+  "rootRequestMessage": "msg_bffcad56b7d4",
+  "createdAtUtc": "2026-10-22T00:13:03Z",
+  "monitorNotificationMessage": "msg_30f288b3477a",
+  "monitorNotificationAtUtc": "2026-10-22T00:17:05Z",
+  "usbRecoveryMessage": "msg_7114f34553d8",
+  "savedWifiSuccessMessage": "msg_2b55c7cce4ff",
+  "source": {
+    "exactLocalCommit": "ebde3a8acf6315f920d03593845f17a1fc65a733",
+    "remoteSha": null,
+    "maxBytes": 12582912,
+    "maxSeconds": 120
+  },
+  "assets": {
+    "exactBytesIncludingAudio": 774675150,
+    "maxBytesPerSecond": 2097152,
+    "maxSeconds": 600,
+    "manifest": "SETUP-DEPENDENCIES.json"
+  },
+  "notebookWork": {
+    "maxJobs": 2,
+    "maxSeconds": 1200,
+    "noModelRuntimeSubstitution": true
+  },
+  "releaseTrigger": "Root actual natural currentHTTP terminal+sealed state and explicit relevant resource release",
+  "actualUtcTransferWindow": null,
+  "currentActualReply": null,
+  "sourceOrModelTransferStarted": false,
+  "pilotStarted": false,
+  "ownerSleepStartSignal": null,
+  "noMainInterruption": true,
+  "settledDispatchReused": false
+}

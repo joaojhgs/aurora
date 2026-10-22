@@ -1,0 +1,12 @@
+{
+  "controlDeadline": "2026-10-22T05:45:00Z",
+  "explicitNewline": true,
+  "host": "ssh:ssh-sem-notebook-personal",
+  "incarnation": "328cd72f-c7ea-49ff-a2db-b9275b085037",
+  "remoteResult": "/home/developer/projects/aurora/thesis/phone-notebook/20261020/evidence/read-phone-llm-v159.json",
+  "rootAdmissionMessage": "actual bounded phone native model load/generate/cancel receipt; no additionalcalls",
+  "script": "scripts/read_phone_llm_v159.py",
+  "scriptSha256": "7c31fa80b35f08492186fb3ad957f447c67e3285141b461a6f2fe0de11967cbd",
+  "singleSend": true,
+  "terminal": "term_a2ed5feb-7c92-48e4-bd88-d1b0e6737989"
+}

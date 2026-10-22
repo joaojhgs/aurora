@@ -1,0 +1,24 @@
+{
+  "at": "2026-10-22T06:12:35.066871+00:00",
+  "candidate": "A-D(Waydroid on Personal desktop) -> W K3 HTTP/P2P",
+  "status": "NOT_ADMITTED_EXACT_DEVICE_BINDING_UNRESOLVED",
+  "rootNativeGoal": "01a112a5-d6bb-74e2-bf7c-ace73cb513b5 ACTIVE",
+  "host": "personal.skyron-server",
+  "existingAdbServerReachable": true,
+  "existingServerDeviceCount": 0,
+  "supportedPublicDeviceRead": "orca emulator devices --json",
+  "publicReadFinds": "Only physical phone on notebook; phone belongs exclusively to existing setup worker, untouched by Root",
+  "owningHostCommand": [
+    "/usr/bin/distrobox-host-exec",
+    "waydroid",
+    "status"
+  ],
+  "exitCode": 127,
+  "adbUseAliasPresentInInstalledCatalog": false,
+  "emulatorAbsentClaimed": false,
+  "missingCapability": "Fresh approved Personal Waydroid ADB binding/serial or supported owning-host device control route; package/native ingress cannot be queried without a selected actual Android guest",
+  "newInference": 0,
+  "newDeviceOrServiceStarts": 0,
+  "phoneQueriesByRoot": 0,
+  "nextMain": "C12 declared mixed local + Orca-relayed HTTP workload on W-D, finite paired pilot first; N/phone resources excluded"
+}

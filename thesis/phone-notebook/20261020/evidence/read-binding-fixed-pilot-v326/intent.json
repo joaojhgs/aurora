@@ -1,0 +1,12 @@
+{
+  "controlDeadline": "2026-10-22T11:45:00Z",
+  "explicitNewline": true,
+  "host": "ssh:ssh-sem-notebook-personal",
+  "incarnation": "328cd72f-c7ea-49ff-a2db-b9275b085037",
+  "remoteResult": "/home/developer/projects/aurora/thesis/phone-notebook/20261020/evidence/read-binding-fixed-pilot-v326.json",
+  "rootAdmissionMessage": "existing v2398 actual SDK-binding-fixed native pilot result, clocks/correlation/model bindings, no model replay",
+  "script": "scripts/read_binding_fixed_pilot_v326.py",
+  "scriptSha256": "27bb3f759d4dd3db1ac6e8bc2125155a7e2ac336a14426feabc66741839f572a",
+  "singleSend": true,
+  "terminal": "term_a2ed5feb-7c92-48e4-bd88-d1b0e6737989"
+}

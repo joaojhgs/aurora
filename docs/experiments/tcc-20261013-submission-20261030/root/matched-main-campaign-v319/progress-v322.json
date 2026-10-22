@@ -1,0 +1,18 @@
+{
+  "campaign_id": "6ce98ae97d594d9fafcd1ff9ad4b9b1c",
+  "cell": 1,
+  "route": "local-only",
+  "observed_counts": {
+    "warmup_correct": 5,
+    "measured_correct": 18,
+    "observed_other_outcomes": 0
+  },
+  "cell_complete": false,
+  "campaign_complete": false,
+  "raw_request_file": "/home/developer/projects/aurora/.git/aurora-handoff-import-20261006/matched-main-campaign-v317-6ce98ae97d594d9fafcd1ff9ad4b9b1c/01-local-only/requests.jsonl",
+  "raw_request_prefix_sha256": "940ed3006c585f0311d8d65c25dab4b249330977d187244d7980f85899943b78",
+  "cutoff_end_monotonic_ns": 742321949624708,
+  "native_goal_status": "active",
+  "source_frozen": true,
+  "Root_exec_session_id": 33217
+}

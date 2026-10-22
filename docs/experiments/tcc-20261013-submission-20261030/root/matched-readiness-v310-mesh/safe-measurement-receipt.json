@@ -1,0 +1,93 @@
+{
+  "private_report_sha256": "4e00ff7eb2b4cc43f8ba6ab9f67a4a6b5e2b3466b15b10b02de0b4feff180ab6",
+  "safe_rows": [
+    {
+      "condition": "browser-webrtc-mesh",
+      "workload": "orbit-exact-v1",
+      "attempt": 1,
+      "warmupCount": 0,
+      "outcome": "completed_exact",
+      "requestId": "8f6a6bed-33df-4e15-9629-0fc8246baffc",
+      "sessionId": "8d756e04-d3aa-4631-a42a-21ae44001fc2",
+      "correlationId": "8f6a6bed-33df-4e15-9629-0fc8246baffc",
+      "messageId": "8f6a6bed-33df-4e15-9629-0fc8246baffc",
+      "modelLabel": "Qwen3.5-0.8B-Q4_0.gguf",
+      "exactResponse": true,
+      "completionCount": 1,
+      "completionKind": "fallback",
+      "updateKind": "fallback",
+      "updateKinds": [
+        "connecting",
+        "fallback"
+      ],
+      "requesterDispatchToTypedCompletionMs": 38229,
+      "errorCode": null,
+      "errorDetailCode": null,
+      "peerAtTerminal": {
+        "state": "authorized",
+        "status": "authorized",
+        "expectedStablePeerPresent": true,
+        "diagnosticCode": {
+          "state": "present_unmatched",
+          "value": null
+        },
+        "rosterTotal": 1,
+        "rosterAuthorized": 1
+      },
+      "peerBeforeDispatch": {
+        "state": "authorized",
+        "status": "authorized",
+        "expectedStablePeerPresent": true,
+        "diagnosticCode": {
+          "state": "present_unmatched",
+          "value": null
+        },
+        "rosterTotal": 1,
+        "rosterAuthorized": 1
+      },
+      "providerPreflight": "ready",
+      "readinessWaitMs": 1884
+    },
+    {
+      "condition": "browser-webrtc-mesh",
+      "workload": "orbit-exact-v1",
+      "attempt": 2,
+      "warmupCount": 0,
+      "outcome": "preflight_failure",
+      "preflightOutcome": "manifest_unavailable",
+      "readinessWaitMs": 0,
+      "requesterDispatchToTypedCompletionMs": null,
+      "exactResponse": false,
+      "completionCount": 0,
+      "modelLabel": null,
+      "peerBeforeDispatch": {
+        "state": "authorized",
+        "status": "authorized",
+        "expectedStablePeerPresent": true,
+        "diagnosticCode": {
+          "state": "present_unmatched",
+          "value": null
+        },
+        "rosterTotal": 1,
+        "rosterAuthorized": 1
+      },
+      "peerAtTerminal": {
+        "state": "authorized",
+        "status": "authorized",
+        "expectedStablePeerPresent": true,
+        "diagnosticCode": {
+          "state": "present_unmatched",
+          "value": null
+        },
+        "rosterTotal": 1,
+        "rosterAuthorized": 1
+      }
+    }
+  ],
+  "errors_hashed_only": [
+    {
+      "message_sha256": "4b532fba2cf9cd6d76d653bfc665d7b15e3ab0e05fb4ac3a17efe17ead7b265b",
+      "category": "assertion_or_runner_error"
+    }
+  ]
+}

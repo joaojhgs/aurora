@@ -1,0 +1,191 @@
+{
+  "at": "2026-10-21T02:21:36.870061+00:00",
+  "status": "K3_MEASURED900_AND_SAVED_NATIVE_RESOURCE_ANALYSIS_COMPLETE_WITH_FAILURES",
+  "measured": {
+    "attempted": 900,
+    "correct": 773,
+    "incorrect": 0,
+    "failed": 127,
+    "timeouts": 1,
+    "remaining": 0,
+    "planned": 900
+  },
+  "failureCodes": {
+    "preaccept_capability_changed": 71,
+    "assistant_reply_predicate_failed": 55,
+    "mesh_request_timeout_ambiguous": 1
+  },
+  "warmupsExcluded": {
+    "parent": 17,
+    "remainingEpoch": 18,
+    "correctTotal": 30,
+    "failedTotal": 5
+  },
+  "requesterActors": {
+    "3207537": "absent",
+    "3207665": "absent",
+    "3207538": "absent"
+  },
+  "requesterCustody": {
+    "sequence": 131,
+    "cases": 642,
+    "audio": 532,
+    "files": 1980,
+    "audioReferences": 532
+  },
+  "terminalSummary": {
+    "status": "completed_with_failures_or_incorrect",
+    "stop_reason": "measured_target_complete",
+    "shutdown_completed": true
+  },
+  "providerState": {
+    "at": "2026-10-21T02:12:07.668710+00:00",
+    "host": "personal.skyron-server",
+    "sutCalls": 0,
+    "actors": {
+      "controller": {
+        "pid": 251472,
+        "state": "S",
+        "startTicks": 29038396,
+        "sameStart": true
+      },
+      "receiver": {
+        "pid": 251473,
+        "state": "S",
+        "startTicks": 29038457,
+        "sameStart": true
+      }
+    },
+    "files": {
+      "ACTUAL-FILES-v1965.json": {
+        "bytes": 2221,
+        "mtimeNs": 1792534784114133824
+      },
+      "PREPARATION-v1965.json": {
+        "bytes": 9631,
+        "mtimeNs": 1792534784164181957
+      },
+      "ROOT-ADMISSION-v1966.json": {
+        "bytes": 8872,
+        "mtimeNs": 1792534913083878885
+      },
+      "ROOT-LAUNCH-INTENT-v1966.json": {
+        "bytes": 183,
+        "mtimeNs": 1792534862961961479
+      },
+      "ROOT-LAUNCH-v1966.json": {
+        "bytes": 275,
+        "mtimeNs": 1792534863002383017
+      },
+      "STATUS.json": {
+        "bytes": 161090,
+        "mtimeNs": 1792548718738093924
+      },
+      "actual-provider-bindings.jsonl": {
+        "bytes": 616507,
+        "mtimeNs": 1792547991652312553
+      },
+      "assistant-identity.json": {
+        "bytes": 1417,
+        "mtimeNs": 1792534863666780629
+      },
+      "binding-guard-diagnostic.jsonl": {
+        "bytes": 180004,
+        "mtimeNs": 1792548489319276430
+      },
+      "controller-launch.json": {
+        "bytes": 300,
+        "mtimeNs": 1792534863614458807
+      },
+      "provider-manifest.json": {
+        "bytes": 7720,
+        "mtimeNs": 1792534784139455654
+      },
+      "receiver-identity.json": {
+        "bytes": 1372,
+        "mtimeNs": 1792534863641546543
+      },
+      "resources.jsonl": {
+        "bytes": 59822287,
+        "mtimeNs": 1792548727495311373
+      },
+      "runtime-versions.json": {
+        "bytes": 210,
+        "mtimeNs": 1792534863572746417
+      },
+      "stt-identity.json": {
+        "bytes": 1399,
+        "mtimeNs": 1792534863691521835
+      },
+      "voice-stages.jsonl": {
+        "bytes": 11572367,
+        "mtimeNs": 1792548576302512296
+      }
+    },
+    "manifestSha256": "716b893424f28ef19a1820820000c8a30fb6adbf87252c9f65e1bca30e717bb9",
+    "configSha256": "1b2e464a9dd2a191954504161862d3aa19a991126eb2b08c4de55a40778fd002",
+    "deadline": "2026-10-21T12:45:06.664473+00:00",
+    "native": {
+      "spanCount": 4272,
+      "openSpanCount": 0,
+      "lastBoundary": {
+        "event": "span_end",
+        "handler": "resolved_chat_model.astream",
+        "outcome": "completed",
+        "correlation_id": "audio-campaign-482ca67f7ec14538b8f829e513a29bb0",
+        "monotonic_ns": "304097268563696",
+        "receiver_pid": 251473
+      },
+      "fileSha256": "e8ef8cdbaefcf334f20919edab6e557e6d42a1d15b0539e1004b14e7173531af",
+      "ageSeconds": 151.62241116
+    },
+    "freeBytes": 145202597888
+  },
+  "providerSnapshot": {
+    "at": "2026-10-21T02:13:34.420167+00:00",
+    "status": "original_live_provider_fixed_prefix_snapshot",
+    "actors": [
+      {
+        "pid": 251472,
+        "startTicks": 29038396,
+        "state": "S"
+      },
+      {
+        "pid": 251473,
+        "startTicks": 29038457,
+        "state": "S"
+      }
+    ],
+    "providerRetired": false,
+    "reservationPreserved": true,
+    "nativeSpansAtBoundary": 4272,
+    "openNativeSpansAtBoundary": 0,
+    "rawPayloadBytes": 72756019,
+    "originalFilesPreserved": true,
+    "archiveContainsPhysicalCopies": true,
+    "sutCalls": 0,
+    "K3MeasuredAttempted": 900,
+    "K3Correct": 773,
+    "K3Failed": 127,
+    "K3Remaining": 0,
+    "inheritedConditionEffectiveDeadlineUtc": "2026-10-21T12:41:24.961804+00:00",
+    "manifestOriginalProviderDeadlineUtc": "2026-10-21T12:45:06.664473+00:00",
+    "deadlinePolicy": "Use earlier inherited effective condition bound; no extension or setting change",
+    "nativeCoverageScope": "All three remote native stages; includes prior warmup/parent/current rows; join by unique correlation, never pool extra rows",
+    "archive": "/home/developer/projects/aurora/thesis/campaigns/worker-desktop-k3-p2p-full-audio-v1965/provider-checkpoint-v2128/provider-prefix-v2128.tar.gz",
+    "bytes": 4611284,
+    "sha256": "462847fd5b22695873aee2fae763025012f9abf08ad888fb2bb67e6cc09c4559",
+    "sealSha256": "f81c45d2d1cb299f42ddb86280fe5a0f8f252383de9b9fc7b3dd95cb3f972158",
+    "files": 15,
+    "elapsedSeconds": 0.4631259010056965
+  },
+  "providerTransferStatus": "COMPLETE_HASH_VERIFIED",
+  "nativeAggregateGoal": "ACTIVE original01a112a5-d6bb-74e2-bf7c-ace73cb513b5; fullmatrix/full13 open",
+  "next": "ADMIT K1actualP2P191/global710\u2013900; stillNOT_ADMITTED until actual ordinary/native/capacity gates",
+  "phoneSeparate": true,
+  "sutCalls": 0,
+  "analysis": "thesis/campaigns/worker-desktop-k3-p2p-full-audio-v2043/analysis-v2130/RESULT.json",
+  "humanReport": "thesis/campaigns/worker-desktop-k3-p2p-full-audio-v2043/analysis-v2130/results.md",
+  "nativeJoinPairs": 2530,
+  "analysisGaps": []
+}

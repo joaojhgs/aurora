@@ -1,0 +1,18 @@
+{
+  "at": "2026-10-16T07:41:57.159447+00:00",
+  "source": ".git/aurora-handoff-import-20261006/desktop-app-file-audio-prep-v955",
+  "canonical": "thesis/harness/desktop-app-file-audio-v955",
+  "sourceSHA256": {
+    "desktop-file-audio-e2e.ts": "48b6fc597996536ead4439bca2024a3b3a4f5c6d1ad4c64f8a5d68f84a05c522",
+    "tauri-app.patch": "63e0c9a95eba0c6b53225770c0e43ed53b3d625458da50b3372402784062bf60",
+    "README.md": "e04e8fb45df2d3e182eabb2d419f69e9693550613bd710dde4c69b14d9d528ee"
+  },
+  "review": "thesis/validation/desktop-app-file-audio-source-review-v957.md",
+  "reviewSHA256": "46564163ad8e2da4ed73a2f77c19f995b262f0c9a9c703a0a5e0dee97a64761f",
+  "status": "SOURCE_APPROVED_NOT_APP_INTEGRATED_NOT_TYPECHECKED_NOT_RUNTIME_ADMITTED",
+  "appFilesChanged": false,
+  "runtimeExecuted": false,
+  "firstHTTPGate": false,
+  "newPerformanceCondition": false,
+  "newWorkers": false
+}

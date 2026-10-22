@@ -1,0 +1,55 @@
+{
+  "schema": "aurora.phone_notebook.public_runtime_build_inputs.v1",
+  "llamaVersion": "0.3.19",
+  "artifacts": [
+    {
+      "name": "build-tools/cmake-3.31.6-py3-none-manylinux_2_12_x86_64.manylinux2010_x86_64.whl",
+      "bytes": 26820570,
+      "sha256": "2297e9591307d9c61e557efe737bcf4d7c13a30f1f860732f684a204fee24dca",
+      "pinnedUrl": "https://files.pythonhosted.org/packages/1e/52/85550dfcadca90b59809a1225461bfaadfcbbcc8fe62fa24f75edbe6e0b1/cmake-3.31.6-py3-none-manylinux_2_12_x86_64.manylinux2010_x86_64.whl",
+      "package": "cmake",
+      "version": "3.31.6"
+    },
+    {
+      "name": "build-tools/ninja-1.11.1.4-py3-none-manylinux_2_12_x86_64.manylinux2010_x86_64.whl",
+      "bytes": 422814,
+      "sha256": "096487995473320de7f65d622c3f1d16c3ad174797602218ca8c967f51ec38a0",
+      "pinnedUrl": "https://files.pythonhosted.org/packages/eb/7a/455d2877fe6cf99886849c7f9755d897df32eaf3a0fba47b56e615f880f7/ninja-1.11.1.4-py3-none-manylinux_2_12_x86_64.manylinux2010_x86_64.whl",
+      "package": "ninja",
+      "version": "1.11.1.4"
+    },
+    {
+      "name": "build-tools/scikit_build_core-0.11.6-py3-none-any.whl",
+      "bytes": 185764,
+      "sha256": "ce6d8fe64e6b4c759ea0fb95d2f8a68f60d2df31c2989838633b8ec930736360",
+      "pinnedUrl": "https://files.pythonhosted.org/packages/43/49/ec16b3db6893db788ae35f98506ff5a9c25dca7eb18cc38ada8a4c1dc944/scikit_build_core-0.11.6-py3-none-any.whl",
+      "package": "scikit-build-core",
+      "version": "0.11.6"
+    },
+    {
+      "name": "build-tools/libvulkan-dev_1.3.275.0-1build1_amd64.deb",
+      "bytes": 1238904,
+      "sha256": "9577a2c5379372ca8231e700728390fa7d4991a0d8c6484ad83da849c728e76e",
+      "pinnedUrl": "https://archive.ubuntu.com/ubuntu/pool/main/v/vulkan-loader/libvulkan-dev_1.3.275.0-1build1_amd64.deb",
+      "originalVersionFromRuntimeProvenance": true
+    },
+    {
+      "name": "build-tools/glslc_2023.8-1build1_amd64.deb",
+      "bytes": 76032,
+      "sha256": "ee5f737e570b4b1713b4db9c8f9ead8258726af457391af00264350e59810bd4",
+      "pinnedUrl": "https://archive.ubuntu.com/ubuntu/pool/universe/s/shaderc/glslc_2023.8-1build1_amd64.deb",
+      "originalVersionFromRuntimeProvenance": true
+    },
+    {
+      "name": "build-tools/libshaderc1_2023.8-1build1_amd64.deb",
+      "bytes": 2423388,
+      "sha256": "ebd699ab3feaf00676a7da0644dd74290f60cd1b34057256db90f60e126655b1",
+      "pinnedUrl": "https://archive.ubuntu.com/ubuntu/pool/universe/s/shaderc/libshaderc1_2023.8-1build1_amd64.deb",
+      "originalVersionFromRuntimeProvenance": true
+    }
+  ],
+  "sourceEvidence": "thesis/phone-notebook/20261020/evidence/mdns-build-inputs-20261022T010405/result.json",
+  "noGlobalInstall": true,
+  "vulkanBuildPolicy": "GGML_VULKAN=ON GGML_NATIVE=OFF; no CPU-only substitution",
+  "actualDownloaded": false
+}

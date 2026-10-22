@@ -1,0 +1,21 @@
+{
+  "at": "2026-10-20T00:13:32.459654+00:00",
+  "host": "code-worker",
+  "role": "worker",
+  "pid": 2180819,
+  "startTicks": 123367304,
+  "sourceSha256": "1c6323bd93f308e0d955a920e6ca64ed01343c1a504cb69ae1ddd26e5ed9b957",
+  "sourceRoot": "/home/developer/projects/aurora/.git/aurora-handoff-import-20261006/cpu-full-audio-v490/source",
+  "python": "/home/developer/projects/aurora/.git/aurora-handoff-import-20261006/cpu-audio-campaign-v491/env/bin/python",
+  "privateNode": "/home/developer/projects/aurora/.git/aurora-handoff-import-20261006/mesh-pair-control-v1535/worker-node-v1538",
+  "parametersPath": "/home/developer/projects/aurora/.git/aurora-handoff-import-20261006/mesh-pair-control-v1535/room-parameters.json",
+  "privateLog": "/home/developer/projects/aurora/.git/aurora-handoff-import-20261006/mesh-pair-control-v1535/worker-node-v1663.private.log",
+  "newModelRequests": 0,
+  "newOrcaWorker": false,
+  "sameTaskLocalState": true,
+  "primaryApprovedBrokerUsed": true,
+  "existingFallbackSelected": false,
+  "globalBuildLockInherited": true,
+  "modelServicesStarted": [],
+  "httpListenerStarted": false
+}

@@ -1,0 +1,34 @@
+{
+  "startedAt": "2026-10-17T21:13:18.126511+00:00",
+  "finishedAt": "2026-10-17T21:13:18.138270+00:00",
+  "host": "code-worker",
+  "archive": "/home/developer/projects/aurora/thesis/validation/provider-delta-v1258/smoke/provider-exports/provider-checkpoint-000012-delta-v1258.tar.gz",
+  "bytes": 2613,
+  "sha256": "80287a3f4a8828f85cd01cc901eb89bf35dcfb64a509e26c3165fb988ad22929",
+  "checkpointSequence": 12,
+  "snapshotAt": "2026-10-17T20:40:55.137447+00:00",
+  "rawFiles": 1,
+  "rawPayloadBytes": 749,
+  "prefixes": {},
+  "baseline": {
+    "path": "/home/developer/projects/aurora/thesis/validation/provider-delta-v1258/smoke/baseline.json",
+    "bytes": 650,
+    "sha256": "c912716c4bbd3d24c6eafde84753f4c60f418c7dda61b5cbf80e10d9b3eeafa8",
+    "files": 1,
+    "rawPayloadBytes": 21026
+  },
+  "baselineRawRecopiedBytes": 0,
+  "diskBefore": {
+    "total": 109128826880,
+    "used": 101916184576,
+    "free": 7195865088
+  },
+  "diskAfter": {
+    "total": 109128826880,
+    "used": 101916188672,
+    "free": 7195860992
+  },
+  "sutCalls": 0,
+  "copyRateBytesPerSecond": 4194304,
+  "possibleConfound": "Bounded delta export disk IO/compression concurrent with1197; keep every measured case."
+}

@@ -1,0 +1,77 @@
+{
+  "status": "Owner-review draft only",
+  "at": "2026-10-15T02:57:21.075985+00:00",
+  "drafts": [
+    {
+      "source": "/home/developer/Documents/Obsidian Vault Origin/5-full-notes/faculdade/tcc/report-en/chapters/abstract.tex",
+      "draft": "docs/experiments/tcc-20261013-submission-20261030/monitor/thesis-evidence-addendum-20261015T0254/drafts/report-en/chapters/abstract.tex",
+      "sourceSHA256": "fc4f0e015f276b53f8e79fb9f801d8b15fc08cec4d7ff2d820e4f899de4cca5b",
+      "draftSHA256": "2be36d71d26ea9f8a1f997b153e4f09e1f100cf18b06bd2dcec34e2719d12f8b",
+      "canonicalSourceUnchanged": true,
+      "scope": "owner-review text draft; no canonical edit or compilation"
+    },
+    {
+      "source": "/home/developer/Documents/Obsidian Vault Origin/5-full-notes/faculdade/tcc/report-en/chapters/resumo.tex",
+      "draft": "docs/experiments/tcc-20261013-submission-20261030/monitor/thesis-evidence-addendum-20261015T0254/drafts/report-en/chapters/resumo.tex",
+      "sourceSHA256": "fc4f0e015f276b53f8e79fb9f801d8b15fc08cec4d7ff2d820e4f899de4cca5b",
+      "draftSHA256": "64b86739c6a3332eba6f5e5d5e01bc61ee7de426f0717252c76b080f737dbff3",
+      "canonicalSourceUnchanged": true,
+      "scope": "owner-review text draft; no canonical edit or compilation"
+    },
+    {
+      "source": "/home/developer/Documents/Obsidian Vault Origin/5-full-notes/faculdade/tcc/report-en/chapters/cap05.tex",
+      "draft": "docs/experiments/tcc-20261013-submission-20261030/monitor/thesis-evidence-addendum-20261015T0254/drafts/report-en/chapters/cap05.tex",
+      "sourceSHA256": "676182892eb8a8d9474dac6a4c0f6b24b69824305dae1e8da882c1fc4a29397d",
+      "draftSHA256": "9e9ec6d5d126520f66c16e1be410a73ada774489fdd6a1fd20a2d428f1426c98",
+      "canonicalSourceUnchanged": true,
+      "scope": "owner-review text draft; no canonical edit or compilation"
+    },
+    {
+      "source": "/home/developer/Documents/Obsidian Vault Origin/5-full-notes/faculdade/tcc/report-en/chapters/cap06.tex",
+      "draft": "docs/experiments/tcc-20261013-submission-20261030/monitor/thesis-evidence-addendum-20261015T0254/drafts/report-en/chapters/cap06.tex",
+      "sourceSHA256": "1e766a4331b49389be7be56894d783bab55afa22e6a2caff4d88820401f08eb3",
+      "draftSHA256": "9148825a9adcc5d50df58b1afee0aab8b9a74219bc9fd76213fc29a2ed8ce368",
+      "canonicalSourceUnchanged": true,
+      "scope": "owner-review text draft; no canonical edit or compilation"
+    },
+    {
+      "source": "/home/developer/Documents/Obsidian Vault Origin/5-full-notes/faculdade/tcc/template latex/chapters/abstract.tex",
+      "draft": "docs/experiments/tcc-20261013-submission-20261030/monitor/thesis-evidence-addendum-20261015T0254/drafts/template latex/chapters/abstract.tex",
+      "sourceSHA256": "09b8ba528d00e699477483983d9bd193cfa88300758f6e6ed91e37ea6d7ee6c5",
+      "draftSHA256": "2be36d71d26ea9f8a1f997b153e4f09e1f100cf18b06bd2dcec34e2719d12f8b",
+      "canonicalSourceUnchanged": true,
+      "scope": "owner-review text draft; no canonical edit or compilation"
+    },
+    {
+      "source": "/home/developer/Documents/Obsidian Vault Origin/5-full-notes/faculdade/tcc/template latex/chapters/resumo.tex",
+      "draft": "docs/experiments/tcc-20261013-submission-20261030/monitor/thesis-evidence-addendum-20261015T0254/drafts/template latex/chapters/resumo.tex",
+      "sourceSHA256": "52611484aea6d83fbac498ffc6e1eab766049eaee5c8c2cbb2b151e7c307f1ee",
+      "draftSHA256": "64b86739c6a3332eba6f5e5d5e01bc61ee7de426f0717252c76b080f737dbff3",
+      "canonicalSourceUnchanged": true,
+      "scope": "owner-review text draft; no canonical edit or compilation"
+    },
+    {
+      "source": "/home/developer/Documents/Obsidian Vault Origin/5-full-notes/faculdade/tcc/template latex/chapters/cap05.tex",
+      "draft": "docs/experiments/tcc-20261013-submission-20261030/monitor/thesis-evidence-addendum-20261015T0254/drafts/template latex/chapters/cap05.tex",
+      "sourceSHA256": "a77da729527da45030442c29c844d5fc8b7b4b8d022d5c96c75245dffeda7f18",
+      "draftSHA256": "6a01e971c91cee7f2eddb6b78976088f08518126614283b497cfbd8b366bfcf0",
+      "canonicalSourceUnchanged": true,
+      "scope": "owner-review text draft; no canonical edit or compilation"
+    },
+    {
+      "source": "/home/developer/Documents/Obsidian Vault Origin/5-full-notes/faculdade/tcc/template latex/chapters/cap06.tex",
+      "draft": "docs/experiments/tcc-20261013-submission-20261030/monitor/thesis-evidence-addendum-20261015T0254/drafts/template latex/chapters/cap06.tex",
+      "sourceSHA256": "056a2285d3b8195ee92364a022a9b15343fd57bcb0377e15359640ad3dc7c8a9",
+      "draftSHA256": "ec16ca54abd361e37656e2aac31278e88c27df62574446c331c351aadfecc18e",
+      "canonicalSourceUnchanged": true,
+      "scope": "owner-review text draft; no canonical edit or compilation"
+    }
+  ],
+  "diffSHA256": "96f9007485c875c00b5e969e406d591ae5018551479335f061a2c72b9007beb3",
+  "compiled": false,
+  "canonicalTCCEdited": false,
+  "livePaperLineageVerified": false,
+  "branch": "codex/aurora-native-speech-routing-20261007",
+  "head": "cbac78fe3fb2b73100bfaa9dc198fb6bff689840",
+  "dirtyPathCount": 60
+}

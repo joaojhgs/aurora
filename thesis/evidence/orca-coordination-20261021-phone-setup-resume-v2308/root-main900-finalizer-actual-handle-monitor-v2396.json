@@ -1,0 +1,28 @@
+{
+  "id": "8de4f5ae-ec6f-4235-b457-4137bf72d223",
+  "ok": true,
+  "result": {
+    "message": {
+      "id": "msg_f1642d95cd9b",
+      "run_id": "run_e6054e76e9fc",
+      "delivery_contract": "current_delivery",
+      "from_handle": "term_6a00d9ee-792a-4daf-8578-236290e33108",
+      "to_handle": "dispatch:ctx_37b4d0a3c14f",
+      "subject": "Main900 attempts terminal; finalizer134649 actual live, seal/release pending",
+      "body": "Actual Root V2296 measurements are terminal: remaining450=450 correct, zero failures/incorrect/timeouts; full condition counts900 attempts=899 correct+one preserved historical failure. All original W actors3965950/3965978/3965951 naturally absent at04:55:05 and reverified04:56:32; copier465 case/WAV pairs, zero errors. Terminal summary physically thesis/campaigns/worker-desktop-k1-orca-relayed-http-remaining450-v2296/TERMINAL-SUMMARY-v2396.json94264B SHA70a05a51293e243e34d09cb39388d3ee9964935dd948e279b77e3d674f1c7231. Prepared finalizer2303 launched ONCE04:58:08.738271Z; current actual PID134649/start142354932 matches live. Native Root goal01a112a5 remains ACTIVE/unbudgeted; fresh snapshot NATIVE-GOAL-FINALIZATION-v2396.json in same campaign. Actual launch receipt ROOT-FINALIZER-ACTUAL-LAUNCH-v2396.json751B SHAb6047b0fc57127abab0c9224a9aae9baae03976b1c4f519ba5207dd6f04f3c7f; log FINALIZER-v2396.log and durable intent ROOT-FINALIZATION-INTENT-v2396.json. CURRENT/ORCA coordination now FINALIZING. Desktop provider reservation remains held; final custody/scoped analysis/full900 ID closure/provider EOF retirement+release still pending. Canonical requested owner BIG completion event remains PENDING, do not emit at counter alone. Next maximum check 2026-10-22T05:05:41.477679+00:00, earlier actual finalizer exit/failure. Root stays on this same operation, no inference rerun or blind CLI retry. Owner source assignment30668 acknowledged through Run e02fb534abdc; existing phone worker owns product fixes in isolated overlay, Root later Git integration only. K2/K3 dependency correction retained, no duplicate Root phone query/build/writer. Monitor sole methodology writer; mirror update is not execution gate. Full13/full accepted matrix remain open.",
+      "type": "status",
+      "priority": "normal",
+      "thread_id": null,
+      "payload": null,
+      "created_at": "2026-10-22T05:00:33Z",
+      "delivered_at": null
+    },
+    "mutation": {
+      "requestId": "a37f3e95-2951-4eed-b9db-413645567bc3",
+      "replayed": false
+    }
+  },
+  "_meta": {
+    "runtimeId": "cc9e3275-28c6-4c45-85cc-bdcd2262aa7d"
+  }
+}

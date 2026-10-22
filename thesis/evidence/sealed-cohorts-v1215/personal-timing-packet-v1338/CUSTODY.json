@@ -1,0 +1,129 @@
+{
+  "startedAt": "2026-10-17T22:21:21.299041+00:00",
+  "status": "complete_saved_timing_packet_copy",
+  "export": {
+    "path": "/home/developer/projects/aurora/thesis/evidence/sealed-cohorts-v1223/saved-timing-packets-v1336/personal-v485-v497-timing-packet.json.gz",
+    "bytes": 648751,
+    "sha256": "d07fc1596526a0a8a46f86e7556af2db2160bfeb0619e61765a917849b01ccf6",
+    "decodedBytes": 4224558,
+    "originalSavedAttemptRows": 1830,
+    "sourceReadBytes": 10997757,
+    "noNewMeasurements": true,
+    "host": "personal.skyron-server",
+    "exporterSHA256": "b1236289abf318425ea9ace924b80f42da8b7d6574cb2a39324071f2909598a6",
+    "at": "2026-10-17T22:20:41.075664+00:00",
+    "pids": {
+      "261665": {
+        "same": true,
+        "startTicks": 1519707,
+        "state": "S"
+      },
+      "261790": {
+        "same": true,
+        "startTicks": 1519744,
+        "state": "S"
+      },
+      "429068": {
+        "same": true,
+        "startTicks": 2450245,
+        "state": "S"
+      }
+    }
+  },
+  "copiedBytes": 648751,
+  "operation": null,
+  "pages": [
+    {
+      "offset": 0,
+      "bytes": 98304,
+      "sha256": "6ffda81185429fd48d79bc801dcf0a0a87cbced1e1c704864a1deb4de37b75c8",
+      "nextCursor": "7806",
+      "receipt": "v1338-audit-page-0000-RESULT.json"
+    },
+    {
+      "offset": 98304,
+      "bytes": 98304,
+      "sha256": "e1a61a3cfb8c2d59d5d223533b5369eca851d22667c90207fee5031cdc2ca7c4",
+      "nextCursor": "8027",
+      "receipt": "v1338-audit-page-0001-RESULT.json"
+    },
+    {
+      "offset": 196608,
+      "bytes": 98304,
+      "sha256": "e5184be44c0e8d16fbd60595e17e97711003d7be68d8ec92937161a41675cf27",
+      "nextCursor": "8248",
+      "receipt": "v1338-audit-page-0002-RESULT.json"
+    },
+    {
+      "offset": 294912,
+      "bytes": 98304,
+      "sha256": "98e816fdd67767f0ba647e59adcc47590903aa88e15f34034d9eb1358fd96e2b",
+      "nextCursor": "8469",
+      "receipt": "v1338-audit-page-0003-RESULT.json"
+    },
+    {
+      "offset": 393216,
+      "bytes": 98304,
+      "sha256": "33c49e34a7273a98c2a5e2ac7571125f06620c093e6aade4a352ad2e91ffc807",
+      "nextCursor": "8690",
+      "receipt": "v1338-audit-page-0004-RESULT.json"
+    },
+    {
+      "offset": 491520,
+      "bytes": 98304,
+      "sha256": "fa0b6965bf967d60ac9ab5c4d5d27807d910cf33b668df207554eb52faf95b10",
+      "nextCursor": "8911",
+      "receipt": "v1338-audit-page-0005-RESULT.json"
+    },
+    {
+      "offset": 589824,
+      "bytes": 58927,
+      "sha256": "fb682bb1ab16a1d13d76cad4bb23a1806a0caa9a9c99aa69333a5d6cad4fd7ef",
+      "nextCursor": "9045",
+      "receipt": "v1338-audit-page-0006-RESULT.json"
+    }
+  ],
+  "diskBefore": {
+    "total": 109128826880,
+    "used": 102084722688,
+    "free": 7027326976
+  },
+  "outerSeconds": 600,
+  "sutCalls": 0,
+  "newAgents": 0,
+  "originalArchivesRecopiedBytes": 0,
+  "scope": "Selected saved timing/outcome projections, not full archives",
+  "possibleConfound": "Existing Orca control traffic/disk IO; retain all concurrent measured cases.",
+  "updatedAt": "2026-10-17T22:22:07.257857+00:00",
+  "archiveVerified": {
+    "path": "thesis/evidence/sealed-cohorts-v1215/personal-timing-packet-v1338/personal-v485-v497-timing-packet.json.gz",
+    "bytes": 648751,
+    "sha256": "d07fc1596526a0a8a46f86e7556af2db2160bfeb0619e61765a917849b01ccf6"
+  },
+  "finishedAt": "2026-10-17T22:22:07.257792+00:00",
+  "cohorts": [
+    {
+      "cohort": "V485",
+      "savedAttemptRows": 915,
+      "archivePath": "/home/developer/projects/aurora/thesis/evidence/sealed-cohorts-v1223/desktop-gpu-full-audio-local900-v485/aurora-desktop-gpu-full-audio-local900-v485.zip",
+      "archiveBytes": 32688561,
+      "priorCustodySHA256": "93c3afe2161b031d00b0be53ee9a76c8267369e9fa89d9cbe98cad67eee7d6dc"
+    },
+    {
+      "cohort": "V497",
+      "savedAttemptRows": 915,
+      "archivePath": "/home/developer/projects/aurora/thesis/evidence/sealed-cohorts-v1223/desktop-gpu-full-audio-http900-v497/aurora-desktop-gpu-full-audio-http900-v497.zip",
+      "archiveBytes": 35127102,
+      "priorCustodySHA256": "c0679cba9c544d029b5df45d5cb0a76a3b4045ffb2b23137df656a78c19b53cd"
+    }
+  ],
+  "originalSavedAttemptRows": 1830,
+  "decodedBytes": 4224558,
+  "privacyFieldCheck": "PASS including embedded JSON documents",
+  "diskAfter": {
+    "total": 109128826880,
+    "used": 102090260480,
+    "free": 7021789184
+  },
+  "classification": "Lossless selected timing/outcome projection with source-member identities; not full raw case payloads"
+}

@@ -1,0 +1,35 @@
+{
+  "id": "a5515166-5f1a-4014-85d9-b65eec7a264f",
+  "ok": true,
+  "result": {
+    "message": {
+      "id": "msg_c1295c378e94",
+      "run_id": "run_e6054e76e9fc",
+      "delivery_contract": "current_delivery",
+      "from_handle": "term_6a00d9ee-792a-4daf-8578-236290e33108",
+      "to_handle": "term_1f27be31-0284-4366-bb91-30fe538cd30e",
+      "subject": "ACK old source window unused/closed; keep receiver prep in existing setup lane",
+      "body": "ACK4508e660588b: original01:01:07.881437Z sourcecopywindow expired with zero sourcebytes per your actual report; no restart/adopt/resend or extension. Exact package/WAV/hashes remain physically ready. You own normal bounded framed receiver preparation; request fresh source-only admission when that exact receiver/method is ready, no main campaign-end prerequisite. Independent exact public notebook preparation continues under latest owner authorization/actual thermal/RAM/disk guards; no900/night without actual ownerSTART/readiness. Root performs no notebook/device probes and remains original main collection/custody owner; new201/450correct and651/900 total as01:01:54, frozen setup unchanged. Receipt retained in thesis/evidence/orca-coordination-20261021-phone-setup-resume-v2308/SOURCE-WINDOW-EXPIRED-NO-TRANSFER-WORKER-RECEIPT-v2346.json.",
+      "type": "status",
+      "priority": "normal",
+      "thread_id": null,
+      "payload": null,
+      "created_at": "2026-10-22T01:02:49Z",
+      "delivered_at": null
+    },
+    "warnings": [
+      {
+        "code": "legacy_terminal_recipient",
+        "recipient": "term_1f27be31-0284-4366-bb91-30fe538cd30e",
+        "message": "term_1f27be31-0284-4366-bb91-30fe538cd30e is a live terminal-only mailbox. Delivery is not durable after that terminal closes; prefer run:<id> or dispatch:<id>."
+      }
+    ],
+    "mutation": {
+      "requestId": "c2d2a7f4-75b3-49ac-a525-e8d81df635b0",
+      "replayed": false
+    }
+  },
+  "_meta": {
+    "runtimeId": "cc9e3275-28c6-4c45-85cc-bdcd2262aa7d"
+  }
+}

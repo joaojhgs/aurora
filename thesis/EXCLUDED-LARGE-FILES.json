@@ -1,0 +1,129 @@
+{
+  "schema": "aurora.thesis.large-file-exclusions.v1",
+  "git_lfs_available": false,
+  "current_git_size_limit_bytes": 10000000,
+  "earlier_lfs_threshold_bytes": 50000000,
+  "policy": "Owner subsequently tightened all added evidence to at most 10 MB and deferred raw-data release.",
+  "files": [
+    {
+      "path": "docs/experiments/tcc-20261013-submission-20261030/root/desktop-gpu-padded-http900-v692/aurora-desktop-gpu-padded-http900-v692.zip",
+      "bytes": 34691761,
+      "sha256": "7f1438bd700d5a794a879f5a38d7293275acf4d827289a50c6c49e01dc1a1870",
+      "disposition": "raw_release_deferred_over_10_MB"
+    },
+    {
+      "path": "docs/experiments/tcc-20261013-submission-20261030/root/desktop-gpu-padded-local900-v735/aurora-desktop-gpu-padded-local900-v735.zip",
+      "bytes": 10064090,
+      "sha256": "1ef1dbd55dde983aea97852dadbeebd7f5540285655a0cbbd447b73b5784db33",
+      "disposition": "raw_release_deferred_over_10_MB"
+    },
+    {
+      "path": "docs/experiments/tcc-20261013-submission-20261030/root/desktop-gpu-padded-local900-v745/aurora-desktop-gpu-padded-local900-v745.zip",
+      "bytes": 22099986,
+      "sha256": "8442f975cc23a273d10088de11357bd4eabccd15cccca11477f7c4a84c316cf2",
+      "disposition": "raw_release_deferred_over_10_MB"
+    },
+    {
+      "path": "docs/experiments/tcc-20261013-submission-20261030/root/worker-cpu-full-audio-local900-v491/aurora-worker-cpu-full-audio-local900-v491.zip",
+      "bytes": 33027484,
+      "sha256": "83b9084a09abfe641968b2958e210ed589dbcd655f0a9a26c18f2bc4dd80d897",
+      "disposition": "raw_release_deferred_over_10_MB"
+    },
+    {
+      "path": "docs/experiments/tcc-20261013-submission-20261030/root/worker-cpu-padded-local900-v737/aurora-worker-cpu-padded-local900-v737.zip",
+      "bytes": 32740359,
+      "sha256": "8647715e745b7a49f8fb270730312909be3918fa7e87900b3174dbf2f8dc2f99",
+      "disposition": "raw_release_deferred_over_10_MB"
+    },
+    {
+      "path": "thesis/campaigns/c12-mixed-local-http-900-v2426/requester/resources.jsonl",
+      "bytes": 13328380,
+      "sha256": "fda6783f6c3be8a7280cb8cdfac3485cb7f9fa696e0feb7d08859dda5eb410c3",
+      "disposition": "raw_release_deferred_over_10_MB"
+    },
+    {
+      "path": "thesis/campaigns/c12-mixed-local-http-remaining640-v2453/requester/resources.jsonl",
+      "bytes": 16010886,
+      "sha256": "4997a75e0bcd5ac51513678bd52209a4e848089dbc76dd7fa6fda719532142b8",
+      "disposition": "raw_release_deferred_over_10_MB"
+    },
+    {
+      "path": "thesis/campaigns/worker-desktop-k1-orca-relayed-http-first270-v2234/provider-prefix-transfer-v2253/extracted/raw/resources.jsonl",
+      "bytes": 73716651,
+      "sha256": "b0dfa97381c9e10109a80eaf87e99f61ff37527fb9080bf143cdfbf812e1bfb6",
+      "disposition": "raw_release_deferred_over_10_MB"
+    },
+    {
+      "path": "thesis/campaigns/worker-desktop-k1-orca-relayed-http-remaining450-v2296/provider-prefix-transfer-v2302/extracted/raw/resources.jsonl",
+      "bytes": 113316229,
+      "sha256": "226c98f80e50992558f71d2fa87a978c7fc770f961e6695e127843275e07518e",
+      "disposition": "raw_release_deferred_over_10_MB"
+    },
+    {
+      "path": "thesis/campaigns/worker-desktop-k3-p2p-full-audio-v2043/analysis-v2130/case-analysis.jsonl",
+      "bytes": 13410267,
+      "sha256": "ba2df8db7ce4d081a44b5e11e9fd56843f5c475a33d5d77f38a0935d886045c9",
+      "disposition": "raw_release_deferred_over_10_MB"
+    },
+    {
+      "path": "thesis/evidence/sealed-cohorts-v1215/desktop-gpu-padded-http900-v692/aurora-desktop-gpu-padded-http900-v692.zip",
+      "bytes": 34691761,
+      "sha256": "7f1438bd700d5a794a879f5a38d7293275acf4d827289a50c6c49e01dc1a1870",
+      "disposition": "raw_release_deferred_over_10_MB"
+    },
+    {
+      "path": "thesis/evidence/sealed-cohorts-v1215/desktop-gpu-padded-local900-v735/aurora-desktop-gpu-padded-local900-v735.zip",
+      "bytes": 10064090,
+      "sha256": "1ef1dbd55dde983aea97852dadbeebd7f5540285655a0cbbd447b73b5784db33",
+      "disposition": "raw_release_deferred_over_10_MB"
+    },
+    {
+      "path": "thesis/evidence/sealed-cohorts-v1215/desktop-gpu-padded-local900-v745/aurora-desktop-gpu-padded-local900-v745.zip",
+      "bytes": 22099986,
+      "sha256": "8442f975cc23a273d10088de11357bd4eabccd15cccca11477f7c4a84c316cf2",
+      "disposition": "raw_release_deferred_over_10_MB"
+    },
+    {
+      "path": "thesis/evidence/sealed-cohorts-v1215/worker-cpu-full-audio-local900-v491/aurora-worker-cpu-full-audio-local900-v491.zip",
+      "bytes": 33027484,
+      "sha256": "83b9084a09abfe641968b2958e210ed589dbcd655f0a9a26c18f2bc4dd80d897",
+      "disposition": "raw_release_deferred_over_10_MB"
+    },
+    {
+      "path": "thesis/evidence/sealed-cohorts-v1215/worker-cpu-padded-local900-v737/aurora-worker-cpu-padded-local900-v737.zip",
+      "bytes": 32740359,
+      "sha256": "8647715e745b7a49f8fb270730312909be3918fa7e87900b3174dbf2f8dc2f99",
+      "disposition": "raw_release_deferred_over_10_MB"
+    },
+    {
+      "path": "thesis/evidence/source-sync-ebde-runtime-v2340/aurora-ebde3a8a-runtime.tar.gz",
+      "bytes": 12017639,
+      "sha256": "4489e655cd3b949303ca49be9d8fe52df2c31dd11676ec0ed4ea9ac28fd62c9f",
+      "disposition": "raw_release_deferred_over_10_MB"
+    },
+    {
+      "path": "thesis/evidence/source-sync-ebde-small-v2337/aurora-ebde3a8a-source.tar.gz.partial",
+      "bytes": 12779715,
+      "sha256": "a4736878e1f6e0bcf8e82024623699d6327cd52aba6e2289aa8768b187e0a59c",
+      "disposition": "raw_release_deferred_over_10_MB"
+    },
+    {
+      "path": "thesis/evidence/source-sync-ebde-small-v2338/aurora-ebde3a8a-source.tar.gz.partial",
+      "bytes": 12639349,
+      "sha256": "27cdb4b29ffa067526acad2f7783653643a882df0e0d7d413f8107c3dbf6eff0",
+      "disposition": "raw_release_deferred_over_10_MB"
+    },
+    {
+      "path": "thesis/models/retained-v1212/stt/model.bin",
+      "bytes": 145217532,
+      "sha256": "d01c3014881c9c6f3133c182f3d2887eb6ca1c789a7538c5c007196857a0a6a9",
+      "disposition": "raw_release_deferred_over_10_MB"
+    },
+    {
+      "path": "thesis/models/retained-v1212/tts/en_US-ljspeech-medium.onnx",
+      "bytes": 63531379,
+      "sha256": "6f52a751e2349abe7a76735eb09dc1875298c77ea2342ffd2fef79ff81b87f22",
+      "disposition": "raw_release_deferred_over_10_MB"
+    }
+  ]
+}

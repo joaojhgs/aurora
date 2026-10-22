@@ -1,0 +1,54 @@
+{
+  "startedAt": "2026-10-14T23:23:38.847412+00:00",
+  "host": "personal.skyron-server",
+  "controllerPid": 2842289,
+  "purpose": "build real production apps/aurora-web, no model/app traffic",
+  "capSeconds": 600,
+  "sourceManifest": {
+    "base": "c0f4c0013cea5bb11ef81297194d0dc142a47bc4",
+    "frontendDependenciesSource": "existing passed Android V438 exported source + frozen installed deps; same SDK696fc4fa + five UI overlays",
+    "currentWebOverlays": [
+      {
+        "path": "apps/aurora-web/app/assistant-client.tsx",
+        "sha256": "9d5571da7fc21b99921ae7601b3cf1cd993e730581d014e19f8201162066bb96",
+        "bytes": 4703
+      },
+      {
+        "path": "apps/aurora-web/app/browser-shell-runtime.tsx",
+        "sha256": "70baa11dabba1186f73460ac46c5486f92216e02c03623a0071a8bdc3c92a522",
+        "bytes": 32601
+      }
+    ],
+    "compileRole": "runtime onboarding/profile only; no compiled role/surface/gateway",
+    "noNewCloneOrProjectOrWorker": true,
+    "onlyActualProductionWebBuild": true
+  },
+  "dependencyInstallRepeated": false,
+  "nativeWasmUiBuildRepeated": false,
+  "runtimeRoleCompiled": false,
+  "globalBuildLockHeld": true,
+  "initialHomeFree": 462782464,
+  "initialShmFree": 1084289024,
+  "initialMemAvailable": 3813466112,
+  "resourceGuards": {
+    "homeAndShmFreeBytes": 100000000,
+    "MemAvailableBytes": 400000000
+  },
+  "voiceAttemptsAdded": 0,
+  "measurementStarted": false,
+  "command": [
+    "/home/developer/.asdf/installs/nodejs/24.19.0/bin/node",
+    "/home/developer/projects/aurora/.git/aurora-web-product-v448/source/apps/aurora-web/node_modules/next/dist/bin/next",
+    "build",
+    "--webpack"
+  ],
+  "childPid": 2842309,
+  "resourceOrTimeCap": true,
+  "exitCode": 130,
+  "finishedAt": "2026-10-14T23:24:08.870773+00:00",
+  "elapsedSeconds": 30.22637821000535,
+  "finalHomeFree": 62230528,
+  "finalShmFree": 1074397184,
+  "finalMemAvailable": 3777667072,
+  "oldSourcesAndArtifactsPreserved": true
+}

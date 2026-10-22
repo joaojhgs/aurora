@@ -1,0 +1,122 @@
+{
+  "schema_version": "aurora.assistant.measurement_summary.v1",
+  "quantile_method": "type7_linear_interpolation",
+  "group_count": 2,
+  "groups": [
+    {
+      "schema_version": "aurora.assistant.measurement_summary.v1",
+      "quantile_method": "type7_linear_interpolation",
+      "group": {
+        "config_sha256": "0c87fa5c965be3d6d4039593cc21a3955155223406efbfa5e18d4aaf734b9086",
+        "host_id_pseudonym": "e439ff74d54335f5",
+        "model_id": "qwen3.5-0.8b-q4_0-gguf",
+        "model_sha256": "57d1997790d1744fba5b40a7317df71ea5e2acee28c47e78f0cce39c0703f8cf",
+        "route": "python_gateway_api",
+        "session_id": "pilot-run-9cdde152aa7444a9a6fb52aa00b720d6",
+        "source_commit": "5782746afba213f6b36907db2f09f0017625e218",
+        "surface": "python-production-local",
+        "workload_id": "public-exact-answer-orbit-v1",
+        "workload_sha256": "0f3b83f8fbf0e55e7b7faf8a75e99f42fdad42128b908e7f7c18cd4d8faeed86"
+      },
+      "n_raw_records": 1,
+      "n_warmup": 0,
+      "warmup_counts": {
+        "cancelled": 0,
+        "correct_success": 0,
+        "excluded": 0,
+        "failure": 0,
+        "incorrect_answer": 0,
+        "infeasible": 0,
+        "timeout": 0
+      },
+      "n_total": 1,
+      "n_excluded": 0,
+      "n_eligible": 1,
+      "counts": {
+        "cancelled": 0,
+        "correct_success": 1,
+        "failure": 0,
+        "incorrect_answer": 0,
+        "infeasible": 0,
+        "timeout": 0
+      },
+      "n_success": 1,
+      "n_success_denominator": 1,
+      "correct_success_rate": 1.0,
+      "correct_success_latency_ms": {
+        "p50": 31431.983561,
+        "p90": 31431.983561,
+        "p95": 31431.983561
+      },
+      "correct_success_latency_n": 1,
+      "exclusion_reasons_predeclared": {},
+      "censored_outcomes_retained": {
+        "timeout": 0,
+        "cancelled": 0,
+        "infeasible": 0
+      }
+    },
+    {
+      "schema_version": "aurora.assistant.measurement_summary.v1",
+      "quantile_method": "type7_linear_interpolation",
+      "group": {
+        "config_sha256": "0c87fa5c965be3d6d4039593cc21a3955155223406efbfa5e18d4aaf734b9086",
+        "host_id_pseudonym": "e439ff74d54335f5",
+        "model_id": "qwen3.5-0.8b-q4_0-gguf",
+        "model_sha256": "57d1997790d1744fba5b40a7317df71ea5e2acee28c47e78f0cce39c0703f8cf",
+        "route": "python_local_bus",
+        "session_id": "pilot-run-9cdde152aa7444a9a6fb52aa00b720d6",
+        "source_commit": "5782746afba213f6b36907db2f09f0017625e218",
+        "surface": "python-production-local",
+        "workload_id": "public-exact-answer-orbit-v1",
+        "workload_sha256": "0f3b83f8fbf0e55e7b7faf8a75e99f42fdad42128b908e7f7c18cd4d8faeed86"
+      },
+      "n_raw_records": 2,
+      "n_warmup": 1,
+      "warmup_counts": {
+        "cancelled": 0,
+        "correct_success": 1,
+        "excluded": 0,
+        "failure": 0,
+        "incorrect_answer": 0,
+        "infeasible": 0,
+        "timeout": 0
+      },
+      "n_total": 1,
+      "n_excluded": 0,
+      "n_eligible": 1,
+      "counts": {
+        "cancelled": 0,
+        "correct_success": 1,
+        "failure": 0,
+        "incorrect_answer": 0,
+        "infeasible": 0,
+        "timeout": 0
+      },
+      "n_success": 1,
+      "n_success_denominator": 1,
+      "correct_success_rate": 1.0,
+      "correct_success_latency_ms": {
+        "p50": 30736.83551,
+        "p90": 30736.83551,
+        "p95": 30736.83551
+      },
+      "correct_success_latency_n": 1,
+      "exclusion_reasons_predeclared": {},
+      "censored_outcomes_retained": {
+        "timeout": 0,
+        "cancelled": 0,
+        "infeasible": 0
+      }
+    }
+  ],
+  "claim_scope": "One-session descriptive real Assistant LocalBus/authenticated localhost API pilot, declared exact ORBIT reply plus saved history/correlation. Not stable tails or deployed/mesh/mobile/voice acceptance.",
+  "llama_cpp_python_version_observed_after_run": "0.3.19",
+  "dependencies_mutated_during_study": false,
+  "clean_benchmark_condition": false,
+  "independent_sessions": 1,
+  "replication_gap": "One measured request per route; owner main n300/3independent sessions protocol remains unexecuted. No effect/speedup/precision claim from these n1 Type7 point values.",
+  "original_failed_history_preserved": "v245 startupfailure, v246 measuredincorrectbothroutes, v247 diagnosisrawpredicatefailed; neverreclassified",
+  "predicate_changed_for_recovery": false,
+  "product_correction": "Only leading empty thought block removed before final persistence/emission/return, independently reviewed and4affectedtestsPASS."
+}

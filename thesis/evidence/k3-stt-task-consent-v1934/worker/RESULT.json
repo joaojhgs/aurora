@@ -1,0 +1,50 @@
+{
+  "afterPermissions": [
+    "Gateway.GetRegistry",
+    "Gateway.GetMeshStatus",
+    "TTS.Synthesize",
+    "Orchestrator.use",
+    "Transcription.Transcribe"
+  ],
+  "at": "2026-10-20T21:45:02.037130+00:00",
+  "beforePermissions": [
+    "Gateway.GetRegistry",
+    "Gateway.GetMeshStatus",
+    "TTS.Synthesize",
+    "Orchestrator.use"
+  ],
+  "contract": {
+    "method": "Transcription.Transcribe",
+    "priorPermissionsPreserved": [
+      "Gateway.GetRegistry",
+      "Gateway.GetMeshStatus",
+      "TTS.Synthesize",
+      "Orchestrator.use"
+    ],
+    "requiredPermissions": [
+      "Transcription.Transcribe"
+    ],
+    "source": "/home/developer/projects/aurora/thesis/sources/k3-stt-runtime-v1907/worker/source/app/services/stt_transcription/service.py",
+    "sourceSha256": "becf4222d99b02dbc4cac03ad098f275ccb288ceb35f44e945a521701ecaaf49"
+  },
+  "directPermissionDBEdits": false,
+  "host": "code-worker",
+  "localStablePeerId": "aurora-03a910366bf721d72a9ef481d2e08fbd",
+  "modelCalls": 0,
+  "modelServicesStarted": [],
+  "mutationCalls": 1,
+  "mutationMethod": "Auth.MeshUpdatePeerPermissions",
+  "networkListenerStarted": false,
+  "newCredential": false,
+  "newIdentity": false,
+  "peerId": "aurora-276bb04e1276201922851f6a222110de",
+  "priorFrozenConfigUnchanged": true,
+  "reversePermissionsUnchanged": [
+    "Gateway.GetRegistry",
+    "Gateway.GetMeshStatus",
+    "TTS.Synthesize"
+  ],
+  "scope": "Only deployed required Transcription.Transcribe added to same approved test pair; prior/reverse grants preserved",
+  "side": "worker",
+  "status": "NORMAL_EXISTING_TEST_PAIR_TASK_CONSENT_APPLIED_VERIFIED"
+}

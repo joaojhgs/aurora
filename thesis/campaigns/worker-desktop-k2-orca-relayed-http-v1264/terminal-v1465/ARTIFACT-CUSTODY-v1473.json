@@ -1,0 +1,105 @@
+{
+  "at": "2026-10-18T07:49:59.891442+00:00",
+  "newMeasurements": 0,
+  "records": [
+    {
+      "bytes": 7420,
+      "path": "thesis/campaigns/worker-desktop-k2-orca-relayed-http-v1264/terminal-v1465/SEAL.json",
+      "sha256": "e08f9b8888eb148f9d10ac935b884dc9311fa614e97e37903c3e7664a21b29ae"
+    },
+    {
+      "bytes": 4389,
+      "path": "thesis/campaigns/worker-desktop-k2-orca-relayed-http-v1264/terminal-v1465/FINAL-VALIDATION-v1472.json",
+      "sha256": "910992937bdd8235d01d953eb9ac771df2c5409466ad2f075230bf020f64b8d4"
+    },
+    {
+      "bytes": 1016,
+      "path": "thesis/campaigns/worker-desktop-k2-orca-relayed-http-v1264/terminal-v1465/FAILURE-HASH-CLASSIFICATION-v1470.json",
+      "sha256": "5d8d0bb2b8c358f758c85a9a8004fb9d7e950bd7ee90eaf01d5db759355f4881"
+    },
+    {
+      "bytes": 6184,
+      "path": "thesis/campaigns/worker-desktop-k2-orca-relayed-http-v1264/terminal-v1465/RESULTS.md",
+      "sha256": "10e8d4067c4e350c9e581150bb695695118ff655b06f9b424fe5b9d17b2b6c9b"
+    },
+    {
+      "bytes": 107912,
+      "path": "thesis/campaigns/worker-desktop-k2-orca-relayed-http-v1264/terminal-v1465/analysis-v1469/SUMMARY.json",
+      "sha256": "f1b1231416c5a0996b940b7f6103839965eba1479b7b137f25b3251d6f747c7f"
+    },
+    {
+      "bytes": 8353252,
+      "path": "thesis/campaigns/worker-desktop-k2-orca-relayed-http-v1264/terminal-v1465/analysis-v1469/CASE-HISTORY.json",
+      "sha256": "0482ede44f6ef3993da0144b54f2aa65c8ce9c881bdd8a0b10526249e1936614"
+    },
+    {
+      "bytes": 528437,
+      "path": "thesis/campaigns/worker-desktop-k2-orca-relayed-http-v1264/terminal-v1465/analysis-v1469/SOURCE-IDENTITIES.json",
+      "sha256": "fc762b675fa8b8a691ff2eba58ae817ce72cee210619e88ef82cb6188f941a5a"
+    },
+    {
+      "bytes": 1162,
+      "path": "thesis/campaigns/worker-desktop-k2-orca-relayed-http-v1264/terminal-v1465/analysis-v1469/CUSTODY.json",
+      "sha256": "f7ee435a8541c04687b68ceede3b6b0fe6158f9b50a37728be1acdafc2b334a2"
+    },
+    {
+      "bytes": 6254,
+      "path": "thesis/campaigns/worker-desktop-k2-orca-relayed-http-v1264/terminal-v1465/resource-analysis-v1471/SUMMARY.json",
+      "sha256": "a0e53f3c7b651cb47d33c61250715feeb294aa25647a5f47635d97491f9fc798"
+    },
+    {
+      "bytes": 7567,
+      "path": "thesis/campaigns/worker-desktop-k2-orca-relayed-http-v1264/terminal-v1465/resource-analysis-v1471/SUMMARY-UNITS.json",
+      "sha256": "560366e0fa92fceb6bc00843afd69f118f4a73c24fd0aa367146c52db507c731"
+    },
+    {
+      "bytes": 6924673,
+      "path": "thesis/campaigns/worker-desktop-k2-orca-relayed-http-v1264/terminal-v1465/resource-analysis-v1471/RESOURCE-CASE-HISTORY.json",
+      "sha256": "e4168b290bb4d689b909c27a795a36bf9eb96302300798d1459ccd52910c0981"
+    },
+    {
+      "bytes": 316529,
+      "path": "thesis/campaigns/worker-desktop-k2-orca-relayed-http-v1264/terminal-v1465/resource-analysis-v1471/SOURCE-IDENTITIES.json",
+      "sha256": "f2eaa653a264dda639ceda5705a1b0b837cd07f4cd94ee8b0d457ee04233afb6"
+    },
+    {
+      "bytes": 10913,
+      "path": "thesis/campaigns/worker-desktop-k2-orca-relayed-http-v1264/terminal-v1465/resource-analysis-v1471/ANALYSIS-SOURCE-AS-EXECUTED.py",
+      "sha256": "6fdb7c4d815b000889fd975e094887e22ecc8bfa0217a7f0531f5ce17f4a8f73"
+    },
+    {
+      "bytes": 11410,
+      "path": "thesis/analysis/k2_saved_case_history.py",
+      "sha256": "06163cb874cb3010df3426334b04cf74abe2bcc0a715aea1bed75ce2769e1e89"
+    },
+    {
+      "bytes": 11441,
+      "path": "thesis/analysis/k2_saved_resource_windows.py",
+      "sha256": "32c4b6bbcf01bbd9b381ed54f18ed629f616094458dce0c81abf199475875b8e"
+    },
+    {
+      "bytes": 963589,
+      "path": "thesis/evidence/orca-relayed-http-v1197/provider-transfer-delta-v1468/COVERAGE-CHAIN.json",
+      "sha256": "7875161fa63a047cc3943f19d0aa601d80622874f05b5b89c09f2c97ad7ae364"
+    },
+    {
+      "path": "thesis/campaigns/worker-desktop-k2-orca-relayed-http-v1264/terminal-v1465/RESULTS-before-R1-v1473.md",
+      "bytes": 6059,
+      "sha256": "bcd42c0f4c9b0a2e72b837a8cf8e0e455aa4bf1f6df9e01d63d5908378b0edd4"
+    },
+    {
+      "path": "thesis/campaigns/worker-desktop-k2-orca-relayed-http-v1264/terminal-v1465/SOL-RESOURCE-REVIEW-v1473.md",
+      "bytes": 5351,
+      "sha256": "edfb4294d48f1d7d83d3b1ceadcea3b5fbb986c8a79dcfa9b259f173038097a9"
+    },
+    {
+      "path": "thesis/campaigns/worker-desktop-k2-orca-relayed-http-v1264/terminal-v1465/REVIEW-CLOSURE-v1473.json",
+      "bytes": 1180,
+      "sha256": "dbffc75aaec60cfc41948c471a69e94ad8959fdefa01197fcb66ba8097d51cda"
+    }
+  ],
+  "resourceUnitChecksFromExistingDerivedValues": 20,
+  "sutCalls": 0,
+  "previousManifest": "thesis/campaigns/worker-desktop-k2-orca-relayed-http-v1264/terminal-v1465/ARTIFACT-CUSTODY-v1472.json",
+  "revision": "Report-only R1 correction; old report retained at declared backup, all numerical inputs/outputs unchanged."
+}

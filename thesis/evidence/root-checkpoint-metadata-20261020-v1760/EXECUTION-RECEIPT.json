@@ -1,0 +1,28 @@
+{
+  "at": "2026-10-20T10:13:39.211599+00:00",
+  "status": "ACTUAL_CHECKPOINT_EXECUTION_PASS",
+  "checkpoint": "thesis/campaigns/worker-desktop-k1-p2p-tts-remaining880-v1719/ROOT-RUNNING-CHECKPOINT-v1760.json",
+  "frozenManifestSha256": "120dd99a4de0a242c30ebe4bb46d854ca77313c482a0c74f024edb624829a6e8",
+  "wholeCondition": {
+    "attempted": 447,
+    "correct": 439,
+    "failed": 8,
+    "planned": 900,
+    "unattempted": 453,
+    "excludedWarmupsAcrossEpochs": 30
+  },
+  "newEpochFailedCaseListCount": 7,
+  "newEpochFailedGlobalIndices": [
+    36,
+    98,
+    129,
+    169,
+    229,
+    242,
+    439
+  ],
+  "latestCaseSha256": "259eff73328184d7bf7e788bbbe5906ce711c223cb9caffea0271c2ddc02ed21",
+  "copierErrors": [],
+  "sutCalls": 0,
+  "newSourceOrRuntimeTestGate": false
+}

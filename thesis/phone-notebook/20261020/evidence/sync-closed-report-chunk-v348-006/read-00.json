@@ -1,0 +1,26 @@
+{
+  "_meta": {
+    "runtimeId": "cc9e3275-28c6-4c45-85cc-bdcd2262aa7d"
+  },
+  "id": "fe860393-8a7c-41d8-b0b3-fa311f58c12d",
+  "ok": true,
+  "result": {
+    "terminal": {
+      "handle": "term_a2ed5feb-7c92-48e4-bd88-d1b0e6737989",
+      "latestCursor": "1718",
+      "limited": false,
+      "nextCursor": "1718",
+      "oldestCursor": "1643",
+      "returnedLineCount": 4,
+      "source": "stream",
+      "status": "running",
+      "tail": [
+        "                                                     >....",
+        "",
+        "AURORA_NOTEBOOK_sync-closed-report-chunk-v348-006=eyJzdGF0dXMiOiAiREFUQV9PTkxZX0NIVU5LX1NBVkVEIiwgImluZGV4IjogNiwgImJ5dGVzIjogNTQ4MCwgInBob25lQ29tbWFuZHMiOiAwLCAibW9kZWxDYWxscyI6IDB9Cg==",
+        "AURORA_COPY_RECEIPT={\"path\": \"/home/developer/projects/aurora/thesis/phone-notebook/20261020/evidence/sync-closed-report-chunk-v348-006.json\", \"bytes\": 100, \"sha256\": \"d695964b4a314eea83dcdaaca18e176d23dada7db24c7822926b9f6ce653a113\"}"
+      ],
+      "truncated": false
+    }
+  }
+}

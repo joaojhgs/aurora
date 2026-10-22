@@ -1,0 +1,98 @@
+[
+  {
+    "path": "root-manifest.json",
+    "original_sha256": "cf7e219a5e8bae2947441ed54bcf5f7bec38cdb94ce90564b280351131bc459a",
+    "export_sha256": "6d3d0d9818ce7d8d091350ed669b97f742853a16842cc082eb98901f0ae0bc1b",
+    "transformation": "omit private config/env hashes"
+  },
+  {
+    "path": "root-result.json",
+    "original_sha256": "acc322d277362b9d5eeada3c73b562a76393ffaf5089aa678e6e73dcb2da8546",
+    "export_sha256": "66b42cc3fcabce2a1d2e0e98560d008c4107729cbf3f146d8a72fbf9a2af9699",
+    "transformation": "omit private config/env hashes"
+  },
+  {
+    "path": "requests.jsonl",
+    "original_sha256": "914ed2968e80d0cf74fee5bc7c04a89bff3c1c50101cc270f7075fe8746143c5",
+    "export_sha256": "914ed2968e80d0cf74fee5bc7c04a89bff3c1c50101cc270f7075fe8746143c5",
+    "transformation": "byte-identical"
+  },
+  {
+    "path": "requests.jsonl.manifest.json",
+    "original_sha256": "6176bc4387d9f951e87257fff0fc7ac6f59b72971bb6429a6fe39a3bf128a5e3",
+    "export_sha256": "6176bc4387d9f951e87257fff0fc7ac6f59b72971bb6429a6fe39a3bf128a5e3",
+    "transformation": "byte-identical"
+  },
+  {
+    "path": "requests.jsonl.cleanup.json",
+    "original_sha256": "79d2ff1a386b46fb27ab8198353139e02dd56973a966c08699597a34fe9229c3",
+    "export_sha256": "79d2ff1a386b46fb27ab8198353139e02dd56973a966c08699597a34fe9229c3",
+    "transformation": "byte-identical"
+  },
+  {
+    "path": "gateway-only-transport-error.json",
+    "original_sha256": "68509353dd764ec3bedf995041170c8ac06cdf186a7a05c20ed702b865a61e07",
+    "export_sha256": "68509353dd764ec3bedf995041170c8ac06cdf186a7a05c20ed702b865a61e07",
+    "transformation": "byte-identical"
+  },
+  {
+    "path": "assistant-stdout.log",
+    "original_sha256": "9b536ead5a2f09bac10c7e4539c5be59ba0f079f624ce53bc3e5c1bfbd5409be",
+    "export_sha256": "cc2b3b0b83c69cd09286138a581cd423136ce7a0873608824c2cb0c5ddf087e0",
+    "transformation": "conservative entire credential-field line redaction: 1 lines"
+  },
+  {
+    "path": "assistant-stderr.log",
+    "original_sha256": "c45a1c33081731e1e595cd72a866b2846a4c3b64de76d336f0a5ad33b56bfacd",
+    "export_sha256": "c45a1c33081731e1e595cd72a866b2846a4c3b64de76d336f0a5ad33b56bfacd",
+    "transformation": "byte-identical"
+  },
+  {
+    "path": "assistant-result.json",
+    "original_sha256": "ca7ae6ce0d36895e245ccb178cd1bc3889d1760e720e7a63dcf254db13d7dd7f",
+    "export_sha256": "ca7ae6ce0d36895e245ccb178cd1bc3889d1760e720e7a63dcf254db13d7dd7f",
+    "transformation": "byte-identical"
+  },
+  {
+    "path": "redis-start-stdout.log",
+    "original_sha256": "88962ce9fa833dc4d2687edb906a6c82eed96ad3bd4a19de4f8217c244536250",
+    "export_sha256": "88962ce9fa833dc4d2687edb906a6c82eed96ad3bd4a19de4f8217c244536250",
+    "transformation": "byte-identical"
+  },
+  {
+    "path": "redis-start-stderr.log",
+    "original_sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+    "export_sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+    "transformation": "byte-identical"
+  },
+  {
+    "path": "redis-start-result.json",
+    "original_sha256": "bf9ca0f3ec01d618c123f9b4855a7fe6000c5756453b8547625b04584b9cc5bc",
+    "export_sha256": "bf9ca0f3ec01d618c123f9b4855a7fe6000c5756453b8547625b04584b9cc5bc",
+    "transformation": "byte-identical"
+  },
+  {
+    "path": "redis-stop-stdout.log",
+    "original_sha256": "dd3fcd94773d30ee8f5398bef5e69ab207ca84895a4c6974123ebd1f8f260ced",
+    "export_sha256": "dd3fcd94773d30ee8f5398bef5e69ab207ca84895a4c6974123ebd1f8f260ced",
+    "transformation": "byte-identical"
+  },
+  {
+    "path": "redis-stop-stderr.log",
+    "original_sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+    "export_sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+    "transformation": "byte-identical"
+  },
+  {
+    "path": "redis-stop-result.json",
+    "original_sha256": "3d57b4fb4d67060361035320ff2cea67aee9c1cc69ac7f75b90dda67a7e64f87",
+    "export_sha256": "3d57b4fb4d67060361035320ff2cea67aee9c1cc69ac7f75b90dda67a7e64f87",
+    "transformation": "byte-identical"
+  },
+  {
+    "path": "redis-readiness.json",
+    "original_sha256": "91bc737e62f728dc36eaa0b18efee28f87649272f89cecd0644a0bf562424ea2",
+    "export_sha256": "91bc737e62f728dc36eaa0b18efee28f87649272f89cecd0644a0bf562424ea2",
+    "transformation": "byte-identical"
+  }
+]

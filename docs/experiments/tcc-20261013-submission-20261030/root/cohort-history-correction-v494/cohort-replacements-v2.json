@@ -1,0 +1,43 @@
+{
+  "schema": "aurora.cohort-replacement-registry.v2",
+  "at": "2026-10-15T04:06:49.915448+00:00",
+  "records": [
+    {
+      "oldCohortId": null,
+      "oldIdReason": "Original ORBIT readiness did not assign a measured cohort ID",
+      "oldCondition": "originalfixedORBIT/accuratebase/audio-readiness/V477-voice9",
+      "oldManifestPath": "docs/experiments/tcc-20261013-submission-20261030/root/headless-full-audio-v477/manifest.json",
+      "oldManifestSHA256": "bcca2e64746b8b9f3f251abf9c4ee3d9714a6e4cb3b1d56f81f2c4ea288d7b21",
+      "oldRawArchiveSHA256": "530ee72a4d76fa7e97760ee25e53255c979094ffcc0b062dc038cd32a03698e2",
+      "disposition": "SUPERSEDED_COMPARATIVE_SETUP_FAILURES_RETAINED",
+      "reason": "Owner-authorized clearer representative audio and effective configuration fidelity repair; old failures remain immutable, not labeled model causes when harnessfailed",
+      "affectedCells": [
+        "proposedmatchedfullaudioORBITCPU-GPU/newconditions"
+      ],
+      "replacementCohortId": "aurora-full-audio-capital-v1-desktop-gpu-local-20261015",
+      "replacementManifestPath": "/home/developer/projects/aurora/.git/aurora-audio-candidate-v481/frozen-manifest-v1.json",
+      "replacementManifestSHA256": "d34d21d1a9b1a2db03be2ad64c096e77082168b3bcc09c28d442b4a61eaff3d7",
+      "replacementStatus": "passing_readiness_frozen_measurements_not_started",
+      "historyClarification": "The exact linked old manifest/raw concern V477 voice9 with accurate/base. The original voice1-9 history is mixed: first six Tiny; later accurate/base declared setup includes runtime failures. Do not infer every old case reached STT or completed a full chain. All old records remain unchanged."
+    },
+    {
+      "oldCohortId": "6ce98ae97d594d9fafcd1ff9ad4b9b1c",
+      "disposition": "retained_supplemental",
+      "scope": "originalfrozenworkerCPUtyped900total/300each+45warmups",
+      "reason": "Unaffected typed control; notnewfullaudio and no compatiblepercentilepooling"
+    },
+    {
+      "oldCohortId": null,
+      "oldCondition": "desktopGPUtypedlocal900/API900",
+      "disposition": "retained_supplemental",
+      "scope": "sealedtypedcontrols only",
+      "reason": "Unaffected typed task; notreplacementaudio orautomaticsettings-equivalence proof"
+    }
+  ],
+  "previousRegistry": {
+    "path": "/home/developer/projects/aurora/docs/experiments/tcc-20261013-submission-20261030/root/full-audio-capital-v481/raw/candidate-v481/cohort-replacements-v1.json",
+    "sha256": "cda9eb1931def2c1a177a13b69b6c8d6dd9a58e9a7135d50e51c43721c514cc5"
+  },
+  "metadataOnly": true,
+  "activeInputsChanged": false
+}

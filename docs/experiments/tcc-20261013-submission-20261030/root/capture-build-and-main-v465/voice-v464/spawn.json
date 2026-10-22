@@ -1,0 +1,14 @@
+{
+  "at": "2026-10-15T00:59:28.079964+00:00",
+  "controllerPid": 2871142,
+  "capSeconds": 900,
+  "packetSHA256": "2d9b7a39eb9e5329bbde47d0842c839b2b81d973823b8f5a217e7f73ba7b8473",
+  "sampleClass": "one corrected real production voice UI readiness; fixedsameinput/models/predicate",
+  "priorExcludedGlobalVoiceFlows": 8,
+  "newOrdinalOnlyOnFirstSTT": 9,
+  "measuredSamples": 0,
+  "phase2Allowed": false,
+  "priorAllOwnedPIDsAbsent": true,
+  "priorGlobalLockAvailable": true,
+  "sourceGuardRequiredBeforeUI": true
+}

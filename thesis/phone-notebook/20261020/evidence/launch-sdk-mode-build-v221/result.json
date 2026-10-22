@@ -1,0 +1,1 @@
+{"at": "2026-10-22T07:38:18.929588+00:00", "controllerPid": 262057, "job": "android-apk-build-v221", "maxJobs": 2, "maximumSeconds": 1220, "resourceReceipt": "ROOT-PHONE-OWNER-WINDOW-FOOTPRINT-v2398.json", "notebookInference": false, "modelCalls": 0, "priorTypecheckErrorCorrected": "canonical SDK mode webrtc-only"}

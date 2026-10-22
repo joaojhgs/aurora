@@ -1,0 +1,15 @@
+{
+  "stage": "T1-corrected-python-unit-baseline",
+  "exitCode": 1,
+  "finishedAt": "2026-10-14T00:04:58.386632+00:00",
+  "elapsedSeconds": 599.464731215,
+  "sourceCommit": "5782746afba213f6b36907db2f09f0017625e218",
+  "sourceStatusAfter": "?? docs/experiments/\n",
+  "stdoutSha256": "d2a4b8848d524ef22609fb49ad53ee3f6028cb492f0b498d538b31d980e386be",
+  "stderrSha256": "6609f44399eec912fbcf675d5abe5bed8fa0e47300c5be9ed51dcdbbf8e2014b",
+  "junitSha256": "a2f4a1640ad74c3810f3e7e853544440e9a83ab6985be0f7548d31ee5c048634",
+  "deadlineReached": false,
+  "globalLockContended": false,
+  "scope": "Full unit baseline after reviewed three-file correction; not mobile, live mesh, full integration or performance acceptance",
+  "protectedUserConfigAndEnvUnchanged": true
+}

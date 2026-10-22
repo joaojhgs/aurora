@@ -1,0 +1,132 @@
+{
+  "at": "2026-10-22T01:25:38.567718+00:00",
+  "state": "NEW_SOURCE_DELTA_TRANSFER_ADMITTED_NOT_LAUNCHED",
+  "operationId": "source-delta-v29-copy-v2350-20261022",
+  "runId": "run_e6054e76e9fc",
+  "rootNativeGoal": "01a112a5-d6bb-74e2-bf7c-ace73cb513b5",
+  "existingWorker": "term_1f27be31-0284-4366-bb91-30fe538cd30e",
+  "notebookControl": "term_a2ed5feb-7c92-48e4-bd88-d1b0e6737989",
+  "notebookControlIncarnation": "328cd72f-c7ea-49ff-a2db-b9275b085037",
+  "notebookTarget": "ssh:ssh-sem-notebook-personal",
+  "requestMessage": "msg_e667cdd018cc",
+  "sourceSha": "ebde3a8acf6315f920d03593845f17a1fc65a733",
+  "baseSha": "df23fd6e1f80e87dc45b6221bed87c00b4187e66",
+  "baseTreeInventorySha256": "a9699da8ab6c086674dfa5abfb8add03e8029708eb35da8adf3ab2fb0f1777c4",
+  "targetSourceFiles": 1959,
+  "reusedGitObjects": 759,
+  "deltaSourceFiles": 1200,
+  "sourceManifest": "thesis/phone-notebook/20261020/source-delta-v28/DELTA-MANIFEST.json",
+  "sourceManifestSha256": "67ca748ae480e0061c95a19d9f771648ff454133e1fbe5379580be0977b7739f",
+  "files": [
+    {
+      "path": "thesis/phone-notebook/20261020/source-delta-v28/ORIGINAL-FIXED-INPUT.wav",
+      "name": "ORIGINAL-FIXED-INPUT.wav",
+      "bytes": 219794,
+      "sha256": "da0ecc4ad0885746ab6e716585473917ab2b543a505bf0db09ebacfaa7943cbb"
+    },
+    {
+      "path": "thesis/phone-notebook/20261020/source-delta-v28/SOURCE-DELTA.tar.xz",
+      "name": "SOURCE-DELTA.tar.xz",
+      "bytes": 3575664,
+      "sha256": "b3fbbc88962f4882710a92a7d49b70ab14a31edc63b39526867ba6d7e7f1f966"
+    },
+    {
+      "path": "thesis/phone-notebook/20261020/source-delta-v28/SOURCE-FILE-INVENTORY.json.gz",
+      "name": "SOURCE-FILE-INVENTORY.json.gz",
+      "bytes": 114458,
+      "sha256": "8939411a36fc6d6b09b48099ad388a70e09c24269996609669e4fbb6e0342bd6"
+    },
+    {
+      "path": "thesis/phone-notebook/20261020/source-delta-v28/SOURCE-REUSE-INDEX.json",
+      "name": "SOURCE-REUSE-INDEX.json",
+      "bytes": 3820,
+      "sha256": "214813fc362db20f409b532d934de268ca60d54de0b44f729985f70f193601e8"
+    }
+  ],
+  "totalPayloadBytes": 3913736,
+  "maximumBytes": 12582912,
+  "earliestStartUtc": "2026-10-22T01:26:23.567718+00:00",
+  "absoluteEndUtc": "2026-10-22T01:28:23.567718+00:00",
+  "maximumActiveSeconds": 120,
+  "noReceiverOrSenderStartupBeforeEarliestStart": true,
+  "maximumFrameRawBytes": 98048,
+  "computedPerFileDataFrames": 43,
+  "historicalV28ManifestFramePlan": {
+    "bytes": 65536,
+    "frames": 60
+  },
+  "maximumPayloadBytesPerSecond": 131072,
+  "maximumWireBytesPerSecond": 262144,
+  "maximumConcurrentSenders": 1,
+  "receiverScript": "thesis/phone-notebook/20261020/scripts/source_frame_receiver_v29.py",
+  "receiverScriptSha256": "f47d791347a08378f25f6865405e1e93a310e5072b699174d850e69459628975",
+  "route": "Existing approved Orca text control stream to same Personal notebook only",
+  "guards": [
+    "Receiver --until equals exact absoluteEndUtc and existing hard alarm/TTY restoration; preserve failure/partial evidence",
+    "Single sequential sender; no overlapping terminal writes or ambiguous accepted-send retries",
+    "Worker checks own current free disk/RAM/thermal/data-only95C or stricter existing guards before start; build/inference85C unchanged",
+    "Validate four lengths/hashes, exact Notebook base and complete1959target source blob/mode inventory before assembly/execution; preserve dirty repository",
+    "No provider restart/new forward/credentials/Git writes/new worker/model inference/phone900 from this source-only admission"
+  ],
+  "newOperationNotOldWindowExtension": true,
+  "priorWindowClosedUnusedMessage": "msg_4508e660588b",
+  "mainAtAdmission": {
+    "at": "2026-10-22T01:25:38.547401+00:00",
+    "classification": "VERIFIED_WAIT",
+    "manifestSha256": "9adbf9ba3a7ec0948a087edad3655cf94ee344b3a2371a78d15f188f44150d42",
+    "actors": [
+      {
+        "pid": 3965950,
+        "expectedStartTicks": 139740362,
+        "state": "S",
+        "startTicks": 139740362,
+        "matches": true
+      },
+      {
+        "pid": 3965978,
+        "expectedStartTicks": 139740616,
+        "state": "S",
+        "startTicks": 139740616,
+        "matches": true
+      },
+      {
+        "pid": 3965951,
+        "expectedStartTicks": 139740363,
+        "state": "S",
+        "startTicks": 139740363,
+        "matches": true
+      }
+    ],
+    "epochMeasured": {
+      "attempted": 226,
+      "correct": 226,
+      "failed": 0,
+      "incorrect": 0,
+      "timeouts": 0,
+      "planned": 450
+    },
+    "conditionCountsOnly": {
+      "attempted": 676,
+      "correct": 675,
+      "failed": 1,
+      "incorrect": 0,
+      "unattempted": 224,
+      "planned": 900
+    },
+    "copier": {
+      "receipt": "thesis/campaigns/worker-desktop-k1-orca-relayed-http-remaining450-v2296/receipts/000223.json",
+      "sha256": "af8bf23a4d527ad390e61af49ab750f133b31814e05fdd69466d7a85820edbae",
+      "cases": 240,
+      "WAV": 240,
+      "errors": [],
+      "freeBytes": 3177529344
+    },
+    "terminalSummaryPresent": false,
+    "observationOnly": true,
+    "newSutCalls": 0,
+    "processSignals": 0,
+    "measurementInputsNotModifiedByThisObserver": true
+  },
+  "newSutCalls": 0,
+  "copyOutcomeNotYetKnown": true
+}

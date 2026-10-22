@@ -1,0 +1,20 @@
+{
+  "scope": "Root procedural launch/admission only, unchanged reviewed852/856 scientific runner and original450 provider",
+  "files": [
+    {
+      "path": "thesis/harness/k2_existing_provider_v1384.py",
+      "bytes": 15819,
+      "sha256": "27530814194dba79e984a2a7fd9b3bcbbac43bb48761d23c50713c11736554d7"
+    },
+    {
+      "path": "thesis/harness/k2_existing_provider_remote_proof_v1384.py",
+      "bytes": 6709,
+      "sha256": "a878bf86a1e1a98ede2eaee56f313d1758a9aa32331c174e26a6fd20a75a250a"
+    }
+  ],
+  "validation": "AST and Ruff F,E9 passed; no model or synthetic cases run",
+  "ordinaryWarmupsLaunched": false,
+  "measuredLaunched": false,
+  "noAdditionalSourceReviewMatrix": true,
+  "onFailure": "Preserve same attempt/results and reconcile exact accepted operation, no automatic retry"
+}

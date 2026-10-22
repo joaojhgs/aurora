@@ -1,0 +1,44 @@
+{
+  "status": "Current bounded check",
+  "host": "personal.skyron-server",
+  "executionHost": "ssh:ssh-1786238480967-semdev",
+  "existingTerminal": "term_2e93af9c-1589-414b-8f92-17649f3c8069",
+  "archive": {
+    "archivePath": "/home/developer/projects/aurora/docs/experiments/tcc-20261013-submission-20261030/root/desktop-gpu-full-audio-local900-v485/aurora-desktop-gpu-full-audio-local900-v485.zip",
+    "bytes": 32688561,
+    "createdAt": "2026-10-15T06:44:20.822009+00:00",
+    "fileCount": 1870,
+    "manifestSHA256": "692c497da33ffa4e329cbddc1cd6116bc9aaebcd54ce071c0bf0ad1038bc56be",
+    "omissions": [
+      {
+        "path": "frozen/harnessFiles/controller.py",
+        "reason": "V481 controller contains fixture literals; retained only as frozen path/size/SHA metadata"
+      },
+      {
+        "path": "campaign-v485/controller.py",
+        "reason": "V485 controller embeds private fixture literals; runtime/launch.json newHarnessSHA256 verified it, so only path/size/SHA are retained"
+      },
+      {
+        "path": "campaign-v485/runtime/absent.env",
+        "reason": "config or environment file excluded by policy"
+      },
+      {
+        "path": "campaign-v485/runtime/backend.private.log",
+        "reason": "raw backend log excluded by policy"
+      },
+      {
+        "path": "campaign-v485/runtime/config.json",
+        "reason": "config or environment file excluded by policy"
+      }
+    ],
+    "privateFixtureScanPassed": true,
+    "scope": "private post-terminal seal; includes failed/partial outcomes without changing raw records",
+    "sha256": "93c3afe2161b031d00b0be53ee9a76c8267369e9fa89d9cbe98cad67eee7d6dc"
+  },
+  "archivePresentInCodingWorker": false,
+  "exactVerificationReportPresentInCodingWorker": true,
+  "reportSHA256": "8b649a34aee6d347c16ea6e6a6a4310babb2d91b0cbf868dc46cddc47c13ae6c",
+  "sourceCollector": "V52048203304",
+  "boundedEvidenceReviewSHA256": "1b078318af816c626d7a51be4a9697835015f8d2783af1988b0449b5e67885fa",
+  "noIndependentReviewerZipAuditClaim": true
+}

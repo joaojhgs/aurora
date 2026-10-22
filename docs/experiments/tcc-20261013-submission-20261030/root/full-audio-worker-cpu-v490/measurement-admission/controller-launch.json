@@ -1,0 +1,20 @@
+{
+  "startedAt": "2026-10-15T04:00:53.523642+00:00",
+  "cohortId": "aurora-full-audio-capital-v1-worker-cpu-local-20261015",
+  "plannedMeasured": 900,
+  "excludedWarmups": 15,
+  "conditionCapSeconds": 57600,
+  "outerCapSeconds": 57840,
+  "requestCapSeconds": 180,
+  "frozenManifestSHA256": "364832a627e2f45b4b1c2b80ca05739f809132a28ff26511f0eda5e30f89127a",
+  "sourceReviewSHA256": "c9815f930167bb214ef90696a6cd2310c6698d277f0afee821c1ed02a1f8f159",
+  "sourceHashes": {
+    "runner.py": "e3348ca0c064679f1c88e7bdc8fdec0942fda24b43fe7fdba2fa9f924d7d7dd9",
+    "controller.py": "d2d4b6bb288edda83e519df92f317e31c826fba1a9cc9ae17b191917ce5d1eb6",
+    "bootstrap.py": "f89af97e1589486802c797cf02355348199a7f4b343273691d6244ba979b1679",
+    "bindings.py": "52182f956b34788ecbfbbb241c8243ff88baebe2874e3605791793777ed0dc91"
+  },
+  "crossDeviceMeasuredAllowed": false,
+  "measurementObservedYet": false,
+  "controllerPid": 2232517
+}

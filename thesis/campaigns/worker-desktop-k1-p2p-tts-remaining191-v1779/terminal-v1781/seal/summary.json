@@ -1,0 +1,242 @@
+{
+  "attempted": 3,
+  "attempts": [
+    {
+      "file": "attempts/attempt-0001-warmup.jsonl",
+      "ordinal": 1,
+      "phase": "warmup",
+      "status": "completed_correct",
+      "timeout": false
+    },
+    {
+      "file": "attempts/attempt-0002-warmup.jsonl",
+      "ordinal": 2,
+      "phase": "warmup",
+      "status": "completed_correct",
+      "timeout": false
+    },
+    {
+      "file": "attempts/attempt-0003-warmup.jsonl",
+      "ordinal": 3,
+      "phase": "warmup",
+      "status": "failed",
+      "timeout": false
+    }
+  ],
+  "candidate_manifest_reference_sha256": "34b681e385feb3500c9e9849d30f5bac982716c4e4938cdb04c5fdc617cff624",
+  "candidate_manifest_role": "exact_three_key_pilot_input_manifest",
+  "candidate_manifest_sha256": "ce75b965ee5879ebece6ea7dfe133441547d20ccf89ecd5d66ea510bd9645e60",
+  "completed_flow_count_including_incorrect": 0,
+  "completed_flow_latency_ms_r7_including_incorrect": {
+    "p50": null,
+    "p90": null,
+    "p95": null
+  },
+  "condition": "localbus_accurate_stt_assistant_remote_typed_mesh_tts",
+  "condition_cap_seconds": 15000.0,
+  "condition_elapsed_ms_excluding_setup_and_shutdown": 139453.182665,
+  "condition_ended_monotonic_ns": 1283931409036357,
+  "condition_started_monotonic_ns": 1283791955853692,
+  "config_raw_sha256_after_startup": "53e3402f4017a9b8127cbde2e0e8eb586ce6b50e61f94b598c36d960f2c83d16",
+  "config_raw_sha256_before_startup": "1eb28726375e71314687b91170d9360a34317ea03a6cef18b3b29be533876855",
+  "config_sha256": "53e3402f4017a9b8127cbde2e0e8eb586ce6b50e61f94b598c36d960f2c83d16",
+  "config_startup_changed_key_paths": [
+    "services.gateway.api.token_secret",
+    "services.gateway.webrtc.password"
+  ],
+  "config_startup_changed_values_redacted": true,
+  "config_startup_semantics_verified": true,
+  "correct": 0,
+  "correctness_denominator": {
+    "measured_attempted": 0,
+    "measured_correct": 0,
+    "measured_failed_or_interrupted": 0,
+    "measured_incorrect_completed": 0,
+    "measured_planned": 191,
+    "unattempted_measured": 191,
+    "warmup_attempted_excluded": 3,
+    "warmup_failed_or_interrupted_excluded": 1,
+    "warmup_planned_excluded": 15
+  },
+  "epoch_condition_measured_offset": 709,
+  "expected_reply_words": [
+    "paris"
+  ],
+  "failed": 1,
+  "failure_policy": {
+    "all_other_system_failures": "stop",
+    "consecutive_rejection_cap": 3,
+    "known_structured_preaccept_capability_changed": "count_failed_and_continue_next_distinct_measured_index",
+    "retry_or_fallback": false,
+    "warmup_failure": "stop"
+  },
+  "finished_monotonic_ns": 1283932365410902,
+  "flow_end_point": "valid_non_silent_pcm16_tts_wav_received_decoded_and_checked_before_artifact_write",
+  "frozen_cohort_manifest_name": "condition-frozen-v1779.json",
+  "frozen_cohort_manifest_sha256": "9b9e9c0a5d7c74295d0bb91e88dcdc53966283c21a86aa32bcaa785f5f0d2af1",
+  "input": {
+    "bytes": 219794,
+    "channels": 1,
+    "frames": 109875,
+    "sample_rate": 22050,
+    "sample_width_bytes": 2,
+    "sha256": "da0ecc4ad0885746ab6e716585473917ab2b543a505bf0db09ebacfaa7943cbb"
+  },
+  "measured_requests": 0,
+  "mesh_authority_binding": "existing_authorized_peer_session",
+  "mesh_route_observation": "actual_peerbridge_call_target_and_receiver_native_span_join",
+  "mesh_tts_peer_id_sha256": "77421aa81ce7ae2e865455348e9aa5ae17013d8f5e1f72d38d71d09f110ef868",
+  "missing_metrics": {
+    "first_audio": "no playback path in this pilot",
+    "first_token": "not exposed by this caller boundary",
+    "playback_end": "no playback path in this pilot",
+    "playback_start": "no playback path in this pilot"
+  },
+  "observed_measured_attempt_latency_ms_r7_including_failures": {
+    "p50": null,
+    "p90": null,
+    "p95": null
+  },
+  "phase_denominators": {
+    "all": {
+      "attempted": 3,
+      "completed_correct": 2,
+      "completed_incorrect": 0,
+      "failed_or_interrupted": 1,
+      "planned": 206,
+      "timeouts": 0,
+      "unattempted": 203
+    },
+    "measured": {
+      "attempted": 0,
+      "completed_correct": 0,
+      "completed_incorrect": 0,
+      "failed_or_interrupted": 0,
+      "planned": 191,
+      "timeouts": 0,
+      "unattempted": 191
+    },
+    "warmup_excluded": {
+      "attempted": 3,
+      "completed_correct": 2,
+      "completed_incorrect": 0,
+      "failed_or_interrupted": 1,
+      "planned": 15,
+      "timeouts": 0,
+      "unattempted": 12
+    }
+  },
+  "physical_microphone": false,
+  "physical_playback_or_audibility": false,
+  "planned_measured": 191,
+  "planned_warmups": 15,
+  "provider_bindings_after": {
+    "configured_llm": {
+      "model_file": "Qwen3.5-0.8B-Q4_0.gguf",
+      "provider": "llama_cpp",
+      "settings": {
+        "chat_format": "chatml-function-calling",
+        "max_tokens": 128,
+        "min_p": 0.0,
+        "n_batch": 64,
+        "n_ctx": 4096,
+        "n_gpu_layers": 0,
+        "n_threads": 2,
+        "repeat_penalty": 1.0,
+        "seed": 42,
+        "temperature": 0.0,
+        "top_k": 1,
+        "top_p": 1.0
+      }
+    },
+    "transcription": {
+      "configured_compute_type": "int8",
+      "configured_device": "cpu",
+      "configured_model": "ebe41f70d5b6dfa9166e2c581c45c9c0cfc57b66",
+      "enabled": true,
+      "model_ready": true,
+      "model_type": {
+        "class": "WhisperModel",
+        "module": "faster_whisper.transcribe"
+      },
+      "service": "TranscriptionService"
+    },
+    "tts": {
+      "executable_file": "piper",
+      "expected_sample_rate": 22050,
+      "model_config_file": "en_US-ljspeech-medium.onnx.json",
+      "model_file": "en_US-ljspeech-medium.onnx",
+      "provider_id": "piper",
+      "provider_type": {
+        "class": "PiperTTSProvider",
+        "module": "app.services.tts.providers.piper"
+      },
+      "service": "TTSService"
+    }
+  },
+  "provider_bindings_before": {
+    "configured_llm": {
+      "model_file": "Qwen3.5-0.8B-Q4_0.gguf",
+      "provider": "llama_cpp",
+      "settings": {
+        "chat_format": "chatml-function-calling",
+        "max_tokens": 128,
+        "min_p": 0.0,
+        "n_batch": 64,
+        "n_ctx": 4096,
+        "n_gpu_layers": 0,
+        "n_threads": 2,
+        "repeat_penalty": 1.0,
+        "seed": 42,
+        "temperature": 0.0,
+        "top_k": 1,
+        "top_p": 1.0
+      }
+    },
+    "transcription": {
+      "configured_compute_type": "int8",
+      "configured_device": "cpu",
+      "configured_model": "ebe41f70d5b6dfa9166e2c581c45c9c0cfc57b66",
+      "enabled": true,
+      "model_ready": true,
+      "model_type": {
+        "class": "WhisperModel",
+        "module": "faster_whisper.transcribe"
+      },
+      "service": "TranscriptionService"
+    },
+    "tts": {
+      "executable_file": "piper",
+      "expected_sample_rate": 22050,
+      "model_config_file": "en_US-ljspeech-medium.onnx.json",
+      "model_file": "en_US-ljspeech-medium.onnx",
+      "provider_id": "piper",
+      "provider_type": {
+        "class": "PiperTTSProvider",
+        "module": "app.services.tts.providers.piper"
+      },
+      "service": "TTSService"
+    }
+  },
+  "request_cap_seconds": 180.0,
+  "schema_version": "aurora.full_audio_campaign.v1",
+  "selected_ice_pair": {
+    "reason": "not_exposed_by_typed_requester_call_boundary",
+    "value": null
+  },
+  "setup_duration_ms": 20559.392055,
+  "shutdown_completed": true,
+  "shutdown_duration_ms": 956.317824,
+  "status": "stopped_system_failure",
+  "stop_reason": "remote_mesh_preaccept_capability_changed",
+  "successful_correct_count": 0,
+  "successful_correct_latency_ms_r7": {
+    "p50": null,
+    "p90": null,
+    "p95": null,
+    "p99": null
+  },
+  "timeouts": 0,
+  "unattempted_measured": 191,
+  "warmup_requests": 3
+}

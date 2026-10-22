@@ -1,0 +1,55 @@
+{
+  "message": "msg_08ab31aef427",
+  "at": "2026-10-15T03:30:23Z",
+  "rawExport": {
+    "bytes": 195329,
+    "members": 19,
+    "sha256": "a39ae341d2adf2d18d12e934083cd511c64f1dbf1a9fefe80a78419e6c575eb5",
+    "transfer": "underway once"
+  },
+  "desktopGPUCondition": {
+    "cohortManifestPrefix": "d34d",
+    "retainedSupervisor": true,
+    "nPlannedMeasured": 900,
+    "nPlannedExcludedWarmups": 15,
+    "conditionCapSeconds": 12600,
+    "outerCapSeconds": 12780,
+    "flowCapSeconds": 180,
+    "sourceChecks": "Root AST/RuffF821-823 PASS; existing Sol bounded source closure ongoing",
+    "actualLaunchVerified": false,
+    "reservation": "Root exclusive desktop GPU/build lock",
+    "noWaydroid": true,
+    "diskAdmissionReported": "180MB",
+    "diskStopReported": "100MB",
+    "exactByteThresholds": null,
+    "thresholdLimit": "Exact bytes await source/admission manifest; reported MB not assumed SI/MiB"
+  },
+  "workerCPU": {
+    "logicalCPU": 2,
+    "totalRAMGB": 12.5,
+    "availableRAMGB": 4.89,
+    "freeDiskGB": 13.2,
+    "activeCompilerOrModel": false,
+    "alreadyPresent": {
+      "llama_cpp_python": "0.3.19",
+      "numpy": "2.2.6",
+      "baseSTTWeight": "exact cached weight"
+    },
+    "missingPackages": {
+      "faster-whisper": "1.1.1",
+      "ctranslate2": "4.7.1",
+      "piper": "1.2.0",
+      "onnxruntime": "1.20.1"
+    },
+    "neededAssets": [
+      "same Piper voice",
+      "same frozen WAV"
+    ],
+    "environment": "separate private CPU environment, preserve .venv/source/assets/evidence",
+    "newWorker": false,
+    "noDesktopGPUUse": true,
+    "ARMFeasibilityProven": false,
+    "provisioningComplete": false
+  },
+  "phase2MeasuredAllowed": false
+}

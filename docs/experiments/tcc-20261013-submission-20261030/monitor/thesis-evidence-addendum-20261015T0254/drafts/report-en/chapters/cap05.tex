@@ -1,0 +1,47 @@
+\chapter{Testing, Evaluation, and Discussion}
+\label{chap:evaluation}
+
+\section{Test Strategy}
+\label{sec:test-strategy}
+
+The evaluation separates available evidence from desired evidence. The repository contains unit tests, integration tests, process-mode tests, and tests related to messaging, gateway, pairing, and WebRTC. The dissertation first inventories those tests, then records which checks were executed in the available environment.
+
+The test tree contains 82 files named \texttt{test\_*.py}: 63 unit-test files, 18 integration-test files, and 1 fixture data file. The most relevant groups cover the contract registry, MeshBus, routing, failover, ACL permissions, identity, peer registry, RPC authentication, RTC authentication, and process mode. This inventory shows that the repository contains tests aligned with the main architectural risks.
+
+Execution evidence is narrower. Initial attempts failed because the observed environment used Python 3.14.2 and did not provide \texttt{pytest}, \texttt{uv}, Python 3.10/3.11, or Redis. A later revision installed a local \texttt{uv} and CPython 3.11.15 environment and installed optional dependencies needed for selected WebRTC tests. Redis remained unavailable, so Redis/BullMQ, process-mode, integration, and performance validation stayed outside the executed scope.
+
+\section{Functional Validation}
+\label{sec:functional-validation}
+
+The targeted unit run focused on the implementation areas closest to the dissertation contribution. It executed tests for contract registry behavior, MeshBus routing, ACL permission matching, identity handling, peer registry behavior, routing table behavior, RPC authentication, token routes, RTC authentication enforcement, and RTC client authentication.
+
+The token-route file was included in the command, but its eight cases were skipped because those endpoints had migrated to Auth service contracts. The final targeted result was \texttt{151 passed, 8 skipped, 17 warnings} in 16.03 seconds, with log and JUnit output stored under \texttt{.omx/artifacts/g17/aurora-targeted-unit-final.*}.
+
+The targeted run supports only the tested unit-level behavior. It shows that a selected subset around contracts, mesh, gateway authorization, peer state, and RTC authentication passes in a compatible Python 3.11 environment. It does not replace a full integration run, process-mode run, Redis-backed messaging run, or end-to-end peer test across real machines.
+
+\section{Security Evaluation}
+\label{sec:security-evaluation}
+
+Security evaluation in this report focuses on implemented mechanisms and targeted tests. The relevant mechanisms include the WebRTC authentication gate, anonymous RPC allowlist, topic-based permissions, RBAC, token scopes, and ACL checks. The targeted unit tests exercise several of those boundaries.
+
+The design reduces accidental exposure by allowing only pairing and login operations before authentication. After authentication, service-topic permissions and method types restrict what a peer can do. This supports selective sharing because a peer can receive access to one capability without receiving administrative access or access to unrelated services.
+
+The evaluation does not certify the system as secure against adversaries. Future work still needs credential-rotation tests, revocation tests, adversarial WebRTC scenarios, cryptographic review, deployment hardening, audit logging, and testing on real networks. The final text therefore claims an implemented access-control model with partial functional evidence, not a completed security audit.
+
+\section{Results and Limitations}
+\label{sec:results-limitations}
+
+The targeted unit evidence from 16 June 2026 records 151 passing and eight skipped tests. It is historical functional evidence at its archived source and environment, not current full-suite validation. Later functional and experimental records must be attributed to their own manifests, source versions, outcome counts and observation dates; neither the older test count nor a new source-level regression proves full voice or distributed acceptance.
+
+The repository also contains historical handoff evidence reporting 590 passing tests, 40 skipped tests, and 9 deselected tests due to missing optional dependencies \cite{aurora_handoff_doc}. This dissertation uses that number only as repository context at handoff time. The June 2026 evidence is smaller but directly reproducible from the recorded environment.
+
+The evidence snapshot dated 15 October 2026 contains three distinct experimental groups. The extra CPU typed-request control retains its original 900 measured requests in total, with 300 per route. The desktop GPU typed-request controls contain 900 measured requests for each of the local-bus and same-desktop HTTP conditions, with additional excluded warmups. These are conditional typed-reply measurements, not full-audio measurements or real cross-device results. A separate pilot processed the complete fixed recording through actual speech recognition, actual language-model inference and actual Piper synthesis. It produced a valid non-silent output WAV but failed the reference task: one attempt, zero correct outcomes, one failure, zero timeouts and zero admitted measured audio samples. Its file-submission-to-output-validation interval was 16854.171509 ms; this excludes recording duration, setup, shutdown and playback. Actual GPU offload was not established for that pilot, and its effective seed/thread settings were not equivalent to their declared values. A later configuration repair does not change these historical facts. Queue time, first-token timing, first-audio timing and playback remain unmeasured independent boundaries. No audio p90/p95, protocol-only overhead, causal hardware speedup, weak-device benefit or cross-region conclusion follows from these controls and this failed pilot. Full individual audio and surface acceptance remains a prerequisite for measured cross-device work.
+
+\section{Discussion}
+\label{sec:discussion}
+
+The results show an implemented contribution with tests planned for the main risk points and a successful targeted unit run. The main limitation is scope: the dissertation does not convert the full test inventory into a full experimental evaluation because Redis, process mode, broad integration, performance tests, and real networks were not executed. That distinction protects the validity of the work.
+
+Even with that limitation, the test structure follows the proposal objectives. Contracts and registry address modularity. LocalBus, BullMQBus, and MeshBus address local, process, and mesh topologies. Routing and failover address capability availability. Pairing, tokens, permissions, and WebRTC authentication address access control. Process and Docker support operational separation.
+
+The next validation step should turn the prepared Python 3.11 environment into a reproducible project protocol with Redis, integration tests, process mode, full-suite execution, and systematic JUnit logs. After that, the evaluation chapter can be extended with complete counts, failures, execution times, and measured limitations.

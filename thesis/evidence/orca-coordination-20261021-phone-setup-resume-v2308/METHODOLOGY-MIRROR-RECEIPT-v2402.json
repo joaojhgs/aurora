@@ -1,0 +1,12 @@
+{
+  "at": "2026-10-22T05:44:53.541577+00:00",
+  "status": "EXACT_COMPLETE_SECTION30_78_SOURCE_VERSION_MIRRORED",
+  "path": "thesis/methodology/owner-requirements-20261022-ce2bb5d9.md",
+  "bytes": 848778,
+  "sha256": "ce2bb5d999effb3ca865312dd29d8b8c906ff1a149131b73165c5de326b23298",
+  "previousPrefixBytesPreserved": 839824,
+  "sourceReceipt": ".omx/evidence/orca-monitor-20261010/plan-update-20261022T045920Z-phone-product-ownership/RECEIPT.json",
+  "method": "Exact prior mirror plus monitor-owned append diff, final byte size/hash equals authoritative receipt",
+  "newAuthoritativePlanWrites": 0,
+  "executionApprovalGate": false
+}

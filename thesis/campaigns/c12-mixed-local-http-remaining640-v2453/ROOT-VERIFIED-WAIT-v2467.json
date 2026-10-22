@@ -1,0 +1,92 @@
+{
+  "at": "2026-10-22T13:20:36.644850+00:00",
+  "classification": "VERIFIED_WAIT",
+  "previousTurnClassification": "VERIFIED_WAIT: exact original requester polled live with advancing completed cases",
+  "specificLiveHandle": {
+    "pid": 462924,
+    "startTicks": 144596371,
+    "state": "S"
+  },
+  "current": {
+    "at": "2026-10-22T13:20:34.178232+00:00",
+    "companion": {
+      "measured": {
+        "attempted": 169,
+        "correct": 169,
+        "failed": 0,
+        "harnessErrorsIncludedInFailed": 0,
+        "incorrectIncludedInFailed": 0,
+        "offered": 169,
+        "planned": 640,
+        "timeouts": 0,
+        "unstarted": 471
+      },
+      "warmup": {
+        "attempted": 15,
+        "correct": 15,
+        "failed": 0,
+        "harnessErrorsIncludedInFailed": 0,
+        "incorrectIncludedInFailed": 0,
+        "offered": 15,
+        "planned": 15,
+        "timeouts": 0,
+        "unstarted": 0
+      }
+    },
+    "completePairedCapsules": 184,
+    "elapsedSeconds": 7723.939424094,
+    "lastIndex": 169,
+    "lastNativeParent": "f8b1ffc7179a9663bf9aeba08c8befd9",
+    "lastOrdinal": 184,
+    "manifestSha256": "3bfca19d2dd0a9eec3981eae256168a5badd9ac2bb58a270ff8a55df1d986cce",
+    "phase": "measured",
+    "pid": 462924,
+    "primary": {
+      "measured": {
+        "attempted": 169,
+        "correct": 169,
+        "failed": 0,
+        "harnessErrorsIncludedInFailed": 0,
+        "incorrectIncludedInFailed": 0,
+        "offered": 169,
+        "planned": 640,
+        "timeouts": 0,
+        "unstarted": 471
+      },
+      "warmup": {
+        "attempted": 15,
+        "correct": 15,
+        "failed": 0,
+        "harnessErrorsIncludedInFailed": 0,
+        "incorrectIncludedInFailed": 0,
+        "offered": 15,
+        "planned": 15,
+        "timeouts": 0,
+        "unstarted": 0
+      }
+    },
+    "status": "running"
+  },
+  "priorRetainedMeasuredPerStream": 260,
+  "conditionCorrectPerStream": {
+    "primary": 429,
+    "companion": 429
+  },
+  "terminalPresent": false,
+  "activeErrorPresent": false,
+  "freeBytes": 2253758464,
+  "diskFreeFloorBytes": 2147483648,
+  "mainSourceSettingsCountsClocksFloorChanged": false,
+  "newCompletedControlCustody": "control-link-receipts/20261022T132036.294061Z.json",
+  "newFilesLinked": 154,
+  "newBytesHashed": 925794,
+  "oldFilesRehashed": 0,
+  "newPayloadAllocations": 0,
+  "newWorkersReviewsModelsBuildsDeviceOrPhoneOperations": 0,
+  "phoneOwner": "term_1f27be31-0284-4366-bb91-30fe538cd30e",
+  "sourceHandoff": "ebde+v2383 closed",
+  "originalMonitorMailbox": "No new message/directive at13:16:18Z; last accepted Root status msg_6cbb545e681b remains",
+  "exactUnusedWebpackCachePermission": "PENDING; no deletion/reask; existing current/next storage projection risk remains open",
+  "nextSutAction": "Finish exact current measured collection; EOF/audio/normal actor retirement/release before prepared mixed P2P actual admission on available capacity",
+  "nextMaximumObservationUtc": "2026-10-22T13:25:36.644850+00:00"
+}

@@ -1,0 +1,58 @@
+{
+  "at": "2026-10-17T21:10:11Z",
+  "auditorExclusiveWriteClaim": "thesis/audit/20261017-data-and-results/",
+  "auditorTask": "task_c626834bf1c6",
+  "copies": [
+    {
+      "bytes": 874,
+      "destination": "thesis/evidence/auditor-dispatch-20261017/CALLER-DEFAULT-ACCOUNT-ADMISSION-20261017T2106.json",
+      "sha256": "f5988ab059222c7c22e01a3d4211750c55c488d43c99f21900601d773c1ba4b3",
+      "source": ".omx/evidence/orca-monitor-20261010/CALLER-DEFAULT-ACCOUNT-ADMISSION-20261017T2106.json"
+    },
+    {
+      "bytes": 3010,
+      "destination": "thesis/evidence/auditor-dispatch-20261017/CANONICAL-PLAN-30.50-VERIFIED-20261017T210719.json",
+      "sha256": "46a32f110dc3dbf783dcac3904e801f96c29b899be05469bebf556279b1a8c77",
+      "source": ".omx/evidence/orca-monitor-20261010/CANONICAL-PLAN-30.50-VERIFIED-20261017T210719.json"
+    },
+    {
+      "bytes": 4876,
+      "destination": "thesis/evidence/auditor-dispatch-20261017/v1254-auditor-capability-wait.json",
+      "sha256": "9dbc754d7f4125360d9c3d0ac4c80f9e62f4c0da346747ef70a472eb4a4d1b24",
+      "source": ".git/aurora-handoff-import-20261006/v1254-auditor-capability-wait.json"
+    }
+  ],
+  "dispatch": null,
+  "errors": [
+    "Manager service credential is not configured",
+    "orca account usage acts on the Orca host machine itself and cannot run from an SSH host. Run it on the Orca host."
+  ],
+  "freeBytes": 7199391744,
+  "incarnation": null,
+  "nativeGoalStatusFresh": "active",
+  "originalMonitorAssignmentDelivered": "msg_2bdf1dc2dbf9",
+  "originalMonitorConfirmation": "msg_3bed1f58ee0c",
+  "originalNativeGoal": "01a112a5-d6bb-74e2-bf7c-ace73cb513b5",
+  "originalRunsPreserved": true,
+  "ownerRouteQuestionPending": true,
+  "progressPointInTime": {
+    "attempted": 73,
+    "last_attempt_file": "attempts/attempt-0073-measured.jsonl",
+    "last_attempt_status": "completed_correct",
+    "measured_attempted": 58,
+    "planned_measured": 900,
+    "planned_warmups": 15,
+    "status": "running",
+    "unattempted_measured": 842,
+    "warmups_attempted": 15
+  },
+  "requiredCapability": "Existing authorized owning-Orca manager route for live Codex Sol model/quota/resource admission and one supported worker-start for the existing Task, preserving the reserved request ID; no new credentials or grants.",
+  "reservedWorkerRequest": "15142b33-da95-45c7-b9fd-6303d9cb3d61",
+  "rootHasNotWrittenAuditorOutputs": true,
+  "run": "run_e6054e76e9fc",
+  "status": "UNLAUNCHED_PENDING_EXISTING_AUTHORIZED_OWNING_HOST_ADMISSION_ROUTE",
+  "taskCreateRequest": "5d982b0e-7361-400c-80f8-b5d5f42544c9",
+  "terminal": null,
+  "verifiedExternalCodingRecipient": null,
+  "workerStartAttempted": false
+}

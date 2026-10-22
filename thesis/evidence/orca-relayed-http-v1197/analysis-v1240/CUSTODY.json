@@ -1,0 +1,25 @@
+{
+  "newMeasurements": 0,
+  "outputs": [
+    {
+      "bytes": 13196,
+      "path": "/home/developer/projects/aurora/thesis/evidence/orca-relayed-http-v1197/analysis-v1240/SUMMARY.json",
+      "sha256": "019dc6b4b2e0d8947e842605d065d8b6ace7fcd4a8319f5d89956755e4c50afa"
+    },
+    {
+      "bytes": 366178,
+      "path": "/home/developer/projects/aurora/thesis/evidence/orca-relayed-http-v1197/analysis-v1240/CASE-HISTORY.json",
+      "sha256": "577b1eebdb633650695a4b37158c3dae668a1a8aab533fc65607744aca9c2d54"
+    },
+    {
+      "bytes": 23412,
+      "path": "/home/developer/projects/aurora/thesis/evidence/orca-relayed-http-v1197/analysis-v1240/SOURCE-IDENTITIES.json",
+      "sha256": "dbae32958e7eb06a43143be2e26441d4ea14bea2ab67a5a32d2de55a3b4380bb"
+    },
+    {
+      "bytes": 141868,
+      "path": "/home/developer/projects/aurora/thesis/evidence/orca-relayed-http-v1197/analysis-v1240/REQUESTER-CURRENT.snapshot.json",
+      "sha256": "b935287895f99765e8a6b082df64a8bb9ad5eb3377820c7f50799c958083bd4f"
+    }
+  ]
+}

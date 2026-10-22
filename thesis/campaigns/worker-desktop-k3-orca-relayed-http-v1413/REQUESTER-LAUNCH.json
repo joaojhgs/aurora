@@ -1,0 +1,17 @@
+{
+  "at": "2026-10-18T08:07:54.473873+00:00",
+  "controllerPid": 957782,
+  "controllerStartTicks": 108933506,
+  "credentialFilesCopied": false,
+  "excludedWarmups": 15,
+  "frozenManifestSha256": "867006901be32c93fc893f794f74a2704cc7623ced3df5d5025a044ff1e10ab6",
+  "newMeasuredObserved": 0,
+  "newWarmupsObserved": 0,
+  "plannedMeasured": 900,
+  "providerManifestSha256": "b4b95d579c29695832c05d96692f2f15fd51cf3258333b9175091ab357280887",
+  "providerReceiverPid": 1227894,
+  "requiredNativeJoins": 45,
+  "reviewedApp860SourceUnchanged": true,
+  "startupIsNotAcceptance": true,
+  "status": "K3_REQUESTER_CONTROLLER_LAUNCHED_ORDINARY_WARMUP_ADMISSION_PENDING"
+}

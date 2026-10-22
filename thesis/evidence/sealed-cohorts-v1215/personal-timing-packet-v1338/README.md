@@ -1,0 +1,5 @@
+# Saved historical desktop timing packet
+
+[Custody](CUSTODY.json) records the completed648751-byte actual worker copy, SHA256d07fc1596526a0a8a46f86e7556af2db2160bfeb0619e61765a917849b01ccf6. The gzip packet retains915saved attempts for each of V485 and V497, with exact source member paths/bytes/hashes, selected timing/outcome/identity fields and exact frozen-manifest/summary/progress documents. This is a selected timing projection, not the complete original archives or audio; all originals remain physically on Personal.
+
+[Executed source custody](SOURCE-CUSTODY.json) retains the auditor-owned exporter and Root transfer/operation source. The exporter read10997757saved source bytes at bounded4MiB/s, without archive rehash, resources/DB/audio/model reads or application traffic. The transfer completed through the existing original Orca control;7page hashes, whole-packet SHA, embedded document hashes and privacy-field checks passed. Separate cohorts and failures must remain separate in analysis. No new measurements ran.

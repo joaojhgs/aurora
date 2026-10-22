@@ -1,0 +1,13 @@
+{
+  "status": "PASS_COUNT_ONLY_NO_SUT",
+  "excludedSyntheticWarmupCount": 17,
+  "qualifiedSyntheticWarmups": 15,
+  "measuredCount": 191,
+  "globalFirst": 710,
+  "globalLast": 900,
+  "extraMeasuredCalls": 0,
+  "noFailedIndexRetry": true,
+  "fixtureScope": "Phase accounting only, not real STT/LLM/TTS correctness/native/readiness or latency evidence",
+  "sutCalls": 0,
+  "sourceSha256": "eb6ff805e926c0f8fb66013063e99b173c1bfe6d91062cf6e59f976acc1cef66"
+}

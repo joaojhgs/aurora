@@ -1,0 +1,147 @@
+{
+  "archive": {
+    "bytes": 33027484,
+    "manifestSHA256": "cfcec63729d52a8c59a03efdae52a1ea7cee8bdb9403e662dcac8295f8ea9165",
+    "membersIncludingManifest": 1865,
+    "payloadMembers": 1864,
+    "sha256": "83b9084a09abfe641968b2958e210ed589dbcd655f0a9a26c18f2bc4dd80d897"
+  },
+  "attempts": {
+    "correct": 900,
+    "failedOrInterrupted": 0,
+    "incorrect": 0,
+    "measured": 900,
+    "timeouts": 0,
+    "total": 915,
+    "warmupsExcluded": 15
+  },
+  "audio": {
+    "inputBytes": 153644,
+    "inputSHA256": "139fa0c34b6d18600ad9608fd2d11c9389cae2f5f548ce0f4f23b735b176f0b3",
+    "verifiedOutputReferences": 915,
+    "wavDecodingRepeated": false
+  },
+  "cohortId": "aurora-full-audio-capital-v1-worker-cpu-local-20261015",
+  "collectorOmissions": [
+    {
+      "bytes": 14163,
+      "path": "harness/controller.py",
+      "reason": "fixture-bearing controller source withheld",
+      "sha256": "e726ed7a67ba3cf0d456e7ceff094495ef2f79b514ecc04cdb687b4db6e6dc2b",
+      "sourcePath": "/home/developer/projects/aurora/.git/aurora-handoff-import-20261006/cpu-full-audio-v490/controller.py"
+    },
+    {
+      "bytes": 15338,
+      "path": "campaign-harness-v491/controller.py",
+      "reason": "actual V491 controller contains fixture literals; withheld",
+      "sha256": "d2d4b6bb288edda83e519df92f317e31c826fba1a9cc9ae17b191917ce5d1eb6",
+      "sourcePath": "/home/developer/projects/aurora/.git/aurora-handoff-import-20261006/cpu-audio-campaign-v491/controller.py"
+    },
+    {
+      "bytes": 15940,
+      "path": "runtime/config.json",
+      "reason": "credential-bearing runtime configuration withheld",
+      "sha256": "e4ad73fa5569a311369e4352556ddffee9bfb9d123c252ec2060a2b0bc89632d",
+      "sourcePath": "/home/developer/projects/aurora/.git/aurora-handoff-import-20261006/cpu-audio-campaign-v491/runtime/config.json"
+    },
+    {
+      "bytes": 1257562,
+      "path": "runtime/backend.private.log",
+      "reason": "raw backend log withheld",
+      "sha256": "70666c2cbdb6398eee3030ae991b9efdde75003fbab703836f7711bfd1174c8e",
+      "sourcePath": "/home/developer/projects/aurora/.git/aurora-handoff-import-20261006/cpu-audio-campaign-v491/runtime/backend.private.log"
+    },
+    {
+      "bytes": 188,
+      "path": "runtime/absent.env",
+      "reason": "controller environment path omitted",
+      "sha256": "5d25c8c5fa9f4b18a35e1e5c1bc18f6c49b5295caa9468f0a88228bd309d3840",
+      "sourcePath": "/home/developer/projects/aurora/.git/aurora-handoff-import-20261006/cpu-audio-campaign-v491/runtime/absent.env"
+    },
+    {
+      "bytes": 2055,
+      "path": "runtime/config.json.mesh-policy-rbac.json",
+      "reason": "private policy sidecar withheld",
+      "sha256": "852b252260009a3c00452293c7911cbc3b0d83385d0f1b59b13f33ec9844fb39",
+      "sourcePath": "/home/developer/projects/aurora/.git/aurora-handoff-import-20261006/cpu-audio-campaign-v491/runtime/config.json.mesh-policy-rbac.json"
+    },
+    {
+      "bytes": 303,
+      "path": "controller.private.log",
+      "reason": "raw controller log withheld",
+      "sha256": "678e9b294903fd20569d2118f96bf47ab548d586049e3fe31afd5794b106dc30",
+      "sourcePath": "/home/developer/projects/aurora/.git/aurora-handoff-import-20261006/cpu-audio-campaign-v491/controller.private.log"
+    },
+    {
+      "bytes": 926,
+      "path": "controller-launch.json",
+      "reason": "private launch environment receipt withheld",
+      "sha256": "2a6370e25a8dc5e220b450569a25e13b6c1847c6e177f4fb9652baa8fc63550a",
+      "sourcePath": "/home/developer/projects/aurora/.git/aurora-handoff-import-20261006/cpu-audio-campaign-v491/controller-launch.json"
+    }
+  ],
+  "frozenSourceAliases": [],
+  "incorrectOutcomes": {
+    "falseCheckCounts": {},
+    "responseGroups": []
+  },
+  "latencyMs": {
+    "measuredAllIncludingIncorrect": {
+      "denominator": 900,
+      "type7": {
+        "p90": 49936.7875221,
+        "p95": 52595.94862639999
+      }
+    },
+    "stagePercentilesAreIndependent": true,
+    "stages": {
+      "assistant": {
+        "type7Ms": {
+          "p50": 32615.857633,
+          "p90": 37560.8704425,
+          "p95": 40089.569304799996
+        },
+        "validMeasuredCount": 900
+      },
+      "stt": {
+        "type7Ms": {
+          "p50": 8333.593146,
+          "p90": 10630.5304123,
+          "p95": 11274.449979949995
+        },
+        "validMeasuredCount": 900
+      },
+      "tts": {
+        "type7Ms": {
+          "p50": 2487.012267,
+          "p90": 3928.0318947000005,
+          "p95": 4677.269980749999
+        },
+        "validMeasuredCount": 900
+      }
+    },
+    "successfulCorrect": {
+      "denominator": 900,
+      "type7": {
+        "p90": 49936.7875221,
+        "p95": 52595.94862639999
+      }
+    }
+  },
+  "measuredOutcomes": {
+    "completed_correct": 900
+  },
+  "schema": "aurora.worker_cpu_audio_seal_verification.v1",
+  "sourceHashValidation": "collector_only",
+  "unknowns": [
+    "queue",
+    "first_token",
+    "first_audio",
+    "playback",
+    "physical_audibility"
+  ],
+  "verifiedAt": "2026-10-15T15:23:30.885768+00:00",
+  "warmupOutcomes": {
+    "completed_correct": 15
+  }
+}

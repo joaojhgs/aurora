@@ -1,0 +1,43 @@
+{
+  "at": "2026-10-22T08:19:28.865875+00:00",
+  "status": "PREPARED_NOT_EXECUTED",
+  "campaignManifestSha256": "316d4cc09adc44d0104dca8ac1f2a966347588ffef37bc2fa809ec14fd5efff8",
+  "executionBoundary": "No Desktop control send while requester281887/start143363140 exists; terminal file alone is insufficient because controller sends stop after writing terminal. Never duplicate an ambiguous accepted stop.",
+  "existingAutomaticRetirement": {
+    "source": "thesis/harness/c12-mixed-local-http-900-v2426/requester_controller.py",
+    "terminalWriteLine": 325,
+    "stopSendLine": 329,
+    "normalSutSupervisorStop": "provider_controller.py observes STOP-REQUESTED.json; ordinary own Supervisor shutdown; parent reaps receiver and writes terminal.json"
+  },
+  "actors": {
+    "worker": {
+      "pid": 281887,
+      "startTicks": 143363140
+    },
+    "desktopController": {
+      "pid": 2555838,
+      "startTicks": 41063526
+    },
+    "desktopReceiver": {
+      "pid": 2555839,
+      "startTicks": 41063588
+    }
+  },
+  "steps": [
+    "Read actual REQUESTER-TERMINAL/EXCEPTION and saved control receipts; reconcile exact W actor absence before any Desktop control operation. Preserve unknown/counterpart custody as unknown, not unstarted.",
+    "Use existing approved same Desktop plain terminal once to read original provider terminal/STATUS/LOCAL-PRODUCER-STOP and exact actor identities. Do not signal or restart on missing observation. If original actors remain, reconcile existing accepted stop and fixed natural deadline first.",
+    "After proven original actor retirement, seal copy-only safe metadata, all uncollected case/audio artifacts and final tails of voice-stages.jsonl/resources.jsonl/bus-queue-observations.jsonl/actual-provider-bindings.jsonl from final sealed capsule offsets. Preserve all failure rows. Exclude private config, credentials, model weights and unrelated files.",
+    "Copy sealed EOF artifact in bounded checksum-verified pages through existing supported control. Keep originals and each accepted SEND/READ receipt; interrupted transfer resumes only exact missing bytes after observation reconciliation, never inference. Maintain2GiB free floor; no deletion or clock extension.",
+    "Verify capsule offset continuity and full prefix-plus-tail byte counts/hashes against Desktop EOF manifests using saved data. Requester audio and provider local audio must remain actual physical repository copies.",
+    "Run the saved-data analyzer once for final snapshot. Keep separate HTTP/local populations, retained15pluscurrent1excluded warmups, outcome/failure/timeout denominators and HF7 quantiles. Keep partial status if fewer than900, no top-up.",
+    "Write scoped final report and exact resource-release proof only after successful custody/identity reconciliation. Preserve original Root/global scheduling and running Orca/SSH/relay/forward; release only owned cohort SUT allocation. Coordinate next declared unfinished matrix condition with original monitor; do not repeat closed controls."
+  ],
+  "existingSavedAnalyzer": "thesis/analysis/analyze_c12_saved_v2432.py",
+  "savedAnalyzerSmokeReceipt": "SAVED-ANALYSIS-REPRODUCIBILITY-v2433.json",
+  "collectionDeadlineUtc": "2026-10-22T19:14:51.316179+00:00",
+  "providerDeadlineUtc": "2026-10-22T20:04:51.316179+00:00",
+  "finalizationDeadlineUtc": "2026-10-22T21:14:51.316179+00:00",
+  "newTestsInferenceProcessesOrWorkers": 0,
+  "activeSourceChanged": false,
+  "phoneSetupDependency": false
+}

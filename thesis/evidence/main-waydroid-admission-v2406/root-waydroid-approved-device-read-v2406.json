@@ -1,0 +1,17 @@
+{
+  "id": "d477ac7b-7ef2-443b-ad89-b60e73567463",
+  "ok": true,
+  "result": [
+    {
+      "backend": "android",
+      "id": "ssh-adb:WyJzc2gtc2VtLW5vdGVib29rLXBlcnNvbmFsIiwiS0JYOExORlVCRTVYR1FSRyJd",
+      "name": "notebook-personal \u00b7 2412DPC0AG",
+      "state": "booted",
+      "isAvailable": true,
+      "detail": "SSH device"
+    }
+  ],
+  "_meta": {
+    "runtimeId": "cc9e3275-28c6-4c45-85cc-bdcd2262aa7d"
+  }
+}

@@ -1,0 +1,28 @@
+{
+  "id": "94b7906d-c2b4-4f7a-a001-0fce4c839c01",
+  "ok": true,
+  "result": {
+    "message": {
+      "id": "msg_9dec065cf28d",
+      "run_id": "run_e6054e76e9fc",
+      "delivery_contract": "current_delivery",
+      "from_handle": "term_6a00d9ee-792a-4daf-8578-236290e33108",
+      "to_handle": "dispatch:ctx_37b4d0a3c14f",
+      "subject": "Main670/900 active; nextbound01:25:20Z; single BIG notification remains pending",
+      "body": "Original Root native goal actualACTIVE/unbudgeted. Actual01:20:20Z V2296 new220/450 all correct; full670/900=669correct1historicalfailure230remain. Original controller3965950/backend3965978/copier3965951 exactstartticks live; copier235case/WAV0errors3.183GBfree. ROOT-VERIFIED-WAIT-v2349.json/fresh native snapshot/CURRENT nextbound01:25:20.494475Z or earlier actualfailure/terminal/guard. Same frozen settings/source/manifest9adb/clocks; no new tests/baselines/review/workers or device probes. Owner K1 notification contract b7092e90c09a consumed; Root pending execution receipt OWNER-K1-HTTP-COMPLETION-NOTIFICATION-PENDING-v2348.json explicitly uses your canonical dedupkey run_e6054e76e9fc:K1_HTTP_FULL900_FINAL_SEAL_RELEASE:OWNER_REQUEST_20261022, original monitor emitter/Coding delivery verification. Supported OMX annotate_ledger accepted once, same13 unchanged; no independent second notification or prematureBIG sent. Root will provide actual final counts/scopedanalysis/custody/retirementrelease at true completion, no extra proof gate. Root remains main collection/natural-seal owner; finite source delta stays existing worker lane under current owner120s cap. Full13 open.",
+      "type": "status",
+      "priority": "normal",
+      "thread_id": null,
+      "payload": null,
+      "created_at": "2026-10-22T01:20:38Z",
+      "delivered_at": null
+    },
+    "mutation": {
+      "requestId": "32719022-ca8d-474e-a8f7-c299f2ad91a6",
+      "replayed": false
+    }
+  },
+  "_meta": {
+    "runtimeId": "cc9e3275-28c6-4c45-85cc-bdcd2262aa7d"
+  }
+}

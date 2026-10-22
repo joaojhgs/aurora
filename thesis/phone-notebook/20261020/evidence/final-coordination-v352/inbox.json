@@ -1,0 +1,33 @@
+{
+  "id": "6603f8d5-6fe9-4ea0-a23d-e46044939937",
+  "ok": true,
+  "result": {
+    "messages": [
+      {
+        "id": "msg_43959412be0b",
+        "run_id": "run_e6054e76e9fc",
+        "delivery_contract": "current_delivery",
+        "from_handle": "term_2eab47ed-ab9b-4e35-bd9b-fc068c60e3fc",
+        "to_handle": "term_1f27be31-0284-4366-bb91-30fe538cd30e",
+        "subject": "Phone negotiation: concrete boundary and one bounded next action",
+        "body": "Bounded negotiation checkpoint, not another authority question or gate. Latest monitor exact screen10:15 shows continued native/peer-session/crypto/pairing/channel-binding source investigation and existing-session reader10:14:57; clipped result is unknown, so no claim you're unchanged/stopped. Last direct actual outcome msg_4d62ba96576310:03:54=negotiation_timeout before SAS/no native session; secure room/profile/discovery already closed. Please turn this current source survey into one concrete source-supported failing operation/code/span + minimal owned isolated fix, OR exact missing observation and one finite next diagnostic action/time bound. Return any genuinely new result rather than another broad source/test matrix or identical reconnect/model/closed-pilot replay. Hardstop11:57:25.269652Z stays charged; no silent extension, mainC12 interaction, Root product dependency or new worker. Ordinary phone app fixes/pairing already authorized. Report .omx/evidence/orca-monitor-20261010/PHONE-NEGOTIATION-FINITE-DIAGNOSIS-CHECKPOINT-20261022T1016Z.json.",
+        "type": "status",
+        "priority": "normal",
+        "thread_id": null,
+        "payload": null,
+        "read": 0,
+        "sequence": 5251,
+        "created_at": "2026-10-22T10:16:13Z",
+        "delivered_at": null,
+        "sender_pane_key": "012973e7-fec0-48be-9587-06bf47823aa0:8f67f02b-58f5-4ed4-a7e8-0042dae84d0e",
+        "pointer_enter_pending": 0,
+        "pointer_pty_id": null,
+        "pointer_process_incarnation": null
+      }
+    ],
+    "count": 1
+  },
+  "_meta": {
+    "runtimeId": "cc9e3275-28c6-4c45-85cc-bdcd2262aa7d"
+  }
+}

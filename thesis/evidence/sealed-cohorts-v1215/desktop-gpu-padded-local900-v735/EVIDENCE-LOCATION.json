@@ -1,0 +1,32 @@
+{
+  "schema": "aurora.evidence-location.v1",
+  "at": "2026-10-15T23:23:30.037698+00:00",
+  "cohort": "aurora-padded-local900-v735-partial",
+  "full900Seal": false,
+  "sourceHost": "personal.skyron-server",
+  "sourceRawRoot": "/tmp/aurora-root-padded-local900-v735",
+  "sourceSavedExport": "/tmp/aurora-root-padded-local900-v735/export-v744",
+  "sourceOriginalsPreserved": true,
+  "workerHost": "code-worker",
+  "workerVerified": true,
+  "workerDirectory": "docs/experiments/tcc-20261013-submission-20261030/root/desktop-gpu-padded-local900-v735",
+  "workerCustodyReceipt": "WORKER-CUSTODY-RECEIPT.json",
+  "workerCustodyReceiptSHA256": "782a653d10ccd3cc9f358af4868d72dce8f816b9f5de0e20609e88f90de7d534",
+  "archive": {
+    "file": "aurora-desktop-gpu-padded-local900-v735.zip",
+    "bytes": 10064090,
+    "sha256": "1ef1dbd55dde983aea97852dadbeebd7f5540285655a0cbbd447b73b5784db33"
+  },
+  "measuredOutcomes": {
+    "planned": 900,
+    "attempted": 274,
+    "correct": 273,
+    "interrupted": 1,
+    "timeouts": 0,
+    "unattempted": 626
+  },
+  "copyCompletedAt": "2026-10-15T23:17:12.923439+00:00",
+  "savedArchiveAuditCount": 1,
+  "auditReplayedForCopy": false,
+  "newMeasuredRequestsForCustody": 0
+}

@@ -1,0 +1,85 @@
+{
+  "status": "SOURCE_PREPARED_NOT_LAUNCHED",
+  "sourceFiles": [
+    {
+      "name": "aurora_voice_telemetry_v430.py",
+      "bytes": 11584,
+      "sha256": "8129ffe7591a47a0107ede53b101aead9fc1f58b92f0c0c4203176cc7608325d",
+      "priorSha256": "8129ffe7591a47a0107ede53b101aead9fc1f58b92f0c0c4203176cc7608325d"
+    },
+    {
+      "name": "bindings.py",
+      "bytes": 3230,
+      "sha256": "52182f956b34788ecbfbbb241c8243ff88baebe2874e3605791793777ed0dc91",
+      "priorSha256": "52182f956b34788ecbfbbb241c8243ff88baebe2874e3605791793777ed0dc91"
+    },
+    {
+      "name": "bootstrap.py",
+      "bytes": 1950,
+      "sha256": "6dddcd75348326ed65f6efaf05abdc40dcc503d512dd0a20b6335cbb277f5d50",
+      "priorSha256": "6dddcd75348326ed65f6efaf05abdc40dcc503d512dd0a20b6335cbb277f5d50"
+    },
+    {
+      "name": "candidate-input.wav",
+      "bytes": 219794,
+      "sha256": "da0ecc4ad0885746ab6e716585473917ab2b543a505bf0db09ebacfaa7943cbb",
+      "priorSha256": "da0ecc4ad0885746ab6e716585473917ab2b543a505bf0db09ebacfaa7943cbb"
+    },
+    {
+      "name": "candidate-manifest.json",
+      "bytes": 220,
+      "sha256": "ce75b965ee5879ebece6ea7dfe133441547d20ccf89ecd5d66ea510bd9645e60",
+      "priorSha256": "ce75b965ee5879ebece6ea7dfe133441547d20ccf89ecd5d66ea510bd9645e60"
+    },
+    {
+      "name": "controller.py",
+      "bytes": 19512,
+      "sha256": "9c06e8fc9cbbfff3dabdd3f4fea752ca3adaa43a35f63d5aa78f629d999cbc1d",
+      "priorSha256": "e3a909c69f21eaefa240ca876ac44e758ca8e60cfc8a47f769e4390cf46446ce"
+    },
+    {
+      "name": "k3_composition.py",
+      "bytes": 13333,
+      "sha256": "a62e5a036eb127657e1f81c503c08a272a7ef603c53c5e03991c17f4daa1a9e6",
+      "priorSha256": "a62e5a036eb127657e1f81c503c08a272a7ef603c53c5e03991c17f4daa1a9e6"
+    },
+    {
+      "name": "observer.py",
+      "bytes": 11873,
+      "sha256": "784cc4bffc0d6824bbe378d17a7f632d587ca0a315896b048b2ebef727082df5",
+      "priorSha256": "784cc4bffc0d6824bbe378d17a7f632d587ca0a315896b048b2ebef727082df5"
+    },
+    {
+      "name": "receiver_proof.py",
+      "bytes": 15751,
+      "sha256": "c4f08615b9e37943a94024c5500ecfc171893562e42afc0437d3e549dfbdbf67",
+      "priorSha256": "be81af7dd90812509f217f62281c51ae6bee7eb4c4f10fb02c73056e4e274470"
+    },
+    {
+      "name": "resource_sample.py",
+      "bytes": 7475,
+      "sha256": "8f62ec378e74036d4539d9159e3caf29b8fd7a9115de1ab0f482dfd58b6e1857",
+      "priorSha256": "8f62ec378e74036d4539d9159e3caf29b8fd7a9115de1ab0f482dfd58b6e1857"
+    },
+    {
+      "name": "runner.py",
+      "bytes": 55137,
+      "sha256": "71b863b3245ecc76ac31fe59124647b6f5d8a03bc8b3abb74f58b5c0513a38d5",
+      "priorSha256": "ce56c2c1588e8bbd77bce823987447c444553fe78a2be8e7d9467c466970f680"
+    },
+    {
+      "name": "source-inventory.json",
+      "bytes": 58216,
+      "sha256": "96ec8e3e14233520d4cd469c4177264a193d05cf26b4b512d91d98f16bbb7dee",
+      "priorSha256": "96ec8e3e14233520d4cd469c4177264a193d05cf26b4b512d91d98f16bbb7dee"
+    },
+    {
+      "name": "stage_adapter.py",
+      "bytes": 10811,
+      "sha256": "eb4538e453b3f0f4d1eac9bd1437d222d9333d68d7a0280f68cc5682d052e5c3",
+      "priorSha256": "eb4538e453b3f0f4d1eac9bd1437d222d9333d68d7a0280f68cc5682d052e5c3"
+    }
+  ],
+  "newModelRequests": 0,
+  "changes": "Only new epoch namespaces, exact remaining160/global741-900/counts and cumulative budget, fresh provider identity/deadline; strict Paris/audio/models/effective settings unchanged"
+}

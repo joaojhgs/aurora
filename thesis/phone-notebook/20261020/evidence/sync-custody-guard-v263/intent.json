@@ -1,0 +1,12 @@
+{
+  "controlDeadline": "2026-10-22T09:30:00Z",
+  "explicitNewline": true,
+  "host": "ssh:ssh-sem-notebook-personal",
+  "incarnation": "328cd72f-c7ea-49ff-a2db-b9275b085037",
+  "remoteResult": "/home/developer/projects/aurora/thesis/phone-notebook/20261020/evidence/sync-custody-guard-v263.json",
+  "rootAdmissionMessage": "owner-copy-only-custody-helper-disk-budget-guard-source",
+  "script": "scripts/sync_custody_guard_v263.py",
+  "scriptSha256": "c27760c9004deb59ba1336937702a27a3b0d21eff90d8cb15d79f840f1034175",
+  "singleSend": true,
+  "terminal": "term_a2ed5feb-7c92-48e4-bd88-d1b0e6737989"
+}

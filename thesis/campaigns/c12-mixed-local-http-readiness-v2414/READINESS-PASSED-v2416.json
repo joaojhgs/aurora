@@ -1,0 +1,86 @@
+{
+  "at": "2026-10-22T06:44:45.355380+00:00",
+  "status": "FINITE_C12_REAL_AUDIO_PAIRED_READINESS_PASSED",
+  "newMeasuredAdmitted": 0,
+  "new900Launched": false,
+  "correctFlows": 2,
+  "excludedReadinessFlows": 2,
+  "oldFailuresAndZeroInferenceTimingRejectionPreserved": true,
+  "workerE2eMs": 34399.71633,
+  "desktopLocalE2eMs": 15239.122246,
+  "nativePairs": {
+    "stt": {
+      "desktop-local": {
+        "startNs": 406707742964040,
+        "endNs": 406711020310137,
+        "durationMs": 3277.346097,
+        "receiverPid": 2474824
+      },
+      "worker-http": {
+        "startNs": 406704499225633,
+        "endNs": 406707734157177,
+        "durationMs": 3234.931544,
+        "receiverPid": 2474824
+      },
+      "sameStageNativeOverlapMs": 0.0
+    },
+    "assistant": {
+      "desktop-local": {
+        "startNs": 406717739996697,
+        "endNs": 406717998926663,
+        "durationMs": 258.929966,
+        "receiverPid": 2474824
+      },
+      "worker-http": {
+        "startNs": 406719779112607,
+        "endNs": 406720555814892,
+        "durationMs": 776.702285,
+        "receiverPid": 2474824
+      },
+      "sameStageNativeOverlapMs": 0.0
+    },
+    "tts": {
+      "desktop-local": {
+        "startNs": 406718188104578,
+        "endNs": 406719825753248,
+        "durationMs": 1637.64867,
+        "receiverPid": 2474824
+      },
+      "worker-http": {
+        "startNs": 406726802688020,
+        "endNs": 406728363082194,
+        "durationMs": 1560.394174,
+        "receiverPid": 2474824
+      },
+      "sameStageNativeOverlapMs": 0.0
+    }
+  },
+  "offeredLocalRemoteFlowOverlapMsSameProviderClock": 15202.578594,
+  "localSttCallToNativeHandlerDelayMs": 3112.903231,
+  "delayInterpretation": "Includes actual bus queue and scheduling/dispatch overhead; not a pure queue-duration claim",
+  "sameStageSerialization": "Observed native STT/LLM/TTS invocations serialize within each stage; no forced parallel-model claim",
+  "correlatedNativeStagePairs": 6,
+  "actualNativeTtsCalls": 2,
+  "extraAutomaticTtsCalls": 0,
+  "actualGpuOffload": {
+    "layers": 25,
+    "of": 25,
+    "device": "AMD Radeon RX 7600",
+    "backend": "Vulkan"
+  },
+  "receiverPid": 2474824,
+  "clockDomain": "Desktop receiver monotonic_ns only for overlap/delay",
+  "localAudio": {
+    "bytes": 31276,
+    "path": "/home/developer/projects/aurora/thesis/campaigns/c12-mixed-local-http-readiness-v2414/provider/AUDIO-desktop-local.wav",
+    "sha256": "f9591cabbe8d7b0e66ed821c850cbab6a059726a57582bafea9a3a5a5f57fa0f"
+  },
+  "workerAudio": {
+    "bytes": 32300,
+    "path": "/home/developer/projects/aurora/thesis/campaigns/c12-mixed-local-http-readiness-v2414/requester/AUDIO-worker-http.wav",
+    "sha256": "35a3bfeca8b436923678c5a313cf00fee8869deb800a96f400ee33123b5dc4cf"
+  },
+  "percentilesFromSingleSample": false,
+  "modelConfigFixtureChanged": false,
+  "next": "Seal/release finite readiness once. Freeze new C12 mixed-local+HTTP condition900 per declared primary population, companion stream counts separate, exact15excluded warmup pairs/resource/queue/rate/native instrumentation/caps and prior reference mapping; never replay unloaded baseline or gate on phone."
+}

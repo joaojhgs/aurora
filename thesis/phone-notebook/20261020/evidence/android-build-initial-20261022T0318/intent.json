@@ -1,0 +1,12 @@
+{
+  "controlDeadline": "2026-10-22T03:30:00Z",
+  "explicitNewline": true,
+  "host": "ssh:ssh-sem-notebook-personal",
+  "incarnation": "328cd72f-c7ea-49ff-a2db-b9275b085037",
+  "remoteResult": "/home/developer/projects/aurora/thesis/phone-notebook/20261020/evidence/android-build-initial-20261022T0318.json",
+  "rootAdmissionMessage": "owner-authorized-actual-android-build",
+  "script": "scripts/prepare_android_workspace_v48.py",
+  "scriptSha256": "fa4653e65284f1a25976ca01261ea44df22b33e07889469843a261661e293651",
+  "singleSend": true,
+  "terminal": "term_a2ed5feb-7c92-48e4-bd88-d1b0e6737989"
+}

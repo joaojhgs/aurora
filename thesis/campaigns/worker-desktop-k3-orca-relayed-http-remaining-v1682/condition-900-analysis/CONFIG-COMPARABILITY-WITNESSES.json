@@ -1,0 +1,50 @@
+{
+  "V1481": {
+    "availableConfigWitnessSha256": "2b8cc043fc75c8978e2528379badb9fff7cd2ad2bc82729e61c560d35bbd1cc1",
+    "isPostStartupWitness": false,
+    "manifestSha256": "54d51acdf8219b4e69f21cabb9d9fb1b402acf9826196dbdcea4fcfd15bddb25",
+    "normalization": "Exclude only services.gateway.api.token_secret; no private values copied",
+    "normalizedConfigHash": "1ff4a2fef817f04862af88cbfc304a1a2fa83490a6252e09df5436fb2f2587e4",
+    "scope": "V1481 available witness is its frozen input; post-startup hash is retained in summary. Others use matched post-startup content.",
+    "startupChangedPaths": [
+      "services.gateway.api.token_secret"
+    ],
+    "startupSemanticsVerified": true,
+    "summarySha256": "e0fd80e370938dda4ff38a4d6004ac3d74d3598b930f1da381c80f987cdc455e"
+  },
+  "V1513": {
+    "availableConfigWitnessSha256": "2b8cc043fc75c8978e2528379badb9fff7cd2ad2bc82729e61c560d35bbd1cc1",
+    "isPostStartupWitness": true,
+    "manifestSha256": "b19c10d9aad4f9a2261d7eac5b52c258315eea94db256a411e66981e6a45d4a4",
+    "normalization": "Exclude only services.gateway.api.token_secret; no private values copied",
+    "normalizedConfigHash": "1ff4a2fef817f04862af88cbfc304a1a2fa83490a6252e09df5436fb2f2587e4",
+    "scope": "V1481 available witness is its frozen input; post-startup hash is retained in summary. Others use matched post-startup content.",
+    "startupChangedPaths": [
+      "services.gateway.api.token_secret"
+    ],
+    "startupSemanticsVerified": true,
+    "summarySha256": "5c87fe077e1f54375e122da07de885786c77911fcbfd78eb2d8dfd83b7e3d415"
+  },
+  "V1620": {
+    "availableConfigWitnessSha256": "2b8cc043fc75c8978e2528379badb9fff7cd2ad2bc82729e61c560d35bbd1cc1",
+    "isPostStartupWitness": true,
+    "manifestSha256": "4f1a09e7ac7dedeaeae6c1bef5a364d4a007e9249aec74f20a0b63b6375a6279",
+    "normalization": "Exclude only services.gateway.api.token_secret; no private values copied",
+    "normalizedConfigHash": "1ff4a2fef817f04862af88cbfc304a1a2fa83490a6252e09df5436fb2f2587e4",
+    "scope": "V1481 available witness is its frozen input; post-startup hash is retained in summary. Others use matched post-startup content.",
+    "startupChangedPaths": [],
+    "startupSemanticsVerified": true,
+    "summarySha256": "d1d29fe13c5d858d8c4e67727ef8d0cc1bc2f2c1adb2d3597955cf67435dc864"
+  },
+  "V1682": {
+    "availableConfigWitnessSha256": "2b8cc043fc75c8978e2528379badb9fff7cd2ad2bc82729e61c560d35bbd1cc1",
+    "isPostStartupWitness": true,
+    "manifestSha256": "32c5ac87c8cd765f0117a0312b6941c8f69c7731dfe66987826311e74e34b506",
+    "normalization": "Exclude only services.gateway.api.token_secret; no private values copied",
+    "normalizedConfigHash": "1ff4a2fef817f04862af88cbfc304a1a2fa83490a6252e09df5436fb2f2587e4",
+    "scope": "V1481 available witness is its frozen input; post-startup hash is retained in summary. Others use matched post-startup content.",
+    "startupChangedPaths": [],
+    "startupSemanticsVerified": true,
+    "summarySha256": "5f6d4927ee4854c6a7d9285b492fb53d647eeb31427130c359c8b9f728cc3756"
+  }
+}

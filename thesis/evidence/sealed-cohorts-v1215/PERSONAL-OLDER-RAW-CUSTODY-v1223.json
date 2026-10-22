@@ -1,0 +1,35 @@
+{
+  "host": "personal.skyron-server",
+  "startedAt": "2026-10-17T20:35:20.639323+00:00",
+  "diskBefore": {
+    "total": 491054088192,
+    "used": 316956311552,
+    "free": 149078388736
+  },
+  "records": [
+    {
+      "source": "/home/developer/projects/aurora/docs/experiments/tcc-20261013-submission-20261030/root/desktop-gpu-full-audio-local900-v485/aurora-desktop-gpu-full-audio-local900-v485.zip",
+      "destination": "/home/developer/projects/aurora/thesis/evidence/sealed-cohorts-v1223/desktop-gpu-full-audio-local900-v485/aurora-desktop-gpu-full-audio-local900-v485.zip",
+      "expectedSHA256": "93c3afe2161b031d00b0be53ee9a76c8267369e9fa89d9cbe98cad67eee7d6dc",
+      "state": "VERIFIED_REPO_COPY",
+      "bytes": 32688561,
+      "sha256": "93c3afe2161b031d00b0be53ee9a76c8267369e9fa89d9cbe98cad67eee7d6dc"
+    },
+    {
+      "source": "/home/developer/projects/aurora/docs/experiments/tcc-20261013-submission-20261030/root/desktop-gpu-full-audio-http900-v497/aurora-desktop-gpu-full-audio-http900-v497.zip",
+      "destination": "/home/developer/projects/aurora/thesis/evidence/sealed-cohorts-v1223/desktop-gpu-full-audio-http900-v497/aurora-desktop-gpu-full-audio-http900-v497.zip",
+      "expectedSHA256": "c0679cba9c544d029b5df45d5cb0a76a3b4045ffb2b23137df656a78c19b53cd",
+      "state": "VERIFIED_REPO_COPY",
+      "bytes": 35127102,
+      "sha256": "c0679cba9c544d029b5df45d5cb0a76a3b4045ffb2b23137df656a78c19b53cd"
+    }
+  ],
+  "sutCalls": 0,
+  "possibleConfound": "Bounded4MiB/s copy of sealed historical archives concurrent with1197; keep all measured cases.",
+  "finishedAt": "2026-10-17T20:35:37.551743+00:00",
+  "diskAfter": {
+    "total": 491054088192,
+    "used": 317024206848,
+    "free": 149010493440
+  }
+}

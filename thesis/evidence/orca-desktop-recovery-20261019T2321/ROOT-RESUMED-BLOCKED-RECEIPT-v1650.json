@@ -1,0 +1,36 @@
+{
+  "at": "2026-10-19T23:28:44.062107+00:00",
+  "actualNativeGet": {
+    "goal": {
+      "threadId": "01a112a5-d6bb-74e2-bf7c-ace73cb513b5",
+      "objective": "Complete the durable ultragoal plan in .omx/ultragoal/goals.json, including later accepted/appended stories, under the original brief constraints; use .omx/ultragoal/ledger.jsonl as the audit trail.",
+      "status": "blocked",
+      "tokensUsed": 229511973,
+      "timeUsedSeconds": 740024,
+      "createdAt": 1791314947,
+      "updatedAt": 1792452482
+    },
+    "remainingTokens": null,
+    "completionBudgetReport": null
+  },
+  "blockedAudit": "thesis/evidence/orca-desktop-recovery-20261019T2321/ROOT-RESUMED-BLOCKED-AUDIT-TURN3-v1650.json",
+  "consecutiveResumedGoalTurns": 3,
+  "sameGoalObjectivePreserved": true,
+  "all13StoriesPreserved": true,
+  "actualPersonalRejectedRequest": "d390101e-3f12-4e05-9427-58ab54839a6e",
+  "controlRepairRequired": "Owning Orca restore normal terminal.send to SAME Personal term_d5651d8d-58e2-4b38-85e2-51c668cc933c incarnation034ff933-61a3-4c74-b5ad-98a75e8ac21c targetssh:ssh-1786238480967-semdev; no applicable public worker-side repair",
+  "noAdditionalSendsOrGoalResumesOrTestsOrWorkers": true,
+  "providerDeadlineExpired": true,
+  "providerActualLivenessOrRetirement": "UNKNOWN",
+  "noProviderRenewalOrRestart": true,
+  "k3Counts": {
+    "attempted": 740,
+    "correct": 725,
+    "failed": 15,
+    "unattempted": 160
+  },
+  "aggregateComplete": false,
+  "taskDispatchRunWorktreeDirtyFilesEvidencePreserved": true,
+  "originalMonitorNative": "Last actual verifiedACTIVE on19Oct; Root does not mutate it",
+  "nextAction": "Only after changed control evidence and supported SAME-goal continuation, reconcile exact original provider/process/results/expired admission; retrieve retained native/resources delta before new inference. No closed-baseline/measured-index replay."
+}

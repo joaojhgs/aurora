@@ -1,0 +1,62 @@
+{
+  "at": "2026-10-18T18:03:15.722425+00:00",
+  "status": "V1573_NATURALLY_RETIRED_FAILED_FIRST_EXCLUDED_STT_NO_MEASUREMENT",
+  "frozenManifestSha256": "05b724ff24977f570fa728381f750eb675d192fc9f7f766a5123c03262ceccb8",
+  "warmups": {
+    "attemptedExcluded": 1,
+    "correct": 0,
+    "failed": 1,
+    "unattempted": 14
+  },
+  "measured": {
+    "attempted": 0,
+    "unattempted": 184,
+    "conditionAttemptsAlreadyPreserved": 716,
+    "priorCorrect": 714,
+    "priorFailed": 2
+  },
+  "failure": {
+    "code": "transport_ambiguous",
+    "stage": "stt"
+  },
+  "failureDurationMs": 46240.193469,
+  "requestDeadlineSeconds": 180,
+  "timeoutFlag": false,
+  "rawUnderlyingException": "Not retained by original sanitized adapter; cannot reconstruct from category alone",
+  "allFourProcessesAbsent": true,
+  "remoteCollectorStarted": false,
+  "personalControlReleased": true,
+  "nextPersonalCursor": "56949",
+  "currentSourceFilesUnmodified": true,
+  "failedSetupChargeSeconds": 62.831509675999996,
+  "cumulativeUsedSeconds": 23578.905962333003,
+  "remainingOf57600Seconds": 34021.094037667,
+  "localIndexedFilesVerified": 36,
+  "localIndexedBytes": 605525,
+  "custodyErrors": [],
+  "physicalCopies": [
+    {
+      "path": "thesis/campaigns/worker-desktop-k3-orca-relayed-http-remaining-v1573/terminal-v1588/summary.json",
+      "bytes": 9853,
+      "sha256": "8c2313d6b6dfd1c01399a95c67e58a30fe33ffd3b6b29d9f018c4d4498d63e65"
+    },
+    {
+      "path": "thesis/campaigns/worker-desktop-k3-orca-relayed-http-remaining-v1573/terminal-v1588/progress.json",
+      "bytes": 217,
+      "sha256": "57eb938d040b26dd98b9315c0e87688ba001498b5490d85ca7496ca20d1c65f8"
+    },
+    {
+      "path": "thesis/campaigns/worker-desktop-k3-orca-relayed-http-remaining-v1573/terminal-v1588/failed-excluded-warmup.jsonl",
+      "bytes": 3281,
+      "sha256": "554c21925d1d386a50884b4aeca279eec3292190375aad4db2e70b54b679102c"
+    },
+    {
+      "path": "thesis/campaigns/worker-desktop-k3-orca-relayed-http-remaining-v1573/terminal-v1588/warmup-finalizer-failure.json",
+      "bytes": 202,
+      "sha256": "207ed899ae5a518a88a38da18cb8d0c7b0835aaa5fed93b5aedbc7c3e99ad58e"
+    }
+  ],
+  "actualPassiveProviderEvidence": "../transport-reconciliation-v1587/ACTUAL-PROVIDER-RESULT.json",
+  "passiveProviderStatus": "Same original three processes live/b4manifest/aa config at18:01:36; last native rows match final V1562 warmup, no new V1573 STT span observed in bounded tail. No full-log absence or exact relay cause inferred.",
+  "nextAction": "No blind campaign replay. Resolve exact current forwarding/transport behavior with safe finite diagnostics; keep all184unattempted. Original monitor coordination, no provider/forward restart or security changes."
+}

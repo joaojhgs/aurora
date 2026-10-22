@@ -1,0 +1,97 @@
+{
+  "exportedAt": "2026-10-15T03:30:05.956885+00:00",
+  "campaign": "V481 completed prerecorded audio candidate",
+  "scope": "allowlisted candidate, runtime, voice stages, and original WAV only",
+  "files": [
+    {
+      "path": "candidate-v481/candidate-manifest.json",
+      "bytes": 1616,
+      "sha256": "5274a0e9dcc49a529ad15ce9d24ee2a204f970a9d644f2fe66ecb974f3cdc765"
+    },
+    {
+      "path": "candidate-v481/cohort-replacements-v1.json",
+      "bytes": 1954,
+      "sha256": "cda9eb1931def2c1a177a13b69b6c8d6dd9a58e9a7135d50e51c43721c514cc5"
+    },
+    {
+      "path": "candidate-v481/controller-launch.json",
+      "bytes": 915,
+      "sha256": "3838ba694331018c113d20948e39eff6ebabb7bfe93bd5e8e22091733ead6da5"
+    },
+    {
+      "path": "candidate-v481/frozen-manifest-v1.json",
+      "bytes": 19630,
+      "sha256": "d34d21d1a9b1a2db03be2ad64c096e77082168b3bcc09c28d442b4a61eaff3d7"
+    },
+    {
+      "path": "candidate-v481/pilot-input.json",
+      "bytes": 220,
+      "sha256": "33faee1514e84dd414e58ed02828c51b3e20596574fa58f989e5f62f50a83f2a"
+    },
+    {
+      "path": "candidate-v481/runtime/actual-provider-bindings.jsonl",
+      "bytes": 2549,
+      "sha256": "12b595027c0270c7ea1bed34f23c7eaa6cebe90f32f9c4c20f91cfeb071c8585"
+    },
+    {
+      "path": "candidate-v481/runtime/launch.json",
+      "bytes": 1516,
+      "sha256": "380acf7a15e41d44583fc9ad423872318cb31067246dcb26c16340bf53850641"
+    },
+    {
+      "path": "candidate-v481/runtime/pilot/pilot-result.json",
+      "bytes": 5724,
+      "sha256": "a0a08291623ae1b64084eda91c2079abe054a69a0e5bc4f1f5a8cfe5a111b821"
+    },
+    {
+      "path": "candidate-v481/runtime/pilot/tts-output.wav",
+      "bytes": 31276,
+      "sha256": "c45b4cc7d8e6edbc4722f4a87ffd235cc25a550cbe90c777cfe4863ef84dc430"
+    },
+    {
+      "path": "candidate-v481/runtime/resources.jsonl",
+      "bytes": 81907,
+      "sha256": "0068c76c1cbebf5dbae2d8f999f887f0f71a2cb441398aaa3228b78873905cf8"
+    },
+    {
+      "path": "candidate-v481/runtime/retirement.json",
+      "bytes": 200,
+      "sha256": "ad2452a7e8f0bfda977b045e6cc4f3199f12fe0fce1cd23562c9a382fb73ab78"
+    },
+    {
+      "path": "candidate-v481/runtime/runtime-versions.json",
+      "bytes": 177,
+      "sha256": "b6167beee572657c75e840ef2ef709f67ba47f2ce05a78758826bd09be977832"
+    },
+    {
+      "path": "candidate-v481/runtime/terminal.json",
+      "bytes": 2623,
+      "sha256": "e59f65a1ee2dda87b02e793f303c6b28e50510c0e3ecccd708452da9c21fb209"
+    },
+    {
+      "path": "candidate-v481/runtime/voice-stages.installed.json",
+      "bytes": 109,
+      "sha256": "57c00eb79729b48fe849bf9bbb9d70a945844e7e710cf493eb1b466615540d57"
+    },
+    {
+      "path": "candidate-v481/runtime/voice-stages.jsonl",
+      "bytes": 16640,
+      "sha256": "c676d5ac4546887b1f252f0957f6f09e0d81a3579b82842e6bffae2611f00a6e"
+    },
+    {
+      "path": "candidate-v481/runtime/voice-stages.status.json",
+      "bytes": 134,
+      "sha256": "739bdb59353591b004b0039eb46c968b3fd8c1c3afb74157ac3c361700bcf6bc"
+    },
+    {
+      "path": "candidate-v481/source-isolation-repair.json",
+      "bytes": 1940,
+      "sha256": "a07ac0458608ec04fd8ec9f0cadc253c102083d6c7816e8d3c1b928e4cec2389"
+    },
+    {
+      "path": "input/capital-question-en-US.wav",
+      "bytes": 153644,
+      "sha256": "139fa0c34b6d18600ad9608fd2d11c9389cae2f5f548ce0f4f23b735b176f0b3"
+    }
+  ]
+}

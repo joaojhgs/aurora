@@ -1,0 +1,175 @@
+{
+  "at": "2026-10-14T20:07:53.575033+00:00",
+  "host": "personal.skyron-server",
+  "scope": "read-only allowlisted existing main config and bounded known path metadata; no runtime readiness or consent claim",
+  "selected_config": {
+    "tts": {
+      "provider": "piper",
+      "default_voice_id": null,
+      "model_file_path": "voice_models/en_US-lessac-medium.onnx",
+      "model_config_file_path": "voice_models/en_US-lessac-medium.onnx.txt",
+      "piper": {
+        "model_file_path": "voice_models/en_US-lessac-medium.onnx",
+        "model_config_file_path": "voice_models/en_US-lessac-medium.onnx.txt",
+        "cache_dir": "voice_models/piper"
+      },
+      "pockettts": {
+        "cache_dir": "voice_models/pockettts",
+        "preload_voice_ids": []
+      },
+      "voice_registry": {
+        "cache_dir": "voice_models/voice-pack",
+        "manifest_path": "voice_models/voices.manifest.json",
+        "standard_pack_enabled": true
+      }
+    },
+    "stt": {
+      "activate": null,
+      "model": null,
+      "model_size": null,
+      "realtime_model": null,
+      "accurate_model": null
+    },
+    "system": {
+      "primary_language": "en",
+      "voice_language": "en"
+    }
+  },
+  "paths": [
+    {
+      "path": "/home/developer/projects/aurora/config.json",
+      "exists": true,
+      "kind": "file",
+      "bytes": 14027,
+      "mtime_ns": 1787775299899456634
+    },
+    {
+      "path": "/home/developer/projects/aurora/voice_models",
+      "exists": true,
+      "kind": "dir",
+      "bytes": 4096,
+      "mtime_ns": 1786761576667617816,
+      "entries": [
+        {
+          "path": "/home/developer/projects/aurora/voice_models/en_US-lessac-medium.onnx.txt",
+          "exists": true,
+          "kind": "file",
+          "bytes": 4885,
+          "mtime_ns": 1786262249005105733
+        },
+        {
+          "path": "/home/developer/projects/aurora/voice_models/en_US-lessac-medium.onnx",
+          "exists": true,
+          "kind": "file",
+          "bytes": 63201294,
+          "mtime_ns": 1786262248967104725
+        },
+        {
+          "path": "/home/developer/projects/aurora/voice_models/README.md",
+          "exists": true,
+          "kind": "file",
+          "bytes": 1128,
+          "mtime_ns": 1786761576667617816
+        }
+      ],
+      "entry_limit": 20,
+      "not_recursive": true
+    },
+    {
+      "path": "/home/developer/projects/aurora/voice_models/voice-pack",
+      "exists": false,
+      "error": "FileNotFoundError: [Errno 2] No such file or directory: '/home/developer/projects/aurora/voice_models/voice-pack'"
+    },
+    {
+      "path": "/home/developer/projects/aurora/voice_models/voice-pack/voice_registry.json",
+      "exists": false,
+      "error": "FileNotFoundError: [Errno 2] No such file or directory: '/home/developer/projects/aurora/voice_models/voice-pack/voice_registry.json'"
+    },
+    {
+      "path": "/home/developer/projects/aurora/data/models/huggingface",
+      "exists": true,
+      "kind": "dir",
+      "bytes": 4096,
+      "mtime_ns": 1788817765891712889,
+      "entries": [
+        {
+          "path": "/home/developer/projects/aurora/data/models/huggingface/hub",
+          "exists": true,
+          "kind": "dir",
+          "bytes": 4096,
+          "mtime_ns": 1786765509067213692
+        },
+        {
+          "path": "/home/developer/projects/aurora/data/models/huggingface/whisper",
+          "exists": true,
+          "kind": "dir",
+          "bytes": 4096,
+          "mtime_ns": 1788817765891995156
+        }
+      ],
+      "entry_limit": 20,
+      "not_recursive": true
+    },
+    {
+      "path": "/home/developer/projects/aurora/data/models/huggingface/whisper",
+      "exists": true,
+      "kind": "dir",
+      "bytes": 4096,
+      "mtime_ns": 1788817765891995156,
+      "entries": [],
+      "entry_limit": 20,
+      "not_recursive": true
+    },
+    {
+      "path": "/tmp/aurora/faster-whisper",
+      "exists": false,
+      "error": "FileNotFoundError: [Errno 2] No such file or directory: '/tmp/aurora/faster-whisper'"
+    },
+    {
+      "path": "/tmp/aurora/huggingface",
+      "exists": false,
+      "error": "FileNotFoundError: [Errno 2] No such file or directory: '/tmp/aurora/huggingface'"
+    },
+    {
+      "path": "/home/developer/projects/aurora/tools/voice-runtime/phase4_manifest.json",
+      "exists": true,
+      "kind": "file",
+      "bytes": 25311,
+      "mtime_ns": 1786911909744311327
+    },
+    {
+      "path": "/home/developer/projects/aurora/voice_models/en_US-lessac-medium.onnx",
+      "exists": true,
+      "kind": "file",
+      "bytes": 63201294,
+      "mtime_ns": 1786262248967104725
+    },
+    {
+      "path": "/home/developer/projects/aurora/voice_models/en_US-lessac-medium.onnx.txt",
+      "exists": true,
+      "kind": "file",
+      "bytes": 4885,
+      "mtime_ns": 1786262249005105733
+    },
+    {
+      "path": "/home/developer/projects/aurora/voice_models/piper",
+      "exists": false,
+      "error": "FileNotFoundError: [Errno 2] No such file or directory: '/home/developer/projects/aurora/voice_models/piper'"
+    },
+    {
+      "path": "/home/developer/projects/aurora/voice_models/pockettts",
+      "exists": false,
+      "error": "FileNotFoundError: [Errno 2] No such file or directory: '/home/developer/projects/aurora/voice_models/pockettts'"
+    },
+    {
+      "path": "/home/developer/projects/aurora/voice_models/voices.manifest.json",
+      "exists": false,
+      "error": "FileNotFoundError: [Errno 2] No such file or directory: '/home/developer/projects/aurora/voice_models/voices.manifest.json'"
+    }
+  ],
+  "elapsed_seconds": 0.038036464946344495,
+  "no_binary_reads": true,
+  "no_model_audio_calls": true,
+  "Orca_terminal": "term_2e93af9c-1589-414b-8f92-17649f3c8069",
+  "nextCursor": "1105"
+}

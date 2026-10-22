@@ -1,0 +1,322 @@
+{
+  "analysisSourceSha256": "12036a7eeb51b5954a0061872222f029925d024158c9bd36b3e337d8191eadc5",
+  "at": "2026-10-17T20:53:06.598014+00:00",
+  "audioPolicy": "Retain existing audio references and custody; no repeated WAV decoding or model/transcript correctness audit.",
+  "clockPolicy": "Pair identical host/process/recorder/clock/stage/handler/span/correlation boundaries; never subtract different host clocks or sum independent quantiles.",
+  "cohort": "aurora-worker-desktop-k1-orca-relayed-http-tts-v1197",
+  "flowMetricsMs": {
+    "completedIncludingIncorrect": {
+      "denominator": 36,
+      "p50_ms": 50445.3952995,
+      "p90_ms": 55421.771533499996,
+      "p95_ms": 56978.451288000004
+    },
+    "observedAttemptsIncludingFailures": {
+      "denominator": 36,
+      "p50_ms": 50445.3952995,
+      "p90_ms": 55421.771533499996,
+      "p95_ms": 56978.451288000004
+    },
+    "successfulCorrect": {
+      "denominator": 36,
+      "p50_ms": 50445.3952995,
+      "p90_ms": 55421.771533499996,
+      "p95_ms": 56978.451288000004
+    }
+  },
+  "harnessStageMetricsMs": {
+    "assistant": {
+      "denominator": 36,
+      "p50_ms": 33238.723631,
+      "p90_ms": 37366.4225105,
+      "p95_ms": 37944.11764875
+    },
+    "stt": {
+      "denominator": 36,
+      "p50_ms": 8017.438307,
+      "p90_ms": 9871.806483,
+      "p95_ms": 10804.265192500001
+    },
+    "tts": {
+      "denominator": 36,
+      "p50_ms": 8276.784496,
+      "p90_ms": 9381.6780885,
+      "p95_ms": 10218.887828750001
+    }
+  },
+  "measuredObservedButNotInCustodySnapshot": 0,
+  "missingSpanPolicy": "Missing in copied prefixes is a custody/coverage observation, not a model/runtime failure.",
+  "nativeMetrics": [
+    {
+      "allCompletedInvocations": {
+        "denominator": 36,
+        "p50_ms": 8016.2198775,
+        "p90_ms": 9747.359556,
+        "p95_ms": 10577.51324325
+      },
+      "casesWithAnyCompletedSpan": 36,
+      "exactlyOneCompletedSpanPerCase": {
+        "denominator": 36,
+        "p50_ms": 8016.2198775,
+        "p90_ms": 9747.359556,
+        "p95_ms": 10577.51324325
+      },
+      "handler": "Transcription.Transcribe",
+      "host": "requester",
+      "missingNativeAttemptId": 36,
+      "missingNativeOperationId": 36,
+      "populationNote": "Native completed spans can belong to failed or incorrect overall requests; they never convert those outcomes to successes.",
+      "retainedMeasuredCaseDenominator": 36,
+      "stage": "stt"
+    },
+    {
+      "allCompletedInvocations": {
+        "denominator": 36,
+        "p50_ms": 8010.9583775,
+        "p90_ms": 9740.435224,
+        "p95_ms": 10565.734623249999
+      },
+      "casesWithAnyCompletedSpan": 36,
+      "exactlyOneCompletedSpanPerCase": {
+        "denominator": 36,
+        "p50_ms": 8010.9583775,
+        "p90_ms": 9740.435224,
+        "p95_ms": 10565.734623249999
+      },
+      "handler": "stt.model_invoke",
+      "host": "requester",
+      "missingNativeAttemptId": 0,
+      "missingNativeOperationId": 0,
+      "populationNote": "Native completed spans can belong to failed or incorrect overall requests; they never convert those outcomes to successes.",
+      "retainedMeasuredCaseDenominator": 36,
+      "stage": "stt"
+    },
+    {
+      "allCompletedInvocations": {
+        "denominator": 36,
+        "p50_ms": 28085.61099,
+        "p90_ms": 31909.647243,
+        "p95_ms": 32443.18214525
+      },
+      "casesWithAnyCompletedSpan": 36,
+      "exactlyOneCompletedSpanPerCase": {
+        "denominator": 36,
+        "p50_ms": 28085.61099,
+        "p90_ms": 31909.647243,
+        "p95_ms": 32443.18214525
+      },
+      "handler": "resolved_chat_model.astream",
+      "host": "requester",
+      "missingNativeAttemptId": 36,
+      "missingNativeOperationId": 36,
+      "populationNote": "Native completed spans can belong to failed or incorrect overall requests; they never convert those outcomes to successes.",
+      "retainedMeasuredCaseDenominator": 36,
+      "stage": "llm"
+    },
+    {
+      "allCompletedInvocations": {
+        "denominator": 72,
+        "p50_ms": 23.578018999999998,
+        "p90_ms": 39.700037599999995,
+        "p95_ms": 47.96209665000002
+      },
+      "casesWithAnyCompletedSpan": 36,
+      "exactlyOneCompletedSpanPerCase": {
+        "denominator": 0,
+        "p50_ms": null,
+        "p90_ms": null,
+        "p95_ms": null
+      },
+      "handler": "OrchestratorService._persist_chat_message",
+      "host": "requester",
+      "missingNativeAttemptId": 72,
+      "missingNativeOperationId": 72,
+      "multipleCompletedSpanCases": 36,
+      "populationNote": "Native completed spans can belong to failed or incorrect overall requests; they never convert those outcomes to successes.",
+      "retainedMeasuredCaseDenominator": 36,
+      "stage": "history"
+    },
+    {
+      "allCompletedInvocations": {
+        "denominator": 24,
+        "p50_ms": 1739.643302,
+        "p90_ms": 1921.5052346,
+        "p95_ms": 1944.5016154
+      },
+      "casesWithAnyCompletedSpan": 24,
+      "exactlyOneCompletedSpanPerCase": {
+        "denominator": 24,
+        "p50_ms": 1739.643302,
+        "p90_ms": 1921.5052346,
+        "p95_ms": 1944.5016154
+      },
+      "handler": "TTS.Synthesize",
+      "host": "provider",
+      "missingCasesInSavedPrefixes": 12,
+      "missingNativeAttemptId": 24,
+      "missingNativeOperationId": 24,
+      "populationNote": "Native completed spans can belong to failed or incorrect overall requests; they never convert those outcomes to successes.",
+      "retainedMeasuredCaseDenominator": 36,
+      "stage": "tts"
+    },
+    {
+      "allCompletedInvocations": {
+        "denominator": 24,
+        "p50_ms": 1739.002492,
+        "p90_ms": 1920.7044295,
+        "p95_ms": 1943.4429587999998
+      },
+      "casesWithAnyCompletedSpan": 24,
+      "exactlyOneCompletedSpanPerCase": {
+        "denominator": 24,
+        "p50_ms": 1739.002492,
+        "p90_ms": 1920.7044295,
+        "p95_ms": 1943.4429587999998
+      },
+      "handler": "tts.model_invoke",
+      "host": "provider",
+      "missingCasesInSavedPrefixes": 12,
+      "missingNativeAttemptId": 0,
+      "missingNativeOperationId": 0,
+      "populationNote": "Native completed spans can belong to failed or incorrect overall requests; they never convert those outcomes to successes.",
+      "retainedMeasuredCaseDenominator": 36,
+      "stage": "tts"
+    }
+  ],
+  "nativePairingCounts": {
+    "provider": {
+      "unattributedBoundaries": 2,
+      "unmatchedStartsInSavedPrefix": 0
+    },
+    "requester": {
+      "unmatchedStartsInSavedPrefix": 1
+    }
+  },
+  "newMeasurements": 0,
+  "plannedExcludedWarmups": 15,
+  "plannedMeasured": 900,
+  "prefixWatermarks": {
+    "provider": 189206,
+    "requester": 607748
+  },
+  "providerCheckpoint": 12,
+  "providerSnapshotAt": "2026-10-17T20:40:55.137447+00:00",
+  "quantileMethod": "Hyndman-Fan Type7, h=(n-1)*p, linear interpolation",
+  "requesterSnapshotAt": "2026-10-17T20:51:14.359829+00:00",
+  "resourceCustody": {
+    "provider": {
+      "chunks": [
+        "prefixes/resources.jsonl/000000000000-000004191689.chunk",
+        "prefixes/resources.jsonl/000004191689-000008384111.chunk",
+        "prefixes/resources.jsonl/000008384111-000012577265.chunk",
+        "prefixes/resources.jsonl/000012577265-000016767773.chunk",
+        "prefixes/resources.jsonl/000016767773-000020960378.chunk",
+        "prefixes/resources.jsonl/000020960378-000025153302.chunk",
+        "prefixes/resources.jsonl/000025153302-000029346224.chunk",
+        "prefixes/resources.jsonl/000029346224-000033539149.chunk",
+        "prefixes/resources.jsonl/000033539149-000037732073.chunk",
+        "prefixes/resources.jsonl/000037732073-000039835040.chunk",
+        "prefixes/resources.jsonl/000039835040-000040134225.chunk",
+        "prefixes/resources.jsonl/000040134225-000040394385.chunk",
+        "prefixes/resources.jsonl/000040394385-000040654546.chunk",
+        "prefixes/resources.jsonl/000040654546-000040910370.chunk",
+        "prefixes/resources.jsonl/000040910370-000041170531.chunk",
+        "prefixes/resources.jsonl/000041170531-000041430692.chunk",
+        "prefixes/resources.jsonl/000041430692-000041690852.chunk",
+        "prefixes/resources.jsonl/000041690852-000041946677.chunk",
+        "prefixes/resources.jsonl/000041946677-000042206837.chunk",
+        "prefixes/resources.jsonl/000042206837-000042462663.chunk",
+        "prefixes/resources.jsonl/000042462663-000042722823.chunk"
+      ],
+      "endByte": 42722823,
+      "incomplete": true,
+      "inode": 7243539,
+      "observedAt": "2026-10-17T20:40:55.088287+00:00",
+      "sourceObservedBytes": 42722823
+    },
+    "requester": {
+      "chunks": [
+        "thesis/evidence/orca-relayed-http-v1197/prefixes/resources.jsonl/000000000000-000001412825.chunk",
+        "thesis/evidence/orca-relayed-http-v1197/prefixes/resources.jsonl/000001412825-000001473502.chunk",
+        "thesis/evidence/orca-relayed-http-v1197/prefixes/resources.jsonl/000001473502-000001550962.chunk",
+        "thesis/evidence/orca-relayed-http-v1197/prefixes/resources.jsonl/000001550962-000001628422.chunk",
+        "thesis/evidence/orca-relayed-http-v1197/prefixes/resources.jsonl/000001628422-000001705882.chunk",
+        "thesis/evidence/orca-relayed-http-v1197/prefixes/resources.jsonl/000001705882-000001783342.chunk",
+        "thesis/evidence/orca-relayed-http-v1197/prefixes/resources.jsonl/000001783342-000001860802.chunk",
+        "thesis/evidence/orca-relayed-http-v1197/prefixes/resources.jsonl/000001860802-000001938262.chunk",
+        "thesis/evidence/orca-relayed-http-v1197/prefixes/resources.jsonl/000001938262-000002015722.chunk",
+        "thesis/evidence/orca-relayed-http-v1197/prefixes/resources.jsonl/000002015722-000002093234.chunk",
+        "thesis/evidence/orca-relayed-http-v1197/prefixes/resources.jsonl/000002093234-000002169462.chunk",
+        "thesis/evidence/orca-relayed-http-v1197/prefixes/resources.jsonl/000002169462-000002246982.chunk",
+        "thesis/evidence/orca-relayed-http-v1197/prefixes/resources.jsonl/000002246982-000002325794.chunk",
+        "thesis/evidence/orca-relayed-http-v1197/prefixes/resources.jsonl/000002325794-000002403314.chunk",
+        "thesis/evidence/orca-relayed-http-v1197/prefixes/resources.jsonl/000002403314-000002480834.chunk",
+        "thesis/evidence/orca-relayed-http-v1197/prefixes/resources.jsonl/000002480834-000002557062.chunk",
+        "thesis/evidence/orca-relayed-http-v1197/prefixes/resources.jsonl/000002557062-000002634582.chunk",
+        "thesis/evidence/orca-relayed-http-v1197/prefixes/resources.jsonl/000002634582-000002712102.chunk",
+        "thesis/evidence/orca-relayed-http-v1197/prefixes/resources.jsonl/000002712102-000002789622.chunk",
+        "thesis/evidence/orca-relayed-http-v1197/prefixes/resources.jsonl/000002789622-000002867142.chunk",
+        "thesis/evidence/orca-relayed-http-v1197/prefixes/resources.jsonl/000002867142-000002944662.chunk",
+        "thesis/evidence/orca-relayed-http-v1197/prefixes/resources.jsonl/000002944662-000003022182.chunk",
+        "thesis/evidence/orca-relayed-http-v1197/prefixes/resources.jsonl/000003022182-000003099702.chunk",
+        "thesis/evidence/orca-relayed-http-v1197/prefixes/resources.jsonl/000003099702-000003177222.chunk",
+        "thesis/evidence/orca-relayed-http-v1197/prefixes/resources.jsonl/000003177222-000003254742.chunk",
+        "thesis/evidence/orca-relayed-http-v1197/prefixes/resources.jsonl/000003254742-000003332262.chunk",
+        "thesis/evidence/orca-relayed-http-v1197/prefixes/resources.jsonl/000003332262-000003409782.chunk"
+      ],
+      "endByte": 3409782,
+      "incomplete": true,
+      "inode": 2189790,
+      "observedAt": "2026-10-17T20:51:14.354794+00:00",
+      "sourceObservedBytes": 3409782
+    },
+    "scope": "Raw resource chunks retained, with per-case own-clock flow/span boundaries for later association. No per-request CPU/network attribution or resource-derived metric is claimed here."
+  },
+  "retainedPhases": {
+    "excludedWarmup": {
+      "attempted": 15,
+      "correct": 15,
+      "failedOrInterrupted": 0,
+      "incorrect": 0,
+      "outcomes": {
+        "completed_correct": 15
+      },
+      "timeouts": 0
+    },
+    "measured": {
+      "attempted": 36,
+      "correct": 36,
+      "failedOrInterrupted": 0,
+      "incorrect": 0,
+      "outcomes": {
+        "completed_correct": 36
+      },
+      "timeouts": 0
+    }
+  },
+  "route": "ORCA-RELAYED HTTP",
+  "schema": "aurora.k1.saved-case-analysis.v1",
+  "sourceProgressObservation": {
+    "attempted": 51,
+    "last_attempt_file": "attempts/attempt-0051-measured.jsonl",
+    "last_attempt_status": "completed_correct",
+    "measured_attempted": 36,
+    "planned_measured": 900,
+    "planned_warmups": 15,
+    "status": "running",
+    "unattempted_measured": 864,
+    "warmups_attempted": 15
+  },
+  "status": "INCOMPLETE_CHECKPOINT_ANALYSIS_NOT_A_900_CASE_SEAL",
+  "sutCalls": 0,
+  "type7SourceSha256": "b8fc433bae6e941bd8829df1fa65a5df42af94f2a45d1f3e7174aca8767a7932",
+  "unattemptedAtSourceProgress": 864,
+  "unknownMetrics": {
+    "externalPiperSubprocessPerRequestCpu": null,
+    "firstAudio": null,
+    "firstToken": null,
+    "playback": null,
+    "queue": null,
+    "relayOnlyLatency": null
+  }
+}

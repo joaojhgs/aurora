@@ -1,0 +1,33 @@
+{
+  "schema": "aurora.synthetic-segmented-join-main-check.v760",
+  "at": "2026-10-16T00:06:58.675607+00:00",
+  "source": "/home/developer/projects/aurora/thesis/analysis/join_local_segments.py",
+  "sourceSHA256": "4a71e75ffdfc42919c9b43fec01621507e6c7e98367f8ff24c51fd6d59a84478",
+  "checkSourceSHA256": "4c80e5b40da537c1d9b93d1d0491e82e085921bd59905660eadc54e07e168399",
+  "command": [
+    "/home/developer/projects/aurora/.venv/bin/python",
+    "/home/developer/projects/aurora/.git/aurora-handoff-import-20261006/segmented-analysis-check-v760/check_main.py"
+  ],
+  "durationSeconds": 1.1567359720356762,
+  "exitCode": 0,
+  "scope": "ONE synthetic saved-data main-flow fixture, not a benchmark or actual cohort join.",
+  "syntheticRows": {
+    "measured": 900,
+    "excludedWarmups": 30,
+    "pairedSpans": 4500
+  },
+  "assertions": [
+    "all900 unique measured rows preserved",
+    "original interrupted row remains failed",
+    "incorrect/completed/observed populations have distinct Type7 denominators",
+    "15 warmups per segment excluded",
+    "five exact handlers remain separate",
+    "own receiver/correlation/session/request IDs retained",
+    "missing native operation IDs and null unknown metrics remain visible"
+  ],
+  "syntheticAdmission": "Only fixture module namespace replaced immutable manifest digest constants; real canonical source/admission pins untouched.",
+  "actualSegmentDataJoinExecuted": false,
+  "archiveAuditReplayed": false,
+  "newMeasuredRequests": 0,
+  "modelsOrServicesLoaded": false
+}

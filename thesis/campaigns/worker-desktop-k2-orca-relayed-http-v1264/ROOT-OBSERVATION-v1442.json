@@ -1,0 +1,56 @@
+{
+  "at": "2026-10-18T03:05:21.356194+00:00",
+  "classification": "VERIFIED_WAIT",
+  "progress": {
+    "attempted": 425,
+    "last_attempt_file": "attempts/attempt-0425-measured.jsonl",
+    "last_attempt_status": "completed_correct",
+    "measured_attempted": 410,
+    "planned_measured": 900,
+    "planned_warmups": 15,
+    "status": "running",
+    "unattempted_measured": 490,
+    "warmups_attempted": 15
+  },
+  "measuredOutcomeCounts": {
+    "completed_correct": 410
+  },
+  "outcomeCountProvenance": {
+    "previousObservation": "thesis/campaigns/worker-desktop-k2-orca-relayed-http-v1264/ROOT-OBSERVATION-v1441.json",
+    "previousMeasured": 390,
+    "newClosedCaseRowsRead": 20
+  },
+  "processes": {
+    "588011": {
+      "same": true,
+      "state": "S",
+      "startTicks": 105853078
+    },
+    "588053": {
+      "same": true,
+      "state": "S",
+      "startTicks": 105853326
+    },
+    "588276": {
+      "same": true,
+      "state": "S",
+      "startTicks": 105855021
+    },
+    "421717": {
+      "same": true,
+      "state": "S",
+      "startTicks": 104535394
+    }
+  },
+  "frozenManifestSha256": "b15a49adffc5aaa43b426563d5776fa384c92f58e339030b69cb3877e98f2399",
+  "custody": {
+    "cases": 425,
+    "audio": 425,
+    "at": "2026-10-18T03:05:13.417187+00:00",
+    "missingPhysicalPaths": [],
+    "copierErrors": [],
+    "pendingStatic": [],
+    "receipt": "thesis/campaigns/worker-desktop-k2-orca-relayed-http-v1264/receipts/000211.json"
+  },
+  "observationWindow": "02:57:49 to03:05:00 read-only original PID/startTicks/progress,395->410; no SUT calls"
+}

@@ -1,0 +1,35 @@
+{
+  "id": "6c0a1eca-74df-42a0-863c-d930ef9d4a75",
+  "ok": true,
+  "result": {
+    "message": {
+      "id": "msg_921be959a5f3",
+      "run_id": "run_e6054e76e9fc",
+      "delivery_contract": "current_delivery",
+      "from_handle": "term_6a00d9ee-792a-4daf-8578-236290e33108",
+      "to_handle": "term_1f27be31-0284-4366-bb91-30fe538cd30e",
+      "subject": "NEW exactdelta sourcecopy admitted120s; actualUTCwindow and43frames",
+      "body": "NEW source-only admission READY, not extension of oldunusedwindow: thesis/evidence/source-sync-ebde-runtime-v2340/SOURCE-DELTA-TRANSFER-ADMISSION-v2350.json. Operation source-delta-v29-copy-v2350-20261022; same existing Notebook control/incarnation, only your delta/source-control-v29. Earliest receiver+sender startup 2026-10-22T01:26:23.567718+00:00, hardabsolute end 2026-10-22T01:28:23.567718+00:00, window120s/maxactive120s. ONE sequential stream, <=128KiB/s payload/256KiB/swire, exact4payloads total3913736B; four lengths/SHA verified locally including frozenWAV. Root computed PER-FILE dataframes43 at98048B, NOT aggregate40; v28manifest65536/60 is historical, bind actualv29 admitted98048/43 plus bounded controls. Ensure counter reflects actual per-file frames; no concurrency/ambiguousaccepted resend or silentextension. Receiver --until MUST exacthardend, alarm/TTYrestore preserved. Actual fresh own disk/RAM/thermal data-onlyguards beforestart; build/pilot85C unchanged. Verify exactbase df23fd6e1f80e87dc45b6221bed87c00b4187e66 and target1959blob+mode inventory before assembly/execution; dirtyGit preserved. No newforward/provider/credential/Gitwrite/modelcall/phone900. Return actualstart/acceptedhandle then receiver lengths/SHA/cap/TTYrestore receipt, or exact guard/cap failure, all in owned thesis evidence. If windowmissed no attempt without newadmission. Oldfullarchive andfailedsource history retained. Root remains main frozenHTTP; no Root notebook/devicequery.",
+      "type": "status",
+      "priority": "normal",
+      "thread_id": null,
+      "payload": null,
+      "created_at": "2026-10-22T01:25:32Z",
+      "delivered_at": null
+    },
+    "warnings": [
+      {
+        "code": "legacy_terminal_recipient",
+        "recipient": "term_1f27be31-0284-4366-bb91-30fe538cd30e",
+        "message": "term_1f27be31-0284-4366-bb91-30fe538cd30e is a live terminal-only mailbox. Delivery is not durable after that terminal closes; prefer run:<id> or dispatch:<id>."
+      }
+    ],
+    "mutation": {
+      "requestId": "71ec7458-946b-4912-918d-da4b856c9cc1",
+      "replayed": false
+    }
+  },
+  "_meta": {
+    "runtimeId": "cc9e3275-28c6-4c45-85cc-bdcd2262aa7d"
+  }
+}

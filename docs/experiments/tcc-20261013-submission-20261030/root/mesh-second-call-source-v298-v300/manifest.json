@@ -1,0 +1,19 @@
+{
+  "files_sha256": {
+    "matched-mesh-second-call-ui-v298.md": "269cb75049609dd0fc31d67da03f8b3909d993983bbf1941e936b78d3666c8d8",
+    "matched-mesh-second-call-backend-v298.md": "278fd54669f177fd19ed46cb0bdb6e690589eec1eb6283708fcf3bbc5a833f29",
+    "matched-mesh-second-call-backend-v299.md": "75ef1e868d65d0dd1081f17a2f25e5cab9da69b8cf1544f34795b10628112b9b",
+    "matched-mesh-terminal-v299b-sol-review.md": "f29db7c34656270cb160873abc16abd9239a0ae3662e245eed06653c800fa4ea",
+    "matched-mesh-terminal-v299c-sol-review.md": "627daad3934885c6c9c66b1f5736c13148a3cb28d206be719a91e3938b8729e2",
+    "matched-mesh-terminal-v299b-candidate/REPORT.txt": "f6b4f2880ed650f2b8b7120b61e44d022020ff176bda936abc2fca11c775c99f",
+    "matched-mesh-terminal-v299c-candidate/correction.json": "98fdff7da6382704e2bb99a2db1cf7e19b151ab6592befeaaebd69798394bd0b",
+    "matched-mesh-error-source-v300/integration.json": "e663ec99e9ae3aa5076c939a7ad798d522d7c1c295868c80413fe7c7ca9fc4c6",
+    "mesh-sdk-error-literals-v300.json": "ed3a187903e5d13d71158aa187b7e10020247931551c031a7fed65b24494fd04",
+    "mesh-sdk-error-literals-v300-report.txt": "e0b44baea4a797d2b4bb8bc57779f1a9aaa40347a78dd74ce0721015d28ac59a",
+    "source/browser-shell-runtime.tsx": "b4253ce9d9cd3d868e4a5e78c011dd838ec67671070932349b6545ed9b1a249e"
+  },
+  "runtime_cause_not_claimed": true,
+  "actual_diagnostic": "v300 pending",
+  "private_plaintext_error_stored": false,
+  "main_launched": false
+}

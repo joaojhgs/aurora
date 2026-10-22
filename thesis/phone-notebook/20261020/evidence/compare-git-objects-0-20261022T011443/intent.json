@@ -1,0 +1,12 @@
+{
+  "controlDeadline": "2026-10-22T01:24:43.455143+00:00",
+  "explicitNewline": true,
+  "host": "ssh:ssh-sem-notebook-personal",
+  "incarnation": "328cd72f-c7ea-49ff-a2db-b9275b085037",
+  "remoteResult": "/home/developer/projects/aurora/thesis/phone-notebook/20261020/evidence/compare-git-objects-0-20261022T011443.json",
+  "rootAdmissionMessage": "root-msg-e9e166d77c50-immutable-Git-blob-reuse",
+  "script": "scripts/compare-notebook-objects-0.py",
+  "scriptSha256": "70b6571f05ce68c5bbd87e219c3db34bd62e0c8809bc904b29db9d08a996a9d0",
+  "singleSend": true,
+  "terminal": "term_a2ed5feb-7c92-48e4-bd88-d1b0e6737989"
+}

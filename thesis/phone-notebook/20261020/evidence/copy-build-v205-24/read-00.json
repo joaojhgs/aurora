@@ -1,0 +1,21 @@
+{
+  "_meta": {
+    "runtimeId": "cc9e3275-28c6-4c45-85cc-bdcd2262aa7d"
+  },
+  "id": "fe5b1a7e-4f3d-487d-9e2d-79c206cb6eb9",
+  "ok": true,
+  "result": {
+    "terminal": {
+      "handle": "term_a2ed5feb-7c92-48e4-bd88-d1b0e6737989",
+      "latestCursor": "926",
+      "limited": false,
+      "nextCursor": "926",
+      "oldestCursor": "794",
+      "returnedLineCount": 0,
+      "source": "stream",
+      "status": "running",
+      "tail": [],
+      "truncated": false
+    }
+  }
+}

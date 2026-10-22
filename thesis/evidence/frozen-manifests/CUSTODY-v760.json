@@ -1,0 +1,28 @@
+{
+  "schema": "aurora.thesis.frozen-manifest-custody.v760",
+  "at": "2026-10-16T00:04:43.494264+00:00",
+  "scope": "Two exact small selected metadata members from existing audited/verified ZIPs; no full ZIP hash, outcome/audio audit or model load",
+  "records": [
+    {
+      "path": "thesis/evidence/frozen-manifests/desktop-local-v735.json",
+      "bytes": 148150,
+      "sha256": "be108882b3024b33545f1484da00a56dccc5993e5c441b3eb3854102e7f14ac5",
+      "originArchive": "docs/experiments/tcc-20261013-submission-20261030/root/desktop-gpu-padded-local900-v735/aurora-desktop-gpu-padded-local900-v735.zip",
+      "originMember": "input/frozen-local-manifest.json",
+      "originalAuditReplayed": false,
+      "credentialRedacted": false,
+      "byteIdentical": true
+    },
+    {
+      "path": "thesis/evidence/frozen-manifests/desktop-http-v692.json",
+      "bytes": 148014,
+      "sha256": "81c25bd59323b1d515d20f9ea154868640e0f0d55b04cb39e77e88fb414aa78f",
+      "originArchive": "docs/experiments/tcc-20261013-submission-20261030/root/desktop-gpu-padded-http900-v692/aurora-desktop-gpu-padded-http900-v692.zip",
+      "originMember": "input/frozen-http-manifest.json",
+      "originalAuditReplayed": false,
+      "credentialRedacted": false,
+      "byteIdentical": true
+    }
+  ],
+  "newMeasuredRequests": 0
+}

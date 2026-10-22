@@ -1,0 +1,36 @@
+{
+  "at": "2026-10-18T11:31:23.103147+00:00",
+  "classification": "VERIFIED_WAIT",
+  "window": "thesis/campaigns/worker-desktop-k3-orca-relayed-http-v1481/observations/root-read-only-window-v1497.jsonl",
+  "windowSha256": "9453efdb99c86ab09b35f889d1d0092734c30179fa558a451260d03c782ec2af",
+  "windowStarted": "2026-10-18T11:22:40.098153+00:00",
+  "windowEnded": "2026-10-18T11:31:20.098284+00:00",
+  "measuredStart": 335,
+  "measuredEnd": 353,
+  "allExactHandlesLiveThroughout": true,
+  "progressReadErrors": [],
+  "progress": {
+    "attempted": 368,
+    "last_attempt_file": "attempts/attempt-0368-measured.jsonl",
+    "last_attempt_status": "completed_correct",
+    "measured_attempted": 353,
+    "planned_measured": 900,
+    "planned_warmups": 15,
+    "status": "running",
+    "unattempted_measured": 547,
+    "warmups_attempted": 15
+  },
+  "measuredOutcomes": {
+    "completed_correct": 353
+  },
+  "caseCountMatchesProgress": true,
+  "copiedCases": 366,
+  "copiedWavs": 366,
+  "copierErrors": [],
+  "frozenManifestSha256": "54d51acdf8219b4e69f21cabb9d9fb1b402acf9826196dbdcea4fcfd15bddb25",
+  "observerSourceSha256": "47bc13b99f6c8a90233dae46ea407b248db2148dab2e3a2ae6d8a9d8425f828d",
+  "checkpointSourceSha256": "5704809f692d408cc4f7fc3024f7513d767a55a679ceee9552782a0ea3c7906c",
+  "newSutCallsTestsSettingsOrLifecycleChanges": 0,
+  "full13Complete": false,
+  "requiresTerminalReconciliation": false
+}

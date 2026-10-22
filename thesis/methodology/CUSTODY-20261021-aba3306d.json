@@ -1,0 +1,13 @@
+{
+  "at": "2026-10-21T01:19:47.267690+00:00",
+  "source": ".omx/evidence/orca-monitor-20261010/plan-update-20261021T011834Z-next-finite-matrix/PLAN-AFTER.md",
+  "destination": "thesis/methodology/owner-requirements-20261021-aba3306d.md",
+  "bytes": 780151,
+  "sha256": "aba3306d0b473cbc934b890c804ee1323386ad624b7aab658ce2f3e9a7cbc918",
+  "completePlan": true,
+  "prior765720PrefixByteExact": true,
+  "methodologyWriter": "original monitor task_d7ea336050cf",
+  "rootAction": "copy only; K3 unchanged; next K1 P2P191 NOT_ADMITTED",
+  "sutCalls": 0,
+  "freeBytesAfter": 4020740096
+}

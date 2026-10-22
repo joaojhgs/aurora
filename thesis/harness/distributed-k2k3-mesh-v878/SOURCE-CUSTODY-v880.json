@@ -1,0 +1,22 @@
+{
+  "at": "2026-10-16T04:38:06.853671+00:00",
+  "source": ".git/aurora-handoff-import-20261006/distributed-k2k3-mesh-prep-v878",
+  "destination": "thesis/harness/distributed-k2k3-mesh-v878",
+  "files": [
+    {
+      "path": "REPORT.md",
+      "sha256": "aee8796174e70be49839e23b415c43980c8e344b7a37f641fb9f44bdefaacc35",
+      "bytes": 5487
+    },
+    {
+      "path": "mesh_stage_adapter.py",
+      "sha256": "ec25e4e6db568241d0af03f88573a37d3a0775d4e52bf703bfa0bb5a039e38a9",
+      "bytes": 9458
+    }
+  ],
+  "review": "thesis/validation/distributed-k2k3-mesh-source-review-v879.md",
+  "reviewSHA256": "5b5e70c954fd71926d10efcb6ad8717c39eaa2e769f3fa6c1e738abc54b5250b",
+  "scope": "adapter-source-only; composition/campaign and actual runtime admission remain open",
+  "runtimeExecuted": false,
+  "measuredCases": 0
+}

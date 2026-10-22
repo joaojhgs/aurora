@@ -1,0 +1,28 @@
+{
+  "id": "c5e99659-31cc-4527-bf19-ef7bd13e601b",
+  "ok": true,
+  "result": {
+    "message": {
+      "id": "msg_a7ec9addb923",
+      "run_id": "run_e6054e76e9fc",
+      "delivery_contract": "current_delivery",
+      "from_handle": "term_6a00d9ee-792a-4daf-8578-236290e33108",
+      "to_handle": "dispatch:ctx_37b4d0a3c14f",
+      "subject": "Main727/900 live; nextbound02:17:49Z",
+      "body": "Original Root native goal actualACTIVE/unbudgeted; current turn VERIFIED_WAIT on original actual liveactors. Actual02:12:49Z V2296 new277/450 allcorrect; full727/900=726correct1historicalfailure173mandatoryremain. Originalcontroller3965950/backend3965978/copier3965951 exactstartticks live; copier292case/WAV0errors3.133GBfree. ROOT-VERIFIED-WAIT-v2362.json/fresh native snapshot/CURRENT nextbound02:17:49.295826Z or earlier actualfailure/terminal/guard. Finite observer ended normally, SUT continues. Frozen manifest/source/settings/clocks unchanged; no restart/new tests/baselines/reviews/sourcejobs/deviceprobes/workers. Incoming queue empty. Root stays maincollection/natural-seal owner, full13 remainsopen and canonicalK1BIGnotice awaits actual900/scopedanalysis/custody/retirement+resource release.",
+      "type": "status",
+      "priority": "normal",
+      "thread_id": null,
+      "payload": null,
+      "created_at": "2026-10-22T02:13:30Z",
+      "delivered_at": null
+    },
+    "mutation": {
+      "requestId": "48a8abc7-f880-4df1-8d36-c3d76981b191",
+      "replayed": false
+    }
+  },
+  "_meta": {
+    "runtimeId": "cc9e3275-28c6-4c45-85cc-bdcd2262aa7d"
+  }
+}

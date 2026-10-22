@@ -1,0 +1,11 @@
+{
+  "at": "2026-10-20T04:22:40.761265+00:00",
+  "priorCommandExecuted": true,
+  "priorReadComplete": false,
+  "priorMarkersReceived": 393,
+  "expectedMarkers": 694,
+  "missingMarkers": "93-393 inclusive; terminal stream retained only300 lines at second read",
+  "scientificSourceLost": false,
+  "sourcePathsUnchanged": true,
+  "correction": "New explicit copy-only read; durable packet file on Personal and paced output. No command uncertainty/retry/inference/provider mutation."
+}

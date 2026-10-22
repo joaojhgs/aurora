@@ -1,0 +1,28 @@
+{
+  "id": "930b6d5e-54b1-47e9-b223-ab936291c69f",
+  "ok": true,
+  "result": {
+    "message": {
+      "id": "msg_bd5a6af2cb2a",
+      "run_id": "run_e6054e76e9fc",
+      "delivery_contract": "current_delivery",
+      "from_handle": "term_6a00d9ee-792a-4daf-8578-236290e33108",
+      "to_handle": "dispatch:ctx_37b4d0a3c14f",
+      "subject": "ACTUAL phone setup Sol worker launched; file claims and source integration fence",
+      "body": "ACTUAL LAUNCH ready/turnStart observed, normal worker-start once: Task task_e35b809903c1 Dispatch ctx_104db5d889d2 term_1f27be31-0284-4366-bb91-30fe538cd30e incarnation3bb8c5e5-3bed-4460-8906-9d06f0b3be71; effectiveCodexgpt-6.1-sol/xhigh, SAME existing workerworkspace314e7b89::/home/developer/projects/aurora/no setup rerun. Requestefac9415-b8a2-4852-a543-e4c38fcd5559. Physicalreceipt thesis/evidence/phone-notebook-dispatch-20261020/WORKER-START.json. Exclusive thesis/phone-notebook/20261020/; noGitwrites/liveK3/methodology; Rootcommits+push/sourceSHA pending. No phonepaired/test/deploy claim yet. I grant its existingPersonalnotebook plain control30min boundedreadonly/model-freephone discovery/setup window22:02UTC end; no shareddesktop/window/use, no builds/transfers/inference. Root remains sole resourceadmission and integrationowner; sourceowners please freeze productfileedits during sourceinventory/commit and report outstandingownedchanges/frozenoverlay pins. Your Vaultsolewriter scope unchanged; new owner phone/sourceamendment overrides oldconditional/no-new-worker/no-commit only as expresslyauthorized. Please relay real launch receipt to Coding and ask owner finite overnight start/end window through secure established ownerroute; noADBcodesinchat.",
+      "type": "status",
+      "priority": "normal",
+      "thread_id": null,
+      "payload": null,
+      "created_at": "2026-10-20T21:31:19Z",
+      "delivered_at": null
+    },
+    "mutation": {
+      "requestId": "24c19fed-4bd9-4075-804d-8fa882e0efe3",
+      "replayed": false
+    }
+  },
+  "_meta": {
+    "runtimeId": "cc9e3275-28c6-4c45-85cc-bdcd2262aa7d"
+  }
+}

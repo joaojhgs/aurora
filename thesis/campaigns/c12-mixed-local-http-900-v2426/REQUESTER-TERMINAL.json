@@ -1,0 +1,60 @@
+{
+  "at": "2026-10-22T10:43:54.917643+00:00",
+  "companion": {
+    "measured": {
+      "attempted": 259,
+      "correct": 259,
+      "failed": 0,
+      "harnessErrorsIncludedInFailed": 0,
+      "incorrectIncludedInFailed": 0,
+      "note": "Missing custody is not proof counterpart never started; reconcile actual provider rows",
+      "offered": 259,
+      "planned": 900,
+      "timeouts": 0,
+      "unresolvedPotentiallyOffered": 1,
+      "unstarted": null
+    },
+    "warmup": {
+      "attempted": 1,
+      "correct": 1,
+      "failed": 0,
+      "harnessErrorsIncludedInFailed": 0,
+      "incorrectIncludedInFailed": 0,
+      "offered": 1,
+      "planned": 1,
+      "timeouts": 0,
+      "unstarted": 0
+    }
+  },
+  "elapsedSeconds": 10657.547593712,
+  "extraCompanionCalls": 0,
+  "extraPrimaryCalls": 0,
+  "failedOrPartialCasesRetained": true,
+  "fullAggregateGoalComplete": false,
+  "pid": 281887,
+  "primary": {
+    "measured": {
+      "attempted": 260,
+      "correct": 260,
+      "failed": 0,
+      "harnessErrorsIncludedInFailed": 0,
+      "incorrectIncludedInFailed": 0,
+      "offered": 260,
+      "planned": 900,
+      "timeouts": 0,
+      "unstarted": 640
+    },
+    "warmup": {
+      "attempted": 1,
+      "correct": 1,
+      "failed": 0,
+      "harnessErrorsIncludedInFailed": 0,
+      "incorrectIncludedInFailed": 0,
+      "offered": 1,
+      "planned": 1,
+      "timeouts": 0,
+      "unstarted": 0
+    }
+  },
+  "reason": "finite_or_policy_stop"
+}

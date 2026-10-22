@@ -1,0 +1,82 @@
+{
+  "at": "2026-10-20T14:10:57.544476+00:00",
+  "status": "LAUNCHED_ORDINARY_WARMUP_ADMISSION_PENDING",
+  "nativeGoal": "01a112a5-d6bb-74e2-bf7c-ace73cb513b5",
+  "run": "run_e6054e76e9fc",
+  "actors": [
+    {
+      "name": "controller",
+      "pid": 2747722,
+      "startTicks": 128375209,
+      "state": "S"
+    },
+    {
+      "name": "backend",
+      "pid": 2747791,
+      "startTicks": 128375493,
+      "state": "R"
+    },
+    {
+      "name": "copier",
+      "pid": 2748029,
+      "startTicks": 128377788,
+      "state": "S"
+    },
+    {
+      "name": "finalizer",
+      "pid": 2748030,
+      "startTicks": 128377790,
+      "state": "S"
+    }
+  ],
+  "manifestSha256": "9b9e9c0a5d7c74295d0bb91e88dcdc53966283c21a86aa32bcaa785f5f0d2af1",
+  "plannedNewMeasured": 191,
+  "newGlobalIndices": [
+    710,
+    900
+  ],
+  "excludedWarmupsPlanned": 15,
+  "observedWarmups": 2,
+  "warmupStatuses": [
+    "completed_correct",
+    "completed_correct"
+  ],
+  "newMeasuredAttempts": 0,
+  "progress": {
+    "attempted": 2,
+    "last_attempt_file": "attempts/attempt-0002-warmup.jsonl",
+    "last_attempt_status": "completed_correct",
+    "measured_attempted": 0,
+    "planned_measured": 191,
+    "planned_warmups": 15,
+    "status": "running",
+    "unattempted_measured": 191,
+    "warmups_attempted": 2
+  },
+  "priorCondition": {
+    "attempted": 709,
+    "correct": 697,
+    "failed": 12,
+    "timeoutFlagged": 1,
+    "unattempted": 191
+  },
+  "measurementAdmitted": false,
+  "launchReceipt": "thesis/campaigns/worker-desktop-k1-p2p-tts-remaining191-v1779/ROOT-LAUNCH.json",
+  "sourceReview": "PASS_CLOSED",
+  "latestCustody": {
+    "receipt": "thesis/campaigns/worker-desktop-k1-p2p-tts-remaining191-v1779/receipts/000003.json",
+    "errors": []
+  },
+  "freeBytes": 4634345472,
+  "sameOriginalProvider": {
+    "pid": 3194394,
+    "startTicks": 22320527,
+    "latestFreshAdmission": "2026-10-20T14:07:17.203275+00:00"
+  },
+  "original72000ClockIncludingRecoveryPlusNewOuterSeconds": 52594.896373,
+  "providerDeadlineUtc": "2026-10-20T23:55:24.085968+00:00",
+  "newWorkers": 0,
+  "oldResultsReplayed": false,
+  "nextAction": "Observe ordinary15 full-audio warmups and existing finalizer; measured indices710-900 only after correlated native/Piper/route proof and actual remaining-time admission.",
+  "fullAggregateGoalComplete": false
+}

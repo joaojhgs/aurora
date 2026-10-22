@@ -1,0 +1,2825 @@
+{
+  "schema": "aurora.phone_notebook.approved_local_source_pin.v1",
+  "approvedSourceSha": "ebde3a8acf6315f920d03593845f17a1fc65a733",
+  "authorityMessage": "msg_d132e64d0192",
+  "remoteVerified": false,
+  "acquisition": "proposed_copy_only_git_archive_not_executed",
+  "files": [
+    {
+      "mode": "100644",
+      "type": "blob",
+      "gitBlob": "49802ac5bea8a4cb0c485269b5b533b403eb0d82",
+      "bytes": 435,
+      "path": "app/__init__.py"
+    },
+    {
+      "mode": "100644",
+      "type": "blob",
+      "gitBlob": "068a08786c1b6d61fd91ab2864bc4fed560f38d0",
+      "bytes": 549,
+      "path": "app/__main__.py"
+    },
+    {
+      "mode": "100644",
+      "type": "blob",
+      "gitBlob": "88b9c5ae5e7c241f40f26d4f773ac78e3f7ba699",
+      "bytes": 4727,
+      "path": "app/helpers/aurora_logger.py"
+    },
+    {
+      "mode": "100644",
+      "type": "blob",
+      "gitBlob": "0579dcb03218a488dce8bbd7cf494dc580e1242d",
+      "bytes": 2912,
+      "path": "app/helpers/getGoogleCredentials.py"
+    },
+    {
+      "mode": "100644",
+      "type": "blob",
+      "gitBlob": "5b27fce87ce105c20bdc237d65b4bc658b94e3d8",
+      "bytes": 1196,
+      "path": "app/helpers/getUseHardwareAcceleration.py"
+    },
+    {
+      "mode": "100644",
+      "type": "blob",
+      "gitBlob": "aa8280a38eef1c166917babd7a51d91d4af9586d",
+      "bytes": 1058,
+      "path": "app/helpers/runAsyncInThread.py"
+    },
+    {
+      "mode": "100644",
+      "type": "blob",
+      "gitBlob": "562ba4c2cee127fd84417719e6bd6ac83e82aaa2",
+      "bytes": 10202,
+      "path": "app/messaging/AGENTS.md"
+    },
+    {
+      "mode": "100644",
+      "type": "blob",
+      "gitBlob": "cf6e907e92c0b33ed86e15bc7088d1ff971130f3",
+      "bytes": 1827,
+      "path": "app/messaging/__init__.py"
+    },
+    {
+      "mode": "100644",
+      "type": "blob",
+      "gitBlob": "dba2fff146726805ec1e5b589da17e820c764a84",
+      "bytes": 6643,
+      "path": "app/messaging/audio_messages.py"
+    },
+    {
+      "mode": "100644",
+      "type": "blob",
+      "gitBlob": "391ba68bc70a316440edcd494d31a9e17275796d",
+      "bytes": 42387,
+      "path": "app/messaging/bullmq_bus.py"
+    },
+    {
+      "mode": "100644",
+      "type": "blob",
+      "gitBlob": "57d4da1387a2ab175b250fef75c9f2c8a01ef71d",
+      "bytes": 9588,
+      "path": "app/messaging/bus.py"
+    },
+    {
+      "mode": "100644",
+      "type": "blob",
+      "gitBlob": "7900bc80d6a32f11acd7591dd671b067247b6872",
+      "bytes": 840,
+      "path": "app/messaging/bus_runtime.py"
+    },
+    {
+      "mode": "100644",
+      "type": "blob",
+      "gitBlob": "84d04f003058a6fe9d1027bdc744ed94918a6321",
+      "bytes": 26579,
+      "path": "app/messaging/local_bus.py"
+    },
+    {
+      "mode": "100644",
+      "type": "blob",
+      "gitBlob": "6d99283ae1a3c6e015ee77158b33e26063e0e5d3",
+      "bytes": 70559,
+      "path": "app/messaging/mesh_bus.py"
+    },
+    {
+      "mode": "100644",
+      "type": "blob",
+      "gitBlob": "805fbd86e47a61760015284e77b7c219c8fd124d",
+      "bytes": 1875,
+      "path": "app/messaging/priority_helpers.py"
+    },
+    {
+      "mode": "100644",
+      "type": "blob",
+      "gitBlob": "a7dc36bdd08b2a119ef3c0efddea0f39a7d61de3",
+      "bytes": 3412,
+      "path": "app/messaging/transcription_messages.py"
+    },
+    {
+      "mode": "100644",
+      "type": "blob",
+      "gitBlob": "9e9abeaa41a39fee445c1583e848f86660fcedce",
+      "bytes": 9295,
+      "path": "app/services/AGENTS.md"
+    },
+    {
+      "mode": "100644",
+      "type": "blob",
+      "gitBlob": "47c6f6c18732de29cd6db690944bad9c257f6d41",
+      "bytes": 937,
+      "path": "app/services/__init__.py"
+    },
+    {
+      "mode": "100644",
+      "type": "blob",
+      "gitBlob": "9d75ab31de2cde0a5b5e30df573c323a7519b948",
+      "bytes": 8647,
+      "path": "app/services/auth/AGENTS.md"
+    },
+    {
+      "mode": "100644",
+      "type": "blob",
+      "gitBlob": "26d6bf950be4dcbe843b8e5baad960f3582c6d67",
+      "bytes": 574,
+      "path": "app/services/auth/__init__.py"
+    },
+    {
+      "mode": "100644",
+      "type": "blob",
+      "gitBlob": "9c75308da7be001a9a43b0349f2a2ef734b12b02",
+      "bytes": 1726,
+      "path": "app/services/auth/__main__.py"
+    },
+    {
+      "mode": "100644",
+      "type": "blob",
+      "gitBlob": "4f2b38e08fc5d311c501b900d45a66e5033ff42b",
+      "bytes": 94113,
+      "path": "app/services/auth/auth_manager.py"
+    },
+    {
+      "mode": "100644",
+      "type": "blob",
+      "gitBlob": "32617a84016dec2b5d8f85a0e28d565d4d10cf50",
+      "bytes": 55520,
+      "path": "app/services/auth/service.py"
+    },
+    {
+      "mode": "100644",
+      "type": "blob",
+      "gitBlob": "7ef9d4bb6a982b09fba9f9363c2fc35b8afdde48",
+      "bytes": 113,
+      "path": "app/services/backup/__init__.py"
+    },
+    {
+      "mode": "100644",
+      "type": "blob",
+      "gitBlob": "74557c0a4a4237327baf768500e9b18fd5440adb",
+      "bytes": 1707,
+      "path": "app/services/backup/__main__.py"
+    },
+    {
+      "mode": "100644",
+      "type": "blob",
+      "gitBlob": "334f7dbb110ae7d74398126dadcdb10b17099171",
+      "bytes": 20007,
+      "path": "app/services/backup/service.py"
+    },
+    {
+      "mode": "100644",
+      "type": "blob",
+      "gitBlob": "df321a10befa09f9f325babd055a88d696d9aaaa",
+      "bytes": 144,
+      "path": "app/services/config/__init__.py"
+    },
+    {
+      "mode": "100644",
+      "type": "blob",
+      "gitBlob": "1d51b1f6035529d5f1676418148b2496349cf5ed",
+      "bytes": 2058,
+      "path": "app/services/config/__main__.py"
+    },
+    {
+      "mode": "100644",
+      "type": "blob",
+      "gitBlob": "3b2f07e9751c165f5f85884dcf18dd8ca6b0e559",
+      "bytes": 14254,
+      "path": "app/services/config/config_defaults.json"
+    },
+    {
+      "mode": "100644",
+      "type": "blob",
+      "gitBlob": "15251a73f1c6bcf91ed90a7dd57acdef12d4c116",
+      "bytes": 85974,
+      "path": "app/services/config/config_manager.py"
+    },
+    {
+      "mode": "100644",
+      "type": "blob",
+      "gitBlob": "671604cff85bae9f0f449f8a8b6dc719d1f4b262",
+      "bytes": 86603,
+      "path": "app/services/config/config_schema.json"
+    },
+    {
+      "mode": "100644",
+      "type": "blob",
+      "gitBlob": "94c62f4aff61c1a62a0e253839809fc26cd94b6a",
+      "bytes": 6392,
+      "path": "app/services/config/env_config.py"
+    },
+    {
+      "mode": "100644",
+      "type": "blob",
+      "gitBlob": "f7b62a74afecf12039f3ab21c4ad74a555066a44",
+      "bytes": 31084,
+      "path": "app/services/config/mesh_policy_migration.py"
+    },
+    {
+      "mode": "100644",
+      "type": "blob",
+      "gitBlob": "473fc23e34b8f4f0e0c9ad2621db3265fbdfb8de",
+      "bytes": 1729,
+      "path": "app/services/config/messages.py"
+    },
+    {
+      "mode": "100644",
+      "type": "blob",
+      "gitBlob": "66164bd378e2e1f65f7f79df0ae5637bd4d0f5ed",
+      "bytes": 26719,
+      "path": "app/services/config/service.py"
+    },
+    {
+      "mode": "100644",
+      "type": "blob",
+      "gitBlob": "390dbf44a712fd125d63eee57db291aa290d47f5",
+      "bytes": 1037,
+      "path": "app/services/db/__init__.py"
+    },
+    {
+      "mode": "100644",
+      "type": "blob",
+      "gitBlob": "7a3c516b33db7ccc7f832fdd326f9b70063107f7",
+      "bytes": 1767,
+      "path": "app/services/db/__main__.py"
+    },
+    {
+      "mode": "100644",
+      "type": "blob",
+      "gitBlob": "b4f39994c13e695f771af910ccd6f40c31068715",
+      "bytes": 122024,
+      "path": "app/services/db/manager.py"
+    },
+    {
+      "mode": "100644",
+      "type": "blob",
+      "gitBlob": "175ccc9aa63a39043ad02886d726586f43d3b66b",
+      "bytes": 6201,
+      "path": "app/services/db/migration_manager.py"
+    },
+    {
+      "mode": "100644",
+      "type": "blob",
+      "gitBlob": "c4a4d602447e902f5092feb23f2cfd44fd1238ad",
+      "bytes": 1379,
+      "path": "app/services/db/migrations/001_initial_schema.sql"
+    },
+    {
+      "mode": "100644",
+      "type": "blob",
+      "gitBlob": "e1fd8c523e7a2ff4529af5665f96ac4a595273af",
+      "bytes": 1927,
+      "path": "app/services/db/migrations/002_scheduler_tables.sql"
+    },
+    {
+      "mode": "100644",
+      "type": "blob",
+      "gitBlob": "feb57d7213b5b434c4a05ded5247d83be0bbc354",
+      "bytes": 1539,
+      "path": "app/services/db/migrations/003_auth_tables.sql"
+    },
+    {
+      "mode": "100644",
+      "type": "blob",
+      "gitBlob": "ff66400fdd32d5c31edf8390f91f0a85b6016149",
+      "bytes": 691,
+      "path": "app/services/db/migrations/004_users_permissions.sql"
+    },
+    {
+      "mode": "100644",
+      "type": "blob",
+      "gitBlob": "938f345eb854c3afeee4f645f0f9cdca6bcb0c57",
+      "bytes": 533,
+      "path": "app/services/db/migrations/005_audit_log.sql"
+    },
+    {
+      "mode": "100644",
+      "type": "blob",
+      "gitBlob": "14ec4d6a5228f159c27837a9f57c116597f0d9bb",
+      "bytes": 875,
+      "path": "app/services/db/migrations/006_mesh_credentials.sql"
+    },
+    {
+      "mode": "100644",
+      "type": "blob",
+      "gitBlob": "93ce3a4f20f3a4f474e0c1e5b10f410ff5fd8f75",
+      "bytes": 6086,
+      "path": "app/services/db/migrations/007_mesh_peer_lifecycle.sql"
+    },
+    {
+      "mode": "100644",
+      "type": "blob",
+      "gitBlob": "8169a84d5d9289922838675dfa114c813f4ef648",
+      "bytes": 607,
+      "path": "app/services/db/migrations/008_scheduler_typed_actions.sql"
+    },
+    {
+      "mode": "100644",
+      "type": "blob",
+      "gitBlob": "a8cbbd26786a86dab5cec0736e4e5d4716b52687",
+      "bytes": 432,
+      "path": "app/services/db/migrations/009_mesh_inbound_token_id.sql"
+    },
+    {
+      "mode": "100644",
+      "type": "blob",
+      "gitBlob": "ef5bd1d03ab0315f0c4633d80abb1bb086f7f9ee",
+      "bytes": 2251,
+      "path": "app/services/db/migrations/010_chat_sessions.sql"
+    },
+    {
+      "mode": "100644",
+      "type": "blob",
+      "gitBlob": "f18d465b9890d3dba3d12e34d6caa037143598ab",
+      "bytes": 943,
+      "path": "app/services/db/migrations/011_mesh_peer_auth_grant_revisions.sql"
+    },
+    {
+      "mode": "100644",
+      "type": "blob",
+      "gitBlob": "3bf2439fa71a460e0db30a59f69f9ee0e57cee90",
+      "bytes": 4675,
+      "path": "app/services/db/migrations/012_tooling_tool_identity.sql"
+    },
+    {
+      "mode": "100644",
+      "type": "blob",
+      "gitBlob": "009d41d7ce76604176434ceeec024caaeb85ed74",
+      "bytes": 2470,
+      "path": "app/services/db/migrations/013_tooling_legacy_identity_compat.sql"
+    },
+    {
+      "mode": "100644",
+      "type": "blob",
+      "gitBlob": "a0775ab8c465016232829fccd04652d4eadaabc0",
+      "bytes": 3488,
+      "path": "app/services/db/migrations/014_tooling_export_policy.sql"
+    },
+    {
+      "mode": "100644",
+      "type": "blob",
+      "gitBlob": "7f67b9977469fe8e3a8df0aea68e30b249608971",
+      "bytes": 8394,
+      "path": "app/services/db/migrations/015_tooling_remote_projection.sql"
+    },
+    {
+      "mode": "100644",
+      "type": "blob",
+      "gitBlob": "01224e469a409b1ef8361b89b3cafe489020a341",
+      "bytes": 2504,
+      "path": "app/services/db/migrations/016_tooling_remote_lifecycle.sql"
+    },
+    {
+      "mode": "100644",
+      "type": "blob",
+      "gitBlob": "c4e54980be9cf69b489600731e020106ccde066c",
+      "bytes": 793,
+      "path": "app/services/db/migrations/017_tooling_projection_blocked_inventory.sql"
+    },
+    {
+      "mode": "100644",
+      "type": "blob",
+      "gitBlob": "254befbbaf569ab30c2c38e705d96601b22152cb",
+      "bytes": 4310,
+      "path": "app/services/db/migrations/018_repair_tooling_safe_revisions.sql"
+    },
+    {
+      "mode": "100644",
+      "type": "blob",
+      "gitBlob": "5350aa5bb65d5bbeb417c178f5688f0fd6e0fa7b",
+      "bytes": 448,
+      "path": "app/services/db/models.py"
+    },
+    {
+      "mode": "100644",
+      "type": "blob",
+      "gitBlob": "292ca204e1bfb2a30d2bca12b8139c8c78805903",
+      "bytes": 30688,
+      "path": "app/services/db/rag_service.py"
+    },
+    {
+      "mode": "100644",
+      "type": "blob",
+      "gitBlob": "bdccd5a7b077c370645d2a51ff2007292ff88ab5",
+      "bytes": 9538,
+      "path": "app/services/db/scheduler_db_service.py"
+    },
+    {
+      "mode": "100644",
+      "type": "blob",
+      "gitBlob": "bb2d5fbb37c84ca095f81a6469cedaa35987cc04",
+      "bytes": 114583,
+      "path": "app/services/db/service.py"
+    },
+    {
+      "mode": "100644",
+      "type": "blob",
+      "gitBlob": "8a94a5e722a29fbe3704e227c3856a5a0d814acb",
+      "bytes": 2789,
+      "path": "app/services/db/sqlite_connection.py"
+    },
+    {
+      "mode": "100644",
+      "type": "blob",
+      "gitBlob": "1338712476f39d17ddd29ae7ff7bf270619d338e",
+      "bytes": 31178,
+      "path": "app/services/db/tool_identity_store.py"
+    },
+    {
+      "mode": "100644",
+      "type": "blob",
+      "gitBlob": "923f26533bd5df43a1357881b22adc45bbaf6ff9",
+      "bytes": 19306,
+      "path": "app/services/db/tooling_export_policy_store.py"
+    },
+    {
+      "mode": "100644",
+      "type": "blob",
+      "gitBlob": "93878a9d199258fa3167a42ca8f964d5eadb1c00",
+      "bytes": 2518,
+      "path": "app/services/db/tooling_exposure_ledger_store.py"
+    },
+    {
+      "mode": "100644",
+      "type": "blob",
+      "gitBlob": "3a694017750c3de791e2fc8de3bfb33bad9bc8d0",
+      "bytes": 7070,
+      "path": "app/services/db/tooling_mesh_activation_store.py"
+    },
+    {
+      "mode": "100644",
+      "type": "blob",
+      "gitBlob": "e33ede221f4d94e8dc290eca6dca10a4a275ba58",
+      "bytes": 87411,
+      "path": "app/services/db/tooling_remote_catalog_store.py"
+    },
+    {
+      "mode": "100644",
+      "type": "blob",
+      "gitBlob": "16f65375725be752b53cb6570b8468db18b2f984",
+      "bytes": 11897,
+      "path": "app/services/gateway/AGENTS.md"
+    },
+    {
+      "mode": "100644",
+      "type": "blob",
+      "gitBlob": "3cc749a518cb050727aaf86b31613a75a9247e57",
+      "bytes": 1569,
+      "path": "app/services/gateway/__init__.py"
+    },
+    {
+      "mode": "100644",
+      "type": "blob",
+      "gitBlob": "2062a9ab9cd8a3119402cca1e79551e71c023685",
+      "bytes": 1653,
+      "path": "app/services/gateway/__main__.py"
+    },
+    {
+      "mode": "100644",
+      "type": "blob",
+      "gitBlob": "912350e7c22d62e8310b1b2be39ed697ed9e1fd0",
+      "bytes": 650,
+      "path": "app/services/gateway/acl/__init__.py"
+    },
+    {
+      "mode": "100644",
+      "type": "blob",
+      "gitBlob": "23a6021276d7f74afc66dd65784bfb6b3d7b44ac",
+      "bytes": 221,
+      "path": "app/services/gateway/acl/audit.py"
+    },
+    {
+      "mode": "100644",
+      "type": "blob",
+      "gitBlob": "32584673c167605de1c679cc6700b788832c58a6",
+      "bytes": 440,
+      "path": "app/services/gateway/acl/identity.py"
+    },
+    {
+      "mode": "100644",
+      "type": "blob",
+      "gitBlob": "dc40c5971a95576f1463caafde71f50205c92bdf",
+      "bytes": 530,
+      "path": "app/services/gateway/acl/permissions.py"
+    },
+    {
+      "mode": "100644",
+      "type": "blob",
+      "gitBlob": "787a2b944e94374f46f2debaae3ede646ce8d2e2",
+      "bytes": 10133,
+      "path": "app/services/gateway/admin_action.py"
+    },
+    {
+      "mode": "100644",
+      "type": "blob",
+      "gitBlob": "f4703f18fce3c8316ca99729cb2cd5ae64c61400",
+      "bytes": 13258,
+      "path": "app/services/gateway/audio_session.py"
+    },
+    {
+      "mode": "100644",
+      "type": "blob",
+      "gitBlob": "e01395f71028367addc4ba492de4a84196b8e2be",
+      "bytes": 12729,
+      "path": "app/services/gateway/auth.py"
+    },
+    {
+      "mode": "100644",
+      "type": "blob",
+      "gitBlob": "7ca18d9cf0045ef127b99d4c5efbcc3514e4fcbe",
+      "bytes": 21011,
+      "path": "app/services/gateway/auth_proxy.py"
+    },
+    {
+      "mode": "100644",
+      "type": "blob",
+      "gitBlob": "ed28eb33039e22a8c6d21498ab27c89419b6dc26",
+      "bytes": 7268,
+      "path": "app/services/gateway/config.py"
+    },
+    {
+      "mode": "100644",
+      "type": "blob",
+      "gitBlob": "6ff7d86891b91413dddbf3bca82c0d40b0863ceb",
+      "bytes": 1871,
+      "path": "app/services/gateway/dependencies.py"
+    },
+    {
+      "mode": "100644",
+      "type": "blob",
+      "gitBlob": "dbdfa7e74d5c3af76753fd2ed140abc2fc74a8bc",
+      "bytes": 24489,
+      "path": "app/services/gateway/fastapi_app.py"
+    },
+    {
+      "mode": "100644",
+      "type": "blob",
+      "gitBlob": "7df7498003ed01ab15fd7760c7c40f913dfb9fc9",
+      "bytes": 616,
+      "path": "app/services/gateway/mesh/__init__.py"
+    },
+    {
+      "mode": "100644",
+      "type": "blob",
+      "gitBlob": "72dd5e2efdd966f82e3cd59b660ad8ba0452ece7",
+      "bytes": 2580,
+      "path": "app/services/gateway/mesh/announcer.py"
+    },
+    {
+      "mode": "100644",
+      "type": "blob",
+      "gitBlob": "34aaa380ab1b8df7d2311866b2ef85250ed7ee42",
+      "bytes": 23878,
+      "path": "app/services/gateway/mesh/capability_catalog.py"
+    },
+    {
+      "mode": "100644",
+      "type": "blob",
+      "gitBlob": "69df28e1510f1a3d7c2c770726cae8d7756ec8c4",
+      "bytes": 16682,
+      "path": "app/services/gateway/mesh/capability_graph.py"
+    },
+    {
+      "mode": "100644",
+      "type": "blob",
+      "gitBlob": "a4c796d1eecc86a58ffd56147f48d2b72e1793bf",
+      "bytes": 6630,
+      "path": "app/services/gateway/mesh/latency.py"
+    },
+    {
+      "mode": "100644",
+      "type": "blob",
+      "gitBlob": "48758d1cd7c9cdfcd1b5769e5a8cb8c48183e837",
+      "bytes": 11606,
+      "path": "app/services/gateway/mesh/models.py"
+    },
+    {
+      "mode": "100644",
+      "type": "blob",
+      "gitBlob": "7cc97ad530147384f23065e39f79eccb617438c9",
+      "bytes": 55456,
+      "path": "app/services/gateway/mesh/negotiation.py"
+    },
+    {
+      "mode": "100644",
+      "type": "blob",
+      "gitBlob": "6eb73039ef31f7d9ec485840dd3076017effc73c",
+      "bytes": 27001,
+      "path": "app/services/gateway/mesh/peer_bridge.py"
+    },
+    {
+      "mode": "100644",
+      "type": "blob",
+      "gitBlob": "51b1285aa771baecc2cd0b7ce3165b876f1d3183",
+      "bytes": 52037,
+      "path": "app/services/gateway/mesh/peer_registry.py"
+    },
+    {
+      "mode": "100644",
+      "type": "blob",
+      "gitBlob": "e966249e8680ff2c269f28744a7e8a3d1bc6b5b8",
+      "bytes": 3156,
+      "path": "app/services/gateway/mesh/policy_store.py"
+    },
+    {
+      "mode": "100644",
+      "type": "blob",
+      "gitBlob": "e536eff36f6078646814aabd4a544281c96a4de1",
+      "bytes": 19131,
+      "path": "app/services/gateway/mesh/provider_eligibility.py"
+    },
+    {
+      "mode": "100644",
+      "type": "blob",
+      "gitBlob": "8d1825a83f5cbf9ff7190082e3e397d342489888",
+      "bytes": 55438,
+      "path": "app/services/gateway/mesh/provider_export.py"
+    },
+    {
+      "mode": "100644",
+      "type": "blob",
+      "gitBlob": "b9aa28903e8fa8f71bd1a8a66dc06618dd2929c7",
+      "bytes": 5015,
+      "path": "app/services/gateway/mesh/route_errors.py"
+    },
+    {
+      "mode": "100644",
+      "type": "blob",
+      "gitBlob": "3e3fe3de52f296e7876438b2de7a566e80cad9dd",
+      "bytes": 24708,
+      "path": "app/services/gateway/mesh/routing_table.py"
+    },
+    {
+      "mode": "100644",
+      "type": "blob",
+      "gitBlob": "fc7d341a5a4bd3744931bd0e50daff2a686da9b2",
+      "bytes": 5138,
+      "path": "app/services/gateway/mesh/speech_constraints.py"
+    },
+    {
+      "mode": "100644",
+      "type": "blob",
+      "gitBlob": "58519b18e835a564b4131cbd18f39b40d6dbdbab",
+      "bytes": 3209,
+      "path": "app/services/gateway/mesh/tooling_projection_transport.py"
+    },
+    {
+      "mode": "100644",
+      "type": "blob",
+      "gitBlob": "7ce1249404067bf54cbf634b53fe24c74dfdb50f",
+      "bytes": 3983,
+      "path": "app/services/gateway/mesh/version_compat.py"
+    },
+    {
+      "mode": "100644",
+      "type": "blob",
+      "gitBlob": "a325c95b125905733f7e4af123f79ae0f2cf39c4",
+      "bytes": 4162,
+      "path": "app/services/gateway/orchestrator_runtime_policy.py"
+    },
+    {
+      "mode": "100644",
+      "type": "blob",
+      "gitBlob": "140b97ac65e3d587c062d71ea1d38273b9f1ee05",
+      "bytes": 27485,
+      "path": "app/services/gateway/registry_aggregator.py"
+    },
+    {
+      "mode": "100644",
+      "type": "blob",
+      "gitBlob": "d335005ac9e2d60633e30e9101578dcc3428d8cc",
+      "bytes": 45834,
+      "path": "app/services/gateway/route_generator.py"
+    },
+    {
+      "mode": "100644",
+      "type": "blob",
+      "gitBlob": "af513f57063c8421810ec8fbf3386d43c38127c9",
+      "bytes": 197247,
+      "path": "app/services/gateway/service.py"
+    },
+    {
+      "mode": "100644",
+      "type": "blob",
+      "gitBlob": "e69de29bb2d1d6434b8b29ae775ad8c2e48c5391",
+      "bytes": 0,
+      "path": "app/services/gateway/utils/__init__.py"
+    },
+    {
+      "mode": "100644",
+      "type": "blob",
+      "gitBlob": "a9cd0f192eb5503ac30dfe05c42ef6b22e065b33",
+      "bytes": 3918,
+      "path": "app/services/gateway/utils/crypto.py"
+    },
+    {
+      "mode": "100644",
+      "type": "blob",
+      "gitBlob": "bb38b99124671cedf26c8b3b53b11e1930da087b",
+      "bytes": 74,
+      "path": "app/services/gateway/webrtc/__init__.py"
+    },
+    {
+      "mode": "100644",
+      "type": "blob",
+      "gitBlob": "3a2a9b073eb00681434b1bba21fa12eb8872c72f",
+      "bytes": 12263,
+      "path": "app/services/gateway/webrtc/datachannel_flow.py"
+    },
+    {
+      "mode": "100644",
+      "type": "blob",
+      "gitBlob": "04ab722929fb236ae4401c555922562898a71c6a",
+      "bytes": 16050,
+      "path": "app/services/gateway/webrtc/event_subscriptions.py"
+    },
+    {
+      "mode": "100644",
+      "type": "blob",
+      "gitBlob": "b693dcc5320cc74c18f94692c4f0b341988bf057",
+      "bytes": 13479,
+      "path": "app/services/gateway/webrtc/pairing_sas.py"
+    },
+    {
+      "mode": "100644",
+      "type": "blob",
+      "gitBlob": "9f04cedcae3f46d4148598920eea7441208dba16",
+      "bytes": 28523,
+      "path": "app/services/gateway/webrtc/peer_protocol.py"
+    },
+    {
+      "mode": "100644",
+      "type": "blob",
+      "gitBlob": "e6e82c139c09cc911d717060b78cb4ef7ddb4d67",
+      "bytes": 5971,
+      "path": "app/services/gateway/webrtc/protocol_contract.py"
+    },
+    {
+      "mode": "100644",
+      "type": "blob",
+      "gitBlob": "534f131a4b27342ece397edc7c7079d8dabc4d72",
+      "bytes": 92358,
+      "path": "app/services/gateway/webrtc/rpc.py"
+    },
+    {
+      "mode": "100644",
+      "type": "blob",
+      "gitBlob": "dfe1b6d4967f8f7db739936a72db13c9ae7a8a71",
+      "bytes": 315736,
+      "path": "app/services/gateway/webrtc/rtc_client.py"
+    },
+    {
+      "mode": "100644",
+      "type": "blob",
+      "gitBlob": "8c18c35a6b045f5ca832fdcad443890b75ae55b5",
+      "bytes": 605,
+      "path": "app/services/gateway/webrtc/signaling/base.py"
+    },
+    {
+      "mode": "100644",
+      "type": "blob",
+      "gitBlob": "ef2c55792f6ba8f275048aabf6c9a80533e06c73",
+      "bytes": 13246,
+      "path": "app/services/gateway/webrtc/signaling/mqtt_client.py"
+    },
+    {
+      "mode": "100644",
+      "type": "blob",
+      "gitBlob": "17177e26e0d0c3e0573271697fb21cf3b6490463",
+      "bytes": 440,
+      "path": "app/services/orchestrator/__init__.py"
+    },
+    {
+      "mode": "100644",
+      "type": "blob",
+      "gitBlob": "1b1b064d773bee12142dc2e3e7a69abb9cb842f8",
+      "bytes": 1656,
+      "path": "app/services/orchestrator/__main__.py"
+    },
+    {
+      "mode": "100644",
+      "type": "blob",
+      "gitBlob": "b509839a174eb43d2b94b81ab5c2697dd9d4eee2",
+      "bytes": 29489,
+      "path": "app/services/orchestrator/agents/chatbot.py"
+    },
+    {
+      "mode": "100644",
+      "type": "blob",
+      "gitBlob": "c36b461a714361c61fbdd5bd6fd7629d1ec29230",
+      "bytes": 40161,
+      "path": "app/services/orchestrator/chat_llama_cpp.py"
+    },
+    {
+      "mode": "100644",
+      "type": "blob",
+      "gitBlob": "52a26c982ebb4042fcde9cf78a8a5d5739a63643",
+      "bytes": 21174,
+      "path": "app/services/orchestrator/chat_llama_cpp_fn_handler.py"
+    },
+    {
+      "mode": "100644",
+      "type": "blob",
+      "gitBlob": "66b243ae809cb671b0aeb91a0cb243e5c3f85c9e",
+      "bytes": 91909,
+      "path": "app/services/orchestrator/graph.py"
+    },
+    {
+      "mode": "100644",
+      "type": "blob",
+      "gitBlob": "17efe7eccf0aba1fad20c8ff138a568a76dcf3dc",
+      "bytes": 211258,
+      "path": "app/services/orchestrator/llama_context_owner.py"
+    },
+    {
+      "mode": "100644",
+      "type": "blob",
+      "gitBlob": "34e7044c3d1b15dabc580c7dda59dccf6c3373f3",
+      "bytes": 756,
+      "path": "app/services/orchestrator/llama_cpp_compat.py"
+    },
+    {
+      "mode": "100644",
+      "type": "blob",
+      "gitBlob": "d4c7502b29c028dec1b0db2c642a5118f472ec1b",
+      "bytes": 439,
+      "path": "app/services/orchestrator/message_types.py"
+    },
+    {
+      "mode": "100644",
+      "type": "blob",
+      "gitBlob": "c0419932b892542b26c811dd77c9cbbfa536a88b",
+      "bytes": 32791,
+      "path": "app/services/orchestrator/native_request_completion.py"
+    },
+    {
+      "mode": "100644",
+      "type": "blob",
+      "gitBlob": "4cb03a428d63620132a031178a3427d676c07eb7",
+      "bytes": 216921,
+      "path": "app/services/orchestrator/native_worker.py"
+    },
+    {
+      "mode": "100644",
+      "type": "blob",
+      "gitBlob": "54018a2744473f9b9f4f87320e7abcfc2e2dbd20",
+      "bytes": 16323,
+      "path": "app/services/orchestrator/remote_mesh_chat_model.py"
+    },
+    {
+      "mode": "100644",
+      "type": "blob",
+      "gitBlob": "539f8568deab391f60e47f901da0e689b86c3417",
+      "bytes": 170198,
+      "path": "app/services/orchestrator/service.py"
+    },
+    {
+      "mode": "100644",
+      "type": "blob",
+      "gitBlob": "05ea9d905cd23401766f5c7d1d667494cf2c21ff",
+      "bytes": 632,
+      "path": "app/services/orchestrator/state.py"
+    },
+    {
+      "mode": "100644",
+      "type": "blob",
+      "gitBlob": "22b86b15d257f4522e5e79082d85edef1fe709bb",
+      "bytes": 12495,
+      "path": "app/services/orchestrator/tool_bindings.py"
+    },
+    {
+      "mode": "100644",
+      "type": "blob",
+      "gitBlob": "761a41fb22e01af50661c4685d3269255b0a0a15",
+      "bytes": 5190,
+      "path": "app/services/scheduler/README.md"
+    },
+    {
+      "mode": "100644",
+      "type": "blob",
+      "gitBlob": "f52461fd904ecee361f2e1716c8e30389cc60cf3",
+      "bytes": 593,
+      "path": "app/services/scheduler/__init__.py"
+    },
+    {
+      "mode": "100644",
+      "type": "blob",
+      "gitBlob": "25f02e2a9edfd538f80e52d9fd6ee0b846affee6",
+      "bytes": 1638,
+      "path": "app/services/scheduler/__main__.py"
+    },
+    {
+      "mode": "100644",
+      "type": "blob",
+      "gitBlob": "e13ce878c1fb5adffda51e925e64419724c50a70",
+      "bytes": 13008,
+      "path": "app/services/scheduler/cron_service.py"
+    },
+    {
+      "mode": "100644",
+      "type": "blob",
+      "gitBlob": "01d8820d2d5bd9991b28abd371dd5f3b3ff5fe41",
+      "bytes": 6373,
+      "path": "app/services/scheduler/models.py"
+    },
+    {
+      "mode": "100644",
+      "type": "blob",
+      "gitBlob": "417321c844aa95eff005ef2200c006489c99ac2a",
+      "bytes": 26156,
+      "path": "app/services/scheduler/scheduler_manager.py"
+    },
+    {
+      "mode": "100644",
+      "type": "blob",
+      "gitBlob": "6c84cd5a7bcfb86f6d536deb7bf870a3dbb08ab8",
+      "bytes": 59437,
+      "path": "app/services/scheduler/service.py"
+    },
+    {
+      "mode": "100644",
+      "type": "blob",
+      "gitBlob": "e5b4dd22ae916cf3fd420f82e283cdda7b375e3e",
+      "bytes": 441,
+      "path": "app/services/stt_coordinator/__init__.py"
+    },
+    {
+      "mode": "100644",
+      "type": "blob",
+      "gitBlob": "8a17a0db6bcb6ac7619bdbafe7e8a79f1fae83b9",
+      "bytes": 1669,
+      "path": "app/services/stt_coordinator/__main__.py"
+    },
+    {
+      "mode": "100644",
+      "type": "blob",
+      "gitBlob": "0624989fa6d9158346148b2074a994a12863bd24",
+      "bytes": 69286,
+      "path": "app/services/stt_coordinator/service.py"
+    },
+    {
+      "mode": "100644",
+      "type": "blob",
+      "gitBlob": "8110e781adcf0f88638377e002252f0959f84d39",
+      "bytes": 295,
+      "path": "app/services/stt_transcription/__init__.py"
+    },
+    {
+      "mode": "100644",
+      "type": "blob",
+      "gitBlob": "48840b13665aa4fb76d4eb0e259da0b9240b1ebe",
+      "bytes": 1666,
+      "path": "app/services/stt_transcription/__main__.py"
+    },
+    {
+      "mode": "100644",
+      "type": "blob",
+      "gitBlob": "a628a959459326922e07faa9889bf23ec7a73cdb",
+      "bytes": 120668,
+      "path": "app/services/stt_transcription/service.py"
+    },
+    {
+      "mode": "100644",
+      "type": "blob",
+      "gitBlob": "baa4b07466eacf0c90af12c099abf96c5881cea5",
+      "bytes": 787,
+      "path": "app/services/stt_wakeword/__init__.py"
+    },
+    {
+      "mode": "100644",
+      "type": "blob",
+      "gitBlob": "37b999f137d97a563ef15075c62d43f5422102f0",
+      "bytes": 1636,
+      "path": "app/services/stt_wakeword/__main__.py"
+    },
+    {
+      "mode": "100644",
+      "type": "blob",
+      "gitBlob": "379afc91aefaed4e1b9d0211ed9443b7c33143e2",
+      "bytes": 9417,
+      "path": "app/services/stt_wakeword/backends.py"
+    },
+    {
+      "mode": "100644",
+      "type": "blob",
+      "gitBlob": "8ed747a54a2f073829fad0da23923ee76487aea2",
+      "bytes": 419,
+      "path": "app/services/stt_wakeword/messages.py"
+    },
+    {
+      "mode": "100644",
+      "type": "blob",
+      "gitBlob": "3d525356c76327f824bce41153b5b6b1bc44f21b",
+      "bytes": 68303,
+      "path": "app/services/stt_wakeword/service.py"
+    },
+    {
+      "mode": "100644",
+      "type": "blob",
+      "gitBlob": "be55fc2fd776c3b6bf5e2829e3916dee9507a9ee",
+      "bytes": 24235,
+      "path": "app/services/supervisor.py"
+    },
+    {
+      "mode": "100644",
+      "type": "blob",
+      "gitBlob": "173209aee589f3fc0f61c86ad09185340c7e6895",
+      "bytes": 443,
+      "path": "app/services/tooling/__init__.py"
+    },
+    {
+      "mode": "100644",
+      "type": "blob",
+      "gitBlob": "bea6d79a807922ed39ed6867fb684957a5b9ef1a",
+      "bytes": 1626,
+      "path": "app/services/tooling/__main__.py"
+    },
+    {
+      "mode": "100644",
+      "type": "blob",
+      "gitBlob": "42fa09acc6138d923ec5fc59a90d6169e5ad7ffd",
+      "bytes": 4043,
+      "path": "app/services/tooling/export_policy.py"
+    },
+    {
+      "mode": "100644",
+      "type": "blob",
+      "gitBlob": "a9a6606716824a94f85c83d066f7b0269042a0c7",
+      "bytes": 8427,
+      "path": "app/services/tooling/identity.py"
+    },
+    {
+      "mode": "100644",
+      "type": "blob",
+      "gitBlob": "68d6be8cbcfd828f3f8cfe91dd8a6724417ca507",
+      "bytes": 364,
+      "path": "app/services/tooling/mcp/__init__.py"
+    },
+    {
+      "mode": "100644",
+      "type": "blob",
+      "gitBlob": "b693ea9b5236ac775f23d648c90ee7461b8e5520",
+      "bytes": 13787,
+      "path": "app/services/tooling/mcp/mcp_client.py"
+    },
+    {
+      "mode": "100644",
+      "type": "blob",
+      "gitBlob": "d2af2f1b5f80ec120d5ea4c15b66808cd6bd1cec",
+      "bytes": 16195,
+      "path": "app/services/tooling/mcp/mcp_discovery.py"
+    },
+    {
+      "mode": "100644",
+      "type": "blob",
+      "gitBlob": "8f6662f8a43f626821402657f7082a9e25f80850",
+      "bytes": 8262,
+      "path": "app/services/tooling/projection.py"
+    },
+    {
+      "mode": "100644",
+      "type": "blob",
+      "gitBlob": "8e92938cfe3f90e0ffb2ae01e6b3ca93b4e1ac0c",
+      "bytes": 1944,
+      "path": "app/services/tooling/projection_cursor.py"
+    },
+    {
+      "mode": "100644",
+      "type": "blob",
+      "gitBlob": "9790a89579653255ae68dd5bb01f05558af49f9f",
+      "bytes": 448189,
+      "path": "app/services/tooling/service.py"
+    },
+    {
+      "mode": "100644",
+      "type": "blob",
+      "gitBlob": "afdd9d00c61e4975962d7d04d837db842d0ca5c3",
+      "bytes": 861,
+      "path": "app/services/tooling/tools/__init__.py"
+    },
+    {
+      "mode": "100644",
+      "type": "blob",
+      "gitBlob": "9a82b2bb466405810d3387d259987384306fc32c",
+      "bytes": 1700,
+      "path": "app/services/tooling/tools/brave_search.py"
+    },
+    {
+      "mode": "100644",
+      "type": "blob",
+      "gitBlob": "44263156e0b3a94a42cc4189dd0a8db48843034a",
+      "bytes": 705,
+      "path": "app/services/tooling/tools/current_screen.py"
+    },
+    {
+      "mode": "100644",
+      "type": "blob",
+      "gitBlob": "a1a32f1817766e1227e0a1596af401e88cb9f425",
+      "bytes": 114,
+      "path": "app/services/tooling/tools/duckduckgo_search.py"
+    },
+    {
+      "mode": "100644",
+      "type": "blob",
+      "gitBlob": "6fee6be8e33c2019301b3b45527502047fd68885",
+      "bytes": 214,
+      "path": "app/services/tooling/tools/gcalendar_toolkit.py"
+    },
+    {
+      "mode": "100644",
+      "type": "blob",
+      "gitBlob": "f109d6ba9e555351c220336a7bceb9dffa6e1437",
+      "bytes": 263,
+      "path": "app/services/tooling/tools/github_toolkit.py"
+    },
+    {
+      "mode": "100644",
+      "type": "blob",
+      "gitBlob": "94701edd5e82dc1b627de9dd34c1fb354bd8c5e1",
+      "bytes": 204,
+      "path": "app/services/tooling/tools/gmail_toolkit.py"
+    },
+    {
+      "mode": "100644",
+      "type": "blob",
+      "gitBlob": "7033b3b396e76ee3233aed7376440994d407d1e3",
+      "bytes": 244,
+      "path": "app/services/tooling/tools/jira_toolkit.py"
+    },
+    {
+      "mode": "100644",
+      "type": "blob",
+      "gitBlob": "04f9811e1b4e2c4c4cef8a642e420f99e606e1a6",
+      "bytes": 956,
+      "path": "app/services/tooling/tools/openrecall_search.py"
+    },
+    {
+      "mode": "100644",
+      "type": "blob",
+      "gitBlob": "db34135704ff1acee0f85eddb2f1a2d35de4e213",
+      "bytes": 13298,
+      "path": "app/services/tooling/tools/pomodoro_tool.py"
+    },
+    {
+      "mode": "100644",
+      "type": "blob",
+      "gitBlob": "adfdbeff2760686aee191bbea8c954217beae199",
+      "bytes": 1105,
+      "path": "app/services/tooling/tools/resume_tts.py"
+    },
+    {
+      "mode": "100644",
+      "type": "blob",
+      "gitBlob": "6d740309f5533f5e0bf92b6f87218fee768c7ce1",
+      "bytes": 24168,
+      "path": "app/services/tooling/tools/scheduler_tool.py"
+    },
+    {
+      "mode": "100644",
+      "type": "blob",
+      "gitBlob": "84e264c297eea155414c3ec4fdcf59137ba98bb9",
+      "bytes": 120,
+      "path": "app/services/tooling/tools/slack_toolkit.py"
+    },
+    {
+      "mode": "100644",
+      "type": "blob",
+      "gitBlob": "6f6dc6ec954b465537842d4b4e686ca2da5b70e6",
+      "bytes": 1130,
+      "path": "app/services/tooling/tools/stop_tts.py"
+    },
+    {
+      "mode": "100644",
+      "type": "blob",
+      "gitBlob": "0bd9776d1d40533f78ae8d3b8dfe5aeec421db63",
+      "bytes": 1443,
+      "path": "app/services/tooling/tools/upsert_memory.py"
+    },
+    {
+      "mode": "100644",
+      "type": "blob",
+      "gitBlob": "92b89ccc03c5f53ddfcd9629ac0c907894f30f35",
+      "bytes": 29875,
+      "path": "app/services/tooling/tools_manager.py"
+    },
+    {
+      "mode": "100644",
+      "type": "blob",
+      "gitBlob": "25ebad3984bcb9e419562c5759ef0fce0304f820",
+      "bytes": 841,
+      "path": "app/services/tts/__init__.py"
+    },
+    {
+      "mode": "100644",
+      "type": "blob",
+      "gitBlob": "d2242bc8852adfce3e9353320558fd869e02b7fe",
+      "bytes": 1602,
+      "path": "app/services/tts/__main__.py"
+    },
+    {
+      "mode": "100644",
+      "type": "blob",
+      "gitBlob": "f672de4de9e9fea9bcb3c3d859d4e39c42cbe954",
+      "bytes": 19877,
+      "path": "app/services/tts/media_import.py"
+    },
+    {
+      "mode": "100644",
+      "type": "blob",
+      "gitBlob": "e6aa6894d3ddcb4ceb6fdd0be7d83ff49f3e1bba",
+      "bytes": 31569,
+      "path": "app/services/tts/piper_catalog.py"
+    },
+    {
+      "mode": "100644",
+      "type": "blob",
+      "gitBlob": "e06059a7a46e663eceb0c4876f87ba076b1bcaca",
+      "bytes": 4541,
+      "path": "app/services/tts/piper_engine.py"
+    },
+    {
+      "mode": "100644",
+      "type": "blob",
+      "gitBlob": "b19c2a3d89f9afcef29944f053ad7c4443b46d6f",
+      "bytes": 18817,
+      "path": "app/services/tts/playback.py"
+    },
+    {
+      "mode": "100644",
+      "type": "blob",
+      "gitBlob": "4393da5252ebca53fd2494c16afe7b0829b85f9b",
+      "bytes": 763,
+      "path": "app/services/tts/providers/__init__.py"
+    },
+    {
+      "mode": "100644",
+      "type": "blob",
+      "gitBlob": "e529f5193f6c7a4f1954ec9a513fe439e3206f9a",
+      "bytes": 5895,
+      "path": "app/services/tts/providers/base.py"
+    },
+    {
+      "mode": "100644",
+      "type": "blob",
+      "gitBlob": "3da4d15ee00066c08a19aed229ca87c16641875c",
+      "bytes": 14398,
+      "path": "app/services/tts/providers/piper.py"
+    },
+    {
+      "mode": "100644",
+      "type": "blob",
+      "gitBlob": "412a9b1742768297e44fc2efc133e7c8dd87c3f7",
+      "bytes": 66955,
+      "path": "app/services/tts/providers/pockettts.py"
+    },
+    {
+      "mode": "100644",
+      "type": "blob",
+      "gitBlob": "d0e843bd19c938b52a0db482f3720df0fd6d0377",
+      "bytes": 705477,
+      "path": "app/services/tts/resources/sherpa_onnx_tts_catalog.json"
+    },
+    {
+      "mode": "100644",
+      "type": "blob",
+      "gitBlob": "d84819b2cfb2dc955e24a180ce2c991c257e2ffe",
+      "bytes": 228651,
+      "path": "app/services/tts/service.py"
+    },
+    {
+      "mode": "100644",
+      "type": "blob",
+      "gitBlob": "a9e1ecb6d9af8ed11f641419e1f849fe0f58eacd",
+      "bytes": 29775,
+      "path": "app/services/tts/voice_catalog.py"
+    },
+    {
+      "mode": "100644",
+      "type": "blob",
+      "gitBlob": "a42d88f623a83ebdd72fa46e6dc473dab9362359",
+      "bytes": 69660,
+      "path": "app/services/tts/voice_registry.py"
+    },
+    {
+      "mode": "100644",
+      "type": "blob",
+      "gitBlob": "af58830a224a3c5e74b88542d22456ff1f847469",
+      "bytes": 127,
+      "path": "app/services/vad/__init__.py"
+    },
+    {
+      "mode": "100644",
+      "type": "blob",
+      "gitBlob": "98de628c26c6ca252f9bbe45bbcb226c5fcc8356",
+      "bytes": 24668,
+      "path": "app/services/vad/service.py"
+    },
+    {
+      "mode": "100644",
+      "type": "blob",
+      "gitBlob": "cc8b1d86c903082c33eb047ac00ac193b809f9f3",
+      "bytes": 6337,
+      "path": "app/shared/AGENTS.md"
+    },
+    {
+      "mode": "100644",
+      "type": "blob",
+      "gitBlob": "7094aef942f7652f69aaf5b533c2290a4ab5700d",
+      "bytes": 59,
+      "path": "app/shared/__init__.py"
+    },
+    {
+      "mode": "100644",
+      "type": "blob",
+      "gitBlob": "8c13bbca99705e73728b7582b59b6f72c8430678",
+      "bytes": 654,
+      "path": "app/shared/auth/__init__.py"
+    },
+    {
+      "mode": "100644",
+      "type": "blob",
+      "gitBlob": "06fda6dff1d8f0b6aa415e8b524e0ff2979cdf76",
+      "bytes": 1296,
+      "path": "app/shared/auth/audit.py"
+    },
+    {
+      "mode": "100644",
+      "type": "blob",
+      "gitBlob": "17b5d14a571c4549ddf93009085eb73971f6b836",
+      "bytes": 5438,
+      "path": "app/shared/auth/identity.py"
+    },
+    {
+      "mode": "100644",
+      "type": "blob",
+      "gitBlob": "282d1b275103f7986b597b65d00af8193b839719",
+      "bytes": 14457,
+      "path": "app/shared/auth/permissions.py"
+    },
+    {
+      "mode": "100644",
+      "type": "blob",
+      "gitBlob": "96e8cc16d95fd490acc690fc4f77a6d38f12e8f8",
+      "bytes": 55,
+      "path": "app/shared/config/__init__.py"
+    },
+    {
+      "mode": "100644",
+      "type": "blob",
+      "gitBlob": "d1c8976251477e44c1cd959840527b4a3f2d6b31",
+      "bytes": 30399,
+      "path": "app/shared/config/interface.py"
+    },
+    {
+      "mode": "100644",
+      "type": "blob",
+      "gitBlob": "b7e18e6d2842a6af00f08d9009ceb922dfb8890e",
+      "bytes": 72060,
+      "path": "app/shared/config/keys.py"
+    },
+    {
+      "mode": "100644",
+      "type": "blob",
+      "gitBlob": "a3ac48230fceeeb145a2a814c416fbd319a16cef",
+      "bytes": 37108,
+      "path": "app/shared/config/models.py"
+    },
+    {
+      "mode": "100644",
+      "type": "blob",
+      "gitBlob": "002be41aedcc7502ada2f032b80bed4d475b99ca",
+      "bytes": 342,
+      "path": "app/shared/config/models_base.py"
+    },
+    {
+      "mode": "100644",
+      "type": "blob",
+      "gitBlob": "de7169b834ed01b61d9ba00b86dbb02bab124e1a",
+      "bytes": 8923,
+      "path": "app/shared/contracts/AGENTS.md"
+    },
+    {
+      "mode": "100644",
+      "type": "blob",
+      "gitBlob": "f0ddb835a31370c98bdc292ed6d7c5bff492ae28",
+      "bytes": 155,
+      "path": "app/shared/contracts/__init__.py"
+    },
+    {
+      "mode": "100644",
+      "type": "blob",
+      "gitBlob": "eb02a2e89dd462c0f4d8193566895982d142dcf0",
+      "bytes": 202,
+      "path": "app/shared/contracts/io_model.py"
+    },
+    {
+      "mode": "100644",
+      "type": "blob",
+      "gitBlob": "399c87b664481ae0efb0fbbe71060e93317264dd",
+      "bytes": 1000,
+      "path": "app/shared/contracts/mesh_compatibility.py"
+    },
+    {
+      "mode": "100644",
+      "type": "blob",
+      "gitBlob": "a70db2d2564dd9fd928a7945a9faff2932951f16",
+      "bytes": 21169,
+      "path": "app/shared/contracts/mesh_surface.py"
+    },
+    {
+      "mode": "100644",
+      "type": "blob",
+      "gitBlob": "124e7dc8802aecace28504ce87fca05050a4f790",
+      "bytes": 9280,
+      "path": "app/shared/contracts/models/__init__.py"
+    },
+    {
+      "mode": "100644",
+      "type": "blob",
+      "gitBlob": "56040a71b07fc37df268ec43ab2531ad58f8b008",
+      "bytes": 1018,
+      "path": "app/shared/contracts/models/audio.py"
+    },
+    {
+      "mode": "100644",
+      "type": "blob",
+      "gitBlob": "f723f5a0661889b74d8db0e020a91c829ea70694",
+      "bytes": 2837,
+      "path": "app/shared/contracts/models/aurora.py"
+    },
+    {
+      "mode": "100644",
+      "type": "blob",
+      "gitBlob": "afd1dff3f9e4df49268da8ade9be6c2bded9f70a",
+      "bytes": 17942,
+      "path": "app/shared/contracts/models/auth.py"
+    },
+    {
+      "mode": "100644",
+      "type": "blob",
+      "gitBlob": "ad319afe54fac1cba17cf793d77b1cc82d19a21e",
+      "bytes": 5377,
+      "path": "app/shared/contracts/models/backup.py"
+    },
+    {
+      "mode": "100644",
+      "type": "blob",
+      "gitBlob": "f15bd628bcd45a0dd23b6181091ca2735d527984",
+      "bytes": 632,
+      "path": "app/shared/contracts/models/common.py"
+    },
+    {
+      "mode": "100644",
+      "type": "blob",
+      "gitBlob": "71201d172f8278b53dd9f9ac994f1926fbdc8e59",
+      "bytes": 7988,
+      "path": "app/shared/contracts/models/config.py"
+    },
+    {
+      "mode": "100644",
+      "type": "blob",
+      "gitBlob": "70ff02a61cad70a5d3d5cccd9e869e0ff8f6ef6b",
+      "bytes": 58117,
+      "path": "app/shared/contracts/models/db.py"
+    },
+    {
+      "mode": "100644",
+      "type": "blob",
+      "gitBlob": "c2ae8d308c027a93c6d8979b016fca5e6d90300d",
+      "bytes": 43147,
+      "path": "app/shared/contracts/models/gateway.py"
+    },
+    {
+      "mode": "100644",
+      "type": "blob",
+      "gitBlob": "6224a0a2dab494758dde1844d8b4cbb1d0c55af7",
+      "bytes": 10985,
+      "path": "app/shared/contracts/models/mesh.py"
+    },
+    {
+      "mode": "100644",
+      "type": "blob",
+      "gitBlob": "7cc2e85e5c33dbfd30fd464accf5f5655fb72694",
+      "bytes": 22857,
+      "path": "app/shared/contracts/models/orchestrator.py"
+    },
+    {
+      "mode": "100644",
+      "type": "blob",
+      "gitBlob": "53520cf23d146fa1f8e2c270af0acc71fac29485",
+      "bytes": 8999,
+      "path": "app/shared/contracts/models/scheduler.py"
+    },
+    {
+      "mode": "100644",
+      "type": "blob",
+      "gitBlob": "96c5149228c6d75d4fdfd47ea862451324131db2",
+      "bytes": 13163,
+      "path": "app/shared/contracts/models/speech.py"
+    },
+    {
+      "mode": "100644",
+      "type": "blob",
+      "gitBlob": "856f810ef3c746474f2b939c903706b384ab6605",
+      "bytes": 23096,
+      "path": "app/shared/contracts/models/speech_runtime.py"
+    },
+    {
+      "mode": "100644",
+      "type": "blob",
+      "gitBlob": "3433afcc3ffb0046f8d58cf756fed161dbfa2e9c",
+      "bytes": 21745,
+      "path": "app/shared/contracts/models/stt.py"
+    },
+    {
+      "mode": "100644",
+      "type": "blob",
+      "gitBlob": "3273a51b8720aae6093a9b1eb307679056297479",
+      "bytes": 2420,
+      "path": "app/shared/contracts/models/supervisor.py"
+    },
+    {
+      "mode": "100644",
+      "type": "blob",
+      "gitBlob": "caa9bfdd3794918784ff2bce4aa25114b6e7306d",
+      "bytes": 61428,
+      "path": "app/shared/contracts/models/tooling.py"
+    },
+    {
+      "mode": "100644",
+      "type": "blob",
+      "gitBlob": "6aa71cff55bc6711f236c4e3e14b8c35f286d85b",
+      "bytes": 55774,
+      "path": "app/shared/contracts/models/tts.py"
+    },
+    {
+      "mode": "100644",
+      "type": "blob",
+      "gitBlob": "e8411a327ff87c24ef589b68ed86eebbb5c1a593",
+      "bytes": 18337,
+      "path": "app/shared/contracts/registry.py"
+    },
+    {
+      "mode": "100644",
+      "type": "blob",
+      "gitBlob": "fb3e2a94e934a8bf8e1bd76158a78dde7063caba",
+      "bytes": 1810,
+      "path": "app/shared/contracts/speech_routing.py"
+    },
+    {
+      "mode": "100644",
+      "type": "blob",
+      "gitBlob": "eb4cb0027445294d85c4ec54f588345edba4a050",
+      "bytes": 2175,
+      "path": "app/shared/crypto.py"
+    },
+    {
+      "mode": "100644",
+      "type": "blob",
+      "gitBlob": "4918a576891f088d74db2e0aea9143017020c409",
+      "bytes": 29,
+      "path": "app/shared/mesh/__init__.py"
+    },
+    {
+      "mode": "100644",
+      "type": "blob",
+      "gitBlob": "ccd0d5e2bb385c26f651521c5e130a3dd45f672d",
+      "bytes": 6644,
+      "path": "app/shared/mesh/observability.py"
+    },
+    {
+      "mode": "100644",
+      "type": "blob",
+      "gitBlob": "ef849ff7d1194de4911a11956aed6787a3149098",
+      "bytes": 7511,
+      "path": "app/shared/mesh/tracing.py"
+    },
+    {
+      "mode": "100644",
+      "type": "blob",
+      "gitBlob": "cf2ac9f70973949cb12065f227b309ac64b10855",
+      "bytes": 57,
+      "path": "app/shared/messaging/__init__.py"
+    },
+    {
+      "mode": "100644",
+      "type": "blob",
+      "gitBlob": "092bfb592b4e1b0c845f2f29a14fa8f9bed1084d",
+      "bytes": 5270,
+      "path": "app/shared/messaging/bus_init.py"
+    },
+    {
+      "mode": "100644",
+      "type": "blob",
+      "gitBlob": "a73cddcaeb0169cb3f6db0545a6e741b05485072",
+      "bytes": 2637,
+      "path": "app/shared/messaging/models/__init__.py"
+    },
+    {
+      "mode": "100644",
+      "type": "blob",
+      "gitBlob": "6fe55ec81eaf979d5f28bd5c34c1e7a45f1054db",
+      "bytes": 2483,
+      "path": "app/shared/messaging/models/db_models.py"
+    },
+    {
+      "mode": "100644",
+      "type": "blob",
+      "gitBlob": "632ff234d1f7be8444295b30cd29fe1ee34a6e59",
+      "bytes": 1582,
+      "path": "app/shared/messaging/models/orchestrator_models.py"
+    },
+    {
+      "mode": "100644",
+      "type": "blob",
+      "gitBlob": "f0e72c26118bed5c03ae3d2af784666751ef8c40",
+      "bytes": 395,
+      "path": "app/shared/messaging/models/scheduler_models.py"
+    },
+    {
+      "mode": "100644",
+      "type": "blob",
+      "gitBlob": "470ba1aa9ace334f635e064f82c091605c825974",
+      "bytes": 1942,
+      "path": "app/shared/messaging/models/stt_coordinator_models.py"
+    },
+    {
+      "mode": "100644",
+      "type": "blob",
+      "gitBlob": "c81dc50708377e11ee0c1d4179f364abe0c17e56",
+      "bytes": 1143,
+      "path": "app/shared/messaging/models/stt_wakeword_models.py"
+    },
+    {
+      "mode": "100644",
+      "type": "blob",
+      "gitBlob": "238ad3b9597cf1ac9b99d8bcf5b4463dcc43f509",
+      "bytes": 1888,
+      "path": "app/shared/messaging/models/tooling_models.py"
+    },
+    {
+      "mode": "100644",
+      "type": "blob",
+      "gitBlob": "ee3fce8e00fbd3d5926eb348f099b07b28ea2bb8",
+      "bytes": 1146,
+      "path": "app/shared/messaging/models/tts_models.py"
+    },
+    {
+      "mode": "100644",
+      "type": "blob",
+      "gitBlob": "e69de29bb2d1d6434b8b29ae775ad8c2e48c5391",
+      "bytes": 0,
+      "path": "app/shared/models/__init__.py"
+    },
+    {
+      "mode": "100644",
+      "type": "blob",
+      "gitBlob": "fcc0c26dfef0d469761a70a93c75136cedaec14a",
+      "bytes": 17024,
+      "path": "app/shared/models/db.py"
+    },
+    {
+      "mode": "100644",
+      "type": "blob",
+      "gitBlob": "b58940b13dd4e682d23cf3e869729b74407ee916",
+      "bytes": 6750,
+      "path": "app/shared/path_utils.py"
+    },
+    {
+      "mode": "100644",
+      "type": "blob",
+      "gitBlob": "10c16de824f1dba3a91cddc4c504cefa4571e8f4",
+      "bytes": 51,
+      "path": "app/shared/services/__init__.py"
+    },
+    {
+      "mode": "100644",
+      "type": "blob",
+      "gitBlob": "5aafe02b387f8ebfbacb34752b5b67e08bb5982a",
+      "bytes": 69281,
+      "path": "app/shared/services/base_service.py"
+    },
+    {
+      "mode": "100644",
+      "type": "blob",
+      "gitBlob": "c806890a5a71aa218ac471d4d84fdb8ab179782d",
+      "bytes": 1723,
+      "path": "app/shared/services/health.py"
+    },
+    {
+      "mode": "100644",
+      "type": "blob",
+      "gitBlob": "88b23844c50b94d8ee310a36362739de8df23c2f",
+      "bytes": 12132,
+      "path": "app/shared/services/process_launcher.py"
+    },
+    {
+      "mode": "100644",
+      "type": "blob",
+      "gitBlob": "c00fd01ffa62ac29f12c409ab48a73058a800dc4",
+      "bytes": 1960,
+      "path": "app/shared/speech_language_policy.py"
+    },
+    {
+      "mode": "100644",
+      "type": "blob",
+      "gitBlob": "7873d4379fd61dd412342e7e130d3ab382512c2e",
+      "bytes": 4754,
+      "path": "app/shared/speech_lifecycle_observer.py"
+    },
+    {
+      "mode": "100644",
+      "type": "blob",
+      "gitBlob": "921ae5225d52c3e380c050f2869d6d1f9226e2ec",
+      "bytes": 215,
+      "path": "app/ui/__init__.py"
+    },
+    {
+      "mode": "100644",
+      "type": "blob",
+      "gitBlob": "1443181e6d9edf4738e9ec16393800211886ebe2",
+      "bytes": 10967,
+      "path": "app/ui/bridge_service.py"
+    },
+    {
+      "mode": "100644",
+      "type": "blob",
+      "gitBlob": "db3f2fab90ea60bed1882b9b5f3ecfd1720fe7f3",
+      "bytes": 8936,
+      "path": "main.py"
+    },
+    {
+      "mode": "160000",
+      "type": "commit",
+      "gitBlob": "f121ed97888e5046ac3b8d5ce0b40b56431feba3",
+      "bytes": null,
+      "path": "modules/openrecall"
+    },
+    {
+      "mode": "100644",
+      "type": "blob",
+      "gitBlob": "665d96d197ee7fa16e5c6d714245e1d5cf63998e",
+      "bytes": 13381,
+      "path": "modules/ui-mock-reference/.design-sync/NOTES.md"
+    },
+    {
+      "mode": "100644",
+      "type": "blob",
+      "gitBlob": "c98cd46cb9f3ae68063158bfd74c3d4273a2360a",
+      "bytes": 4192,
+      "path": "modules/ui-mock-reference/.design-sync/config.json"
+    },
+    {
+      "mode": "100644",
+      "type": "blob",
+      "gitBlob": "a60ef5b23add28723d9d86fded787674d4b6bba9",
+      "bytes": 3835,
+      "path": "modules/ui-mock-reference/.design-sync/conventions.md"
+    },
+    {
+      "mode": "100644",
+      "type": "blob",
+      "gitBlob": "84c41be227138598878322549fd093cbe2830d8d",
+      "bytes": 12248,
+      "path": "modules/ui-mock-reference/.design-sync/overrides/common.mjs"
+    },
+    {
+      "mode": "100644",
+      "type": "blob",
+      "gitBlob": "adc9e2dd0c509a65f485cfb14865c5e28658ffbe",
+      "bytes": 8660,
+      "path": "modules/ui-mock-reference/.design-sync/overrides/source-kit.mjs"
+    },
+    {
+      "mode": "100644",
+      "type": "blob",
+      "gitBlob": "0a3744fda7e659f871c5083c8649b4c1684d15c5",
+      "bytes": 2261,
+      "path": "modules/ui-mock-reference/.design-sync/previews/Accordion.tsx"
+    },
+    {
+      "mode": "100644",
+      "type": "blob",
+      "gitBlob": "0ec425270dedb8cb41c073010954561ecd793bf7",
+      "bytes": 466,
+      "path": "modules/ui-mock-reference/.design-sync/previews/ActivityRail.tsx"
+    },
+    {
+      "mode": "100644",
+      "type": "blob",
+      "gitBlob": "2067672481176a86b3c892d30d12828a0cb1288c",
+      "bytes": 2355,
+      "path": "modules/ui-mock-reference/.design-sync/previews/AdminConfirmDialog.tsx"
+    },
+    {
+      "mode": "100644",
+      "type": "blob",
+      "gitBlob": "8c5e664bf18b37eb0cc6b7d19986ac66296ab339",
+      "bytes": 220,
+      "path": "modules/ui-mock-reference/.design-sync/previews/AdminOverview.tsx"
+    },
+    {
+      "mode": "100644",
+      "type": "blob",
+      "gitBlob": "1f23bc39b11c8f869dc43330cd11d50c96e6be14",
+      "bytes": 822,
+      "path": "modules/ui-mock-reference/.design-sync/previews/AdminSecondarySurface.tsx"
+    },
+    {
+      "mode": "100644",
+      "type": "blob",
+      "gitBlob": "62114ec9a6a04fdce8e7621dc6838a01f8ebdb18",
+      "bytes": 1177,
+      "path": "modules/ui-mock-reference/.design-sync/previews/Alert.tsx"
+    },
+    {
+      "mode": "100644",
+      "type": "blob",
+      "gitBlob": "2d0e0a9a244cc5c177df1d27c84cd3440e83f90c",
+      "bytes": 230,
+      "path": "modules/ui-mock-reference/.design-sync/previews/AssistantView.tsx"
+    },
+    {
+      "mode": "100644",
+      "type": "blob",
+      "gitBlob": "9f727f37b94d4e169b95281177ef71f418e967f4",
+      "bytes": 212,
+      "path": "modules/ui-mock-reference/.design-sync/previews/AuditView.tsx"
+    },
+    {
+      "mode": "100644",
+      "type": "blob",
+      "gitBlob": "3b185b596ce0fd9fe65a9e5c48922efb9e1447eb",
+      "bytes": 1415,
+      "path": "modules/ui-mock-reference/.design-sync/previews/Avatar.tsx"
+    },
+    {
+      "mode": "100644",
+      "type": "blob",
+      "gitBlob": "4894e2e83cfc14310ff00c3fe1079c96a7b801bb",
+      "bytes": 1378,
+      "path": "modules/ui-mock-reference/.design-sync/previews/AvatarGroup.tsx"
+    },
+    {
+      "mode": "100644",
+      "type": "blob",
+      "gitBlob": "d629e98d0892a3451910b0ee3b9209fdca92a66a",
+      "bytes": 726,
+      "path": "modules/ui-mock-reference/.design-sync/previews/BackendCoverageBadge.tsx"
+    },
+    {
+      "mode": "100644",
+      "type": "blob",
+      "gitBlob": "9b30a4b16bf81aeead64510fc5794411ac332835",
+      "bytes": 924,
+      "path": "modules/ui-mock-reference/.design-sync/previews/Badge.tsx"
+    },
+    {
+      "mode": "100644",
+      "type": "blob",
+      "gitBlob": "3bb4057a9f43c25b7c6d27c1e99ade462c990457",
+      "bytes": 1114,
+      "path": "modules/ui-mock-reference/.design-sync/previews/Button.tsx"
+    },
+    {
+      "mode": "100644",
+      "type": "blob",
+      "gitBlob": "cedbeb1d8e71f3da60e974ea2be1b98f31c85785",
+      "bytes": 1918,
+      "path": "modules/ui-mock-reference/.design-sync/previews/CapabilityDrawer.tsx"
+    },
+    {
+      "mode": "100644",
+      "type": "blob",
+      "gitBlob": "81184cbf40d6932ebcbac2859efa904bc07f9d5a",
+      "bytes": 1074,
+      "path": "modules/ui-mock-reference/.design-sync/previews/CapabilityStateBadge.tsx"
+    },
+    {
+      "mode": "100644",
+      "type": "blob",
+      "gitBlob": "7c11164c64db11cf9ce39702fdb1d8dabd544370",
+      "bytes": 1412,
+      "path": "modules/ui-mock-reference/.design-sync/previews/Card.tsx"
+    },
+    {
+      "mode": "100644",
+      "type": "blob",
+      "gitBlob": "cf8413b1ae1b21d0a408e37962856a2390ee40e3",
+      "bytes": 214,
+      "path": "modules/ui-mock-reference/.design-sync/previews/ConfigView.tsx"
+    },
+    {
+      "mode": "100644",
+      "type": "blob",
+      "gitBlob": "bd39c8ff784e5f96470e758a11b448b805be9ae7",
+      "bytes": 216,
+      "path": "modules/ui-mock-reference/.design-sync/previews/DevicesView.tsx"
+    },
+    {
+      "mode": "100644",
+      "type": "blob",
+      "gitBlob": "00d8fa2721f7b14a62f9974cc2710029fff918a9",
+      "bytes": 224,
+      "path": "modules/ui-mock-reference/.design-sync/previews/DiagnosticsView.tsx"
+    },
+    {
+      "mode": "100644",
+      "type": "blob",
+      "gitBlob": "9040264c165e0a34cdeebd9fcf35ebb52e28a283",
+      "bytes": 896,
+      "path": "modules/ui-mock-reference/.design-sync/previews/Dialog.tsx"
+    },
+    {
+      "mode": "100644",
+      "type": "blob",
+      "gitBlob": "0f42081c67f589c6f12b5b4b7b3bedbe45bc1886",
+      "bytes": 858,
+      "path": "modules/ui-mock-reference/.design-sync/previews/DiffViewer.tsx"
+    },
+    {
+      "mode": "100644",
+      "type": "blob",
+      "gitBlob": "5910add99525f5128cf957007efec1a525ae92eb",
+      "bytes": 1918,
+      "path": "modules/ui-mock-reference/.design-sync/previews/DropdownMenu.tsx"
+    },
+    {
+      "mode": "100644",
+      "type": "blob",
+      "gitBlob": "7c656ed11cf4ba517869ce459ccb0a27d0df43e2",
+      "bytes": 611,
+      "path": "modules/ui-mock-reference/.design-sync/previews/ExposureBadge.tsx"
+    },
+    {
+      "mode": "100644",
+      "type": "blob",
+      "gitBlob": "73bff2c1e2d2754bb3d16ba91e2b8ef2476dea2b",
+      "bytes": 581,
+      "path": "modules/ui-mock-reference/.design-sync/previews/HealthBadge.tsx"
+    },
+    {
+      "mode": "100644",
+      "type": "blob",
+      "gitBlob": "f00791abe43d242c66857b62a55160ba985c47bb",
+      "bytes": 640,
+      "path": "modules/ui-mock-reference/.design-sync/previews/IdentityBadge.tsx"
+    },
+    {
+      "mode": "100644",
+      "type": "blob",
+      "gitBlob": "981187bd3732aff800a51a48a535ad8f61b75c13",
+      "bytes": 1033,
+      "path": "modules/ui-mock-reference/.design-sync/previews/Input.tsx"
+    },
+    {
+      "mode": "100644",
+      "type": "blob",
+      "gitBlob": "ccf89efae2cd967cab9c1e32af1d95616aa55d31",
+      "bytes": 865,
+      "path": "modules/ui-mock-reference/.design-sync/previews/Label.tsx"
+    },
+    {
+      "mode": "100644",
+      "type": "blob",
+      "gitBlob": "ced0089c0cdba57496e66d2a123bb9e55e44fe07",
+      "bytes": 210,
+      "path": "modules/ui-mock-reference/.design-sync/previews/MeshView.tsx"
+    },
+    {
+      "mode": "100644",
+      "type": "blob",
+      "gitBlob": "26343b2617d7dd8c4ba02cecd945365d2a35b97d",
+      "bytes": 578,
+      "path": "modules/ui-mock-reference/.design-sync/previews/MethodTypeBadge.tsx"
+    },
+    {
+      "mode": "100644",
+      "type": "blob",
+      "gitBlob": "a298dda358c745880a9e4ec9bcfcbe7cc888ad31",
+      "bytes": 651,
+      "path": "modules/ui-mock-reference/.design-sync/previews/ModeBadge.tsx"
+    },
+    {
+      "mode": "100644",
+      "type": "blob",
+      "gitBlob": "ce78536d1efdd8bd597edc1ef03e279f9d092614",
+      "bytes": 214,
+      "path": "modules/ui-mock-reference/.design-sync/previews/ModelsView.tsx"
+    },
+    {
+      "mode": "100644",
+      "type": "blob",
+      "gitBlob": "40080c2cf86386bc7b2a723ab2a564d4aa1300df",
+      "bytes": 222,
+      "path": "modules/ui-mock-reference/.design-sync/previews/OnboardingView.tsx"
+    },
+    {
+      "mode": "100644",
+      "type": "blob",
+      "gitBlob": "411e2dfe76612c52fe57e122218b28043bd62cae",
+      "bytes": 1721,
+      "path": "modules/ui-mock-reference/.design-sync/previews/PageHeader.tsx"
+    },
+    {
+      "mode": "100644",
+      "type": "blob",
+      "gitBlob": "47b7e5371d493cacbe4fc9a6f9478b00df217964",
+      "bytes": 684,
+      "path": "modules/ui-mock-reference/.design-sync/previews/PrivacyBadge.tsx"
+    },
+    {
+      "mode": "100644",
+      "type": "blob",
+      "gitBlob": "dfbfdf1b702e6a1b5e72009ae0239b9752600549",
+      "bytes": 1333,
+      "path": "modules/ui-mock-reference/.design-sync/previews/Progress.tsx"
+    },
+    {
+      "mode": "100644",
+      "type": "blob",
+      "gitBlob": "55317db94599205ee76a0c1843d50b04da9dc273",
+      "bytes": 210,
+      "path": "modules/ui-mock-reference/.design-sync/previews/RbacView.tsx"
+    },
+    {
+      "mode": "100644",
+      "type": "blob",
+      "gitBlob": "5274b8f7b95425583f54f60e4ddf5b5e12346c9a",
+      "bytes": 606,
+      "path": "modules/ui-mock-reference/.design-sync/previews/RouteBadge.tsx"
+    },
+    {
+      "mode": "100644",
+      "type": "blob",
+      "gitBlob": "9dc8586de3ad3f79b83bbcaeade806e7527ef4da",
+      "bytes": 548,
+      "path": "modules/ui-mock-reference/.design-sync/previews/RouteSheet.tsx"
+    },
+    {
+      "mode": "100644",
+      "type": "blob",
+      "gitBlob": "e93afd62ad1c3908cd2750e607d7a84d74aa488a",
+      "bytes": 2247,
+      "path": "modules/ui-mock-reference/.design-sync/previews/ScrollArea.tsx"
+    },
+    {
+      "mode": "100644",
+      "type": "blob",
+      "gitBlob": "c832c69b8088f4cc4ad0b14f5c464e779318274e",
+      "bytes": 1983,
+      "path": "modules/ui-mock-reference/.design-sync/previews/Select.tsx"
+    },
+    {
+      "mode": "100644",
+      "type": "blob",
+      "gitBlob": "51fe156eb9cdb34f2e342b59a75cff5483824125",
+      "bytes": 718,
+      "path": "modules/ui-mock-reference/.design-sync/previews/Separator.tsx"
+    },
+    {
+      "mode": "100644",
+      "type": "blob",
+      "gitBlob": "54696e98e829706440587f3b06ece77ec052507a",
+      "bytes": 218,
+      "path": "modules/ui-mock-reference/.design-sync/previews/ServicesView.tsx"
+    },
+    {
+      "mode": "100644",
+      "type": "blob",
+      "gitBlob": "8188eb533549e3b687d951f3bc6e748f3751f452",
+      "bytes": 240,
+      "path": "modules/ui-mock-reference/.design-sync/previews/SettingsPermissionsView.tsx"
+    },
+    {
+      "mode": "100644",
+      "type": "blob",
+      "gitBlob": "6f9267aa3eaff6faa5034cc21fe8852d2f95e9e7",
+      "bytes": 1591,
+      "path": "modules/ui-mock-reference/.design-sync/previews/Sheet.tsx"
+    },
+    {
+      "mode": "100644",
+      "type": "blob",
+      "gitBlob": "9f68f49cd8969f99c2869206806c83fb72c17d6c",
+      "bytes": 911,
+      "path": "modules/ui-mock-reference/.design-sync/previews/Switch.tsx"
+    },
+    {
+      "mode": "100644",
+      "type": "blob",
+      "gitBlob": "f7d3c044b060938ad7e34f9469984d64a5e63f08",
+      "bytes": 1750,
+      "path": "modules/ui-mock-reference/.design-sync/previews/Table.tsx"
+    },
+    {
+      "mode": "100644",
+      "type": "blob",
+      "gitBlob": "80dbca09aafe4eb0f80dd1032d1367ba87ab6608",
+      "bytes": 2054,
+      "path": "modules/ui-mock-reference/.design-sync/previews/Tabs.tsx"
+    },
+    {
+      "mode": "100644",
+      "type": "blob",
+      "gitBlob": "2548cc2c9277a45c61642315aa82ffa8e3ac9faf",
+      "bytes": 1240,
+      "path": "modules/ui-mock-reference/.design-sync/previews/Textarea.tsx"
+    },
+    {
+      "mode": "100644",
+      "type": "blob",
+      "gitBlob": "83590dbad9c45e446b0222c4abf1d7e3e7fad50d",
+      "bytes": 1162,
+      "path": "modules/ui-mock-reference/.design-sync/previews/Toaster.tsx"
+    },
+    {
+      "mode": "100644",
+      "type": "blob",
+      "gitBlob": "b1f22d95d682408d19783fc0dcd3a9c5f1965b0a",
+      "bytes": 214,
+      "path": "modules/ui-mock-reference/.design-sync/previews/TokensView.tsx"
+    },
+    {
+      "mode": "100644",
+      "type": "blob",
+      "gitBlob": "c232c73ba50cc1f6ed7062dd507f45e8c4b98853",
+      "bytes": 965,
+      "path": "modules/ui-mock-reference/.design-sync/previews/ToolCallCard.tsx"
+    },
+    {
+      "mode": "100644",
+      "type": "blob",
+      "gitBlob": "3fadd5ae0bba34a18bfeead6712b3d4d25e2c4a7",
+      "bytes": 1166,
+      "path": "modules/ui-mock-reference/.design-sync/previews/Tooltip.tsx"
+    },
+    {
+      "mode": "100644",
+      "type": "blob",
+      "gitBlob": "c29ba8f4e79ecde1016d9786f6286ea54a53ab1a",
+      "bytes": 565,
+      "path": "modules/ui-mock-reference/.gitignore"
+    },
+    {
+      "mode": "100644",
+      "type": "blob",
+      "gitBlob": "4728e990f50dbc1e59c38e3041185f8c9e6b35de",
+      "bytes": 3680,
+      "path": "modules/ui-mock-reference/README.md"
+    },
+    {
+      "mode": "100644",
+      "type": "blob",
+      "gitBlob": "c2d177b4157bb55497193585722bd8934648bd08",
+      "bytes": 127,
+      "path": "modules/ui-mock-reference/app/(cockpit)/admin/access/page.tsx"
+    },
+    {
+      "mode": "100644",
+      "type": "blob",
+      "gitBlob": "645f2482bd554024488319a471a5956c5f97b417",
+      "bytes": 129,
+      "path": "modules/ui-mock-reference/app/(cockpit)/admin/audit/page.tsx"
+    },
+    {
+      "mode": "100644",
+      "type": "blob",
+      "gitBlob": "f016e930a6f98aa83cd737c4052243efba880359",
+      "bytes": 173,
+      "path": "modules/ui-mock-reference/app/(cockpit)/admin/backups/page.tsx"
+    },
+    {
+      "mode": "100644",
+      "type": "blob",
+      "gitBlob": "6f33e5e5cc91bc8517dd793b1c06b19b2d6a612e",
+      "bytes": 133,
+      "path": "modules/ui-mock-reference/app/(cockpit)/admin/config/page.tsx"
+    },
+    {
+      "mode": "100644",
+      "type": "blob",
+      "gitBlob": "b0b7d711067637adbb9a1119f6bf34b63327a408",
+      "bytes": 175,
+      "path": "modules/ui-mock-reference/app/(cockpit)/admin/contracts/page.tsx"
+    },
+    {
+      "mode": "100644",
+      "type": "blob",
+      "gitBlob": "6ad537bdb8ac875668d560377f0ae21da3acef0f",
+      "bytes": 137,
+      "path": "modules/ui-mock-reference/app/(cockpit)/admin/devices/page.tsx"
+    },
+    {
+      "mode": "100644",
+      "type": "blob",
+      "gitBlob": "3af3330a54580a0d1d42fc9248bfbc59a421cc82",
+      "bytes": 135,
+      "path": "modules/ui-mock-reference/app/(cockpit)/admin/page.tsx"
+    },
+    {
+      "mode": "100644",
+      "type": "blob",
+      "gitBlob": "b705bd055b8db07a02629dbe9dc5528792ea0cad",
+      "bytes": 173,
+      "path": "modules/ui-mock-reference/app/(cockpit)/admin/pairing/page.tsx"
+    },
+    {
+      "mode": "100644",
+      "type": "blob",
+      "gitBlob": "f7d4f1610e2accb4f2bc3cb3b2a1ae8f7058ac2b",
+      "bytes": 173,
+      "path": "modules/ui-mock-reference/app/(cockpit)/admin/plugins/page.tsx"
+    },
+    {
+      "mode": "100644",
+      "type": "blob",
+      "gitBlob": "fcce749127a5a6db49c6317df456f392a70da7c1",
+      "bytes": 141,
+      "path": "modules/ui-mock-reference/app/(cockpit)/admin/services/page.tsx"
+    },
+    {
+      "mode": "100644",
+      "type": "blob",
+      "gitBlob": "fe9dd5a61e60a5a1cf8eb8654da6fadbdd6b1f2e",
+      "bytes": 133,
+      "path": "modules/ui-mock-reference/app/(cockpit)/admin/tokens/page.tsx"
+    },
+    {
+      "mode": "100644",
+      "type": "blob",
+      "gitBlob": "d64278b94d856c991b81b7feaf01878b0f8aac60",
+      "bytes": 159,
+      "path": "modules/ui-mock-reference/app/(cockpit)/diagnostics/page.tsx"
+    },
+    {
+      "mode": "100644",
+      "type": "blob",
+      "gitBlob": "f58392af116b93586e3addb8ae4a66df9f1a884a",
+      "bytes": 186,
+      "path": "modules/ui-mock-reference/app/(cockpit)/layout.tsx"
+    },
+    {
+      "mode": "100644",
+      "type": "blob",
+      "gitBlob": "b6f883a17fa9b66f9000247c8533e9189e68f945",
+      "bytes": 3686,
+      "path": "modules/ui-mock-reference/app/(cockpit)/memory/page.tsx"
+    },
+    {
+      "mode": "100644",
+      "type": "blob",
+      "gitBlob": "0681c6f791b2ebad9003a253b8075b974f7b3201",
+      "bytes": 124,
+      "path": "modules/ui-mock-reference/app/(cockpit)/mesh/page.tsx"
+    },
+    {
+      "mode": "100644",
+      "type": "blob",
+      "gitBlob": "159dd29886bb82297fa5a1403c4b37618d8a5d3b",
+      "bytes": 134,
+      "path": "modules/ui-mock-reference/app/(cockpit)/models/page.tsx"
+    },
+    {
+      "mode": "100644",
+      "type": "blob",
+      "gitBlob": "716994f04aee06a4b963031948c18813c2281c16",
+      "bytes": 154,
+      "path": "modules/ui-mock-reference/app/(cockpit)/onboarding/page.tsx"
+    },
+    {
+      "mode": "100644",
+      "type": "blob",
+      "gitBlob": "4c5e24d9ef32fd4e70d380596e9f4dbf07eadb61",
+      "bytes": 149,
+      "path": "modules/ui-mock-reference/app/(cockpit)/page.tsx"
+    },
+    {
+      "mode": "100644",
+      "type": "blob",
+      "gitBlob": "eff2ffe806bcd3ad1e09e6a653109e152c0f6eaa",
+      "bytes": 178,
+      "path": "modules/ui-mock-reference/app/(cockpit)/settings/page.tsx"
+    },
+    {
+      "mode": "100644",
+      "type": "blob",
+      "gitBlob": "5c6fb561f05bdc969b231f68a3f3673a712d00f1",
+      "bytes": 4105,
+      "path": "modules/ui-mock-reference/app/(cockpit)/tools/page.tsx"
+    },
+    {
+      "mode": "100644",
+      "type": "blob",
+      "gitBlob": "8df750c8711f53d40c8e4b5af49908c06b86b3ac",
+      "bytes": 5916,
+      "path": "modules/ui-mock-reference/app/globals.css"
+    },
+    {
+      "mode": "100644",
+      "type": "blob",
+      "gitBlob": "d63dbda1a3c8483e06b9b9d32ed8526956498d47",
+      "bytes": 1315,
+      "path": "modules/ui-mock-reference/app/layout.tsx"
+    },
+    {
+      "mode": "100644",
+      "type": "blob",
+      "gitBlob": "45921ecdea324a57c73917317f80bcd77a3978d6",
+      "bytes": 428,
+      "path": "modules/ui-mock-reference/components.json"
+    },
+    {
+      "mode": "100644",
+      "type": "blob",
+      "gitBlob": "c7cf0b29cca2609e7fd96ea80631015e80ce294f",
+      "bytes": 2129,
+      "path": "modules/ui-mock-reference/components/aurora/activity-rail.tsx"
+    },
+    {
+      "mode": "100644",
+      "type": "blob",
+      "gitBlob": "1ce8384bd25c6e7f25b97c0861a9976d3d93da54",
+      "bytes": 7158,
+      "path": "modules/ui-mock-reference/components/aurora/admin-confirm-dialog.tsx"
+    },
+    {
+      "mode": "100644",
+      "type": "blob",
+      "gitBlob": "f80e83da402236cc6d0172208052eaf74f5bf401",
+      "bytes": 5065,
+      "path": "modules/ui-mock-reference/components/aurora/admin/audit-view.tsx"
+    },
+    {
+      "mode": "100644",
+      "type": "blob",
+      "gitBlob": "94ff01ae4b345a19d6c33f626fd01ca3a65cf2ad",
+      "bytes": 6232,
+      "path": "modules/ui-mock-reference/components/aurora/admin/config-view.tsx"
+    },
+    {
+      "mode": "100644",
+      "type": "blob",
+      "gitBlob": "7e5ad15a02664b6e0bb6f1a9155831b872fc15b2",
+      "bytes": 4885,
+      "path": "modules/ui-mock-reference/components/aurora/admin/devices-view.tsx"
+    },
+    {
+      "mode": "100644",
+      "type": "blob",
+      "gitBlob": "a8e5d5df2d1588d40d902972d52a5a72c5ef26ec",
+      "bytes": 7012,
+      "path": "modules/ui-mock-reference/components/aurora/admin/overview.tsx"
+    },
+    {
+      "mode": "100644",
+      "type": "blob",
+      "gitBlob": "6ed7bf1534e674ddd0c0c3d0526d1485c34e98ea",
+      "bytes": 12339,
+      "path": "modules/ui-mock-reference/components/aurora/admin/rbac-view.tsx"
+    },
+    {
+      "mode": "100644",
+      "type": "blob",
+      "gitBlob": "ae33237e087796cd9aae78466fda204e9441e7ba",
+      "bytes": 9167,
+      "path": "modules/ui-mock-reference/components/aurora/admin/secondary-surface.tsx"
+    },
+    {
+      "mode": "100644",
+      "type": "blob",
+      "gitBlob": "163004ff0f1a6b72d657b481561b68a09885e71e",
+      "bytes": 10145,
+      "path": "modules/ui-mock-reference/components/aurora/admin/services-view.tsx"
+    },
+    {
+      "mode": "100644",
+      "type": "blob",
+      "gitBlob": "93700afdd794d011376e95e4677de14837f15a66",
+      "bytes": 6374,
+      "path": "modules/ui-mock-reference/components/aurora/admin/tokens-view.tsx"
+    },
+    {
+      "mode": "100644",
+      "type": "blob",
+      "gitBlob": "e3dc1a5fc3e4dcca92daeea0a72b3bd4ccacae29",
+      "bytes": 7770,
+      "path": "modules/ui-mock-reference/components/aurora/app-shell.tsx"
+    },
+    {
+      "mode": "100644",
+      "type": "blob",
+      "gitBlob": "ffeadf5168d19ef38ec4ed6f9173937196b2ef99",
+      "bytes": 9163,
+      "path": "modules/ui-mock-reference/components/aurora/assistant/assistant-view.tsx"
+    },
+    {
+      "mode": "100644",
+      "type": "blob",
+      "gitBlob": "732b4ceb6bb110e765ad1812fa0b84709fa52413",
+      "bytes": 6595,
+      "path": "modules/ui-mock-reference/components/aurora/assistant/route-sheet.tsx"
+    },
+    {
+      "mode": "100644",
+      "type": "blob",
+      "gitBlob": "9b72248bd01a01e8179b51ce265b462e69f5b44a",
+      "bytes": 3143,
+      "path": "modules/ui-mock-reference/components/aurora/assistant/tool-call-card.tsx"
+    },
+    {
+      "mode": "100644",
+      "type": "blob",
+      "gitBlob": "e9acfdf8cbe84e0da35362ba94e74d7b75ab1cae",
+      "bytes": 6301,
+      "path": "modules/ui-mock-reference/components/aurora/capability-drawer.tsx"
+    },
+    {
+      "mode": "100644",
+      "type": "blob",
+      "gitBlob": "5475d988388ca17d5693e8dd722ae6c55da86fb3",
+      "bytes": 5666,
+      "path": "modules/ui-mock-reference/components/aurora/diagnostics/diagnostics-view.tsx"
+    },
+    {
+      "mode": "100644",
+      "type": "blob",
+      "gitBlob": "720a1168d0e889e77eb0903c584b5e7f3ab4c818",
+      "bytes": 1882,
+      "path": "modules/ui-mock-reference/components/aurora/diff-viewer.tsx"
+    },
+    {
+      "mode": "100644",
+      "type": "blob",
+      "gitBlob": "fc4a2f5b5a077d589f950d85d8e433a7be308d81",
+      "bytes": 7215,
+      "path": "modules/ui-mock-reference/components/aurora/mesh/mesh-view.tsx"
+    },
+    {
+      "mode": "100644",
+      "type": "blob",
+      "gitBlob": "27a9068e325fcfc928fa29fd801bc77db4108426",
+      "bytes": 6526,
+      "path": "modules/ui-mock-reference/components/aurora/models/models-view.tsx"
+    },
+    {
+      "mode": "100644",
+      "type": "blob",
+      "gitBlob": "c384aa9374c90066ac704475b957556d52e0b119",
+      "bytes": 4612,
+      "path": "modules/ui-mock-reference/components/aurora/onboarding/onboarding-view.tsx"
+    },
+    {
+      "mode": "100644",
+      "type": "blob",
+      "gitBlob": "f768c13afc2af7f4d778d21d1029564e9eadb75f",
+      "bytes": 986,
+      "path": "modules/ui-mock-reference/components/aurora/page-header.tsx"
+    },
+    {
+      "mode": "100644",
+      "type": "blob",
+      "gitBlob": "d57536e3b3fee265a3013138529b0b9efe420938",
+      "bytes": 6989,
+      "path": "modules/ui-mock-reference/components/aurora/settings/settings-permissions-view.tsx"
+    },
+    {
+      "mode": "100644",
+      "type": "blob",
+      "gitBlob": "40ff9b959a6d6fdbc768698a8c6aabf4b4c907e9",
+      "bytes": 8806,
+      "path": "modules/ui-mock-reference/components/aurora/status-badges.tsx"
+    },
+    {
+      "mode": "100644",
+      "type": "blob",
+      "gitBlob": "b98e35c5712ee3c540f6db0eeb631b318570320b",
+      "bytes": 2694,
+      "path": "modules/ui-mock-reference/components/ui/accordion.tsx"
+    },
+    {
+      "mode": "100644",
+      "type": "blob",
+      "gitBlob": "1fe3176d21caccc8859aa540e34964f9b31db9aa",
+      "bytes": 2048,
+      "path": "modules/ui-mock-reference/components/ui/alert.tsx"
+    },
+    {
+      "mode": "100644",
+      "type": "blob",
+      "gitBlob": "e4fed865cf75e3f46d920d554204faa7b6639200",
+      "bytes": 3038,
+      "path": "modules/ui-mock-reference/components/ui/avatar.tsx"
+    },
+    {
+      "mode": "100644",
+      "type": "blob",
+      "gitBlob": "b20959dd775e40754a5f66940c62ee4f7feaef36",
+      "bytes": 1925,
+      "path": "modules/ui-mock-reference/components/ui/badge.tsx"
+    },
+    {
+      "mode": "100644",
+      "type": "blob",
+      "gitBlob": "b520e8718163a48ed9abc79cbc51028b7e4b1fcb",
+      "bytes": 3198,
+      "path": "modules/ui-mock-reference/components/ui/button.tsx"
+    },
+    {
+      "mode": "100644",
+      "type": "blob",
+      "gitBlob": "4458dae19f243f9fd6f8ccd60c52033d241a5f60",
+      "bytes": 2630,
+      "path": "modules/ui-mock-reference/components/ui/card.tsx"
+    },
+    {
+      "mode": "100644",
+      "type": "blob",
+      "gitBlob": "014f5aa3b65627541b66ace8f6624e118a7c5afe",
+      "bytes": 4075,
+      "path": "modules/ui-mock-reference/components/ui/dialog.tsx"
+    },
+    {
+      "mode": "100644",
+      "type": "blob",
+      "gitBlob": "9d5ebbd2cef2e9693740f4981d479a28ac2af6fc",
+      "bytes": 8736,
+      "path": "modules/ui-mock-reference/components/ui/dropdown-menu.tsx"
+    },
+    {
+      "mode": "100644",
+      "type": "blob",
+      "gitBlob": "7d21babba91655ac1cd6a5ea630eb2ec18d2b52b",
+      "bytes": 1040,
+      "path": "modules/ui-mock-reference/components/ui/input.tsx"
+    },
+    {
+      "mode": "100644",
+      "type": "blob",
+      "gitBlob": "74da65c33b49c2921947376aa11634a403c833fd",
+      "bytes": 518,
+      "path": "modules/ui-mock-reference/components/ui/label.tsx"
+    },
+    {
+      "mode": "100644",
+      "type": "blob",
+      "gitBlob": "986f3463a4715a2c27eec0ba55ade09e3391cf54",
+      "bytes": 1740,
+      "path": "modules/ui-mock-reference/components/ui/progress.tsx"
+    },
+    {
+      "mode": "100644",
+      "type": "blob",
+      "gitBlob": "84c1e9fbb05bc2af79ed1ba447d38a419815fcab",
+      "bytes": 1624,
+      "path": "modules/ui-mock-reference/components/ui/scroll-area.tsx"
+    },
+    {
+      "mode": "100644",
+      "type": "blob",
+      "gitBlob": "e8021f5f283d43afc66e003a97231c1255864a4c",
+      "bytes": 6655,
+      "path": "modules/ui-mock-reference/components/ui/select.tsx"
+    },
+    {
+      "mode": "100644",
+      "type": "blob",
+      "gitBlob": "6e1369e43cce8be3da7ef04940b79dd276245290",
+      "bytes": 545,
+      "path": "modules/ui-mock-reference/components/ui/separator.tsx"
+    },
+    {
+      "mode": "100644",
+      "type": "blob",
+      "gitBlob": "48e783d9c0785426903f5b2ea5a78f007a259e11",
+      "bytes": 4605,
+      "path": "modules/ui-mock-reference/components/ui/sheet.tsx"
+    },
+    {
+      "mode": "100644",
+      "type": "blob",
+      "gitBlob": "9280ee52ffedac56107a4880828f61fac897c7f8",
+      "bytes": 1226,
+      "path": "modules/ui-mock-reference/components/ui/sonner.tsx"
+    },
+    {
+      "mode": "100644",
+      "type": "blob",
+      "gitBlob": "9b8b44b1d19a3904b56c6ac9a3e9230d46be9dbc",
+      "bytes": 1707,
+      "path": "modules/ui-mock-reference/components/ui/switch.tsx"
+    },
+    {
+      "mode": "100644",
+      "type": "blob",
+      "gitBlob": "abeaced4b2efac98bf5c50ec2c3791bbc88bc0bd",
+      "bytes": 2402,
+      "path": "modules/ui-mock-reference/components/ui/table.tsx"
+    },
+    {
+      "mode": "100644",
+      "type": "blob",
+      "gitBlob": "8ee8054f3f7347bbacdb7399024d64f34d676836",
+      "bytes": 3497,
+      "path": "modules/ui-mock-reference/components/ui/tabs.tsx"
+    },
+    {
+      "mode": "100644",
+      "type": "blob",
+      "gitBlob": "04d27f7d17584cd77ba7d6f2377f5be6779f1270",
+      "bytes": 842,
+      "path": "modules/ui-mock-reference/components/ui/textarea.tsx"
+    },
+    {
+      "mode": "100644",
+      "type": "blob",
+      "gitBlob": "fb8109f8b82063773737606af8d8fe982feb4bf5",
+      "bytes": 3114,
+      "path": "modules/ui-mock-reference/components/ui/tooltip.tsx"
+    },
+    {
+      "mode": "100644",
+      "type": "blob",
+      "gitBlob": "08a9ef3bdd991b8454f8ff7c248e38acbce3cc94",
+      "bytes": 636,
+      "path": "modules/ui-mock-reference/eslint.config.mjs"
+    },
+    {
+      "mode": "100644",
+      "type": "blob",
+      "gitBlob": "de466eb63a177f6a6eb2216a6d6919a3e16cc70f",
+      "bytes": 37880,
+      "path": "modules/ui-mock-reference/lib/aurora/data.ts"
+    },
+    {
+      "mode": "100644",
+      "type": "blob",
+      "gitBlob": "ed64189d9b9bcd3f2352d728f9d46a6bd54f3a45",
+      "bytes": 929,
+      "path": "modules/ui-mock-reference/lib/aurora/nav.test.ts"
+    },
+    {
+      "mode": "100644",
+      "type": "blob",
+      "gitBlob": "06f32e7327a4f32778ae8e07f102e1bed0fe1b85",
+      "bytes": 2572,
+      "path": "modules/ui-mock-reference/lib/aurora/nav.ts"
+    },
+    {
+      "mode": "100644",
+      "type": "blob",
+      "gitBlob": "50b2297ae96cbd6568575e2ec696c37c35c3b168",
+      "bytes": 5416,
+      "path": "modules/ui-mock-reference/lib/aurora/types.ts"
+    },
+    {
+      "mode": "100644",
+      "type": "blob",
+      "gitBlob": "fed2fe91e4d2321f997c0209881db87fe0d07ba9",
+      "bytes": 166,
+      "path": "modules/ui-mock-reference/lib/utils.ts"
+    },
+    {
+      "mode": "100644",
+      "type": "blob",
+      "gitBlob": "9edff1c7cacb3bfac9a1eadcf6f51eaa99565e38",
+      "bytes": 247,
+      "path": "modules/ui-mock-reference/next-env.d.ts"
+    },
+    {
+      "mode": "100644",
+      "type": "blob",
+      "gitBlob": "4cd9948a8a149f8f7338fd7757d5b22303e1fb9f",
+      "bytes": 181,
+      "path": "modules/ui-mock-reference/next.config.mjs"
+    },
+    {
+      "mode": "100644",
+      "type": "blob",
+      "gitBlob": "50cec30f0c2b3dbcea7d57b8baafb97ef8b01b03",
+      "bytes": 1077,
+      "path": "modules/ui-mock-reference/package.json"
+    },
+    {
+      "mode": "100644",
+      "type": "blob",
+      "gitBlob": "e867140a39163fe8f33a1a4408d451291921ca8c",
+      "bytes": 174184,
+      "path": "modules/ui-mock-reference/pnpm-lock.yaml"
+    },
+    {
+      "mode": "100644",
+      "type": "blob",
+      "gitBlob": "a869506ee48c89838ee770863c5d99ba97eeb930",
+      "bytes": 144,
+      "path": "modules/ui-mock-reference/postcss.config.mjs"
+    },
+    {
+      "mode": "100644",
+      "type": "blob",
+      "gitBlob": "f9418b406bdb93a28dfc30c2ea61bef97b9d7c22",
+      "bytes": 2626,
+      "path": "modules/ui-mock-reference/public/apple-icon.png"
+    },
+    {
+      "mode": "100644",
+      "type": "blob",
+      "gitBlob": "12c825a109e3c3b7941d957d8a2ac936d5717c5b",
+      "bytes": 585,
+      "path": "modules/ui-mock-reference/public/icon-dark-32x32.png"
+    },
+    {
+      "mode": "100644",
+      "type": "blob",
+      "gitBlob": "a3462ccd8a6f9c1da6893d213f8868200cf3c80a",
+      "bytes": 566,
+      "path": "modules/ui-mock-reference/public/icon-light-32x32.png"
+    },
+    {
+      "mode": "100644",
+      "type": "blob",
+      "gitBlob": "5c11e6c50d2df379c5018d3bca984c866097ad58",
+      "bytes": 1304,
+      "path": "modules/ui-mock-reference/public/icon.svg"
+    },
+    {
+      "mode": "100644",
+      "type": "blob",
+      "gitBlob": "8a792ac2ddfbe047639f7907c82f14c73e3de3d9",
+      "bytes": 568,
+      "path": "modules/ui-mock-reference/public/placeholder-logo.png"
+    },
+    {
+      "mode": "100644",
+      "type": "blob",
+      "gitBlob": "b1695aafcd5925a0b3eb122b9e553b8a0f4a0d47",
+      "bytes": 3208,
+      "path": "modules/ui-mock-reference/public/placeholder-logo.svg"
+    },
+    {
+      "mode": "100644",
+      "type": "blob",
+      "gitBlob": "6fa7543d38ed8fdb38f03b5c0f40ad2d66827d4a",
+      "bytes": 1635,
+      "path": "modules/ui-mock-reference/public/placeholder-user.jpg"
+    },
+    {
+      "mode": "100644",
+      "type": "blob",
+      "gitBlob": "6bfe96336dbe567f5f1e9129f5bccdc78b114bba",
+      "bytes": 1064,
+      "path": "modules/ui-mock-reference/public/placeholder.jpg"
+    },
+    {
+      "mode": "100644",
+      "type": "blob",
+      "gitBlob": "e763910b27fdd9ac872f56baede51bc839402347",
+      "bytes": 3253,
+      "path": "modules/ui-mock-reference/public/placeholder.svg"
+    },
+    {
+      "mode": "100644",
+      "type": "blob",
+      "gitBlob": "48d6d8209c1377f1992a937b4cce222ce01e64bf",
+      "bytes": 695,
+      "path": "modules/ui-mock-reference/tsconfig.json"
+    },
+    {
+      "mode": "100644",
+      "type": "blob",
+      "gitBlob": "7b38a0064ceb9b8a9c925096398e02d9795a6407",
+      "bytes": 32616,
+      "path": "pyproject.toml"
+    },
+    {
+      "mode": "100644",
+      "type": "blob",
+      "gitBlob": "ad5fdc3fe355d3d202775fc0562d70d1b2fb3e17",
+      "bytes": 804833,
+      "path": "uv.lock"
+    }
+  ],
+  "blobBytes": 7524554,
+  "estimatedTarBytes": 7849472
+}

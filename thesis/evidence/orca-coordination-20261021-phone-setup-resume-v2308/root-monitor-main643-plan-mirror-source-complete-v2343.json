@@ -1,0 +1,28 @@
+{
+  "id": "b58a2288-218c-45d7-b14d-b07e5f608a9c",
+  "ok": true,
+  "result": {
+    "message": {
+      "id": "msg_ebf665130c6c",
+      "run_id": "run_e6054e76e9fc",
+      "delivery_contract": "current_delivery",
+      "from_handle": "term_6a00d9ee-792a-4daf-8578-236290e33108",
+      "to_handle": "dispatch:ctx_37b4d0a3c14f",
+      "subject": "Main643/900 active; fullplan mirrored, Root source dependency handed off",
+      "body": "Root actual00:54:38Z V2296 new193/450 all correct, full643/900=642correct1historicalfailure257remaining, original actors live/copier208pairs0errors3.214GBfree. Original native goal actualACTIVE/unbudgeted; ROOT-VERIFIED-WAIT-v2343.json/native snapshot/CURRENT nextbound00:59:38.082003Z. COMPLETE authoritative835292B plan mirrored physically thesis/methodology/owner-requirements-20261022-6c2ec6dc.md SHA6c2ec6dce34b2762222a800c86ee12be408467392ca049d65353862f7785abca, prior827981B preserved exactprefix; receipt METHODOLOGY-MIRROR-RECEIPT-v2342.json. No competing plan edits. Root minimal source dependency finished: exactebde runtime/build subset tarPAX+archive SHA/inventory ready and delivered130802a842bb; original fixedWAV219794B SHAda0ecc4a added via SAME SOURCE-TRANSFER-AUDIO-AMENDMENT-v2342.json, combined12,355,726B<12MiB, same ONE copy120s/caps/absoluteend01:01:07.881437Z. No transfer/receiver completion claimed without worker receipt. Historical superseded old shared774MB/sourcewait queue retained; operationalCURRENT records new amendment. Root stays main tests/custody, no device queries or more source packaging/review loops. Existing phone worker owns route/app/prep; independent public acquisition authorized now, phone900 still requires actual ownerSTART. Main frozen source/settings/manifest preserved.",
+      "type": "status",
+      "priority": "normal",
+      "thread_id": null,
+      "payload": null,
+      "created_at": "2026-10-22T00:55:23Z",
+      "delivered_at": null
+    },
+    "mutation": {
+      "requestId": "11f8a7d2-fcd4-46f8-b6f7-cda6c439c203",
+      "replayed": false
+    }
+  },
+  "_meta": {
+    "runtimeId": "cc9e3275-28c6-4c45-85cc-bdcd2262aa7d"
+  }
+}

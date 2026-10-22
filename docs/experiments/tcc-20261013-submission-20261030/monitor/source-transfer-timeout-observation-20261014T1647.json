@@ -1,0 +1,25 @@
+{
+  "observed_at": "2026-10-14T16:47:06.829740+00:00",
+  "source": "supported Root screen24lines receiptf8a474f0-cff3-4160-b687-e975f25d1b8f",
+  "source_preparation_observed": "subprocess.TimeoutExpired for nice19 git pack preparation; exact cap/elapsed/start/end unavailable to monitor",
+  "bundle_lock_path": ".git/aurora-handoff-import-20261006/desktop-source-delta-v409.bundle.lock",
+  "bundle_lock_observed_bytes": 177,
+  "bundle_lock_modified_at": "2026-10-14T16:44:02.518434Z",
+  "readonly_process_observation_at": "2026-10-14T16:45:58.268050Z",
+  "root_repo_git_processes_observed": [],
+  "process_scope": "comm git/pack-objects/index-pack/nice with resolved cwd inside canonical Aurora only; no raw args/other-project sessions; not host-wide exit proof",
+  "cpu09_actual_at": "2026-10-14T16:45:58.793546Z",
+  "cpu09_measured_correct": 70,
+  "cpu09_excluded_warmups_correct": 5,
+  "provider_capture_count": 76,
+  "all_capture_hashes_match": true,
+  "original_process_ids": [
+    1305953,
+    1305954,
+    1665506
+  ],
+  "source_changes_by_monitor": false,
+  "kills_or_cleanup_by_monitor": false,
+  "inference_or_gpu_main_claim": false,
+  "scope": "possible concurrent CPU prep-load event; exact causal attribution not proved; retain slow/failed values"
+}

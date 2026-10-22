@@ -1,0 +1,12 @@
+{
+  "controlDeadline": "2026-10-22T11:30:00Z",
+  "explicitNewline": true,
+  "host": "ssh:ssh-sem-notebook-personal",
+  "incarnation": "328cd72f-c7ea-49ff-a2db-b9275b085037",
+  "remoteResult": "/home/developer/projects/aurora/thesis/phone-notebook/20261020/evidence/read-bounded-transcription-denials-v316.json",
+  "rootAdmissionMessage": "existing v2398 recover exact two own-test Transcription denial reasons from isolated audit; bounded150 no params/other methods/identities export",
+  "script": "scripts/read_bounded_transcription_denials_v316.py",
+  "scriptSha256": "8260c98c2771f9cfdc5eb3294871a2e9c41c3e8d444691bc64d3969ef829c1a7",
+  "singleSend": true,
+  "terminal": "term_a2ed5feb-7c92-48e4-bd88-d1b0e6737989"
+}

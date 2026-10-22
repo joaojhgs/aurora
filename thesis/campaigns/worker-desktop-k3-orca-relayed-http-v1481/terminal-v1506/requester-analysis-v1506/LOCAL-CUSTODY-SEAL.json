@@ -1,0 +1,36 @@
+{
+  "at": "2026-10-18T13:13:04.883595+00:00",
+  "scope": "Requester terminal partial custody; provider resource log remains live",
+  "frozenManifestSha256": "54d51acdf8219b4e69f21cabb9d9fb1b402acf9826196dbdcea4fcfd15bddb25",
+  "currentSnapshotSha256": "11b4d16582b25629424639c998a3e64b4ab2c27f3c830c6c965a6537b9740d06",
+  "verifiedFileCount": 1342,
+  "verifiedPayloadBytes": 41009448,
+  "verifiedCases": 528,
+  "verifiedUniqueWavs": 527,
+  "localPrefixCoverage": {
+    "actual-provider-bindings.jsonl": {
+      "copiedBytes": 845,
+      "chunkCount": 1,
+      "closedSourceEofCovered": true,
+      "originalIncompleteFlagPreserved": true
+    },
+    "resources.jsonl": {
+      "copiedBytes": 20803454,
+      "chunkCount": 270,
+      "closedSourceEofCovered": true,
+      "originalIncompleteFlagPreserved": true
+    },
+    "voice-stages.jsonl": {
+      "copiedBytes": 0,
+      "chunkCount": 0,
+      "closedSourceEofCovered": true,
+      "originalIncompleteFlagPreserved": true
+    }
+  },
+  "copierErrors": [],
+  "controllerExitCode": 1,
+  "controllerFinishedAt": "2026-10-18T12:52:50.522700+00:00",
+  "requesterAndCopierRetiredAtCapture": true,
+  "full900Complete": false,
+  "full13Complete": false
+}

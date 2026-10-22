@@ -1,0 +1,41 @@
+{
+  "startedAt": "2026-10-20T14:32:25.056542+00:00",
+  "status": "incomplete_preserved",
+  "export": {
+    "at": "2026-10-20T14:31:09.858344+00:00",
+    "host": "personal.skyron-server",
+    "status": "provider_eof_archive_verified",
+    "archive": "/home/developer/projects/aurora/thesis/campaigns/worker-desktop-k1-p2p-tts-v1710/terminal-v1783/provider-eof-v1784.tar.gz",
+    "bytes": 8886577,
+    "sha256": "361889ce2239cda99f14ae12102f52746c01307c49cbb20c91093bd4473baa99",
+    "files": 11,
+    "rawPayloadBytes": 171335796,
+    "sealSha256": "159d397e4f80947f3c7aace66c9e24ce5c6bfb84faa6f2a46d31c824bbcd259b",
+    "elapsedSeconds": 0.7488735200022347,
+    "actorsAbsent": true,
+    "sutCalls": 0,
+    "noDuplicateUncompressedCopy": true
+  },
+  "copiedBytes": 0,
+  "operation": {
+    "name": "k1-eof-v1785-provider-page-0000",
+    "marker": "K1_EOF_V1785_PROVIDER_PAGE_0000",
+    "offset": 0,
+    "status": "One read-only send; reconcile same accepted output on failure"
+  },
+  "pages": [],
+  "diskBefore": {
+    "total": 109128826880,
+    "used": 104486957056,
+    "free": 4625092608
+  },
+  "outerSeconds": 600,
+  "sutCalls": 0,
+  "newAgents": 0,
+  "newK1ProviderArchiveBytes": 8886577,
+  "baseline": null,
+  "possibleConfound": "Post-requester-terminal retrieval of existing checksummed archive; no active measurements or new SUT traffic; all original provider owners retired.",
+  "updatedAt": "2026-10-20T14:33:55.165466+00:00",
+  "errorClass": "TimeoutExpired",
+  "error": "Command '['/usr/bin/python3', '/home/developer/projects/aurora/thesis/harness/orca_copy_control_raw_read_v1652.py', 'k1-eof-v1785-provider-page-0000', '/home/developer/projects/aurora/thesis/campaigns/worker-desktop-k1-p2p-tts-v1710/provider-transfer-terminal-v1785/commands/k1-eof-v1785-provider-page-0000.txt', 'K1_EOF_V1785_PROVIDER_PAGE_0000']' timed out after 90 seconds"
+}

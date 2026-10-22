@@ -1,0 +1,57 @@
+{
+  "at": "2026-10-21T17:55:58.205054+00:00",
+  "status": "SAME_FROZEN_V2234_MEASURED_COLLECTION_RUNNING",
+  "newMeasured": {
+    "attempted": 71,
+    "correct": 71,
+    "failed": 0,
+    "planned": 270
+  },
+  "conditionCountsOnly": {
+    "attempted": 251,
+    "correct": 250,
+    "failed": 1,
+    "unattempted": 649,
+    "target": 900
+  },
+  "actors": [
+    {
+      "pid": 3751414,
+      "startTicks": 137933512,
+      "state": "S"
+    },
+    {
+      "pid": 3751426,
+      "startTicks": 137933748,
+      "state": "S"
+    },
+    {
+      "pid": 3751415,
+      "startTicks": 137933513,
+      "state": "S"
+    }
+  ],
+  "custody": {
+    "sequence": 75,
+    "cases": 86,
+    "WAV": 86,
+    "errors": [],
+    "source": "thesis/campaigns/worker-desktop-k1-orca-relayed-http-first270-v2234/receipts/000075.json"
+  },
+  "frozenManifestSha256": "11bbea3fc1e45e65da1ecb7b501aee77739870cb087d792e5bc5197f9b1027be",
+  "rootNativeGoalStatus": "active",
+  "originalMonitorNativeGoalStatus": "active",
+  "currentFullMethodology": {
+    "path": "thesis/methodology/owner-requirements-20261021-ca11a844.md",
+    "bytes": 814831,
+    "sha256": "ca11a84465ff16869e5aaa840b3e30046a2b50fd2f280c02b47b5ed77e16a963",
+    "full808456BPrefixPreserved": true,
+    "appended30746FullyRead": true
+  },
+  "nextReadOnlyCheckAt": "2026-10-21T18:00:58.205054+00:00",
+  "nextAction": "Verifiedwait on same3liveWactors/copier until next5min or actualterminal/error; no more implementation/tests/reviews/preparation until needed",
+  "atActualTerminal": "Execute prepared finish_k1_http_epoch_v2254.py ONCE after3Wactorsabsent; guards/drain/seal/export/transfer/actualsavedanalysis; prepared!=executed",
+  "laterRemainingAdmission": "Passivehandoff2255 CLOSED; actualterminalset+allpriorcharges then separatelydeclaredfuturefiniteadmission; no currentclockextension/newallocation now",
+  "phoneNotGate": true,
+  "newWorkersOrSUTTrafficByThisCheckpoint": 0
+}

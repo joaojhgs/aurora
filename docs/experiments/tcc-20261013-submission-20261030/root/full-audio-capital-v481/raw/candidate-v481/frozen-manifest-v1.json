@@ -1,0 +1,438 @@
+{
+  "schema": "aurora.full-audio-frozen-cohort.v1",
+  "version": 1,
+  "cohortId": "aurora-full-audio-capital-v1-desktop-gpu-local-20261015",
+  "comparisonFamilyId": "aurora-full-audio-capital-base-qwen-piper-v1",
+  "status": "frozen_after_correct_real_audio_pilot_with_correlated_telemetry",
+  "freezeAt": "2026-10-15T03:22:36.295174+00:00",
+  "authority": "owner msg_92e2e65958c0/plan1670section30.15",
+  "sourceCommit": "cbac78fe3fb2b73100bfaa9dc198fb6bff689840",
+  "sourceOverlay": "preserved production backend plus reviewed V478 typedexecutionoptions and private passive observer",
+  "sourceFiles": {
+    "main.py": {
+      "path": "/home/developer/projects/aurora/.git/aurora-audio-candidate-v481/source/main.py",
+      "bytes": 8936,
+      "sha256": "83c3f5dbcf939339e7643a46188acda4dd47b0bf3a78c13e2c087564c6d3730b"
+    },
+    "app/services/config/config_schema.json": {
+      "path": "/home/developer/projects/aurora/.git/aurora-audio-candidate-v481/source/app/services/config/config_schema.json",
+      "bytes": 86603,
+      "sha256": "558cf9641fcb050c60768c845ddb94558e6a1fe4656547a2e3efc638850969af"
+    },
+    "app/shared/config/models.py": {
+      "path": "/home/developer/projects/aurora/.git/aurora-audio-candidate-v481/source/app/shared/config/models.py",
+      "bytes": 37108,
+      "sha256": "00fb3ef21b4477f8d02cd1d47c702edadae982608ff4a28f72609a0e83f3f59f"
+    },
+    "app/shared/config/keys.py": {
+      "path": "/home/developer/projects/aurora/.git/aurora-audio-candidate-v481/source/app/shared/config/keys.py",
+      "bytes": 72060,
+      "sha256": "c14fb6252fa88e337b1a27d2fd20976ad98b4a59ef8a75065f9afac7de08d269"
+    },
+    "app/services/config/config_defaults.json": {
+      "path": "/home/developer/projects/aurora/.git/aurora-audio-candidate-v481/source/app/services/config/config_defaults.json",
+      "bytes": 14254,
+      "sha256": "1ddb323235b97b1211bcfbf97ca0b6167f2a42a48b76e7fa0db9dda3767939a8"
+    },
+    "app/services/stt_transcription/service.py": {
+      "path": "/home/developer/projects/aurora/.git/aurora-audio-candidate-v481/source/app/services/stt_transcription/service.py",
+      "bytes": 112263,
+      "sha256": "4723b798b2643cee262e3d1d0ad28114305c3e83c8ef5bae5becd790aac5f888"
+    },
+    "app/services/tts/service.py": {
+      "path": "/home/developer/projects/aurora/.git/aurora-audio-candidate-v481/source/app/services/tts/service.py",
+      "bytes": 227431,
+      "sha256": "6e4386aaf219ca5f5488ed007c03519be64f8de56aa2cc17956b5140218f234e"
+    },
+    "app/services/tts/providers/piper.py": {
+      "path": "/home/developer/projects/aurora/.git/aurora-audio-candidate-v481/source/app/services/tts/providers/piper.py",
+      "bytes": 14398,
+      "sha256": "b5c1cd3110b7405cf0990ad27c7d038a252b31af3d01191d415e3b76fd1ed7ac"
+    },
+    "app/services/orchestrator/service.py": {
+      "path": "/home/developer/projects/aurora/.git/aurora-audio-candidate-v481/source/app/services/orchestrator/service.py",
+      "bytes": 170198,
+      "sha256": "0b77092091946b94130945b3bfb670a922a209b846d5ffe30e23f75b52f982f3"
+    },
+    "app/services/orchestrator/agents/chatbot.py": {
+      "path": "/home/developer/projects/aurora/.git/aurora-audio-candidate-v481/source/app/services/orchestrator/agents/chatbot.py",
+      "bytes": 29489,
+      "sha256": "4e6d2b21a2eb672a47128340700a6d5f09adeabbab99980b6ba5d4e4e9e692ee"
+    },
+    "app/services/orchestrator/chat_llama_cpp.py": {
+      "path": "/home/developer/projects/aurora/.git/aurora-audio-candidate-v481/source/app/services/orchestrator/chat_llama_cpp.py",
+      "bytes": 40161,
+      "sha256": "bbb7a3d247af8b53f55ee0b15be81db520f02ab1a53a6aff49c1d2e523f0b55e"
+    },
+    "app/shared/services/base_service.py": {
+      "path": "/home/developer/projects/aurora/.git/aurora-audio-candidate-v481/source/app/shared/services/base_service.py",
+      "bytes": 68871,
+      "sha256": "580c691214761fcd6edef1c199731065151466c29be4aeccd7c096ac397778d6"
+    },
+    "app/messaging/local_bus.py": {
+      "path": "/home/developer/projects/aurora/.git/aurora-audio-candidate-v481/source/app/messaging/local_bus.py",
+      "bytes": 26579,
+      "sha256": "b80a4a54859f142f12c52bab640d5b7c2fe4fd6f66bcd831bc83cb6909ec3b6f"
+    }
+  },
+  "harnessFiles": {
+    "controller.py": {
+      "path": "/home/developer/projects/aurora/.git/aurora-audio-candidate-v481/controller.py",
+      "bytes": 9502,
+      "sha256": "975c64f83237ff2639a5d943f8af61b863533161b394ab5065dfb5aa66ef2bb0"
+    },
+    "bootstrap.py": {
+      "path": "/home/developer/projects/aurora/.git/aurora-audio-candidate-v481/bootstrap.py",
+      "bytes": 840,
+      "sha256": "31dc5ca950bf07ff21a066dd0dc522dc5c35608ad6cedc9edfd845b62f2ddc94"
+    },
+    "bindings.py": {
+      "path": "/home/developer/projects/aurora/.git/aurora-audio-candidate-v481/bindings.py",
+      "bytes": 3230,
+      "sha256": "52182f956b34788ecbfbbb241c8243ff88baebe2874e3605791793777ed0dc91"
+    },
+    "pilot.py": {
+      "path": "/home/developer/projects/aurora/.git/aurora-audio-candidate-v481/pilot.py",
+      "bytes": 21602,
+      "sha256": "7079b8fb2f3e74815fb0d7e1a26823270b05b0dbb8ea418437b979e4149e676d"
+    }
+  },
+  "audio": {
+    "candidateId": "audio-capital-base-qwen-piper-v481",
+    "wavSHA256": "139fa0c34b6d18600ad9608fd2d11c9389cae2f5f548ce0f4f23b735b176f0b3",
+    "wavPath": "/home/developer/projects/aurora/.git/aurora-audio-candidate-v481/fixture/capital-question-en-US.wav",
+    "wavBytes": 153644,
+    "frames": 76800,
+    "sampleRate": 22050,
+    "channels": 1,
+    "sampleWidthBytes": 2,
+    "durationSeconds": 3.4829931972789114,
+    "referenceTranscript": "What is the capital of France? Answer with only the city name.",
+    "expectedReplyWords": "paris",
+    "correctness": "Exact normalized transcript word sequence and exact single reply word paris; no injected transcript/reply/hints.",
+    "provenance": "Original agent-authored factual assistant question, synthesized once with existing pinned PiperLJSpeech; not a personal recording. No voice/model license inferred from synthetic content.",
+    "modelWeightSHA256": {
+      "sttBase": "d01c3014881c9c6f3133c182f3d2887eb6ca1c789a7538c5c007196857a0a6a9",
+      "llm": "57d1997790d1744fba5b40a7317df71ea5e2acee28c47e78f0cce39c0703f8cf",
+      "tts": "6f52a751e2349abe7a76735eb09dc1875298c77ea2342ffd2fef79ff81b87f22"
+    },
+    "modelHashProvenance": "Existing V477 pinned files preserved; next runtime must bind actual engines/settings.",
+    "baselineFrozen": false,
+    "pilotRequestsPlanned": 1,
+    "pilotFlowCapSeconds": 180,
+    "pilotControllerCapSeconds": 300,
+    "newMeasuredRequests": 0,
+    "priorFailuresPreserved": true,
+    "changedCohort": true,
+    "oldV477ComparisonStatus": "SUPERSEDED for proposed new fullaudio condition only; originalfailure remains immutable; no measured oldaudio data to pool.",
+    "inputOriginal": {
+      "path": "/home/developer/projects/aurora/.git/aurora-audio-candidate-v481/fixture/capital-question-en-US.wav",
+      "bytes": 153644,
+      "sha256": "139fa0c34b6d18600ad9608fd2d11c9389cae2f5f548ce0f4f23b735b176f0b3"
+    },
+    "referenceTranscriptSHA256": "34b681e385feb3500c9e9849d30f5bac982716c4e4938cdb04c5fdc617cff624",
+    "outputPilot": {
+      "path": "/home/developer/projects/aurora/.git/aurora-audio-candidate-v481/runtime/pilot/tts-output.wav",
+      "bytes": 31276,
+      "sha256": "c45b4cc7d8e6edbc4722f4a87ffd235cc25a550cbe90c777cfe4863ef84dc430"
+    }
+  },
+  "models": {
+    "stt": {
+      "weightFiles": [
+        {
+          "path": "/dev/shm/aurora-root-accurate-base-v443/model/config.json",
+          "bytes": 2309,
+          "sha256": "56a6d8110d311f19c8f0471e562832c7527f146b567275bfca59fcf7c184da9a"
+        },
+        {
+          "path": "/dev/shm/aurora-root-accurate-base-v443/model/model.bin",
+          "bytes": 145217532,
+          "sha256": "d01c3014881c9c6f3133c182f3d2887eb6ca1c789a7538c5c007196857a0a6a9"
+        },
+        {
+          "path": "/dev/shm/aurora-root-accurate-base-v443/model/tokenizer.json",
+          "bytes": 2203239,
+          "sha256": "fb7b63191e9bb045082c79fd742a3106a12c99513ab30df4a0d47fa6cb6fd0ab"
+        },
+        {
+          "path": "/dev/shm/aurora-root-accurate-base-v443/model/vocabulary.txt",
+          "bytes": 459861,
+          "sha256": "34ce3fe1c5041027b3f8d42912270993f986dbc4bb34cf27f951e34a1e453913"
+        }
+      ],
+      "engine": "faster_whisper/ctranslate2",
+      "actualComputeType": "int8_float32",
+      "actualDevice": "cpu",
+      "decode": {
+        "role": "accurate",
+        "beamSize": 5,
+        "vadFilter": true,
+        "language": null,
+        "inputSampleRate": 22050,
+        "modelSampleRate": 16000,
+        "resample": "single source-linked numpy.interp to float32; expected target55728samples",
+        "actualProviderInputHash": null,
+        "actualProviderInputHashReason": "Preprocessed numpy argument was not separately recorded in this passing pilot; full WAV hash/frame count and service source/pinned numpy version are retained."
+      }
+    },
+    "llm": {
+      "weights": {
+        "path": "/tmp/aurora-root-gpu-primary-v409/models/Qwen3.5-0.8B-Q4_0.gguf",
+        "bytes": 563036064,
+        "sha256": "57d1997790d1744fba5b40a7317df71ea5e2acee28c47e78f0cce39c0703f8cf"
+      },
+      "quantization": "Q4_0",
+      "actualConstructor": {
+        "chat_format": "chatml-function-calling",
+        "max_tokens": 128,
+        "min_p": 0.0,
+        "model_path": "/tmp/aurora-root-gpu-primary-v409/models/Qwen3.5-0.8B-Q4_0.gguf",
+        "n_batch": 64,
+        "n_ctx": 4096,
+        "n_gpu_layers": 100,
+        "n_threads": 2,
+        "repeat_penalty": 1.0,
+        "seed": 42,
+        "temperature": 0.0,
+        "top_k": 1,
+        "top_p": 1.0,
+        "verbose": true
+      },
+      "effectiveWrapperSettings": {
+        "n_batch": 64,
+        "n_ctx": 4096,
+        "n_gpu_layers": 100,
+        "n_threads": 2,
+        "seed": 42,
+        "verbose": true
+      },
+      "backend": "llama-cpp-python/Vulkan",
+      "hardware": "AMD Radeon RX7600",
+      "actualOffloadedLayers": "25/25",
+      "actualGpuProof": [
+        "load_tensors: offloaded 25/25 layers to GPU",
+        "ggml_vulkan: Found 1 Vulkan devices:",
+        "ggml_vulkan: 0 = AMD Radeon RX 7600 (RADV NAVI33) (radv) | uma: 0 | fp16: 1 | bf16: 0 | warp size: 64 | shared memory: 65536 | int dot: 0 | matrix cores: KHR_coopmat",
+        "llama_model_load_from_file_impl: using device Vulkan0 (AMD Radeon RX 7600 (RADV NAVI33)) (0000:03:00.0) - 8162 MiB free",
+        "load_tensors: layer   0 assigned to device Vulkan0, is_swa = 0",
+        "load_tensors: layer   1 assigned to device Vulkan0, is_swa = 0",
+        "load_tensors: layer   2 assigned to device Vulkan0, is_swa = 0",
+        "load_tensors: layer   3 assigned to device Vulkan0, is_swa = 0",
+        "load_tensors: layer   4 assigned to device Vulkan0, is_swa = 0"
+      ]
+    },
+    "tts": {
+      "weights": {
+        "path": "/tmp/aurora-root-voice-primary-v426/models-v427/piper-ljspeech/en_US-ljspeech-medium.onnx",
+        "bytes": 63531379,
+        "sha256": "6f52a751e2349abe7a76735eb09dc1875298c77ea2342ffd2fef79ff81b87f22"
+      },
+      "voiceConfig": {
+        "path": "/tmp/aurora-root-voice-primary-v426/models-v427/piper-ljspeech/en_US-ljspeech-medium.onnx.json",
+        "bytes": 4972,
+        "sha256": "141d612cc0a95ed7efc1ca936b845c2364967f2e9217c5dbfcf69fc4d6c65860"
+      },
+      "executable": {
+        "path": "/tmp/aurora-root-voice-primary-v426/env/bin/piper",
+        "bytes": 330,
+        "sha256": "afcf2635686ce7f90302a757477194784d394f166e7168523404915eea9613ac"
+      },
+      "actualCall": {
+        "piperExecutable": "/tmp/aurora-root-voice-primary-v426/env/bin/piper",
+        "useCuda": false,
+        "voice": {
+          "config_file": "/tmp/aurora-root-voice-primary-v426/models-v427/piper-ljspeech/en_US-ljspeech-medium.onnx.json",
+          "expected_sample_rate": 22050,
+          "model_file": "/tmp/aurora-root-voice-primary-v426/models-v427/piper-ljspeech/en_US-ljspeech-medium.onnx",
+          "voice_id": "standard:piper:en-us"
+        }
+      },
+      "outputFormat": "monoPCM16/22050Hz",
+      "perChildORTProviderEnumeration": null,
+      "perChildORTProviderEnumerationReason": "Actual Piper CLI invocation has useCuda=false; per-child execution-provider enumeration not recorded."
+    }
+  },
+  "runtimeVersions": {
+    "pid": 2903675,
+    "packages": {
+      "faster-whisper": "1.1.1",
+      "ctranslate2": "4.7.1",
+      "llama-cpp-python": "0.3.19",
+      "piper-tts": "1.2.0",
+      "onnxruntime": "1.20.1",
+      "numpy": "2.2.6"
+    }
+  },
+  "hardware": {
+    "host": "personal.skyron-server",
+    "architecture": "x86_64",
+    "logicalCpuCount": 8,
+    "cpuModel": "AMD Ryzen 5 3400G with Radeon Vega Graphics",
+    "memoryTotalKiB": "30742596",
+    "gpus": [
+      {
+        "path": "/sys/devices/pci0000:00/0000:00:01.1/0000:01:00.0/0000:02:00.0/0000:03:00.0",
+        "device": "0x7480",
+        "vramTotal": 8573157376
+      },
+      {
+        "path": "/sys/devices/pci0000:00/0000:00:08.1/0000:0a:00.0",
+        "device": "0x15d8",
+        "vramTotal": 2147483648
+      }
+    ]
+  },
+  "condition": {
+    "surface": "headless productionPython",
+    "requester": "personal-desktop",
+    "provider": "same-personal-desktop",
+    "mode": "localBus",
+    "remoteStageSet": [],
+    "stageProviderMap": {
+      "stt": "samehost/faster-whisper CPU int8_float32/base",
+      "llm": "samehost/llama-cpp VulkanRX7600/QwenQ4_0/25layers",
+      "tts": "samehost/PiperCLI/useCudaFalse"
+    }
+  },
+  "pilotProof": {
+    "resultPath": "/home/developer/projects/aurora/.git/aurora-audio-candidate-v481/runtime/pilot/pilot-result.json",
+    "resultSHA256": "a0a08291623ae1b64084eda91c2079abe054a69a0e5bc4f1f5a8cfe5a111b821",
+    "nAttempted": 1,
+    "nCorrect": 1,
+    "nFailed": 0,
+    "nTimeout": 0,
+    "nMeasured": 0,
+    "globalVoiceAttempt": 10,
+    "flowMs": 13512.828985,
+    "correlation": {
+      "correlation_id": "wav-flow-05d5e0dcb8374de4af7d7ce570cd8616",
+      "request_id": "wav-request-34c4e335bf90469fbeb6daa9c1ce0c19",
+      "scope": "one parent LocalBus flow; STT/TTS contracts themselves have no caller id fields",
+      "session_id": "wav-session-cc88ceed46424144a67f2b578f3fcd45"
+    },
+    "observer": {
+      "capture_complete": true,
+      "encoded_bytes": 16640,
+      "event_count": 20,
+      "flush_error_count": 0,
+      "rejected_event_count": 0,
+      "write_error_count": 0
+    },
+    "terminal": {
+      "kind": "single_complete_prerecorded_audio_local_bus_pilot",
+      "controllerPid": 2903659,
+      "startedAt": "2026-10-15T03:14:22.803598+00:00",
+      "host": "personal.skyron-server",
+      "capSeconds": 300,
+      "flowCapSeconds": 180,
+      "maximumFullAudioAttempts": 1,
+      "measurementStarted": false,
+      "measuredRequests": 0,
+      "crossDeviceMeasuredAllowed": false,
+      "desktopGpuReservationExclusive": true,
+      "globalBuildLockHeld": true,
+      "sourceRoot": "/home/developer/projects/aurora/.git/aurora-audio-candidate-v481/source",
+      "sourceCommit": "cbac78fe3fb2b73100bfaa9dc198fb6bff689840",
+      "surface": "headless production Python local bus; native/web/Android separate",
+      "physicalPlaybackVerified": false,
+      "initialResources": {
+        "homeFree": 319754240,
+        "shmFree": 560443392,
+        "memAvailable": 3286351872
+      },
+      "inputWavBytes": 153644,
+      "gpuDevices": [
+        {
+          "path": "/sys/devices/pci0000:00/0000:00:01.1/0000:01:00.0/0000:02:00.0/0000:03:00.0",
+          "device": "0x7480",
+          "vramTotal": 8573157376
+        },
+        {
+          "path": "/sys/devices/pci0000:00/0000:00:08.1/0000:0a:00.0",
+          "device": "0x15d8",
+          "vramTotal": 2147483648
+        }
+      ],
+      "command": [
+        "/tmp/aurora-root-voice-primary-v426/env/bin/python",
+        "/home/developer/projects/aurora/.git/aurora-audio-candidate-v481/bootstrap.py"
+      ],
+      "configSHA256": "9608682c8496c65b51eea4f30bbf8a2ca34b81470f146734129829ea458963bb",
+      "LLMOptionsSHA256": "f4cf841be947416a1b8428d372c2018993e0e76d7eed021b6e395c68eec0e046",
+      "pid": 2903675,
+      "exitCode": 0,
+      "counterErrors": [
+        {
+          "path": "/sys/class/drm/card1/device/gpu_busy_percent",
+          "errorClass": "OSError",
+          "errno": 16
+        }
+      ],
+      "actualGpuOffloadLogLines": [
+        "load_tensors: offloaded 25/25 layers to GPU"
+      ],
+      "actualBackendLogLines": [
+        "ggml_vulkan: Found 1 Vulkan devices:",
+        "ggml_vulkan: 0 = AMD Radeon RX 7600 (RADV NAVI33) (radv) | uma: 0 | fp16: 1 | bf16: 0 | warp size: 64 | shared memory: 65536 | int dot: 0 | matrix cores: KHR_coopmat",
+        "llama_model_load_from_file_impl: using device Vulkan0 (AMD Radeon RX 7600 (RADV NAVI33)) (0000:03:00.0) - 8162 MiB free",
+        "load_tensors: layer   0 assigned to device Vulkan0, is_swa = 0",
+        "load_tensors: layer   1 assigned to device Vulkan0, is_swa = 0",
+        "load_tensors: layer   2 assigned to device Vulkan0, is_swa = 0",
+        "load_tensors: layer   3 assigned to device Vulkan0, is_swa = 0",
+        "load_tensors: layer   4 assigned to device Vulkan0, is_swa = 0"
+      ],
+      "finishedAt": "2026-10-15T03:14:48.886545+00:00",
+      "elapsedSeconds": 26.08299181901384,
+      "processPresentAfterWait": false
+    },
+    "retirement": {
+      "at": "2026-10-15T03:22:35.799683+00:00",
+      "pidsAbsent": [
+        2903659,
+        2903675
+      ],
+      "locks": {
+        "aurora-global-build.lock": "free",
+        "aurora-desktop-gpu-baseline.lock": "free"
+      }
+    }
+  },
+  "measurementPlan": {
+    "plannedMeasuredPerApplicableNewCondition": 900,
+    "excludedWarmupsPerCondition": 15,
+    "requestDeadlineSeconds": 180,
+    "conditionOverallCapSeconds": 12600,
+    "capBasis": "915 attempts * observed coldpilot13.513s is12363s; retained modelwarmstate expected faster; cap12600s bounded, no timeout ladder.",
+    "quantileMethod": "HyndmanFanType7: sorted x, index=(n-1)*p, linear interpolation; correctness-success and all-outcome timing distributions reported separately, timeout censoring/denominators explicit.",
+    "sameEffectiveSemanticSetupRequiredAcrossSurfaces": true,
+    "hardwareAccelerationDifferenceMustBeExplicitSeparateCondition": true,
+    "currentMeasurementStarted": false
+  },
+  "telemetry": {
+    "clockDomain": "same Python process monotonic per spans; no unrelated clock subtraction",
+    "latencyEndpoint": "file-ready submission to validated generatedWAV; excludes input recordingduration/setup/shutdown; not physicalEOS/playback",
+    "correlationAndSpans": "20raw events/7pairedspans in samepid; actualparentSpanIdsnull retained",
+    "resourceSampling": "1Hz host freeRAM/storage/GPU VRAM/busy/error + parentCPUstat/RSS/HWM + networknamespace aggregate(notperprocess)",
+    "unknowns": {
+      "queue": null,
+      "nativeFirstToken": null,
+      "streamingFirstAudio": null,
+      "playbackStart": null,
+      "playbackEnd": null,
+      "physicalAudibility": null
+    },
+    "unknownReasons": "No independent queue/firsttoken boundary in finite modeladapter; Piper is finite output; no playback in headlesspilot; network aggregate is not isolated providertraffic."
+  },
+  "historyPolicy": {
+    "allOldFailuresRetained": true,
+    "newSetupMustNotPoolOldPercentiles": true,
+    "unaffectedCPUExtraAndTypedControls": "retained_supplemental_in_original_limited_scope"
+  },
+  "acceptance": {
+    "pilotCorrect": true,
+    "requiredIndividualAudioAndSurfaceSealsComplete": false,
+    "phase2MeasuredAllowed": false,
+    "full13Complete": false
+  }
+}

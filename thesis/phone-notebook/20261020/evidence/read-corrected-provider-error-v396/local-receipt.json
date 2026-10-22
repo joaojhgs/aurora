@@ -1,0 +1,8 @@
+{
+  "bytes": 2043,
+  "copyOnly": true,
+  "custody": "Notebook result persisted and fsynced before relay; remote receipt in same output",
+  "localPath": "/home/developer/projects/aurora/thesis/phone-notebook/20261020/evidence/read-corrected-provider-error-v396/result.json",
+  "remotePath": "/home/developer/projects/aurora/thesis/phone-notebook/20261020/evidence/read-corrected-provider-error-v396.json",
+  "sha256": "47db6f5ccb9f309c511121634df66359a033c7ae2d7e78ca95dfb6912c4f6025"
+}

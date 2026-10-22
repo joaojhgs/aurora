@@ -1,0 +1,47 @@
+{
+  "private_originals_retained": true,
+  "files": [
+    {
+      "path": "root-manifest.json",
+      "original_sha256": "4f1b731288c80043c88b2ccd4f58819a43c0678f7730a2a7da1e43eae80bf65e",
+      "export_sha256": "494d613e4422373408022ef5afbccb4ad8b2f76e5a0c0005ae65d5d8791e249f",
+      "transform": "Private config/environment hashes withheld; unchanged boolean retained"
+    },
+    {
+      "path": "root-result.json",
+      "original_sha256": "5094ee810aad60b5879ff059f9a98ce1c7865a6ed40a2e86961adc680e609930",
+      "export_sha256": "f6cb9293943be5377c2066d9589aa21fc9e960ab2f047a23e91d780eebbf0a98",
+      "transform": "Private config/environment hashes withheld; unchanged boolean retained"
+    },
+    {
+      "path": "requests.jsonl",
+      "original_sha256": "ba34c076515e9e653f260f32ad33e5d2178606a6bb027856ea4009c662398126",
+      "export_sha256": "ba34c076515e9e653f260f32ad33e5d2178606a6bb027856ea4009c662398126",
+      "transform": "none"
+    },
+    {
+      "path": "requests.jsonl.manifest.json",
+      "original_sha256": "50d366fe8872c781c9adde819f11e9a41deb499c759eecb528c78c5a9a0f5d82",
+      "export_sha256": "50d366fe8872c781c9adde819f11e9a41deb499c759eecb528c78c5a9a0f5d82",
+      "transform": "none"
+    },
+    {
+      "path": "requests.jsonl.cleanup.json",
+      "original_sha256": "b520a0441c3f52026bcd3f44fdcd6bc0f737d8f220ed62460b82564c81af2c63",
+      "export_sha256": "b520a0441c3f52026bcd3f44fdcd6bc0f737d8f220ed62460b82564c81af2c63",
+      "transform": "none"
+    },
+    {
+      "path": "stdout.log",
+      "original_sha256": "5ba1783f65c667e56b52de0be9d1e9469269a1e1a50c2c882f55c3033810aafd",
+      "export_sha256": "199cf8f4634787e5708c86b27d7747a161f65871526f4e1804f178507ec6fc55",
+      "transform": "Generated temporary bootstrap Password value only redacted"
+    },
+    {
+      "path": "stderr.log",
+      "original_sha256": "bcffddd6b99799a74c3f1754476ba2ed0c20a4f3c0b96663b44e8975d245aedd",
+      "export_sha256": "bcffddd6b99799a74c3f1754476ba2ed0c20a4f3c0b96663b44e8975d245aedd",
+      "transform": "none"
+    }
+  ]
+}

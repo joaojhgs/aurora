@@ -1,0 +1,9 @@
+{
+  "state": "REMOTE_FINISHED_AT_SHELL_PROMPT",
+  "error": "FileNotFoundError: notebook-exact-model-overlay.json not copied to notebook",
+  "beforeFailure": "private-notebook-instance-v92 empty directory created",
+  "nextOperation": "v93 embeds identical public overlay; preserves v92",
+  "evidence": "terminal read cursor468 / read-29.json",
+  "servicesStarted": 0,
+  "modelCalls": 0
+}

@@ -1,0 +1,128 @@
+{
+  "actual_provider_file_receipt": {
+    "path": "/tmp/aurora-root-k1-http-provider-prep-v825/input/actual-provider-files-v994.json",
+    "sha256": "d3971350195b0bd944e5242f08570d5dd8b93521b6cefd899086fab31c3402d2"
+  },
+  "admission_receipt": {
+    "path": "/tmp/aurora-root-k1-http-provider-prep-v825/input/admission-v994.json",
+    "sha256": "dc929a8fd74497cbc1413511fd6785df167fa62900180eca6e898fb80bbed88f"
+  },
+  "cohortId": "aurora-worker-desktop-k1-http-tts-v994",
+  "existing_env_file": {
+    "bytes": 0,
+    "path": "/tmp/aurora-root-k1-http-provider-prep-v825/input/existing-private.env",
+    "sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+  },
+  "freezeAt": "2026-10-16T09:47:18.314679+00:00",
+  "fresh_resource_model_source_runtime_or_route_admission_performed": true,
+  "gateway": {
+    "approved_interface_receipt": "dc929a8fd74497cbc1413511fd6785df167fa62900180eca6e898fb80bbed88f",
+    "auth_binding": "existing_gateway_api_key",
+    "auth_env_name": "AURORA_HOSTED_PEER_GATEWAY_API_KEY",
+    "bind": {
+      "approved_private_interface": true,
+      "host": "100.64.0.3",
+      "port": 8000
+    },
+    "endpoint": "http://100.64.0.3:8000/api/TTS/Synthesize",
+    "endpoint_host": "100.64.0.3",
+    "endpoint_port": 8000,
+    "endpoint_sha256": "92c5f1bd8f68369986778d7504484ed9f2d16743f857ad8bb97eaeebf6f5a1b5"
+  },
+  "historical_hardware_context": {
+    "cpuModel": "AMD Ryzen 5 3400G with Radeon Vega Graphics",
+    "effectiveLLMBackend": "llama-cpp-python/Vulkan;25/25layers",
+    "gpuDevice": "0x7480",
+    "gpuName": "AMD Radeon RX7600",
+    "gpuVRAMTotal": 8573157376,
+    "kernel": "7.0.0-34-generic",
+    "machine": "x86_64",
+    "sttBackend": "faster-whisper/ctranslate2 CPU int8_float32",
+    "ttsBackend": "Piper CLI CPU useCuda=false"
+  },
+  "historical_model_paths": {
+    "config": "/tmp/aurora-root-voice-primary-v426/models-v427/piper-ljspeech/en_US-ljspeech-medium.onnx.json",
+    "model": "/tmp/aurora-root-voice-primary-v426/models-v427/piper-ljspeech/en_US-ljspeech-medium.onnx"
+  },
+  "host_id_pseudonym": "personal-desktop-k1-http-tts",
+  "implementation": {
+    "bindings_sha256": "52182f956b34788ecbfbbb241c8243ff88baebe2874e3605791793777ed0dc91",
+    "bootstrap_sha256": "bf0da2f51e174193ceca7636ddfa1d602e56027afca339d23cb9366f96916926",
+    "controller_sha256": "27a09e195d1a82f6dde770f60b15bcdcbf93f3743bf661c012405ae22eece5de",
+    "observer_sha256": "784cc4bffc0d6824bbe378d17a7f632d587ca0a315896b048b2ebef727082df5",
+    "resource_sampler_sha256": "8f62ec378e74036d4539d9159e3caf29b8fd7a9115de1ab0f482dfd58b6e1857",
+    "telemetry_sha256": "8129ffe7591a47a0107ede53b101aead9fc1f58b92f0c0c4203176cc7608325d"
+  },
+  "launch_config": {
+    "bytes": 15630,
+    "path": "/tmp/aurora-root-k1-http-provider-prep-v825/input/launch-config.json",
+    "sha256": "531368116489ed98abb521e09c8b1b2980b7a6ba819e51e808b969ed3be47f15"
+  },
+  "lineage": {
+    "actual_auth_already_staged": "v838-staged-auth-binding-metadata-RESULT.json",
+    "actual_staging_receipt": "v825-stage-provider-source-RESULT.json",
+    "no_new_identity_or_credential": true,
+    "prepared_from_retained_closed_baseline": "desktop-v692-frozen-manifest.saved.json"
+  },
+  "models": {
+    "tts": "6f52a751e2349abe7a76735eb09dc1875298c77ea2342ffd2fef79ff81b87f22",
+    "ttsConfig": "141d612cc0a95ed7efc1ca936b845c2364967f2e9217c5dbfcf69fc4d6c65860"
+  },
+  "prepared_at": "2026-10-16T08:19:47.825696+00:00",
+  "remaining_actual_inputs": [
+    "actual authenticated route and15 native/provider-correlated warmups after startup before measured1"
+  ],
+  "remoteTtsReceiver": {
+    "config_sha256": "141d612cc0a95ed7efc1ca936b845c2364967f2e9217c5dbfcf69fc4d6c65860",
+    "hardware_fingerprint_sha256": "a22d678d63f77200c159d743523a6c2e41070b4b142ff1768c1120b23487c713",
+    "model_sha256": "6f52a751e2349abe7a76735eb09dc1875298c77ea2342ffd2fef79ff81b87f22",
+    "provider_class": "app.services.tts.providers.piper.PiperTTSProvider",
+    "receiver_id": "personal-desktop-piper-cpu-k1-http",
+    "sample_rate": 22050,
+    "source_sha256": "bcc9ec8765616093b0b0b4dd2bf35847a6653f242e09f809e93ee5199f409848",
+    "use_cuda": false
+  },
+  "required_effective_environment": {
+    "AURORA_STT_WHISPER_DOWNLOAD_ROOT": "/dev/shm/aurora-root-accurate-base-v443/model",
+    "GGML_VK_VISIBLE_DEVICES": "1",
+    "MKL_NUM_THREADS": "2",
+    "OMP_NUM_THREADS": "2",
+    "OPENBLAS_NUM_THREADS": "2"
+  },
+  "runtime": {
+    "resolved_interpreter": "/home/developer/.local/share/uv/python/cpython-3.11.11-linux-x86_64-gnu/bin/python3.11",
+    "resolved_interpreter_sha256": "89b2f5166fb529c259aedd43e5f718c60e35d58e630cb40ae6accb48fc4f961a",
+    "venv_executable": "/tmp/aurora-root-voice-primary-v426/env/bin/python",
+    "venv_root": "/tmp/aurora-root-voice-primary-v426/env"
+  },
+  "runtime_versions": {
+    "packages": {
+      "ctranslate2": "4.7.1",
+      "faster-whisper": "1.1.1",
+      "llama-cpp-python": "0.3.19",
+      "numpy": "2.2.6",
+      "onnxruntime": "1.20.1",
+      "piper-tts": "1.2.0"
+    }
+  },
+  "schema": "aurora.distributed_k1_gateway_receiver.v1",
+  "source": {
+    "inventory_path": "/tmp/aurora-root-k1-http-provider-prep-v825/input/source-inventory.json",
+    "inventory_sha256": "bcc9ec8765616093b0b0b4dd2bf35847a6653f242e09f809e93ee5199f409848",
+    "root": "/home/developer/projects/aurora/.git/aurora-handoff-import-20261006/http-full-audio-v497/source"
+  },
+  "static_expected_class_source": {
+    "actualProviderAndSourceAdmission": "Existing fresh remote source/file admission and actual ordinary15warmup loaded/provider/native joins still required; historical source gates closed/reused",
+    "canonicalSourceRefs": [
+      "thesis/harness/distributed-k1-http-v822/requester/runner.py:131",
+      "app/services/tts/service.py:46",
+      "app/services/tts/service.py:985",
+      "app/services/tts/providers/piper.py:172"
+    ],
+    "capturedObject": "type(service._provider).__module__ + .__qualname__",
+    "frozenSourceLocation": "Personal desktop /home/developer/projects/aurora/.git/aurora-handoff-import-20261006/http-full-audio-v497/source; not present on worker",
+    "scope": "EXPECTED_DECLARATION_ONLY_NOT_LOADED_RUNTIME_PROOF",
+    "sourceLookup": "existing Luna v972 read-only factual report"
+  },
+  "status": "FROZEN_PRESTART_ADMITTED_POSTSTART_WARMUP_PROOF_PENDING"
+}

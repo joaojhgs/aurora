@@ -1,0 +1,21 @@
+{
+  "at": "2026-10-20T04:28:38.086185+00:00",
+  "epochOuterCapSeconds": 68240,
+  "globalIndices": [
+    21,
+    900
+  ],
+  "manifestSha256": "120dd99a4de0a242c30ebe4bb46d854ca77313c482a0c74f024edb624829a6e8",
+  "modelCalls": 0,
+  "newOrcaWorker": false,
+  "originalConditionCapSeconds": 72000,
+  "plannedMeasured": 880,
+  "priorUsedSeconds": 1579.63201598,
+  "providerDeadlineUtc": "2026-10-20T23:55:24.085968+00:00",
+  "sameProvider": {
+    "pid": 3194394,
+    "startTicks": 22320527
+  },
+  "status": "DRAFT_FROZEN_NOT_LAUNCHED",
+  "sutCalls": 0
+}

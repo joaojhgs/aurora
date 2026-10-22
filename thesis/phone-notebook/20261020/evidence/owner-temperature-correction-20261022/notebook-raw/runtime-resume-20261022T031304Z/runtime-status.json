@@ -1,0 +1,47 @@
+{
+  "buildChildrenRssBytes": 18841600,
+  "buildPid": 114222,
+  "commands": [
+    {
+      "elapsedSeconds": 499.1430092979972,
+      "exit": 0,
+      "log": "/home/developer/projects/aurora/thesis/phone-notebook/20261020/deployment/ebde3a8acf6315f920d03593845f17a1fc65a733/runtime-resume-20261022T031304Z/llama-vulkan-build.log",
+      "logSha256": "773975906d958d36f7fae30cd7dbe8880230a75c79793737abf603d144cae23e",
+      "name": "llama-vulkan-build"
+    },
+    {
+      "elapsedSeconds": 2.030862698000419,
+      "exit": 0,
+      "log": "/home/developer/projects/aurora/thesis/phone-notebook/20261020/deployment/ebde3a8acf6315f920d03593845f17a1fc65a733/runtime-resume-20261022T031304Z/runtime-import-proof.log",
+      "logSha256": "3d48e63efca7f7fb40a94e510057776df9f9f88ae4d9ca166feaeb5db9de7f2f",
+      "name": "runtime-import-proof"
+    }
+  ],
+  "deadlineUtc": "2026-10-22T03:33:04.731550+00:00",
+  "elapsedSeconds": 501.27359179999985,
+  "finishedAt": "2026-10-22T03:21:26.003264+00:00",
+  "globalInstall": false,
+  "maxBuildRssBytes": 4294967296,
+  "maxJobs": 2,
+  "modelCalls": 0,
+  "networkAcquisition": false,
+  "ownBuildChildrenActive": false,
+  "peakBuildChildrenRssBytes": 43204608,
+  "pid": 114215,
+  "resources": {
+    "at": "2026-10-22T03:21:24.001580+00:00",
+    "diskFreeBytes": 99342790656,
+    "load": [
+      3.72119140625,
+      4.9892578125,
+      4.861328125
+    ],
+    "maxSensorC": 82.0,
+    "memAvailableBytes": 21000192000,
+    "temperaturePolicy": "observe_only_owner_correction"
+  },
+  "startTicks": "1937479",
+  "startedAt": "2026-10-22T03:13:04.731539+00:00",
+  "status": "PINNED_VULKAN_RUNTIME_BUILT_IMPORTED_NO_MODEL_CALLS",
+  "temperaturePolicy": "observe_only_owner_correction"
+}

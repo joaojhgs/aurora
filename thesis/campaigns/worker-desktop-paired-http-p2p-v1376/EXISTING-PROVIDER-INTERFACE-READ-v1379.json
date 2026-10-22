@@ -1,0 +1,64 @@
+{
+  "at": "2026-10-17T23:23:09.344871+00:00",
+  "url": "http://127.0.0.1:18000/api/openapi.json",
+  "method": "GET",
+  "readOnly": true,
+  "modelCalls": 0,
+  "existingApprovedCredentialOnly": true,
+  "secretOutput": false,
+  "status": 200,
+  "bytes": 846426,
+  "sha256": "181d68dff975d38a51291bc30c2b3873b8cc054b4d1ee075b9d6833a1f663656",
+  "path": "thesis/campaigns/worker-desktop-paired-http-p2p-v1376/EXISTING-PROVIDER-OPENAPI-v1379.json",
+  "meshPaths": {
+    "/api/routes": [
+      "get"
+    ],
+    "/api/admin/peers": [
+      "get"
+    ],
+    "/api/admin/peers/{peer_id}": [
+      "delete"
+    ],
+    "/api/admin/peers/{peer_id}/refresh-permissions": [
+      "post"
+    ],
+    "/api/Auth/MeshApprovePeer": [
+      "post"
+    ],
+    "/api/Auth/MeshDenyPeer": [
+      "post"
+    ],
+    "/api/Auth/MeshGetPeer": [
+      "post"
+    ],
+    "/api/Auth/MeshListPeers": [
+      "post"
+    ],
+    "/api/Auth/MeshRemovePeer": [
+      "post"
+    ],
+    "/api/Auth/MeshUpdatePeerPermissions": [
+      "post"
+    ],
+    "/api/Tooling/GetExportCatalog": [
+      "post"
+    ],
+    "/api/Gateway/ExplainRoute": [
+      "post"
+    ],
+    "/api/Gateway/GetMeshInviteConfig": [
+      "post"
+    ],
+    "/api/Gateway/GetMeshStatus": [
+      "post"
+    ],
+    "/api/Gateway/GetWebRTCDiagnostics": [
+      "post"
+    ],
+    "/api/TTS/VoiceImportChunk": [
+      "post"
+    ]
+  },
+  "elapsedSeconds": 8.455305666895583
+}

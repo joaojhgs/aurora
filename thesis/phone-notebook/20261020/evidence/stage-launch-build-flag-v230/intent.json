@@ -1,0 +1,12 @@
+{
+  "controlDeadline": "2026-10-22T08:35:00Z",
+  "explicitNewline": true,
+  "host": "ssh:ssh-sem-notebook-personal",
+  "incarnation": "328cd72f-c7ea-49ff-a2db-b9275b085037",
+  "remoteResult": "/home/developer/projects/aurora/thesis/phone-notebook/20261020/evidence/stage-launch-build-flag-v230.json",
+  "rootAdmissionMessage": "verified-v2398-2job-idle-provider-no-inference-during-build",
+  "script": "scripts/stage_launch_build_flag_v230.py",
+  "scriptSha256": "401f2391adef07220e6868d3f0c12ac17bcb43c1bf914f142dbd8d3b75ef33ae",
+  "singleSend": true,
+  "terminal": "term_a2ed5feb-7c92-48e4-bd88-d1b0e6737989"
+}

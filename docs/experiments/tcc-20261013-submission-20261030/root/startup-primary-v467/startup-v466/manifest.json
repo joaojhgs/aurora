@@ -1,0 +1,35 @@
+{
+  "files": {
+    "driver-controller.py": {
+      "bytes": 2806,
+      "sha256": "93bf75494dbc6586afce5a90e981ccbe420fc4f5bff5fffe05a29805388523e7"
+    },
+    "backend-controller.py": {
+      "bytes": 7192,
+      "sha256": "12216cb3a5e8f6e2684226859d8379d46541f181c2a98aeb3682d13ec47bd567"
+    },
+    "supervisor.py": {
+      "bytes": 8433,
+      "sha256": "6934633078afe6de86e943e3ee05ca58650035a9afa5f175a3003aafca7524d9"
+    },
+    "driver.py": {
+      "bytes": 29924,
+      "sha256": "964fa5af79f363c2040ba2d500d301d6e1e9fdfdefe4d3357aa6fdfe1741f5d6"
+    },
+    "source_guard_v455.py": {
+      "bytes": 1590,
+      "sha256": "53539d5606af82212f0b5907b41f57b294a0f2ee540ab9f0f78ca0ffe55e4640"
+    }
+  },
+  "mode": "one startup-only90sdiagnostic/incontextprimary/noStop/noSTT/noLLM/noTTS",
+  "actualPriorRuntimeRetired": true,
+  "oldSourcesAndBuildsPreserved": true,
+  "build": "unchangedV463 CujxufTIY73eYYc6iXAj1",
+  "priorGlobalVoiceFlows": 8,
+  "newVoiceOrdinalPlanned": null,
+  "maximumDiagnosticCases": 1,
+  "driverCapSeconds": 90,
+  "parentCapSeconds": 300,
+  "phase2MeasuredAllowed": false,
+  "launchStarted": false
+}

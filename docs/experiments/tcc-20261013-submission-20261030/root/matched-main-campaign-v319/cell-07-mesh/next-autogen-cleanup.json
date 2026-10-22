@@ -1,0 +1,12 @@
+[
+  {
+    "path": "apps/aurora-web/tsconfig.json",
+    "restored": false,
+    "unexpected_delta_preserved": false
+  },
+  {
+    "path": "apps/aurora-web/next-env.d.ts",
+    "restored": false,
+    "unexpected_delta_preserved": false
+  }
+]

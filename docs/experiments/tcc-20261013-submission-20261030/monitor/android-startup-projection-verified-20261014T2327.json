@@ -1,0 +1,57 @@
+{
+  "at": "2026-10-14T23:27:03.062788+00:00",
+  "scope": "Local non-sensitive project projection bytes/README claims checked against delivered Root receipts; no remote runtime rerun/model load/source test",
+  "root_package": "docs/experiments/tcc-20261013-submission-20261030/root/android-build-and-startup-v448",
+  "manifest_sha256": "d5ab52a454130270abda42842a8c1839080bdbd1887f9d2e00b583b5468a9f45",
+  "file_count": 8,
+  "files": {
+    "app-case-history.json": {
+      "bytes_match": true,
+      "sha256_match": true
+    },
+    "blank-startup.png": {
+      "bytes_match": true,
+      "sha256_match": true
+    },
+    "artifact.json": {
+      "bytes_match": true,
+      "sha256_match": true
+    },
+    "next-desktop-asset-admission.json": {
+      "bytes_match": true,
+      "sha256_match": true
+    },
+    "startup-selected-primary.log": {
+      "bytes_match": true,
+      "sha256_match": true
+    },
+    "build-case-history.json": {
+      "bytes_match": true,
+      "sha256_match": true
+    },
+    "startup-observations.json": {
+      "bytes_match": true,
+      "sha256_match": true
+    },
+    "README.md": {
+      "bytes_match": true,
+      "sha256_match": true
+    }
+  },
+  "readme_sha256": "1726eb68bd50bc2bc61ef570d20fe5edfa882f514dc0e86b2b7ed49c34a67eb6",
+  "root_outcomes": "APK build/install/coldlaunch n1PASS; renderedUIFAIL; missing DOMprimary; zeroAndroidvoice samples",
+  "plan": {
+    "path": "/home/developer/Documents/Obsidian Vault Origin/5-full-notes/faculdade/tcc/future-work-test-requirements.md",
+    "lines": 1477,
+    "sha256": "5c4346ad27dd4d72c9ed2b65154e4da6d84d8b55d030fafda4f7627c605417d8",
+    "root_ack": "msg_817ee2bf5271"
+  },
+  "branch": "codex/aurora-native-speech-routing-20261007",
+  "head": "cbac78fe3fb2b73100bfaa9dc198fb6bff689840",
+  "dirty_paths": 48,
+  "dirty_state_sha256": "37173057277b4ad270185f667d4e6eea5612a416ad8d2f59b394c8adfd1247ca",
+  "run": "run_e6054e76e9fc",
+  "task": "task_d7ea336050cf",
+  "dispatch": "ctx_37b4d0a3c14f",
+  "all_checks": true
+}

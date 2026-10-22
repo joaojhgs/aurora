@@ -1,0 +1,26 @@
+{
+  "failure": "actual_mesh_runtime_pins_not_frozen",
+  "actualCause": "route pins used v491 virtualenv alias, controller compared resolved v487 path",
+  "oldAlias": "/home/developer/projects/aurora/.git/aurora-handoff-import-20261006/cpu-audio-campaign-v491/env",
+  "canonicalPrefix": "/home/developer/projects/aurora/.git/aurora-handoff-import-20261006/cpu-full-audio-v487/env",
+  "sameInterpreterSha256": "1e463bf849bb038214f6d4278f1aa6e079f307c04db5c9ed192543d5d866fa97",
+  "interpreterOnlyCheck": {
+    "prefix": "/home/developer/projects/aurora/.git/aurora-handoff-import-20261006/cpu-full-audio-v487/env",
+    "version": [
+      3,
+      11,
+      17
+    ]
+  },
+  "warmups": 0,
+  "measured": 0,
+  "modelCalls": 0,
+  "providerRestarted": false,
+  "failedOriginalPreserved": true,
+  "retiredCopyOnlyHelper": {
+    "pid": 2779050,
+    "startTicks": 128609774,
+    "signal": "SIGINT"
+  },
+  "changes": "Root launch metadata canonicalizes the same interpreter/pins prefix; no production/controller/runner/proof algorithm changed; fresh paths1796 only"
+}

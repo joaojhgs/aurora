@@ -1,0 +1,2838 @@
+{
+  "schema": "aurora.frozen_product_source_physical_custody.v1",
+  "startedAt": "2026-10-18T00:09:16.569556+00:00",
+  "finishedAt": "2026-10-18T00:09:20.151597+00:00",
+  "sourceRoot": "/home/developer/projects/aurora/.git/aurora-handoff-import-20261006/cpu-full-audio-v490/source",
+  "inventory": {
+    "path": ".git/aurora-handoff-import-20261006/distributed-k2-requester-prep-v1282/source-inventory.json",
+    "sha256": "96ec8e3e14233520d4cd469c4177264a193d05cf26b4b512d91d98f16bbb7dee",
+    "bytes": 58216
+  },
+  "copiedFiles": 400,
+  "copiedBytes": 6708922,
+  "reusedVerifiedFiles": 6,
+  "newBytesThisRecovery": 6698045,
+  "withheld": [],
+  "records": [
+    {
+      "source": ".git/aurora-handoff-import-20261006/cpu-full-audio-v490/source/app/__init__.py",
+      "destination": "thesis/sources/python-audio-v490-96ec8e3e/source/app/__init__.py",
+      "bytes": 435,
+      "path": "app/__init__.py",
+      "sha256": "c0a471f797970471caf50fa6b354c3623f0df2ab94a85837be6257348adf9f62"
+    },
+    {
+      "source": ".git/aurora-handoff-import-20261006/cpu-full-audio-v490/source/app/__main__.py",
+      "destination": "thesis/sources/python-audio-v490-96ec8e3e/source/app/__main__.py",
+      "bytes": 549,
+      "path": "app/__main__.py",
+      "sha256": "f75f073545eaeba85ae47c84c48f575bdb027cfbb0b7b8d7a12a475394fbf557"
+    },
+    {
+      "source": ".git/aurora-handoff-import-20261006/cpu-full-audio-v490/source/app/helpers/aurora_logger.py",
+      "destination": "thesis/sources/python-audio-v490-96ec8e3e/source/app/helpers/aurora_logger.py",
+      "bytes": 4727,
+      "path": "app/helpers/aurora_logger.py",
+      "sha256": "d41321b864074edc350656a98225d7c828daa26de505f68c22d20ebcdb10c17c"
+    },
+    {
+      "source": ".git/aurora-handoff-import-20261006/cpu-full-audio-v490/source/app/helpers/getGoogleCredentials.py",
+      "destination": "thesis/sources/python-audio-v490-96ec8e3e/source/app/helpers/getGoogleCredentials.py",
+      "bytes": 2912,
+      "path": "app/helpers/getGoogleCredentials.py",
+      "sha256": "342b619b7afb7ff35911a684e0d6a8010d305906b06c2517860597481a574e96"
+    },
+    {
+      "source": ".git/aurora-handoff-import-20261006/cpu-full-audio-v490/source/app/helpers/getUseHardwareAcceleration.py",
+      "destination": "thesis/sources/python-audio-v490-96ec8e3e/source/app/helpers/getUseHardwareAcceleration.py",
+      "bytes": 1196,
+      "path": "app/helpers/getUseHardwareAcceleration.py",
+      "sha256": "c4fe4f9141d3c001458a1de86023ae1d7f006ffda3a20866212cf458c6ae6845"
+    },
+    {
+      "source": ".git/aurora-handoff-import-20261006/cpu-full-audio-v490/source/app/helpers/runAsyncInThread.py",
+      "destination": "thesis/sources/python-audio-v490-96ec8e3e/source/app/helpers/runAsyncInThread.py",
+      "bytes": 1058,
+      "path": "app/helpers/runAsyncInThread.py",
+      "sha256": "3698e71021e712790e050ce64d508b33b4d9f23ee1eb1d61a239a1f544774aa8"
+    },
+    {
+      "source": ".git/aurora-handoff-import-20261006/cpu-full-audio-v490/source/app/messaging/AGENTS.md",
+      "destination": "thesis/sources/python-audio-v490-96ec8e3e/source/app/messaging/AGENTS.md",
+      "bytes": 10202,
+      "path": "app/messaging/AGENTS.md",
+      "sha256": "cf8e4b3ecaba3bcdbf13af717554b54ae5f0a41b8943e7e37c42bfdb69384049"
+    },
+    {
+      "source": ".git/aurora-handoff-import-20261006/cpu-full-audio-v490/source/app/messaging/__init__.py",
+      "destination": "thesis/sources/python-audio-v490-96ec8e3e/source/app/messaging/__init__.py",
+      "bytes": 1827,
+      "path": "app/messaging/__init__.py",
+      "sha256": "5c1d8fdb2c8ab42d22f47877185eeb6fae84a3d2dea2e77d0725011ba039a2c8"
+    },
+    {
+      "source": ".git/aurora-handoff-import-20261006/cpu-full-audio-v490/source/app/messaging/audio_messages.py",
+      "destination": "thesis/sources/python-audio-v490-96ec8e3e/source/app/messaging/audio_messages.py",
+      "bytes": 6643,
+      "path": "app/messaging/audio_messages.py",
+      "sha256": "f0bcbb031cf3329cb86d6b0800bd775b9bd0b62c9074734d664f249c87c7b32d"
+    },
+    {
+      "source": ".git/aurora-handoff-import-20261006/cpu-full-audio-v490/source/app/messaging/bullmq_bus.py",
+      "destination": "thesis/sources/python-audio-v490-96ec8e3e/source/app/messaging/bullmq_bus.py",
+      "bytes": 42387,
+      "path": "app/messaging/bullmq_bus.py",
+      "sha256": "9992896a4e3ec6fc516bfcca5ae39b5df317a82995cc7aaf9a434662cf77867e"
+    },
+    {
+      "source": ".git/aurora-handoff-import-20261006/cpu-full-audio-v490/source/app/messaging/bus.py",
+      "destination": "thesis/sources/python-audio-v490-96ec8e3e/source/app/messaging/bus.py",
+      "bytes": 9588,
+      "path": "app/messaging/bus.py",
+      "sha256": "952129d6e9ac0003d24bd53332e8bbc7cc7eeb6fdaad41327c921ffa128880b2"
+    },
+    {
+      "source": ".git/aurora-handoff-import-20261006/cpu-full-audio-v490/source/app/messaging/bus_runtime.py",
+      "destination": "thesis/sources/python-audio-v490-96ec8e3e/source/app/messaging/bus_runtime.py",
+      "bytes": 840,
+      "path": "app/messaging/bus_runtime.py",
+      "sha256": "f87f99fed2a6d4646cb843da63067e21944ed6feb4445c38db3d60eb61337835"
+    },
+    {
+      "source": ".git/aurora-handoff-import-20261006/cpu-full-audio-v490/source/app/messaging/local_bus.py",
+      "destination": "thesis/sources/python-audio-v490-96ec8e3e/source/app/messaging/local_bus.py",
+      "bytes": 26579,
+      "path": "app/messaging/local_bus.py",
+      "sha256": "b80a4a54859f142f12c52bab640d5b7c2fe4fd6f66bcd831bc83cb6909ec3b6f"
+    },
+    {
+      "source": ".git/aurora-handoff-import-20261006/cpu-full-audio-v490/source/app/messaging/mesh_bus.py",
+      "destination": "thesis/sources/python-audio-v490-96ec8e3e/source/app/messaging/mesh_bus.py",
+      "bytes": 70559,
+      "path": "app/messaging/mesh_bus.py",
+      "sha256": "faf9c452022ded30967aed6cc6bbcb583d3c93fb2f3328abb20e3076b71a2ef2"
+    },
+    {
+      "source": ".git/aurora-handoff-import-20261006/cpu-full-audio-v490/source/app/messaging/priority_helpers.py",
+      "destination": "thesis/sources/python-audio-v490-96ec8e3e/source/app/messaging/priority_helpers.py",
+      "bytes": 1875,
+      "path": "app/messaging/priority_helpers.py",
+      "sha256": "5ac349e99c7ffa92d1bcfb747e2b2d7b79cb164ca5035825b29b8609c7ed7501"
+    },
+    {
+      "source": ".git/aurora-handoff-import-20261006/cpu-full-audio-v490/source/app/messaging/transcription_messages.py",
+      "destination": "thesis/sources/python-audio-v490-96ec8e3e/source/app/messaging/transcription_messages.py",
+      "bytes": 3412,
+      "path": "app/messaging/transcription_messages.py",
+      "sha256": "0792b83d4fead285a8b0400c9a5b07dd1202aae49625c1a491ce3017ec7973f6"
+    },
+    {
+      "source": ".git/aurora-handoff-import-20261006/cpu-full-audio-v490/source/app/services/AGENTS.md",
+      "destination": "thesis/sources/python-audio-v490-96ec8e3e/source/app/services/AGENTS.md",
+      "bytes": 9295,
+      "path": "app/services/AGENTS.md",
+      "sha256": "5ce85a953723177ef770b37d6fe67357f9b082e75981b3fe96fe7ccdf15e9bf6"
+    },
+    {
+      "source": ".git/aurora-handoff-import-20261006/cpu-full-audio-v490/source/app/services/__init__.py",
+      "destination": "thesis/sources/python-audio-v490-96ec8e3e/source/app/services/__init__.py",
+      "bytes": 937,
+      "path": "app/services/__init__.py",
+      "sha256": "eeba43fe1156593a7a546fd0ecc241f12a6d4e5f1981d5651a496b694265ea1d"
+    },
+    {
+      "source": ".git/aurora-handoff-import-20261006/cpu-full-audio-v490/source/app/services/auth/AGENTS.md",
+      "destination": "thesis/sources/python-audio-v490-96ec8e3e/source/app/services/auth/AGENTS.md",
+      "bytes": 8647,
+      "path": "app/services/auth/AGENTS.md",
+      "sha256": "ce7220c9a5ad858a21a422a8d24bb3f9ad1b2215efcfc2d1e8b3777dc73fb61b"
+    },
+    {
+      "source": ".git/aurora-handoff-import-20261006/cpu-full-audio-v490/source/app/services/auth/__init__.py",
+      "destination": "thesis/sources/python-audio-v490-96ec8e3e/source/app/services/auth/__init__.py",
+      "bytes": 574,
+      "path": "app/services/auth/__init__.py",
+      "sha256": "e031a7fdbca16e05521351fdd8a52e715567a54937a542700a5275745c551290"
+    },
+    {
+      "source": ".git/aurora-handoff-import-20261006/cpu-full-audio-v490/source/app/services/auth/__main__.py",
+      "destination": "thesis/sources/python-audio-v490-96ec8e3e/source/app/services/auth/__main__.py",
+      "bytes": 1726,
+      "path": "app/services/auth/__main__.py",
+      "sha256": "75d9ca534a2af065cf77d6f15a0108175edf983f4c589f78d7c24023f2218de3"
+    },
+    {
+      "source": ".git/aurora-handoff-import-20261006/cpu-full-audio-v490/source/app/services/auth/auth_manager.py",
+      "destination": "thesis/sources/python-audio-v490-96ec8e3e/source/app/services/auth/auth_manager.py",
+      "bytes": 94113,
+      "path": "app/services/auth/auth_manager.py",
+      "sha256": "20d6bb333a8cbcb5003bf8b8e7c1b3369e984effce18e9c91b45036609a839d7"
+    },
+    {
+      "source": ".git/aurora-handoff-import-20261006/cpu-full-audio-v490/source/app/services/auth/service.py",
+      "destination": "thesis/sources/python-audio-v490-96ec8e3e/source/app/services/auth/service.py",
+      "bytes": 55520,
+      "path": "app/services/auth/service.py",
+      "sha256": "3e3cc97b097325f6591f8323d6d70e860588d71f200302f9fbc65fc0e43c1883"
+    },
+    {
+      "source": ".git/aurora-handoff-import-20261006/cpu-full-audio-v490/source/app/services/backup/__init__.py",
+      "destination": "thesis/sources/python-audio-v490-96ec8e3e/source/app/services/backup/__init__.py",
+      "bytes": 113,
+      "path": "app/services/backup/__init__.py",
+      "sha256": "d54637e06caf95c31117d5de0b156b362832e2036128a22f2e73073cb43c6214"
+    },
+    {
+      "source": ".git/aurora-handoff-import-20261006/cpu-full-audio-v490/source/app/services/backup/__main__.py",
+      "destination": "thesis/sources/python-audio-v490-96ec8e3e/source/app/services/backup/__main__.py",
+      "bytes": 1707,
+      "path": "app/services/backup/__main__.py",
+      "sha256": "c24318b403df78a347086d231efaddab6d4795e91bbc7e384c72e842c15bd239"
+    },
+    {
+      "source": ".git/aurora-handoff-import-20261006/cpu-full-audio-v490/source/app/services/backup/service.py",
+      "destination": "thesis/sources/python-audio-v490-96ec8e3e/source/app/services/backup/service.py",
+      "bytes": 20007,
+      "path": "app/services/backup/service.py",
+      "sha256": "d369d2d27546ef283e2782bd36d901b3b5e468634a09ccfdd6adc67c0810800d"
+    },
+    {
+      "source": ".git/aurora-handoff-import-20261006/cpu-full-audio-v490/source/app/services/config/__init__.py",
+      "destination": "thesis/sources/python-audio-v490-96ec8e3e/source/app/services/config/__init__.py",
+      "bytes": 144,
+      "path": "app/services/config/__init__.py",
+      "sha256": "fd3b0231fc2e43ff88b0064eed386c39486d5ec4d73b8b0eb6dca9b4d8cbe770"
+    },
+    {
+      "source": ".git/aurora-handoff-import-20261006/cpu-full-audio-v490/source/app/services/config/__main__.py",
+      "destination": "thesis/sources/python-audio-v490-96ec8e3e/source/app/services/config/__main__.py",
+      "bytes": 2058,
+      "path": "app/services/config/__main__.py",
+      "sha256": "23f0e51560ec37bfe7fe084a12a4bfa7ddce44fe42fc5efca2a183fcbcfba5cb"
+    },
+    {
+      "source": ".git/aurora-handoff-import-20261006/cpu-full-audio-v490/source/app/services/config/config_defaults.json",
+      "destination": "thesis/sources/python-audio-v490-96ec8e3e/source/app/services/config/config_defaults.json",
+      "bytes": 14254,
+      "path": "app/services/config/config_defaults.json",
+      "sha256": "1ddb323235b97b1211bcfbf97ca0b6167f2a42a48b76e7fa0db9dda3767939a8"
+    },
+    {
+      "source": ".git/aurora-handoff-import-20261006/cpu-full-audio-v490/source/app/services/config/config_manager.py",
+      "destination": "thesis/sources/python-audio-v490-96ec8e3e/source/app/services/config/config_manager.py",
+      "bytes": 85974,
+      "path": "app/services/config/config_manager.py",
+      "sha256": "fddd49689fb868265ac1d77e768ba114b4dc326e978bd49fe43e09fd75999607"
+    },
+    {
+      "source": ".git/aurora-handoff-import-20261006/cpu-full-audio-v490/source/app/services/config/config_schema.json",
+      "destination": "thesis/sources/python-audio-v490-96ec8e3e/source/app/services/config/config_schema.json",
+      "bytes": 86603,
+      "path": "app/services/config/config_schema.json",
+      "sha256": "558cf9641fcb050c60768c845ddb94558e6a1fe4656547a2e3efc638850969af"
+    },
+    {
+      "source": ".git/aurora-handoff-import-20261006/cpu-full-audio-v490/source/app/services/config/env_config.py",
+      "destination": "thesis/sources/python-audio-v490-96ec8e3e/source/app/services/config/env_config.py",
+      "bytes": 6392,
+      "path": "app/services/config/env_config.py",
+      "sha256": "305416b9dca061eee4d76b733c3df42cf5a3f8d00fcb0f653bc5c7069a37e8ac"
+    },
+    {
+      "source": ".git/aurora-handoff-import-20261006/cpu-full-audio-v490/source/app/services/config/mesh_policy_migration.py",
+      "destination": "thesis/sources/python-audio-v490-96ec8e3e/source/app/services/config/mesh_policy_migration.py",
+      "bytes": 31084,
+      "path": "app/services/config/mesh_policy_migration.py",
+      "sha256": "f8ca8b449ef609a891d36849a144f38af5147398602ecb1f4bfc15813898e621"
+    },
+    {
+      "source": ".git/aurora-handoff-import-20261006/cpu-full-audio-v490/source/app/services/config/messages.py",
+      "destination": "thesis/sources/python-audio-v490-96ec8e3e/source/app/services/config/messages.py",
+      "bytes": 1729,
+      "path": "app/services/config/messages.py",
+      "sha256": "2b56a242b276ab0126c160b67536348f0c46faff87edcd2d4df6cec350a646cc"
+    },
+    {
+      "source": ".git/aurora-handoff-import-20261006/cpu-full-audio-v490/source/app/services/config/service.py",
+      "destination": "thesis/sources/python-audio-v490-96ec8e3e/source/app/services/config/service.py",
+      "bytes": 26719,
+      "path": "app/services/config/service.py",
+      "sha256": "645c74a0fe866f12af58c868067825b81ae323c7a3aa5fefe8085b73197d94b8"
+    },
+    {
+      "source": ".git/aurora-handoff-import-20261006/cpu-full-audio-v490/source/app/services/db/__init__.py",
+      "destination": "thesis/sources/python-audio-v490-96ec8e3e/source/app/services/db/__init__.py",
+      "bytes": 1037,
+      "path": "app/services/db/__init__.py",
+      "sha256": "ead74b27a17b0e11007947ab135a4a9437337f7594bd59eaed5dd53e1930ab86"
+    },
+    {
+      "source": ".git/aurora-handoff-import-20261006/cpu-full-audio-v490/source/app/services/db/__main__.py",
+      "destination": "thesis/sources/python-audio-v490-96ec8e3e/source/app/services/db/__main__.py",
+      "bytes": 1767,
+      "path": "app/services/db/__main__.py",
+      "sha256": "be0c4405a505cae5efe6c126d94e91bacecbcf55245ef42ce8f3474fb2fde635"
+    },
+    {
+      "source": ".git/aurora-handoff-import-20261006/cpu-full-audio-v490/source/app/services/db/manager.py",
+      "destination": "thesis/sources/python-audio-v490-96ec8e3e/source/app/services/db/manager.py",
+      "bytes": 122024,
+      "path": "app/services/db/manager.py",
+      "sha256": "f9ca5d8a7fc512d1aeaa051019ca97914ba252c7b9d759b1c60a2388fc97f6a0"
+    },
+    {
+      "source": ".git/aurora-handoff-import-20261006/cpu-full-audio-v490/source/app/services/db/migration_manager.py",
+      "destination": "thesis/sources/python-audio-v490-96ec8e3e/source/app/services/db/migration_manager.py",
+      "bytes": 6201,
+      "path": "app/services/db/migration_manager.py",
+      "sha256": "f2befb501f97aa97633e8ae2697eae0e6f2a6d0bc8381a6311e5839c66638c5c"
+    },
+    {
+      "source": ".git/aurora-handoff-import-20261006/cpu-full-audio-v490/source/app/services/db/migrations/001_initial_schema.sql",
+      "destination": "thesis/sources/python-audio-v490-96ec8e3e/source/app/services/db/migrations/001_initial_schema.sql",
+      "bytes": 1379,
+      "path": "app/services/db/migrations/001_initial_schema.sql",
+      "sha256": "106c6b0257bda75cf093d8e1a58d1cfca5125ff9d17bf3d3bf9d93bfbda8c0cc"
+    },
+    {
+      "source": ".git/aurora-handoff-import-20261006/cpu-full-audio-v490/source/app/services/db/migrations/002_scheduler_tables.sql",
+      "destination": "thesis/sources/python-audio-v490-96ec8e3e/source/app/services/db/migrations/002_scheduler_tables.sql",
+      "bytes": 1927,
+      "path": "app/services/db/migrations/002_scheduler_tables.sql",
+      "sha256": "8b3c49dbdfaa7cbe7693fe444386b4467fdff81168830e657ae64560c31ec3f4"
+    },
+    {
+      "source": ".git/aurora-handoff-import-20261006/cpu-full-audio-v490/source/app/services/db/migrations/003_auth_tables.sql",
+      "destination": "thesis/sources/python-audio-v490-96ec8e3e/source/app/services/db/migrations/003_auth_tables.sql",
+      "bytes": 1539,
+      "path": "app/services/db/migrations/003_auth_tables.sql",
+      "sha256": "566e0309f8989967cdc892c2b4274aa13ddf6588a3589fd4fedab37a88843b32"
+    },
+    {
+      "source": ".git/aurora-handoff-import-20261006/cpu-full-audio-v490/source/app/services/db/migrations/004_users_permissions.sql",
+      "destination": "thesis/sources/python-audio-v490-96ec8e3e/source/app/services/db/migrations/004_users_permissions.sql",
+      "bytes": 691,
+      "path": "app/services/db/migrations/004_users_permissions.sql",
+      "sha256": "6e2c9bf9da24096fcf2c91a75eb439dcfd5137b609c98f686b5d9a756c91f980"
+    },
+    {
+      "source": ".git/aurora-handoff-import-20261006/cpu-full-audio-v490/source/app/services/db/migrations/005_audit_log.sql",
+      "destination": "thesis/sources/python-audio-v490-96ec8e3e/source/app/services/db/migrations/005_audit_log.sql",
+      "bytes": 533,
+      "path": "app/services/db/migrations/005_audit_log.sql",
+      "sha256": "ba2a303a66608910d9677165aa1fa58e009b29827b6c9a0f2b64c909306f244d"
+    },
+    {
+      "source": ".git/aurora-handoff-import-20261006/cpu-full-audio-v490/source/app/services/db/migrations/006_mesh_credentials.sql",
+      "destination": "thesis/sources/python-audio-v490-96ec8e3e/source/app/services/db/migrations/006_mesh_credentials.sql",
+      "bytes": 875,
+      "path": "app/services/db/migrations/006_mesh_credentials.sql",
+      "sha256": "7f75902e171b3dee94fabf8642a16142c46bcb8a82a3aeb5da9b5fefc3b31d6e"
+    },
+    {
+      "source": ".git/aurora-handoff-import-20261006/cpu-full-audio-v490/source/app/services/db/migrations/007_mesh_peer_lifecycle.sql",
+      "destination": "thesis/sources/python-audio-v490-96ec8e3e/source/app/services/db/migrations/007_mesh_peer_lifecycle.sql",
+      "bytes": 6086,
+      "path": "app/services/db/migrations/007_mesh_peer_lifecycle.sql",
+      "sha256": "91bf0e4f1ee0e22f0fda7d565ad04bd423ad7ec258f60dc3c6bc5fd7453cf31a"
+    },
+    {
+      "source": ".git/aurora-handoff-import-20261006/cpu-full-audio-v490/source/app/services/db/migrations/008_scheduler_typed_actions.sql",
+      "destination": "thesis/sources/python-audio-v490-96ec8e3e/source/app/services/db/migrations/008_scheduler_typed_actions.sql",
+      "bytes": 607,
+      "path": "app/services/db/migrations/008_scheduler_typed_actions.sql",
+      "sha256": "3e9b1e0e2d9064e22a0586dc5d4700400ac15b81130fd8635eecfb9adf2eeea4"
+    },
+    {
+      "source": ".git/aurora-handoff-import-20261006/cpu-full-audio-v490/source/app/services/db/migrations/009_mesh_inbound_token_id.sql",
+      "destination": "thesis/sources/python-audio-v490-96ec8e3e/source/app/services/db/migrations/009_mesh_inbound_token_id.sql",
+      "bytes": 432,
+      "path": "app/services/db/migrations/009_mesh_inbound_token_id.sql",
+      "sha256": "287ed036915777311a2cd900a433d91b8bde9ab7703ac741403020f8134b6791"
+    },
+    {
+      "source": ".git/aurora-handoff-import-20261006/cpu-full-audio-v490/source/app/services/db/migrations/010_chat_sessions.sql",
+      "destination": "thesis/sources/python-audio-v490-96ec8e3e/source/app/services/db/migrations/010_chat_sessions.sql",
+      "bytes": 2251,
+      "path": "app/services/db/migrations/010_chat_sessions.sql",
+      "sha256": "55fcd3e27b64d07f6487d3d57d4167c31ed1665a3d6d43659d4759036db2f693"
+    },
+    {
+      "source": ".git/aurora-handoff-import-20261006/cpu-full-audio-v490/source/app/services/db/migrations/011_mesh_peer_auth_grant_revisions.sql",
+      "destination": "thesis/sources/python-audio-v490-96ec8e3e/source/app/services/db/migrations/011_mesh_peer_auth_grant_revisions.sql",
+      "bytes": 943,
+      "path": "app/services/db/migrations/011_mesh_peer_auth_grant_revisions.sql",
+      "sha256": "320cd77923ff9ceeac7ac104364523bc84520870e27f740ea908a9fbe2497501"
+    },
+    {
+      "source": ".git/aurora-handoff-import-20261006/cpu-full-audio-v490/source/app/services/db/migrations/012_tooling_tool_identity.sql",
+      "destination": "thesis/sources/python-audio-v490-96ec8e3e/source/app/services/db/migrations/012_tooling_tool_identity.sql",
+      "bytes": 4675,
+      "path": "app/services/db/migrations/012_tooling_tool_identity.sql",
+      "sha256": "01cd91b568b8bd7e209274145d1b1c581d36a34b366b4469d4ba27798bcdfe1f"
+    },
+    {
+      "source": ".git/aurora-handoff-import-20261006/cpu-full-audio-v490/source/app/services/db/migrations/013_tooling_legacy_identity_compat.sql",
+      "destination": "thesis/sources/python-audio-v490-96ec8e3e/source/app/services/db/migrations/013_tooling_legacy_identity_compat.sql",
+      "bytes": 2470,
+      "path": "app/services/db/migrations/013_tooling_legacy_identity_compat.sql",
+      "sha256": "2e6f67436354508c8c8fdf0c88e7459020eec9f253eaa77033a731a8177fd4bd"
+    },
+    {
+      "source": ".git/aurora-handoff-import-20261006/cpu-full-audio-v490/source/app/services/db/migrations/014_tooling_export_policy.sql",
+      "destination": "thesis/sources/python-audio-v490-96ec8e3e/source/app/services/db/migrations/014_tooling_export_policy.sql",
+      "bytes": 3488,
+      "path": "app/services/db/migrations/014_tooling_export_policy.sql",
+      "sha256": "6e6b9fa581f9f77fd3d53abb2344b3a700f374453d222af0dc9948cc3c24f764"
+    },
+    {
+      "source": ".git/aurora-handoff-import-20261006/cpu-full-audio-v490/source/app/services/db/migrations/015_tooling_remote_projection.sql",
+      "destination": "thesis/sources/python-audio-v490-96ec8e3e/source/app/services/db/migrations/015_tooling_remote_projection.sql",
+      "bytes": 8394,
+      "path": "app/services/db/migrations/015_tooling_remote_projection.sql",
+      "sha256": "6108476203256ee9230b4bf7f72d9c57821918af852392ad5d8a30a419f295eb"
+    },
+    {
+      "source": ".git/aurora-handoff-import-20261006/cpu-full-audio-v490/source/app/services/db/migrations/016_tooling_remote_lifecycle.sql",
+      "destination": "thesis/sources/python-audio-v490-96ec8e3e/source/app/services/db/migrations/016_tooling_remote_lifecycle.sql",
+      "bytes": 2504,
+      "path": "app/services/db/migrations/016_tooling_remote_lifecycle.sql",
+      "sha256": "5d0c7ac7fdff7f32bdf9455af9f3faa1b27711484bd90c54a99c480fbcd15da6"
+    },
+    {
+      "source": ".git/aurora-handoff-import-20261006/cpu-full-audio-v490/source/app/services/db/migrations/017_tooling_projection_blocked_inventory.sql",
+      "destination": "thesis/sources/python-audio-v490-96ec8e3e/source/app/services/db/migrations/017_tooling_projection_blocked_inventory.sql",
+      "bytes": 793,
+      "path": "app/services/db/migrations/017_tooling_projection_blocked_inventory.sql",
+      "sha256": "d1a9f7811f93efe74706ff237a92b8f181d7891e2cc2980a95f4e6519a008034"
+    },
+    {
+      "source": ".git/aurora-handoff-import-20261006/cpu-full-audio-v490/source/app/services/db/migrations/018_repair_tooling_safe_revisions.sql",
+      "destination": "thesis/sources/python-audio-v490-96ec8e3e/source/app/services/db/migrations/018_repair_tooling_safe_revisions.sql",
+      "bytes": 4310,
+      "path": "app/services/db/migrations/018_repair_tooling_safe_revisions.sql",
+      "sha256": "4ef9dcb113bc383fee18b80536ea223e05a26b7e9a0c573433c206b23fc3dd70"
+    },
+    {
+      "source": ".git/aurora-handoff-import-20261006/cpu-full-audio-v490/source/app/services/db/models.py",
+      "destination": "thesis/sources/python-audio-v490-96ec8e3e/source/app/services/db/models.py",
+      "bytes": 448,
+      "path": "app/services/db/models.py",
+      "sha256": "8c5668b1c49468ec3b093aed765f56160959612a370e9a335fd1c4fcb6923d38"
+    },
+    {
+      "source": ".git/aurora-handoff-import-20261006/cpu-full-audio-v490/source/app/services/db/rag_service.py",
+      "destination": "thesis/sources/python-audio-v490-96ec8e3e/source/app/services/db/rag_service.py",
+      "bytes": 30688,
+      "path": "app/services/db/rag_service.py",
+      "sha256": "29b99ef8536aba585e8e500d9c1725ea7061911eb0682a7e6add52ee63985674"
+    },
+    {
+      "source": ".git/aurora-handoff-import-20261006/cpu-full-audio-v490/source/app/services/db/scheduler_db_service.py",
+      "destination": "thesis/sources/python-audio-v490-96ec8e3e/source/app/services/db/scheduler_db_service.py",
+      "bytes": 9538,
+      "path": "app/services/db/scheduler_db_service.py",
+      "sha256": "d82eddca09490fb187da05836f6350213498aee710eea446289cdc9cc181fee3"
+    },
+    {
+      "source": ".git/aurora-handoff-import-20261006/cpu-full-audio-v490/source/app/services/db/service.py",
+      "destination": "thesis/sources/python-audio-v490-96ec8e3e/source/app/services/db/service.py",
+      "bytes": 114583,
+      "path": "app/services/db/service.py",
+      "sha256": "78ee6bd4f24155034c8bb41e3477ab8a9811fdb8446ce67d803d952217d73146"
+    },
+    {
+      "source": ".git/aurora-handoff-import-20261006/cpu-full-audio-v490/source/app/services/db/sqlite_connection.py",
+      "destination": "thesis/sources/python-audio-v490-96ec8e3e/source/app/services/db/sqlite_connection.py",
+      "bytes": 2789,
+      "path": "app/services/db/sqlite_connection.py",
+      "sha256": "7f04349d4e755dda2c2ce909da7e34cc7cd0d6119ca9a2aa74bab579b1422f84"
+    },
+    {
+      "source": ".git/aurora-handoff-import-20261006/cpu-full-audio-v490/source/app/services/db/tool_identity_store.py",
+      "destination": "thesis/sources/python-audio-v490-96ec8e3e/source/app/services/db/tool_identity_store.py",
+      "bytes": 31178,
+      "path": "app/services/db/tool_identity_store.py",
+      "sha256": "bc22b0a4224bb5f7d8da36c617148bb661f9f1277c2b0ffa5c6d4947aee7a02d"
+    },
+    {
+      "source": ".git/aurora-handoff-import-20261006/cpu-full-audio-v490/source/app/services/db/tooling_export_policy_store.py",
+      "destination": "thesis/sources/python-audio-v490-96ec8e3e/source/app/services/db/tooling_export_policy_store.py",
+      "bytes": 19306,
+      "path": "app/services/db/tooling_export_policy_store.py",
+      "sha256": "e9cb664ad370c646ebf2c5259c0ac419c48256f8959ef3c36be2248ec14567cb"
+    },
+    {
+      "source": ".git/aurora-handoff-import-20261006/cpu-full-audio-v490/source/app/services/db/tooling_exposure_ledger_store.py",
+      "destination": "thesis/sources/python-audio-v490-96ec8e3e/source/app/services/db/tooling_exposure_ledger_store.py",
+      "bytes": 2518,
+      "path": "app/services/db/tooling_exposure_ledger_store.py",
+      "sha256": "0a7c79b02bf4607c2dd6aa1d7dde2ae8b5f4a791f5c997a9a527d271ff856ce3"
+    },
+    {
+      "source": ".git/aurora-handoff-import-20261006/cpu-full-audio-v490/source/app/services/db/tooling_mesh_activation_store.py",
+      "destination": "thesis/sources/python-audio-v490-96ec8e3e/source/app/services/db/tooling_mesh_activation_store.py",
+      "bytes": 7070,
+      "path": "app/services/db/tooling_mesh_activation_store.py",
+      "sha256": "064230762a59645b3759a3beeca9cf0a3bdf116f40eee9037813602a9a5433b1"
+    },
+    {
+      "source": ".git/aurora-handoff-import-20261006/cpu-full-audio-v490/source/app/services/db/tooling_remote_catalog_store.py",
+      "destination": "thesis/sources/python-audio-v490-96ec8e3e/source/app/services/db/tooling_remote_catalog_store.py",
+      "bytes": 87411,
+      "path": "app/services/db/tooling_remote_catalog_store.py",
+      "sha256": "9466076de58ce92f84f867557c6bbf252f9149114b4e203538a65c1c417eff7d"
+    },
+    {
+      "source": ".git/aurora-handoff-import-20261006/cpu-full-audio-v490/source/app/services/gateway/AGENTS.md",
+      "destination": "thesis/sources/python-audio-v490-96ec8e3e/source/app/services/gateway/AGENTS.md",
+      "bytes": 11897,
+      "path": "app/services/gateway/AGENTS.md",
+      "sha256": "1828a70c51db5dccff94e2dc745f7d57a85a16b48248a6942413d0c68aee20df"
+    },
+    {
+      "source": ".git/aurora-handoff-import-20261006/cpu-full-audio-v490/source/app/services/gateway/__init__.py",
+      "destination": "thesis/sources/python-audio-v490-96ec8e3e/source/app/services/gateway/__init__.py",
+      "bytes": 1569,
+      "path": "app/services/gateway/__init__.py",
+      "sha256": "acb2f372b50046383f817f89af91c3d79733b69436114f9f38462764478b882e"
+    },
+    {
+      "source": ".git/aurora-handoff-import-20261006/cpu-full-audio-v490/source/app/services/gateway/__main__.py",
+      "destination": "thesis/sources/python-audio-v490-96ec8e3e/source/app/services/gateway/__main__.py",
+      "bytes": 1653,
+      "path": "app/services/gateway/__main__.py",
+      "sha256": "9c3861c8aeacad2d84b4ecd3ed13ef646e36c35d166039508f5b6185cb494b07"
+    },
+    {
+      "source": ".git/aurora-handoff-import-20261006/cpu-full-audio-v490/source/app/services/gateway/acl/__init__.py",
+      "destination": "thesis/sources/python-audio-v490-96ec8e3e/source/app/services/gateway/acl/__init__.py",
+      "bytes": 650,
+      "path": "app/services/gateway/acl/__init__.py",
+      "sha256": "4832a0c2aebb5581b38bbcfe4cf57648ac439ac9c2f0083735c4205d8b20ce9e"
+    },
+    {
+      "source": ".git/aurora-handoff-import-20261006/cpu-full-audio-v490/source/app/services/gateway/acl/audit.py",
+      "destination": "thesis/sources/python-audio-v490-96ec8e3e/source/app/services/gateway/acl/audit.py",
+      "bytes": 221,
+      "path": "app/services/gateway/acl/audit.py",
+      "sha256": "f0aef4371cafa4e70fde95111ce2b1fcb428314648a06f841320b3a7157f532e"
+    },
+    {
+      "source": ".git/aurora-handoff-import-20261006/cpu-full-audio-v490/source/app/services/gateway/acl/identity.py",
+      "destination": "thesis/sources/python-audio-v490-96ec8e3e/source/app/services/gateway/acl/identity.py",
+      "bytes": 440,
+      "path": "app/services/gateway/acl/identity.py",
+      "sha256": "a7fbfed283c7bf9f76ea3beff179e37c3fb78e60a26560e8a3486a133b0b925d"
+    },
+    {
+      "source": ".git/aurora-handoff-import-20261006/cpu-full-audio-v490/source/app/services/gateway/acl/permissions.py",
+      "destination": "thesis/sources/python-audio-v490-96ec8e3e/source/app/services/gateway/acl/permissions.py",
+      "bytes": 530,
+      "path": "app/services/gateway/acl/permissions.py",
+      "sha256": "e55a84373f020e206f370f3811c9463122974322e0a2295c395a1a97ee5a85ba"
+    },
+    {
+      "source": ".git/aurora-handoff-import-20261006/cpu-full-audio-v490/source/app/services/gateway/admin_action.py",
+      "destination": "thesis/sources/python-audio-v490-96ec8e3e/source/app/services/gateway/admin_action.py",
+      "bytes": 10133,
+      "path": "app/services/gateway/admin_action.py",
+      "sha256": "e432836d5a5d349ae436294503c4d05dbd4b64987e009a732f7b7473e4b10173"
+    },
+    {
+      "source": ".git/aurora-handoff-import-20261006/cpu-full-audio-v490/source/app/services/gateway/audio_session.py",
+      "destination": "thesis/sources/python-audio-v490-96ec8e3e/source/app/services/gateway/audio_session.py",
+      "bytes": 13258,
+      "path": "app/services/gateway/audio_session.py",
+      "sha256": "687a036373ce5c90cbcce2afe7d0455ddafa1556883af9bd265e191560329f1d"
+    },
+    {
+      "source": ".git/aurora-handoff-import-20261006/cpu-full-audio-v490/source/app/services/gateway/auth.py",
+      "destination": "thesis/sources/python-audio-v490-96ec8e3e/source/app/services/gateway/auth.py",
+      "bytes": 12729,
+      "path": "app/services/gateway/auth.py",
+      "sha256": "771991764a60e549bfce1c7bc117bcd3f5cb883d4d865033db93618d6aaa3a59"
+    },
+    {
+      "source": ".git/aurora-handoff-import-20261006/cpu-full-audio-v490/source/app/services/gateway/auth_proxy.py",
+      "destination": "thesis/sources/python-audio-v490-96ec8e3e/source/app/services/gateway/auth_proxy.py",
+      "bytes": 21011,
+      "path": "app/services/gateway/auth_proxy.py",
+      "sha256": "b98160e6bedd92d0fc37da652bc674f067baeb6853b3549786d8c96d897f9c71"
+    },
+    {
+      "source": ".git/aurora-handoff-import-20261006/cpu-full-audio-v490/source/app/services/gateway/config.py",
+      "destination": "thesis/sources/python-audio-v490-96ec8e3e/source/app/services/gateway/config.py",
+      "bytes": 7268,
+      "path": "app/services/gateway/config.py",
+      "sha256": "9b57dbf2c1fa91c32454a8f6e1e31afb2bcf15754d1bdede3229724bd322a3c7"
+    },
+    {
+      "source": ".git/aurora-handoff-import-20261006/cpu-full-audio-v490/source/app/services/gateway/dependencies.py",
+      "destination": "thesis/sources/python-audio-v490-96ec8e3e/source/app/services/gateway/dependencies.py",
+      "bytes": 1871,
+      "path": "app/services/gateway/dependencies.py",
+      "sha256": "043ff8b53d8ca1ec97cd028dd4ebe81d7f4c5f801a6d8e0d5f5d9d9c0f9638bc"
+    },
+    {
+      "source": ".git/aurora-handoff-import-20261006/cpu-full-audio-v490/source/app/services/gateway/fastapi_app.py",
+      "destination": "thesis/sources/python-audio-v490-96ec8e3e/source/app/services/gateway/fastapi_app.py",
+      "bytes": 24489,
+      "path": "app/services/gateway/fastapi_app.py",
+      "sha256": "c90ade3dc52f1dfdf3840225894d24cefa530b063b2b32e1b289139772e65273"
+    },
+    {
+      "source": ".git/aurora-handoff-import-20261006/cpu-full-audio-v490/source/app/services/gateway/mesh/__init__.py",
+      "destination": "thesis/sources/python-audio-v490-96ec8e3e/source/app/services/gateway/mesh/__init__.py",
+      "bytes": 616,
+      "path": "app/services/gateway/mesh/__init__.py",
+      "sha256": "60e3d6147b9b6b458379f0ef253e282e87e4df11867954370059bb5ba0b79372"
+    },
+    {
+      "source": ".git/aurora-handoff-import-20261006/cpu-full-audio-v490/source/app/services/gateway/mesh/announcer.py",
+      "destination": "thesis/sources/python-audio-v490-96ec8e3e/source/app/services/gateway/mesh/announcer.py",
+      "bytes": 2580,
+      "path": "app/services/gateway/mesh/announcer.py",
+      "sha256": "66034e63b952f1022073812541b9882c360685ea9a462519cb1682d76cbe263c"
+    },
+    {
+      "source": ".git/aurora-handoff-import-20261006/cpu-full-audio-v490/source/app/services/gateway/mesh/capability_catalog.py",
+      "destination": "thesis/sources/python-audio-v490-96ec8e3e/source/app/services/gateway/mesh/capability_catalog.py",
+      "bytes": 23878,
+      "path": "app/services/gateway/mesh/capability_catalog.py",
+      "sha256": "d249a2d67871414b0f21a8d62cd5e48a74b5496c37a07a863681e9202b8fd48e"
+    },
+    {
+      "source": ".git/aurora-handoff-import-20261006/cpu-full-audio-v490/source/app/services/gateway/mesh/capability_graph.py",
+      "destination": "thesis/sources/python-audio-v490-96ec8e3e/source/app/services/gateway/mesh/capability_graph.py",
+      "bytes": 16682,
+      "path": "app/services/gateway/mesh/capability_graph.py",
+      "sha256": "aaef31b7757f0603d169edb9562338327324cad0bb1c4d79d49be3460663da94"
+    },
+    {
+      "source": ".git/aurora-handoff-import-20261006/cpu-full-audio-v490/source/app/services/gateway/mesh/latency.py",
+      "destination": "thesis/sources/python-audio-v490-96ec8e3e/source/app/services/gateway/mesh/latency.py",
+      "bytes": 6630,
+      "path": "app/services/gateway/mesh/latency.py",
+      "sha256": "183b537e4d076fc0c386411c5d9defe2f77de88074aee3984e8a7aea40c138e8"
+    },
+    {
+      "source": ".git/aurora-handoff-import-20261006/cpu-full-audio-v490/source/app/services/gateway/mesh/models.py",
+      "destination": "thesis/sources/python-audio-v490-96ec8e3e/source/app/services/gateway/mesh/models.py",
+      "bytes": 11606,
+      "path": "app/services/gateway/mesh/models.py",
+      "sha256": "62241e75ead725338c1e62a1b2cf65cd8ad243204d416f6ce95fb65c9d9d3964"
+    },
+    {
+      "source": ".git/aurora-handoff-import-20261006/cpu-full-audio-v490/source/app/services/gateway/mesh/negotiation.py",
+      "destination": "thesis/sources/python-audio-v490-96ec8e3e/source/app/services/gateway/mesh/negotiation.py",
+      "bytes": 55456,
+      "path": "app/services/gateway/mesh/negotiation.py",
+      "sha256": "1fc34dcf8489d4969c09e37d0fffd38964e07eb1b301a6a32c0dd969c09280bb"
+    },
+    {
+      "source": ".git/aurora-handoff-import-20261006/cpu-full-audio-v490/source/app/services/gateway/mesh/peer_bridge.py",
+      "destination": "thesis/sources/python-audio-v490-96ec8e3e/source/app/services/gateway/mesh/peer_bridge.py",
+      "bytes": 27001,
+      "path": "app/services/gateway/mesh/peer_bridge.py",
+      "sha256": "3a0748a6fd8093f4b8f616a578af94f8a86ae0700cd0099ab5847f9235f2330d"
+    },
+    {
+      "source": ".git/aurora-handoff-import-20261006/cpu-full-audio-v490/source/app/services/gateway/mesh/peer_registry.py",
+      "destination": "thesis/sources/python-audio-v490-96ec8e3e/source/app/services/gateway/mesh/peer_registry.py",
+      "bytes": 52037,
+      "path": "app/services/gateway/mesh/peer_registry.py",
+      "sha256": "a601a89bdf83ed3f4818279586c5448daef622d9ccd8078b3e2b5c57c9d891aa"
+    },
+    {
+      "source": ".git/aurora-handoff-import-20261006/cpu-full-audio-v490/source/app/services/gateway/mesh/policy_store.py",
+      "destination": "thesis/sources/python-audio-v490-96ec8e3e/source/app/services/gateway/mesh/policy_store.py",
+      "bytes": 3156,
+      "path": "app/services/gateway/mesh/policy_store.py",
+      "sha256": "6495625d1f21bfd8ce28c6bb18707e0466f15f442850437355f122f68048a36d"
+    },
+    {
+      "source": ".git/aurora-handoff-import-20261006/cpu-full-audio-v490/source/app/services/gateway/mesh/provider_eligibility.py",
+      "destination": "thesis/sources/python-audio-v490-96ec8e3e/source/app/services/gateway/mesh/provider_eligibility.py",
+      "bytes": 19131,
+      "path": "app/services/gateway/mesh/provider_eligibility.py",
+      "sha256": "f0ae82281392ee442448f05e0c9cbacf176c5e53f701a2bbc88e13c04cf704fa"
+    },
+    {
+      "source": ".git/aurora-handoff-import-20261006/cpu-full-audio-v490/source/app/services/gateway/mesh/provider_export.py",
+      "destination": "thesis/sources/python-audio-v490-96ec8e3e/source/app/services/gateway/mesh/provider_export.py",
+      "bytes": 55438,
+      "path": "app/services/gateway/mesh/provider_export.py",
+      "sha256": "be035a495a362955a18dbdf3e5a1a96284de30c7f0748098765878018aaba8fb"
+    },
+    {
+      "source": ".git/aurora-handoff-import-20261006/cpu-full-audio-v490/source/app/services/gateway/mesh/route_errors.py",
+      "destination": "thesis/sources/python-audio-v490-96ec8e3e/source/app/services/gateway/mesh/route_errors.py",
+      "bytes": 5015,
+      "path": "app/services/gateway/mesh/route_errors.py",
+      "sha256": "21f09da20cb483fa6f0d699af32f10ddc5c69f001f18ac652ef34d16b6abd355"
+    },
+    {
+      "source": ".git/aurora-handoff-import-20261006/cpu-full-audio-v490/source/app/services/gateway/mesh/routing_table.py",
+      "destination": "thesis/sources/python-audio-v490-96ec8e3e/source/app/services/gateway/mesh/routing_table.py",
+      "bytes": 24708,
+      "path": "app/services/gateway/mesh/routing_table.py",
+      "sha256": "994080417103df68ebde8b0c5f58cdf1431531c11a1d611f3a3166e2f3208127"
+    },
+    {
+      "source": ".git/aurora-handoff-import-20261006/cpu-full-audio-v490/source/app/services/gateway/mesh/speech_constraints.py",
+      "destination": "thesis/sources/python-audio-v490-96ec8e3e/source/app/services/gateway/mesh/speech_constraints.py",
+      "bytes": 5138,
+      "path": "app/services/gateway/mesh/speech_constraints.py",
+      "sha256": "74b97afc601bc0d9dd07fdda5a46ef3f6e8c1e8978d9fe27ce73b5a0f944423a"
+    },
+    {
+      "source": ".git/aurora-handoff-import-20261006/cpu-full-audio-v490/source/app/services/gateway/mesh/tooling_projection_transport.py",
+      "destination": "thesis/sources/python-audio-v490-96ec8e3e/source/app/services/gateway/mesh/tooling_projection_transport.py",
+      "bytes": 3209,
+      "path": "app/services/gateway/mesh/tooling_projection_transport.py",
+      "sha256": "78969c385d73d6c6282ba5b2fccf6916ac68d58c600dd4ee3aedfd807f81341e"
+    },
+    {
+      "source": ".git/aurora-handoff-import-20261006/cpu-full-audio-v490/source/app/services/gateway/mesh/version_compat.py",
+      "destination": "thesis/sources/python-audio-v490-96ec8e3e/source/app/services/gateway/mesh/version_compat.py",
+      "bytes": 3983,
+      "path": "app/services/gateway/mesh/version_compat.py",
+      "sha256": "50053058cb4e320af63bded77ef81cf9f3c4a63b0c53728e8f7a2b3fc64e5dd9"
+    },
+    {
+      "source": ".git/aurora-handoff-import-20261006/cpu-full-audio-v490/source/app/services/gateway/orchestrator_runtime_policy.py",
+      "destination": "thesis/sources/python-audio-v490-96ec8e3e/source/app/services/gateway/orchestrator_runtime_policy.py",
+      "bytes": 4162,
+      "path": "app/services/gateway/orchestrator_runtime_policy.py",
+      "sha256": "49956185b6cb2c5cf48ed4769d33c8a70de347fbc6aac19add056eea1302333e"
+    },
+    {
+      "source": ".git/aurora-handoff-import-20261006/cpu-full-audio-v490/source/app/services/gateway/registry_aggregator.py",
+      "destination": "thesis/sources/python-audio-v490-96ec8e3e/source/app/services/gateway/registry_aggregator.py",
+      "bytes": 26699,
+      "path": "app/services/gateway/registry_aggregator.py",
+      "sha256": "306f731721f9f0daf309cc4c3ee1bc60dd4ad3f747b7e604523258e81ddab1de"
+    },
+    {
+      "source": ".git/aurora-handoff-import-20261006/cpu-full-audio-v490/source/app/services/gateway/route_generator.py",
+      "destination": "thesis/sources/python-audio-v490-96ec8e3e/source/app/services/gateway/route_generator.py",
+      "bytes": 45834,
+      "path": "app/services/gateway/route_generator.py",
+      "sha256": "40ccde0e90273842ccdedb331f63e8cb979b22bc9d3d5ce2caaab1a2bbdd9a83"
+    },
+    {
+      "source": ".git/aurora-handoff-import-20261006/cpu-full-audio-v490/source/app/services/gateway/service.py",
+      "destination": "thesis/sources/python-audio-v490-96ec8e3e/source/app/services/gateway/service.py",
+      "bytes": 197247,
+      "path": "app/services/gateway/service.py",
+      "sha256": "2748b265c6b6a59b9176fe36fa8af0bcac7d230ada7b77c5fbe5e6a27bc472d5"
+    },
+    {
+      "source": ".git/aurora-handoff-import-20261006/cpu-full-audio-v490/source/app/services/gateway/utils/__init__.py",
+      "destination": "thesis/sources/python-audio-v490-96ec8e3e/source/app/services/gateway/utils/__init__.py",
+      "bytes": 0,
+      "path": "app/services/gateway/utils/__init__.py",
+      "sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+    },
+    {
+      "source": ".git/aurora-handoff-import-20261006/cpu-full-audio-v490/source/app/services/gateway/utils/crypto.py",
+      "destination": "thesis/sources/python-audio-v490-96ec8e3e/source/app/services/gateway/utils/crypto.py",
+      "bytes": 3918,
+      "path": "app/services/gateway/utils/crypto.py",
+      "sha256": "3cca03c9a1581b8c4357b474f48907d98108630a96dd2c30438baaaec9d7238a"
+    },
+    {
+      "source": ".git/aurora-handoff-import-20261006/cpu-full-audio-v490/source/app/services/gateway/webrtc/__init__.py",
+      "destination": "thesis/sources/python-audio-v490-96ec8e3e/source/app/services/gateway/webrtc/__init__.py",
+      "bytes": 74,
+      "path": "app/services/gateway/webrtc/__init__.py",
+      "sha256": "1b121d0d8c428ff1f0ecc89df0dc1264bf2ebfdd13efb4ab1d24bc0deb839134"
+    },
+    {
+      "source": ".git/aurora-handoff-import-20261006/cpu-full-audio-v490/source/app/services/gateway/webrtc/datachannel_flow.py",
+      "destination": "thesis/sources/python-audio-v490-96ec8e3e/source/app/services/gateway/webrtc/datachannel_flow.py",
+      "bytes": 12263,
+      "path": "app/services/gateway/webrtc/datachannel_flow.py",
+      "sha256": "042df8833e2f11f83865cce588bd21b989f2a0e9ecf2bb74cc750200195f5b85"
+    },
+    {
+      "source": ".git/aurora-handoff-import-20261006/cpu-full-audio-v490/source/app/services/gateway/webrtc/event_subscriptions.py",
+      "destination": "thesis/sources/python-audio-v490-96ec8e3e/source/app/services/gateway/webrtc/event_subscriptions.py",
+      "bytes": 16050,
+      "path": "app/services/gateway/webrtc/event_subscriptions.py",
+      "sha256": "46c5f92494ad0f20bdb776283673f813875b4f0da1c84d90b68da52524956dd8"
+    },
+    {
+      "source": ".git/aurora-handoff-import-20261006/cpu-full-audio-v490/source/app/services/gateway/webrtc/pairing_sas.py",
+      "destination": "thesis/sources/python-audio-v490-96ec8e3e/source/app/services/gateway/webrtc/pairing_sas.py",
+      "bytes": 13479,
+      "path": "app/services/gateway/webrtc/pairing_sas.py",
+      "sha256": "d5a0ad74dbbd80d801fe7a2784530dfe9d48970271358f5a418817a15c063f1d"
+    },
+    {
+      "source": ".git/aurora-handoff-import-20261006/cpu-full-audio-v490/source/app/services/gateway/webrtc/peer_protocol.py",
+      "destination": "thesis/sources/python-audio-v490-96ec8e3e/source/app/services/gateway/webrtc/peer_protocol.py",
+      "bytes": 28523,
+      "path": "app/services/gateway/webrtc/peer_protocol.py",
+      "sha256": "eedaecf057e5c5fd22b2aa1d4fb4ffc93b4e54a00ca3eba188ebd8b881075942"
+    },
+    {
+      "source": ".git/aurora-handoff-import-20261006/cpu-full-audio-v490/source/app/services/gateway/webrtc/protocol_contract.py",
+      "destination": "thesis/sources/python-audio-v490-96ec8e3e/source/app/services/gateway/webrtc/protocol_contract.py",
+      "bytes": 5971,
+      "path": "app/services/gateway/webrtc/protocol_contract.py",
+      "sha256": "0979e70fb83d2d334700683229159f8da2f8a22a25ceeef1518e95257e59e1ff"
+    },
+    {
+      "source": ".git/aurora-handoff-import-20261006/cpu-full-audio-v490/source/app/services/gateway/webrtc/rpc.py",
+      "destination": "thesis/sources/python-audio-v490-96ec8e3e/source/app/services/gateway/webrtc/rpc.py",
+      "bytes": 92358,
+      "path": "app/services/gateway/webrtc/rpc.py",
+      "sha256": "68cdd7c932c23e5054d53013a57f2c39c923d0d4fde98077953c9a665d4cb005"
+    },
+    {
+      "source": ".git/aurora-handoff-import-20261006/cpu-full-audio-v490/source/app/services/gateway/webrtc/rtc_client.py",
+      "destination": "thesis/sources/python-audio-v490-96ec8e3e/source/app/services/gateway/webrtc/rtc_client.py",
+      "bytes": 315838,
+      "path": "app/services/gateway/webrtc/rtc_client.py",
+      "sha256": "d3a5ee5e02c976839d221ba7a4996a30f074b42a53fc25530b987879e7dc58b7"
+    },
+    {
+      "source": ".git/aurora-handoff-import-20261006/cpu-full-audio-v490/source/app/services/gateway/webrtc/signaling/base.py",
+      "destination": "thesis/sources/python-audio-v490-96ec8e3e/source/app/services/gateway/webrtc/signaling/base.py",
+      "bytes": 605,
+      "path": "app/services/gateway/webrtc/signaling/base.py",
+      "sha256": "6f1dc1a6e6daf89e0c889b93886500b7db0162d235535ddd458eb231a624f07d"
+    },
+    {
+      "source": ".git/aurora-handoff-import-20261006/cpu-full-audio-v490/source/app/services/gateway/webrtc/signaling/mqtt_client.py",
+      "destination": "thesis/sources/python-audio-v490-96ec8e3e/source/app/services/gateway/webrtc/signaling/mqtt_client.py",
+      "bytes": 13246,
+      "path": "app/services/gateway/webrtc/signaling/mqtt_client.py",
+      "sha256": "949d0fdad601708c19041131a7909ead01f7ae6fe0ffb6eac0ac35acc9a3012e"
+    },
+    {
+      "source": ".git/aurora-handoff-import-20261006/cpu-full-audio-v490/source/app/services/orchestrator/__init__.py",
+      "destination": "thesis/sources/python-audio-v490-96ec8e3e/source/app/services/orchestrator/__init__.py",
+      "bytes": 440,
+      "path": "app/services/orchestrator/__init__.py",
+      "sha256": "522af23e1eb88ce24aa2b2768307a54145bde3c647265a8a5dab7d2a03750a9d"
+    },
+    {
+      "source": ".git/aurora-handoff-import-20261006/cpu-full-audio-v490/source/app/services/orchestrator/__main__.py",
+      "destination": "thesis/sources/python-audio-v490-96ec8e3e/source/app/services/orchestrator/__main__.py",
+      "bytes": 1656,
+      "path": "app/services/orchestrator/__main__.py",
+      "sha256": "4ea710f5deb157a40e3f4d80ae4f170dc8172687500400c901d165245a51c515"
+    },
+    {
+      "source": ".git/aurora-handoff-import-20261006/cpu-full-audio-v490/source/app/services/orchestrator/agents/chatbot.py",
+      "destination": "thesis/sources/python-audio-v490-96ec8e3e/source/app/services/orchestrator/agents/chatbot.py",
+      "bytes": 29489,
+      "path": "app/services/orchestrator/agents/chatbot.py",
+      "sha256": "4e6d2b21a2eb672a47128340700a6d5f09adeabbab99980b6ba5d4e4e9e692ee"
+    },
+    {
+      "source": ".git/aurora-handoff-import-20261006/cpu-full-audio-v490/source/app/services/orchestrator/chat_llama_cpp.py",
+      "destination": "thesis/sources/python-audio-v490-96ec8e3e/source/app/services/orchestrator/chat_llama_cpp.py",
+      "bytes": 40161,
+      "path": "app/services/orchestrator/chat_llama_cpp.py",
+      "sha256": "bbb7a3d247af8b53f55ee0b15be81db520f02ab1a53a6aff49c1d2e523f0b55e"
+    },
+    {
+      "source": ".git/aurora-handoff-import-20261006/cpu-full-audio-v490/source/app/services/orchestrator/chat_llama_cpp_fn_handler.py",
+      "destination": "thesis/sources/python-audio-v490-96ec8e3e/source/app/services/orchestrator/chat_llama_cpp_fn_handler.py",
+      "bytes": 21174,
+      "path": "app/services/orchestrator/chat_llama_cpp_fn_handler.py",
+      "sha256": "eceff0a8f870bf43121753835b6876e63ba7cff61b4b405ab7793f6662a8d990"
+    },
+    {
+      "source": ".git/aurora-handoff-import-20261006/cpu-full-audio-v490/source/app/services/orchestrator/graph.py",
+      "destination": "thesis/sources/python-audio-v490-96ec8e3e/source/app/services/orchestrator/graph.py",
+      "bytes": 91909,
+      "path": "app/services/orchestrator/graph.py",
+      "sha256": "0af8c6db1296873e9d9d251a1a455e1d70332b51bc31c90e70a95762b2af3923"
+    },
+    {
+      "source": ".git/aurora-handoff-import-20261006/cpu-full-audio-v490/source/app/services/orchestrator/llama_context_owner.py",
+      "destination": "thesis/sources/python-audio-v490-96ec8e3e/source/app/services/orchestrator/llama_context_owner.py",
+      "bytes": 211258,
+      "path": "app/services/orchestrator/llama_context_owner.py",
+      "sha256": "4737b7b9e7bc959ff2adb91f0045e65314546cf158d4aa33db84047c100d4375"
+    },
+    {
+      "source": ".git/aurora-handoff-import-20261006/cpu-full-audio-v490/source/app/services/orchestrator/llama_cpp_compat.py",
+      "destination": "thesis/sources/python-audio-v490-96ec8e3e/source/app/services/orchestrator/llama_cpp_compat.py",
+      "bytes": 756,
+      "path": "app/services/orchestrator/llama_cpp_compat.py",
+      "sha256": "15cbf51a92f999aecdcf9abb40ebc864fc7b5d24868c025f5eedead36549e1c0"
+    },
+    {
+      "source": ".git/aurora-handoff-import-20261006/cpu-full-audio-v490/source/app/services/orchestrator/message_types.py",
+      "destination": "thesis/sources/python-audio-v490-96ec8e3e/source/app/services/orchestrator/message_types.py",
+      "bytes": 439,
+      "path": "app/services/orchestrator/message_types.py",
+      "sha256": "ceeb9456c1898a0e3f9e5f0c703471d407548cb667405f9de67283b0ac9673af"
+    },
+    {
+      "source": ".git/aurora-handoff-import-20261006/cpu-full-audio-v490/source/app/services/orchestrator/native_request_completion.py",
+      "destination": "thesis/sources/python-audio-v490-96ec8e3e/source/app/services/orchestrator/native_request_completion.py",
+      "bytes": 32791,
+      "path": "app/services/orchestrator/native_request_completion.py",
+      "sha256": "04151015ca4d651ef5eca1d040b782e45cc91c4fbcab837d988acc1d51a5b9b3"
+    },
+    {
+      "source": ".git/aurora-handoff-import-20261006/cpu-full-audio-v490/source/app/services/orchestrator/native_worker.py",
+      "destination": "thesis/sources/python-audio-v490-96ec8e3e/source/app/services/orchestrator/native_worker.py",
+      "bytes": 216921,
+      "path": "app/services/orchestrator/native_worker.py",
+      "sha256": "587af441dfcba4ceeeebd7c847c0e678987bcb705d8bd2bac488d3c1e4aab3ad"
+    },
+    {
+      "source": ".git/aurora-handoff-import-20261006/cpu-full-audio-v490/source/app/services/orchestrator/remote_mesh_chat_model.py",
+      "destination": "thesis/sources/python-audio-v490-96ec8e3e/source/app/services/orchestrator/remote_mesh_chat_model.py",
+      "bytes": 16323,
+      "path": "app/services/orchestrator/remote_mesh_chat_model.py",
+      "sha256": "3302752da1cfc2bf0b716dbaad16133cb30e43d4f9092db05150241c5810367b"
+    },
+    {
+      "source": ".git/aurora-handoff-import-20261006/cpu-full-audio-v490/source/app/services/orchestrator/service.py",
+      "destination": "thesis/sources/python-audio-v490-96ec8e3e/source/app/services/orchestrator/service.py",
+      "bytes": 170198,
+      "path": "app/services/orchestrator/service.py",
+      "sha256": "0b77092091946b94130945b3bfb670a922a209b846d5ffe30e23f75b52f982f3"
+    },
+    {
+      "source": ".git/aurora-handoff-import-20261006/cpu-full-audio-v490/source/app/services/orchestrator/state.py",
+      "destination": "thesis/sources/python-audio-v490-96ec8e3e/source/app/services/orchestrator/state.py",
+      "bytes": 632,
+      "path": "app/services/orchestrator/state.py",
+      "sha256": "91e8e9f2c0a3f8c23c9f718b2a10fe927e90ff851fe44740424b5884830a9ff3"
+    },
+    {
+      "source": ".git/aurora-handoff-import-20261006/cpu-full-audio-v490/source/app/services/orchestrator/tool_bindings.py",
+      "destination": "thesis/sources/python-audio-v490-96ec8e3e/source/app/services/orchestrator/tool_bindings.py",
+      "bytes": 12495,
+      "path": "app/services/orchestrator/tool_bindings.py",
+      "sha256": "82bcf32d529522bec535e1fab712a5f432d428103c2cff03c409bc0bf5d418f5"
+    },
+    {
+      "source": ".git/aurora-handoff-import-20261006/cpu-full-audio-v490/source/app/services/scheduler/README.md",
+      "destination": "thesis/sources/python-audio-v490-96ec8e3e/source/app/services/scheduler/README.md",
+      "bytes": 5190,
+      "path": "app/services/scheduler/README.md",
+      "sha256": "cf26c4d65cda53e74a2df0f802ff1466ba52170ee57da6f6423d236b7c204a7d"
+    },
+    {
+      "source": ".git/aurora-handoff-import-20261006/cpu-full-audio-v490/source/app/services/scheduler/__init__.py",
+      "destination": "thesis/sources/python-audio-v490-96ec8e3e/source/app/services/scheduler/__init__.py",
+      "bytes": 593,
+      "path": "app/services/scheduler/__init__.py",
+      "sha256": "def4df0efbd2ebf1936e7f76030c275e4ba337aba5d406abd8b6592e9248a2cb"
+    },
+    {
+      "source": ".git/aurora-handoff-import-20261006/cpu-full-audio-v490/source/app/services/scheduler/__main__.py",
+      "destination": "thesis/sources/python-audio-v490-96ec8e3e/source/app/services/scheduler/__main__.py",
+      "bytes": 1638,
+      "path": "app/services/scheduler/__main__.py",
+      "sha256": "4dbd81048584a38fab27649ccb00a7de7cbf161f46e4bc21c67181f02716e5b3"
+    },
+    {
+      "source": ".git/aurora-handoff-import-20261006/cpu-full-audio-v490/source/app/services/scheduler/cron_service.py",
+      "destination": "thesis/sources/python-audio-v490-96ec8e3e/source/app/services/scheduler/cron_service.py",
+      "bytes": 13008,
+      "path": "app/services/scheduler/cron_service.py",
+      "sha256": "124bc5233312cb29885377d7c214a43f1a1a82b491e400d41871c5a8b541f8ef"
+    },
+    {
+      "source": ".git/aurora-handoff-import-20261006/cpu-full-audio-v490/source/app/services/scheduler/models.py",
+      "destination": "thesis/sources/python-audio-v490-96ec8e3e/source/app/services/scheduler/models.py",
+      "bytes": 6373,
+      "path": "app/services/scheduler/models.py",
+      "sha256": "3f0049361474c216f9d64e3cd46e6b30dd0e726c688ddf1b11760a99383396d9"
+    },
+    {
+      "source": ".git/aurora-handoff-import-20261006/cpu-full-audio-v490/source/app/services/scheduler/scheduler_manager.py",
+      "destination": "thesis/sources/python-audio-v490-96ec8e3e/source/app/services/scheduler/scheduler_manager.py",
+      "bytes": 26156,
+      "path": "app/services/scheduler/scheduler_manager.py",
+      "sha256": "ce237cb7f882f9c6d4eebdc3caaaec27d10075b24124448f25c52edb55ee3f01"
+    },
+    {
+      "source": ".git/aurora-handoff-import-20261006/cpu-full-audio-v490/source/app/services/scheduler/service.py",
+      "destination": "thesis/sources/python-audio-v490-96ec8e3e/source/app/services/scheduler/service.py",
+      "bytes": 59437,
+      "path": "app/services/scheduler/service.py",
+      "sha256": "ede7b025507aaf41cff1d460a315ab809f4117c84487f5476f64a8a5a9e8b3bd"
+    },
+    {
+      "source": ".git/aurora-handoff-import-20261006/cpu-full-audio-v490/source/app/services/stt_coordinator/__init__.py",
+      "destination": "thesis/sources/python-audio-v490-96ec8e3e/source/app/services/stt_coordinator/__init__.py",
+      "bytes": 441,
+      "path": "app/services/stt_coordinator/__init__.py",
+      "sha256": "a9fa9dd8e39085f1fd32c3f6aa1527c2c15fb89c47a267bd74405e74f3cc59b1"
+    },
+    {
+      "source": ".git/aurora-handoff-import-20261006/cpu-full-audio-v490/source/app/services/stt_coordinator/__main__.py",
+      "destination": "thesis/sources/python-audio-v490-96ec8e3e/source/app/services/stt_coordinator/__main__.py",
+      "bytes": 1669,
+      "path": "app/services/stt_coordinator/__main__.py",
+      "sha256": "7ff53b7ab175acc4ec69166b8812acb2750adbb7af4b7ade9e70416167f89766"
+    },
+    {
+      "source": ".git/aurora-handoff-import-20261006/cpu-full-audio-v490/source/app/services/stt_coordinator/service.py",
+      "destination": "thesis/sources/python-audio-v490-96ec8e3e/source/app/services/stt_coordinator/service.py",
+      "bytes": 69286,
+      "path": "app/services/stt_coordinator/service.py",
+      "sha256": "0a9fc35fb3b52dd5a6b54b49840ebe57f9c3fcb742a729dc8091bc6d0f990196"
+    },
+    {
+      "source": ".git/aurora-handoff-import-20261006/cpu-full-audio-v490/source/app/services/stt_transcription/__init__.py",
+      "destination": "thesis/sources/python-audio-v490-96ec8e3e/source/app/services/stt_transcription/__init__.py",
+      "bytes": 295,
+      "path": "app/services/stt_transcription/__init__.py",
+      "sha256": "3b4f874efa6be713753745c3a8d7c4eb062708b6bf39fa889be484f04b0e751c"
+    },
+    {
+      "source": ".git/aurora-handoff-import-20261006/cpu-full-audio-v490/source/app/services/stt_transcription/__main__.py",
+      "destination": "thesis/sources/python-audio-v490-96ec8e3e/source/app/services/stt_transcription/__main__.py",
+      "bytes": 1666,
+      "path": "app/services/stt_transcription/__main__.py",
+      "sha256": "5f24b67674c3c4fcb4959b0bccf72398267ca5959679d9a47cfa3c00d05f193e"
+    },
+    {
+      "source": ".git/aurora-handoff-import-20261006/cpu-full-audio-v490/source/app/services/stt_transcription/service.py",
+      "destination": "thesis/sources/python-audio-v490-96ec8e3e/source/app/services/stt_transcription/service.py",
+      "bytes": 112263,
+      "path": "app/services/stt_transcription/service.py",
+      "sha256": "4723b798b2643cee262e3d1d0ad28114305c3e83c8ef5bae5becd790aac5f888"
+    },
+    {
+      "source": ".git/aurora-handoff-import-20261006/cpu-full-audio-v490/source/app/services/stt_wakeword/__init__.py",
+      "destination": "thesis/sources/python-audio-v490-96ec8e3e/source/app/services/stt_wakeword/__init__.py",
+      "bytes": 787,
+      "path": "app/services/stt_wakeword/__init__.py",
+      "sha256": "c4e61ab90d67892f4755645371d6ffe49572166f486d47f98a9b42c2806c1bd0"
+    },
+    {
+      "source": ".git/aurora-handoff-import-20261006/cpu-full-audio-v490/source/app/services/stt_wakeword/__main__.py",
+      "destination": "thesis/sources/python-audio-v490-96ec8e3e/source/app/services/stt_wakeword/__main__.py",
+      "bytes": 1636,
+      "path": "app/services/stt_wakeword/__main__.py",
+      "sha256": "777ca62692127bc972d552affce09ad61eb6aea1a50f7a102c88804ef5bbb652"
+    },
+    {
+      "source": ".git/aurora-handoff-import-20261006/cpu-full-audio-v490/source/app/services/stt_wakeword/backends.py",
+      "destination": "thesis/sources/python-audio-v490-96ec8e3e/source/app/services/stt_wakeword/backends.py",
+      "bytes": 9417,
+      "path": "app/services/stt_wakeword/backends.py",
+      "sha256": "5453a8c0332ae01cac04bfedde3c7188f31710f58d43d1cd2906d4b8bd52b4ca"
+    },
+    {
+      "source": ".git/aurora-handoff-import-20261006/cpu-full-audio-v490/source/app/services/stt_wakeword/messages.py",
+      "destination": "thesis/sources/python-audio-v490-96ec8e3e/source/app/services/stt_wakeword/messages.py",
+      "bytes": 419,
+      "path": "app/services/stt_wakeword/messages.py",
+      "sha256": "8d38f30c69feb13ba6cb185ea0c85f80bd0e8123d510eb7ad48a353500f2c047"
+    },
+    {
+      "source": ".git/aurora-handoff-import-20261006/cpu-full-audio-v490/source/app/services/stt_wakeword/service.py",
+      "destination": "thesis/sources/python-audio-v490-96ec8e3e/source/app/services/stt_wakeword/service.py",
+      "bytes": 68303,
+      "path": "app/services/stt_wakeword/service.py",
+      "sha256": "9125f6836d900bd7bc8d788ac7a437e5e6e68270ae3f0570644a8e8b196e2eb0"
+    },
+    {
+      "source": ".git/aurora-handoff-import-20261006/cpu-full-audio-v490/source/app/services/supervisor.py",
+      "destination": "thesis/sources/python-audio-v490-96ec8e3e/source/app/services/supervisor.py",
+      "bytes": 24235,
+      "path": "app/services/supervisor.py",
+      "sha256": "4ac2b5578fa8b3759bf30e7dfe8c68364e3453eba5020663dc3be670b838a7d8"
+    },
+    {
+      "source": ".git/aurora-handoff-import-20261006/cpu-full-audio-v490/source/app/services/tooling/__init__.py",
+      "destination": "thesis/sources/python-audio-v490-96ec8e3e/source/app/services/tooling/__init__.py",
+      "bytes": 443,
+      "path": "app/services/tooling/__init__.py",
+      "sha256": "e36dc899c683fd2260c44d179c04ac1c5694e98e481e6062d16d3e9205456587"
+    },
+    {
+      "source": ".git/aurora-handoff-import-20261006/cpu-full-audio-v490/source/app/services/tooling/__main__.py",
+      "destination": "thesis/sources/python-audio-v490-96ec8e3e/source/app/services/tooling/__main__.py",
+      "bytes": 1626,
+      "path": "app/services/tooling/__main__.py",
+      "sha256": "b2d04ca73f49da07d5caccebba613f4f6ac7feee09e10052ec892b960f1cc4cc"
+    },
+    {
+      "source": ".git/aurora-handoff-import-20261006/cpu-full-audio-v490/source/app/services/tooling/export_policy.py",
+      "destination": "thesis/sources/python-audio-v490-96ec8e3e/source/app/services/tooling/export_policy.py",
+      "bytes": 4043,
+      "path": "app/services/tooling/export_policy.py",
+      "sha256": "4699ba1505ffdb13ee9a798a3f78f807e3c91cb66662cea9f4a17d835151b2e7"
+    },
+    {
+      "source": ".git/aurora-handoff-import-20261006/cpu-full-audio-v490/source/app/services/tooling/identity.py",
+      "destination": "thesis/sources/python-audio-v490-96ec8e3e/source/app/services/tooling/identity.py",
+      "bytes": 8427,
+      "path": "app/services/tooling/identity.py",
+      "sha256": "4eeae048a5e6d8b4027122746d06a82f4a5d6fa95bbfe9b86bb27287be91eb79"
+    },
+    {
+      "source": ".git/aurora-handoff-import-20261006/cpu-full-audio-v490/source/app/services/tooling/mcp/__init__.py",
+      "destination": "thesis/sources/python-audio-v490-96ec8e3e/source/app/services/tooling/mcp/__init__.py",
+      "bytes": 364,
+      "path": "app/services/tooling/mcp/__init__.py",
+      "sha256": "558312c2dab96a6200670bee76116c5a02516c89e9409d14d5742a0ef3b3802d"
+    },
+    {
+      "source": ".git/aurora-handoff-import-20261006/cpu-full-audio-v490/source/app/services/tooling/mcp/mcp_client.py",
+      "destination": "thesis/sources/python-audio-v490-96ec8e3e/source/app/services/tooling/mcp/mcp_client.py",
+      "bytes": 13787,
+      "path": "app/services/tooling/mcp/mcp_client.py",
+      "sha256": "87fc84d595bdcc6f20ab90e55f7ecc4eb054d1b9327c67adb0315dca9c2fe7c4"
+    },
+    {
+      "source": ".git/aurora-handoff-import-20261006/cpu-full-audio-v490/source/app/services/tooling/mcp/mcp_discovery.py",
+      "destination": "thesis/sources/python-audio-v490-96ec8e3e/source/app/services/tooling/mcp/mcp_discovery.py",
+      "bytes": 16195,
+      "path": "app/services/tooling/mcp/mcp_discovery.py",
+      "sha256": "7b80a5cfccbe3642aa2dd710c337bd91c0fbec42fd4a6174b0b2b36b439ff5c5"
+    },
+    {
+      "source": ".git/aurora-handoff-import-20261006/cpu-full-audio-v490/source/app/services/tooling/projection.py",
+      "destination": "thesis/sources/python-audio-v490-96ec8e3e/source/app/services/tooling/projection.py",
+      "bytes": 8262,
+      "path": "app/services/tooling/projection.py",
+      "sha256": "42d0a71aafe49995e31ef946a7f426b36cbded5d3000f30613be8ec0e7b38fa9"
+    },
+    {
+      "source": ".git/aurora-handoff-import-20261006/cpu-full-audio-v490/source/app/services/tooling/projection_cursor.py",
+      "destination": "thesis/sources/python-audio-v490-96ec8e3e/source/app/services/tooling/projection_cursor.py",
+      "bytes": 1944,
+      "path": "app/services/tooling/projection_cursor.py",
+      "sha256": "b5c31f8cfdd9399b4419112c15448d3234886736d40f2a97d0e01ca060e2008f"
+    },
+    {
+      "source": ".git/aurora-handoff-import-20261006/cpu-full-audio-v490/source/app/services/tooling/service.py",
+      "destination": "thesis/sources/python-audio-v490-96ec8e3e/source/app/services/tooling/service.py",
+      "bytes": 448189,
+      "path": "app/services/tooling/service.py",
+      "sha256": "9f9aaf3c57f7b3c9c73ca07d6a6f02403e0badbad1403475a175a249f4eadb66"
+    },
+    {
+      "source": ".git/aurora-handoff-import-20261006/cpu-full-audio-v490/source/app/services/tooling/tools/__init__.py",
+      "destination": "thesis/sources/python-audio-v490-96ec8e3e/source/app/services/tooling/tools/__init__.py",
+      "bytes": 861,
+      "path": "app/services/tooling/tools/__init__.py",
+      "sha256": "8a73bd943dc4607bc25176d9d6038dfed0cd4b6439a2733b15febb515e419b42"
+    },
+    {
+      "source": ".git/aurora-handoff-import-20261006/cpu-full-audio-v490/source/app/services/tooling/tools/brave_search.py",
+      "destination": "thesis/sources/python-audio-v490-96ec8e3e/source/app/services/tooling/tools/brave_search.py",
+      "bytes": 1700,
+      "path": "app/services/tooling/tools/brave_search.py",
+      "sha256": "b4b4ac87ffb42aad4497120d95e35386f16fc4aea55f585ec06423bbfedd6ddc"
+    },
+    {
+      "source": ".git/aurora-handoff-import-20261006/cpu-full-audio-v490/source/app/services/tooling/tools/current_screen.py",
+      "destination": "thesis/sources/python-audio-v490-96ec8e3e/source/app/services/tooling/tools/current_screen.py",
+      "bytes": 705,
+      "path": "app/services/tooling/tools/current_screen.py",
+      "sha256": "8b25e008aa6a89d5957be00ee6840f630b52794771e1d290dcf6d92fb7acf70c"
+    },
+    {
+      "source": ".git/aurora-handoff-import-20261006/cpu-full-audio-v490/source/app/services/tooling/tools/duckduckgo_search.py",
+      "destination": "thesis/sources/python-audio-v490-96ec8e3e/source/app/services/tooling/tools/duckduckgo_search.py",
+      "bytes": 114,
+      "path": "app/services/tooling/tools/duckduckgo_search.py",
+      "sha256": "e4c14d8558fb319d005dcecbba54667cd503e4b2d911d48d09aa8d1941510a8b"
+    },
+    {
+      "source": ".git/aurora-handoff-import-20261006/cpu-full-audio-v490/source/app/services/tooling/tools/gcalendar_toolkit.py",
+      "destination": "thesis/sources/python-audio-v490-96ec8e3e/source/app/services/tooling/tools/gcalendar_toolkit.py",
+      "bytes": 214,
+      "path": "app/services/tooling/tools/gcalendar_toolkit.py",
+      "sha256": "d69a36ed75e6c125846a13c67c776844d92118277f18aaf353f319b73121d60e"
+    },
+    {
+      "source": ".git/aurora-handoff-import-20261006/cpu-full-audio-v490/source/app/services/tooling/tools/github_toolkit.py",
+      "destination": "thesis/sources/python-audio-v490-96ec8e3e/source/app/services/tooling/tools/github_toolkit.py",
+      "bytes": 263,
+      "path": "app/services/tooling/tools/github_toolkit.py",
+      "sha256": "e8b280d89ec7fed13ec9bb49b4596e87517f002b853d556c09e76e40a28d4cab"
+    },
+    {
+      "source": ".git/aurora-handoff-import-20261006/cpu-full-audio-v490/source/app/services/tooling/tools/gmail_toolkit.py",
+      "destination": "thesis/sources/python-audio-v490-96ec8e3e/source/app/services/tooling/tools/gmail_toolkit.py",
+      "bytes": 204,
+      "path": "app/services/tooling/tools/gmail_toolkit.py",
+      "sha256": "d1a2dbab843c6f2c3b2e47f745b5a656dd692461a71a4faa3c0249da21d312a6"
+    },
+    {
+      "source": ".git/aurora-handoff-import-20261006/cpu-full-audio-v490/source/app/services/tooling/tools/jira_toolkit.py",
+      "destination": "thesis/sources/python-audio-v490-96ec8e3e/source/app/services/tooling/tools/jira_toolkit.py",
+      "bytes": 244,
+      "path": "app/services/tooling/tools/jira_toolkit.py",
+      "sha256": "1f2750981df74c10892b844bebe274013eb04caefcf1ddaa65d2c1d79e172d0a"
+    },
+    {
+      "source": ".git/aurora-handoff-import-20261006/cpu-full-audio-v490/source/app/services/tooling/tools/openrecall_search.py",
+      "destination": "thesis/sources/python-audio-v490-96ec8e3e/source/app/services/tooling/tools/openrecall_search.py",
+      "bytes": 956,
+      "path": "app/services/tooling/tools/openrecall_search.py",
+      "sha256": "fcc3a23b845e679622d6b7c6fa00b350442c77ba1c5a873898e8f44d539491f0"
+    },
+    {
+      "source": ".git/aurora-handoff-import-20261006/cpu-full-audio-v490/source/app/services/tooling/tools/pomodoro_tool.py",
+      "destination": "thesis/sources/python-audio-v490-96ec8e3e/source/app/services/tooling/tools/pomodoro_tool.py",
+      "bytes": 13298,
+      "path": "app/services/tooling/tools/pomodoro_tool.py",
+      "sha256": "45ca27e73679e840ec46bea9303e8414c7fcce059ed03a5dd3c6f64582d46dd8"
+    },
+    {
+      "source": ".git/aurora-handoff-import-20261006/cpu-full-audio-v490/source/app/services/tooling/tools/resume_tts.py",
+      "destination": "thesis/sources/python-audio-v490-96ec8e3e/source/app/services/tooling/tools/resume_tts.py",
+      "bytes": 1105,
+      "path": "app/services/tooling/tools/resume_tts.py",
+      "sha256": "7e7cb356f14dc52ae52033d764cd431476d862db8e4c5db2d05898f3e897c058"
+    },
+    {
+      "source": ".git/aurora-handoff-import-20261006/cpu-full-audio-v490/source/app/services/tooling/tools/scheduler_tool.py",
+      "destination": "thesis/sources/python-audio-v490-96ec8e3e/source/app/services/tooling/tools/scheduler_tool.py",
+      "bytes": 24168,
+      "path": "app/services/tooling/tools/scheduler_tool.py",
+      "sha256": "1c5223094092d10bf554fc41f075ecf4da129e770d88564c612e61bd9156b6ad"
+    },
+    {
+      "source": ".git/aurora-handoff-import-20261006/cpu-full-audio-v490/source/app/services/tooling/tools/slack_toolkit.py",
+      "destination": "thesis/sources/python-audio-v490-96ec8e3e/source/app/services/tooling/tools/slack_toolkit.py",
+      "bytes": 120,
+      "path": "app/services/tooling/tools/slack_toolkit.py",
+      "sha256": "cc5ce2cee16d3df7742e63782df2d7b179cd315d9c61d00d910fdc1ddd505e15"
+    },
+    {
+      "source": ".git/aurora-handoff-import-20261006/cpu-full-audio-v490/source/app/services/tooling/tools/stop_tts.py",
+      "destination": "thesis/sources/python-audio-v490-96ec8e3e/source/app/services/tooling/tools/stop_tts.py",
+      "bytes": 1130,
+      "path": "app/services/tooling/tools/stop_tts.py",
+      "sha256": "fae3b5347c447743583bb8a98cd3834ea82d13dc45f660ce02b6a1b881bb904c"
+    },
+    {
+      "source": ".git/aurora-handoff-import-20261006/cpu-full-audio-v490/source/app/services/tooling/tools/upsert_memory.py",
+      "destination": "thesis/sources/python-audio-v490-96ec8e3e/source/app/services/tooling/tools/upsert_memory.py",
+      "bytes": 1443,
+      "path": "app/services/tooling/tools/upsert_memory.py",
+      "sha256": "d12cf7bdcc22648e3a3a4af934490d6aac9dbf728b3e9b26f7c0691a37e0f76b"
+    },
+    {
+      "source": ".git/aurora-handoff-import-20261006/cpu-full-audio-v490/source/app/services/tooling/tools_manager.py",
+      "destination": "thesis/sources/python-audio-v490-96ec8e3e/source/app/services/tooling/tools_manager.py",
+      "bytes": 29875,
+      "path": "app/services/tooling/tools_manager.py",
+      "sha256": "37134ede030f4f4ff08aede1e43c14091649fa7fa661fd036f6bf3218879884a"
+    },
+    {
+      "source": ".git/aurora-handoff-import-20261006/cpu-full-audio-v490/source/app/services/tts/__init__.py",
+      "destination": "thesis/sources/python-audio-v490-96ec8e3e/source/app/services/tts/__init__.py",
+      "bytes": 841,
+      "path": "app/services/tts/__init__.py",
+      "sha256": "abdf1499b818055cc42b8f0623e64b58f1980828cdac9dca2b0283257fe6b82a"
+    },
+    {
+      "source": ".git/aurora-handoff-import-20261006/cpu-full-audio-v490/source/app/services/tts/__main__.py",
+      "destination": "thesis/sources/python-audio-v490-96ec8e3e/source/app/services/tts/__main__.py",
+      "bytes": 1602,
+      "path": "app/services/tts/__main__.py",
+      "sha256": "b6b376d982401f8542578a7954fe9ba8484fc13cea8f2bd5d3829090502b0f99"
+    },
+    {
+      "source": ".git/aurora-handoff-import-20261006/cpu-full-audio-v490/source/app/services/tts/media_import.py",
+      "destination": "thesis/sources/python-audio-v490-96ec8e3e/source/app/services/tts/media_import.py",
+      "bytes": 19877,
+      "path": "app/services/tts/media_import.py",
+      "sha256": "ea13fae1b7546ce143a341f9b388bd52234ec2b47a345db1fa8f79a837b45055"
+    },
+    {
+      "source": ".git/aurora-handoff-import-20261006/cpu-full-audio-v490/source/app/services/tts/piper_catalog.py",
+      "destination": "thesis/sources/python-audio-v490-96ec8e3e/source/app/services/tts/piper_catalog.py",
+      "bytes": 31569,
+      "path": "app/services/tts/piper_catalog.py",
+      "sha256": "f92fa51cfb322abd13a53e28b41c0b7dd43e80c2747f94aa9baed7c73b62db65"
+    },
+    {
+      "source": ".git/aurora-handoff-import-20261006/cpu-full-audio-v490/source/app/services/tts/piper_engine.py",
+      "destination": "thesis/sources/python-audio-v490-96ec8e3e/source/app/services/tts/piper_engine.py",
+      "bytes": 4541,
+      "path": "app/services/tts/piper_engine.py",
+      "sha256": "79ced0464d046a1496f1a7f4e0656642888fac4f6993e4204f71efdd63d41e3c"
+    },
+    {
+      "source": ".git/aurora-handoff-import-20261006/cpu-full-audio-v490/source/app/services/tts/playback.py",
+      "destination": "thesis/sources/python-audio-v490-96ec8e3e/source/app/services/tts/playback.py",
+      "bytes": 18817,
+      "path": "app/services/tts/playback.py",
+      "sha256": "455f0f1bbd68b7cdbf1f7fb0b91900f640c15377be310705d6e07da05f6c70be"
+    },
+    {
+      "source": ".git/aurora-handoff-import-20261006/cpu-full-audio-v490/source/app/services/tts/providers/__init__.py",
+      "destination": "thesis/sources/python-audio-v490-96ec8e3e/source/app/services/tts/providers/__init__.py",
+      "bytes": 763,
+      "path": "app/services/tts/providers/__init__.py",
+      "sha256": "29dee1d78f46f1a08f7b226de6861380049212c0408022c475214458ede1f6a2"
+    },
+    {
+      "source": ".git/aurora-handoff-import-20261006/cpu-full-audio-v490/source/app/services/tts/providers/base.py",
+      "destination": "thesis/sources/python-audio-v490-96ec8e3e/source/app/services/tts/providers/base.py",
+      "bytes": 5895,
+      "path": "app/services/tts/providers/base.py",
+      "sha256": "1afecc77b657a56b09a8a590b8c50690dd45808d3c1d8bbc9db18ddffba8eeb4"
+    },
+    {
+      "source": ".git/aurora-handoff-import-20261006/cpu-full-audio-v490/source/app/services/tts/providers/piper.py",
+      "destination": "thesis/sources/python-audio-v490-96ec8e3e/source/app/services/tts/providers/piper.py",
+      "bytes": 14398,
+      "path": "app/services/tts/providers/piper.py",
+      "sha256": "b5c1cd3110b7405cf0990ad27c7d038a252b31af3d01191d415e3b76fd1ed7ac"
+    },
+    {
+      "source": ".git/aurora-handoff-import-20261006/cpu-full-audio-v490/source/app/services/tts/providers/pockettts.py",
+      "destination": "thesis/sources/python-audio-v490-96ec8e3e/source/app/services/tts/providers/pockettts.py",
+      "bytes": 66955,
+      "path": "app/services/tts/providers/pockettts.py",
+      "sha256": "e6dce471ddc2689305ad5f8f96964c715a953093567ca5a9ddfab8342d3a1514"
+    },
+    {
+      "source": ".git/aurora-handoff-import-20261006/cpu-full-audio-v490/source/app/services/tts/resources/sherpa_onnx_tts_catalog.json",
+      "destination": "thesis/sources/python-audio-v490-96ec8e3e/source/app/services/tts/resources/sherpa_onnx_tts_catalog.json",
+      "bytes": 705477,
+      "path": "app/services/tts/resources/sherpa_onnx_tts_catalog.json",
+      "sha256": "284875477e2c10248e6efaae2a142abb6a21b8f5c9e76cdf563a4c3a7f0cba84"
+    },
+    {
+      "source": ".git/aurora-handoff-import-20261006/cpu-full-audio-v490/source/app/services/tts/service.py",
+      "destination": "thesis/sources/python-audio-v490-96ec8e3e/source/app/services/tts/service.py",
+      "bytes": 227431,
+      "path": "app/services/tts/service.py",
+      "sha256": "6e4386aaf219ca5f5488ed007c03519be64f8de56aa2cc17956b5140218f234e"
+    },
+    {
+      "source": ".git/aurora-handoff-import-20261006/cpu-full-audio-v490/source/app/services/tts/voice_catalog.py",
+      "destination": "thesis/sources/python-audio-v490-96ec8e3e/source/app/services/tts/voice_catalog.py",
+      "bytes": 29775,
+      "path": "app/services/tts/voice_catalog.py",
+      "sha256": "916261826cdd37bb57cbd3e20c18da88090cbb801a0145485cebc5a420746210"
+    },
+    {
+      "source": ".git/aurora-handoff-import-20261006/cpu-full-audio-v490/source/app/services/tts/voice_registry.py",
+      "destination": "thesis/sources/python-audio-v490-96ec8e3e/source/app/services/tts/voice_registry.py",
+      "bytes": 69660,
+      "path": "app/services/tts/voice_registry.py",
+      "sha256": "1f5d785d4facb7b4eb0fc0a220d9daf47a5320caf42d19d1f1304ceefbad82fa"
+    },
+    {
+      "source": ".git/aurora-handoff-import-20261006/cpu-full-audio-v490/source/app/services/vad/__init__.py",
+      "destination": "thesis/sources/python-audio-v490-96ec8e3e/source/app/services/vad/__init__.py",
+      "bytes": 127,
+      "path": "app/services/vad/__init__.py",
+      "sha256": "c652ec357132022e775259797b89a867ae2add1ab8b85ce86682653fa41f8fd4"
+    },
+    {
+      "source": ".git/aurora-handoff-import-20261006/cpu-full-audio-v490/source/app/services/vad/service.py",
+      "destination": "thesis/sources/python-audio-v490-96ec8e3e/source/app/services/vad/service.py",
+      "bytes": 24668,
+      "path": "app/services/vad/service.py",
+      "sha256": "67f12dbdc7a7264049b3168c8ba4230dfe005f6cee5a6b3b6e8016ed71e1b108"
+    },
+    {
+      "source": ".git/aurora-handoff-import-20261006/cpu-full-audio-v490/source/app/shared/AGENTS.md",
+      "destination": "thesis/sources/python-audio-v490-96ec8e3e/source/app/shared/AGENTS.md",
+      "bytes": 6337,
+      "path": "app/shared/AGENTS.md",
+      "sha256": "254a15095630e1c712390111747969937ca09c47fbbe6469580a7ce9c17e67ed"
+    },
+    {
+      "source": ".git/aurora-handoff-import-20261006/cpu-full-audio-v490/source/app/shared/__init__.py",
+      "destination": "thesis/sources/python-audio-v490-96ec8e3e/source/app/shared/__init__.py",
+      "bytes": 59,
+      "path": "app/shared/__init__.py",
+      "sha256": "ea3c75ff017f18dd36749b1f912d1dafa71b509c2549e54c5af500f3fa22ec29"
+    },
+    {
+      "source": ".git/aurora-handoff-import-20261006/cpu-full-audio-v490/source/app/shared/auth/__init__.py",
+      "destination": "thesis/sources/python-audio-v490-96ec8e3e/source/app/shared/auth/__init__.py",
+      "bytes": 654,
+      "path": "app/shared/auth/__init__.py",
+      "sha256": "d24281419b6fdaa56bdff7e01397b194400930a22aa587acb4ca98a7f3b28f40"
+    },
+    {
+      "source": ".git/aurora-handoff-import-20261006/cpu-full-audio-v490/source/app/shared/auth/audit.py",
+      "destination": "thesis/sources/python-audio-v490-96ec8e3e/source/app/shared/auth/audit.py",
+      "bytes": 1296,
+      "path": "app/shared/auth/audit.py",
+      "sha256": "f8f849530da616eb19eefac1c16beef592305abf83885f2c392c9ce07b9d6491"
+    },
+    {
+      "source": ".git/aurora-handoff-import-20261006/cpu-full-audio-v490/source/app/shared/auth/identity.py",
+      "destination": "thesis/sources/python-audio-v490-96ec8e3e/source/app/shared/auth/identity.py",
+      "bytes": 5438,
+      "path": "app/shared/auth/identity.py",
+      "sha256": "05e2fe0e3bb8a4eeb440fd596550a3450137bc61eef55271ad25da56fa7f52aa"
+    },
+    {
+      "source": ".git/aurora-handoff-import-20261006/cpu-full-audio-v490/source/app/shared/auth/permissions.py",
+      "destination": "thesis/sources/python-audio-v490-96ec8e3e/source/app/shared/auth/permissions.py",
+      "bytes": 14457,
+      "path": "app/shared/auth/permissions.py",
+      "sha256": "936ceb1920a97f5795f706694bbc9f851310f120e177ebe20288f7f5dff8eeaf"
+    },
+    {
+      "source": ".git/aurora-handoff-import-20261006/cpu-full-audio-v490/source/app/shared/config/__init__.py",
+      "destination": "thesis/sources/python-audio-v490-96ec8e3e/source/app/shared/config/__init__.py",
+      "bytes": 55,
+      "path": "app/shared/config/__init__.py",
+      "sha256": "e3440d01497a0d1bcd631cc5637cce6d324aecf93210f2f028a25156a17e736d"
+    },
+    {
+      "source": ".git/aurora-handoff-import-20261006/cpu-full-audio-v490/source/app/shared/config/interface.py",
+      "destination": "thesis/sources/python-audio-v490-96ec8e3e/source/app/shared/config/interface.py",
+      "bytes": 30399,
+      "path": "app/shared/config/interface.py",
+      "sha256": "cf000e4f5d1ec387e86ee0868ae465f2397cfa2fd1c0deaf17ad59166e65ac79"
+    },
+    {
+      "source": ".git/aurora-handoff-import-20261006/cpu-full-audio-v490/source/app/shared/config/keys.py",
+      "destination": "thesis/sources/python-audio-v490-96ec8e3e/source/app/shared/config/keys.py",
+      "bytes": 72060,
+      "path": "app/shared/config/keys.py",
+      "sha256": "c14fb6252fa88e337b1a27d2fd20976ad98b4a59ef8a75065f9afac7de08d269"
+    },
+    {
+      "source": ".git/aurora-handoff-import-20261006/cpu-full-audio-v490/source/app/shared/config/models.py",
+      "destination": "thesis/sources/python-audio-v490-96ec8e3e/source/app/shared/config/models.py",
+      "bytes": 37108,
+      "path": "app/shared/config/models.py",
+      "sha256": "00fb3ef21b4477f8d02cd1d47c702edadae982608ff4a28f72609a0e83f3f59f"
+    },
+    {
+      "source": ".git/aurora-handoff-import-20261006/cpu-full-audio-v490/source/app/shared/config/models_base.py",
+      "destination": "thesis/sources/python-audio-v490-96ec8e3e/source/app/shared/config/models_base.py",
+      "bytes": 342,
+      "path": "app/shared/config/models_base.py",
+      "sha256": "2fc6f6790db59a94379ddb063f3069ac04c0cc32b41e14344edfec71556e7fb7"
+    },
+    {
+      "source": ".git/aurora-handoff-import-20261006/cpu-full-audio-v490/source/app/shared/contracts/AGENTS.md",
+      "destination": "thesis/sources/python-audio-v490-96ec8e3e/source/app/shared/contracts/AGENTS.md",
+      "bytes": 8923,
+      "path": "app/shared/contracts/AGENTS.md",
+      "sha256": "c14445fd7929f3eae5ce9df21ff4f6ca61b3121f0cd133be19f1cf6d770f59ff"
+    },
+    {
+      "source": ".git/aurora-handoff-import-20261006/cpu-full-audio-v490/source/app/shared/contracts/__init__.py",
+      "destination": "thesis/sources/python-audio-v490-96ec8e3e/source/app/shared/contracts/__init__.py",
+      "bytes": 155,
+      "path": "app/shared/contracts/__init__.py",
+      "sha256": "01b3f509d366cab21680f07f796d473dae5650204aedf87bbf41672072ca46df"
+    },
+    {
+      "source": ".git/aurora-handoff-import-20261006/cpu-full-audio-v490/source/app/shared/contracts/io_model.py",
+      "destination": "thesis/sources/python-audio-v490-96ec8e3e/source/app/shared/contracts/io_model.py",
+      "bytes": 202,
+      "path": "app/shared/contracts/io_model.py",
+      "sha256": "8ec4c0051ca39875842b7a6dba2df1ef7ecee2340e22a6c982dad0f5a06b73ea"
+    },
+    {
+      "source": ".git/aurora-handoff-import-20261006/cpu-full-audio-v490/source/app/shared/contracts/mesh_compatibility.py",
+      "destination": "thesis/sources/python-audio-v490-96ec8e3e/source/app/shared/contracts/mesh_compatibility.py",
+      "bytes": 1000,
+      "path": "app/shared/contracts/mesh_compatibility.py",
+      "sha256": "e2cc614dfb178b2468b4311aae01b111fc90a19e862d8978fd02cc6028f041fc"
+    },
+    {
+      "source": ".git/aurora-handoff-import-20261006/cpu-full-audio-v490/source/app/shared/contracts/mesh_surface.py",
+      "destination": "thesis/sources/python-audio-v490-96ec8e3e/source/app/shared/contracts/mesh_surface.py",
+      "bytes": 21169,
+      "path": "app/shared/contracts/mesh_surface.py",
+      "sha256": "1c30842d8a037e0e35223ee30a1c3540342726718a397da7aebca3f456e482f6"
+    },
+    {
+      "source": ".git/aurora-handoff-import-20261006/cpu-full-audio-v490/source/app/shared/contracts/models/__init__.py",
+      "destination": "thesis/sources/python-audio-v490-96ec8e3e/source/app/shared/contracts/models/__init__.py",
+      "bytes": 9280,
+      "path": "app/shared/contracts/models/__init__.py",
+      "sha256": "45b4655f4f56a4085099b7a652e72d4f94c5b47c9efcdf3eefaf91edbe457506"
+    },
+    {
+      "source": ".git/aurora-handoff-import-20261006/cpu-full-audio-v490/source/app/shared/contracts/models/audio.py",
+      "destination": "thesis/sources/python-audio-v490-96ec8e3e/source/app/shared/contracts/models/audio.py",
+      "bytes": 1018,
+      "path": "app/shared/contracts/models/audio.py",
+      "sha256": "a157fb21ecc738c030b616f7bfbde29fef0bcb4dc2ec626f1aaa38829bdc8d78"
+    },
+    {
+      "source": ".git/aurora-handoff-import-20261006/cpu-full-audio-v490/source/app/shared/contracts/models/aurora.py",
+      "destination": "thesis/sources/python-audio-v490-96ec8e3e/source/app/shared/contracts/models/aurora.py",
+      "bytes": 2837,
+      "path": "app/shared/contracts/models/aurora.py",
+      "sha256": "dd3a866deac079fafb6c07570ad4a4d73b84961f81afec158b785036bcba7011"
+    },
+    {
+      "source": ".git/aurora-handoff-import-20261006/cpu-full-audio-v490/source/app/shared/contracts/models/auth.py",
+      "destination": "thesis/sources/python-audio-v490-96ec8e3e/source/app/shared/contracts/models/auth.py",
+      "bytes": 17942,
+      "path": "app/shared/contracts/models/auth.py",
+      "sha256": "005d3b1ebd02cffc4a04dc404ac6f96a3018dfab711ce3f2b640b6abeb006740"
+    },
+    {
+      "source": ".git/aurora-handoff-import-20261006/cpu-full-audio-v490/source/app/shared/contracts/models/backup.py",
+      "destination": "thesis/sources/python-audio-v490-96ec8e3e/source/app/shared/contracts/models/backup.py",
+      "bytes": 5377,
+      "path": "app/shared/contracts/models/backup.py",
+      "sha256": "1f20b777ea13285830192082320468e190fb3e33fea8265c3d25d6ef0285aa1b"
+    },
+    {
+      "source": ".git/aurora-handoff-import-20261006/cpu-full-audio-v490/source/app/shared/contracts/models/common.py",
+      "destination": "thesis/sources/python-audio-v490-96ec8e3e/source/app/shared/contracts/models/common.py",
+      "bytes": 632,
+      "path": "app/shared/contracts/models/common.py",
+      "sha256": "7026655968ae7c8f9839626b9f460e31296b8df8de42182080a65b1731595de0"
+    },
+    {
+      "source": ".git/aurora-handoff-import-20261006/cpu-full-audio-v490/source/app/shared/contracts/models/config.py",
+      "destination": "thesis/sources/python-audio-v490-96ec8e3e/source/app/shared/contracts/models/config.py",
+      "bytes": 7988,
+      "path": "app/shared/contracts/models/config.py",
+      "sha256": "93574950ec690762402fa8301bfafd09ab1ef1c3d863a0b78621711c19a6f056"
+    },
+    {
+      "source": ".git/aurora-handoff-import-20261006/cpu-full-audio-v490/source/app/shared/contracts/models/db.py",
+      "destination": "thesis/sources/python-audio-v490-96ec8e3e/source/app/shared/contracts/models/db.py",
+      "bytes": 58117,
+      "path": "app/shared/contracts/models/db.py",
+      "sha256": "7f26e9474980b4518e9b3ae3fc54043c37c7c219da71a913eb85dd0d87e402d7"
+    },
+    {
+      "source": ".git/aurora-handoff-import-20261006/cpu-full-audio-v490/source/app/shared/contracts/models/gateway.py",
+      "destination": "thesis/sources/python-audio-v490-96ec8e3e/source/app/shared/contracts/models/gateway.py",
+      "bytes": 43147,
+      "path": "app/shared/contracts/models/gateway.py",
+      "sha256": "fd457020a33532f6615fb490e023e68b98b5e57c80b11efc82edc6741c63ea84"
+    },
+    {
+      "source": ".git/aurora-handoff-import-20261006/cpu-full-audio-v490/source/app/shared/contracts/models/mesh.py",
+      "destination": "thesis/sources/python-audio-v490-96ec8e3e/source/app/shared/contracts/models/mesh.py",
+      "bytes": 10985,
+      "path": "app/shared/contracts/models/mesh.py",
+      "sha256": "27074b7e4bea970736f98ce30aa0906e3b6006d01bd184a07af22607a33836bf"
+    },
+    {
+      "source": ".git/aurora-handoff-import-20261006/cpu-full-audio-v490/source/app/shared/contracts/models/orchestrator.py",
+      "destination": "thesis/sources/python-audio-v490-96ec8e3e/source/app/shared/contracts/models/orchestrator.py",
+      "bytes": 22857,
+      "path": "app/shared/contracts/models/orchestrator.py",
+      "sha256": "cf7f048c0678f298141a59b031be420772b83e649ec2910053d4f372cfaf2df9"
+    },
+    {
+      "source": ".git/aurora-handoff-import-20261006/cpu-full-audio-v490/source/app/shared/contracts/models/scheduler.py",
+      "destination": "thesis/sources/python-audio-v490-96ec8e3e/source/app/shared/contracts/models/scheduler.py",
+      "bytes": 8999,
+      "path": "app/shared/contracts/models/scheduler.py",
+      "sha256": "e3f92d325ca608a374a005fcb8b60a1afb607fc1865129d48ec3f48fd62269af"
+    },
+    {
+      "source": ".git/aurora-handoff-import-20261006/cpu-full-audio-v490/source/app/shared/contracts/models/speech.py",
+      "destination": "thesis/sources/python-audio-v490-96ec8e3e/source/app/shared/contracts/models/speech.py",
+      "bytes": 13163,
+      "path": "app/shared/contracts/models/speech.py",
+      "sha256": "47855c8fdec6f7dd8f5fb415da11ab61b22ab60f4b483961e316729ada3777b0"
+    },
+    {
+      "source": ".git/aurora-handoff-import-20261006/cpu-full-audio-v490/source/app/shared/contracts/models/speech_runtime.py",
+      "destination": "thesis/sources/python-audio-v490-96ec8e3e/source/app/shared/contracts/models/speech_runtime.py",
+      "bytes": 23016,
+      "path": "app/shared/contracts/models/speech_runtime.py",
+      "sha256": "1f7ea66c9a4619439130a6a200647b49a1df5b5b8cd17490c5aab0a371e88d94"
+    },
+    {
+      "source": ".git/aurora-handoff-import-20261006/cpu-full-audio-v490/source/app/shared/contracts/models/stt.py",
+      "destination": "thesis/sources/python-audio-v490-96ec8e3e/source/app/shared/contracts/models/stt.py",
+      "bytes": 21745,
+      "path": "app/shared/contracts/models/stt.py",
+      "sha256": "3c56b2d5a5435a971465ac5b132d8b5d78d18cfe02506813631a4b67e401c703"
+    },
+    {
+      "source": ".git/aurora-handoff-import-20261006/cpu-full-audio-v490/source/app/shared/contracts/models/supervisor.py",
+      "destination": "thesis/sources/python-audio-v490-96ec8e3e/source/app/shared/contracts/models/supervisor.py",
+      "bytes": 2420,
+      "path": "app/shared/contracts/models/supervisor.py",
+      "sha256": "97f97f19745d348d907c5addf8edf965d36de0e4fe02169d08b96af017d72991"
+    },
+    {
+      "source": ".git/aurora-handoff-import-20261006/cpu-full-audio-v490/source/app/shared/contracts/models/tooling.py",
+      "destination": "thesis/sources/python-audio-v490-96ec8e3e/source/app/shared/contracts/models/tooling.py",
+      "bytes": 61428,
+      "path": "app/shared/contracts/models/tooling.py",
+      "sha256": "4a4d3b9a90d2091adeb9848c77a9ff927487c178bf9b937faa051aaa817cf76a"
+    },
+    {
+      "source": ".git/aurora-handoff-import-20261006/cpu-full-audio-v490/source/app/shared/contracts/models/tts.py",
+      "destination": "thesis/sources/python-audio-v490-96ec8e3e/source/app/shared/contracts/models/tts.py",
+      "bytes": 55774,
+      "path": "app/shared/contracts/models/tts.py",
+      "sha256": "e6ca2ebe21b928506be0bf8c3bf88eb9ad3f582b0aae80bba361c326b2bde744"
+    },
+    {
+      "source": ".git/aurora-handoff-import-20261006/cpu-full-audio-v490/source/app/shared/contracts/registry.py",
+      "destination": "thesis/sources/python-audio-v490-96ec8e3e/source/app/shared/contracts/registry.py",
+      "bytes": 18337,
+      "path": "app/shared/contracts/registry.py",
+      "sha256": "075617cafa2089d453f14b2859f9b73a7ee4c92587599db94efd2f46c8b53324"
+    },
+    {
+      "source": ".git/aurora-handoff-import-20261006/cpu-full-audio-v490/source/app/shared/contracts/speech_routing.py",
+      "destination": "thesis/sources/python-audio-v490-96ec8e3e/source/app/shared/contracts/speech_routing.py",
+      "bytes": 1810,
+      "path": "app/shared/contracts/speech_routing.py",
+      "sha256": "f630665b9a6b4535127b446c365e14943b12dec9badffffca56328608338e20b"
+    },
+    {
+      "source": ".git/aurora-handoff-import-20261006/cpu-full-audio-v490/source/app/shared/crypto.py",
+      "destination": "thesis/sources/python-audio-v490-96ec8e3e/source/app/shared/crypto.py",
+      "bytes": 2175,
+      "path": "app/shared/crypto.py",
+      "sha256": "fa7c1a70209ea4b94a9fcb477d486292f87a851d58691e10a5cd14c4d23d223e"
+    },
+    {
+      "source": ".git/aurora-handoff-import-20261006/cpu-full-audio-v490/source/app/shared/mesh/__init__.py",
+      "destination": "thesis/sources/python-audio-v490-96ec8e3e/source/app/shared/mesh/__init__.py",
+      "bytes": 29,
+      "path": "app/shared/mesh/__init__.py",
+      "sha256": "6927bf6bea34f8b6bb1e47316672741ec47b38d68520233bb0eb49b85ca09cbf"
+    },
+    {
+      "source": ".git/aurora-handoff-import-20261006/cpu-full-audio-v490/source/app/shared/mesh/observability.py",
+      "destination": "thesis/sources/python-audio-v490-96ec8e3e/source/app/shared/mesh/observability.py",
+      "bytes": 6644,
+      "path": "app/shared/mesh/observability.py",
+      "sha256": "4d46ae71cb3d687f05c50a72ef06f5816c6b3bf09a52af1c3e43444e06e1ba51"
+    },
+    {
+      "source": ".git/aurora-handoff-import-20261006/cpu-full-audio-v490/source/app/shared/mesh/tracing.py",
+      "destination": "thesis/sources/python-audio-v490-96ec8e3e/source/app/shared/mesh/tracing.py",
+      "bytes": 7511,
+      "path": "app/shared/mesh/tracing.py",
+      "sha256": "0a0f8f492ebc5f96b64fb479c2f6ca127f3b8683570f09de0017bd6394b970fe"
+    },
+    {
+      "source": ".git/aurora-handoff-import-20261006/cpu-full-audio-v490/source/app/shared/messaging/__init__.py",
+      "destination": "thesis/sources/python-audio-v490-96ec8e3e/source/app/shared/messaging/__init__.py",
+      "bytes": 57,
+      "path": "app/shared/messaging/__init__.py",
+      "sha256": "efb6843f6335e4dba352ddee4933c62163c76e161c98192acb14253110befa76"
+    },
+    {
+      "source": ".git/aurora-handoff-import-20261006/cpu-full-audio-v490/source/app/shared/messaging/bus_init.py",
+      "destination": "thesis/sources/python-audio-v490-96ec8e3e/source/app/shared/messaging/bus_init.py",
+      "bytes": 5270,
+      "path": "app/shared/messaging/bus_init.py",
+      "sha256": "670af5ccf950f82a3b01a3248b7fc7d07b7e6d1fd2c3e88c46ab6f77ea211b7e"
+    },
+    {
+      "source": ".git/aurora-handoff-import-20261006/cpu-full-audio-v490/source/app/shared/messaging/models/__init__.py",
+      "destination": "thesis/sources/python-audio-v490-96ec8e3e/source/app/shared/messaging/models/__init__.py",
+      "bytes": 2637,
+      "path": "app/shared/messaging/models/__init__.py",
+      "sha256": "ea8a73784ef11ce5403b44d5d6087fb3e5ccb333568fd29043c88e830c2f8bec"
+    },
+    {
+      "source": ".git/aurora-handoff-import-20261006/cpu-full-audio-v490/source/app/shared/messaging/models/db_models.py",
+      "destination": "thesis/sources/python-audio-v490-96ec8e3e/source/app/shared/messaging/models/db_models.py",
+      "bytes": 2483,
+      "path": "app/shared/messaging/models/db_models.py",
+      "sha256": "c40201754abda02ff41880f1b84937423866c9d7ceaa1437a363af838a27664f"
+    },
+    {
+      "source": ".git/aurora-handoff-import-20261006/cpu-full-audio-v490/source/app/shared/messaging/models/orchestrator_models.py",
+      "destination": "thesis/sources/python-audio-v490-96ec8e3e/source/app/shared/messaging/models/orchestrator_models.py",
+      "bytes": 1582,
+      "path": "app/shared/messaging/models/orchestrator_models.py",
+      "sha256": "f4c23df02a7a02bbe01c7382607fd72c32f5444de4e7388b928c29374655b954"
+    },
+    {
+      "source": ".git/aurora-handoff-import-20261006/cpu-full-audio-v490/source/app/shared/messaging/models/scheduler_models.py",
+      "destination": "thesis/sources/python-audio-v490-96ec8e3e/source/app/shared/messaging/models/scheduler_models.py",
+      "bytes": 395,
+      "path": "app/shared/messaging/models/scheduler_models.py",
+      "sha256": "215de216ab206b7e0b30a178437a13113fc87689e5b6e01106f0d06af017e10e"
+    },
+    {
+      "source": ".git/aurora-handoff-import-20261006/cpu-full-audio-v490/source/app/shared/messaging/models/stt_coordinator_models.py",
+      "destination": "thesis/sources/python-audio-v490-96ec8e3e/source/app/shared/messaging/models/stt_coordinator_models.py",
+      "bytes": 1942,
+      "path": "app/shared/messaging/models/stt_coordinator_models.py",
+      "sha256": "866e42f354274de5a23dd4d58bf521b36fc2a92a411424dea6578b6bf7e48166"
+    },
+    {
+      "source": ".git/aurora-handoff-import-20261006/cpu-full-audio-v490/source/app/shared/messaging/models/stt_wakeword_models.py",
+      "destination": "thesis/sources/python-audio-v490-96ec8e3e/source/app/shared/messaging/models/stt_wakeword_models.py",
+      "bytes": 1143,
+      "path": "app/shared/messaging/models/stt_wakeword_models.py",
+      "sha256": "199739fef52f754651595e0404a8230229bf4c57e9a767b60dc2b84e22f599f2"
+    },
+    {
+      "source": ".git/aurora-handoff-import-20261006/cpu-full-audio-v490/source/app/shared/messaging/models/tooling_models.py",
+      "destination": "thesis/sources/python-audio-v490-96ec8e3e/source/app/shared/messaging/models/tooling_models.py",
+      "bytes": 1888,
+      "path": "app/shared/messaging/models/tooling_models.py",
+      "sha256": "c7858710c2eba0545073046533d7edd9de13a4c4257be5687b57dee59b7f0855"
+    },
+    {
+      "source": ".git/aurora-handoff-import-20261006/cpu-full-audio-v490/source/app/shared/messaging/models/tts_models.py",
+      "destination": "thesis/sources/python-audio-v490-96ec8e3e/source/app/shared/messaging/models/tts_models.py",
+      "bytes": 1146,
+      "path": "app/shared/messaging/models/tts_models.py",
+      "sha256": "96e4660dac2cdd56e58071faace74de589a30ae022217b9986e84ab0a4227527"
+    },
+    {
+      "source": ".git/aurora-handoff-import-20261006/cpu-full-audio-v490/source/app/shared/models/__init__.py",
+      "destination": "thesis/sources/python-audio-v490-96ec8e3e/source/app/shared/models/__init__.py",
+      "bytes": 0,
+      "path": "app/shared/models/__init__.py",
+      "sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+    },
+    {
+      "source": ".git/aurora-handoff-import-20261006/cpu-full-audio-v490/source/app/shared/models/db.py",
+      "destination": "thesis/sources/python-audio-v490-96ec8e3e/source/app/shared/models/db.py",
+      "bytes": 17024,
+      "path": "app/shared/models/db.py",
+      "sha256": "5e0f9ab259c47311304013fbe2ccdf243387e410818095341a0cbe860e72ad57"
+    },
+    {
+      "source": ".git/aurora-handoff-import-20261006/cpu-full-audio-v490/source/app/shared/path_utils.py",
+      "destination": "thesis/sources/python-audio-v490-96ec8e3e/source/app/shared/path_utils.py",
+      "bytes": 6750,
+      "path": "app/shared/path_utils.py",
+      "sha256": "f6f4d5b44137942774c7dd734ba9edfcea5ff5b422c622fbd351e754a529f366"
+    },
+    {
+      "source": ".git/aurora-handoff-import-20261006/cpu-full-audio-v490/source/app/shared/services/__init__.py",
+      "destination": "thesis/sources/python-audio-v490-96ec8e3e/source/app/shared/services/__init__.py",
+      "bytes": 51,
+      "path": "app/shared/services/__init__.py",
+      "sha256": "04d1ef4b4d0bcbfbe1d3d4af4940a66bce493306dd7b8e5aeb2ef3c74403dbcc"
+    },
+    {
+      "source": ".git/aurora-handoff-import-20261006/cpu-full-audio-v490/source/app/shared/services/base_service.py",
+      "destination": "thesis/sources/python-audio-v490-96ec8e3e/source/app/shared/services/base_service.py",
+      "bytes": 68871,
+      "path": "app/shared/services/base_service.py",
+      "sha256": "580c691214761fcd6edef1c199731065151466c29be4aeccd7c096ac397778d6"
+    },
+    {
+      "source": ".git/aurora-handoff-import-20261006/cpu-full-audio-v490/source/app/shared/services/health.py",
+      "destination": "thesis/sources/python-audio-v490-96ec8e3e/source/app/shared/services/health.py",
+      "bytes": 1723,
+      "path": "app/shared/services/health.py",
+      "sha256": "9c9b75cda153813e96d1f8a7eb529b34cb1c964c176e6d2d1e613fb866d15082"
+    },
+    {
+      "source": ".git/aurora-handoff-import-20261006/cpu-full-audio-v490/source/app/shared/services/process_launcher.py",
+      "destination": "thesis/sources/python-audio-v490-96ec8e3e/source/app/shared/services/process_launcher.py",
+      "bytes": 12132,
+      "path": "app/shared/services/process_launcher.py",
+      "sha256": "c6e102416d03b092d5ac33ef50caa5dc4f5448daf480606a0026f72e16a4eef3"
+    },
+    {
+      "source": ".git/aurora-handoff-import-20261006/cpu-full-audio-v490/source/app/shared/speech_language_policy.py",
+      "destination": "thesis/sources/python-audio-v490-96ec8e3e/source/app/shared/speech_language_policy.py",
+      "bytes": 1960,
+      "path": "app/shared/speech_language_policy.py",
+      "sha256": "d3c241d68bb351c508ceb2358cdf6474ffaa52ecb197940da4189d6fb3cfbcbb"
+    },
+    {
+      "source": ".git/aurora-handoff-import-20261006/cpu-full-audio-v490/source/app/shared/speech_lifecycle_observer.py",
+      "destination": "thesis/sources/python-audio-v490-96ec8e3e/source/app/shared/speech_lifecycle_observer.py",
+      "bytes": 4754,
+      "path": "app/shared/speech_lifecycle_observer.py",
+      "sha256": "774570be169f2f4cee0744d18a85045323797fd6fe7f84d92f24fb9aa8111076"
+    },
+    {
+      "source": ".git/aurora-handoff-import-20261006/cpu-full-audio-v490/source/app/ui/__init__.py",
+      "destination": "thesis/sources/python-audio-v490-96ec8e3e/source/app/ui/__init__.py",
+      "bytes": 215,
+      "path": "app/ui/__init__.py",
+      "sha256": "53b9acb57a2eb46124e9561c5d8dcd9c11ab52e09cae39884ffdea15e22b8cd8"
+    },
+    {
+      "source": ".git/aurora-handoff-import-20261006/cpu-full-audio-v490/source/app/ui/bridge_service.py",
+      "destination": "thesis/sources/python-audio-v490-96ec8e3e/source/app/ui/bridge_service.py",
+      "bytes": 10967,
+      "path": "app/ui/bridge_service.py",
+      "sha256": "da558f8673c39395b96be7fc92d9f00d772a6665569144643ec3a18f80fa5a88"
+    },
+    {
+      "source": ".git/aurora-handoff-import-20261006/cpu-full-audio-v490/source/main.py",
+      "destination": "thesis/sources/python-audio-v490-96ec8e3e/source/main.py",
+      "bytes": 8936,
+      "path": "main.py",
+      "sha256": "83c3f5dbcf939339e7643a46188acda4dd47b0bf3a78c13e2c087564c6d3730b"
+    },
+    {
+      "source": ".git/aurora-handoff-import-20261006/cpu-full-audio-v490/source/modules/ui-mock-reference/.design-sync/NOTES.md",
+      "destination": "thesis/sources/python-audio-v490-96ec8e3e/source/modules/ui-mock-reference/.design-sync/NOTES.md",
+      "bytes": 13381,
+      "path": "modules/ui-mock-reference/.design-sync/NOTES.md",
+      "sha256": "613e867013f6ed51e5a07a1e1fd04e9c6b1116a7693c99a96d1ef1ed5b71f53e"
+    },
+    {
+      "source": ".git/aurora-handoff-import-20261006/cpu-full-audio-v490/source/modules/ui-mock-reference/.design-sync/config.json",
+      "destination": "thesis/sources/python-audio-v490-96ec8e3e/source/modules/ui-mock-reference/.design-sync/config.json",
+      "bytes": 4192,
+      "path": "modules/ui-mock-reference/.design-sync/config.json",
+      "sha256": "7547fed8cf0f2fa73d601c5dd7356c957d02bd5d00a3a2b2e03d9877335589bd"
+    },
+    {
+      "source": ".git/aurora-handoff-import-20261006/cpu-full-audio-v490/source/modules/ui-mock-reference/.design-sync/conventions.md",
+      "destination": "thesis/sources/python-audio-v490-96ec8e3e/source/modules/ui-mock-reference/.design-sync/conventions.md",
+      "bytes": 3835,
+      "path": "modules/ui-mock-reference/.design-sync/conventions.md",
+      "sha256": "91f8c26d2edb038f5c21eec05958a9229ff2174c5fe2b6c5a3dc5c17510b50fd"
+    },
+    {
+      "source": ".git/aurora-handoff-import-20261006/cpu-full-audio-v490/source/modules/ui-mock-reference/.design-sync/overrides/common.mjs",
+      "destination": "thesis/sources/python-audio-v490-96ec8e3e/source/modules/ui-mock-reference/.design-sync/overrides/common.mjs",
+      "bytes": 12248,
+      "path": "modules/ui-mock-reference/.design-sync/overrides/common.mjs",
+      "sha256": "530f26dbe4591b63456c5b914f6cfef2f4a17446f16656a328fa0fe36bda4649"
+    },
+    {
+      "source": ".git/aurora-handoff-import-20261006/cpu-full-audio-v490/source/modules/ui-mock-reference/.design-sync/overrides/source-kit.mjs",
+      "destination": "thesis/sources/python-audio-v490-96ec8e3e/source/modules/ui-mock-reference/.design-sync/overrides/source-kit.mjs",
+      "bytes": 8660,
+      "path": "modules/ui-mock-reference/.design-sync/overrides/source-kit.mjs",
+      "sha256": "d69c1f00ad46cc5defcbcef3d417c9505e827532939e2349280ed7bbd2b31bcc"
+    },
+    {
+      "source": ".git/aurora-handoff-import-20261006/cpu-full-audio-v490/source/modules/ui-mock-reference/.design-sync/previews/Accordion.tsx",
+      "destination": "thesis/sources/python-audio-v490-96ec8e3e/source/modules/ui-mock-reference/.design-sync/previews/Accordion.tsx",
+      "bytes": 2261,
+      "path": "modules/ui-mock-reference/.design-sync/previews/Accordion.tsx",
+      "sha256": "c01436fc1fdc893e3761c4953da9e3b0f952fed1cd51de59165cb1b8afc951bd"
+    },
+    {
+      "source": ".git/aurora-handoff-import-20261006/cpu-full-audio-v490/source/modules/ui-mock-reference/.design-sync/previews/ActivityRail.tsx",
+      "destination": "thesis/sources/python-audio-v490-96ec8e3e/source/modules/ui-mock-reference/.design-sync/previews/ActivityRail.tsx",
+      "bytes": 466,
+      "path": "modules/ui-mock-reference/.design-sync/previews/ActivityRail.tsx",
+      "sha256": "cf2d66116ec194e22d1a5bed2f1fdfdd41e91f0d8d1c0255ebb8c2b0916778ed"
+    },
+    {
+      "source": ".git/aurora-handoff-import-20261006/cpu-full-audio-v490/source/modules/ui-mock-reference/.design-sync/previews/AdminConfirmDialog.tsx",
+      "destination": "thesis/sources/python-audio-v490-96ec8e3e/source/modules/ui-mock-reference/.design-sync/previews/AdminConfirmDialog.tsx",
+      "bytes": 2355,
+      "path": "modules/ui-mock-reference/.design-sync/previews/AdminConfirmDialog.tsx",
+      "sha256": "f9ec0ffe110dd7b548e71f9515d5c633b2c1ed2f28c472700abf50c08c166f6e"
+    },
+    {
+      "source": ".git/aurora-handoff-import-20261006/cpu-full-audio-v490/source/modules/ui-mock-reference/.design-sync/previews/AdminOverview.tsx",
+      "destination": "thesis/sources/python-audio-v490-96ec8e3e/source/modules/ui-mock-reference/.design-sync/previews/AdminOverview.tsx",
+      "bytes": 220,
+      "path": "modules/ui-mock-reference/.design-sync/previews/AdminOverview.tsx",
+      "sha256": "35bb3f11bc6c5f9c1c358d020b999180bfe0a27e37579292aadf81bafa1f6956"
+    },
+    {
+      "source": ".git/aurora-handoff-import-20261006/cpu-full-audio-v490/source/modules/ui-mock-reference/.design-sync/previews/AdminSecondarySurface.tsx",
+      "destination": "thesis/sources/python-audio-v490-96ec8e3e/source/modules/ui-mock-reference/.design-sync/previews/AdminSecondarySurface.tsx",
+      "bytes": 822,
+      "path": "modules/ui-mock-reference/.design-sync/previews/AdminSecondarySurface.tsx",
+      "sha256": "6f240e8f6caa86d63f116d4a4724c9a4db56a2becb5afbb95a06667ac81f90b7"
+    },
+    {
+      "source": ".git/aurora-handoff-import-20261006/cpu-full-audio-v490/source/modules/ui-mock-reference/.design-sync/previews/Alert.tsx",
+      "destination": "thesis/sources/python-audio-v490-96ec8e3e/source/modules/ui-mock-reference/.design-sync/previews/Alert.tsx",
+      "bytes": 1177,
+      "path": "modules/ui-mock-reference/.design-sync/previews/Alert.tsx",
+      "sha256": "cf44f11fd02145707f4c129718388751d177259ebc3745938392537211ecbd71"
+    },
+    {
+      "source": ".git/aurora-handoff-import-20261006/cpu-full-audio-v490/source/modules/ui-mock-reference/.design-sync/previews/AssistantView.tsx",
+      "destination": "thesis/sources/python-audio-v490-96ec8e3e/source/modules/ui-mock-reference/.design-sync/previews/AssistantView.tsx",
+      "bytes": 230,
+      "path": "modules/ui-mock-reference/.design-sync/previews/AssistantView.tsx",
+      "sha256": "ff7315695740bea20c220b7e5f45b82becc540583b4bf791217efc82e67fc98c"
+    },
+    {
+      "source": ".git/aurora-handoff-import-20261006/cpu-full-audio-v490/source/modules/ui-mock-reference/.design-sync/previews/AuditView.tsx",
+      "destination": "thesis/sources/python-audio-v490-96ec8e3e/source/modules/ui-mock-reference/.design-sync/previews/AuditView.tsx",
+      "bytes": 212,
+      "path": "modules/ui-mock-reference/.design-sync/previews/AuditView.tsx",
+      "sha256": "37feecd85657695e7adf12037cb805234f6f8289141c47631b0f9339a163e00e"
+    },
+    {
+      "source": ".git/aurora-handoff-import-20261006/cpu-full-audio-v490/source/modules/ui-mock-reference/.design-sync/previews/Avatar.tsx",
+      "destination": "thesis/sources/python-audio-v490-96ec8e3e/source/modules/ui-mock-reference/.design-sync/previews/Avatar.tsx",
+      "bytes": 1415,
+      "path": "modules/ui-mock-reference/.design-sync/previews/Avatar.tsx",
+      "sha256": "0a2fbe41f5d2576f643262dd3466415870113f7b52162b88a0dfa03a3d0a1188"
+    },
+    {
+      "source": ".git/aurora-handoff-import-20261006/cpu-full-audio-v490/source/modules/ui-mock-reference/.design-sync/previews/AvatarGroup.tsx",
+      "destination": "thesis/sources/python-audio-v490-96ec8e3e/source/modules/ui-mock-reference/.design-sync/previews/AvatarGroup.tsx",
+      "bytes": 1378,
+      "path": "modules/ui-mock-reference/.design-sync/previews/AvatarGroup.tsx",
+      "sha256": "a5a37770e0d9658c72aea3a5fc6a3556e812efe46ca640afceb9915206c8b3dc"
+    },
+    {
+      "source": ".git/aurora-handoff-import-20261006/cpu-full-audio-v490/source/modules/ui-mock-reference/.design-sync/previews/BackendCoverageBadge.tsx",
+      "destination": "thesis/sources/python-audio-v490-96ec8e3e/source/modules/ui-mock-reference/.design-sync/previews/BackendCoverageBadge.tsx",
+      "bytes": 726,
+      "path": "modules/ui-mock-reference/.design-sync/previews/BackendCoverageBadge.tsx",
+      "sha256": "586e6ce68e919dee8a15eb14173695c99ef5127a3af9c66a4e8748f41687b7f2"
+    },
+    {
+      "source": ".git/aurora-handoff-import-20261006/cpu-full-audio-v490/source/modules/ui-mock-reference/.design-sync/previews/Badge.tsx",
+      "destination": "thesis/sources/python-audio-v490-96ec8e3e/source/modules/ui-mock-reference/.design-sync/previews/Badge.tsx",
+      "bytes": 924,
+      "path": "modules/ui-mock-reference/.design-sync/previews/Badge.tsx",
+      "sha256": "3135fe0ed04a76b1c989aeb04cac4d11323aac2ce148507ff6ed25a78f5ec6ac"
+    },
+    {
+      "source": ".git/aurora-handoff-import-20261006/cpu-full-audio-v490/source/modules/ui-mock-reference/.design-sync/previews/Button.tsx",
+      "destination": "thesis/sources/python-audio-v490-96ec8e3e/source/modules/ui-mock-reference/.design-sync/previews/Button.tsx",
+      "bytes": 1114,
+      "path": "modules/ui-mock-reference/.design-sync/previews/Button.tsx",
+      "sha256": "91ae100d0a04b408ad760c90829546304e19519e5138c4dec4158be14774afb6"
+    },
+    {
+      "source": ".git/aurora-handoff-import-20261006/cpu-full-audio-v490/source/modules/ui-mock-reference/.design-sync/previews/CapabilityDrawer.tsx",
+      "destination": "thesis/sources/python-audio-v490-96ec8e3e/source/modules/ui-mock-reference/.design-sync/previews/CapabilityDrawer.tsx",
+      "bytes": 1918,
+      "path": "modules/ui-mock-reference/.design-sync/previews/CapabilityDrawer.tsx",
+      "sha256": "e9ee3ebf28dca684a3bb0c3d347ed16036a97d9a954d9478ee1b40b5a56336a0"
+    },
+    {
+      "source": ".git/aurora-handoff-import-20261006/cpu-full-audio-v490/source/modules/ui-mock-reference/.design-sync/previews/CapabilityStateBadge.tsx",
+      "destination": "thesis/sources/python-audio-v490-96ec8e3e/source/modules/ui-mock-reference/.design-sync/previews/CapabilityStateBadge.tsx",
+      "bytes": 1074,
+      "path": "modules/ui-mock-reference/.design-sync/previews/CapabilityStateBadge.tsx",
+      "sha256": "edd3e558f54540fc07e472afd157c8bf07fbe076914af6a01482c5d2344fd19c"
+    },
+    {
+      "source": ".git/aurora-handoff-import-20261006/cpu-full-audio-v490/source/modules/ui-mock-reference/.design-sync/previews/Card.tsx",
+      "destination": "thesis/sources/python-audio-v490-96ec8e3e/source/modules/ui-mock-reference/.design-sync/previews/Card.tsx",
+      "bytes": 1412,
+      "path": "modules/ui-mock-reference/.design-sync/previews/Card.tsx",
+      "sha256": "4a45d314db6da6cd690f6ca2d67ad10c7668f0f0599b8c96f575e5d90f0d860c"
+    },
+    {
+      "source": ".git/aurora-handoff-import-20261006/cpu-full-audio-v490/source/modules/ui-mock-reference/.design-sync/previews/ConfigView.tsx",
+      "destination": "thesis/sources/python-audio-v490-96ec8e3e/source/modules/ui-mock-reference/.design-sync/previews/ConfigView.tsx",
+      "bytes": 214,
+      "path": "modules/ui-mock-reference/.design-sync/previews/ConfigView.tsx",
+      "sha256": "41ddfda5292954daa40653e35935fd6dbe6c64c730e71e18ece8480fd931eb6f"
+    },
+    {
+      "source": ".git/aurora-handoff-import-20261006/cpu-full-audio-v490/source/modules/ui-mock-reference/.design-sync/previews/DevicesView.tsx",
+      "destination": "thesis/sources/python-audio-v490-96ec8e3e/source/modules/ui-mock-reference/.design-sync/previews/DevicesView.tsx",
+      "bytes": 216,
+      "path": "modules/ui-mock-reference/.design-sync/previews/DevicesView.tsx",
+      "sha256": "5fc9d2bedabccecf39b8b9f5ed37ab091c5eb55783d547534551c0f22b1dd7fd"
+    },
+    {
+      "source": ".git/aurora-handoff-import-20261006/cpu-full-audio-v490/source/modules/ui-mock-reference/.design-sync/previews/DiagnosticsView.tsx",
+      "destination": "thesis/sources/python-audio-v490-96ec8e3e/source/modules/ui-mock-reference/.design-sync/previews/DiagnosticsView.tsx",
+      "bytes": 224,
+      "path": "modules/ui-mock-reference/.design-sync/previews/DiagnosticsView.tsx",
+      "sha256": "9c15d952cd07ae14c6b5102e45761e5bdd61f73a0b2e9c5a175e4b8890a25456"
+    },
+    {
+      "source": ".git/aurora-handoff-import-20261006/cpu-full-audio-v490/source/modules/ui-mock-reference/.design-sync/previews/Dialog.tsx",
+      "destination": "thesis/sources/python-audio-v490-96ec8e3e/source/modules/ui-mock-reference/.design-sync/previews/Dialog.tsx",
+      "bytes": 896,
+      "path": "modules/ui-mock-reference/.design-sync/previews/Dialog.tsx",
+      "sha256": "c272a3387486ad3d432fee3521c6f903e31f2586de0b2a4e215ecfdf46b9fa46"
+    },
+    {
+      "source": ".git/aurora-handoff-import-20261006/cpu-full-audio-v490/source/modules/ui-mock-reference/.design-sync/previews/DiffViewer.tsx",
+      "destination": "thesis/sources/python-audio-v490-96ec8e3e/source/modules/ui-mock-reference/.design-sync/previews/DiffViewer.tsx",
+      "bytes": 858,
+      "path": "modules/ui-mock-reference/.design-sync/previews/DiffViewer.tsx",
+      "sha256": "da74752f47fd0a31fc9c866ed8342e848b4d324bc23697d9758ca40cbc5f6e69"
+    },
+    {
+      "source": ".git/aurora-handoff-import-20261006/cpu-full-audio-v490/source/modules/ui-mock-reference/.design-sync/previews/DropdownMenu.tsx",
+      "destination": "thesis/sources/python-audio-v490-96ec8e3e/source/modules/ui-mock-reference/.design-sync/previews/DropdownMenu.tsx",
+      "bytes": 1918,
+      "path": "modules/ui-mock-reference/.design-sync/previews/DropdownMenu.tsx",
+      "sha256": "51b722ba6be7147d5a8220e3cd60df1d301d82682b720f2362ec92bbbf98b53f"
+    },
+    {
+      "source": ".git/aurora-handoff-import-20261006/cpu-full-audio-v490/source/modules/ui-mock-reference/.design-sync/previews/ExposureBadge.tsx",
+      "destination": "thesis/sources/python-audio-v490-96ec8e3e/source/modules/ui-mock-reference/.design-sync/previews/ExposureBadge.tsx",
+      "bytes": 611,
+      "path": "modules/ui-mock-reference/.design-sync/previews/ExposureBadge.tsx",
+      "sha256": "146555979fc873914648d7adc79f1185026024ed9658865d3a6c10916e7b06b7"
+    },
+    {
+      "source": ".git/aurora-handoff-import-20261006/cpu-full-audio-v490/source/modules/ui-mock-reference/.design-sync/previews/HealthBadge.tsx",
+      "destination": "thesis/sources/python-audio-v490-96ec8e3e/source/modules/ui-mock-reference/.design-sync/previews/HealthBadge.tsx",
+      "bytes": 581,
+      "path": "modules/ui-mock-reference/.design-sync/previews/HealthBadge.tsx",
+      "sha256": "94e61fc2e63143ffbeff51239e3e247db429d1aaae35beec5268dcd5aa1e5b1a"
+    },
+    {
+      "source": ".git/aurora-handoff-import-20261006/cpu-full-audio-v490/source/modules/ui-mock-reference/.design-sync/previews/IdentityBadge.tsx",
+      "destination": "thesis/sources/python-audio-v490-96ec8e3e/source/modules/ui-mock-reference/.design-sync/previews/IdentityBadge.tsx",
+      "bytes": 640,
+      "path": "modules/ui-mock-reference/.design-sync/previews/IdentityBadge.tsx",
+      "sha256": "0c21e07237e1913711affdb05670b1a5d4a9942dddc84936dd23263dade9862f"
+    },
+    {
+      "source": ".git/aurora-handoff-import-20261006/cpu-full-audio-v490/source/modules/ui-mock-reference/.design-sync/previews/Input.tsx",
+      "destination": "thesis/sources/python-audio-v490-96ec8e3e/source/modules/ui-mock-reference/.design-sync/previews/Input.tsx",
+      "bytes": 1033,
+      "path": "modules/ui-mock-reference/.design-sync/previews/Input.tsx",
+      "sha256": "6c202ffd41787e954fa004a040086878d57f0f5ecebbd064d10ec6e97481345c"
+    },
+    {
+      "source": ".git/aurora-handoff-import-20261006/cpu-full-audio-v490/source/modules/ui-mock-reference/.design-sync/previews/Label.tsx",
+      "destination": "thesis/sources/python-audio-v490-96ec8e3e/source/modules/ui-mock-reference/.design-sync/previews/Label.tsx",
+      "bytes": 865,
+      "path": "modules/ui-mock-reference/.design-sync/previews/Label.tsx",
+      "sha256": "bce67858bc8b7bfb5dd484cc08fc408bab9eaadeaa0c75bb53bdddd37991fd98"
+    },
+    {
+      "source": ".git/aurora-handoff-import-20261006/cpu-full-audio-v490/source/modules/ui-mock-reference/.design-sync/previews/MeshView.tsx",
+      "destination": "thesis/sources/python-audio-v490-96ec8e3e/source/modules/ui-mock-reference/.design-sync/previews/MeshView.tsx",
+      "bytes": 210,
+      "path": "modules/ui-mock-reference/.design-sync/previews/MeshView.tsx",
+      "sha256": "8aa2e8866f44ae420bfc0c128bdaec2701ffe68aeabfc4dd5522f8d805610c10"
+    },
+    {
+      "source": ".git/aurora-handoff-import-20261006/cpu-full-audio-v490/source/modules/ui-mock-reference/.design-sync/previews/MethodTypeBadge.tsx",
+      "destination": "thesis/sources/python-audio-v490-96ec8e3e/source/modules/ui-mock-reference/.design-sync/previews/MethodTypeBadge.tsx",
+      "bytes": 578,
+      "path": "modules/ui-mock-reference/.design-sync/previews/MethodTypeBadge.tsx",
+      "sha256": "c5169229f7b2656f21b2d0f04b5abe972cb93b3611553b4db0f51f6ce2cd795a"
+    },
+    {
+      "source": ".git/aurora-handoff-import-20261006/cpu-full-audio-v490/source/modules/ui-mock-reference/.design-sync/previews/ModeBadge.tsx",
+      "destination": "thesis/sources/python-audio-v490-96ec8e3e/source/modules/ui-mock-reference/.design-sync/previews/ModeBadge.tsx",
+      "bytes": 651,
+      "path": "modules/ui-mock-reference/.design-sync/previews/ModeBadge.tsx",
+      "sha256": "3038af86d0d618910f6fcf28e6fc312cd644e76d587b5163fe5bdd86bff49ba7"
+    },
+    {
+      "source": ".git/aurora-handoff-import-20261006/cpu-full-audio-v490/source/modules/ui-mock-reference/.design-sync/previews/ModelsView.tsx",
+      "destination": "thesis/sources/python-audio-v490-96ec8e3e/source/modules/ui-mock-reference/.design-sync/previews/ModelsView.tsx",
+      "bytes": 214,
+      "path": "modules/ui-mock-reference/.design-sync/previews/ModelsView.tsx",
+      "sha256": "682bc45af8c3e98f25132ce19f538fd2593a7f21c2518666a49c75c5117e9637"
+    },
+    {
+      "source": ".git/aurora-handoff-import-20261006/cpu-full-audio-v490/source/modules/ui-mock-reference/.design-sync/previews/OnboardingView.tsx",
+      "destination": "thesis/sources/python-audio-v490-96ec8e3e/source/modules/ui-mock-reference/.design-sync/previews/OnboardingView.tsx",
+      "bytes": 222,
+      "path": "modules/ui-mock-reference/.design-sync/previews/OnboardingView.tsx",
+      "sha256": "952164b50c3b1541d56f0a656e3839f19cbe41f998093373b13d47e822934409"
+    },
+    {
+      "source": ".git/aurora-handoff-import-20261006/cpu-full-audio-v490/source/modules/ui-mock-reference/.design-sync/previews/PageHeader.tsx",
+      "destination": "thesis/sources/python-audio-v490-96ec8e3e/source/modules/ui-mock-reference/.design-sync/previews/PageHeader.tsx",
+      "bytes": 1721,
+      "path": "modules/ui-mock-reference/.design-sync/previews/PageHeader.tsx",
+      "sha256": "b57d6edfcd3b3844a6dfdb7bca08c4b10d26b76c8e30ac774b2c55a941e70f3a"
+    },
+    {
+      "source": ".git/aurora-handoff-import-20261006/cpu-full-audio-v490/source/modules/ui-mock-reference/.design-sync/previews/PrivacyBadge.tsx",
+      "destination": "thesis/sources/python-audio-v490-96ec8e3e/source/modules/ui-mock-reference/.design-sync/previews/PrivacyBadge.tsx",
+      "bytes": 684,
+      "path": "modules/ui-mock-reference/.design-sync/previews/PrivacyBadge.tsx",
+      "sha256": "d9ef7f85948cd815be4d3c425f622eb98d9d0edd958702e29bc2eb4fcd866072"
+    },
+    {
+      "source": ".git/aurora-handoff-import-20261006/cpu-full-audio-v490/source/modules/ui-mock-reference/.design-sync/previews/Progress.tsx",
+      "destination": "thesis/sources/python-audio-v490-96ec8e3e/source/modules/ui-mock-reference/.design-sync/previews/Progress.tsx",
+      "bytes": 1333,
+      "path": "modules/ui-mock-reference/.design-sync/previews/Progress.tsx",
+      "sha256": "a68afe1d2f2a8c49e51dc6583eef42aed6f13d56e57a84143dac5c32420b6779"
+    },
+    {
+      "source": ".git/aurora-handoff-import-20261006/cpu-full-audio-v490/source/modules/ui-mock-reference/.design-sync/previews/RbacView.tsx",
+      "destination": "thesis/sources/python-audio-v490-96ec8e3e/source/modules/ui-mock-reference/.design-sync/previews/RbacView.tsx",
+      "bytes": 210,
+      "path": "modules/ui-mock-reference/.design-sync/previews/RbacView.tsx",
+      "sha256": "871740917d165e1b7120b33ab0de14e6b0787aaab076190a5351e1e0239e2028"
+    },
+    {
+      "source": ".git/aurora-handoff-import-20261006/cpu-full-audio-v490/source/modules/ui-mock-reference/.design-sync/previews/RouteBadge.tsx",
+      "destination": "thesis/sources/python-audio-v490-96ec8e3e/source/modules/ui-mock-reference/.design-sync/previews/RouteBadge.tsx",
+      "bytes": 606,
+      "path": "modules/ui-mock-reference/.design-sync/previews/RouteBadge.tsx",
+      "sha256": "e51216554569e165999ec3be5831d627588239dad2784b571702623cdd63245a"
+    },
+    {
+      "source": ".git/aurora-handoff-import-20261006/cpu-full-audio-v490/source/modules/ui-mock-reference/.design-sync/previews/RouteSheet.tsx",
+      "destination": "thesis/sources/python-audio-v490-96ec8e3e/source/modules/ui-mock-reference/.design-sync/previews/RouteSheet.tsx",
+      "bytes": 548,
+      "path": "modules/ui-mock-reference/.design-sync/previews/RouteSheet.tsx",
+      "sha256": "67f2133325b2cb5e154f2f46ce5008d7908687bbd5982d5e1e412c485b779dc2"
+    },
+    {
+      "source": ".git/aurora-handoff-import-20261006/cpu-full-audio-v490/source/modules/ui-mock-reference/.design-sync/previews/ScrollArea.tsx",
+      "destination": "thesis/sources/python-audio-v490-96ec8e3e/source/modules/ui-mock-reference/.design-sync/previews/ScrollArea.tsx",
+      "bytes": 2247,
+      "path": "modules/ui-mock-reference/.design-sync/previews/ScrollArea.tsx",
+      "sha256": "76202408217e6cb445f37b74815d76eef8d7450dbf750db01c8dd203ef3b5318"
+    },
+    {
+      "source": ".git/aurora-handoff-import-20261006/cpu-full-audio-v490/source/modules/ui-mock-reference/.design-sync/previews/Select.tsx",
+      "destination": "thesis/sources/python-audio-v490-96ec8e3e/source/modules/ui-mock-reference/.design-sync/previews/Select.tsx",
+      "bytes": 1983,
+      "path": "modules/ui-mock-reference/.design-sync/previews/Select.tsx",
+      "sha256": "0cb6d975e01a0748fd33d10359d2888900e7f4be36b4b8b07baeedccfc247f9e"
+    },
+    {
+      "source": ".git/aurora-handoff-import-20261006/cpu-full-audio-v490/source/modules/ui-mock-reference/.design-sync/previews/Separator.tsx",
+      "destination": "thesis/sources/python-audio-v490-96ec8e3e/source/modules/ui-mock-reference/.design-sync/previews/Separator.tsx",
+      "bytes": 718,
+      "path": "modules/ui-mock-reference/.design-sync/previews/Separator.tsx",
+      "sha256": "119e391a6cb9bbdf763eca5444fff516e814ebadfcf2ee2d25c2b5a36464a202"
+    },
+    {
+      "source": ".git/aurora-handoff-import-20261006/cpu-full-audio-v490/source/modules/ui-mock-reference/.design-sync/previews/ServicesView.tsx",
+      "destination": "thesis/sources/python-audio-v490-96ec8e3e/source/modules/ui-mock-reference/.design-sync/previews/ServicesView.tsx",
+      "bytes": 218,
+      "path": "modules/ui-mock-reference/.design-sync/previews/ServicesView.tsx",
+      "sha256": "8d52f7105776d7af8d3dfea115088ccd5ef6250976fa4e437408c3df5e0f88fa"
+    },
+    {
+      "source": ".git/aurora-handoff-import-20261006/cpu-full-audio-v490/source/modules/ui-mock-reference/.design-sync/previews/SettingsPermissionsView.tsx",
+      "destination": "thesis/sources/python-audio-v490-96ec8e3e/source/modules/ui-mock-reference/.design-sync/previews/SettingsPermissionsView.tsx",
+      "bytes": 240,
+      "path": "modules/ui-mock-reference/.design-sync/previews/SettingsPermissionsView.tsx",
+      "sha256": "b5c27397198b57b7b435f62944042644e29515ebb00ac3dc1c619a48dee11a4c"
+    },
+    {
+      "source": ".git/aurora-handoff-import-20261006/cpu-full-audio-v490/source/modules/ui-mock-reference/.design-sync/previews/Sheet.tsx",
+      "destination": "thesis/sources/python-audio-v490-96ec8e3e/source/modules/ui-mock-reference/.design-sync/previews/Sheet.tsx",
+      "bytes": 1591,
+      "path": "modules/ui-mock-reference/.design-sync/previews/Sheet.tsx",
+      "sha256": "683b0464e15ca6e59ef41b1fc1314a593e7261b47f34a0b66c2e560a17ff8c05"
+    },
+    {
+      "source": ".git/aurora-handoff-import-20261006/cpu-full-audio-v490/source/modules/ui-mock-reference/.design-sync/previews/Switch.tsx",
+      "destination": "thesis/sources/python-audio-v490-96ec8e3e/source/modules/ui-mock-reference/.design-sync/previews/Switch.tsx",
+      "bytes": 911,
+      "path": "modules/ui-mock-reference/.design-sync/previews/Switch.tsx",
+      "sha256": "0b3067099c2b23b7323de275af74c812a088d5600648cd4a4e24f6dedc38c088"
+    },
+    {
+      "source": ".git/aurora-handoff-import-20261006/cpu-full-audio-v490/source/modules/ui-mock-reference/.design-sync/previews/Table.tsx",
+      "destination": "thesis/sources/python-audio-v490-96ec8e3e/source/modules/ui-mock-reference/.design-sync/previews/Table.tsx",
+      "bytes": 1750,
+      "path": "modules/ui-mock-reference/.design-sync/previews/Table.tsx",
+      "sha256": "eb61b329451b5e0eae0aacd55dc61087806834fd8a9207d8d28aae3f5546aeac"
+    },
+    {
+      "source": ".git/aurora-handoff-import-20261006/cpu-full-audio-v490/source/modules/ui-mock-reference/.design-sync/previews/Tabs.tsx",
+      "destination": "thesis/sources/python-audio-v490-96ec8e3e/source/modules/ui-mock-reference/.design-sync/previews/Tabs.tsx",
+      "bytes": 2054,
+      "path": "modules/ui-mock-reference/.design-sync/previews/Tabs.tsx",
+      "sha256": "8b0fe0620f4b7ec352bbda989de364e6834eb250017e5afad414be9a40ac2c38"
+    },
+    {
+      "source": ".git/aurora-handoff-import-20261006/cpu-full-audio-v490/source/modules/ui-mock-reference/.design-sync/previews/Textarea.tsx",
+      "destination": "thesis/sources/python-audio-v490-96ec8e3e/source/modules/ui-mock-reference/.design-sync/previews/Textarea.tsx",
+      "bytes": 1240,
+      "path": "modules/ui-mock-reference/.design-sync/previews/Textarea.tsx",
+      "sha256": "79c3a9a615c2a48b7314c50e66c92d90058c4b51de9f28c32113bff346a970ad"
+    },
+    {
+      "source": ".git/aurora-handoff-import-20261006/cpu-full-audio-v490/source/modules/ui-mock-reference/.design-sync/previews/Toaster.tsx",
+      "destination": "thesis/sources/python-audio-v490-96ec8e3e/source/modules/ui-mock-reference/.design-sync/previews/Toaster.tsx",
+      "bytes": 1162,
+      "path": "modules/ui-mock-reference/.design-sync/previews/Toaster.tsx",
+      "sha256": "fc83a29c54c0b0ee81edb695db272d4cfe275135bdabae87a51eee2920ba2e89"
+    },
+    {
+      "source": ".git/aurora-handoff-import-20261006/cpu-full-audio-v490/source/modules/ui-mock-reference/.design-sync/previews/TokensView.tsx",
+      "destination": "thesis/sources/python-audio-v490-96ec8e3e/source/modules/ui-mock-reference/.design-sync/previews/TokensView.tsx",
+      "bytes": 214,
+      "path": "modules/ui-mock-reference/.design-sync/previews/TokensView.tsx",
+      "sha256": "001cb77b386d6eff56c32345e6080c55a42084e3b653924bad98f4a84c390f41"
+    },
+    {
+      "source": ".git/aurora-handoff-import-20261006/cpu-full-audio-v490/source/modules/ui-mock-reference/.design-sync/previews/ToolCallCard.tsx",
+      "destination": "thesis/sources/python-audio-v490-96ec8e3e/source/modules/ui-mock-reference/.design-sync/previews/ToolCallCard.tsx",
+      "bytes": 965,
+      "path": "modules/ui-mock-reference/.design-sync/previews/ToolCallCard.tsx",
+      "sha256": "e278224bc43e7a3cbcfdf3867e5963646f808da96928e11c333b21359f684fed"
+    },
+    {
+      "source": ".git/aurora-handoff-import-20261006/cpu-full-audio-v490/source/modules/ui-mock-reference/.design-sync/previews/Tooltip.tsx",
+      "destination": "thesis/sources/python-audio-v490-96ec8e3e/source/modules/ui-mock-reference/.design-sync/previews/Tooltip.tsx",
+      "bytes": 1166,
+      "path": "modules/ui-mock-reference/.design-sync/previews/Tooltip.tsx",
+      "sha256": "5a33a47c67152306facc866929a90f758a5343e973f04c0cf1d170a715842377"
+    },
+    {
+      "source": ".git/aurora-handoff-import-20261006/cpu-full-audio-v490/source/modules/ui-mock-reference/.gitignore",
+      "destination": "thesis/sources/python-audio-v490-96ec8e3e/source/modules/ui-mock-reference/.gitignore",
+      "bytes": 565,
+      "path": "modules/ui-mock-reference/.gitignore",
+      "sha256": "db2e8b626893454bc5ea0eddbb3e62a9bc07155a50c7331be46fcff255135c49"
+    },
+    {
+      "source": ".git/aurora-handoff-import-20261006/cpu-full-audio-v490/source/modules/ui-mock-reference/README.md",
+      "destination": "thesis/sources/python-audio-v490-96ec8e3e/source/modules/ui-mock-reference/README.md",
+      "bytes": 3680,
+      "path": "modules/ui-mock-reference/README.md",
+      "sha256": "ed7e9519dc6211a62c883a841422ccd1b92ee869cf9914bca8ecf14c45067639"
+    },
+    {
+      "source": ".git/aurora-handoff-import-20261006/cpu-full-audio-v490/source/modules/ui-mock-reference/app/(cockpit)/admin/access/page.tsx",
+      "destination": "thesis/sources/python-audio-v490-96ec8e3e/source/modules/ui-mock-reference/app/(cockpit)/admin/access/page.tsx",
+      "bytes": 127,
+      "path": "modules/ui-mock-reference/app/(cockpit)/admin/access/page.tsx",
+      "sha256": "278ef15038143ea831a1d9b2fd3408afe2804a09ca518cf911702a9eaf08923a"
+    },
+    {
+      "source": ".git/aurora-handoff-import-20261006/cpu-full-audio-v490/source/modules/ui-mock-reference/app/(cockpit)/admin/audit/page.tsx",
+      "destination": "thesis/sources/python-audio-v490-96ec8e3e/source/modules/ui-mock-reference/app/(cockpit)/admin/audit/page.tsx",
+      "bytes": 129,
+      "path": "modules/ui-mock-reference/app/(cockpit)/admin/audit/page.tsx",
+      "sha256": "fc611691e07bd56cd9a1206a07941b30470804621826f59b97d1f33bedfc802c"
+    },
+    {
+      "source": ".git/aurora-handoff-import-20261006/cpu-full-audio-v490/source/modules/ui-mock-reference/app/(cockpit)/admin/backups/page.tsx",
+      "destination": "thesis/sources/python-audio-v490-96ec8e3e/source/modules/ui-mock-reference/app/(cockpit)/admin/backups/page.tsx",
+      "bytes": 173,
+      "path": "modules/ui-mock-reference/app/(cockpit)/admin/backups/page.tsx",
+      "sha256": "2096687e2779418d67ced5bee8a38404b003b2bf14af9cc7bcca87724b8a8d7b"
+    },
+    {
+      "source": ".git/aurora-handoff-import-20261006/cpu-full-audio-v490/source/modules/ui-mock-reference/app/(cockpit)/admin/config/page.tsx",
+      "destination": "thesis/sources/python-audio-v490-96ec8e3e/source/modules/ui-mock-reference/app/(cockpit)/admin/config/page.tsx",
+      "bytes": 133,
+      "path": "modules/ui-mock-reference/app/(cockpit)/admin/config/page.tsx",
+      "sha256": "cb752e73ae1a3e93c36514fa8f78fe41524d42adc11fc997e08ac7afc89b9f4e"
+    },
+    {
+      "source": ".git/aurora-handoff-import-20261006/cpu-full-audio-v490/source/modules/ui-mock-reference/app/(cockpit)/admin/contracts/page.tsx",
+      "destination": "thesis/sources/python-audio-v490-96ec8e3e/source/modules/ui-mock-reference/app/(cockpit)/admin/contracts/page.tsx",
+      "bytes": 175,
+      "path": "modules/ui-mock-reference/app/(cockpit)/admin/contracts/page.tsx",
+      "sha256": "41bb58cf35d7a9064da88ee909bac224d73b9fc9db5ced14ee09ed9136e1b751"
+    },
+    {
+      "source": ".git/aurora-handoff-import-20261006/cpu-full-audio-v490/source/modules/ui-mock-reference/app/(cockpit)/admin/devices/page.tsx",
+      "destination": "thesis/sources/python-audio-v490-96ec8e3e/source/modules/ui-mock-reference/app/(cockpit)/admin/devices/page.tsx",
+      "bytes": 137,
+      "path": "modules/ui-mock-reference/app/(cockpit)/admin/devices/page.tsx",
+      "sha256": "6e385788b59eaa44dae1ad538f187d8df84e7684d93fa76feec9ce5e1d6c9a99"
+    },
+    {
+      "source": ".git/aurora-handoff-import-20261006/cpu-full-audio-v490/source/modules/ui-mock-reference/app/(cockpit)/admin/page.tsx",
+      "destination": "thesis/sources/python-audio-v490-96ec8e3e/source/modules/ui-mock-reference/app/(cockpit)/admin/page.tsx",
+      "bytes": 135,
+      "path": "modules/ui-mock-reference/app/(cockpit)/admin/page.tsx",
+      "sha256": "3061ba9a227986ca3f0886c5433f16418e670f6b9b38e5ef73a8b7f9ff2e61df"
+    },
+    {
+      "source": ".git/aurora-handoff-import-20261006/cpu-full-audio-v490/source/modules/ui-mock-reference/app/(cockpit)/admin/pairing/page.tsx",
+      "destination": "thesis/sources/python-audio-v490-96ec8e3e/source/modules/ui-mock-reference/app/(cockpit)/admin/pairing/page.tsx",
+      "bytes": 173,
+      "path": "modules/ui-mock-reference/app/(cockpit)/admin/pairing/page.tsx",
+      "sha256": "46f1149ce76eb3ddf20a78eba2559239de647fefc44fe652c0f17de8da171940"
+    },
+    {
+      "source": ".git/aurora-handoff-import-20261006/cpu-full-audio-v490/source/modules/ui-mock-reference/app/(cockpit)/admin/plugins/page.tsx",
+      "destination": "thesis/sources/python-audio-v490-96ec8e3e/source/modules/ui-mock-reference/app/(cockpit)/admin/plugins/page.tsx",
+      "bytes": 173,
+      "path": "modules/ui-mock-reference/app/(cockpit)/admin/plugins/page.tsx",
+      "sha256": "4ac02bea63d868b6eabe5841bc1d918f92e9a05e08bb7d0743a959739f638997"
+    },
+    {
+      "source": ".git/aurora-handoff-import-20261006/cpu-full-audio-v490/source/modules/ui-mock-reference/app/(cockpit)/admin/services/page.tsx",
+      "destination": "thesis/sources/python-audio-v490-96ec8e3e/source/modules/ui-mock-reference/app/(cockpit)/admin/services/page.tsx",
+      "bytes": 141,
+      "path": "modules/ui-mock-reference/app/(cockpit)/admin/services/page.tsx",
+      "sha256": "4d5c7b35087caa1705af3c93baf4ca1caf9d0b7c80efab9cb61c7e4ba80b927a"
+    },
+    {
+      "source": ".git/aurora-handoff-import-20261006/cpu-full-audio-v490/source/modules/ui-mock-reference/app/(cockpit)/admin/tokens/page.tsx",
+      "destination": "thesis/sources/python-audio-v490-96ec8e3e/source/modules/ui-mock-reference/app/(cockpit)/admin/tokens/page.tsx",
+      "bytes": 133,
+      "path": "modules/ui-mock-reference/app/(cockpit)/admin/tokens/page.tsx",
+      "sha256": "1c57927206758090c74c17ecf2e2c89b6e7d4be800b9b7c17be6332fc82e26aa"
+    },
+    {
+      "source": ".git/aurora-handoff-import-20261006/cpu-full-audio-v490/source/modules/ui-mock-reference/app/(cockpit)/diagnostics/page.tsx",
+      "destination": "thesis/sources/python-audio-v490-96ec8e3e/source/modules/ui-mock-reference/app/(cockpit)/diagnostics/page.tsx",
+      "bytes": 159,
+      "path": "modules/ui-mock-reference/app/(cockpit)/diagnostics/page.tsx",
+      "sha256": "f796752d0cddf433704e0b1038fca7108d13dbc1d64bcc4248ec0f22a5f6bad9"
+    },
+    {
+      "source": ".git/aurora-handoff-import-20261006/cpu-full-audio-v490/source/modules/ui-mock-reference/app/(cockpit)/layout.tsx",
+      "destination": "thesis/sources/python-audio-v490-96ec8e3e/source/modules/ui-mock-reference/app/(cockpit)/layout.tsx",
+      "bytes": 186,
+      "path": "modules/ui-mock-reference/app/(cockpit)/layout.tsx",
+      "sha256": "18d69fb739ddf7451678d0ac5eff28796e9932769d6f03482e69578a241dea4e"
+    },
+    {
+      "source": ".git/aurora-handoff-import-20261006/cpu-full-audio-v490/source/modules/ui-mock-reference/app/(cockpit)/memory/page.tsx",
+      "destination": "thesis/sources/python-audio-v490-96ec8e3e/source/modules/ui-mock-reference/app/(cockpit)/memory/page.tsx",
+      "bytes": 3686,
+      "path": "modules/ui-mock-reference/app/(cockpit)/memory/page.tsx",
+      "sha256": "2655ee9307862b6a043e8fe17f44f5efc2bc0723bee689e8af33997583b0fc3c"
+    },
+    {
+      "source": ".git/aurora-handoff-import-20261006/cpu-full-audio-v490/source/modules/ui-mock-reference/app/(cockpit)/mesh/page.tsx",
+      "destination": "thesis/sources/python-audio-v490-96ec8e3e/source/modules/ui-mock-reference/app/(cockpit)/mesh/page.tsx",
+      "bytes": 124,
+      "path": "modules/ui-mock-reference/app/(cockpit)/mesh/page.tsx",
+      "sha256": "514c672bdce1a1a42101717d83fd8c49ac0e4d440759bee3db5d52a090ae2331"
+    },
+    {
+      "source": ".git/aurora-handoff-import-20261006/cpu-full-audio-v490/source/modules/ui-mock-reference/app/(cockpit)/models/page.tsx",
+      "destination": "thesis/sources/python-audio-v490-96ec8e3e/source/modules/ui-mock-reference/app/(cockpit)/models/page.tsx",
+      "bytes": 134,
+      "path": "modules/ui-mock-reference/app/(cockpit)/models/page.tsx",
+      "sha256": "af6239ff7b9f6e1189c962e1b0a8536401b834650bf4ac6778009b6d2a6d27c8"
+    },
+    {
+      "source": ".git/aurora-handoff-import-20261006/cpu-full-audio-v490/source/modules/ui-mock-reference/app/(cockpit)/onboarding/page.tsx",
+      "destination": "thesis/sources/python-audio-v490-96ec8e3e/source/modules/ui-mock-reference/app/(cockpit)/onboarding/page.tsx",
+      "bytes": 154,
+      "path": "modules/ui-mock-reference/app/(cockpit)/onboarding/page.tsx",
+      "sha256": "3b31501129c56482b4d860609aaac616385010d36fbed66f38ea5049a83c76b1"
+    },
+    {
+      "source": ".git/aurora-handoff-import-20261006/cpu-full-audio-v490/source/modules/ui-mock-reference/app/(cockpit)/page.tsx",
+      "destination": "thesis/sources/python-audio-v490-96ec8e3e/source/modules/ui-mock-reference/app/(cockpit)/page.tsx",
+      "bytes": 149,
+      "path": "modules/ui-mock-reference/app/(cockpit)/page.tsx",
+      "sha256": "a2f14e37c045ace59e08e39ee42ed0833ec46b91ac417ef09a1f60c5d7a1f7b6"
+    },
+    {
+      "source": ".git/aurora-handoff-import-20261006/cpu-full-audio-v490/source/modules/ui-mock-reference/app/(cockpit)/settings/page.tsx",
+      "destination": "thesis/sources/python-audio-v490-96ec8e3e/source/modules/ui-mock-reference/app/(cockpit)/settings/page.tsx",
+      "bytes": 178,
+      "path": "modules/ui-mock-reference/app/(cockpit)/settings/page.tsx",
+      "sha256": "59f4bee88e7579d40d69ecdadabb2b51ddd2dfcd10730eb932a6853ae30eac17"
+    },
+    {
+      "source": ".git/aurora-handoff-import-20261006/cpu-full-audio-v490/source/modules/ui-mock-reference/app/(cockpit)/tools/page.tsx",
+      "destination": "thesis/sources/python-audio-v490-96ec8e3e/source/modules/ui-mock-reference/app/(cockpit)/tools/page.tsx",
+      "bytes": 4105,
+      "path": "modules/ui-mock-reference/app/(cockpit)/tools/page.tsx",
+      "sha256": "c388868bc57011eaf1d73544d7274c9c546c95499ef61ac25349f77d2ebbb958"
+    },
+    {
+      "source": ".git/aurora-handoff-import-20261006/cpu-full-audio-v490/source/modules/ui-mock-reference/app/globals.css",
+      "destination": "thesis/sources/python-audio-v490-96ec8e3e/source/modules/ui-mock-reference/app/globals.css",
+      "bytes": 5916,
+      "path": "modules/ui-mock-reference/app/globals.css",
+      "sha256": "f72d68f3e7fff26cf0ae1bb05fd1d019805c0ee2ef4dc370e1c60d461b83e33e"
+    },
+    {
+      "source": ".git/aurora-handoff-import-20261006/cpu-full-audio-v490/source/modules/ui-mock-reference/app/layout.tsx",
+      "destination": "thesis/sources/python-audio-v490-96ec8e3e/source/modules/ui-mock-reference/app/layout.tsx",
+      "bytes": 1315,
+      "path": "modules/ui-mock-reference/app/layout.tsx",
+      "sha256": "ef7ece2c95056fe1672861ce04c1b5d49454dc878b1a611e035288674c217079"
+    },
+    {
+      "source": ".git/aurora-handoff-import-20261006/cpu-full-audio-v490/source/modules/ui-mock-reference/components/aurora/activity-rail.tsx",
+      "destination": "thesis/sources/python-audio-v490-96ec8e3e/source/modules/ui-mock-reference/components/aurora/activity-rail.tsx",
+      "bytes": 2129,
+      "path": "modules/ui-mock-reference/components/aurora/activity-rail.tsx",
+      "sha256": "d1703e206057916943ab5508ec84b81e34d46bff75da5bf5ec8a23fde1259937"
+    },
+    {
+      "source": ".git/aurora-handoff-import-20261006/cpu-full-audio-v490/source/modules/ui-mock-reference/components/aurora/admin/audit-view.tsx",
+      "destination": "thesis/sources/python-audio-v490-96ec8e3e/source/modules/ui-mock-reference/components/aurora/admin/audit-view.tsx",
+      "bytes": 5065,
+      "path": "modules/ui-mock-reference/components/aurora/admin/audit-view.tsx",
+      "sha256": "56cba647dbdc8fdf8e0a76aa78c38344575145968d9249280801da4c27115624"
+    },
+    {
+      "source": ".git/aurora-handoff-import-20261006/cpu-full-audio-v490/source/modules/ui-mock-reference/components/aurora/admin/config-view.tsx",
+      "destination": "thesis/sources/python-audio-v490-96ec8e3e/source/modules/ui-mock-reference/components/aurora/admin/config-view.tsx",
+      "bytes": 6232,
+      "path": "modules/ui-mock-reference/components/aurora/admin/config-view.tsx",
+      "sha256": "e2411703acf3991bc299b9494e3313fb19fb74426ab96f91218f7ac125fb2495"
+    },
+    {
+      "source": ".git/aurora-handoff-import-20261006/cpu-full-audio-v490/source/modules/ui-mock-reference/components/aurora/admin/devices-view.tsx",
+      "destination": "thesis/sources/python-audio-v490-96ec8e3e/source/modules/ui-mock-reference/components/aurora/admin/devices-view.tsx",
+      "bytes": 4885,
+      "path": "modules/ui-mock-reference/components/aurora/admin/devices-view.tsx",
+      "sha256": "e9ff858ff253a08680f3e71a617c3142479224149292480eb2c56a319cc92f97"
+    },
+    {
+      "source": ".git/aurora-handoff-import-20261006/cpu-full-audio-v490/source/modules/ui-mock-reference/components/aurora/admin/overview.tsx",
+      "destination": "thesis/sources/python-audio-v490-96ec8e3e/source/modules/ui-mock-reference/components/aurora/admin/overview.tsx",
+      "bytes": 7012,
+      "path": "modules/ui-mock-reference/components/aurora/admin/overview.tsx",
+      "sha256": "402ee0088e5a8dbb3547f5094452ce87a912c26cd8d8a6cf21b0b6ca17644efe"
+    },
+    {
+      "source": ".git/aurora-handoff-import-20261006/cpu-full-audio-v490/source/modules/ui-mock-reference/components/aurora/admin/rbac-view.tsx",
+      "destination": "thesis/sources/python-audio-v490-96ec8e3e/source/modules/ui-mock-reference/components/aurora/admin/rbac-view.tsx",
+      "bytes": 12339,
+      "path": "modules/ui-mock-reference/components/aurora/admin/rbac-view.tsx",
+      "sha256": "9e80ff7922691627f7bab0195c21d3695b14e1e7ddab905d596ffb5b394012fa"
+    },
+    {
+      "source": ".git/aurora-handoff-import-20261006/cpu-full-audio-v490/source/modules/ui-mock-reference/components/aurora/admin/secondary-surface.tsx",
+      "destination": "thesis/sources/python-audio-v490-96ec8e3e/source/modules/ui-mock-reference/components/aurora/admin/secondary-surface.tsx",
+      "bytes": 9167,
+      "path": "modules/ui-mock-reference/components/aurora/admin/secondary-surface.tsx",
+      "sha256": "cd8e15467da18d5298037a40a41f24fc9a7be1086b8742d9be8e904772fe335f"
+    },
+    {
+      "source": ".git/aurora-handoff-import-20261006/cpu-full-audio-v490/source/modules/ui-mock-reference/components/aurora/admin/services-view.tsx",
+      "destination": "thesis/sources/python-audio-v490-96ec8e3e/source/modules/ui-mock-reference/components/aurora/admin/services-view.tsx",
+      "bytes": 10145,
+      "path": "modules/ui-mock-reference/components/aurora/admin/services-view.tsx",
+      "sha256": "12af4123ef916ceabc167735471f62dfea11ffe3c4b57e046d70f10aab5593f6"
+    },
+    {
+      "source": ".git/aurora-handoff-import-20261006/cpu-full-audio-v490/source/modules/ui-mock-reference/components/aurora/admin/tokens-view.tsx",
+      "destination": "thesis/sources/python-audio-v490-96ec8e3e/source/modules/ui-mock-reference/components/aurora/admin/tokens-view.tsx",
+      "bytes": 6374,
+      "path": "modules/ui-mock-reference/components/aurora/admin/tokens-view.tsx",
+      "sha256": "c1b25348f28b4fa24a8b4bc749bf1dec4dab8d4b1c146e1ae34a5977e5c2d67c"
+    },
+    {
+      "source": ".git/aurora-handoff-import-20261006/cpu-full-audio-v490/source/modules/ui-mock-reference/components/aurora/admin-confirm-dialog.tsx",
+      "destination": "thesis/sources/python-audio-v490-96ec8e3e/source/modules/ui-mock-reference/components/aurora/admin-confirm-dialog.tsx",
+      "bytes": 7158,
+      "path": "modules/ui-mock-reference/components/aurora/admin-confirm-dialog.tsx",
+      "sha256": "1621739b766b4b56edaaf8c5006a2d849c6663180a426e92aa27850d2ebf2188"
+    },
+    {
+      "source": ".git/aurora-handoff-import-20261006/cpu-full-audio-v490/source/modules/ui-mock-reference/components/aurora/app-shell.tsx",
+      "destination": "thesis/sources/python-audio-v490-96ec8e3e/source/modules/ui-mock-reference/components/aurora/app-shell.tsx",
+      "bytes": 7770,
+      "path": "modules/ui-mock-reference/components/aurora/app-shell.tsx",
+      "sha256": "e32292e3e5e58e9f17db9b907c711dc8fad7ac2a17fd79e0db82480c92c467bc"
+    },
+    {
+      "source": ".git/aurora-handoff-import-20261006/cpu-full-audio-v490/source/modules/ui-mock-reference/components/aurora/assistant/assistant-view.tsx",
+      "destination": "thesis/sources/python-audio-v490-96ec8e3e/source/modules/ui-mock-reference/components/aurora/assistant/assistant-view.tsx",
+      "bytes": 9163,
+      "path": "modules/ui-mock-reference/components/aurora/assistant/assistant-view.tsx",
+      "sha256": "ca9718cf1f01291242605d37b45817911ea63564630dba531f7e0761bed66bfc"
+    },
+    {
+      "source": ".git/aurora-handoff-import-20261006/cpu-full-audio-v490/source/modules/ui-mock-reference/components/aurora/assistant/route-sheet.tsx",
+      "destination": "thesis/sources/python-audio-v490-96ec8e3e/source/modules/ui-mock-reference/components/aurora/assistant/route-sheet.tsx",
+      "bytes": 6595,
+      "path": "modules/ui-mock-reference/components/aurora/assistant/route-sheet.tsx",
+      "sha256": "bba812f7fb6742ce46b88cc5bde359167a19de013e73bac38aa06a40f6a29998"
+    },
+    {
+      "source": ".git/aurora-handoff-import-20261006/cpu-full-audio-v490/source/modules/ui-mock-reference/components/aurora/assistant/tool-call-card.tsx",
+      "destination": "thesis/sources/python-audio-v490-96ec8e3e/source/modules/ui-mock-reference/components/aurora/assistant/tool-call-card.tsx",
+      "bytes": 3143,
+      "path": "modules/ui-mock-reference/components/aurora/assistant/tool-call-card.tsx",
+      "sha256": "e7a5d6140788453867b5f3880069534a7b7eac3caf9ca444af6a84f5d74369ac"
+    },
+    {
+      "source": ".git/aurora-handoff-import-20261006/cpu-full-audio-v490/source/modules/ui-mock-reference/components/aurora/capability-drawer.tsx",
+      "destination": "thesis/sources/python-audio-v490-96ec8e3e/source/modules/ui-mock-reference/components/aurora/capability-drawer.tsx",
+      "bytes": 6301,
+      "path": "modules/ui-mock-reference/components/aurora/capability-drawer.tsx",
+      "sha256": "081bc7f003df00251c080718baedf58879faf99d9da48594c64c9f2c40f9690d"
+    },
+    {
+      "source": ".git/aurora-handoff-import-20261006/cpu-full-audio-v490/source/modules/ui-mock-reference/components/aurora/diagnostics/diagnostics-view.tsx",
+      "destination": "thesis/sources/python-audio-v490-96ec8e3e/source/modules/ui-mock-reference/components/aurora/diagnostics/diagnostics-view.tsx",
+      "bytes": 5666,
+      "path": "modules/ui-mock-reference/components/aurora/diagnostics/diagnostics-view.tsx",
+      "sha256": "dd2abc1f57ae40d7cd0a2c1e3a8d754bd9a09610dc112bb791f0e5f09ed963cf"
+    },
+    {
+      "source": ".git/aurora-handoff-import-20261006/cpu-full-audio-v490/source/modules/ui-mock-reference/components/aurora/diff-viewer.tsx",
+      "destination": "thesis/sources/python-audio-v490-96ec8e3e/source/modules/ui-mock-reference/components/aurora/diff-viewer.tsx",
+      "bytes": 1882,
+      "path": "modules/ui-mock-reference/components/aurora/diff-viewer.tsx",
+      "sha256": "ae4c7bd76ba7260f565df7230ac92e2e708861e59da9e9606e7a95e35af27e1e"
+    },
+    {
+      "source": ".git/aurora-handoff-import-20261006/cpu-full-audio-v490/source/modules/ui-mock-reference/components/aurora/mesh/mesh-view.tsx",
+      "destination": "thesis/sources/python-audio-v490-96ec8e3e/source/modules/ui-mock-reference/components/aurora/mesh/mesh-view.tsx",
+      "bytes": 7215,
+      "path": "modules/ui-mock-reference/components/aurora/mesh/mesh-view.tsx",
+      "sha256": "ae081a365c1f86742a9aaa4a3d9dd93731f0fb4434d3e646223aea36ac5f7598"
+    },
+    {
+      "source": ".git/aurora-handoff-import-20261006/cpu-full-audio-v490/source/modules/ui-mock-reference/components/aurora/models/models-view.tsx",
+      "destination": "thesis/sources/python-audio-v490-96ec8e3e/source/modules/ui-mock-reference/components/aurora/models/models-view.tsx",
+      "bytes": 6526,
+      "path": "modules/ui-mock-reference/components/aurora/models/models-view.tsx",
+      "sha256": "3e26a3125f67191dda8ba0e8aced4a31ac54b46d0cd1f584612bba75f1701c8a"
+    },
+    {
+      "source": ".git/aurora-handoff-import-20261006/cpu-full-audio-v490/source/modules/ui-mock-reference/components/aurora/onboarding/onboarding-view.tsx",
+      "destination": "thesis/sources/python-audio-v490-96ec8e3e/source/modules/ui-mock-reference/components/aurora/onboarding/onboarding-view.tsx",
+      "bytes": 4612,
+      "path": "modules/ui-mock-reference/components/aurora/onboarding/onboarding-view.tsx",
+      "sha256": "3764f0721c22386dfe5930db038ef8997547528df9a233fffbb4c0f9e2f38f48"
+    },
+    {
+      "source": ".git/aurora-handoff-import-20261006/cpu-full-audio-v490/source/modules/ui-mock-reference/components/aurora/page-header.tsx",
+      "destination": "thesis/sources/python-audio-v490-96ec8e3e/source/modules/ui-mock-reference/components/aurora/page-header.tsx",
+      "bytes": 986,
+      "path": "modules/ui-mock-reference/components/aurora/page-header.tsx",
+      "sha256": "45408b5bf179f1c83b66666ae799e7043de0f093301c16a2c99f136ea1525c71"
+    },
+    {
+      "source": ".git/aurora-handoff-import-20261006/cpu-full-audio-v490/source/modules/ui-mock-reference/components/aurora/settings/settings-permissions-view.tsx",
+      "destination": "thesis/sources/python-audio-v490-96ec8e3e/source/modules/ui-mock-reference/components/aurora/settings/settings-permissions-view.tsx",
+      "bytes": 6989,
+      "path": "modules/ui-mock-reference/components/aurora/settings/settings-permissions-view.tsx",
+      "sha256": "8f0946ca55f2cc9e1ae54fdbc175679f4373654f7ebb08f345ec67d65b2fc1b2"
+    },
+    {
+      "source": ".git/aurora-handoff-import-20261006/cpu-full-audio-v490/source/modules/ui-mock-reference/components/aurora/status-badges.tsx",
+      "destination": "thesis/sources/python-audio-v490-96ec8e3e/source/modules/ui-mock-reference/components/aurora/status-badges.tsx",
+      "bytes": 8806,
+      "path": "modules/ui-mock-reference/components/aurora/status-badges.tsx",
+      "sha256": "cbf86d9fd3ca862cc26fc557c3373c880df21a718a032c23017ce83aa498fe4e"
+    },
+    {
+      "source": ".git/aurora-handoff-import-20261006/cpu-full-audio-v490/source/modules/ui-mock-reference/components/ui/accordion.tsx",
+      "destination": "thesis/sources/python-audio-v490-96ec8e3e/source/modules/ui-mock-reference/components/ui/accordion.tsx",
+      "bytes": 2694,
+      "path": "modules/ui-mock-reference/components/ui/accordion.tsx",
+      "sha256": "711b499d8b01909484ac9dcfc5b3aa93eb06481f35dc322c828ce3d74e55c871"
+    },
+    {
+      "source": ".git/aurora-handoff-import-20261006/cpu-full-audio-v490/source/modules/ui-mock-reference/components/ui/alert.tsx",
+      "destination": "thesis/sources/python-audio-v490-96ec8e3e/source/modules/ui-mock-reference/components/ui/alert.tsx",
+      "bytes": 2048,
+      "path": "modules/ui-mock-reference/components/ui/alert.tsx",
+      "sha256": "126a26b401ab2cd3f3855551d012b5dca7a96b7d6984a921add3ce2d441af4b6"
+    },
+    {
+      "source": ".git/aurora-handoff-import-20261006/cpu-full-audio-v490/source/modules/ui-mock-reference/components/ui/avatar.tsx",
+      "destination": "thesis/sources/python-audio-v490-96ec8e3e/source/modules/ui-mock-reference/components/ui/avatar.tsx",
+      "bytes": 3038,
+      "path": "modules/ui-mock-reference/components/ui/avatar.tsx",
+      "sha256": "357b2f9aac0192c071cb2ed65cb6e4c8ec01fa02fc15cf50d889b85731b75666"
+    },
+    {
+      "source": ".git/aurora-handoff-import-20261006/cpu-full-audio-v490/source/modules/ui-mock-reference/components/ui/badge.tsx",
+      "destination": "thesis/sources/python-audio-v490-96ec8e3e/source/modules/ui-mock-reference/components/ui/badge.tsx",
+      "bytes": 1925,
+      "path": "modules/ui-mock-reference/components/ui/badge.tsx",
+      "sha256": "968b0403af74a785c9408ca69a677235e49d0c80b2c27fb9858ad421a8778c7d"
+    },
+    {
+      "source": ".git/aurora-handoff-import-20261006/cpu-full-audio-v490/source/modules/ui-mock-reference/components/ui/button.tsx",
+      "destination": "thesis/sources/python-audio-v490-96ec8e3e/source/modules/ui-mock-reference/components/ui/button.tsx",
+      "bytes": 3198,
+      "path": "modules/ui-mock-reference/components/ui/button.tsx",
+      "sha256": "4e679215c9c8480ea8b876cf74d77c1225da544adaf6acba43634a434275a69d"
+    },
+    {
+      "source": ".git/aurora-handoff-import-20261006/cpu-full-audio-v490/source/modules/ui-mock-reference/components/ui/card.tsx",
+      "destination": "thesis/sources/python-audio-v490-96ec8e3e/source/modules/ui-mock-reference/components/ui/card.tsx",
+      "bytes": 2630,
+      "path": "modules/ui-mock-reference/components/ui/card.tsx",
+      "sha256": "d8113cbf964f8d1aadf2649d2944d8bbc6e3cfd49d36746f76868cbc4dde3cfe"
+    },
+    {
+      "source": ".git/aurora-handoff-import-20261006/cpu-full-audio-v490/source/modules/ui-mock-reference/components/ui/dialog.tsx",
+      "destination": "thesis/sources/python-audio-v490-96ec8e3e/source/modules/ui-mock-reference/components/ui/dialog.tsx",
+      "bytes": 4075,
+      "path": "modules/ui-mock-reference/components/ui/dialog.tsx",
+      "sha256": "ccabf6cc674a68b09d9168904bb46b7c1075a67312cf6f51f3e38b8eeacd2fdb"
+    },
+    {
+      "source": ".git/aurora-handoff-import-20261006/cpu-full-audio-v490/source/modules/ui-mock-reference/components/ui/dropdown-menu.tsx",
+      "destination": "thesis/sources/python-audio-v490-96ec8e3e/source/modules/ui-mock-reference/components/ui/dropdown-menu.tsx",
+      "bytes": 8736,
+      "path": "modules/ui-mock-reference/components/ui/dropdown-menu.tsx",
+      "sha256": "1c1ae4ec02de9778286f84e0d15a1b74cc610c13c5b6a13c1ada2e6770eeb4e1"
+    },
+    {
+      "source": ".git/aurora-handoff-import-20261006/cpu-full-audio-v490/source/modules/ui-mock-reference/components/ui/input.tsx",
+      "destination": "thesis/sources/python-audio-v490-96ec8e3e/source/modules/ui-mock-reference/components/ui/input.tsx",
+      "bytes": 1040,
+      "path": "modules/ui-mock-reference/components/ui/input.tsx",
+      "sha256": "f7d6ecff9a4d631feeaf401c02bb87e26ddb38131c55d15a43b9290747390847"
+    },
+    {
+      "source": ".git/aurora-handoff-import-20261006/cpu-full-audio-v490/source/modules/ui-mock-reference/components/ui/label.tsx",
+      "destination": "thesis/sources/python-audio-v490-96ec8e3e/source/modules/ui-mock-reference/components/ui/label.tsx",
+      "bytes": 518,
+      "path": "modules/ui-mock-reference/components/ui/label.tsx",
+      "sha256": "7f19b8476658d25ff197c84030e58cd7395059d876a54630e025951e474ebdae"
+    },
+    {
+      "source": ".git/aurora-handoff-import-20261006/cpu-full-audio-v490/source/modules/ui-mock-reference/components/ui/progress.tsx",
+      "destination": "thesis/sources/python-audio-v490-96ec8e3e/source/modules/ui-mock-reference/components/ui/progress.tsx",
+      "bytes": 1740,
+      "path": "modules/ui-mock-reference/components/ui/progress.tsx",
+      "sha256": "45e33890b5a82744fc27d0928f927c5942c1166e5e27de8f776b29112967d317"
+    },
+    {
+      "source": ".git/aurora-handoff-import-20261006/cpu-full-audio-v490/source/modules/ui-mock-reference/components/ui/scroll-area.tsx",
+      "destination": "thesis/sources/python-audio-v490-96ec8e3e/source/modules/ui-mock-reference/components/ui/scroll-area.tsx",
+      "bytes": 1624,
+      "path": "modules/ui-mock-reference/components/ui/scroll-area.tsx",
+      "sha256": "42de3962daca60255bf1d3cd90bd3c038db73a3ed61ecaac6cffc6a153181e4a"
+    },
+    {
+      "source": ".git/aurora-handoff-import-20261006/cpu-full-audio-v490/source/modules/ui-mock-reference/components/ui/select.tsx",
+      "destination": "thesis/sources/python-audio-v490-96ec8e3e/source/modules/ui-mock-reference/components/ui/select.tsx",
+      "bytes": 6655,
+      "path": "modules/ui-mock-reference/components/ui/select.tsx",
+      "sha256": "ca3bd1b370ea67b84632d435c22d8270752fa6013c06c365162af265e4a0e87e"
+    },
+    {
+      "source": ".git/aurora-handoff-import-20261006/cpu-full-audio-v490/source/modules/ui-mock-reference/components/ui/separator.tsx",
+      "destination": "thesis/sources/python-audio-v490-96ec8e3e/source/modules/ui-mock-reference/components/ui/separator.tsx",
+      "bytes": 545,
+      "path": "modules/ui-mock-reference/components/ui/separator.tsx",
+      "sha256": "75085bd84ff6965e4a356c53a4689799cabf65caa93c0bba064d5a0c6fa78f13"
+    },
+    {
+      "source": ".git/aurora-handoff-import-20261006/cpu-full-audio-v490/source/modules/ui-mock-reference/components/ui/sheet.tsx",
+      "destination": "thesis/sources/python-audio-v490-96ec8e3e/source/modules/ui-mock-reference/components/ui/sheet.tsx",
+      "bytes": 4605,
+      "path": "modules/ui-mock-reference/components/ui/sheet.tsx",
+      "sha256": "0ef53f989d7f9f9b2c24b7ec3562609579a91d58ab6df5d6a8c15d2d429e3704"
+    },
+    {
+      "source": ".git/aurora-handoff-import-20261006/cpu-full-audio-v490/source/modules/ui-mock-reference/components/ui/sonner.tsx",
+      "destination": "thesis/sources/python-audio-v490-96ec8e3e/source/modules/ui-mock-reference/components/ui/sonner.tsx",
+      "bytes": 1226,
+      "path": "modules/ui-mock-reference/components/ui/sonner.tsx",
+      "sha256": "2dd975ad2170ba2570b00e58713dcbda90f26a7fffdaceb1ef7255f450c2d2a6"
+    },
+    {
+      "source": ".git/aurora-handoff-import-20261006/cpu-full-audio-v490/source/modules/ui-mock-reference/components/ui/switch.tsx",
+      "destination": "thesis/sources/python-audio-v490-96ec8e3e/source/modules/ui-mock-reference/components/ui/switch.tsx",
+      "bytes": 1707,
+      "path": "modules/ui-mock-reference/components/ui/switch.tsx",
+      "sha256": "c98e4b259d28463c34c65cdbfba447d5ccd4fed0a138b7acf8c796309e61e2d6"
+    },
+    {
+      "source": ".git/aurora-handoff-import-20261006/cpu-full-audio-v490/source/modules/ui-mock-reference/components/ui/table.tsx",
+      "destination": "thesis/sources/python-audio-v490-96ec8e3e/source/modules/ui-mock-reference/components/ui/table.tsx",
+      "bytes": 2402,
+      "path": "modules/ui-mock-reference/components/ui/table.tsx",
+      "sha256": "a13f55a7c1406197608f223006cf16f211a257b213362caaef0d2abf3a389c8f"
+    },
+    {
+      "source": ".git/aurora-handoff-import-20261006/cpu-full-audio-v490/source/modules/ui-mock-reference/components/ui/tabs.tsx",
+      "destination": "thesis/sources/python-audio-v490-96ec8e3e/source/modules/ui-mock-reference/components/ui/tabs.tsx",
+      "bytes": 3497,
+      "path": "modules/ui-mock-reference/components/ui/tabs.tsx",
+      "sha256": "8bf9ee3935ab86c268a2a71cb5b4b67d3d5587ca9f2e0bf25f37ffdb1980434c"
+    },
+    {
+      "source": ".git/aurora-handoff-import-20261006/cpu-full-audio-v490/source/modules/ui-mock-reference/components/ui/textarea.tsx",
+      "destination": "thesis/sources/python-audio-v490-96ec8e3e/source/modules/ui-mock-reference/components/ui/textarea.tsx",
+      "bytes": 842,
+      "path": "modules/ui-mock-reference/components/ui/textarea.tsx",
+      "sha256": "58b58d84fc54ba5f4ca46937870c619349fd9eccc4d494250ac7bc73a94e05e9"
+    },
+    {
+      "source": ".git/aurora-handoff-import-20261006/cpu-full-audio-v490/source/modules/ui-mock-reference/components/ui/tooltip.tsx",
+      "destination": "thesis/sources/python-audio-v490-96ec8e3e/source/modules/ui-mock-reference/components/ui/tooltip.tsx",
+      "bytes": 3114,
+      "path": "modules/ui-mock-reference/components/ui/tooltip.tsx",
+      "sha256": "6e7663d5d502acb417d043918890b388cd72c78368567e5dc3948d54771ebb9a"
+    },
+    {
+      "source": ".git/aurora-handoff-import-20261006/cpu-full-audio-v490/source/modules/ui-mock-reference/components.json",
+      "destination": "thesis/sources/python-audio-v490-96ec8e3e/source/modules/ui-mock-reference/components.json",
+      "bytes": 428,
+      "path": "modules/ui-mock-reference/components.json",
+      "sha256": "1301860ec7b710eaa7455957545ee4e756e361215cb29cc4cce2192eb47e45fb"
+    },
+    {
+      "source": ".git/aurora-handoff-import-20261006/cpu-full-audio-v490/source/modules/ui-mock-reference/eslint.config.mjs",
+      "destination": "thesis/sources/python-audio-v490-96ec8e3e/source/modules/ui-mock-reference/eslint.config.mjs",
+      "bytes": 636,
+      "path": "modules/ui-mock-reference/eslint.config.mjs",
+      "sha256": "6c834fef6ba783aae45229175bf9ffd48211947046def37df78d7a9f4e498140"
+    },
+    {
+      "source": ".git/aurora-handoff-import-20261006/cpu-full-audio-v490/source/modules/ui-mock-reference/lib/aurora/data.ts",
+      "destination": "thesis/sources/python-audio-v490-96ec8e3e/source/modules/ui-mock-reference/lib/aurora/data.ts",
+      "bytes": 37880,
+      "path": "modules/ui-mock-reference/lib/aurora/data.ts",
+      "sha256": "eda7a1657c76fc7cb122ee1f1f744637cd5bf7aeb2a3b064376d25fb34688b93"
+    },
+    {
+      "source": ".git/aurora-handoff-import-20261006/cpu-full-audio-v490/source/modules/ui-mock-reference/lib/aurora/nav.test.ts",
+      "destination": "thesis/sources/python-audio-v490-96ec8e3e/source/modules/ui-mock-reference/lib/aurora/nav.test.ts",
+      "bytes": 929,
+      "path": "modules/ui-mock-reference/lib/aurora/nav.test.ts",
+      "sha256": "54f6a8a5c23e742b672a0aa8783777c47e65fa610f55c44a129388bb3cf17ed0"
+    },
+    {
+      "source": ".git/aurora-handoff-import-20261006/cpu-full-audio-v490/source/modules/ui-mock-reference/lib/aurora/nav.ts",
+      "destination": "thesis/sources/python-audio-v490-96ec8e3e/source/modules/ui-mock-reference/lib/aurora/nav.ts",
+      "bytes": 2572,
+      "path": "modules/ui-mock-reference/lib/aurora/nav.ts",
+      "sha256": "ec3efbc59c5c5506feb1cd19fc2a83819a97e88cbcbcc2ceb055ae23f35443db"
+    },
+    {
+      "source": ".git/aurora-handoff-import-20261006/cpu-full-audio-v490/source/modules/ui-mock-reference/lib/aurora/types.ts",
+      "destination": "thesis/sources/python-audio-v490-96ec8e3e/source/modules/ui-mock-reference/lib/aurora/types.ts",
+      "bytes": 5416,
+      "path": "modules/ui-mock-reference/lib/aurora/types.ts",
+      "sha256": "1c2ae108a1ba1897e5d9ebb6f9dcf55f541e8e1ec93f37c26f738a8c2ce9bdc4"
+    },
+    {
+      "source": ".git/aurora-handoff-import-20261006/cpu-full-audio-v490/source/modules/ui-mock-reference/lib/utils.ts",
+      "destination": "thesis/sources/python-audio-v490-96ec8e3e/source/modules/ui-mock-reference/lib/utils.ts",
+      "bytes": 166,
+      "path": "modules/ui-mock-reference/lib/utils.ts",
+      "sha256": "e46429536f43f5910f5b2b0c50bb2769b510a4558bb4b5d20a3b0a9091dbf7c3"
+    },
+    {
+      "source": ".git/aurora-handoff-import-20261006/cpu-full-audio-v490/source/modules/ui-mock-reference/next-env.d.ts",
+      "destination": "thesis/sources/python-audio-v490-96ec8e3e/source/modules/ui-mock-reference/next-env.d.ts",
+      "bytes": 247,
+      "path": "modules/ui-mock-reference/next-env.d.ts",
+      "sha256": "7b550dda9686c16f36a17bf9051d5dbf31e98555b30d114ac49fc49a1e712651"
+    },
+    {
+      "source": ".git/aurora-handoff-import-20261006/cpu-full-audio-v490/source/modules/ui-mock-reference/next.config.mjs",
+      "destination": "thesis/sources/python-audio-v490-96ec8e3e/source/modules/ui-mock-reference/next.config.mjs",
+      "bytes": 181,
+      "path": "modules/ui-mock-reference/next.config.mjs",
+      "sha256": "dae4df4b0371be999fabf9327e2cb54b34d3cbd4c6db23380a8e21c5a52d564a"
+    },
+    {
+      "source": ".git/aurora-handoff-import-20261006/cpu-full-audio-v490/source/modules/ui-mock-reference/package.json",
+      "destination": "thesis/sources/python-audio-v490-96ec8e3e/source/modules/ui-mock-reference/package.json",
+      "bytes": 1077,
+      "path": "modules/ui-mock-reference/package.json",
+      "sha256": "ac9dbaa61dc8a437f0c76dc762a0ab8a7bc683c7442e2071bced31b343456484"
+    },
+    {
+      "source": ".git/aurora-handoff-import-20261006/cpu-full-audio-v490/source/modules/ui-mock-reference/pnpm-lock.yaml",
+      "destination": "thesis/sources/python-audio-v490-96ec8e3e/source/modules/ui-mock-reference/pnpm-lock.yaml",
+      "bytes": 174184,
+      "path": "modules/ui-mock-reference/pnpm-lock.yaml",
+      "sha256": "e669888b8728d89f5df0a1e610488474ee25325367b00a6bed92bcb649f9ead6"
+    },
+    {
+      "source": ".git/aurora-handoff-import-20261006/cpu-full-audio-v490/source/modules/ui-mock-reference/postcss.config.mjs",
+      "destination": "thesis/sources/python-audio-v490-96ec8e3e/source/modules/ui-mock-reference/postcss.config.mjs",
+      "bytes": 144,
+      "path": "modules/ui-mock-reference/postcss.config.mjs",
+      "sha256": "54b5708e687b8c9ecc8dbeebf29801dbec1213f890c5e018d7ca9c1541a6f7e3"
+    },
+    {
+      "source": ".git/aurora-handoff-import-20261006/cpu-full-audio-v490/source/modules/ui-mock-reference/public/apple-icon.png",
+      "destination": "thesis/sources/python-audio-v490-96ec8e3e/source/modules/ui-mock-reference/public/apple-icon.png",
+      "bytes": 2626,
+      "path": "modules/ui-mock-reference/public/apple-icon.png",
+      "sha256": "da678942d4656a903f61000551cc51c09464d7a223faaae304e8210e1ca19257"
+    },
+    {
+      "source": ".git/aurora-handoff-import-20261006/cpu-full-audio-v490/source/modules/ui-mock-reference/public/icon-dark-32x32.png",
+      "destination": "thesis/sources/python-audio-v490-96ec8e3e/source/modules/ui-mock-reference/public/icon-dark-32x32.png",
+      "bytes": 585,
+      "path": "modules/ui-mock-reference/public/icon-dark-32x32.png",
+      "sha256": "8a1570b2955c3748b6844356a7487d88c60f9f1e699e870a3452a3decd1ba03c"
+    },
+    {
+      "source": ".git/aurora-handoff-import-20261006/cpu-full-audio-v490/source/modules/ui-mock-reference/public/icon-light-32x32.png",
+      "destination": "thesis/sources/python-audio-v490-96ec8e3e/source/modules/ui-mock-reference/public/icon-light-32x32.png",
+      "bytes": 566,
+      "path": "modules/ui-mock-reference/public/icon-light-32x32.png",
+      "sha256": "83145e5bb033ace23cd8e7fbb63e7c39733aaf58f8a7280d7800995cced6f7c2"
+    },
+    {
+      "source": ".git/aurora-handoff-import-20261006/cpu-full-audio-v490/source/modules/ui-mock-reference/public/icon.svg",
+      "destination": "thesis/sources/python-audio-v490-96ec8e3e/source/modules/ui-mock-reference/public/icon.svg",
+      "bytes": 1304,
+      "path": "modules/ui-mock-reference/public/icon.svg",
+      "sha256": "263f117c0c69a44d3206a5702105c178ebaa164bca325f3c3973a13bd948f1bf"
+    },
+    {
+      "source": ".git/aurora-handoff-import-20261006/cpu-full-audio-v490/source/modules/ui-mock-reference/public/placeholder-logo.png",
+      "destination": "thesis/sources/python-audio-v490-96ec8e3e/source/modules/ui-mock-reference/public/placeholder-logo.png",
+      "bytes": 568,
+      "path": "modules/ui-mock-reference/public/placeholder-logo.png",
+      "sha256": "d7c39d978af643ba9525de6fb8171e0f834882db4110c82ecad0df3f4f69551a"
+    },
+    {
+      "source": ".git/aurora-handoff-import-20261006/cpu-full-audio-v490/source/modules/ui-mock-reference/public/placeholder-logo.svg",
+      "destination": "thesis/sources/python-audio-v490-96ec8e3e/source/modules/ui-mock-reference/public/placeholder-logo.svg",
+      "bytes": 3208,
+      "path": "modules/ui-mock-reference/public/placeholder-logo.svg",
+      "sha256": "19a9e968f4656d52a4c249b4056117ad109370ba9da51cdc630ddded74cec73b"
+    },
+    {
+      "source": ".git/aurora-handoff-import-20261006/cpu-full-audio-v490/source/modules/ui-mock-reference/public/placeholder-user.jpg",
+      "destination": "thesis/sources/python-audio-v490-96ec8e3e/source/modules/ui-mock-reference/public/placeholder-user.jpg",
+      "bytes": 1635,
+      "path": "modules/ui-mock-reference/public/placeholder-user.jpg",
+      "sha256": "22be067d748175598a5e00123902f5c8332dd7f101de03dfb92ec08d85bb5e53"
+    },
+    {
+      "source": ".git/aurora-handoff-import-20261006/cpu-full-audio-v490/source/modules/ui-mock-reference/public/placeholder.jpg",
+      "destination": "thesis/sources/python-audio-v490-96ec8e3e/source/modules/ui-mock-reference/public/placeholder.jpg",
+      "bytes": 1064,
+      "path": "modules/ui-mock-reference/public/placeholder.jpg",
+      "sha256": "14be0c7aa11cca1e78f0966176b286a6d36d00ec64be027775dfeb33d8e2dfdf"
+    },
+    {
+      "source": ".git/aurora-handoff-import-20261006/cpu-full-audio-v490/source/modules/ui-mock-reference/public/placeholder.svg",
+      "destination": "thesis/sources/python-audio-v490-96ec8e3e/source/modules/ui-mock-reference/public/placeholder.svg",
+      "bytes": 3253,
+      "path": "modules/ui-mock-reference/public/placeholder.svg",
+      "sha256": "64badf7aabda0b9630b87020ffb6095cb858ccbcf66b355c2aa08b1063954d3b"
+    },
+    {
+      "source": ".git/aurora-handoff-import-20261006/cpu-full-audio-v490/source/modules/ui-mock-reference/tsconfig.json",
+      "destination": "thesis/sources/python-audio-v490-96ec8e3e/source/modules/ui-mock-reference/tsconfig.json",
+      "bytes": 695,
+      "path": "modules/ui-mock-reference/tsconfig.json",
+      "sha256": "9c43305b728b4b57e97c63dcef97739d59491469c9c2ddfd24408fdf63e70f86"
+    },
+    {
+      "source": ".git/aurora-handoff-import-20261006/cpu-full-audio-v490/source/pyproject.toml",
+      "destination": "thesis/sources/python-audio-v490-96ec8e3e/source/pyproject.toml",
+      "bytes": 32616,
+      "path": "pyproject.toml",
+      "sha256": "c335d253896203e65b5d636e977326ac2d90d441fde1365adea7bc42eb91fda1"
+    }
+  ],
+  "diskBefore": {
+    "total": 109128826880,
+    "used": 102251491328,
+    "free": 6860558336
+  },
+  "diskAfter": {
+    "total": 109128826880,
+    "used": 102259589120,
+    "free": 6852460544
+  },
+  "rateCapBytesPerSecond": 2097152,
+  "outerCapSeconds": 120,
+  "freeFloorBytes": 2147483648,
+  "credentialValuesCopied": false,
+  "modelFilesCopied": 0,
+  "sutCalls": 0,
+  "activeSourcePathChanged": false,
+  "scope": "Explicit canonical physical source tree; not a claim that other retained copies/archives were absent. Original runtime source unchanged.",
+  "possibleConfound": "Bounded source-copy IO/checksums concurrent with measured K2; preserve all actual cases and copy times.",
+  "initialCopyGuardFailure": "COPY-GUARD-FAILURE-v1415.json"
+}

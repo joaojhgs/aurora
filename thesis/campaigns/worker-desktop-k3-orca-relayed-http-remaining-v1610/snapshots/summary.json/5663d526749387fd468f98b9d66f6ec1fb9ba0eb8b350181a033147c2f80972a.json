@@ -1,0 +1,43 @@
+{
+  "attempted": 0,
+  "correct": 0,
+  "failed": 0,
+  "phase_denominators": {
+    "all": {
+      "attempted": 0,
+      "completed_correct": 0,
+      "completed_incorrect": 0,
+      "failed_or_interrupted": 0,
+      "planned": 135,
+      "timeouts": 0,
+      "unattempted": 135
+    },
+    "measured": {
+      "attempted": 0,
+      "completed_correct": 0,
+      "completed_incorrect": 0,
+      "failed_or_interrupted": 0,
+      "planned": 120,
+      "timeouts": 0,
+      "unattempted": 120
+    },
+    "warmup_excluded": {
+      "attempted": 0,
+      "completed_correct": 0,
+      "completed_incorrect": 0,
+      "failed_or_interrupted": 0,
+      "planned": 15,
+      "timeouts": 0,
+      "unattempted": 15
+    }
+  },
+  "physical_microphone": false,
+  "physical_playback_or_audibility": false,
+  "planned_measured": 120,
+  "planned_warmups": 15,
+  "schema_version": "aurora.full_audio_campaign.v1",
+  "status": "failed_preflight_or_setup",
+  "stop_reason": "CampaignFailure",
+  "timeouts": 0,
+  "unattempted_measured": 120
+}

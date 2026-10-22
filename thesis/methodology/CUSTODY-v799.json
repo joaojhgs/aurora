@@ -1,0 +1,11 @@
+{
+  "at": "2026-10-16T02:04:14.100360+00:00",
+  "fullreadPrefixBytes": 425562,
+  "fullreadPrefixSHA256": "3334a2d7ef9ba20d04df200f554f8699b206296b13c809da6076797623cd45b3",
+  "priorPrefixBytes": 422796,
+  "priorPrefixUnchanged": true,
+  "newDeltaReadBytes": 2766,
+  "newDeltaSHA256": "fa3019779d2eb83c331a829c6f40e288ef58451f1956e5210e9e0fc632fcaf87",
+  "sourceCurrentBytes": 429892,
+  "unknownLaterBytesReadForAuthority": false
+}

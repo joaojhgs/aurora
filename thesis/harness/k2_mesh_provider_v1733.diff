@@ -1,0 +1,68 @@
+--- thesis/harness/k1_mesh_provider_v1710.py
++++ thesis/harness/k2_mesh_provider_v1733.py
+@@ -1,4 +1,4 @@
+-"""Root's bounded normal-service P2P TTS receiver, reusing approved task state.
++"""Root's bounded normal-service P2P Assistant and TTS receiver, reusing approved task state.
+ 
+ No pairing approval, credential output, HTTP listener or inference is performed
+ by the controller. Real TTS requests arrive through the normal mesh authority.
+@@ -110,7 +110,7 @@
+                 GatewayMethods.GET_MESH_STATUS, EmptyInput(), timeout=10))).model_dump(mode='json')
+             catalogue = CapabilityCatalogResponse.model_validate(unwrap(await supervisor.bus.request(
+                 GatewayMethods.GET_CAPABILITY_CATALOG,
+-                CapabilityCatalogRequest(modules=['TTS'], include_schemas=False), timeout=10))).model_dump(mode='json')
++                CapabilityCatalogRequest(modules=['Orchestrator', 'TTS'], include_schemas=False), timeout=10))).model_dump(mode='json')
+             peers = MeshPeerListResponse.model_validate(unwrap(await supervisor.bus.request(
+                 AuthMethods.MESH_LIST_PEERS, MeshPeerListRequest(), timeout=10)))
+             local_id = catalogue.get('local_peer_id')
+@@ -167,16 +167,23 @@
+     assert shutil.disk_usage(output).free > 2 * 1024**3
+     assert next(int(l.split()[1]) * 1024 for l in Path('/proc/meminfo').read_text().splitlines()
+                 if l.startswith('MemAvailable:')) > 2_000_000_000
+-    for field in ('model', 'voiceConfig', 'piperExecutable'):
++    for field in ('model', 'voiceConfig', 'piperExecutable', 'llmModel'):
+         value = m['actualFiles'][field]
+         assert sha(value['path']) == value['sha256'], 'actual_provider_file_drift'
++    assistant = m['remoteMeshAssistantReceiver']
++    assert assistant['model_sha256'] == m['actualFiles']['llmModel']['sha256']
++    assert assistant['config_sha256'] == m['configSha256']
++    assert m['remoteAssistantEffectiveSettings']['n_gpu_layers'] == 100
++    assert m['remoteAssistantEffectiveSettings']['model_path'] == m['actualFiles']['llmModel']['path']
++    assert m['automaticTtsReadback'] is False
++    assert len(m['actualFileReceiptSha256']) == 64
+     env = os.environ.copy()
+     env.update(m['environment'])
+     env.update(AURORA_CONFIG_FILE=m['config'], AURORA_ENV_FILE=m['existingEnvFile'],
+                AURORA_DATA_DIR=m['existingDataDir'], AURORA_BACKUP_DIR=m['privateRoot'] + '/backups',
+                AURORA_ARCHITECTURE_MODE='threads', AURORA_VOICE_STAGE_OUTPUT=str(output/'voice-stages.jsonl'),
+                AURORA_V409_OBSERVER_PATH=str(Path(m['hookRoot'])/'observer.py'),
+-               AURORA_VOICE_STAGE_HOST_ID='personal-k1-mesh-tts-v1710', AURORA_VOICE_TELEMETRY_V430='1',
++               AURORA_VOICE_STAGE_HOST_ID='personal-k2-mesh-assistant-tts-v1733', AURORA_VOICE_TELEMETRY_V430='1',
+                PYTHONDONTWRITEBYTECODE='1', HF_HUB_OFFLINE='1', HF_HUB_DISABLE_TELEMETRY='1')
+     packages = {n: importlib.metadata.version(n) for n in m['runtimeVersions']}
+     assert packages == m['runtimeVersions'], 'runtime_versions_changed'
+@@ -195,11 +202,23 @@
+             record.update(receiverPid=child.pid, receiverStartTicks=ticks)
+             write(output/'controller-launch.json', record, exclusive=True)
+             write(output/'receiver-identity.json', {
+-                'schema': 'aurora.distributed_k1_receiver_identity.v1', 'receiver_pid': child.pid,
++                'schema': 'aurora.distributed_k2_receiver_identity.v1', 'receiver_pid': child.pid,
+                 'provider': m['remoteMeshTtsReceiver'], 'manifest_sha256': sha(path),
+                 'actual_provider_files': {'source_receipt_sha256': m['actualFileReceiptSha256'],
+                     'model': {'canonical_path': m['actualFiles']['model']['path'], 'sha256': m['actualFiles']['model']['sha256']},
+                     'config': {'canonical_path': m['actualFiles']['voiceConfig']['path'], 'sha256': m['actualFiles']['voiceConfig']['sha256']}},
++                'credential_value_logged': False,
++            }, exclusive=True)
++            # Independent Assistant file identity; the later strict warmup proof
++            # rehashes these actual files and joins the real constructor/native
++            # spans. This declaration alone makes no loaded-GPU claim.
++            write(output/'assistant-identity.json', {
++                'schema': 'aurora.distributed_k2_receiver_identity.v1', 'receiver_pid': child.pid,
++                'provider': assistant, 'manifest_sha256': sha(path),
++                'actual_provider_files': {'source_receipt_sha256': m['actualFileReceiptSha256'],
++                    'model': {'canonical_path': m['actualFiles']['llmModel']['path'], 'sha256': m['actualFiles']['llmModel']['sha256']},
++                    'config': {'canonical_path': m['config'], 'sha256': m['configSha256']}},
++                'actual_loaded_acceleration': 'PENDING_NEW_PROCESS_ORDINARY_WARMUP_PROOF',
+                 'credential_value_logged': False,
+             }, exclusive=True)
+             while child.poll() is None and time.monotonic()-start < m['lifetimeSeconds']+180:

@@ -1,0 +1,20 @@
+{
+  "files": [
+    {
+      "path": "UPDATE-v1171.md",
+      "bytes": 3227,
+      "sha256": "35aadadac3c6f463248895fb4c95eb2c020ecc38d9c90e31f53423d7899a0c27"
+    },
+    {
+      "path": "provider-and-archive-state-v1170.json",
+      "bytes": 895,
+      "sha256": "272eb20571ef5dea78d94e4630a9c776bbdb7cd276114291aa8a050d8b713489"
+    },
+    {
+      "path": "existing-route-capability-v1171.json",
+      "bytes": 861,
+      "sha256": "1b5ee1d61c7b80d355ecbfedba59bb32f9f91450e9cecd2cb85669b1f0195e58"
+    }
+  ],
+  "privateLogsAndCredentialValuesExcluded": true
+}

@@ -1,0 +1,30 @@
+{
+  "at": "2026-10-22T06:32:19.888980+00:00",
+  "host": "personal.skyron-server",
+  "controller": {
+    "pid": 2468063,
+    "startTicks": 40626085,
+    "state": "S"
+  },
+  "manifestSha256": "e4555b5554460cece135b1469d6296b23aca03bc9af21bd306c1f9173124ce21",
+  "readinessManifestSha256": "c5758ac80348d0fab63f665e6e3a7a43e85dc1996a8ec58322b84e12381b703a",
+  "newWorker": false,
+  "measured": 0,
+  "pilotCallsStarted": false,
+  "deadline": "2026-10-22T06:47:13.434835+00:00",
+  "controllerState": {
+    "pid": 2468063,
+    "startTicks": 40626085,
+    "state": "S"
+  },
+  "localDriverArmed": true,
+  "runtime": {
+    "at": "2026-10-22T06:32:20.740841+00:00",
+    "controllerPid": 2468063,
+    "host": "personal.skyron-server",
+    "manifestSha256": "e4555b5554460cece135b1469d6296b23aca03bc9af21bd306c1f9173124ce21",
+    "measurementStartedByController": false,
+    "receiverPid": 2468064,
+    "receiverStartTicks": 40626170
+  }
+}

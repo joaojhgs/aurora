@@ -1,0 +1,27 @@
+{
+  "phase": "assistant",
+  "pid": 1109541,
+  "process_group": 1109541,
+  "started_at": "2026-10-14T03:09:00.586107+00:00",
+  "deadline_seconds": 600,
+  "argv": [
+    "flock",
+    "--nonblock",
+    "/tmp/aurora-global-build.lock",
+    "timeout",
+    "--signal=INT",
+    "--kill-after=10s",
+    "600s",
+    "/home/developer/projects/aurora/.venv/bin/python",
+    "scripts/experiments/assistant_local_api_pilot.py",
+    "--architecture-mode",
+    "processes",
+    "--gateway-only",
+    "--redis-url",
+    "redis://127.0.0.1:33807/0",
+    "--model-path",
+    "/home/developer/projects/aurora/.artifacts/local-inference/models/Qwen3.5-0.8B-Q4_0.gguf",
+    "--output",
+    "/home/developer/projects/aurora/.git/aurora-handoff-import-20261006/assistant-process-api-v270/requests.jsonl"
+  ]
+}

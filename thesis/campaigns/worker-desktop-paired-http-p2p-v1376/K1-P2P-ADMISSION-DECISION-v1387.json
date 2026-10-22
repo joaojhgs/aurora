@@ -1,0 +1,15 @@
+{
+  "state": "K1_P2P_NOT_ADMITTED_EXISTING_CHECKOUT_TRUST_INSUFFICIENT",
+  "scope": "Exact source-checkout config/data stores on both approved physical hosts; not global absence",
+  "personalProfileMeshEnabled": true,
+  "workerProfileMeshEnabled": false,
+  "workerStableIdentities": 0,
+  "workerPeerTrustRows": 0,
+  "workerWalBytes": 0,
+  "requiredCapability": "An already-approved worker Mesh identity/trust store or test-profile binding authorized to the same Personal receiver, with TTS policy scope; mere enabling of the current worker default would generate a new identity and cannot establish preexisting bilateral approval.",
+  "nextAction": "Original monitor/established Coding route identify existing approved exact test-profile/store, without new grants/security changes; Root proceeds source-ready K2HTTP actual ordinary admission meanwhile.",
+  "inventoryOperationsComplete": true,
+  "newCredentialsGrantsSettingsOrModelCalls": 0,
+  "personal": "thesis/campaigns/worker-desktop-paired-http-p2p-v1376/EXISTING-PERSONAL-TRUST-v1387.json",
+  "worker": "thesis/campaigns/worker-desktop-paired-http-p2p-v1376/EXISTING-WORKER-TRUST-v1387.json"
+}

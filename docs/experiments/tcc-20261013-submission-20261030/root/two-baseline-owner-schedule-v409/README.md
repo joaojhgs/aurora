@@ -1,0 +1,7 @@
+# Exact owner schedule and actual readiness — V409
+
+Start the separate personal-desktop GPU individual campaign as soon as actual setup is ready, in parallel with the original coding-worker CPU campaign. Finish the whole frozen CPU campaign unchanged and retain it as extra CPU evidence. Cross-device and cross-surface measurements wait until both individual campaigns finish naturally and seal results. During the subsequent cross-device phase, declared simultaneous local-user and mesh requests sharing providers are required controlled contention scenarios.
+
+For applicable new conditions, collect 900 measured requests per condition, with additional excluded warmups. Keep cumulative TTS, then TTS+LLM, then TTS+LLM+STT and all applicable non-iOS surfaces. Never pool CPU and GPU data. The original monitor alone writes the authoritative vault plan. This supersedes the earlier pending allocation and permission for measured disjoint cross-device lanes during baselines.
+
+Actual evidence: 800 original CPU measured replies independently reviewed; final API cell live. Desktop RX 7600 hardware and headless Vulkan are verified. The benchmark has NOT started: isolated environment setup stopped at 2.04 GB available disk, the exact worker source commit is absent, and backend build prerequisites remain missing. Root is checking existing storage mounts without cleanup, source overwrite, security changes or new workers.

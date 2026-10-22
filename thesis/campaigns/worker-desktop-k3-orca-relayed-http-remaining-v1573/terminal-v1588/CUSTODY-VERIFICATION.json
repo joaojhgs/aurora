@@ -1,0 +1,208 @@
+{
+  "at": "2026-10-18T18:03:15.722425+00:00",
+  "files": [
+    {
+      "path": "thesis/campaigns/worker-desktop-k3-orca-relayed-http-remaining-v1573/attempts/attempt-0001-warmup.jsonl",
+      "bytes": 3281,
+      "sha256": "554c21925d1d386a50884b4aeca279eec3292190375aad4db2e70b54b679102c"
+    },
+    {
+      "path": "thesis/campaigns/worker-desktop-k3-orca-relayed-http-remaining-v1573/frozen/condition.json",
+      "bytes": 20301,
+      "sha256": "05b724ff24977f570fa728381f750eb675d192fc9f7f766a5123c03262ceccb8"
+    },
+    {
+      "path": "thesis/campaigns/worker-desktop-k3-orca-relayed-http-remaining-v1573/harness/aurora_voice_telemetry_v430.py",
+      "bytes": 11584,
+      "sha256": "8129ffe7591a47a0107ede53b101aead9fc1f58b92f0c0c4203176cc7608325d"
+    },
+    {
+      "path": "thesis/campaigns/worker-desktop-k3-orca-relayed-http-remaining-v1573/harness/bindings.py",
+      "bytes": 3230,
+      "sha256": "52182f956b34788ecbfbbb241c8243ff88baebe2874e3605791793777ed0dc91"
+    },
+    {
+      "path": "thesis/campaigns/worker-desktop-k3-orca-relayed-http-remaining-v1573/harness/bootstrap.py",
+      "bytes": 1950,
+      "sha256": "6dddcd75348326ed65f6efaf05abdc40dcc503d512dd0a20b6335cbb277f5d50"
+    },
+    {
+      "path": "thesis/campaigns/worker-desktop-k3-orca-relayed-http-remaining-v1573/harness/candidate-input.wav",
+      "bytes": 219794,
+      "sha256": "da0ecc4ad0885746ab6e716585473917ab2b543a505bf0db09ebacfaa7943cbb"
+    },
+    {
+      "path": "thesis/campaigns/worker-desktop-k3-orca-relayed-http-remaining-v1573/harness/candidate-manifest.json",
+      "bytes": 220,
+      "sha256": "ce75b965ee5879ebece6ea7dfe133441547d20ccf89ecd5d66ea510bd9645e60"
+    },
+    {
+      "path": "thesis/campaigns/worker-desktop-k3-orca-relayed-http-remaining-v1573/harness/controller.py",
+      "bytes": 19509,
+      "sha256": "6ac8bb2628b7c8011ad696bfd2162a87de00e15be6819b9c312bdea25925fdeb"
+    },
+    {
+      "path": "thesis/campaigns/worker-desktop-k3-orca-relayed-http-remaining-v1573/harness/k3_composition.py",
+      "bytes": 13333,
+      "sha256": "a62e5a036eb127657e1f81c503c08a272a7ef603c53c5e03991c17f4daa1a9e6"
+    },
+    {
+      "path": "thesis/campaigns/worker-desktop-k3-orca-relayed-http-remaining-v1573/harness/observer.py",
+      "bytes": 11873,
+      "sha256": "784cc4bffc0d6824bbe378d17a7f632d587ca0a315896b048b2ebef727082df5"
+    },
+    {
+      "path": "thesis/campaigns/worker-desktop-k3-orca-relayed-http-remaining-v1573/harness/receiver_proof.py",
+      "bytes": 15751,
+      "sha256": "6556a3cc79a8c732f5b0100165981856e0b0053f68c47a4bc8ea308d866d95cf"
+    },
+    {
+      "path": "thesis/campaigns/worker-desktop-k3-orca-relayed-http-remaining-v1573/harness/resource_sample.py",
+      "bytes": 7475,
+      "sha256": "8f62ec378e74036d4539d9159e3caf29b8fd7a9115de1ab0f482dfd58b6e1857"
+    },
+    {
+      "path": "thesis/campaigns/worker-desktop-k3-orca-relayed-http-remaining-v1573/harness/runner.py",
+      "bytes": 54907,
+      "sha256": "540dbe7a84a93a614047f55d35ab9bcc312964d09bdbb5d36631e306ab9d50c9"
+    },
+    {
+      "path": "thesis/campaigns/worker-desktop-k3-orca-relayed-http-remaining-v1573/harness/source-inventory.json",
+      "bytes": 58216,
+      "sha256": "96ec8e3e14233520d4cd469c4177264a193d05cf26b4b512d91d98f16bbb7dee"
+    },
+    {
+      "path": "thesis/campaigns/worker-desktop-k3-orca-relayed-http-remaining-v1573/harness/stage_adapter.py",
+      "bytes": 8801,
+      "sha256": "204ea4d6b48571ab7ba0add0310a3dadd87b5e1e2afdc172634185755c9bb02c"
+    },
+    {
+      "path": "thesis/campaigns/worker-desktop-k3-orca-relayed-http-remaining-v1573/operator/LAUNCH-INTENT.json",
+      "bytes": 200,
+      "sha256": "1ae13ec48e2d2da4ebb76a2ea9ceb2124dc7c02418856c845a071b323022ca79"
+    },
+    {
+      "path": "thesis/campaigns/worker-desktop-k3-orca-relayed-http-remaining-v1573/operator/operator-launch.json",
+      "bytes": 589,
+      "sha256": "12b3aabc5d18df3127fb98dc9a1e548fd796ae13fcea3b7b0304c9dadf2a89bb"
+    },
+    {
+      "path": "thesis/campaigns/worker-desktop-k3-orca-relayed-http-remaining-v1573/operator/requester-launch.json",
+      "bytes": 830,
+      "sha256": "89a68339e6a535d5662e60d9dc091ac322fbd4e344df32f53e063bdf9896c1eb"
+    },
+    {
+      "path": "thesis/campaigns/worker-desktop-k3-orca-relayed-http-remaining-v1573/operator/requesterCopier-launch.json",
+      "bytes": 257,
+      "sha256": "bbdfd0d644726b85f3aa41a3a0fcc94ceca3a2eda928bff48b75d5d8e897c709"
+    },
+    {
+      "path": "thesis/campaigns/worker-desktop-k3-orca-relayed-http-remaining-v1573/operator/warmupFinalizer-launch.json",
+      "bytes": 257,
+      "sha256": "a27100f4ea73f314916564f7f644986718b159299a5008598c56f928448c4db7"
+    },
+    {
+      "path": "thesis/campaigns/worker-desktop-k3-orca-relayed-http-remaining-v1573/prefixes/actual-provider-bindings.jsonl/000000000000-000000000847.chunk",
+      "bytes": 847,
+      "sha256": "f50344559253756d1f2f45e7f8a59cf860a9bacec5f89cbe6cb3c8fb98e6ffc3"
+    },
+    {
+      "path": "thesis/campaigns/worker-desktop-k3-orca-relayed-http-remaining-v1573/prefixes/backend.private.log/000000000000-000000034661.chunk",
+      "bytes": 34661,
+      "sha256": "27b9b5451aa31b25cd12ed38239a59be75f35ef371dc0726f60c9ab989a6d166"
+    },
+    {
+      "path": "thesis/campaigns/worker-desktop-k3-orca-relayed-http-remaining-v1573/prefixes/backend.private.log/000000034661-000000037174.chunk",
+      "bytes": 2513,
+      "sha256": "1ced162661a59e458485fec3a6de918e0c237c8325a633b7313616165acc4a06"
+    },
+    {
+      "path": "thesis/campaigns/worker-desktop-k3-orca-relayed-http-remaining-v1573/prefixes/requesterCopier.private.log/000000000000-000000001311.chunk",
+      "bytes": 1311,
+      "sha256": "66bced460b840f744f74a521e86835cc012d7d8d06ccca4130ff4b3ea5713089"
+    },
+    {
+      "path": "thesis/campaigns/worker-desktop-k3-orca-relayed-http-remaining-v1573/prefixes/requesterCopier.private.log/000000001311-000000001622.chunk",
+      "bytes": 311,
+      "sha256": "b3029887aed14a9e646cca5da0fa3778f6e557160027397ee8a4a39948e094b0"
+    },
+    {
+      "path": "thesis/campaigns/worker-desktop-k3-orca-relayed-http-remaining-v1573/prefixes/requesterCopier.private.log/000000001622-000000002050.chunk",
+      "bytes": 428,
+      "sha256": "5e8e3f03bbd2e34ca94170400cddd6a8a490abc25619280ce0825dabf3113cb6"
+    },
+    {
+      "path": "thesis/campaigns/worker-desktop-k3-orca-relayed-http-remaining-v1573/prefixes/resources.jsonl/000000000000-000000068198.chunk",
+      "bytes": 68198,
+      "sha256": "67340599424d7b0c733630e5c4a5167afd3c7c692c4566ff5d87887798ff42dc"
+    },
+    {
+      "path": "thesis/campaigns/worker-desktop-k3-orca-relayed-http-remaining-v1573/prefixes/resources.jsonl/000000068198-000000093958.chunk",
+      "bytes": 25760,
+      "sha256": "e05e2f32021a524cc0bd201e3e12451981f87a80b09e95324084b0a845a1bca2"
+    },
+    {
+      "path": "thesis/campaigns/worker-desktop-k3-orca-relayed-http-remaining-v1573/prefixes/warmupFinalizer.private.log/000000000000-000000000732.chunk",
+      "bytes": 732,
+      "sha256": "e46766d1ff079d9a86008b2b9152b950e836887a00ed3b67b18464f926b889b0"
+    },
+    {
+      "path": "thesis/campaigns/worker-desktop-k3-orca-relayed-http-remaining-v1573/runtime/runtime-versions.json",
+      "bytes": 177,
+      "sha256": "92d540381dde2cae28caba40a9d69f3da423509523e57fb327bcc9543bab3e13"
+    },
+    {
+      "path": "thesis/campaigns/worker-desktop-k3-orca-relayed-http-remaining-v1573/runtime/voice-stages.installed.json",
+      "bytes": 70,
+      "sha256": "97bf06546c6b8f3b03b86bdb4bb39aba720c051db407d248181252f81051cb31"
+    },
+    {
+      "path": "thesis/campaigns/worker-desktop-k3-orca-relayed-http-remaining-v1573/runtime/voice-stages.status.json",
+      "bytes": 129,
+      "sha256": "33092f425f332f5fd463fbc1b5a24197757503094adc77bc92d814f09735bb68"
+    },
+    {
+      "path": "thesis/campaigns/worker-desktop-k3-orca-relayed-http-remaining-v1573/snapshots/control-launch.json/cd2aa93458b1312077314b90d5eba78dbd9ab92e1ee6a801722702acc70131fa.json",
+      "bytes": 4031,
+      "sha256": "cd2aa93458b1312077314b90d5eba78dbd9ab92e1ee6a801722702acc70131fa"
+    },
+    {
+      "path": "thesis/campaigns/worker-desktop-k3-orca-relayed-http-remaining-v1573/snapshots/control-launch.json/d8179f5a4cd3174c15f26d14d3dd8c70aa804b88915e8814144fe5bdec043d75.json",
+      "bytes": 3929,
+      "sha256": "d8179f5a4cd3174c15f26d14d3dd8c70aa804b88915e8814144fe5bdec043d75"
+    },
+    {
+      "path": "thesis/campaigns/worker-desktop-k3-orca-relayed-http-remaining-v1573/snapshots/progress.json/57eb938d040b26dd98b9315c0e87688ba001498b5490d85ca7496ca20d1c65f8.json",
+      "bytes": 217,
+      "sha256": "57eb938d040b26dd98b9315c0e87688ba001498b5490d85ca7496ca20d1c65f8"
+    },
+    {
+      "path": "thesis/campaigns/worker-desktop-k3-orca-relayed-http-remaining-v1573/snapshots/summary.json/8c2313d6b6dfd1c01399a95c67e58a30fe33ffd3b6b29d9f018c4d4498d63e65.json",
+      "bytes": 9853,
+      "sha256": "8c2313d6b6dfd1c01399a95c67e58a30fe33ffd3b6b29d9f018c4d4498d63e65"
+    }
+  ],
+  "errors": [],
+  "extraTerminalCopies": [
+    {
+      "path": "thesis/campaigns/worker-desktop-k3-orca-relayed-http-remaining-v1573/terminal-v1588/summary.json",
+      "bytes": 9853,
+      "sha256": "8c2313d6b6dfd1c01399a95c67e58a30fe33ffd3b6b29d9f018c4d4498d63e65"
+    },
+    {
+      "path": "thesis/campaigns/worker-desktop-k3-orca-relayed-http-remaining-v1573/terminal-v1588/progress.json",
+      "bytes": 217,
+      "sha256": "57eb938d040b26dd98b9315c0e87688ba001498b5490d85ca7496ca20d1c65f8"
+    },
+    {
+      "path": "thesis/campaigns/worker-desktop-k3-orca-relayed-http-remaining-v1573/terminal-v1588/failed-excluded-warmup.jsonl",
+      "bytes": 3281,
+      "sha256": "554c21925d1d386a50884b4aeca279eec3292190375aad4db2e70b54b679102c"
+    },
+    {
+      "path": "thesis/campaigns/worker-desktop-k3-orca-relayed-http-remaining-v1573/terminal-v1588/warmup-finalizer-failure.json",
+      "bytes": 202,
+      "sha256": "207ed899ae5a518a88a38da18cb8d0c7b0835aaa5fed93b5aedbc7c3e99ad58e"
+    }
+  ]
+}

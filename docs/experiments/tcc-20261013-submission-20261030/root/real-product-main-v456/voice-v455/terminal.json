@@ -1,0 +1,49 @@
+{
+  "startedAt": "2026-10-15T00:10:02.301183+00:00",
+  "controllerPid": 2856612,
+  "globalBuildLockHeld": true,
+  "capSeconds": 900,
+  "measurementStarted": false,
+  "phase2MeasuredAllowed": false,
+  "voiceAttemptsAddedBySetup": 0,
+  "surface": "actual production apps/aurora-web same-host loopback Gateway/main.py",
+  "physicalMic": false,
+  "physicalAudioAudibility": false,
+  "previousSixTinyFlowsPreserved": true,
+  "priorLogicalAccurateFlow7TransportNonpassPreserved": true,
+  "initialResources": {
+    "homeFree": 458952704,
+    "shmFree": 619536384,
+    "memAvailable": 3338317824
+  },
+  "gpuPreflight": [
+    {
+      "device": "/sys/devices/pci0000:00/0000:00:01.1/0000:01:00.0/0000:02:00.0/0000:03:00.0",
+      "vendor": "0x1002",
+      "product": "0x7480",
+      "vramTotal": "8573157376",
+      "vramUsed": "48050176"
+    },
+    {
+      "device": "/sys/devices/pci0000:00/0000:00:08.1/0000:0a:00.0",
+      "vendor": "0x1002",
+      "product": "0x15d8",
+      "vramTotal": "2147483648",
+      "vramUsed": "839176192"
+    }
+  ],
+  "webPid": 2856632,
+  "backendControllerPid": 2856633,
+  "webBaseUrl": "http://127.0.0.1:51407",
+  "error": "FileNotFoundError: [Errno 2] No such file or directory: '/home/developer/projects/aurora/.git/aurora-real-ui-voice-v455/runtime/voice-stages.installed'",
+  "setupFailed": true,
+  "finishedAt": "2026-10-15T00:10:19.224607+00:00",
+  "elapsedSeconds": 16.92357732495293,
+  "childrenExitCodes": [
+    130,
+    -2
+  ],
+  "finalHomeFree": 458256384,
+  "finalShmFree": 619536384,
+  "finalMemAvailable": 3166138368
+}

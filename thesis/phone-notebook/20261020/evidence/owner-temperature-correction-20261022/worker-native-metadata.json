@@ -1,0 +1,16 @@
+{
+  "at": "2026-10-22T03:21:10.202921+00:00",
+  "readOnlyWorkerMetadata": true,
+  "paths": [
+    {
+      "path": ".artifacts/sherpa-onnx/android-runtime-build/runtime/arm64-v8a",
+      "exists": false,
+      "files": []
+    },
+    {
+      "path": ".artifacts/local-inference/runtime/android-arm64",
+      "exists": true,
+      "files": []
+    }
+  ]
+}

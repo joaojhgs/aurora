@@ -1,0 +1,14 @@
+{
+  "owned_sha256": {
+    "apps/aurora-web/app/assistant-client.tsx": "9d5571da7fc21b99921ae7601b3cf1cd993e730581d014e19f8201162066bb96",
+    "packages/aurora-ui/src/assistant-view-types.ts": "3f129d205313eece70b3bb594f568f0511a2c38c43339d3ccf275b0e32db6dc2",
+    "packages/aurora-ui/src/assistant-view.tsx": "d244100fdd1db1a996f304b2555821807f6c1aa973d6660ef27ff762780033bb",
+    "packages/aurora-ui/src/use-assistant-view-coordination.ts": "6f2d63c3ae30dd9447e939a4caf2e4bffc3925613c44446fd33a74057cc33196",
+    "packages/aurora-ui/src/assistant-history-persistence.ts": "4d45d97df625cbac62fdc6c774144f98bcf86e7c8b1341a26d5efd019a077f75",
+    "packages/aurora-ui/tests/native-assistant-view.test.tsx": "5c26bab5e1cee386f578c5cf8fdcea86a0800385e2ede34d78bc485638548a2b"
+  },
+  "typing_delta_only": true,
+  "prior_failure": "mesh-history-source-v280 TS2345; unit not run; preserved",
+  "review_sha256": "5aab80868cee56219e7ed217955179042e98dbba4ea3a73a9d2e45acf78b6f10",
+  "unit_scope": "seeded LOAD/UI only; realhostedmain mustprovefreshsave/reopen"
+}

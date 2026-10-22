@@ -1,0 +1,13 @@
+{
+  "observed_at": "2026-10-14T15:42:09Z",
+  "cpu_campaign": "6ce98ae97d594d9fafcd1ff9ad4b9b1c",
+  "cpu_state": "running",
+  "cpu_terminal_seal": null,
+  "gpu_campaign": null,
+  "gpu_backend_verification": null,
+  "gpu_launch_receipt": null,
+  "gpu_terminal_seal": null,
+  "barrier_ready": false,
+  "cross_device_measured_launch_allowed": false,
+  "scope": "unknown GPU state is not absence/exit"
+}

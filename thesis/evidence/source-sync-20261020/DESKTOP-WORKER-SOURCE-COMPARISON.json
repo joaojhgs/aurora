@@ -1,0 +1,114 @@
+[
+  {
+    "path": "AGENTS.md",
+    "desktopSha256": "42660a65112a101b1c389cd590b2d88ee9e964d9195fd2b825921b045149170b",
+    "workerSha256": "fe0fd32b57fd6d4b6abb2561342e8487023123eb64df152cd4d002d2d713ef2a",
+    "same": false,
+    "workerExists": true
+  },
+  {
+    "path": "CLAUDE.md",
+    "desktopSha256": "4b54bc9b19f6b5b10b22fac27f444f3892d19a866e096aaa4da432cd2fe57367",
+    "workerSha256": "4b54bc9b19f6b5b10b22fac27f444f3892d19a866e096aaa4da432cd2fe57367",
+    "same": true,
+    "workerExists": true
+  },
+  {
+    "path": "apps/aurora-tauri/scripts/android-voice-live-smoke.mjs",
+    "desktopSha256": "b5b0d53db1ae77692844ad5b013bc7f70803a663e7514e5db521d3a6db732103",
+    "workerSha256": "cb5c86d8929e1db16b9acb1664e00627b1ecdaa76f6859d804a4d209491e47f4",
+    "same": false,
+    "workerExists": true
+  },
+  {
+    "path": "apps/aurora-tauri/scripts/per277-assistant-stream-acceptance.mjs",
+    "desktopSha256": "0c5031045139770b01c58b1385a74a8227856aac78ee581d67b0f118db809169",
+    "workerSha256": "e1abc4ae4a445a2857c21938244585fddb14724b815ac32c13a8f9265e8c3b59",
+    "same": false,
+    "workerExists": true
+  },
+  {
+    "path": "apps/aurora-tauri/scripts/per277-waydroid-performance-acceptance.mjs",
+    "desktopSha256": "f0604caa38be387b9064b31a093dff560ebc0d0ef25c54eea46708e332cc494b",
+    "workerSha256": "b7ca82e3224fdce11f9fa3d8e2f7eb7b26b2b6f73a40196128b92d0e78b1b898",
+    "same": false,
+    "workerExists": true
+  },
+  {
+    "path": "apps/aurora-tauri/src-tauri/gen/schemas/acl-manifests.json",
+    "desktopSha256": "98a3e775d1430b1e170014c568c162d99645de49d3d89d52b935cf4c47b01a01",
+    "workerSha256": "99bfb3831591fdccb630b1f6216ea52d46ef086f394956830da5372c066ec6b7",
+    "same": false,
+    "workerExists": true
+  },
+  {
+    "path": "apps/aurora-tauri/src-tauri/gen/schemas/android-schema.json",
+    "desktopSha256": "5efcdc135016aba50cfcc5b8c6bb7e71e1187a7b8cb38c44d965a49067942d86",
+    "workerSha256": "623abd9f0f7eed4dc65da69f25873c1090d610518571c4ac96ead5a510c5f079",
+    "same": false,
+    "workerExists": true
+  },
+  {
+    "path": "apps/aurora-tauri/src-tauri/gen/schemas/mobile-schema.json",
+    "desktopSha256": "5efcdc135016aba50cfcc5b8c6bb7e71e1187a7b8cb38c44d965a49067942d86",
+    "workerSha256": "623abd9f0f7eed4dc65da69f25873c1090d610518571c4ac96ead5a510c5f079",
+    "same": false,
+    "workerExists": true
+  },
+  {
+    "path": "apps/aurora-tauri/src-tauri/src/mesh_session.rs",
+    "desktopSha256": "7bc785d31977482b08efc981c1285d115681ff05798b75a36025a828b1d7e4ba",
+    "workerSha256": "ecd2d1fd59b981dd92c55154c2832a1e5e846088ba8470edfb3dc4d7c757f769",
+    "same": false,
+    "workerExists": true
+  },
+  {
+    "path": "apps/aurora-tauri/src-tauri/src/native_mesh_assistant.rs",
+    "desktopSha256": "4c9962d9f88a214c549fecb1846992f01724912263b63a085dd02207f8a9ab23",
+    "workerSha256": "3711035ad00d8cc9ba921e4d8996a1851b51949d143ee13790de9df8e9abb068",
+    "same": false,
+    "workerExists": true
+  },
+  {
+    "path": "apps/aurora-tauri/src-tauri/src/native_mesh_speech.rs",
+    "desktopSha256": "39bc19d005a104dd78ba04b4da305d449e2ddbfd3643ea191837d712d33a51d6",
+    "workerSha256": null,
+    "same": false,
+    "workerExists": false
+  },
+  {
+    "path": "apps/aurora-tauri/src/native-ios-voice.test.ts",
+    "desktopSha256": "53359956c2a74ec09381d7b3a334ad1c938238d67694385909cf4b82dd2f8ed5",
+    "workerSha256": "a042beba7d0cc54c724e4ff6486286257957e6eaea9ae5f2f1d041c931f8ce4d",
+    "same": false,
+    "workerExists": true
+  },
+  {
+    "path": "docs/CI_CD.md",
+    "desktopSha256": "a908f89ef44a1a475e4c78b30a654b9e56372a35ac4bc7287ac281c461411677",
+    "workerSha256": "a908f89ef44a1a475e4c78b30a654b9e56372a35ac4bc7287ac281c461411677",
+    "same": true,
+    "workerExists": true
+  },
+  {
+    "path": "packages/aurora-ui/src/use-assistant-controller-assembly.ts",
+    "desktopSha256": "45c4ca68266541c5f4b2be3166c3448e8670dba5a34a60b92e567ddae443bf75",
+    "workerSha256": null,
+    "same": false,
+    "workerExists": false
+  },
+  {
+    "path": "rust/crates/aurora-voice-native/src/mesh_speech.rs",
+    "desktopSha256": "5e86d6f140e81608ff582bcc5952c51206cc30a681fa3107e8ee52b037b22aa2",
+    "workerSha256": "cb807fb40dfe6c9d67ebb3cab641b753ae181953e6206f78d83164ea81559ca5",
+    "same": false,
+    "workerExists": true
+  },
+  {
+    "path": "rust/crates/aurora-voice-native/tests/mesh_speech_lifecycle.rs",
+    "desktopSha256": "652bcf1469441477d28ed2b969b69848d85a0e516b48ca523d1aefcdd4f38e72",
+    "workerSha256": null,
+    "same": false,
+    "workerExists": false
+  }
+]

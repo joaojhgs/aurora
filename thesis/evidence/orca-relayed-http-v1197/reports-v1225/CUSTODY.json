@@ -1,0 +1,24 @@
+{
+  "at": "2026-10-17T20:37:08.282857+00:00",
+  "existingEarlierCopiesPreserved": true,
+  "records": [
+    {
+      "bytes": 9752,
+      "destination": "thesis/evidence/orca-relayed-http-v1197/reports-v1225/root-CURRENT.md",
+      "sha256": "21807218942d51e0e4d39db1ac99a749c7086f676dc85c40bd09289f333446ed",
+      "source": "docs/experiments/tcc-20261013-submission-20261030/root/CURRENT.md"
+    },
+    {
+      "bytes": 5682,
+      "destination": "thesis/evidence/orca-relayed-http-v1197/reports-v1225/distributed-k1-orca-relayed-http-v1197-REPORT.md",
+      "sha256": "f041b46c405f973d9ecb888c332dcdb30a9af93b695f18b92ee0a4e4f53e8040",
+      "source": "docs/experiments/tcc-20261013-submission-20261030/root/distributed-k1-orca-relayed-http-v1197/REPORT.md"
+    },
+    {
+      "bytes": 4894,
+      "destination": "thesis/evidence/orca-relayed-http-v1197/reports-v1225/browser-normal-ui-padded900-v799-REPORT.md",
+      "sha256": "d97b480bdc4f0658bf5f096909993e293eb2697e9edd608342d4a1bf14b9acf1",
+      "source": "docs/experiments/tcc-20261013-submission-20261030/root/browser-normal-ui-padded900-v799/REPORT.md"
+    }
+  ]
+}

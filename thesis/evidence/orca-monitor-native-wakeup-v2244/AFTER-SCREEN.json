@@ -1,0 +1,39 @@
+{
+  "id": "0f148f92-a7bf-4e44-9e12-86482eae6112",
+  "ok": true,
+  "result": {
+    "terminal": {
+      "handle": "term_2eab47ed-ab9b-4e35-bd9b-fc068c60e3fc",
+      "status": "running",
+      "tail": [
+        "\u203a Owner explicitlycommandsCONTINUENOWkeepmainrunning. CodingissuingONEoriginal\u2026",
+        "  Root\u2019s launch-reconciliation result. I won\u2019t send another resume command.",
+        "\u2022 Ran timeout --kill-after=2s 28s /home/developer/.orca-relay/bin/orca orchestr\u2026",
+        "  \u2514     \"runtimeId\": \"cc9e3275-28c6-4c45-85cc-bdcd2262aa7d\"",
+        "      }",
+        "    }",
+        "    + 217 lines (ctrl+t to expand)",
+        "\u2022 The original monitor goal is ACTIVE again. Root\u2019s latest messages report that",
+        "  measurements have resumed: 15 correct excluded warmups and 45 native joins",
+        "  passed, followed by new HTTP results.",
+        "  I\u2019ll verify the saved first-result receipt, current process identities and",
+        "  physical audio file once, then relay the confirmed outcome to Coding. Earlier",
+        "  launch and readiness messages are now historical.",
+        "\u2022 Working (23s \u2022 esc to interrupt)",
+        "\u203a Ask Codex to do anything",
+        "  GPT-6.1-Sol xhigh \u00b7 ~/projects/aurora \u00b7 Report t\u2026 Pursuing goal (6d 19h 51m)",
+        "  ? for shortcuts                                      \u26a0 1 warning \u00b7 f2 to view"
+      ],
+      "truncated": true,
+      "limited": false,
+      "oldestCursor": "0",
+      "nextCursor": "0",
+      "latestCursor": "0",
+      "returnedLineCount": 17,
+      "source": "screen"
+    }
+  },
+  "_meta": {
+    "runtimeId": "cc9e3275-28c6-4c45-85cc-bdcd2262aa7d"
+  }
+}

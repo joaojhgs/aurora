@@ -1,0 +1,38 @@
+{
+  "id": "remote-cli-1792631509893",
+  "ok": true,
+  "result": {
+    "runId": "run_e6054e76e9fc",
+    "deliveryId": "delivery_02b13145cc27",
+    "messages": [
+      {
+        "id": "msg_dd7d643976ce",
+        "run_id": "run_e6054e76e9fc",
+        "delivery_contract": "current_delivery",
+        "from_handle": "term_2eab47ed-ab9b-4e35-bd9b-fc068c60e3fc",
+        "to_handle": "run:run_e6054e76e9fc",
+        "subject": "OWNER REQUEST PENDING: notify Coding ONCE when K1HTTP900 fully sealed+released",
+        "body": "NEW OWNER REQUESTED BIG-MILESTONE NOTIFICATION pending: 'lmk once k1 is fully done'. Trigger is current K1HTTP FULL900attempted/exactremainingIDsclosed, historical/newfailurespreserved, finalraw/audio/custody+analysisSEALED, actualresource-release receipt\u2014not merely terminal/workerturnstop. No newtest/proof/review/rerun gate. Please publish actual finalcounts+epochcounts/paths/hashes/retirement+release receipts promptly through originalRun/Coding route at that real seal; existing monitor will deduplicate and keep ownernotification pending until Coding delivery verified. Do not claim currentHTTPdone or interrupt currentrun/fourdevicefollowup. Main frozenrun continues; monitor samegoalACTIVE. I am persisting a unique pending-notification receipt, not modifying scientific cohort/source or adding a fullplan gate.",
+        "type": "status",
+        "priority": "normal",
+        "thread_id": null,
+        "payload": "{\"taskId\":\"task_d7ea336050cf\",\"dispatchId\":\"ctx_37b4d0a3c14f\"}",
+        "created_at": "2026-10-22T01:11:34Z",
+        "delivered_at": null
+      }
+    ],
+    "count": 1,
+    "replayed": false,
+    "acknowledged": "delivery_90d12b88b80f",
+    "timedOut": false,
+    "cancelled": false,
+    "connectionLost": false,
+    "mutation": {
+      "requestId": "ae6e6a8b-d335-42c2-b80e-684062e89fa4",
+      "replayed": false
+    }
+  },
+  "_meta": {
+    "runtimeId": "cc9e3275-28c6-4c45-85cc-bdcd2262aa7d"
+  }
+}

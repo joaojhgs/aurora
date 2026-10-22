@@ -1,0 +1,19 @@
+{
+  "at": "2026-10-17T20:29:59.981292+00:00",
+  "destination": "thesis/evidence/orca-relayed-http-v1197/settings/settings.redacted.json",
+  "destinationSha256": "8e1b227df9f5a84c4d6c890766865d635f17b3cac987cb7b3801344e082dedca",
+  "originalBytes": 15958,
+  "originalSha256": "2b8cc043fc75c8978e2528379badb9fff7cd2ad2bc82729e61c560d35bbd1cc1",
+  "privateValueFindings": [],
+  "privateValuesCopied": false,
+  "redactedPaths": [
+    ".services.gateway.api.token_secret",
+    ".services.gateway.webrtc.password",
+    ".services.auth.api_keys",
+    ".services.orchestrator.llm.third_party.openai.options.api_key",
+    ".services.orchestrator.llm.third_party.huggingface_endpoint.options.access_token",
+    ".services.tooling.plugins.brave_search.api_key"
+  ],
+  "scannedNewTextFiles": 126,
+  "source": "/home/developer/projects/aurora/.git/aurora-handoff-import-20261006/distributed-k1-orca-relayed-launch-v1197/input/runtime-config.frozen.json"
+}

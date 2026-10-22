@@ -1,0 +1,318 @@
+{
+  "observed_at": "2026-10-14T18:37:06.807346+00:00",
+  "root_notice": "msg_6483952ba226",
+  "delivery_ack": "delivery_a75640421943",
+  "closed_epoch_metadata": {
+    "path": ".git/aurora-handoff-import-20261006/desktop-closed-epoch1-metadata-v416.json",
+    "sha256": "59a42e04d9449fcfd5feabdcb865679a87cceb7fb9fb3c9d4070f5db98f3b43b",
+    "actual": {
+      "observedAtUtc": "2026-10-14T18:28:24.727995+00:00",
+      "manifest": {
+        "actual_gpu_offload_observation": null,
+        "cleanup_status": "not_observed_before_shutdown",
+        "cohort_epoch_sessions": [
+          "desktop-gpu-epoch-1-e9ce6c0b518743548d11da9ff71ff159"
+        ],
+        "condition_cohort": "desktop-vulkan-primary-v1",
+        "condition_id": "desktop-vulkan-primary-local-only-epoch-1",
+        "condition_lifecycle": "one_fresh_supervisor_for_primary_epoch_1_of_3",
+        "config_sha256": "aab3c05da67e990a03c7eeb1dfa435d460023e3251022f8f3cb381364fca5aba",
+        "deadline_ms": 180000,
+        "driver_sha256": "12a8a67a0cb0407aa4c2294b33f15518271db41376c4d7619eeb6feea760777d",
+        "epoch_index": 1,
+        "epoch_session_ids": [
+          "desktop-gpu-epoch-1-e9ce6c0b518743548d11da9ff71ff159"
+        ],
+        "failure_type": null,
+        "generation_settings": {
+          "chat_format": "chatml-function-calling",
+          "main_gpu": 0,
+          "max_tokens": 128,
+          "min_p": 0.0,
+          "n_batch": 64,
+          "n_ctx": 4096,
+          "n_gpu_layers": 100,
+          "n_threads": 2,
+          "repeat_penalty": 1.0,
+          "seed": 42,
+          "temperature": 0.0,
+          "top_k": 1,
+          "top_p": 1.0
+        },
+        "ggml_vk_visible_devices": "1",
+        "measured_requests_attempted": 300,
+        "measured_requests_per_route": 300,
+        "measured_requests_per_route_this_invocation": 300,
+        "measured_requests_unattempted": 0,
+        "measurement_tier": "desktop_gpu_primary_epoch",
+        "metric_definition": "reply latency; exact answer and persisted history gate correctness, DB readback time excluded",
+        "model_id": "qwen3.5-0.8b-q4_0-gguf",
+        "model_sha256": "57d1997790d1744fba5b40a7317df71ea5e2acee28c47e78f0cce39c0703f8cf",
+        "pilot_route": "local-only",
+        "planned_epochs": 3,
+        "planned_epochs_in_condition": 3,
+        "planned_measured_per_epoch": 300,
+        "planned_measured_requests_per_condition": 900,
+        "planned_measured_requests_this_epoch": 300,
+        "planned_measured_requests_this_invocation": 300,
+        "planned_warmups_per_epoch": 5,
+        "planned_warmups_this_epoch": 5,
+        "provider_input_capture": {
+          "artifact": "requests.jsonl.provider-inputs.jsonl",
+          "context_verified": true,
+          "sha256": "e932ef2a9543537830622a9517884d7f9bc69cb62d6fd893a4c313faabf7f85c"
+        },
+        "provider_span_attempt_count": 305,
+        "provider_span_pairs_verified": true,
+        "record_helper_sha256": "2648b5579c487e15936bf2eafd70ae8b63db5567915ff4c1c1b318989da2a646",
+        "request_count": 305,
+        "request_jsonl_sha256": "5ad881dc30afb16810458911ca983535448977c5290952dbdeda24d0cee51ea2",
+        "requested_backend": "llama_cpp",
+        "requested_gpu_layers": 100,
+        "requested_main_gpu": 0,
+        "routes": [
+          "python_local_bus"
+        ],
+        "run_mode": "desktop_gpu_primary_epoch",
+        "run_status": "epoch_completed",
+        "schema_version": "aurora.assistant.local_api_pilot_manifest.v1",
+        "scope_limit": "one fresh desktop Vulkan primary epoch over the selected Python route; three separate invocations form the condition",
+        "session_cap_seconds": 3300,
+        "source_commit": "c0f4c0013cea5bb11ef81297194d0dc142a47bc4",
+        "stage_observer": {
+          "artifact": "requests.jsonl.stages.jsonl",
+          "capture_complete": true,
+          "encoded_bytes": 1495060,
+          "event_count": 1830,
+          "flush_error_count": 0,
+          "rejected_event_count": 0,
+          "sha256": "b91df7286ec561fe851a69228760349bd027fb4883c97f2bc5d56c696fe9e96c",
+          "write_error_count": 0
+        },
+        "study_session_id": "desktop-gpu-epoch-1-e9ce6c0b518743548d11da9ff71ff159",
+        "warmup_requests_attempted": 5,
+        "warmup_requests_unattempted": 0,
+        "warmups_per_run": 5,
+        "warmups_this_invocation": 5,
+        "workload": {
+          "expected_sha256": "46d27380af82d6d618e163346c67dd7bc617d40836551d082e0aa6582b8bc934",
+          "predicate_id": "exact-answer-v1",
+          "prompt_sha256": "dcf0bf9982b7155c68f792031bd3a1e8e8e42a08a79fc4dd1136df8c602a6121"
+        },
+        "workload_id": "public-exact-answer-orbit-v1"
+      },
+      "manifestSha256": "dc185c057cc9a1f55a5ba346e3c9ef0e14a4c7592c5c3d74780ebb11793b8f4d",
+      "terminal": {
+        "kind": "actual_desktop_gpu_primary_epoch_terminal",
+        "finishedAtUtc": "2026-10-14T18:24:21.918995+00:00",
+        "elapsedSeconds": 1662.0183084739838,
+        "exitCode": 0,
+        "deadlineAction": null,
+        "resourceSamples": 1653,
+        "pid": 2707433,
+        "startTicks": "62890835",
+        "processPresentAfterWait": false,
+        "files": [
+          {
+            "name": "launch.json",
+            "bytes": 1135,
+            "sha256": "928e7c85b1c853e03963bca1aa41a8f8db30a92b65ce974b1a22b56deea4cfbd"
+          },
+          {
+            "name": "requests.jsonl",
+            "bytes": 287305,
+            "sha256": "5ad881dc30afb16810458911ca983535448977c5290952dbdeda24d0cee51ea2"
+          },
+          {
+            "name": "requests.jsonl.cleanup.json",
+            "bytes": 53,
+            "sha256": "b520a0441c3f52026bcd3f44fdcd6bc0f737d8f220ed62460b82564c81af2c63"
+          },
+          {
+            "name": "requests.jsonl.manifest.json",
+            "bytes": 3699,
+            "sha256": "dc185c057cc9a1f55a5ba346e3c9ef0e14a4c7592c5c3d74780ebb11793b8f4d"
+          },
+          {
+            "name": "requests.jsonl.provider-inputs.jsonl",
+            "bytes": 98295,
+            "sha256": "e932ef2a9543537830622a9517884d7f9bc69cb62d6fd893a4c313faabf7f85c"
+          },
+          {
+            "name": "requests.jsonl.stages.jsonl",
+            "bytes": 1495060,
+            "sha256": "b91df7286ec561fe851a69228760349bd027fb4883c97f2bc5d56c696fe9e96c"
+          },
+          {
+            "name": "resources.jsonl",
+            "bytes": 8289745,
+            "sha256": "5d9234f340b08ba50e84767f2530e0208b3a232534b6bc0cf1e170c4f91b24a3"
+          },
+          {
+            "name": "runtime-private.log",
+            "bytes": 388976,
+            "sha256": "90f7c1ecf33e2e31db6a943d8196b4f5407ac6ee9b8ad37c54d9282fce36a756"
+          }
+        ],
+        "primaryEpochStarted": true,
+        "crossDeviceMeasuredAllowed": false
+      },
+      "launch": {
+        "kind": "actual_desktop_gpu_primary_epoch_launch",
+        "startedAtUtc": "2026-10-14T17:56:39.900723+00:00",
+        "pid": 2707433,
+        "startTicks": "62890835",
+        "parentPid": 2707432,
+        "host": "personal.skyron-server",
+        "sourceRoot": "/home/developer/projects/aurora/.git/aurora-root-gpu-primary-v408/source-v409",
+        "sourceCommit": "c0f4c0013cea5bb11ef81297194d0dc142a47bc4",
+        "output": "/home/developer/projects/aurora/.git/aurora-handoff-import-20261006/desktop-gpu-primary-v415/local-only/epoch-1",
+        "requestCapSeconds": 3300,
+        "outerCapSeconds": 3350,
+        "epochIndex": 1,
+        "route": "local-only",
+        "requestsPlanned": 305,
+        "warmupRequestsPlanned": 5,
+        "measuredRequestsPlanned": 300,
+        "conditionMeasuredRequestsPlanned": 900,
+        "capBasis": "excluded readiness cold6.474s/warm5.450s; 305*6.474*1.5+120=3082s rounded3300s",
+        "GPUReservation": "exclusive original Root desktop GPU baseline flock",
+        "selectedVulkanPhysicalDevice": "1",
+        "diagnosticOnlyVerbosity": true,
+        "runnerSha256": "12a8a67a0cb0407aa4c2294b33f15518271db41376c4d7619eeb6feea760777d",
+        "primaryEpochStarted": true,
+        "crossDeviceMeasuredAllowed": false
+      },
+      "ownedRunnerPidPresent": false,
+      "actualOffloadLines": [
+        "load_tensors: offloading output layer to GPU",
+        "load_tensors: offloading 23 repeating layers to GPU",
+        "load_tensors: offloaded 25/25 layers to GPU"
+      ],
+      "rawExportedOrAnalyzed": false,
+      "scope": "one closed typed local GPU epoch, not900condition or wholeGPU"
+    }
+  },
+  "boundary_progress": {
+    "path": ".git/aurora-handoff-import-20261006/desktop-actual-primary-boundary-progress-v416.json",
+    "sha256": "63d3d9b704428c6b7e90d05394047c1b9166a1427c8c6e0820d66c0f25ea14dc",
+    "actual": {
+      "observedAtUtc": "2026-10-14T18:25:54.645760+00:00",
+      "controller": {
+        "kind": "desktop_gpu_typed_primary_controller",
+        "pid": 2707431,
+        "host": "personal.skyron-server",
+        "startedAtUtc": "2026-10-14T17:56:39.837483+00:00",
+        "overallCapSeconds": 20160,
+        "epochCapSeconds": 3300,
+        "plannedMeasuredPerCondition": 900,
+        "plannedWarmupsPerCondition": 15,
+        "plan": [
+          {
+            "route": "local-only",
+            "epoch": 1
+          },
+          {
+            "route": "local-only",
+            "epoch": 2
+          },
+          {
+            "route": "local-only",
+            "epoch": 3
+          },
+          {
+            "route": "api",
+            "epoch": 1
+          },
+          {
+            "route": "api",
+            "epoch": 2
+          },
+          {
+            "route": "api",
+            "epoch": 3
+          }
+        ],
+        "attemptedEpochs": [
+          {
+            "route": "local-only",
+            "epoch": 1,
+            "launcherPid": 2707432,
+            "startedAtUtc": "2026-10-14T17:56:39.838821+00:00",
+            "status": "epoch_completed",
+            "exitCode": 0,
+            "finishedAtUtc": "2026-10-14T18:24:21.952998+00:00",
+            "manifestSha256": "dc185c057cc9a1f55a5ba346e3c9ef0e14a4c7592c5c3d74780ebb11793b8f4d",
+            "runStatus": "epoch_completed",
+            "measuredAttempted": 300,
+            "warmupAttempted": 5
+          },
+          {
+            "route": "local-only",
+            "epoch": 2,
+            "launcherPid": 2715193,
+            "startedAtUtc": "2026-10-14T18:24:21.955619+00:00",
+            "status": "running"
+          }
+        ],
+        "conditions": {},
+        "status": "running",
+        "scope": "typed Assistant local/API only; full voice and other applicable surfaces remain required",
+        "GPUWholeIndividualFinishedSealed": false,
+        "crossDeviceMeasuredAllowed": false
+      },
+      "activeEpochLaunch": {
+        "kind": "actual_desktop_gpu_primary_epoch_launch",
+        "startedAtUtc": "2026-10-14T18:24:22.020965+00:00",
+        "pid": 2715194,
+        "startTicks": "63057047",
+        "parentPid": 2715193,
+        "host": "personal.skyron-server",
+        "sourceRoot": "/home/developer/projects/aurora/.git/aurora-root-gpu-primary-v408/source-v409",
+        "sourceCommit": "c0f4c0013cea5bb11ef81297194d0dc142a47bc4",
+        "output": "/home/developer/projects/aurora/.git/aurora-handoff-import-20261006/desktop-gpu-primary-v415/local-only/epoch-2",
+        "requestCapSeconds": 3300,
+        "outerCapSeconds": 3350,
+        "epochIndex": 2,
+        "route": "local-only",
+        "requestsPlanned": 305,
+        "warmupRequestsPlanned": 5,
+        "measuredRequestsPlanned": 300,
+        "conditionMeasuredRequestsPlanned": 900,
+        "capBasis": "excluded readiness cold6.474s/warm5.450s; 305*6.474*1.5+120=3082s rounded3300s",
+        "GPUReservation": "exclusive original Root desktop GPU baseline flock",
+        "selectedVulkanPhysicalDevice": "1",
+        "diagnosticOnlyVerbosity": true,
+        "runnerSha256": "12a8a67a0cb0407aa4c2294b33f15518271db41376c4d7619eeb6feea760777d",
+        "primaryEpochStarted": true,
+        "crossDeviceMeasuredAllowed": false
+      },
+      "warmupRows": 5,
+      "measuredRows": 11,
+      "outcomes": {
+        "correct_success": 16
+      },
+      "lastRow": {
+        "request_id": "a0ca3378-6924-4763-82a9-363d4f9f5a1c",
+        "outcome": "correct_success",
+        "warmup": false,
+        "start_monotonic_ns": 630656835313013,
+        "end_monotonic_ns": 630662186083882
+      },
+      "controllerPidPresent": true,
+      "runnerPidPresent": true
+    }
+  },
+  "local_completed_measured_epoch1": 300,
+  "epoch1_raw_analysis": "not retrieved or independently reanalysed during livebaseline; Root defers all expensiveexport until6epochs terminal",
+  "second_epoch_live_measured_at_boundary": 11,
+  "second_epoch_warmups": 5,
+  "first_condition900_closed": false,
+  "API_started": false,
+  "full_voice_surfaces_gpu_finished": false,
+  "dual_barrier_ready": false,
+  "personalSDK_reply": "actualreceived9f7d211.../historicalssh-sem-notebook-personal03d8; currentcapability UNKNOWN, not absent",
+  "run": "run_e6054e76e9fc",
+  "task": "task_d7ea336050cf",
+  "dispatch": "ctx_37b4d0a3c14f"
+}

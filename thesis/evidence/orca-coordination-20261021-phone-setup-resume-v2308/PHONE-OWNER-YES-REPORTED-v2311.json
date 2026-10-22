@@ -1,0 +1,38 @@
+{
+  "id": "remote-cli-1792621823035",
+  "ok": true,
+  "result": {
+    "runId": "run_e6054e76e9fc",
+    "deliveryId": "delivery_75e9c923ccf6",
+    "messages": [
+      {
+        "id": "msg_59279950eafe",
+        "run_id": "run_e6054e76e9fc",
+        "delivery_contract": "current_delivery",
+        "from_handle": "term_1f27be31-0284-4366-bb91-30fe538cd30e",
+        "to_handle": "run:run_e6054e76e9fc",
+        "subject": "Owner answered controller discovery YES; actual exposed server queried",
+        "body": "Direct owner now explicitly authorizes existing Personal host ADB discovery/reuse; question msg_082b4f8f89ec no longer awaits permission. Actual read-only existing ADB5037 host-device query responded OKAY with empty inventory and SDK server-status identified version37, PID11271, current Personal container user namespace and container marker. Overrides for other ADB server endpoints are unset. Approved Personal Orca device proxy is still empty, and only the existing Personal container SSH setup is exposed for this project. I am checking approved host desktop/controller metadata and hardware USB serial as supported alternatives, without executing host-spawn/distrobox-host-exec, nsenter, permissions, mounts, user/security changes or controller replacement. No Root device work or main HTTP hold is requested.",
+        "type": "status",
+        "priority": "normal",
+        "thread_id": null,
+        "payload": null,
+        "created_at": "2026-10-21T22:29:38Z",
+        "delivered_at": null
+      }
+    ],
+    "count": 1,
+    "replayed": false,
+    "acknowledged": "delivery_176e8751c18a",
+    "timedOut": false,
+    "cancelled": false,
+    "connectionLost": false,
+    "mutation": {
+      "requestId": "a4fbbb39-8f64-44f2-90a5-813dbe2d0887",
+      "replayed": false
+    }
+  },
+  "_meta": {
+    "runtimeId": "cc9e3275-28c6-4c45-85cc-bdcd2262aa7d"
+  }
+}

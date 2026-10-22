@@ -1,0 +1,28 @@
+{
+  "id": "11e666ee-a29c-495e-85d8-48906cdd9932",
+  "ok": true,
+  "result": {
+    "message": {
+      "id": "msg_74fdb71c0a6d",
+      "run_id": "run_e6054e76e9fc",
+      "delivery_contract": "current_delivery",
+      "from_handle": "term_6a00d9ee-792a-4daf-8578-236290e33108",
+      "to_handle": "dispatch:ctx_37b4d0a3c14f",
+      "subject": "Original main620/900, next bounded check00:38:07Z",
+      "body": "Verified-wait continuation, original native goal actualACTIVE/unbudgeted. Actual00:33:07Z V2296 new170/450 all correct0failures; full620/900=619correct1preservedhistoricalfailure,280remain. Original3965950/3965978/3965951 exactstartticks remain live, copier185case/WAV0errors and3.260GBfree. Physical ROOT-VERIFIED-WAIT-v2334.json plus native snapshot, CURRENT and routing pointer refreshed; next bounded check00:38:07.006237Z or earlier actual failure/terminal/guard. Finite observation helper exited normally, SUT still live; no new inference/build/review/source/settings changes or phone investigation. Your original coordination route retained, incoming queue empty. Natural-terminal finalizer/custody remains next action, then queued same-worker staging release decision. Full13 remains active/open.",
+      "type": "status",
+      "priority": "normal",
+      "thread_id": null,
+      "payload": null,
+      "created_at": "2026-10-22T00:33:13Z",
+      "delivered_at": null
+    },
+    "mutation": {
+      "requestId": "3c279529-a231-44b6-a426-4ae1ddaeae85",
+      "replayed": false
+    }
+  },
+  "_meta": {
+    "runtimeId": "cc9e3275-28c6-4c45-85cc-bdcd2262aa7d"
+  }
+}

@@ -1,0 +1,43 @@
+{
+  "at": "2026-10-18T23:15:04.552320+00:00",
+  "status": "V1620_TERMINAL_PARTIAL24_LOCAL_CUSTODY_VERIFIED_PROVIDER_ACCESS_BLOCKER_RECURRED",
+  "nativeRootGoal": "ACTIVE SAME ORIGINAL; fresh blockedaudit notyetthreshold",
+  "measured": {
+    "attempted": 24,
+    "correct": 11,
+    "strictReplyFormatFailures": 12,
+    "transportFailures": 1,
+    "timeoutFlags": 0,
+    "planned": 96,
+    "unattemptedWindow": 72,
+    "stillRequiredConditionTotal": 160
+  },
+  "wholeConditionAttemptsCountOnly": 740,
+  "ordinaryExcludedWarmups": 15,
+  "localCustody": {
+    "indexedFilesVerified": 160,
+    "indexedBytesVerified": 3096198,
+    "retainedCases": 39,
+    "actualUniqueAudioFiles": 26,
+    "actualCaseAudioReferences": 26,
+    "hashVerificationErrors": 0
+  },
+  "workerActors": "controller1501375/backend1501420/copier1501376 allnaturallyretired, no restart",
+  "exactTransportException": "http.client.RemoteDisconnected assistant 11231.17253ms",
+  "controlRecurrence": {
+    "requestId": "f2f7472f-e005-46ec-9eb9-715187e69291",
+    "error": "terminal_not_writable",
+    "accepted": false,
+    "target": "ssh:ssh-1786238480967-semdev",
+    "terminal": "term_d5651d8d-58e2-4b38-85e2-51c668cc933c",
+    "incarnation": "034ff933-61a3-4c74-b5ad-98a75e8ac21c",
+    "replayed": false,
+    "originalOutputReadCursor": "57008 unchanged,0newlines"
+  },
+  "existingApplicationHistoryRead": "ONEsame-authDB.GetSession/activatefalse alsoRemoteDisconnected11.930s; no auth/provider/forward change",
+  "providerState": "UNKNOWN since last real samePID/config proof, not absent/exit inferred",
+  "ownerChangedBrokerEvidence": "23:05:54 existingworkerTCP+verifiedTLS44.232.241.40:8084 success; supersedesoldTCPrefused only, noMQTT/pair/admission proof",
+  "nextPairGate": "ONEordinary existing-room/password discovery/negotiation/pair/taskfeatureconsent across approvednodes AFTERsupportedexistingPersonalcontrolwrites restored. No repeatedTLS/brokerprobes/newidentitystoreblocker.",
+  "nextAnalysis": "Use saved local data now; provider-native/history/resources delta retrieval pending working originalcontrol. No nextinference untilactualevidencedremedy/newadmission.",
+  "responseContentIdentification": "REPLY-CONTENT-HASH-IDENTIFICATION-v1639.json"
+}

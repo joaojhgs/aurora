@@ -1,0 +1,132 @@
+{
+  "at": "2026-10-16T15:44:49.199830+00:00",
+  "files": [
+    {
+      "source": ".git/aurora-handoff-import-20261006/profile-preservation-v1093/BEFORE.json",
+      "copy": "BEFORE.json",
+      "bytes": 483,
+      "sha256": "446cb77c9ba4c79fb8373fb2f3e120fe9927a568766e06631543d875ec533d97"
+    },
+    {
+      "source": ".git/aurora-handoff-import-20261006/profile-preservation-v1093/regression-red-RESULT.json",
+      "copy": "regression-red-RESULT.json",
+      "bytes": 505,
+      "sha256": "19ac51668a4e0545e915ab5f0283418bf7f3697c65835eea0cacab1e47a8e583"
+    },
+    {
+      "source": ".git/aurora-handoff-import-20261006/profile-preservation-v1093/regression-red.log",
+      "copy": "regression-red.log",
+      "bytes": 1997,
+      "sha256": "ecefff43d442bc331a45b532faeb5e1bb862ec2105c63c3f2df819ddd8d50a84"
+    },
+    {
+      "source": ".git/aurora-handoff-import-20261006/profile-preservation-v1093/regression-green-RESULT.json",
+      "copy": "canonical-fixture-failure-RESULT.json",
+      "bytes": 459,
+      "sha256": "508fc58151b601663f1e0676d680f204c1c698e896f5125371c5f7de3b487b83"
+    },
+    {
+      "source": ".git/aurora-handoff-import-20261006/profile-preservation-v1093/regression-green.log",
+      "copy": "canonical-fixture-failure.log",
+      "bytes": 1883,
+      "sha256": "000c7fd40ffab9d9c2de01c6a6d4a377dc5bb61b81f6ae9db31af2fdf8f8cd35"
+    },
+    {
+      "source": ".git/aurora-handoff-import-20261006/profile-preservation-v1093/regression-green-canonical-v1095-RESULT.json",
+      "copy": "regression-green-RESULT.json",
+      "bytes": 531,
+      "sha256": "c1bd07e31be61f855f76415347f4f198d92bb230cb03f7f86ca981cb9d25dd95"
+    },
+    {
+      "source": ".git/aurora-handoff-import-20261006/profile-preservation-v1093/regression-green-canonical-v1095.log",
+      "copy": "regression-green.log",
+      "bytes": 237,
+      "sha256": "290b755ffb551e5fd0a158fd27cc6461f5ae79a5ad53bcbee801c8075028f692"
+    },
+    {
+      "source": ".git/aurora-handoff-import-20261006/profile-preservation-v1093/tauri-typecheck-RESULT.json",
+      "copy": "tauri-typecheck-RESULT.json",
+      "bytes": 408,
+      "sha256": "d680229e02eac306494c6d716ab530b5a1744917953cd1cd07f0223d4d1b76d5"
+    },
+    {
+      "source": ".git/aurora-handoff-import-20261006/profile-preservation-v1093/tauri-typecheck.log",
+      "copy": "tauri-typecheck.log",
+      "bytes": 122,
+      "sha256": "9683f4cdbe6cec2d2b71269aadb5346f654cf985149a2848ba82c7e1c89edbef"
+    },
+    {
+      "source": ".git/aurora-handoff-import-20261006/profile-preservation-review-v1094/SOL-REVIEW.md",
+      "copy": "SOL-REVIEW.md",
+      "bytes": 2158,
+      "sha256": "fba5073c9d5b0de612c14ced4c8f71e52aeaa1b663058406a4140a9ce95503a4"
+    },
+    {
+      "source": ".git/aurora-handoff-import-20261006/desktop-local-frontend-v1096/ADMISSION.json",
+      "copy": "FRONTEND-ADMISSION.json",
+      "bytes": 3184,
+      "sha256": "d68ba5daa1d12a6173642871d7946b6d91656c26ed3da5a4f0e307a6802a009d"
+    },
+    {
+      "source": ".git/aurora-handoff-import-20261006/desktop-local-frontend-v1096/PROCESS.json",
+      "copy": "FRONTEND-PROCESS.json",
+      "bytes": 114,
+      "sha256": "33498ed8ef692b8468d71d4c09b3201ffe7dc3bf2bf1c1c42b4c13702df4ae99"
+    },
+    {
+      "source": ".git/aurora-handoff-import-20261006/desktop-local-frontend-v1096/RESULT.json",
+      "copy": "FRONTEND-RESULT.json",
+      "bytes": 138,
+      "sha256": "e9b98dc59d25b34c01c23fdcaaa42ae609878bdaa7215464a9b2f0ce225aadb6"
+    },
+    {
+      "source": ".git/aurora-handoff-import-20261006/desktop-local-frontend-v1096/ARTIFACT.json",
+      "copy": "FRONTEND-ARTIFACT.json",
+      "bytes": 625,
+      "sha256": "7d61e968190cb5c8132dbce2919a9c5566ef818247713fe0676d6f30ae5b6693"
+    },
+    {
+      "source": ".git/aurora-handoff-import-20261006/desktop-local-frontend-v1096/build.log",
+      "copy": "frontend-build.log",
+      "bytes": 12391,
+      "sha256": "296aed4b6d7b3d4197060c6d6e6afe5428da3ac9e072050e99bcb993cb5b6b13"
+    },
+    {
+      "source": ".git/aurora-handoff-import-20261006/desktop-local-frontend-v1096/frontend-production-v1096.tar.gz",
+      "copy": "frontend-production-v1096.tar.gz",
+      "bytes": 2095970,
+      "sha256": "5bf007ceb99c5b6e746f744869bc56fd8b76c945907d7cc2d658730056ccf1a0"
+    },
+    {
+      "source": ".git/aurora-handoff-import-20261006/native-local-setup-inputs-v1097/MANIFEST.json",
+      "copy": "NATIVE-INPUT-MANIFEST.json",
+      "bytes": 5470,
+      "sha256": "5df2f5decc66f4851b62e8a74d917e46976308de3b2eb679bcbffcf4caeb77dc"
+    },
+    {
+      "source": ".git/aurora-handoff-import-20261006/native-local-setup-inputs-v1097/reviewed-source-delta-v1097.tar.gz",
+      "copy": "reviewed-source-delta-v1097.tar.gz",
+      "bytes": 216944,
+      "sha256": "919b893d17d0fb050680cb8ec6cd3b5eddbf06fa5c8444d65e9df38ba067e1aa"
+    },
+    {
+      "source": "Root current evidence",
+      "copy": "SOURCE-DELTA.json",
+      "bytes": 766,
+      "sha256": "b072ba543dfa8c264010608ad9a03c471f8c91d26984cb6fff52171b9fe3f938"
+    },
+    {
+      "source": "Root current evidence",
+      "copy": "reviewed-profile-preservation.patch",
+      "bytes": 2935,
+      "sha256": "3796a8928cef5e20328136dc951cc9167610f63f9104a7983020868b54761482"
+    },
+    {
+      "source": "Root current evidence",
+      "copy": "REPORT.md",
+      "bytes": 4422,
+      "sha256": "e5b683c53c9d1908b2fb8de3339b616d448ef40ae41128f5b69b306b8c72c8ef"
+    }
+  ],
+  "allCopyHashesMatch": true
+}

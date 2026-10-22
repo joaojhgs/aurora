@@ -1,0 +1,28 @@
+{
+  "id": "ca8d2fa2-5f53-41d1-a1a4-712a16744f28",
+  "ok": true,
+  "result": {
+    "message": {
+      "id": "msg_76895d0826fc",
+      "run_id": "run_e6054e76e9fc",
+      "delivery_contract": "current_delivery",
+      "from_handle": "term_6a00d9ee-792a-4daf-8578-236290e33108",
+      "to_handle": "dispatch:ctx_37b4d0a3c14f",
+      "subject": "Main873/900 ACTIVE; distinct worker finite disjointpilot resourcelease admitted notlaunched",
+      "body": "Actual04:28:37.347022Z originalV2296 frozen9adb/original3Wactors live; current423/450allcorrect,global873/900attempts872correct1preservedearlierfailure27remaining.438physicalcaseWAV0copyerrors3083550720Bfree. Originalnativegoal01a112a5ACTIVE/unbudgeted; ROOT-VERIFIED-WAIT-v2391.json under physicalcampaign/CURRENT/ORCAcoord updated,nextbound04:33:37Z oractualterminal/failure/resourceguard. Mainfrozenrun continues unchanged; finalizer2303 gatedonly actualterminal+naturalWretirement, then full900 IDs/outcomes,scopedanalysis/custody/providerrelease; canonical BIGownerK1notification stillpending. Existingphoneworker msg3e4d2b87f067: exactAPKbuilt04:19:23Z569.20s, original install-r signaturemismatch preservedno uninstall; same source+explicitpackagevariant ownv96build. Resource request025bc70ea7ea now ADMITTED_NOT_LAUNCHED by Root receipt thesis/evidence/orca-coordination-20261021-phone-setup-resume-v2308/ROOT-DISJOINT-READINESS-RESOURCE-ADMISSION-v2391.json3182B SHA68296887cab9183a92981b85ba58a7e14c8e456a0e2befbbb5f290da82f1995d; workerstatusmessagefc30174d5abf accepted, notactualpilotlaunch. Exactlyone disjointNB+ownerphonelease AFTER build/Gradleclosure: boot<=900s,2nativecalls total1HTTP+1P2P<=120each,totallease<=1140,2threads,freshMemAvailable>=8GiB,disk>=2GiB,normalOSguards/temperaturerecord,no compiler overlap. Exactsource/package/APK/audio/models/settings+requested/effectivebackend telemetry; no900/warmupcampaign orCPU-as-GPUclaim. No W-D provider/route/measuredGPU/sharedmodelbinarycopy/global-lock adoption; anyoverlappingpilotpathqueuedalone untilrelease. Existingworkerowns secureproductpairing/consent/pilots/custody/actualexpiry-release, oldapp/data/keys/failurespreserved. Overnight900stillwaitsownerSleepSTART. Rootno phone/notebookreads/builds/newworkers; admissionresourceownershiponly, monitorremainsmethodologysolewriter and no extra reviewgate requested.",
+      "type": "status",
+      "priority": "normal",
+      "thread_id": null,
+      "payload": null,
+      "created_at": "2026-10-22T04:29:09Z",
+      "delivered_at": null
+    },
+    "mutation": {
+      "requestId": "af26d978-3215-4c34-9a38-e63642acf7f5",
+      "replayed": false
+    }
+  },
+  "_meta": {
+    "runtimeId": "cc9e3275-28c6-4c45-85cc-bdcd2262aa7d"
+  }
+}

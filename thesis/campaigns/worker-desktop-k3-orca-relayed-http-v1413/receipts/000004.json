@@ -1,0 +1,128 @@
+{
+  "diskAfter": {
+    "free": 6316351488,
+    "total": 109128826880,
+    "used": 102795698176
+  },
+  "diskBefore": {
+    "free": 6316511232,
+    "total": 109128826880,
+    "used": 102795538432
+  },
+  "errors": [],
+  "expectedConditionSha256": "867006901be32c93fc893f794f74a2704cc7623ced3df5d5025a044ff1e10ab6",
+  "finishedAt": "2026-10-18T08:11:32.812707+00:00",
+  "newFiles": [
+    {
+      "bytes": 29740,
+      "copiedAt": "2026-10-18T08:11:32.772813+00:00",
+      "destination": "thesis/campaigns/worker-desktop-k3-orca-relayed-http-v1413/audio/dd61951e5cbdc587c8a5a2d387d46fc76dfcc4cf376e0e4996cc8641c232d4e4.wav",
+      "sha256": "dd61951e5cbdc587c8a5a2d387d46fc76dfcc4cf376e0e4996cc8641c232d4e4",
+      "source": "/home/developer/projects/aurora/.git/aurora-handoff-import-20261006/distributed-k3-orca-relayed-http-cell-v1413/campaign/audio/dd61951e5cbdc587c8a5a2d387d46fc76dfcc4cf376e0e4996cc8641c232d4e4.wav",
+      "wav": {
+        "channels": 1,
+        "frames": 14848,
+        "sampleRate": 22050,
+        "sampleWidth": 2
+      }
+    },
+    {
+      "bytes": 6474,
+      "copiedAt": "2026-10-18T08:11:32.778509+00:00",
+      "destination": "thesis/campaigns/worker-desktop-k3-orca-relayed-http-v1413/attempts/attempt-0005-warmup.jsonl",
+      "sha256": "8c48560a66ebdb2c2304f7a413828160492fe9ef3ab018f05f705fd2edb50ece",
+      "source": "/home/developer/projects/aurora/.git/aurora-handoff-import-20261006/distributed-k3-orca-relayed-http-cell-v1413/campaign/attempts/attempt-0005-warmup.jsonl"
+    },
+    {
+      "bytes": 30252,
+      "copiedAt": "2026-10-18T08:11:32.787446+00:00",
+      "destination": "thesis/campaigns/worker-desktop-k3-orca-relayed-http-v1413/audio/c40fa25fe281502fc73fadb77eb0bae9162d1d0308e68239ecff5f9e1ea1d58f.wav",
+      "sha256": "c40fa25fe281502fc73fadb77eb0bae9162d1d0308e68239ecff5f9e1ea1d58f",
+      "source": "/home/developer/projects/aurora/.git/aurora-handoff-import-20261006/distributed-k3-orca-relayed-http-cell-v1413/campaign/audio/c40fa25fe281502fc73fadb77eb0bae9162d1d0308e68239ecff5f9e1ea1d58f.wav",
+      "wav": {
+        "channels": 1,
+        "frames": 15104,
+        "sampleRate": 22050,
+        "sampleWidth": 2
+      }
+    },
+    {
+      "bytes": 6472,
+      "copiedAt": "2026-10-18T08:11:32.796633+00:00",
+      "destination": "thesis/campaigns/worker-desktop-k3-orca-relayed-http-v1413/attempts/attempt-0006-warmup.jsonl",
+      "sha256": "2a060596b27c605f018ff73b32339571f815807d3e00c34294f2e31c234f129a",
+      "source": "/home/developer/projects/aurora/.git/aurora-handoff-import-20261006/distributed-k3-orca-relayed-http-cell-v1413/campaign/attempts/attempt-0006-warmup.jsonl"
+    },
+    {
+      "bytes": 77160,
+      "copiedAt": "2026-10-18T08:11:32.812549+00:00",
+      "destination": "thesis/campaigns/worker-desktop-k3-orca-relayed-http-v1413/prefixes/resources.jsonl/000000201841-000000279001.chunk",
+      "endByte": 279001,
+      "incomplete": true,
+      "sha256": "0b093b33b96fae36844ecff128274d617a3524a301ceec7466dad3e771351c15",
+      "source": "/home/developer/projects/aurora/.git/aurora-handoff-import-20261006/distributed-k3-orca-relayed-http-cell-v1413/resources.jsonl",
+      "sourceInode": 1665729,
+      "sourceObservedBytes": 279001,
+      "startByte": 201841
+    }
+  ],
+  "pendingStatic": [
+    "/home/developer/projects/aurora/.git/aurora-handoff-import-20261006/distributed-k3-orca-relayed-launch-v1413/warmup-finalizer-result.json",
+    "/home/developer/projects/aurora/.git/aurora-handoff-import-20261006/distributed-k3-orca-relayed-http-cell-v1413/campaign/remote-warmup-proof.json"
+  ],
+  "physicalPayloadBytes": 938836,
+  "possibleConfound": "Concurrent custody reads/writes; keep all affected measurements.",
+  "prefixes": {
+    "actual-provider-bindings.jsonl": {
+      "chunks": [
+        "thesis/campaigns/worker-desktop-k3-orca-relayed-http-v1413/prefixes/actual-provider-bindings.jsonl/000000000000-000000000845.chunk"
+      ],
+      "endByte": 845,
+      "incomplete": true,
+      "inode": 1665739,
+      "observedAt": "2026-10-18T08:11:32.796772+00:00",
+      "sourceObservedBytes": 845
+    },
+    "resources.jsonl": {
+      "chunks": [
+        "thesis/campaigns/worker-desktop-k3-orca-relayed-http-v1413/prefixes/resources.jsonl/000000000000-000000047521.chunk",
+        "thesis/campaigns/worker-desktop-k3-orca-relayed-http-v1413/prefixes/resources.jsonl/000000047521-000000124681.chunk",
+        "thesis/campaigns/worker-desktop-k3-orca-relayed-http-v1413/prefixes/resources.jsonl/000000124681-000000201841.chunk",
+        "thesis/campaigns/worker-desktop-k3-orca-relayed-http-v1413/prefixes/resources.jsonl/000000201841-000000279001.chunk"
+      ],
+      "endByte": 279001,
+      "incomplete": true,
+      "inode": 1665729,
+      "observedAt": "2026-10-18T08:11:32.812570+00:00",
+      "sourceObservedBytes": 279001
+    },
+    "voice-stages.jsonl": {
+      "chunks": [],
+      "endByte": 0,
+      "incomplete": true,
+      "inode": 1665731,
+      "observedAt": "2026-10-18T08:11:32.796730+00:00",
+      "sourceObservedBytes": 0
+    }
+  },
+  "previousReceipt": "thesis/campaigns/worker-desktop-k3-orca-relayed-http-v1413/receipts/000003.json",
+  "progressObservation": {
+    "attempted": 6,
+    "last_attempt_file": "attempts/attempt-0006-warmup.jsonl",
+    "last_attempt_status": "completed_correct",
+    "measured_attempted": 0,
+    "planned_measured": 900,
+    "planned_warmups": 15,
+    "status": "running",
+    "unattempted_measured": 900,
+    "warmups_attempted": 6
+  },
+  "providerCoverage": "Separate K3 provider custody; actual per-host prefix coverage must be joined explicitly.",
+  "reservedFreeBytes": 2147483648,
+  "retainedAudioBlobs": 6,
+  "retainedCases": 6,
+  "schema": "aurora.physical-custody-checkpoint.v1",
+  "sequence": 4,
+  "startedAt": "2026-10-18T08:11:32.760840+00:00",
+  "sutCalls": 0
+}

@@ -1,0 +1,38 @@
+{
+  "id": "remote-cli-1792628692224",
+  "ok": true,
+  "result": {
+    "runId": "run_e6054e76e9fc",
+    "deliveryId": "delivery_08cc0d116881",
+    "messages": [
+      {
+        "id": "msg_9e792434f462",
+        "run_id": "run_e6054e76e9fc",
+        "delivery_contract": "current_delivery",
+        "from_handle": "term_2eab47ed-ab9b-4e35-bd9b-fc068c60e3fc",
+        "to_handle": "run:run_e6054e76e9fc",
+        "subject": "Phone USB/Wi-Fi recovered; offline lease closed, natural-release handoff queued only",
+        "body": "Close the stale USB/Wi-Fi operator-action portion of monitor packets msg_9b34d87a8d75 / msg_fd6bc6440c43 by ACTUAL EVENT TIME: same-worker saved receipts prove USB003/014 read/write/get-state device/getprops at 00:13:17 and owner-authorized saved Wi-Fi enable at 00:14:02, phone192.168.1.94/wlan0 toward notebook192.168.1.250 and reversewlp4s0 route; this is connectivity only, not authenticatedHTTP/P2P/native acceptance. The SAME worker ACK msg_fb7e703be308 was created00:19:27 before leaseend00:19:55.341599; its last import-only child finished00:16:58.244920 with peakRSS265809920B/modelCalls0/networkRequests0/ownBuildOrInferenceProcessesActive0, no later subprocess or extension, and Root's readback acknowledges completed closure. The offline lease watch is CLOSED with no monitor stop/release/adoption or further probe; exact source/pinned llama0.3.19/model/APK readiness remains partial. Preserve QUEUED request msg_bffcad56b7d4 / PENDING-RESOURCE-HANDOFF.json (exact source<=12MiB120s,774675150Bassets+audio<=2MiB/s600s, future notebook2jobs20min then separately admitted pilot) for actual natural CURRENT HTTP terminal+seal/Root resource admission only\u2014no main interruption, transfer/build/inference started or phone900 OWNER START implied.",
+        "type": "status",
+        "priority": "high",
+        "thread_id": null,
+        "payload": "{\"taskId\":\"task_d7ea336050cf\",\"dispatchId\":\"ctx_37b4d0a3c14f\",\"reportPath\":\".omx/evidence/orca-monitor-20261010/NOTEBOOK-LEASE-CLOSED-PHONE-RECOVERED-HANDOFF-QUEUED-20261022T0022Z.json\"}",
+        "created_at": "2026-10-22T00:24:48Z",
+        "delivered_at": null
+      }
+    ],
+    "count": 1,
+    "replayed": false,
+    "acknowledged": "delivery_ac0291e0846d",
+    "timedOut": false,
+    "cancelled": false,
+    "connectionLost": false,
+    "mutation": {
+      "requestId": "7d09d2e9-575c-478a-b803-71b799933469",
+      "replayed": false
+    }
+  },
+  "_meta": {
+    "runtimeId": "cc9e3275-28c6-4c45-85cc-bdcd2262aa7d"
+  }
+}

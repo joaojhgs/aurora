@@ -1,0 +1,41 @@
+{
+  "observed_at": "2026-10-14T09:04:52.182025+00:00",
+  "native_tool": {
+    "session_id": 33217,
+    "state": "terminal",
+    "exit_code": 143,
+    "cause": "unknown",
+    "retired": true
+  },
+  "owned_campaign": {
+    "id": "6ce98ae97d594d9fafcd1ff9ad4b9b1c",
+    "pid": 1305953,
+    "pgid": 1305953,
+    "start_ticks": 74126867,
+    "state": "live",
+    "ppid": 1,
+    "driver_pid": 1305954,
+    "driver_parent": 1305953,
+    "driver_start_ticks": 74126867,
+    "api_child_pid": 1350632,
+    "hard_deadline_at": "2026-10-14T23:11:48.079900+00:00",
+    "outer_kill_after_seconds": 10,
+    "timeout_flags_confirmed": true,
+    "timeout_exit_code": null
+  },
+  "request_counts": [
+    {
+      "phase": "warmup",
+      "outcome": "correct_success",
+      "count": 5
+    },
+    {
+      "phase": "measured",
+      "outcome": "correct_success",
+      "count": 56
+    }
+  ],
+  "campaign_terminal_result_present": false,
+  "launch_result_present": false,
+  "recovery": "Observe original PID/start identities and actual cell/campaign files. No restart, duplicate reservation, terminal-handle polling or invented exit code."
+}

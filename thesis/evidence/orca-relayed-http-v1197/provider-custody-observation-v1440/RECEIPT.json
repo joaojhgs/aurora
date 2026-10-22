@@ -1,0 +1,41 @@
+{
+  "at": "2026-10-18T02:48:02.477612+00:00",
+  "classification": "LIVE_CUSTODY_VERIFIED",
+  "oneCommand": true,
+  "noResend": true,
+  "actualHost": "personal.skyron-server",
+  "terminal": "term_d5651d8d-58e2-4b38-85e2-51c668cc933c",
+  "incarnation": "034ff933-61a3-4c74-b5ad-98a75e8ac21c",
+  "executionHost": "ssh:ssh-1786238480967-semdev",
+  "nextCursor": "15046",
+  "sendReceipt": ".git/aurora-handoff-import-20261006/v1440-provider-custody-read-SEND.json",
+  "files": [
+    {
+      "source": ".git/aurora-handoff-import-20261006/v1440-provider-custody-read-RESULT.json",
+      "destination": "thesis/evidence/orca-relayed-http-v1197/provider-custody-observation-v1440/PERSONAL-CUSTODY-READ.json",
+      "bytes": 2019,
+      "sha256": "46314ad598668041c64fe97c200704e341289b0f0e8ea6294f7e9e116ee4763d"
+    },
+    {
+      "source": ".git/aurora-handoff-import-20261006/v1440-provider-custody-read-command.txt",
+      "destination": "thesis/evidence/orca-relayed-http-v1197/provider-custody-observation-v1440/command.txt",
+      "bytes": 3032,
+      "sha256": "2db0fc9fe8e8d30315e0b7799bd3fdffc7393cd165326c506213e37d6e40e612"
+    }
+  ],
+  "scope": "One metadata and retained-file size read; no raw-data/model scans or export/transfer",
+  "physicalFiles": 1060,
+  "physicalBytesByStat": 142516245,
+  "snapshotAt": "2026-10-18T02:46:02.119773+00:00",
+  "sequence": 375,
+  "missing": 0,
+  "sizeMismatches": 0,
+  "copierErrors": [],
+  "manifestProvenance": "Copier inventory declares retained input/provider-manifest.json SHA450ee5af; physical size verified. No new raw-payload hash claim.",
+  "rootWorkerTransferredProviderRawFilesUnchanged": 541,
+  "rootWorkerTransferredProviderRawBytesUnchanged": 93627933,
+  "controlReleased": true,
+  "sutCalls": 0,
+  "newWorkerOrLifecycleChanges": false,
+  "possibleConfound": "Small bounded control/metadata/stat IO during K2; retain all affected cases."
+}

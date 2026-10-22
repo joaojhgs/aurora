@@ -1,0 +1,23 @@
+{
+  "schema": "aurora.thesis.matrix-factual-label-correction.v762",
+  "at": "2026-10-16T00:12:03.100114+00:00",
+  "authorityMessage": "Original monitor msg_b5e6a109d2b8",
+  "previousByteExactExtraction": {
+    "path": "thesis/matrix/owner-dimensions-v755.md",
+    "bytes": 9832,
+    "sha256": "5ad353c549821639e3af32e3b6867834ad745baf63d35bc6dd52e2ac56cef74c"
+  },
+  "correctedExtraction": {
+    "path": "thesis/matrix/owner-dimensions-v762.md",
+    "bytes": 9921,
+    "sha256": "17776456c18e8ef3e8b25c4a0f8e04685b244178bd751b3385f80af83ff43588"
+  },
+  "correction": {
+    "previous": "V485/V497/V692 padded HTTP and original CPU V491",
+    "current": "V485 original-audio LocalBus, V497 original-audio HTTP, V692 padded-audio HTTP, and V491 original-audio extraCPU"
+  },
+  "scope": "Factual route/input labels only; no model/audio/settings/conditions/methodology/count/status change; earlier exact extraction/custody preserved",
+  "methodologyPlanWriterUnchanged": true,
+  "newMeasuredRequests": 0,
+  "benchmarkOrAuditRerun": false
+}

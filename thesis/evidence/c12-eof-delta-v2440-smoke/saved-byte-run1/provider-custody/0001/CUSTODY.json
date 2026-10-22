@@ -1,0 +1,33 @@
+{
+  "receipt": {
+    "ordinal": 1,
+    "manifestSha256": "316d4cc09adc44d0104dca8ac1f2a966347588ffef37bc2fa809ec14fd5efff8",
+    "sha256": "9104aa34d8c38309be9ee2627ea516adc5db14ca39d56880f99972a44cbc3ee3",
+    "offsets": {
+      "voice-stages.jsonl": {
+        "begin": 0,
+        "end": 29,
+        "bytes": 29,
+        "sha256": "930e4f6c07a5fc55fb5b43d593c992d18671d2b702ecb58a57786f515aa9fa3e"
+      },
+      "resources.jsonl": {
+        "begin": 0,
+        "end": 29,
+        "bytes": 29,
+        "sha256": "930e4f6c07a5fc55fb5b43d593c992d18671d2b702ecb58a57786f515aa9fa3e"
+      },
+      "bus-queue-observations.jsonl": {
+        "begin": 0,
+        "end": 29,
+        "bytes": 29,
+        "sha256": "930e4f6c07a5fc55fb5b43d593c992d18671d2b702ecb58a57786f515aa9fa3e"
+      },
+      "actual-provider-bindings.jsonl": {
+        "begin": 0,
+        "end": 29,
+        "bytes": 29,
+        "sha256": "930e4f6c07a5fc55fb5b43d593c992d18671d2b702ecb58a57786f515aa9fa3e"
+      }
+    }
+  }
+}

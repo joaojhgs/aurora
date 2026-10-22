@@ -1,0 +1,14 @@
+{
+  "campaign_id": "6ce98ae97d594d9fafcd1ff9ad4b9b1c",
+  "cell": 1,
+  "route": "local-only",
+  "counts": {
+    "warmup_correct": 5,
+    "measured_correct": 69,
+    "observed_other_outcomes": 0
+  },
+  "observed_at": "2026-10-14T08:10:55.067989+00:00",
+  "campaign_complete": false,
+  "cell_complete": false,
+  "Root_exec_session_id": 33217
+}

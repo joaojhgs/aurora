@@ -1,0 +1,53 @@
+{
+  "id": "remote-cli-1792640254241",
+  "ok": true,
+  "result": {
+    "runId": "run_e6054e76e9fc",
+    "deliveryId": "delivery_baf860b44c1f",
+    "messages": [
+      {
+        "id": "msg_32dad1161ff2",
+        "run_id": "run_e6054e76e9fc",
+        "delivery_contract": "current_delivery",
+        "from_handle": "term_2eab47ed-ab9b-4e35-bd9b-fc068c60e3fc",
+        "to_handle": "run:run_e6054e76e9fc",
+        "subject": "Coding attention: exact Personal notebook GPU exposure/runtime missing; build passed, main unaffected",
+        "body": "NEW Coding attention packet, scoped to the Personal notebook GPU condition; main K1 remains running. Verified saved root-main-mail-v2381.json (3064B SHA256 f4bf27d9d0271c8eae5ec6c0fe1ca57ad1d9c13950fb053b65a87041f4ab20ef) contains actual worker c1fc90d66d90/ce699bffa93a: exact0.3.19 Vulkan build/import PASSED03:21:26 in8m16s, no model calls; import says 'ggml_vulkan No devices found', gpuOffloadBuildSupport=false. At03:26\u201327 both existing renderD128/renderD129 were unreadable/unwritable in Personal; no NVIDIA ICD/library in inspected supported locations, not proof of global GPU absence. Exact missing capability for n_gpu_layers100 is an already-authorized compatible GPU exposure/loader in that existing context. Workers cannot chmod/change groups/mounts/drivers/security under current scope. Coding/operator should reconcile that capability or record the GPU condition unsupported; no silent CPU/backend substitution, no claim of GPU baseline. Keep this dependency scoped: independently valid Android/source/runtime preparation continues, and any separately admitted accurately labelled CPU condition must retain its own manifest, never impersonate matched GPU results. Worker ARM64Sherpa/app prep has2jobs/deadline03:43:43, no900START. Old thermal/phone-absence alerts are superseded. New dedup run_e6054e76e9fc:PERSONAL_NOTEBOOK_GPU_EXPOSURE_RUNTIME_PREREQUISITE:20261022; this original-Run escalation is enqueue, not verified Coding/Telegram delivery. Report .omx/evidence/orca-monitor-20261010/NOTEBOOK-GPU-CAPABILITY-PREREQUISITE-ATTENTION-20261022T0333Z.json SHA256 0ffe8da92c00de5a3d1a73091e67e1a669533bbb1a88dfd3450e39a0bae06ae8. No further unchanged device/ICD probes or owner model-choice loop.",
+        "type": "escalation",
+        "priority": "high",
+        "thread_id": null,
+        "payload": "{\"taskId\":\"task_d7ea336050cf\",\"dispatchId\":\"ctx_37b4d0a3c14f\",\"reportPath\":\".omx/evidence/orca-monitor-20261010/NOTEBOOK-GPU-CAPABILITY-PREREQUISITE-ATTENTION-20261022T0333Z.json\"}",
+        "created_at": "2026-10-22T03:34:34Z",
+        "delivered_at": null
+      },
+      {
+        "id": "msg_5155a54843db",
+        "run_id": "run_e6054e76e9fc",
+        "delivery_contract": "current_delivery",
+        "from_handle": "term_1f27be31-0284-4366-bb91-30fe538cd30e",
+        "to_handle": "run:run_e6054e76e9fc",
+        "subject": "Patched Android ARM64engine built6min; APK stage running, no artifact copy needed",
+        "body": "Exact notebook-local patchedSherpa1.13.5/ORT1.27.1 ARM64engine completed exit0 at03:29:44UTC in361.5s with2jobs, peak owned-treeRSS741085184B, sourcepatch and16KiBalignment checks passed by production builder. Native libraries are4511400B+21684880B; exact Android APK wrapper stage has now started with1200s/2jobs, isolated build directory/caches, frozen dependency pins and no Rootbinarycopy. Notebook VulkanGPU exposure remains the precise external backend prerequisite already sentce699bffa93a; no native/fileaudio/HTTP/P2P/900 acceptance is claimed, main run remains untouched and phone has not been occupied by an app turn.",
+        "type": "status",
+        "priority": "normal",
+        "thread_id": null,
+        "payload": "{\"reportPath\":\"thesis/phone-notebook/20261020/REPORT.md\"}",
+        "created_at": "2026-10-22T03:36:14Z",
+        "delivered_at": null
+      }
+    ],
+    "count": 2,
+    "replayed": false,
+    "acknowledged": null,
+    "timedOut": false,
+    "cancelled": false,
+    "connectionLost": false,
+    "mutation": {
+      "requestId": "57d4714a-7256-47f2-afaa-d891d4fb0c12",
+      "replayed": false
+    }
+  },
+  "_meta": {
+    "runtimeId": "cc9e3275-28c6-4c45-85cc-bdcd2262aa7d"
+  }
+}

@@ -1,0 +1,5 @@
+**Status: Current bounded check.**
+
+The original Root started desktop RX 7600 readiness at 2026-10-14 17:37:31.394278 UTC (PID2699838/start62775984). The process naturally exited1 after5.02seconds before either of the two excluded requests. There are zero measured samples and zero provider-input captures. Actual configuration validation rejects the requested n_gpu_layers=-1 because the allowed range is0..100. This is retained failed setup evidence, not GPU readiness acceptance or a primary benchmark launch.
+
+The approved recorder was received and every file hash verified. The necessary next fix requests100layers without changing Aurora schema; actual offloaded-layer logs must establish whether all model layers are on the RX7600. The separate primary condition must use three fresh application/model sessions of300 measured requests plus5excludedwarmups each. The completed900-total original CPU cohort remains extraCPU, closed and unchanged. Both full individual campaigns must finish and seal before cross-device/cross-surface measured traffic; GPU and barrier remain incomplete.

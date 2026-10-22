@@ -1,0 +1,8 @@
+{
+  "bytes": 557,
+  "copyOnly": true,
+  "custody": "Notebook result persisted and fsynced before relay; remote receipt in same output",
+  "localPath": "/home/developer/projects/aurora/thesis/phone-notebook/20261020/evidence/launch-fixture-resume-v169/result.json",
+  "remotePath": "/home/developer/projects/aurora/thesis/phone-notebook/20261020/evidence/launch-fixture-resume-v169.json",
+  "sha256": "595565e4df164d47e431a3f7d3ad3a52f6d24054b5eb92010a8548da4bc37dee"
+}

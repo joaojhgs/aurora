@@ -1,0 +1,11 @@
+{
+  "at": "2026-10-18T14:53:01.698649+00:00",
+  "terminal": "term_2eab47ed-ab9b-4e35-bd9b-fc068c60e3fc",
+  "incarnation": "37e50d9c-6cf5-4e28-a63b-f2bc3eed5661",
+  "nativeGoal": "01a123ff-19ba-7332-a2f7-346a722af79f",
+  "reportedStatus": "blocked msg_302bb3286dc2",
+  "command": "/goal resume",
+  "maxSends": 1,
+  "actualChangedCapability": "raw-channel-v1522+fresh-v1523+actual387launch",
+  "replacementGoalOrWorker": false
+}

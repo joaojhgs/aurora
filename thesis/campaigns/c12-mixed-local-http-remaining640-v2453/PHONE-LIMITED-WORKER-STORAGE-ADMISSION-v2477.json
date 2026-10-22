@@ -1,0 +1,49 @@
+{
+  "at": "2026-10-22T14:20:34.319317+00:00",
+  "status": "LIMITED_WORKER_STORAGE_ADMISSION_GRANTED",
+  "decisionOwner": "Original Root01a112a5-d6bb-74e2-bf7c-ace73cb513b5",
+  "runId": "run_e6054e76e9fc",
+  "sourceMessages": [
+    "msg_4d56297d137c",
+    "msg_00b638844b68"
+  ],
+  "samePhoneWorker": "term_1f27be31-0284-4366-bb91-30fe538cd30e",
+  "workerNewPhysicalAllocationMaximumBytes": 2097152,
+  "creditSource": "WITHIN existing64MiB shared-controls reserve, replaces the unadmitted100MiB additional Worker phone envelope; not an extra bulk-data reservation",
+  "workerBudgetIncludes": [
+    "destination file and directory allocation blocks",
+    "all owned new copy/control/checksum/compact journal artifacts",
+    "atomic temporary and compression peaks",
+    "at most one existing pilotWav <=100KiB, INSIDE2MiB total"
+  ],
+  "workerStorageStrategy": "Bounded append/stream-compressed actual case outcome and timing/stage rows plus checksums/receipts; not only external locators; avoid one4KiBfile per case and fullZIP/base64/extract duplication",
+  "beforeFirstWrite": "Record fresh allocated-block/inode baseline for owned Worker paths; logical sizes alone insufficient; preserve old files",
+  "perWriteAdmission": "Net new physical allocation incl owned temp peaks <=2097152B; freeBytes >2147483648+16777216+nextWritePeakBytes, otherwise defer Worker copying/record pending custody while keeping raw safe on Notebook",
+  "mainImmediatePeakGuardBytes": 16777216,
+  "guardBasis": "Bounded operational protection against observed13.65MB transient free-space dip; no change to frozen Main settings/floor or future condition counting",
+  "approvedNotebookCustody": "All actual raw outcomes/case/stage/resource/audio and frozen inputs/harness physically in EXISTING approved Notebook Aurora repo thesis/phone-notebook/20261020/, versioned cohort; not git-only,tmp or external index. Pin source/overlay/effective hashes. Full secondary Worker raw/WAV mirror explicitly PENDING actual capacity",
+  "notebookProposedCollectionAllocationMaximumBytes": 50331648,
+  "notebookAdmission": "Worker must count physical blocks/directories/temp peaks and reserve entire declared900+excludedwarmups+EOF; own free floor2GiB and owner thermal/RAM/battery/window guards. No new benchmark to estimate budget",
+  "phoneMeasuredConditionAdmittedByThisReceipt": false,
+  "scientificAndNativeAdmission": "This clears ONLY shared Worker storage gate; existing actual provider3stage correlations/correctness/native cancellation closure and exact new versioned manifest/cohort comparison labels remain required before measured launch, with no new test/review added by Root",
+  "referenceMatched900": false,
+  "noPooling": "Embedded-GGUF-template compatibility cohort remains separate from frozen fixed-chatml reference; no matched-reference acceptance or full matrix completion inferred",
+  "ownerWindowHardStopUtc": "2026-10-22T18:21:09.788710+00:00",
+  "mainCompletionBlanketBarrier": false,
+  "noNewOwnerPermissionRequiredForThis2MiBAllocation": true,
+  "mainRequest": {
+    "pid": 462924,
+    "startTicks": 144596371,
+    "state": "S"
+  },
+  "mainCorrectPerStream": {
+    "primary": 514,
+    "companion": 514
+  },
+  "freeBytesAtAdmission": 2186244096,
+  "headroomAboveFloorBytes": 38760448,
+  "headroomAfterFullCreditAndMainImmediateGuardBytes": 19886080,
+  "mainChangedHeldOrStopped": false,
+  "existingCleanupApproval": "PENDING; main outstanding capacity risk NOT solved; no deletion or new question",
+  "newWorkersTestsModelsBuildsProviderOrDeviceCommands": 0
+}

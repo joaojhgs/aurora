@@ -1,0 +1,10 @@
+{
+  "at": "2026-10-22T11:09:29.436435+00:00",
+  "manifestSha256": "3bfca19d2dd0a9eec3981eae256168a5badd9ac2bb58a270ff8a55df1d986cce",
+  "maximumCompanionCalls": 655,
+  "maximumPrimaryCalls": 655,
+  "nativeAggregateGoalThread": "01a112a5-d6bb-74e2-bf7c-ace73cb513b5",
+  "newOrcaWorker": false,
+  "pid": 461044,
+  "startTicks": 144582368
+}

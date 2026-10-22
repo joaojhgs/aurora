@@ -1,0 +1,131 @@
+{
+  "diskAfter": {
+    "free": 149007343616,
+    "total": 491054088192,
+    "used": 317027356672
+  },
+  "diskBefore": {
+    "free": 149007630336,
+    "total": 491054088192,
+    "used": 317027069952
+  },
+  "errors": [],
+  "finishedAt": "2026-10-17T20:40:55.088321+00:00",
+  "newFiles": [
+    {
+      "at": "2026-10-17T20:40:54.981268+00:00",
+      "bytes": 4793,
+      "destination": "thesis/evidence/orca-relayed-http-v1197/provider/prefixes/voice-stages.jsonl/000000184413-000000189206.chunk",
+      "endByte": 189206,
+      "incomplete": true,
+      "sha256": "de2f9a8adae3459da10d8be44369ab24ba39c52c1234623dc06bb569febe5d5b",
+      "source": "/home/developer/projects/aurora/.git/aurora-handoff-import-20261006/distributed-k1-http-provider-v1126/runtime/voice-stages.jsonl",
+      "sourceInode": 7243540,
+      "sourceObservedBytes": 189206,
+      "startByte": 184413
+    },
+    {
+      "at": "2026-10-17T20:40:55.029652+00:00",
+      "bytes": 749,
+      "destination": "thesis/evidence/orca-relayed-http-v1197/provider/prefixes/actual-provider-bindings.jsonl/000000030014-000000030763.chunk",
+      "endByte": 30763,
+      "incomplete": true,
+      "sha256": "b23f7bdfbf535ec7529878f564aa55f3f3d30e3f067fc0fb3a6d75a77c9d34f6",
+      "source": "/home/developer/projects/aurora/.git/aurora-handoff-import-20261006/distributed-k1-http-provider-v1126/runtime/actual-provider-bindings.jsonl",
+      "sourceInode": 7243549,
+      "sourceObservedBytes": 30763,
+      "startByte": 30014
+    },
+    {
+      "at": "2026-10-17T20:40:55.088153+00:00",
+      "bytes": 260160,
+      "destination": "thesis/evidence/orca-relayed-http-v1197/provider/prefixes/resources.jsonl/000042462663-000042722823.chunk",
+      "endByte": 42722823,
+      "incomplete": true,
+      "sha256": "61dcaf03ff755c511dd2b012540e25d2917c1968e883c81166de97c339ca7667",
+      "source": "/home/developer/projects/aurora/.git/aurora-handoff-import-20261006/distributed-k1-http-provider-v1126/runtime/resources.jsonl",
+      "sourceInode": 7243539,
+      "sourceObservedBytes": 42722823,
+      "startByte": 42462663
+    }
+  ],
+  "physicalPayloadBytes": 43117024,
+  "possibleConfound": "Concurrent custody IO; retain all measured cases.",
+  "prefixes": {
+    "actual-provider-bindings.jsonl": {
+      "chunks": [
+        "prefixes/actual-provider-bindings.jsonl/000000000000-000000021026.chunk",
+        "prefixes/actual-provider-bindings.jsonl/000000021026-000000021775.chunk",
+        "prefixes/actual-provider-bindings.jsonl/000000021775-000000022524.chunk",
+        "prefixes/actual-provider-bindings.jsonl/000000022524-000000024022.chunk",
+        "prefixes/actual-provider-bindings.jsonl/000000024022-000000024771.chunk",
+        "prefixes/actual-provider-bindings.jsonl/000000024771-000000025520.chunk",
+        "prefixes/actual-provider-bindings.jsonl/000000025520-000000026269.chunk",
+        "prefixes/actual-provider-bindings.jsonl/000000026269-000000027018.chunk",
+        "prefixes/actual-provider-bindings.jsonl/000000027018-000000028516.chunk",
+        "prefixes/actual-provider-bindings.jsonl/000000028516-000000029265.chunk",
+        "prefixes/actual-provider-bindings.jsonl/000000029265-000000030014.chunk",
+        "prefixes/actual-provider-bindings.jsonl/000000030014-000000030763.chunk"
+      ],
+      "endByte": 30763,
+      "incomplete": true,
+      "inode": 7243549,
+      "observedAt": "2026-10-17T20:40:55.029760+00:00",
+      "sourceObservedBytes": 30763
+    },
+    "resources.jsonl": {
+      "chunks": [
+        "prefixes/resources.jsonl/000000000000-000004191689.chunk",
+        "prefixes/resources.jsonl/000004191689-000008384111.chunk",
+        "prefixes/resources.jsonl/000008384111-000012577265.chunk",
+        "prefixes/resources.jsonl/000012577265-000016767773.chunk",
+        "prefixes/resources.jsonl/000016767773-000020960378.chunk",
+        "prefixes/resources.jsonl/000020960378-000025153302.chunk",
+        "prefixes/resources.jsonl/000025153302-000029346224.chunk",
+        "prefixes/resources.jsonl/000029346224-000033539149.chunk",
+        "prefixes/resources.jsonl/000033539149-000037732073.chunk",
+        "prefixes/resources.jsonl/000037732073-000039835040.chunk",
+        "prefixes/resources.jsonl/000039835040-000040134225.chunk",
+        "prefixes/resources.jsonl/000040134225-000040394385.chunk",
+        "prefixes/resources.jsonl/000040394385-000040654546.chunk",
+        "prefixes/resources.jsonl/000040654546-000040910370.chunk",
+        "prefixes/resources.jsonl/000040910370-000041170531.chunk",
+        "prefixes/resources.jsonl/000041170531-000041430692.chunk",
+        "prefixes/resources.jsonl/000041430692-000041690852.chunk",
+        "prefixes/resources.jsonl/000041690852-000041946677.chunk",
+        "prefixes/resources.jsonl/000041946677-000042206837.chunk",
+        "prefixes/resources.jsonl/000042206837-000042462663.chunk",
+        "prefixes/resources.jsonl/000042462663-000042722823.chunk"
+      ],
+      "endByte": 42722823,
+      "incomplete": true,
+      "inode": 7243539,
+      "observedAt": "2026-10-17T20:40:55.088287+00:00",
+      "sourceObservedBytes": 42722823
+    },
+    "voice-stages.jsonl": {
+      "chunks": [
+        "prefixes/voice-stages.jsonl/000000000000-000000126897.chunk",
+        "prefixes/voice-stages.jsonl/000000126897-000000131690.chunk",
+        "prefixes/voice-stages.jsonl/000000131690-000000136483.chunk",
+        "prefixes/voice-stages.jsonl/000000136483-000000146069.chunk",
+        "prefixes/voice-stages.jsonl/000000146069-000000150862.chunk",
+        "prefixes/voice-stages.jsonl/000000150862-000000155655.chunk",
+        "prefixes/voice-stages.jsonl/000000155655-000000160448.chunk",
+        "prefixes/voice-stages.jsonl/000000160448-000000165241.chunk",
+        "prefixes/voice-stages.jsonl/000000165241-000000174827.chunk",
+        "prefixes/voice-stages.jsonl/000000174827-000000179620.chunk",
+        "prefixes/voice-stages.jsonl/000000179620-000000184413.chunk",
+        "prefixes/voice-stages.jsonl/000000184413-000000189206.chunk"
+      ],
+      "endByte": 189206,
+      "incomplete": true,
+      "inode": 7243540,
+      "observedAt": "2026-10-17T20:40:54.981406+00:00",
+      "sourceObservedBytes": 189206
+    }
+  },
+  "sequence": 12,
+  "startedAt": "2026-10-17T20:40:54.915022+00:00",
+  "sutCalls": 0
+}

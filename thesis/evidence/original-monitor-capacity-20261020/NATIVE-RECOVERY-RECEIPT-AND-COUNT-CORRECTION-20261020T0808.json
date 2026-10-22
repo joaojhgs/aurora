@@ -1,0 +1,40 @@
+{
+  "at": "2026-10-20T08:07:50.387042+00:00",
+  "rootMessage": "msg_6b85b3362a45",
+  "nativeGoal": "01a123ff-19ba-7332-a2f7-346a722af79f",
+  "status": "active",
+  "sameMonitorResumeRequest": "46748383-5b38-4f43-8a26-35a3748408bb",
+  "resumeOwnedBy": "term_6a00d9ee-792a-4daf-8578-236290e33108",
+  "duplicateResumeRequired": false,
+  "rootRetainedReceipt": "thesis/evidence/original-monitor-capacity-20261020/NATIVE-MONITOR-ACTIVE-v1749.json",
+  "correction": {
+    "affects": [
+      "msg_7190e9ad71bb",
+      ".omx/evidence/orca-monitor-20261010/NATIVE-MONITOR-RECOVERY-ACTIVE-20261020T0804.json",
+      "08:06 monitor final response"
+    ],
+    "wrongCorrectCount": 272,
+    "actualCorrectAtSameCheckpoint": 276,
+    "measured": 283,
+    "failed": 7,
+    "derivation": "257new correct+19retained correct=276;263new attempts+20retained=283;6new failures+1retained=7",
+    "kind": "monitor arithmetic/reporting error only; raw case counts unaffected",
+    "rawHistoricalReportPreserved": true
+  },
+  "freshActualObservation": {
+    "at": "2026-10-20T08:07:20.549461Z",
+    "indexUpdatedAt": "2026-10-20T08:06:59.207243Z",
+    "newEpochMeasured": 267,
+    "newEpochCorrect": 261,
+    "newEpochFailed": 6,
+    "oldMeasured": 20,
+    "oldCorrect": 19,
+    "oldFailed": 1,
+    "totalMeasured": 287,
+    "totalCorrect": 280,
+    "totalFailed": 7,
+    "remaining": 613,
+    "originalThreePidStartsLive": true
+  },
+  "nextAction": "unchanged bounded event wait; no rerun/review/runtime change"
+}

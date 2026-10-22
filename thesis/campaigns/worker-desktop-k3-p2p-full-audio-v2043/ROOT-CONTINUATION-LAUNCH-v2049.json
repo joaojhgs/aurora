@@ -1,0 +1,98 @@
+{
+  "at": "2026-10-21T00:01:36.601028+00:00",
+  "status": "K3_REMAINING624_ACTUALLY_LAUNCHED_WARMUP_ADMISSION_PENDING",
+  "launch": {
+    "at": "2026-10-21T00:00:40.225845+00:00",
+    "status": "K3_REQUESTER_AND_BOUNDED_AUXILIARIES_STARTED",
+    "requester": {
+      "at": "2026-10-21T00:00:40.181691+00:00",
+      "conditionManifestSha256": "ac92f9ba1455c3778e378c6548f0e518fcf0115c6ea9ebf7624f8c30df14d2c5",
+      "conditionMeasuredTarget": 900,
+      "controllerPid": 3207537,
+      "controllerStartTicks": 131930077,
+      "globalMeasuredEnd": 900,
+      "globalMeasuredStart": 277,
+      "maximumDistinctExcludedWarmupAttempts": 30,
+      "measurementAdmitted": false,
+      "newWorker": false,
+      "plannedMeasured": 624,
+      "provider": {
+        "pid": 251473,
+        "startTicks": 29038457,
+        "state": "R"
+      },
+      "targetCorrectExcludedWarmups": 15
+    },
+    "auxiliaries": {
+      "copier": {
+        "pid": 3207538,
+        "startTicks": 131930081,
+        "state": "R",
+        "sourceSha256": "3e83a0769eea28116ecf28f1a57b4182685bcb236d4ccc09c85ab874c1568c16"
+      },
+      "warmup-finalizer": {
+        "pid": 3207539,
+        "startTicks": 131930081,
+        "state": "R",
+        "sourceSha256": "ac6e7fb4c6c3871e67a093d8575e1797be7854a26ba90a8d13a2b8407f6bce3b"
+      }
+    },
+    "conditionManifestSha256": "ac92f9ba1455c3778e378c6548f0e518fcf0115c6ea9ebf7624f8c30df14d2c5",
+    "measurementAdmitted": false,
+    "plannedMeasured": 624,
+    "conditionMeasuredTarget": 900,
+    "globalMeasuredStart": 277,
+    "globalMeasuredEnd": 900,
+    "excludedWarmups": 15,
+    "newOrcaWorker": false,
+    "provider": {
+      "pid": 251473,
+      "state": "R",
+      "startTicks": 29038457
+    }
+  },
+  "conditionTarget": 900,
+  "priorMeasuredAttempted": 276,
+  "priorMeasuredCorrect": 256,
+  "priorMeasuredFailed": 20,
+  "plannedThisEpoch": 624,
+  "globalMeasuredRange": [
+    277,
+    900
+  ],
+  "newMeasuredAtLaunch": 0,
+  "warmupPolicy": {
+    "all_warmup_attempts_and_failures_retained": true,
+    "continuable_failure": "preaccept_capability_changed",
+    "failed_attempt_retry": false,
+    "maximum_consecutive_preaccept_rejections": 3,
+    "maximum_distinct_attempts": 30,
+    "measured_attempts": 900,
+    "measured_retry": false,
+    "qualification": "first_15_completed_correct_full_audio_flows",
+    "target_correct": 15
+  },
+  "parentSeal": {
+    "conditionMeasuredTarget": 900,
+    "failedIndex276NotRepeated": true,
+    "globalMeasuredEnd": 900,
+    "globalMeasuredStart": 277,
+    "plannedMeasuredThisEpoch": 624,
+    "priorAttempted": 276,
+    "priorCorrect": 256,
+    "priorFailed": 20,
+    "priorManifestSha256": "46003ef84b71fade94e1d9e3cbac0dcee8bb524680ca613a9f02df5878e4cd6b",
+    "priorSealPath": "/home/developer/projects/aurora/thesis/campaigns/worker-desktop-k3-p2p-full-audio-v1988/PARTIAL-CONDITION-SEAL-v2042.json",
+    "priorSealSha256": "957240ab4ccc2eaca702fdec03a376fd96f7cab2568986df7607725b329a6d49",
+    "priorTerminalSummarySha256": "e64b0500fbb46f4adb687b56c348edda3439231362906b0ccd4fd45001c49ff1"
+  },
+  "sameProviderReused": true,
+  "changedHarnessScope": "count/global-index/parent-seal/reporting only;11runtime modules and all model/audio/settings/correctness/authority unchanged",
+  "sourceCounterSmoke": "thesis/evidence/k3-remaining624-v2042/COUNT-SMOKE.json",
+  "providerReturnBoundaryEvidence": "thesis/campaigns/worker-desktop-k3-p2p-full-audio-v1988/provider-reconciliation-v2039/RESULT.json",
+  "old276RawPreserved": true,
+  "failed276NotRetried": true,
+  "nativeGoalThreadId": "01a112a5-d6bb-74e2-bf7c-ace73cb513b5",
+  "nativeGoalStatus": "active",
+  "phoneTaskSeparate": true
+}

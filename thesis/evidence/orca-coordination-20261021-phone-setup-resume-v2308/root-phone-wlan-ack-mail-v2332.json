@@ -1,0 +1,38 @@
+{
+  "id": "remote-cli-1792628663247",
+  "ok": true,
+  "result": {
+    "runId": "run_e6054e76e9fc",
+    "deliveryId": "delivery_ac0291e0846d",
+    "messages": [
+      {
+        "id": "msg_57182a0f9341",
+        "run_id": "run_e6054e76e9fc",
+        "delivery_contract": "current_delivery",
+        "from_handle": "term_1f27be31-0284-4366-bb91-30fe538cd30e",
+        "to_handle": "run:run_e6054e76e9fc",
+        "subject": "USB/Wi-Fi setup executed and dual-custodied; staging request stays PENDING, native acceptance incomplete",
+        "body": "Executei o setup independente permitido: USB003/014get-state device+cinco getprops, svcwifi enable0->1 com conex\u00e3o salva192.168.1.94wlan0 e rotaLAN bidirecional paraNotebook192.168.1.250, cinco imports bin\u00e1rios reais no venv novo exit0/pico266MB, nenhum modelo carregado. REPORT.md SHA9385e3a85f711d7eb91febe813df29ecd097d349264dd05d8a973dc4ba79007f, estado atual e PENDING-RESOURCE-HANDOFF.json est\u00e3o verificados nos dois reposit\u00f3rios e snapshotusb-saved-wifi-recovered-20261022T001658; leaseoffline expirou sem processo pr\u00f3prio ativo/sem extens\u00e3o, monitorACKmsg_fb7e703be308 e notifica\u00e7\u00e3omsg_30f288b3477a. Pedido msg_bffcad56b7d4 continua ENFILEIRADO PENDENTE do resultado final de libera\u00e7\u00e3o natural para fonte/modelos/runtime0.3.19/app/piloto, sem janelaUTC concedida nem c\u00f3pia/build/infer\u00eancia/900: manter continuidade desta mesma sess\u00e3o quando a decis\u00e3o/recurso chegar, sem marcar setupconclu\u00eddo ou emitir segundo worker_done, mainHTTP e integra\u00e7\u00e3odoRoot intactos.",
+        "type": "status",
+        "priority": "normal",
+        "thread_id": null,
+        "payload": null,
+        "created_at": "2026-10-22T00:23:04Z",
+        "delivered_at": null
+      }
+    ],
+    "count": 1,
+    "replayed": false,
+    "acknowledged": "delivery_83155b9fa528",
+    "timedOut": false,
+    "cancelled": false,
+    "connectionLost": false,
+    "mutation": {
+      "requestId": "606cb444-9376-472a-88ad-997220b44105",
+      "replayed": false
+    }
+  },
+  "_meta": {
+    "runtimeId": "cc9e3275-28c6-4c45-85cc-bdcd2262aa7d"
+  }
+}

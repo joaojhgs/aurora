@@ -1,0 +1,24 @@
+{
+  "authoritative_path": "/home/developer/Documents/Obsidian Vault Origin/5-full-notes/faculdade/tcc/future-work-test-requirements.md",
+  "before_sha256": "70d5b91a495292fb3081803c4da48986083a1ceb4d40bc04b2937a8600850b8b",
+  "after_sha256": "bef4786c5b6869396ae4b86e06ed0171d6873a9e9d3e7a69ac1f1930d52a7558",
+  "before_lines": 1408,
+  "after_lines": 1430,
+  "appended_lines": 22,
+  "diff_sha256": "ae7b670f944c2aa5af60b06b93af4b398e77f47c7394c42e1e828ed2fccdbfdc",
+  "package": "/home/developer/projects/aurora/docs/experiments/tcc-20261013-submission-20261030/monitor/plan-typed-data-accepted-20261014T2110",
+  "checks": {
+    "exact_old_prefix": true,
+    "old_lines_preserved": true,
+    "typed_counts": true,
+    "phase2_false": true,
+    "whole_gpu_false": true,
+    "full_voice_pending": true,
+    "original_scope_retained": true
+  },
+  "root_readback_verified": false,
+  "root_readback": "pending",
+  "run": "run_e6054e76e9fc",
+  "task": "task_d7ea336050cf",
+  "dispatch": "ctx_37b4d0a3c14f"
+}

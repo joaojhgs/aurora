@@ -1,0 +1,73 @@
+{
+  "at": "2026-10-20T23:04:36.416326+00:00",
+  "measured": {
+    "attempted": 54,
+    "correct": 50,
+    "failed": 4,
+    "remaining": 846
+  },
+  "actors": {
+    "3154212": {
+      "state": "S",
+      "sameStart": true
+    },
+    "3154248": {
+      "state": "S",
+      "sameStart": true
+    },
+    "3154213": {
+      "state": "S",
+      "sameStart": true
+    }
+  },
+  "status": "running",
+  "custody": {
+    "sequence": 16,
+    "cases": 69,
+    "audio": 64,
+    "files": 252
+  },
+  "freeBytes": 4163149824,
+  "measuredNonCorrect": [
+    {
+      "phase_index": 15,
+      "status": "failed",
+      "failure": {
+        "code": "preaccept_capability_changed",
+        "stage": "stt"
+      },
+      "timeout": false,
+      "partial_quality_incorrect": false
+    },
+    {
+      "phase_index": 24,
+      "status": "failed",
+      "failure": {
+        "code": "preaccept_capability_changed",
+        "stage": "stt"
+      },
+      "timeout": false,
+      "partial_quality_incorrect": false
+    },
+    {
+      "phase_index": 28,
+      "status": "failed",
+      "failure": {
+        "code": "preaccept_capability_changed",
+        "stage": "stt"
+      },
+      "timeout": false,
+      "partial_quality_incorrect": false
+    },
+    {
+      "phase_index": 54,
+      "status": "failed",
+      "failure": {
+        "code": "preaccept_capability_changed",
+        "stage": "stt"
+      },
+      "timeout": false,
+      "partial_quality_incorrect": false
+    }
+  ]
+}

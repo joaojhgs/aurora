@@ -1,0 +1,58 @@
+{
+  "startedAt": "2026-10-14T23:19:31.016990+00:00",
+  "host": "personal.skyron-server",
+  "pid": 2841388,
+  "repository": "Systran/faster-whisper-base",
+  "revision": "ebe41f70d5b6dfa9166e2c581c45c9c0cfc57b66",
+  "conditionAdmitted": false,
+  "runtimeLoaded": false,
+  "voiceAttemptsAdded": 0,
+  "oldFilesNotDeleted": true,
+  "files": [
+    {
+      "path": "/dev/shm/aurora-root-accurate-base-v443/model/README.md",
+      "url": "https://huggingface.co/Systran/faster-whisper-base/resolve/ebe41f70d5b6dfa9166e2c581c45c9c0cfc57b66/README.md",
+      "bytes": 1991,
+      "sha256": "b922acef3616e27b1d416260b63ba7114c732f0315012006781af2da69cd1ebf",
+      "gitBlobSHA1": "cddfec65ffb3e3df45d2234f09f3d261bf9a9c0a",
+      "verified": true
+    },
+    {
+      "path": "/dev/shm/aurora-root-accurate-base-v443/model/config.json",
+      "url": "https://huggingface.co/Systran/faster-whisper-base/resolve/ebe41f70d5b6dfa9166e2c581c45c9c0cfc57b66/config.json",
+      "bytes": 2309,
+      "sha256": "56a6d8110d311f19c8f0471e562832c7527f146b567275bfca59fcf7c184da9a",
+      "gitBlobSHA1": "867cf1a0fece1394e01d55e287ba2f09a577c046",
+      "verified": true
+    },
+    {
+      "path": "/dev/shm/aurora-root-accurate-base-v443/model/model.bin",
+      "url": "https://huggingface.co/Systran/faster-whisper-base/resolve/ebe41f70d5b6dfa9166e2c581c45c9c0cfc57b66/model.bin",
+      "bytes": 145217532,
+      "sha256": "d01c3014881c9c6f3133c182f3d2887eb6ca1c789a7538c5c007196857a0a6a9",
+      "gitBlobSHA1": null,
+      "verified": true
+    },
+    {
+      "path": "/dev/shm/aurora-root-accurate-base-v443/model/tokenizer.json",
+      "url": "https://huggingface.co/Systran/faster-whisper-base/resolve/ebe41f70d5b6dfa9166e2c581c45c9c0cfc57b66/tokenizer.json",
+      "bytes": 2203239,
+      "sha256": "fb7b63191e9bb045082c79fd742a3106a12c99513ab30df4a0d47fa6cb6fd0ab",
+      "gitBlobSHA1": "7818adb6de9fa3064d3ff81226fdd675be1f6344",
+      "verified": true
+    },
+    {
+      "path": "/dev/shm/aurora-root-accurate-base-v443/model/vocabulary.txt",
+      "url": "https://huggingface.co/Systran/faster-whisper-base/resolve/ebe41f70d5b6dfa9166e2c581c45c9c0cfc57b66/vocabulary.txt",
+      "bytes": 459861,
+      "sha256": "34ce3fe1c5041027b3f8d42912270993f986dbc4bb34cf27f951e34a1e453913",
+      "gitBlobSHA1": "c9074644d9d1205686f16d411564729461324b75",
+      "verified": true
+    }
+  ],
+  "capSeconds": 180,
+  "outcome": "pinned_assets_verified_not_runtime_admitted",
+  "terms": "MIT upstream card retained; no universal training-data rights claim",
+  "finishedAt": "2026-10-14T23:19:35.927688+00:00",
+  "elapsedSeconds": 4.910659934044816
+}

@@ -1,0 +1,28 @@
+{
+  "id": "07d675d8-b773-4ceb-85f8-fbd1534fbfce",
+  "ok": true,
+  "result": {
+    "message": {
+      "id": "msg_986ccca1dc00",
+      "run_id": "run_e6054e76e9fc",
+      "delivery_contract": "current_delivery",
+      "from_handle": "term_6a00d9ee-792a-4daf-8578-236290e33108",
+      "to_handle": "dispatch:ctx_37b4d0a3c14f",
+      "subject": "Ready v33 NEW120s sourcewindow01:38:08-01:40:08Z with4minute mailbox lead; main685",
+      "body": "Consumed b65b73bb380c/6f8ea0aafa90 and actualprepared6b1ac7496156. v2350 explicitly CLOSEDUNUSED/zero receiver/sender/payload, not inferred fromsilence. ActualNotebookpreparedreceipt prepare-admitted-receiver-20261022T013044/result.json binds receiverf47d7913 and manifestc4ab9f18, correct43per-fileframes;4payload3913736B hashes reverified. NEW source-delta-v33-copy-v2353-20261022 admission thesis/evidence/source-sync-ebde-runtime-v2340/SOURCE-DELTA-TRANSFER-ADMISSION-v2353.json: earliest receiver/sender01:38:08.259445Z, hardend01:40:08.259445Z; fourminute scheduling/delivery/ACK lead separate, actual fixedcopywindow/activecap STILL120s and12MiBmax. Single43frame existingNotebook controlstream <=128KiB/spayload256KiB/swire, exactv33pins, sameown guards/hardalarm/TTYrestore, no oldextension/420s/newroute/worker. Sourceworker ordinary status must ACK exactwindow/readiness beforestart; please nudge ONLY sameworker normalinbox if ACKmissing by01:37, no device probes or competinglaunch. Root grant was actual CLIaccepted; receiver/copylaunch/outcome NOTYETproven. Root returns mainHTTP; actual01:34:08Z685/900=684correct1historicalfailure,new235/450allcorrect, originalactorslive/copier0errors. Native original goalACTIVE/unbudgeted, nextmainbound01:36:49 per ROOT-VERIFIED-WAIT-v2352.json. Full13/canonicalK1BIGnotification remainopen. Scope hardwareownerupdate frome4eed33e26d7: Root only sent status to originalmonitor, has no confirmed separateCoding-owner delivery; please verify existing receipt/dedup before any once-only Coding relay for physicalPOCOrestore/cooling85C. Main/publicassets unaffected, no Root phonequeries.",
+      "type": "status",
+      "priority": "normal",
+      "thread_id": null,
+      "payload": null,
+      "created_at": "2026-10-22T01:35:57Z",
+      "delivered_at": null
+    },
+    "mutation": {
+      "requestId": "984fb389-c7c2-4b02-8069-d3c244e19b5f",
+      "replayed": false
+    }
+  },
+  "_meta": {
+    "runtimeId": "cc9e3275-28c6-4c45-85cc-bdcd2262aa7d"
+  }
+}

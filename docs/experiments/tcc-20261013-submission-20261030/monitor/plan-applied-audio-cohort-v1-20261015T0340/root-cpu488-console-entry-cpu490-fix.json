@@ -1,0 +1,30 @@
+{
+  "message": "msg_35240fa80b64",
+  "at": "2026-10-15T03:53:41Z",
+  "cpu488": {
+    "endedAt": "2026-10-15T03:52:29.146594Z",
+    "elapsedSeconds": 85.462,
+    "exitCode": 1,
+    "transcriptExact": true,
+    "actualLLMReply": "Paris",
+    "TTSProviderInitialized": true,
+    "TTSExecutableUnavailable": true,
+    "missingPath": "new playbackenv/bin/piper",
+    "existingPinnedCLI": "cpu-full-audio-v483/env/bin/piper, present and executable",
+    "cause": "inherited module does not create console entry in new playback environment",
+    "oldPIDs": [
+      2223834,
+      2223996
+    ],
+    "pidsAbsent": true,
+    "localBuildLockFree": true
+  },
+  "cpu490": {
+    "correction": "point to same old actual pinned Piper1.2.0 CLI, keep new playback env/privateLD/libs/source/models/WAV/options/180flow300outer",
+    "actualLaunchReceiptVerified": false
+  },
+  "desktopV485Unchanged": true,
+  "newModelFixturePredicate": false,
+  "nMeasuredCPU": 0,
+  "phase2MeasuredAllowed": false
+}

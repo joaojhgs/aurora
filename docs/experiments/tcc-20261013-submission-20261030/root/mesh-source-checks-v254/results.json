@@ -1,0 +1,119 @@
+[
+  {
+    "argv": [
+      "flock",
+      "--nonblock",
+      "/tmp/aurora-global-build.lock",
+      "timeout",
+      "--signal=INT",
+      "--kill-after=10s",
+      "180s",
+      "bash",
+      "-n",
+      "scripts/hosted_peer_e2e.sh"
+    ],
+    "exit_code": 0,
+    "elapsed_seconds": 0.005388641031458974
+  },
+  {
+    "argv": [
+      "flock",
+      "--nonblock",
+      "/tmp/aurora-global-build.lock",
+      "timeout",
+      "--signal=INT",
+      "--kill-after=10s",
+      "180s",
+      "/home/developer/projects/aurora/.venv/bin/python",
+      "-m",
+      "ruff",
+      "check",
+      "app/services/gateway/webrtc/rpc.py",
+      "tests/unit/gateway/test_rpc.py"
+    ],
+    "exit_code": 0,
+    "elapsed_seconds": 0.09493391402065754
+  },
+  {
+    "argv": [
+      "flock",
+      "--nonblock",
+      "/tmp/aurora-global-build.lock",
+      "timeout",
+      "--signal=INT",
+      "--kill-after=10s",
+      "180s",
+      "/home/developer/projects/aurora/.venv/bin/python",
+      "-m",
+      "pytest",
+      "--no-cov",
+      "--basetemp=/tmp/aurora-mesh-unit-v254",
+      "--junitxml=/home/developer/projects/aurora/.git/aurora-handoff-import-20261006/mesh-checks-v254/junit.xml",
+      "tests/unit/gateway/test_rpc.py::test_external_user_input_allowed_with_orchestrator_use_permission",
+      "tests/unit/gateway/test_rpc.py::test_handle_call_success"
+    ],
+    "exit_code": 0,
+    "elapsed_seconds": 3.8844397810753435
+  },
+  {
+    "argv": [
+      "flock",
+      "--nonblock",
+      "/tmp/aurora-global-build.lock",
+      "timeout",
+      "--signal=INT",
+      "--kill-after=10s",
+      "180s",
+      "pnpm",
+      "--filter",
+      "@aurora/ui",
+      "exec",
+      "vitest",
+      "run",
+      "--environment",
+      "node",
+      "tests/assistant-unified-execution.test.tsx",
+      "-t",
+      "switches the same composer to dispatch and sends the turn through the connected Aurora device"
+    ],
+    "exit_code": 0,
+    "elapsed_seconds": 11.959170324029401
+  },
+  {
+    "argv": [
+      "flock",
+      "--nonblock",
+      "/tmp/aurora-global-build.lock",
+      "timeout",
+      "--signal=INT",
+      "--kill-after=10s",
+      "180s",
+      "pnpm",
+      "--filter",
+      "@aurora/ui",
+      "exec",
+      "tsc",
+      "--noEmit",
+      "--incremental",
+      "false"
+    ],
+    "exit_code": 0,
+    "elapsed_seconds": 41.52798660704866
+  },
+  {
+    "argv": [
+      "flock",
+      "--nonblock",
+      "/tmp/aurora-global-build.lock",
+      "timeout",
+      "--signal=INT",
+      "--kill-after=10s",
+      "180s",
+      "docker",
+      "compose",
+      "version"
+    ],
+    "exit_code": 0,
+    "elapsed_seconds": 0.5819172980263829
+  }
+]

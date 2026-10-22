@@ -1,0 +1,94 @@
+--- v890/controller.py
++++ v1695/controller.py
+@@ -31,7 +31,7 @@
+ WAV_SHA = "da0ecc4ad0885746ab6e716585473917ab2b543a505bf0db09ebacfaa7943cbb"
+ OUTER_CAP = 57_840
+ RAM_FLOOR = 2_500_000_000
+-DISK_FLOOR = 500_000_000
++DISK_FLOOR = 2 * 1024**3
+ 
+ 
+ def digest(path: pathlib.Path) -> str:
+@@ -185,10 +185,20 @@
+     output.parent.mkdir(mode=0o700, parents=False, exist_ok=False)
+     if shutil.disk_usage(output.parent).free < DISK_FLOOR:
+         raise ValueError("run_volume_resource_floor_not_met")
+-    (output.parent / "data").mkdir(mode=0o700)
++    profile = cohort.get("existingAuthorizedTaskProfile", {})
++    profile_root = pathlib.Path(profile.get("path", ""))
++    expected_profile = private_parent / "mesh-pair-control-v1535" / "worker-node-v1538"
++    if profile_root != expected_profile or not (profile_root / "data").is_dir():
++        raise ValueError("existing_authorized_task_profile_required")
++    if (profile_root / "data").is_symlink() or profile.get("expectedLocalPeerId") != "aurora-03a910366bf721d72a9ef481d2e08fbd":
++        raise ValueError("existing_profile_binding_mismatch")
++    previous = json.loads((profile_root / "STATUS.json").read_bytes())
++    if previous.get("ownRuntimeRetired") is not True or pathlib.Path("/proc", str(previous["pid"])).exists():
++        raise ValueError("previous_profile_owner_not_retired")
+     (output.parent / "backups").mkdir(mode=0o700)
+-    absent_env = output.parent / "absent.env"
+-    absent_env.touch(mode=0o600, exist_ok=False)
++    existing_env = profile_root / ".env"
++    if not existing_env.is_file() or existing_env.is_symlink():
++        raise ValueError("existing_profile_env_unavailable")
+     lock = pathlib.Path("/tmp/aurora-global-build.lock").open("a")
+     fcntl.flock(lock, fcntl.LOCK_EX | fcntl.LOCK_NB)
+     env = os.environ.copy()
+@@ -219,8 +229,8 @@
+         "AURORA_CANDIDATE_MANIFEST": str(candidate_path),
+         "AURORA_OUTPUT_DIR": str(output),
+         "AURORA_K1_RECEIVER_WARMUP_PROOF": str(output / "receiver-warmup-proof.json"),
+-        "AURORA_ENV_FILE": str(absent_env),
+-        "AURORA_DATA_DIR": str(output.parent / "data"),
++        "AURORA_ENV_FILE": str(existing_env),
++        "AURORA_DATA_DIR": str(profile_root / "data"),
+         "AURORA_BACKUP_DIR": str(output.parent / "backups"),
+         "AURORA_ARCHITECTURE_MODE": "threads",
+         "HF_HUB_OFFLINE": "1",
+--- v890/runner.py
++++ v1695/runner.py
+@@ -697,6 +697,45 @@
+         config_hash = config_after_hash
+         summary["config_sha256"] = config_hash
+         summary["setup_duration_ms"] = (time.monotonic_ns() - setup_started_ns) / 1_000_000
++        # Admit the actual existing peer and its TTS catalogue before any
++        # ordinary full-flow warmup. No synthetic call, grant or pairing retry.
++        from app.shared.contracts.models.gateway import (
++            GatewayMethods, CapabilityCatalogRequest, CapabilityCatalogResponse,
++            RouteExplainRequest, RouteExplainResponse,
++        )
++        from app.shared.contracts.models.mesh import MeshAddressSelector
++        from app.shared.contracts.models.tts import TTSMethods
++        from app.messaging.mesh_bus import MeshBus
++        admission_end = time.monotonic() + 120
++        last_admission = {}
++        while time.monotonic() < admission_end:
++            if isinstance(supervisor.bus, MeshBus):
++                cat_raw = await supervisor.bus.request(
++                    GatewayMethods.GET_CAPABILITY_CATALOG,
++                    CapabilityCatalogRequest(modules=["TTS"], include_schemas=False), timeout=10)
++                route_raw = await supervisor.bus.request(
++                    GatewayMethods.EXPLAIN_ROUTE,
++                    RouteExplainRequest(topic=TTSMethods.SYNTHESIZE,
++                        selector=MeshAddressSelector(peer_id=selected_peer_id)), timeout=10)
++                if cat_raw.ok and route_raw.ok:
++                    cat = CapabilityCatalogResponse.model_validate(cat_raw.data)
++                    route = RouteExplainResponse.model_validate(route_raw.data)
++                    last_admission = {"at_monotonic_ns": time.monotonic_ns(),
++                        "catalogue": cat.model_dump(mode="json"),
++                        "route": route.model_dump(mode="json"),
++                        "model_requests_for_admission": 0}
++                    if (cat.local_peer_id == cohort_manifest["existingAuthorizedTaskProfile"]["expectedLocalPeerId"]
++                            and route.selector_valid and route.selected_peer_id == selected_peer_id
++                            and not route.blockers and not route.security_privacy_blockers
++                            and any(p.peer_id == selected_peer_id and p.eligible for p in cat.providers)):
++                        last_admission["status"] = "existing_exact_peer_normal_catalogue_route_admitted"
++                        _atomic_progress(output / "mesh-route-admission.json", last_admission)
++                        break
++            await asyncio.sleep(2)
++        else:
++            last_admission["status"] = "normal_catalogue_or_exact_peer_admission_deadline"
++            _atomic_progress(output / "mesh-route-admission.json", last_admission)
++            raise CampaignFailure("startup", "normal_catalogue_or_exact_peer_not_admitted", stop=True)
+         bindings_before = _bindings(supervisor, config)
+         summary["provider_bindings_before"] = bindings_before
+         condition_started = time.monotonic()

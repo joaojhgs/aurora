@@ -1,0 +1,18 @@
+# Current desktop native build V1031
+
+Current selected source was received and verified at12:08:26UTC:2560files/47306341bytes plus the6-byte VERSION addendum.1876files came from exactly matched existing2a7 Git objects,684from the checksum-bound delta. Original desktop checkout HEAD2a7 and its files were not changed; this is a temporary build-source artifact, not another Git clone, worktree, project or worker. The full929646-byte per-file binding receipt remains on Personal with its hash in the [custody manifest](MANIFEST.json).
+
+The compiled frontend arrived at12:12:48UTC:77files/7634298bytes, all per-file hashes verified; transfer archive2210497bytes/SHA256f36b9750913a232486db7bf3c68a8f145f3640bc4e360513ec044c7ff0392d17. The foreground file receiver restored terminal settings before returning control.
+
+Initial offline dependency metadata failed for uncached arbitrary1.4.2; this did not establish a native build or model failure. The target-native locked fetch then passed at12:17:04UTC using a fresh private/tmp Cargo home,1300existing archive/source links and46,327,518bytes of copied public index metadata. No credentials or user Cargo configuration were copied. Existing static Sherpa1.13.5/ONNX Runtime1.27.1libraries and header are present and byte-bound by the build controller.
+
+The actual native executable compilation started12:17:04UTC, PID3609216/start78133323, supervised by Root controller3609024/start78125475. It uses existing Rust1.88, two jobs, locked/offline Cargo, no incremental cache, debug info0, the existing desktop WebDriver feature, existing full desktop capabilities plus its existing debug-driver capability, and the verified embedded frontend. Runtime role is not chosen through a build-time role variable. New caches/logs/targets stay under/tmp because the original project filesystem had2.9MBfree. No original cleanup was performed.
+
+[Saved actual status](native-build-status-v1032.json) records the running phase, exact commands and public dependency log tail; [launch receipt](native-build-launch-v1031.json) records its controller identity. This is not a completed build, installed app, model invocation, native stage trace or900-case result. The first real desktop file-audio flow remains pending. The separate first distributed HTTP cell still needs an existing approved worker-reachable Gateway origin/forward; this desktop build is not an additional scientific baseline gate.
+
+At12:23:32UTC, [fresh existing-build status](native-build-status-v1034.json) verifies the exact original controller remains live. Compilation advanced into Aurora voice-engine/voice-core/sherpa-sys, CPAL, WebRTC and the desktop WebDriver dependencies. No final compiler result or runtime/model pass is claimed. [Status custody addendum](STATUS-ADDENDUM-v1034.json) preserves the original first-status manifest.
+
+
+Final outcome superseding the progress-only observations above: **Cargo exited0 at12:25:34UTC**. The original postbuild guard failure is preserved in [terminal receipt](native-build-terminal-v1035.json). [Reconciliation](generated-reconciliation-v1036.json) checked all2560selected files and established only three normal generated WebDriver schema changes; non-generated source and lockfile were unchanged. The full166568472-byte ELF SHA256 is `e156c76b676bf6566765c769d211413243f8d7f48026275465e085f4fd21a3b6`. The compile is closed and requires no rebuild. [Custody addendum](STATUS-ADDENDUM-v1055.json) retains the original manifest.
+
+The same executable subsequently passed [one actual native SDK file-audio readiness case](../native-desktop-file-audio-readiness-v1049/REPORT.md), zero measured performance cases. This does not claim normal Assistant UI/history, physical capture/playback or900-case acceptance.

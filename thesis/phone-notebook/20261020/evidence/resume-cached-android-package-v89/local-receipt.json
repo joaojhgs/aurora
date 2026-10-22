@@ -1,0 +1,8 @@
+{
+  "bytes": 254,
+  "copyOnly": true,
+  "custody": "Notebook result persisted and fsynced before relay; remote receipt in same output",
+  "localPath": "/home/developer/projects/aurora/thesis/phone-notebook/20261020/evidence/resume-cached-android-package-v89/result.json",
+  "remotePath": "/home/developer/projects/aurora/thesis/phone-notebook/20261020/evidence/resume-cached-android-package-v89.json",
+  "sha256": "80d06fdf67fe3be0dd0ef8036cfc665322a3f8547e6b87aea7dcc6e050f6b889"
+}

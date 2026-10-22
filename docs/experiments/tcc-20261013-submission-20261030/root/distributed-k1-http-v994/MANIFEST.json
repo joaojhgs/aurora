@@ -1,0 +1,122 @@
+{
+  "at": "2026-10-16T10:11:11.129692+00:00",
+  "cohortId": "aurora-worker-desktop-k1-http-tts-v994",
+  "status": "TERMINAL_FIRST_WARMUP_REMOTE_TRANSPORT_ERROR_ZERO_MEASURED",
+  "requesterFrozenManifestSha256": "02fc8d165aa01e81113c0dc6f51c6ed845c1924e8fbf630ee6916d529f0b151e",
+  "providerFrozenManifestSha256": "249ac590069f37199913f609d75243e4a831edd26bdb12352b49f4d8329f5f55",
+  "files": [
+    {
+      "name": "requester-control-terminal.json",
+      "bytes": 1022,
+      "sha256": "9503da412366f70c5b30f299e244ef97fcf3999647e24c852d451d9dd98b7a9b",
+      "source": "/home/developer/projects/aurora/.git/aurora-handoff-import-20261006/distributed-k1-http-cell-v994/control-launch.json"
+    },
+    {
+      "name": "requester-frozen-manifest.json",
+      "bytes": 11320,
+      "sha256": "02fc8d165aa01e81113c0dc6f51c6ed845c1924e8fbf630ee6916d529f0b151e",
+      "source": "/home/developer/projects/aurora/.git/aurora-handoff-import-20261006/distributed-k1-requester-prep-v843/input/condition-frozen-v994.json"
+    },
+    {
+      "name": "requester-source-inventory.json",
+      "bytes": 58216,
+      "sha256": "96ec8e3e14233520d4cd469c4177264a193d05cf26b4b512d91d98f16bbb7dee",
+      "source": "/home/developer/projects/aurora/.git/aurora-handoff-import-20261006/distributed-k1-requester-prep-v843/source-inventory.json"
+    },
+    {
+      "name": "requester-summary.json",
+      "bytes": 6687,
+      "sha256": "4536c5bc83754958b4b9c1036a74fcca6c01c6d82baf4f91ebf0a4b71f37eb62",
+      "source": "/home/developer/projects/aurora/.git/aurora-handoff-import-20261006/distributed-k1-http-cell-v994/campaign/summary.json"
+    },
+    {
+      "name": "requester-progress.json",
+      "bytes": 220,
+      "sha256": "07f1e9cc10e6192896849408cb526a1a246d5dd60941a484ab1ad562eea08a9a",
+      "source": "/home/developer/projects/aurora/.git/aurora-handoff-import-20261006/distributed-k1-http-cell-v994/campaign/progress.json"
+    },
+    {
+      "name": "attempt-0001-warmup.json",
+      "bytes": 3859,
+      "sha256": "5cbeafd23a98893f03259e6273966b867ba1df991703226d0bc5b1a7aecb323c",
+      "source": "/home/developer/projects/aurora/.git/aurora-handoff-import-20261006/distributed-k1-http-cell-v994/campaign/attempts/attempt-0001-warmup.jsonl"
+    },
+    {
+      "name": "requester-native-stages.jsonl",
+      "bytes": 11731,
+      "sha256": "8388a80a286a604b63e3ac13ff902f9b2202061812cda46421ecba8c30adc1ce",
+      "source": "/home/developer/projects/aurora/.git/aurora-handoff-import-20261006/distributed-k1-http-cell-v994/voice-stages.jsonl"
+    },
+    {
+      "name": "requester-provider-bindings.jsonl",
+      "bytes": 2139,
+      "sha256": "2f0736a9550394fcb3d807a4b60fa32bc9067eb6834953ae5a654abecff33f1b",
+      "source": "/home/developer/projects/aurora/.git/aurora-handoff-import-20261006/distributed-k1-http-cell-v994/actual-provider-bindings.jsonl"
+    },
+    {
+      "name": "requester-runtime-versions.json",
+      "bytes": 177,
+      "sha256": "97a8f0fd402964bf581d5aac6d7bbff6fd709d251cedf0c18310691838727016",
+      "source": "/home/developer/projects/aurora/.git/aurora-handoff-import-20261006/distributed-k1-http-cell-v994/runtime-versions.json"
+    },
+    {
+      "name": "requester-resources.jsonl",
+      "bytes": 105454,
+      "sha256": "4b4f9cc3f8abc84acd5dd3978db3cc96fd53f017945a2fdbb7b911d6c8a4e815",
+      "source": "/home/developer/projects/aurora/.git/aurora-handoff-import-20261006/distributed-k1-http-cell-v994/resources.jsonl"
+    },
+    {
+      "name": "transport-diagnosis-worker.json",
+      "bytes": 3069,
+      "sha256": "0d65facfe8e791111a12413ee5bdcf62f729e7918c31a8d26b4c90aa7476b564",
+      "source": "/home/developer/projects/aurora/.git/aurora-handoff-import-20261006/distributed-k1-launch-operations-v994/transport-diagnosis-worker.json"
+    },
+    {
+      "name": "provider-status-after-failure.json",
+      "bytes": 631,
+      "sha256": "943c978eaaac5d84b16ca42b0ba8294c6cb5817a24a01a79087f1a6688f298a7",
+      "source": "/home/developer/projects/aurora/.git/aurora-handoff-import-20261006/v1004-provider-after-failed-warmup-RESULT.json"
+    },
+    {
+      "name": "provider-native-stages-snapshot.jsonl",
+      "bytes": 2286,
+      "sha256": "778cf98a90d1a628dff86c8583096b7fc2b7c36513318d15441ccc3515226bfa",
+      "source": "/tmp/aurora-root-k1-http-provider-prep-v825/runtime/voice-stages.jsonl"
+    },
+    {
+      "name": "provider-bindings-snapshot.jsonl",
+      "bytes": 683,
+      "sha256": "c01111fa37200e7efd196f155aab1b1a1d1ce799a5bef148d75eacc1d4973c1e",
+      "source": "/tmp/aurora-root-k1-http-provider-prep-v825/runtime/actual-provider-bindings.jsonl"
+    },
+    {
+      "name": "provider-receiver-identity.json",
+      "bytes": 1357,
+      "sha256": "03a4e213ff0ec5a74ff8fc4b84bfa6e39a3acd19dfda8ad0026e438b3ccb0fcb",
+      "source": "/tmp/aurora-root-k1-http-provider-prep-v825/runtime/receiver-identity.json"
+    },
+    {
+      "name": "provider-frozen-manifest.json",
+      "bytes": 6330,
+      "sha256": "249ac590069f37199913f609d75243e4a831edd26bdb12352b49f4d8329f5f55",
+      "source": "/tmp/aurora-root-k1-http-provider-prep-v825/input/provider-manifest.json"
+    },
+    {
+      "name": "provider-admission.json",
+      "bytes": 946,
+      "sha256": "dc929a8fd74497cbc1413511fd6785df167fa62900180eca6e898fb80bbed88f",
+      "source": "/tmp/aurora-root-k1-http-provider-prep-v825/input/admission-v994.json"
+    },
+    {
+      "name": "provider-actual-files.json",
+      "bytes": 1533,
+      "sha256": "d3971350195b0bd944e5242f08570d5dd8b93521b6cefd899086fab31c3402d2",
+      "source": "/tmp/aurora-root-k1-http-provider-prep-v825/input/actual-provider-files-v994.json"
+    }
+  ],
+  "existingFixtureValuesCheckedAbsent": true,
+  "privateConfigAndPrivateBackendLogsWithheld": true,
+  "rawOriginalsPreserved": true,
+  "receiverSnapshotAt": "2026-10-16T10:03:52.073820+00:00",
+  "receiverSnapshotIsNotRetirementOr15WarmupAcceptance": true
+}

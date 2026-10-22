@@ -1,0 +1,10 @@
+{
+  "at": "2026-10-21T00:00:40.178329+00:00",
+  "conditionMeasuredTarget": 900,
+  "globalMeasuredEnd": 900,
+  "globalMeasuredStart": 277,
+  "manifestSha256": "ac92f9ba1455c3778e378c6548f0e518fcf0115c6ea9ebf7624f8c30df14d2c5",
+  "maximumPopenCalls": 1,
+  "newWorker": false,
+  "plannedMeasured": 624
+}

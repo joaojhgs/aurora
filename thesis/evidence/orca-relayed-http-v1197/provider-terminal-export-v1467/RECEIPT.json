@@ -1,0 +1,48 @@
+{
+  "at": "2026-10-18T07:07:23.312049+00:00",
+  "state": "PERSONAL_EXPORT_COMPLETE_NOT_YET_WORKER_TRANSFERRED",
+  "records": [
+    {
+      "source": ".git/aurora-handoff-import-20261006/v1467-provider-terminal-export-RESULT.json",
+      "destination": "thesis/evidence/orca-relayed-http-v1197/provider-terminal-export-v1467/RESULT.json",
+      "bytes": 2854,
+      "sha256": "2cb333106cdf8114ca04590d063dba8424bc9e8c0b826f80bc9537b5b2006e86"
+    },
+    {
+      "source": ".git/aurora-handoff-import-20261006/v1467-provider-terminal-export-command.txt",
+      "destination": "thesis/evidence/orca-relayed-http-v1197/provider-terminal-export-v1467/command.txt",
+      "bytes": 58614,
+      "sha256": "2d32fcd1039d102e2987ba29e31033f29810faa390da0b89172fbcf0f7372549"
+    },
+    {
+      "source": ".git/aurora-handoff-import-20261006/v1467-provider-terminal-export-SEND.json",
+      "destination": "thesis/evidence/orca-relayed-http-v1197/provider-terminal-export-v1467/SEND.json",
+      "bytes": 883,
+      "sha256": "de8193f386c1044f98cd8d444a223f7e018ba2936d49cff95a97dc291ac39e6f"
+    },
+    {
+      "source": ".git/aurora-handoff-import-20261006/v1467-provider-terminal-export-SHOW-FENCE.json",
+      "destination": "thesis/evidence/orca-relayed-http-v1197/provider-terminal-export-v1467/SHOW-FENCE.json",
+      "bytes": 1322,
+      "sha256": "f793bb5cecbe9c217fa2eba0fd1e58ef04199df6c1a2cf94eb2bd25d77b6f8d9"
+    },
+    {
+      "source": ".git/aurora-handoff-import-20261006/v1467-provider-terminal-export-reconcile-read-1.json",
+      "destination": "thesis/evidence/orca-relayed-http-v1197/provider-terminal-export-v1467/RECONCILED-READ.json",
+      "bytes": 4578,
+      "sha256": "e35c5dc8d3549f257d7ef22003a2cecc15994cd936a0ee35c3d25ad82a6514d1"
+    }
+  ],
+  "sendRequestId": "83971e6c-9e87-4e9d-a708-9328c99fd39d",
+  "sameAcceptedOutputRecoveredNoResend": true,
+  "controlCursor": "15056",
+  "providerOriginalPidsUnchanged": true,
+  "sourceFrozenManifestSha256": "450ee5af677a229e93f75c093e4e5ee3135c25b223f0d73f713f0c31f56c4cae",
+  "rawNewFiles": 1222,
+  "rawNewBytes": 120866380,
+  "baselineRawRecopiedBytes": 0,
+  "archiveBytes": 7946023,
+  "archiveSha256": "6ac316b04bb2852dba509d9a42873fb19a4568b13fae1357b56956d9bd434a81",
+  "sourceSnapshotAt": "2026-10-18T07:03:43.985120+00:00",
+  "sutCalls": 0
+}

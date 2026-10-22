@@ -1,0 +1,12 @@
+{
+  "controlDeadline": "2026-10-22T06:45:00Z",
+  "explicitNewline": true,
+  "host": "ssh:ssh-sem-notebook-personal",
+  "incarnation": "328cd72f-c7ea-49ff-a2db-b9275b085037",
+  "remoteResult": "/home/developer/projects/aurora/thesis/phone-notebook/20261020/evidence/launch-file-audio-update-v194.json",
+  "rootAdmissionMessage": "owner-necessary-same-signed-ordinary-repair-update-no-security-bypass",
+  "script": "scripts/launch_file_audio_update_v194.py",
+  "scriptSha256": "8103beea15985e804271203d79b304b3385cdc61f27e6e0dfa07a3041613dff4",
+  "singleSend": true,
+  "terminal": "term_a2ed5feb-7c92-48e4-bd88-d1b0e6737989"
+}

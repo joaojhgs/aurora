@@ -1,0 +1,18 @@
+[
+  {
+    "condition": "browser-webrtc-mesh",
+    "workload": "orbit-exact-v1",
+    "outcome": "no_completion_event_observed",
+    "request_id": "assistant-1791942808693-dgqgk",
+    "session_id": "assistant-1791942808693-dgqgk",
+    "correlation_id": "assistant-1791942808693-dgqgk",
+    "request_frame_id": "assistant-1791942808693-dgqgk",
+    "latency_boundary": "provider_rpc_receive_to_completion_event_send",
+    "provider_processing_ms": 1249,
+    "requester_submit_to_visible_completion_ms": 1377.2300000190735,
+    "requester_latency_is_cli_comparable": false,
+    "exact_prompt": true,
+    "visible_exact_response": false,
+    "completion_events": []
+  }
+]

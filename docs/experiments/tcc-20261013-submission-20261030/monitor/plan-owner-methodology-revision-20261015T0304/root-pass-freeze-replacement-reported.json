@@ -1,0 +1,74 @@
+{
+  "message": "msg_d6481e4a4456",
+  "at": "2026-10-15T03:26:52Z",
+  "rootNativeGoal": {
+    "threadId": "01a112a5-d6bb-74e2-bf7c-ace73cb513b5",
+    "actualGetGoalStatus": "active",
+    "observedAt": "2026-10-15T03:23:00Z",
+    "fullOriginal13": true,
+    "unbudgeted": true
+  },
+  "candidate": {
+    "status": "passed",
+    "terminalAt": "2026-10-15T03:14:48.886545Z",
+    "exitCode": 0,
+    "controllerSeconds": 26.082992,
+    "reference": "What is the capital of France? Answer with only the city name.",
+    "actualTranscriptExact": true,
+    "actualLLMReply": "Paris",
+    "ttsOutput": {
+      "bytes": 31276,
+      "sha256": "c45b4cc7d8e6edbc4722f4a87ffd235cc25a550cbe90c777cfe4863ef84dc430",
+      "validNonsilent": true
+    },
+    "callerMs": {
+      "stt": 3357.917059,
+      "assistant": 8401.700594,
+      "tts": 1563.726817,
+      "fullFileToAudio": 13512.828985
+    },
+    "runtime": {
+      "offloadedLayers": "25/25",
+      "backend": "Vulkan",
+      "gpu": "RX7600",
+      "actualSeed": 42,
+      "actualThreads": 2,
+      "stt": "CPU int8_float32"
+    },
+    "observer": {
+      "events": 20,
+      "complete": true,
+      "errors": 0,
+      "correlated": true
+    },
+    "retirement": {
+      "controllerPID": 2903659,
+      "childPID": 2903675,
+      "absent": true,
+      "bothLocksFree": true,
+      "observedAt": "2026-10-15T03:22:35.799683Z"
+    }
+  },
+  "freeze": {
+    "cohortId": "aurora-full-audio-capital-v1-desktop-gpu-local-20261015",
+    "origin": "existing approved Personal desktop",
+    "manifestPath": ".git/aurora-audio-candidate-v481/frozen-manifest-v1.json",
+    "manifestSHA256": "d34d21d1a9b1a2db03be2ad64c096e77082168b3bcc09c28d442b4a61eaff3d7",
+    "replacementRegistryPath": ".git/aurora-audio-candidate-v481/cohort-replacements-v1.json",
+    "replacementRegistrySHA256": "cda9eb1931def2c1a177a13b69b6c8d6dd9a58e9a7135d50e51c43721c514cc5",
+    "rootReportsApplied": true,
+    "projectCopiesIndependentlyRead": false
+  },
+  "replacement": {
+    "old9LogicalVoiceFailuresRetained": true,
+    "oldAffectedComparativeSetupSuperseded": true,
+    "typedCPUextraAndGPUControls": "retained supplementary limited scopes"
+  },
+  "next": {
+    "v482Source": "retained Supervisor,15excludedwarmups+900LocalBus,sourceadmission/independent review underway",
+    "actual900LaunchVerified": false,
+    "workerCPUReadiness": "four packages/Piper voice/WAV missing; routine engineering not owner blocker"
+  },
+  "phase2MeasuredAllowed": false,
+  "microphonePlaybackNativeSurfaceAcceptance": false
+}

@@ -1,0 +1,25 @@
+{
+  "copyOnly": true,
+  "newModelRequests": 0,
+  "measuredDataRepeated": false,
+  "files": [
+    {
+      "source": ".git/aurora-handoff-import-20261006/v1672-saved-provider-preflight-diagnosis-RESULT.json",
+      "destination": "thesis/campaigns/worker-desktop-k3-remaining160-v1674/failed-attempts-preserved-v1685/v1672-saved-provider-preflight-diagnosis-RESULT.json",
+      "bytes": 1865,
+      "sha256": "d3784c56ec2c417eb1126f542cd2699009e506ae780d06951155f4d211d6bb22"
+    },
+    {
+      "source": ".git/aurora-handoff-import-20261006/v1674-fresh-provider-after-api-env-handoff-fix-READ-2.json",
+      "destination": "thesis/campaigns/worker-desktop-k3-remaining160-v1674/failed-attempts-preserved-v1685/v1674-fresh-provider-after-api-env-handoff-fix-READ-2.json",
+      "bytes": 897,
+      "sha256": "250a077d5c243aeec967f34602ffb9428da2496c5366f884b76c41df9742f3dc"
+    },
+    {
+      "source": ".git/aurora-handoff-import-20261006/v1678-fresh-provider-existing-auth-reference-READ-2.json",
+      "destination": "thesis/campaigns/worker-desktop-k3-remaining160-v1674/failed-attempts-preserved-v1685/v1678-fresh-provider-existing-auth-reference-READ-2.json",
+      "bytes": 827,
+      "sha256": "f196836808b8b1489deb36d235200439b7d1f6e3dd8444073cd2e3c312e9c397"
+    }
+  ]
+}

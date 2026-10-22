@@ -1,0 +1,14 @@
+{
+  "recordedAt": "2026-10-14T17:14:05.300687+00:00",
+  "verdict": "APPROVE",
+  "reviewSha256": "1aabfab6bc7f7d4e753818f666508abf5c615c1ad72a7b9e85cc663772955ec5",
+  "sealedExportManifestSha256": "4058af37439c0a51ae39b99faf70fbeae277dec666e7ffc2efbe43d30ea60530",
+  "analysisJsonSha256": "0c119998fe9c07a96dfb4d9780a769aad48c2ae8acae354ac516684431e1e360",
+  "measuredActualCorrect": 900,
+  "measuredEachRoute": 300,
+  "warmupsExcluded": 45,
+  "cpuCohortRole": "extraCPU",
+  "sealedDataManifestRewritten": false,
+  "primaryGPUAccepted": false,
+  "crossDeviceBarrierReady": false
+}

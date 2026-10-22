@@ -1,0 +1,8 @@
+{
+  "exitCode": 1,
+  "phase": "artifact helper initialization before subprocess/model execution",
+  "error": "System Python3.12 cannot resolve llama-cpp-python metadata from Aurora Python3.11 virtualenv",
+  "requestAttempts": 0,
+  "modelLoadAttempted": false,
+  "recovery": "Run the artifact helper through existing Aurora uv environment, retaining this failed startup"
+}

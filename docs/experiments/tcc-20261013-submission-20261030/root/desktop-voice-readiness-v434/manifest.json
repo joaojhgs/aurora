@@ -1,0 +1,38 @@
+{
+  "scope": "closed_four_nonpass_excluded_flows_and_same_case_output_continuation",
+  "accepted_measured_samples": 0,
+  "speech_quantiles_available": false,
+  "continuous_case4_latency_available": false,
+  "files": [
+    {
+      "name": "flow-1.json",
+      "bytes": 1489,
+      "sha256": "3e26c66100805897fece863c3b0718c177556b356088812538bd95b4d1eeee94",
+      "retained_remote_result_sha256": "af7159ff04c95dba559b18a17f058ec51ba516c1b90d062010b86e83ab80bdf6"
+    },
+    {
+      "name": "flow-2.json",
+      "bytes": 2221,
+      "sha256": "dc039c0daf8129d2971be0a0946987f38a510f72dd9e38221fe78defd0506fcb",
+      "retained_remote_result_sha256": "fbd95eddf551f4f79052ef75608f09ead965e88af3063787f75ba750c56ca6a8"
+    },
+    {
+      "name": "flow-3.json",
+      "bytes": 3081,
+      "sha256": "6c7a79e67def461942fa28d5db6fa4b593d19c2aaa8ab17e2450a08ace0330e7",
+      "retained_remote_result_sha256": "ff9ae92dfb7f42966fb2aa312766ed1cb81e0dae11b1beb10e07cd5da5e7b459"
+    },
+    {
+      "name": "flow-4.json",
+      "bytes": 3085,
+      "sha256": "f9e15909e5841ef023d56f043834c92551c66209f1555130cd788f64d55e0c02",
+      "retained_remote_result_sha256": "4e4039299d80b455a4533e5478df274517a5bf99b9d63e950e8b26e07225961b"
+    },
+    {
+      "name": "flow-4-output-continuation.json",
+      "bytes": 3092,
+      "sha256": "77b4aa00bda8e4328b67fb550060c282b17184a76c3e5e3ce6a9b9f4dc07af3b",
+      "retained_remote_result_sha256": "6c289b4665718f679dc57ed45e74525d2a30a95b5d623f318debba2101e3b43c"
+    }
+  ]
+}

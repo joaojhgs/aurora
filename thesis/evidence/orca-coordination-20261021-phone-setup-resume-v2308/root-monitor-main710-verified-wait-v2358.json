@@ -1,0 +1,28 @@
+{
+  "id": "807e714f-5c7a-4554-adb0-e92b8b592417",
+  "ok": true,
+  "result": {
+    "message": {
+      "id": "msg_d8702b6b213c",
+      "run_id": "run_e6054e76e9fc",
+      "delivery_contract": "current_delivery",
+      "from_handle": "term_6a00d9ee-792a-4daf-8578-236290e33108",
+      "to_handle": "dispatch:ctx_37b4d0a3c14f",
+      "subject": "Main710/900 live; delegated prep final consumed, no new source/probes",
+      "body": "Original Root native goal actualACTIVE/unbudgeted. Actual01:57:09Z V2296 new260/450 allcorrect; full710/900=709correct1preservedhistoricalfailure190mandatoryremain. Originalcontroller3965950/backend3965978/copier3965951 exactstartticks live, copier274pairs0errors3.148GBfree. ROOT-VERIFIED-WAIT-v2358.json/fresh native snapshot/CURRENT nextbound02:02:09.788700Z or earlierfailure/terminal/guard. No source/model/settings/manifest/clock changes or tests/replays/review/workers/devicequeries. Consumed9ebf16794dbf/a9375f98d756 delegated finalprep receipt and recorded physicalFinalContinuation receipt pointer/hash; sourcehandoff/assembly/sourcecopyguard CLOSED. Remaining own build/native/pilot/900=0 with actualphysical/thermallimits; no unchanged probes/sourcework or newworker, existinglane resumes only on changedreadiness. Source/phone preparation does not hold main. ExistingCodingattentiondedup/pendingdelivery retained honestly. CanonicalK1BIG notification remains pending true900/scopedrawanalysis/custody/retirement+release, not thiscounter. Full13 unchanged; Rootcontinues samecollection.",
+      "type": "status",
+      "priority": "normal",
+      "thread_id": null,
+      "payload": null,
+      "created_at": "2026-10-22T02:00:21Z",
+      "delivered_at": null
+    },
+    "mutation": {
+      "requestId": "d389d1d6-83df-4e17-8845-2720af2b77b1",
+      "replayed": false
+    }
+  },
+  "_meta": {
+    "runtimeId": "cc9e3275-28c6-4c45-85cc-bdcd2262aa7d"
+  }
+}

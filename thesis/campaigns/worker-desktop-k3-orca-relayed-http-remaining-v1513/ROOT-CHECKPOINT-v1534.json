@@ -1,0 +1,50 @@
+{
+  "at": "2026-10-18T16:18:06.201121+00:00",
+  "classification": "SAME_FROZEN_K3_RUNNING_PAIR_PREP_CONTROL_ONLY",
+  "progress": {
+    "attempted": 179,
+    "last_attempt_file": "attempts/attempt-0179-measured.jsonl",
+    "last_attempt_status": "completed_correct",
+    "measured_attempted": 164,
+    "planned_measured": 387,
+    "planned_warmups": 15,
+    "status": "running",
+    "unattempted_measured": 223,
+    "warmups_attempted": 15
+  },
+  "measuredOutcomes": {
+    "completed_correct": 164
+  },
+  "pids": [
+    {
+      "role": "controller",
+      "pid": 1231594,
+      "startTicks": 111317576,
+      "sameLiveProcess": true
+    },
+    {
+      "role": "backend",
+      "pid": 1231687,
+      "startTicks": 111318838,
+      "sameLiveProcess": true
+    },
+    {
+      "role": "copier",
+      "pid": 1231601,
+      "startTicks": 111317577,
+      "sameLiveProcess": true
+    }
+  ],
+  "custody": {
+    "sequence": 93,
+    "cases": 179,
+    "wavs": 180,
+    "bytes": 14441281,
+    "errors": []
+  },
+  "newSutRequestsFromCheckpoint": 0,
+  "sourceSettingsOrFrozenManifestChanged": false,
+  "parentOriginalAttempts": 513,
+  "parentOriginalFailureRetained": true,
+  "full13Complete": false
+}

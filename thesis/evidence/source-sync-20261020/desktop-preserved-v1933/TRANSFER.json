@@ -1,0 +1,48 @@
+{
+  "source": {
+    "host": "personal.skyron-server",
+    "archive": "/home/developer/projects/aurora/.git/aurora-handoff-import-20261006/source-sync-desktop-v1933/desktop-dirty-source.tar.gz",
+    "bytes": 258936,
+    "sha256": "375ce8eab9175ef58c2a23c4ea6e0f700fc07e4b694d7d7da0b76f1a4b18689e",
+    "sourceFiles": 23,
+    "sourceBytes": 1072837,
+    "excludedCount": 0,
+    "patchBytes": 490620,
+    "patchSha256": "fcfa4248d539844c46d0c83e2a6c61d224844ea8ee408996fceb73503e7edade",
+    "manifestSha256": "2a90dd86516a35f120169c7bc76aa7b9fd67c452fd5470095c87bca90f73a41c",
+    "branch": "main",
+    "head": "2a7d0da4f6fb1054e6bdc0ad6cde83fdd954ca69",
+    "copyOnly": true,
+    "allExistingWorkPreserved": true,
+    "sutCalls": 0
+  },
+  "copiedBytes": 258936,
+  "pages": [
+    {
+      "offset": 0,
+      "bytes": 98304,
+      "sha256": "d6054a9c6b27ce64df0a59b7caffd533e9fd168764eba7d9f0ac03c862863bf6"
+    },
+    {
+      "offset": 98304,
+      "bytes": 98304,
+      "sha256": "42764d77cec7a912fd06677f94adcfa6ed597dd7d36da43bceeb524f4393379d"
+    },
+    {
+      "offset": 196608,
+      "bytes": 62328,
+      "sha256": "22fc9e46457f717f31f7041bdc58c0b5e9254046b927e9576e633a501ac57b23"
+    }
+  ],
+  "startedAt": 1792532234.5483446,
+  "scientificTraffic": 0,
+  "nextCursor": "113870",
+  "status": "physical_archive_and_all_source_members_verified",
+  "finishedAt": 1792532254.1748726,
+  "archive": "thesis/evidence/source-sync-20261020/desktop-preserved-v1933/desktop-dirty-source.tar.gz",
+  "archiveSha256": "375ce8eab9175ef58c2a23c4ea6e0f700fc07e4b694d7d7da0b76f1a4b18689e",
+  "sourceMembers": 23,
+  "sourceBytes": 1072837,
+  "preservedEveryDesktopOriginal": true,
+  "rootWorkingSourcesUntouched": true
+}

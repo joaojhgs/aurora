@@ -1,0 +1,121 @@
+{
+  "at": "2026-10-22T12:13:32.645707+00:00",
+  "files": [
+    {
+      "path": "thesis/goal-evidence/PER289-external-state-20261022/ARCHIVE-SOURCE-CONTINUITY.json",
+      "bytes": 728,
+      "sha256": "f367a5770fd49458e28f02305fb618bd2d4919d57861585838d5731f5c8371bd"
+    },
+    {
+      "path": "thesis/goal-evidence/PER289-external-state-20261022/CONFIG-SOURCE-CONTINUITY.json",
+      "bytes": 7918,
+      "sha256": "5722a3decac99b444a821de6c0b249dc6cf4135cf39b8d39af7147159dbabd12"
+    },
+    {
+      "path": "thesis/goal-evidence/PER289-external-state-20261022/LIVE-BASE-AND-READ-SCOPES.json",
+      "bytes": 856,
+      "sha256": "845d9b1283cf72b2b688becdc2e80c76e6c5e5eaa4e7a022d6c3375f20662a4e"
+    },
+    {
+      "path": "thesis/goal-evidence/PER289-external-state-20261022/MULTICA-READ-ADMISSION.json",
+      "bytes": 838,
+      "sha256": "4fc28bbc326fd807545c8937d749300788263050f0d3d7eeca8b083a601b58ee"
+    },
+    {
+      "path": "thesis/goal-evidence/PER289-external-state-20261022/READ-RECEIPT.json",
+      "bytes": 46939,
+      "sha256": "b147c155e51a09a82fab53145d97db29d6db22de94fc3af4bf6a582522656fe3"
+    },
+    {
+      "path": "thesis/goal-evidence/PER289-external-state-20261022/READINESS-RECONCILIATION.json",
+      "bytes": 3031,
+      "sha256": "b53000506195385022174169fb2798c19633fa65741f9247928203a17cbe5d99"
+    },
+    {
+      "path": "thesis/goal-evidence/PER289-external-state-20261022/README.md",
+      "bytes": 2622,
+      "sha256": "5ba041b7fd67f23470748e43ce64798d4d25a2634e86aa6d576bb14408333b39"
+    },
+    {
+      "path": "thesis/goal-evidence/PER289-external-state-20261022/RETAINED-ACCEPTANCE-CUSTODY.json",
+      "bytes": 2645,
+      "sha256": "39b7c4968d7b980bd514f6cee3fc4cd7c8bf5b66e894872f1f3ee1948adfd898"
+    },
+    {
+      "path": "thesis/goal-evidence/PER289-external-state-20261022/pr-171.stderr.txt",
+      "bytes": 0,
+      "sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+    },
+    {
+      "path": "thesis/goal-evidence/PER289-external-state-20261022/pr-171.stdout.json",
+      "bytes": 16705,
+      "sha256": "49f992e9efc4a7076765eb8d3974d439cdcc719975b9004eafab2d6b812a56eb"
+    },
+    {
+      "path": "thesis/goal-evidence/PER289-external-state-20261022/pr-172.stderr.txt",
+      "bytes": 0,
+      "sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+    },
+    {
+      "path": "thesis/goal-evidence/PER289-external-state-20261022/pr-172.stdout.json",
+      "bytes": 16360,
+      "sha256": "dacfd3eeb7b531aa5d47404b43b2f3446cb22cc40841c17e8a437d6492dc5def"
+    },
+    {
+      "path": "thesis/goal-evidence/PER289-external-state-20261022/pr-175.stderr.txt",
+      "bytes": 0,
+      "sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+    },
+    {
+      "path": "thesis/goal-evidence/PER289-external-state-20261022/pr-175.stdout.json",
+      "bytes": 17377,
+      "sha256": "0578975ea3211484c84480b1a78996898b571922cf713b946965cf6c3e2fadad"
+    },
+    {
+      "path": "thesis/goal-evidence/PER289-external-state-20261022/pr-177.stderr.txt",
+      "bytes": 0,
+      "sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+    },
+    {
+      "path": "thesis/goal-evidence/PER289-external-state-20261022/pr-177.stdout.json",
+      "bytes": 15893,
+      "sha256": "94c82d1cb39c72d420790e142638862b1ba4a8d6773ba9a9e71d180db37a08f4"
+    },
+    {
+      "path": "thesis/goal-evidence/PER289-external-state-20261022/retained-acceptance/ANDROID-ARCHIVE-DATA-MAIN-V1.json",
+      "bytes": 2196,
+      "sha256": "4ab7836933363831d135c757ae5ce1574679c461d3beb00e10a8af88c96da338"
+    },
+    {
+      "path": "thesis/goal-evidence/PER289-external-state-20261022/retained-acceptance/PER289-ARCHIVE-FOUNDATION-CHECKPOINT-V1.json",
+      "bytes": 14385,
+      "sha256": "de4b19828217ec7104cdd698e270672d38e32545839e6e1463e311ac5a544b78"
+    },
+    {
+      "path": "thesis/goal-evidence/PER289-external-state-20261022/retained-acceptance/PER289-EXACT-PACKAGE-QA-V102.md",
+      "bytes": 5728,
+      "sha256": "548d2764d1c218a983f2b73db646984ac09f27c60c89b6af55e9c3c01d659764"
+    },
+    {
+      "path": "thesis/goal-evidence/PER289-external-state-20261022/retained-acceptance/PER289-LOCAL-ARCHITECTURE-V102.md",
+      "bytes": 3813,
+      "sha256": "495ba3e2c27e98d3b5201b65f2feb4f5dd3373f34008d0c6b7bef5233829e6b6"
+    },
+    {
+      "path": "thesis/goal-evidence/PER289-external-state-20261022/retained-acceptance/PER289-OWN-TECHNICAL-ACCEPTANCE-SOL-V78.md",
+      "bytes": 7209,
+      "sha256": "d9ff0181b18501c18b6717e9511eb418863f0e0881b9c3cd8ef3cd71232fc279"
+    },
+    {
+      "path": "thesis/goal-evidence/PER289-external-state-20261022/retained-acceptance/PER289-SEARCH-CHECKPOINT-V1.json",
+      "bytes": 4566,
+      "sha256": "0a9d7430cc91df36ee881b0ce02ecf29d87218c0efe950647b54ef4cc61c1761"
+    },
+    {
+      "path": "thesis/goal-evidence/PER289-external-state-20261022/retained-acceptance/PER289-STACKED-CONFIG-DELIVERY-V78.json",
+      "bytes": 6995,
+      "sha256": "e9a00ce6f39a8c54ddb0f4fe3904f45330b052d4461b067d001dd20c6330f1cf"
+    }
+  ],
+  "credentialOutputStored": false
+}

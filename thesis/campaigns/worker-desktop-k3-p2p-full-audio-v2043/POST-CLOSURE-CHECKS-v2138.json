@@ -1,0 +1,41 @@
+{
+  "at": "2026-10-21T02:28:35.215256+00:00",
+  "savedAnalysis": "PASS analysis-v2130,0gaps",
+  "targetedWhitespace": "PASS git diff --check on two Root reporting documents",
+  "newLiveBlockLinks": [
+    {
+      "document": "docs/experiments/tcc-20261013-submission-20261030/root/CURRENT.md",
+      "target": "../../../../thesis/campaigns/worker-desktop-k3-p2p-full-audio-v2043/analysis-v2130/results.md",
+      "exists": true
+    },
+    {
+      "document": "docs/experiments/tcc-20261013-submission-20261030/root/CURRENT.md",
+      "target": "../../../../thesis/campaigns/worker-desktop-k3-p2p-full-audio-v2043/analysis-v2130/RESULT.json",
+      "exists": true
+    },
+    {
+      "document": "docs/experiments/tcc-20261013-submission-20261030/root/CURRENT.md",
+      "target": "../../../../thesis/campaigns/worker-desktop-k3-p2p-full-audio-v2043/CONDITION-CLOSURE-v2134.json",
+      "exists": true
+    },
+    {
+      "document": ".omx/ultragoal/ORCA-COORDINATION.md",
+      "target": "../../thesis/campaigns/worker-desktop-k3-p2p-full-audio-v2043/analysis-v2130/results.md",
+      "exists": true
+    },
+    {
+      "document": ".omx/ultragoal/ORCA-COORDINATION.md",
+      "target": "../../thesis/campaigns/worker-desktop-k3-p2p-full-audio-v2043/analysis-v2130/RESULT.json",
+      "exists": true
+    },
+    {
+      "document": ".omx/ultragoal/ORCA-COORDINATION.md",
+      "target": "../../thesis/campaigns/worker-desktop-k3-p2p-full-audio-v2043/CONDITION-CLOSURE-v2134.json",
+      "exists": true
+    }
+  ],
+  "repoWideDocs": "FAIL make check-docs exit2: historic experiment artifact placement and matched-main-campaign-v319/runner-report.md broken campaign.py link; no cleanup/retest loop",
+  "nextPreflight": "PASS WORKER-ASSET-AND-PARENT-PREFLIGHT-v2137.json; provider/finitewarmup admission NOT_ADMITTED",
+  "goal": "ACTIVE original aggregate; all13/fullmatrix open",
+  "sutCalls": 0
+}

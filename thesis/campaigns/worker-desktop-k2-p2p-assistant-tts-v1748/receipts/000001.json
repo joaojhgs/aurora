@@ -1,0 +1,208 @@
+{
+  "diskAfter": {
+    "free": 4550160384,
+    "total": 109128826880,
+    "used": 104561889280
+  },
+  "diskBefore": {
+    "free": 4550733824,
+    "total": 109128826880,
+    "used": 104561315840
+  },
+  "errors": [],
+  "expectedConditionSha256": "4e1ecc910f95aa1272e8e2027322e7f19d3345c5dd8ef8d08c6a7c8c8ca55847",
+  "finishedAt": "2026-10-20T14:47:17.763663+00:00",
+  "newFiles": [
+    {
+      "bytes": 8791,
+      "copiedAt": "2026-10-20T14:47:17.539792+00:00",
+      "destination": "thesis/campaigns/worker-desktop-k2-p2p-assistant-tts-v1748/frozen/condition.json",
+      "sha256": "4e1ecc910f95aa1272e8e2027322e7f19d3345c5dd8ef8d08c6a7c8c8ca55847",
+      "source": "/home/developer/projects/aurora/.git/aurora-handoff-import-20261006/distributed-k2-mesh-launch-v1748/condition-frozen-v1748.json"
+    },
+    {
+      "bytes": 219794,
+      "copiedAt": "2026-10-20T14:47:17.551973+00:00",
+      "destination": "thesis/campaigns/worker-desktop-k2-p2p-assistant-tts-v1748/harness/candidate-input.wav",
+      "sha256": "da0ecc4ad0885746ab6e716585473917ab2b543a505bf0db09ebacfaa7943cbb",
+      "source": "/home/developer/projects/aurora/.git/aurora-handoff-import-20261006/distributed-k2-mesh-requester-v1748/candidate-input.wav"
+    },
+    {
+      "bytes": 220,
+      "copiedAt": "2026-10-20T14:47:17.567222+00:00",
+      "destination": "thesis/campaigns/worker-desktop-k2-p2p-assistant-tts-v1748/harness/candidate-manifest.json",
+      "sha256": "ce75b965ee5879ebece6ea7dfe133441547d20ccf89ecd5d66ea510bd9645e60",
+      "source": "/home/developer/projects/aurora/.git/aurora-handoff-import-20261006/distributed-k2-mesh-requester-v1748/candidate-manifest.json"
+    },
+    {
+      "bytes": 67817,
+      "copiedAt": "2026-10-20T14:47:17.575696+00:00",
+      "destination": "thesis/campaigns/worker-desktop-k2-p2p-assistant-tts-v1748/harness/source-inventory.json",
+      "sha256": "a38421a03ffafb73a4c469aa7c82fb299210eedd6fe97809beb3c508782883d4",
+      "source": "/home/developer/projects/aurora/.git/aurora-handoff-import-20261006/distributed-k2-mesh-requester-v1748/source-inventory.json"
+    },
+    {
+      "bytes": 19790,
+      "copiedAt": "2026-10-20T14:47:17.584684+00:00",
+      "destination": "thesis/campaigns/worker-desktop-k2-p2p-assistant-tts-v1748/harness/controller.py",
+      "sha256": "573ee21e7e8043c9f76061688f411147d3a1be88ed681bd1024f4ca3126a6b9a",
+      "source": "/home/developer/projects/aurora/.git/aurora-handoff-import-20261006/distributed-k2-mesh-requester-v1748/controller.py"
+    },
+    {
+      "bytes": 69328,
+      "copiedAt": "2026-10-20T14:47:17.594672+00:00",
+      "destination": "thesis/campaigns/worker-desktop-k2-p2p-assistant-tts-v1748/harness/runner.py",
+      "sha256": "8347fc103a11ca6c9d0c3686b442bd2e4236a4122c668a42bcc10944b7408285",
+      "source": "/home/developer/projects/aurora/.git/aurora-handoff-import-20261006/distributed-k2-mesh-requester-v1748/runner.py"
+    },
+    {
+      "bytes": 12953,
+      "copiedAt": "2026-10-20T14:47:17.607655+00:00",
+      "destination": "thesis/campaigns/worker-desktop-k2-p2p-assistant-tts-v1748/harness/bootstrap.py",
+      "sha256": "b88a8a1aa6769bffc214329cdc219f6effc369b172cd777b3959c69a084866ec",
+      "source": "/home/developer/projects/aurora/.git/aurora-handoff-import-20261006/distributed-k2-mesh-requester-v1748/bootstrap.py"
+    },
+    {
+      "bytes": 5492,
+      "copiedAt": "2026-10-20T14:47:17.619703+00:00",
+      "destination": "thesis/campaigns/worker-desktop-k2-p2p-assistant-tts-v1748/harness/bindings.py",
+      "sha256": "79558452e6f61268ad246476ca848e060b8ea808e15091bc53a3c4e0e28b1647",
+      "source": "/home/developer/projects/aurora/.git/aurora-handoff-import-20261006/distributed-k2-mesh-requester-v1748/bindings.py"
+    },
+    {
+      "bytes": 11873,
+      "copiedAt": "2026-10-20T14:47:17.634650+00:00",
+      "destination": "thesis/campaigns/worker-desktop-k2-p2p-assistant-tts-v1748/harness/observer.py",
+      "sha256": "784cc4bffc0d6824bbe378d17a7f632d587ca0a315896b048b2ebef727082df5",
+      "source": "/home/developer/projects/aurora/.git/aurora-handoff-import-20261006/distributed-k2-mesh-requester-v1748/observer.py"
+    },
+    {
+      "bytes": 7475,
+      "copiedAt": "2026-10-20T14:47:17.644650+00:00",
+      "destination": "thesis/campaigns/worker-desktop-k2-p2p-assistant-tts-v1748/harness/resource_sample.py",
+      "sha256": "8f62ec378e74036d4539d9159e3caf29b8fd7a9115de1ab0f482dfd58b6e1857",
+      "source": "/home/developer/projects/aurora/.git/aurora-handoff-import-20261006/distributed-k2-mesh-requester-v1748/resource_sample.py"
+    },
+    {
+      "bytes": 11584,
+      "copiedAt": "2026-10-20T14:47:17.658311+00:00",
+      "destination": "thesis/campaigns/worker-desktop-k2-p2p-assistant-tts-v1748/harness/aurora_voice_telemetry_v430.py",
+      "sha256": "8129ffe7591a47a0107ede53b101aead9fc1f58b92f0c0c4203176cc7608325d",
+      "source": "/home/developer/projects/aurora/.git/aurora-handoff-import-20261006/distributed-k2-mesh-requester-v1748/aurora_voice_telemetry_v430.py"
+    },
+    {
+      "bytes": 10765,
+      "copiedAt": "2026-10-20T14:47:17.667544+00:00",
+      "destination": "thesis/campaigns/worker-desktop-k2-p2p-assistant-tts-v1748/harness/mesh_stage_adapter.py",
+      "sha256": "b4fb5cd37c3ba0718f46193c0537c1ca049356ef0d856abc5c3cc88f6c78a181",
+      "source": "/home/developer/projects/aurora/.git/aurora-handoff-import-20261006/distributed-k2-mesh-requester-v1748/mesh_stage_adapter.py"
+    },
+    {
+      "bytes": 14605,
+      "copiedAt": "2026-10-20T14:47:17.679661+00:00",
+      "destination": "thesis/campaigns/worker-desktop-k2-p2p-assistant-tts-v1748/harness/k2_composition.py",
+      "sha256": "c9cbca5cc9f54f21a722fb2a5f9deed4325cce8e644a2af1f993f60f5b1bd883",
+      "source": "/home/developer/projects/aurora/.git/aurora-handoff-import-20261006/distributed-k2-mesh-requester-v1748/k2_composition.py"
+    },
+    {
+      "bytes": 9586,
+      "copiedAt": "2026-10-20T14:47:17.690698+00:00",
+      "destination": "thesis/campaigns/worker-desktop-k2-p2p-assistant-tts-v1748/harness/mesh_route_observer.py",
+      "sha256": "db390cdc4e05718e111037b3118573aab5ee9215c57b8e4398767a8b07e6ce7a",
+      "source": "/home/developer/projects/aurora/.git/aurora-handoff-import-20261006/distributed-k2-mesh-requester-v1748/mesh_route_observer.py"
+    },
+    {
+      "bytes": 11641,
+      "copiedAt": "2026-10-20T14:47:17.710672+00:00",
+      "destination": "thesis/campaigns/worker-desktop-k2-p2p-assistant-tts-v1748/harness/route_observation_sink.py",
+      "sha256": "e85cbd14637af7f9939b07163ee2571ee561c98b52adf179bc72a7e01589ad8f",
+      "source": "/home/developer/projects/aurora/.git/aurora-handoff-import-20261006/distributed-k2-mesh-requester-v1748/route_observation_sink.py"
+    },
+    {
+      "bytes": 2350,
+      "copiedAt": "2026-10-20T14:47:17.726675+00:00",
+      "destination": "thesis/campaigns/worker-desktop-k2-p2p-assistant-tts-v1748/harness/route_runtime_pins.json",
+      "sha256": "db270c9c6373b24e669bdf2b002da5fadb3e3841ee1ecc6ad8dec5a7ad26daf8",
+      "source": "/home/developer/projects/aurora/.git/aurora-handoff-import-20261006/distributed-k2-mesh-requester-v1748/route_runtime_pins.json"
+    },
+    {
+      "bytes": 25849,
+      "copiedAt": "2026-10-20T14:47:17.743662+00:00",
+      "destination": "thesis/campaigns/worker-desktop-k2-p2p-assistant-tts-v1748/harness/receiver_proof.py",
+      "sha256": "4aea2ab1d0687ca8fdae48486dad0dd532967ee1428bc624f525cb8e43344dbb",
+      "source": "/home/developer/projects/aurora/.git/aurora-handoff-import-20261006/distributed-k2-mesh-requester-v1748/receiver_proof.py"
+    },
+    {
+      "bytes": 400,
+      "copiedAt": "2026-10-20T14:47:17.754410+00:00",
+      "destination": "thesis/campaigns/worker-desktop-k2-p2p-assistant-tts-v1748/operator/requester-launch.json",
+      "sha256": "29a23e7b24e2f749b3cf8926cdc44efcd2fca9f0a46460b49563abf76af70df1",
+      "source": "/home/developer/projects/aurora/.git/aurora-handoff-import-20261006/distributed-k2-mesh-launch-v1748/requester-launch.json"
+    },
+    {
+      "bytes": 366,
+      "copiedAt": "2026-10-20T14:47:17.758888+00:00",
+      "destination": "thesis/campaigns/worker-desktop-k2-p2p-assistant-tts-v1748/operator/LAUNCH-INTENT.json",
+      "sha256": "f96e30d5e72c58cc406fa097a5803b692acfa23b02953245625dc8bd314668aa",
+      "source": "/home/developer/projects/aurora/.git/aurora-handoff-import-20261006/distributed-k2-mesh-launch-v1748/LAUNCH-INTENT.json"
+    },
+    {
+      "bytes": 496,
+      "copiedAt": "2026-10-20T14:47:17.763514+00:00",
+      "credentialsRedacted": 0,
+      "destination": "thesis/campaigns/worker-desktop-k2-p2p-assistant-tts-v1748/prefixes/controller.private.log/000000000000-000000000496.chunk",
+      "endByte": 496,
+      "incomplete": true,
+      "sha256": "1240528d1c5fe746fb5187f57832065510d347e9ce867b2ba2f1d4fed1bd0963",
+      "source": "/home/developer/projects/aurora/.git/aurora-handoff-import-20261006/distributed-k2-mesh-launch-v1748/requester-controller.private.log",
+      "sourceInode": 1928543,
+      "sourceObservedBytes": 496,
+      "sourceRawSha256": "1240528d1c5fe746fb5187f57832065510d347e9ce867b2ba2f1d4fed1bd0963",
+      "startByte": 0
+    }
+  ],
+  "pendingStatic": [
+    "/home/developer/projects/aurora/.git/aurora-handoff-import-20261006/distributed-k2-mesh-launch-v1748/warmup-finalizer-result.json",
+    "/home/developer/projects/aurora/.git/aurora-handoff-import-20261006/distributed-k2-mesh-cell-v1748/campaign/remote-warmup-proof.json",
+    "/home/developer/projects/aurora/.git/aurora-handoff-import-20261006/distributed-k2-mesh-launch-v1748/operator-launch.json",
+    "/home/developer/projects/aurora/.git/aurora-handoff-import-20261006/distributed-k2-mesh-launch-v1748/requesterCopier-launch.json",
+    "/home/developer/projects/aurora/.git/aurora-handoff-import-20261006/distributed-k2-mesh-launch-v1748/warmupFinalizer-launch.json",
+    "/home/developer/projects/aurora/.git/aurora-handoff-import-20261006/distributed-k2-mesh-launch-v1748/proof-collection-request.json",
+    "/home/developer/projects/aurora/.git/aurora-handoff-import-20261006/distributed-k2-mesh-cell-v1748/runtime-versions.json",
+    "/home/developer/projects/aurora/.git/aurora-handoff-import-20261006/distributed-k2-mesh-cell-v1748/voice-stages.installed.json",
+    "/home/developer/projects/aurora/.git/aurora-handoff-import-20261006/distributed-k2-mesh-cell-v1748/voice-stages.status.json",
+    "/home/developer/projects/aurora/.git/aurora-handoff-import-20261006/distributed-k2-mesh-cell-v1748/mesh-route-runtime-pins.json",
+    "/home/developer/projects/aurora/.git/aurora-handoff-import-20261006/distributed-k2-mesh-cell-v1748/voice-stages.jsonl",
+    "/home/developer/projects/aurora/.git/aurora-handoff-import-20261006/distributed-k2-mesh-cell-v1748/actual-provider-bindings.jsonl",
+    "/home/developer/projects/aurora/.git/aurora-handoff-import-20261006/distributed-k2-mesh-cell-v1748/resources.jsonl",
+    "/home/developer/projects/aurora/.git/aurora-handoff-import-20261006/distributed-k2-mesh-cell-v1748/requester-mesh-calls.jsonl",
+    "/home/developer/projects/aurora/.git/aurora-handoff-import-20261006/distributed-k2-mesh-cell-v1748/mesh-route-observations.jsonl"
+  ],
+  "physicalPayloadBytes": 511175,
+  "possibleConfound": "Concurrent custody reads/writes; keep all affected measurements.",
+  "prefixes": {
+    "controller.private.log": {
+      "chunks": [
+        "thesis/campaigns/worker-desktop-k2-p2p-assistant-tts-v1748/prefixes/controller.private.log/000000000000-000000000496.chunk"
+      ],
+      "endByte": 496,
+      "incomplete": true,
+      "inode": 1928543,
+      "observedAt": "2026-10-20T14:47:17.763578+00:00",
+      "sourceObservedBytes": 496
+    }
+  },
+  "previousReceipt": null,
+  "progressObservation": {
+    "note": "Copier observation only; no request denominator inferred",
+    "status": "awaiting_progress"
+  },
+  "providerCoverage": "Separate P2P Assistant+TTS provider custody; actual per-host prefix coverage must be joined explicitly.",
+  "reservedFreeBytes": 2147483648,
+  "retainedAudioBlobs": 0,
+  "retainedCases": 0,
+  "schema": "aurora.physical-custody-checkpoint.v1",
+  "sequence": 1,
+  "startedAt": "2026-10-20T14:47:17.491255+00:00",
+  "sutCalls": 0
+}

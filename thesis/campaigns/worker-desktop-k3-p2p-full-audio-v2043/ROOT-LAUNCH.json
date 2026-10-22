@@ -1,0 +1,19 @@
+{
+  "at": "2026-10-21T00:00:40.181691+00:00",
+  "conditionManifestSha256": "ac92f9ba1455c3778e378c6548f0e518fcf0115c6ea9ebf7624f8c30df14d2c5",
+  "conditionMeasuredTarget": 900,
+  "controllerPid": 3207537,
+  "controllerStartTicks": 131930077,
+  "globalMeasuredEnd": 900,
+  "globalMeasuredStart": 277,
+  "maximumDistinctExcludedWarmupAttempts": 30,
+  "measurementAdmitted": false,
+  "newWorker": false,
+  "plannedMeasured": 624,
+  "provider": {
+    "pid": 251473,
+    "startTicks": 29038457,
+    "state": "R"
+  },
+  "targetCorrectExcludedWarmups": 15
+}

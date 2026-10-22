@@ -1,0 +1,1 @@
+{"pid": 433581, "exitNow": null, "job": "native-cancel-v427", "mechanism": "Existing public SDK AbortSignal -> exact native RPC cancel frame; no auth/capacity settings change"}

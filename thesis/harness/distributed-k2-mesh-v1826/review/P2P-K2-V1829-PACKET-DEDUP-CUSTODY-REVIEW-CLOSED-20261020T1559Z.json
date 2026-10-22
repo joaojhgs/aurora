@@ -1,0 +1,62 @@
+{
+  "actualSavedSizeChecks": {
+    "corrected": {
+      "at": "2026-10-20T15:57:51.516511+00:00",
+      "capBytes": 98304,
+      "fileCount": 6,
+      "fits": true,
+      "modelCalls": 0,
+      "noHistoricalResultPublished": true,
+      "path": ".git/aurora-handoff-import-20261006/k2-warmup-packet-size-v1830-RESULT.json",
+      "rawPayloadBytes": 159708,
+      "receiptBytes": 334,
+      "receiptSha256": "dc6c2036d2c8e265258339945c8ec230f4f44f483450ca363d71a06fb4d03b24",
+      "zlibBase64PacketBytes": 33368
+    },
+    "prior": {
+      "at": "2026-10-20T15:56:21.886336+00:00",
+      "capBytes": 98304,
+      "fileCount": 30,
+      "fits": false,
+      "modelCalls": 0,
+      "rawPayloadBytes": 547070,
+      "receiptBytes": 337,
+      "receiptSha256": "e61ab2444e3e4c4eb862967497a9c20b1b6a1ec2f1333fef0a770f0ec9349c90",
+      "zlibBase64PacketBytes": 124232
+    }
+  },
+  "currentState": "V1826 frozen not yet observed launched; V1818retired15correctwarmups0measured, saved30nativejoinsqualified postmortem. K1 709/697/12/191OPEN; fullmatrixunfinished. Ownerfullyresumedalert remains PENDING actualfresh15proof+firstmeasured.",
+  "diffAssessment": {
+    "byteLengthAndShaVerifiedOnImport": true,
+    "copiedCompleteRequiredFiles": [
+      "remote-warmup-proof.json",
+      "actual-new-process-gpu.json",
+      "voice-stages.jsonl",
+      "actual-provider-bindings.jsonl",
+      "assistant-identity.json",
+      "tts-identity.json"
+    ],
+    "launchBinding": "Root must actually launch reviewed finalizer1829 hash7a65b52f and record it in source/launch receipt, preserving never-launched1826 draft and oldaccepted1787 history. No need for another core review.",
+    "newCaseNativeDataReferencesOnly": false,
+    "requiredSetEqualityAsserted": true,
+    "retainedSource": "Every other collector output remains physically in the original Personal repo thesis output tree; sourceRetainedFiles records exact source/bytes/SHA. Duplicate requester inputs already physically W repo custody. Full raw prefixes/outer spans are not deleted/overwritten.",
+    "scopeLimits": "Packet dedup does not claim every private backend log was replicated to W or a full campaign archive is complete. Original source custody/EOF obligations continue. New six proof files are physical W copies, not external-only indexes.",
+    "unchanged": "Strict15warmups/30nativejoins/newGenerator3bb4/collector4fe/25of25GPU/pins/clock/correctness/900forecast/cumulativecaps/one-send/96KiB cap/unique1826operation unchanged; no guard weakening. CUSTODY adds retained-source index and accurate split-custody scope."
+  },
+  "dispatch": "ctx_37b4d0a3c14f",
+  "disposition": "Proceed actual fresh provider metadata/freeze/one requester lifecycle and15fresh native-GPU warmups then900 under existing original budget/expiry. Actual next packet retains its live cap check; saved-size fit is not a guarantee or measurement. Do not reuse oldwarmups asnew or retroactivelypublish expiredgate.",
+  "monitorActions": "Exactdiff+savedactualsize receipt read only; no appimport/test/sourceedit/model/device/network/remotecommand or grant/process mutation.",
+  "observedAt": "2026-10-20T15:59:00Z",
+  "request": "msg_97a2c4b02654",
+  "run": "run_e6054e76e9fc",
+  "source": {
+    "bytes": 9827,
+    "diffBytes": 2652,
+    "diffPath": "thesis/harness/distributed-k2-mesh-v1826/PACKET-DEDUP-ONLY.diff",
+    "diffSha256": "5be0bf6070eaafddfa2a1271f4a85935681167b5c6a19c4cac0bd81428c3c445",
+    "path": "thesis/harness/k2_mesh_warmup_finalize_v1829.py",
+    "sha256": "7a65b52ff5cb6f964fb205ab0f24d992b292bcfa42e40448cc8f4be05b5dea49"
+  },
+  "status": "PASS/CLOSED bounded packet-dedup/physical-custody diff only; no blocking finding",
+  "task": "task_d7ea336050cf"
+}

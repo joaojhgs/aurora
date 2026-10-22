@@ -1,0 +1,51 @@
+{
+  "objective_id": "tcc:20261013:submission-20261030",
+  "run": "run_e6054e76e9fc",
+  "task": "task_d7ea336050cf",
+  "dispatch": "ctx_37b4d0a3c14f",
+  "root_terminal": "term_6a00d9ee-792a-4daf-8578-236290e33108",
+  "scope": "Existing PERSONAL metadata only; no new host probes or authority retries",
+  "state": "no_verified_alternative_storage_or_transfer_route",
+  "root_report": {
+    "source": "Supplied original-monitor follow-up; not independently probed by Coordinator",
+    "physical_alias": "personal.skyron-server",
+    "gpu": "RX7600/amdgpu/8GB-class discrete device and RADV Vulkan",
+    "environment_prep_time_as_supplied": "16:08:57",
+    "project_filesystem_free_bytes": 2040647680,
+    "required_frozen_cpu_commit": "5782746afba213f6b36907db2f09f0017625e218",
+    "desktop_checkout_as_supplied": "main2a7d0da4",
+    "frozen_commit_present": false,
+    "gpu_inference_or_launch_observed": false,
+    "root_inspection": "Already inspecting existing mounts in bounded manner; no duplicate inspection authorized"
+  },
+  "retained_personal_inventory": {
+    "source": "Earlier successful personal-scoped Orca resources tool output, not a fresh host/mount measurement",
+    "execution_host": "ssh:ssh-1786238480967-semdev",
+    "aurora_workspace": "ce8df754-5c48-4296-83bd-452a5b99942f::/home/developer/projects/aurora",
+    "desktop_workspace": "83c87291-4841-4eb1-9b85-055307c53a59::/home/developer/projects",
+    "collectedAt": 1791992481361,
+    "observedAt": 1791992481646,
+    "host_disk_available_bytes": 17166917632,
+    "mount_path": null,
+    "mount_binding_verified": false,
+    "limitation": "Historical host aggregate diskAvailable is not current project filesystem free space or proof of an alternate usable mount; it does not override newer Root project resource-floor observation"
+  },
+  "existing_receiver_metadata": {
+    "source": "/home/developer/.hermes/profiles/coordinator/plugin-data/tcc/personal-desktop-capability-msg_75f13acf7813.json",
+    "observedAt": 1791992548449,
+    "terminals": [
+      {"terminal": "term_05207084-e4a1-458b-b84d-cee862bbae7a", "incarnation": "532c7dae-01b9-4103-8cef-e72fa72c5ec8"},
+      {"terminal": "term_0c56125c-12c6-468e-9d60-3395cd5d764f", "incarnation": "16f328f4-2a9f-4a49-9977-502cca4e3e54"}
+    ],
+    "provider_or_command_capability_verified": false,
+    "prior_read_refusal": "manager_forbidden/authority_refused; NOT retried or reauthorized",
+    "artifact_transfer_route": null,
+    "artifact_transfer_capability_receipt": null,
+    "resource_reservation_receipt": null,
+    "ownership_adopted": false
+  },
+  "other_existing_storage_backend_paths": [],
+  "unknowns": ["Exact approved alternative mount path/current available space", "Artifact-transfer route and receiver command authority", "Frozen commit availability through a verified existing transfer route", "Root resource reservation"],
+  "actions": "Read existing coordinator capability receipt and wrote this coordination metadata artifact only; no host probes, transfers, cleanup, installs, credentials/security/driver changes, workers/projects/source writers, measurements or external followups",
+  "schedule": "Original CPU campaign unchanged; measured cross-device HELD until CPU and GPU individual campaigns both finish and seal; Root remains sole integrator; authoritative plan sole monitor writer"
+}

@@ -1,0 +1,116 @@
+{
+  "at": "2026-10-20T15:33:30.204810+00:00",
+  "status": "ACTUAL_K2_FULL_AUDIO_ORDINARY_WARMUPS_RUNNING",
+  "conditionManifestSha256": "60c71e3c9cc22c1d6cdf2c9267f5fbc9e8f38d295c289c80d9f3cea2491be62f",
+  "nativeGoalStatus": "active",
+  "progress": {
+    "attempted": 6,
+    "last_attempt_file": "attempts/attempt-0006-warmup.jsonl",
+    "last_attempt_status": "completed_correct",
+    "measured_attempted": 0,
+    "planned_measured": 900,
+    "planned_warmups": 15,
+    "status": "running",
+    "unattempted_measured": 900,
+    "warmups_attempted": 6
+  },
+  "warmupResults": [
+    {
+      "case": "audio-campaign-v1731-0001",
+      "status": "completed_correct",
+      "durationMs": 21091.670793,
+      "hasOutputAudio": true
+    },
+    {
+      "case": "audio-campaign-v1731-0002",
+      "status": "completed_correct",
+      "durationMs": 17817.861272,
+      "hasOutputAudio": true
+    },
+    {
+      "case": "audio-campaign-v1731-0003",
+      "status": "completed_correct",
+      "durationMs": 19196.986674,
+      "hasOutputAudio": true
+    },
+    {
+      "case": "audio-campaign-v1731-0004",
+      "status": "completed_correct",
+      "durationMs": 16291.951103,
+      "hasOutputAudio": true
+    },
+    {
+      "case": "audio-campaign-v1731-0005",
+      "status": "completed_correct",
+      "durationMs": 16061.688317,
+      "hasOutputAudio": true
+    },
+    {
+      "case": "audio-campaign-v1731-0006",
+      "status": "completed_correct",
+      "durationMs": 19142.255236,
+      "hasOutputAudio": true
+    }
+  ],
+  "actors": {
+    "controller": 2810817,
+    "backend": 2810909,
+    "copier": 2811255,
+    "finalizer": 2811256,
+    "providerController": 3938174,
+    "providerReceiver": 3938202
+  },
+  "measurementAdmitted": false,
+  "actualGpuNativeProof": "PENDING_ALL15_ORDINARY_WARMUPS",
+  "controlReservation": "Original Personal shell reserved solely current finalizer2811256/start128872630; no competing commands/models/builds/ADB",
+  "custody": {
+    "cases": 5,
+    "files": 53,
+    "sequence": 3
+  },
+  "originalCumulativeBudget": {
+    "newOuterCapSeconds": 54000,
+    "originalCapSeconds": 57600,
+    "originalStartUtc": "2026-10-20T14:46:52.056334+00:00",
+    "priorElapsedSeconds": 2615.202759,
+    "providerAbsoluteDeadlineNotExtended": true
+  },
+  "K1": {
+    "attempted": 709,
+    "correct": 697,
+    "failed": 12,
+    "unattempted": 191
+  },
+  "copies": [
+    {
+      "path": "thesis/campaigns/worker-desktop-k2-p2p-assistant-tts-v1818/launch-metadata/requester-launch.json",
+      "bytes": 400,
+      "sha256": "022be72be2bfa093bae22f61fec2f00feaf1f1435ce72e36e145e53e852e60a8"
+    },
+    {
+      "path": "thesis/campaigns/worker-desktop-k2-p2p-assistant-tts-v1818/launch-metadata/custody-finalizer-LAUNCH-v1819.json",
+      "bytes": 316,
+      "sha256": "d246c4ec71fcda0b7e9e28840537bd4b590ec1f68a6eab6a19bb34b1d05fe082"
+    },
+    {
+      "path": "thesis/campaigns/worker-desktop-k2-p2p-assistant-tts-v1818/launch-metadata/provider-admission.json",
+      "bytes": 7181,
+      "sha256": "57a697e480677d40d1d41e598c6f10e13deca3c7f3b837eebed09e06e1f3340e"
+    },
+    {
+      "path": "thesis/campaigns/worker-desktop-k2-p2p-assistant-tts-v1818/launch-metadata/RESULT.json",
+      "bytes": 1678,
+      "sha256": "499682f05b927264a6c3f940a902e19aabbd98b64d6600293629a504ba6dd2c1"
+    },
+    {
+      "path": "thesis/campaigns/worker-desktop-k2-p2p-assistant-tts-v1818/launch-metadata/NORMAL-MODEL-FREE-ROUTE-ADMISSION.json",
+      "bytes": 6112,
+      "sha256": "6e6ec4daee696bf76cedf380076598382458b270d80402fc916160f7b3181842"
+    },
+    {
+      "path": "thesis/campaigns/worker-desktop-k2-p2p-assistant-tts-v1818/launch-metadata/RECEIPT-CLARIFICATION.json",
+      "bytes": 693,
+      "sha256": "3a4cb61eb37aa8cef3d02f668ebde6e6910f6bdf9cbdc2b7fe81b6177b8b2813"
+    }
+  ]
+}

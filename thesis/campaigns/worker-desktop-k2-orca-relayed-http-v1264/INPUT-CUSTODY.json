@@ -1,0 +1,29 @@
+{
+  "status": "INERT_PREPARATION_NOT_RUNTIME_ACCEPTANCE",
+  "actualSourceTestsOrInference": 0,
+  "files": [
+    {
+      "source": ".omx/evidence/orca-monitor-20261010/NEXT-K2-EXISTING-SOURCE-AND-ADMISSION-20261017T211428.json",
+      "destination": "thesis/campaigns/worker-desktop-k2-orca-relayed-http-v1264/inputs/NEXT-K2-EXISTING-SOURCE-AND-ADMISSION.json",
+      "bytes": 6012,
+      "sha256": "3f1405b6fff005bc498e6c7a928ad0aeb22e9c8b06f4dc9216149c9bc27d63a4"
+    },
+    {
+      "source": "thesis/harness/distributed-k2-http-v852/SOURCE-CUSTODY-v859.json",
+      "destination": "thesis/campaigns/worker-desktop-k2-orca-relayed-http-v1264/inputs/SOURCE-CUSTODY-v859.json",
+      "bytes": 2668,
+      "sha256": "65a9eacb0aaaeed04a44eaae6638e63dd0d8a33fd3482c1e3f852d08d2a3d78b"
+    },
+    {
+      "source": "thesis/harness/distributed-k2-http-v852/candidate-manifest.json",
+      "destination": "thesis/campaigns/worker-desktop-k2-orca-relayed-http-v1264/inputs/candidate-manifest.json",
+      "bytes": 220,
+      "sha256": "ce75b965ee5879ebece6ea7dfe133441547d20ccf89ecd5d66ea510bd9645e60"
+    },
+    {
+      "path": "thesis/campaigns/worker-desktop-k2-orca-relayed-http-v1264/ADMISSION-PREPARED.json",
+      "bytes": 10312,
+      "sha256": "d89717d31e32d70eecbacceef0af67108cb800b8595ae5e9067a3aad60b561d9"
+    }
+  ]
+}

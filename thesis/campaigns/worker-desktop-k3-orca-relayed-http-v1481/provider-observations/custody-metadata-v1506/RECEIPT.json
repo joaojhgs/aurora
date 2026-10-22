@@ -1,0 +1,31 @@
+{
+  "scope": "Physical post-terminal provider metadata/liveness receipt only; no new app/model request or data export",
+  "providerSnapshotAt": "2026-10-18T12:58:43.952779+00:00",
+  "providerCustodyPath": "/home/developer/projects/aurora/thesis/campaigns/worker-desktop-k3-orca-relayed-http-v1413/provider",
+  "retainedFiles": 854,
+  "physicalPayloadBytes": 85800887,
+  "providerAndCopierExactProcessesLive": true,
+  "configAndManifestUnchanged": true,
+  "copierErrors": [],
+  "files": {
+    "SEND.json": {
+      "bytes": 882,
+      "sha256": "04efdaee9435ed62ba1488ec78457a41ba8d152df47e7072164cd2ea7e2342e4"
+    },
+    "RESULT.json": {
+      "bytes": 2001,
+      "sha256": "b59f6f83f32d726e3834859b3bf8d4a284ae8da2e7cb61591c92cddaac972f08"
+    },
+    "SHOW-FENCE.json": {
+      "bytes": 1322,
+      "sha256": "29feb05796053d5e9d35d844ecf6a5e83a06a75a38f8a850ae6428a21d074520"
+    }
+  },
+  "latestPersonalCursor": "33591",
+  "newSutCalls": 0,
+  "settingsLifecycleChanges": 0,
+  "rootCopyFreeBytesBefore": 5918633984,
+  "rootCopyFreeBytesAfter": 5918617600,
+  "reservedFreeBytes": 2147483648,
+  "sourcePopulationNote": "Shared provider log includes prior unadmitted V1413 and V1481; select exact cohort correlations without pooling. Live resource tail remains incomplete."
+}

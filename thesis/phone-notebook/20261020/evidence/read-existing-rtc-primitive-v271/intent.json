@@ -1,0 +1,12 @@
+{
+  "controlDeadline": "2026-10-22T10:20:00Z",
+  "explicitNewline": true,
+  "host": "ssh:ssh-sem-notebook-personal",
+  "incarnation": "328cd72f-c7ea-49ff-a2db-b9275b085037",
+  "remoteResult": "/home/developer/projects/aurora/thesis/phone-notebook/20261020/evidence/read-existing-rtc-primitive-v271.json",
+  "rootAdmissionMessage": "existing-owner-readonly-live-pc-state-and-source-owned-primitive-no-new-connection",
+  "script": "scripts/read_existing_rtc_primitive_v271.py",
+  "scriptSha256": "80d01c2826a7ecf31fddd57ad44915eb844ac7f8295f955d2b787c5d54e052e1",
+  "singleSend": true,
+  "terminal": "term_a2ed5feb-7c92-48e4-bd88-d1b0e6737989"
+}

@@ -1,0 +1,662 @@
+{
+  "actual_provider_file_sha256": {
+    "config": "141d612cc0a95ed7efc1ca936b845c2364967f2e9217c5dbfcf69fc4d6c65860",
+    "model": "6f52a751e2349abe7a76735eb09dc1875298c77ea2342ffd2fef79ff81b87f22"
+  },
+  "calls": [
+    {
+      "attempt_id": "6aa93128c768483fa71e79ba8bd4ee44",
+      "handler": "tts.model_invoke",
+      "harness_case_id": "audio-campaign-v1719-0001",
+      "local_correlation_id": "audio-campaign-d043e1d9665740afaeb4a5927100cf54",
+      "mesh_correlation_id": "audio-campaign-d043e1d9665740afaeb4a5927100cf54",
+      "native_correlation_id": "audio-campaign-d043e1d9665740afaeb4a5927100cf54",
+      "operation_id": "b2a98cc7e6dc4b3c9d55326adabbd4ef",
+      "outcome": "completed",
+      "provider": {
+        "config_sha256": "141d612cc0a95ed7efc1ca936b845c2364967f2e9217c5dbfcf69fc4d6c65860",
+        "hardware_fingerprint_sha256": "d5e5c8c5f35f4b5e98fce3fe328dd006aae23ebebe99e822a703b2a7cd38d957",
+        "model_sha256": "6f52a751e2349abe7a76735eb09dc1875298c77ea2342ffd2fef79ff81b87f22",
+        "peer_id_sha256": "77421aa81ce7ae2e865455348e9aa5ae17013d8f5e1f72d38d71d09f110ef868",
+        "provider_class": "app.services.tts.providers.piper.PiperTTSProvider",
+        "receiver_id": "personal-k1-mesh-tts-v1710",
+        "sample_rate": 22050,
+        "source_sha256": "6fe434a7d3f07350ba7e8c9fce00414bb5cff8a1ee69b33eafbace73c5473b82",
+        "use_cuda": false
+      },
+      "receiver_pid": 3194394,
+      "request_text_sha256": "5dd272b4f316b776a7b8e3d0894b37e1e42be3d5d3b204b8a5836cc50597a6b1",
+      "route_observation": {
+        "after_path_classes": [
+          "direct"
+        ],
+        "before_path_classes": [
+          "direct"
+        ],
+        "continuous_route_stability_claimed": false,
+        "correlation_id": "audio-campaign-d043e1d9665740afaeb4a5927100cf54",
+        "peer_connection_instance_sha256": "a7c4ad59373de9b709f295a16e649d0d923fa91e6519527fd817b2462d4bf0f7",
+        "peer_id_sha256": "77421aa81ce7ae2e865455348e9aa5ae17013d8f5e1f72d38d71d09f110ef868",
+        "requester_pid": 2360768,
+        "same_pair_identity_available": false,
+        "session_peer_id_sha256": "765b609287cd5739bf5cf5592207f1deee7378bc7b5f38faed5f1a645785e31b",
+        "status": "selected_nominated_pair_observed_before_and_after"
+      },
+      "selected_peer_id_sha256": "77421aa81ce7ae2e865455348e9aa5ae17013d8f5e1f72d38d71d09f110ef868"
+    },
+    {
+      "attempt_id": "df09db389db24da692a70927133a12ad",
+      "handler": "tts.model_invoke",
+      "harness_case_id": "audio-campaign-v1719-0002",
+      "local_correlation_id": "audio-campaign-44c3d94922a3411988e4879171dce303",
+      "mesh_correlation_id": "audio-campaign-44c3d94922a3411988e4879171dce303",
+      "native_correlation_id": "audio-campaign-44c3d94922a3411988e4879171dce303",
+      "operation_id": "93b79779031946638e9437ab9b32466a",
+      "outcome": "completed",
+      "provider": {
+        "config_sha256": "141d612cc0a95ed7efc1ca936b845c2364967f2e9217c5dbfcf69fc4d6c65860",
+        "hardware_fingerprint_sha256": "d5e5c8c5f35f4b5e98fce3fe328dd006aae23ebebe99e822a703b2a7cd38d957",
+        "model_sha256": "6f52a751e2349abe7a76735eb09dc1875298c77ea2342ffd2fef79ff81b87f22",
+        "peer_id_sha256": "77421aa81ce7ae2e865455348e9aa5ae17013d8f5e1f72d38d71d09f110ef868",
+        "provider_class": "app.services.tts.providers.piper.PiperTTSProvider",
+        "receiver_id": "personal-k1-mesh-tts-v1710",
+        "sample_rate": 22050,
+        "source_sha256": "6fe434a7d3f07350ba7e8c9fce00414bb5cff8a1ee69b33eafbace73c5473b82",
+        "use_cuda": false
+      },
+      "receiver_pid": 3194394,
+      "request_text_sha256": "5dd272b4f316b776a7b8e3d0894b37e1e42be3d5d3b204b8a5836cc50597a6b1",
+      "route_observation": {
+        "after_path_classes": [
+          "direct"
+        ],
+        "before_path_classes": [
+          "direct"
+        ],
+        "continuous_route_stability_claimed": false,
+        "correlation_id": "audio-campaign-44c3d94922a3411988e4879171dce303",
+        "peer_connection_instance_sha256": "a7c4ad59373de9b709f295a16e649d0d923fa91e6519527fd817b2462d4bf0f7",
+        "peer_id_sha256": "77421aa81ce7ae2e865455348e9aa5ae17013d8f5e1f72d38d71d09f110ef868",
+        "requester_pid": 2360768,
+        "same_pair_identity_available": false,
+        "session_peer_id_sha256": "765b609287cd5739bf5cf5592207f1deee7378bc7b5f38faed5f1a645785e31b",
+        "status": "selected_nominated_pair_observed_before_and_after"
+      },
+      "selected_peer_id_sha256": "77421aa81ce7ae2e865455348e9aa5ae17013d8f5e1f72d38d71d09f110ef868"
+    },
+    {
+      "attempt_id": "e0d12c23287747698686c07a2f444264",
+      "handler": "tts.model_invoke",
+      "harness_case_id": "audio-campaign-v1719-0003",
+      "local_correlation_id": "audio-campaign-0b054bd8f8924304ae19b7913106e968",
+      "mesh_correlation_id": "audio-campaign-0b054bd8f8924304ae19b7913106e968",
+      "native_correlation_id": "audio-campaign-0b054bd8f8924304ae19b7913106e968",
+      "operation_id": "d9216b55aadf407ab4a5f98361713cce",
+      "outcome": "completed",
+      "provider": {
+        "config_sha256": "141d612cc0a95ed7efc1ca936b845c2364967f2e9217c5dbfcf69fc4d6c65860",
+        "hardware_fingerprint_sha256": "d5e5c8c5f35f4b5e98fce3fe328dd006aae23ebebe99e822a703b2a7cd38d957",
+        "model_sha256": "6f52a751e2349abe7a76735eb09dc1875298c77ea2342ffd2fef79ff81b87f22",
+        "peer_id_sha256": "77421aa81ce7ae2e865455348e9aa5ae17013d8f5e1f72d38d71d09f110ef868",
+        "provider_class": "app.services.tts.providers.piper.PiperTTSProvider",
+        "receiver_id": "personal-k1-mesh-tts-v1710",
+        "sample_rate": 22050,
+        "source_sha256": "6fe434a7d3f07350ba7e8c9fce00414bb5cff8a1ee69b33eafbace73c5473b82",
+        "use_cuda": false
+      },
+      "receiver_pid": 3194394,
+      "request_text_sha256": "5dd272b4f316b776a7b8e3d0894b37e1e42be3d5d3b204b8a5836cc50597a6b1",
+      "route_observation": {
+        "after_path_classes": [
+          "direct"
+        ],
+        "before_path_classes": [
+          "direct"
+        ],
+        "continuous_route_stability_claimed": false,
+        "correlation_id": "audio-campaign-0b054bd8f8924304ae19b7913106e968",
+        "peer_connection_instance_sha256": "a7c4ad59373de9b709f295a16e649d0d923fa91e6519527fd817b2462d4bf0f7",
+        "peer_id_sha256": "77421aa81ce7ae2e865455348e9aa5ae17013d8f5e1f72d38d71d09f110ef868",
+        "requester_pid": 2360768,
+        "same_pair_identity_available": false,
+        "session_peer_id_sha256": "765b609287cd5739bf5cf5592207f1deee7378bc7b5f38faed5f1a645785e31b",
+        "status": "selected_nominated_pair_observed_before_and_after"
+      },
+      "selected_peer_id_sha256": "77421aa81ce7ae2e865455348e9aa5ae17013d8f5e1f72d38d71d09f110ef868"
+    },
+    {
+      "attempt_id": "0dd956cf5696431b927d61612d6ba03c",
+      "handler": "tts.model_invoke",
+      "harness_case_id": "audio-campaign-v1719-0004",
+      "local_correlation_id": "audio-campaign-2a62a2f81f784b879f6f6d611a423887",
+      "mesh_correlation_id": "audio-campaign-2a62a2f81f784b879f6f6d611a423887",
+      "native_correlation_id": "audio-campaign-2a62a2f81f784b879f6f6d611a423887",
+      "operation_id": "4f51d5535dc043efb90da50b905dcadb",
+      "outcome": "completed",
+      "provider": {
+        "config_sha256": "141d612cc0a95ed7efc1ca936b845c2364967f2e9217c5dbfcf69fc4d6c65860",
+        "hardware_fingerprint_sha256": "d5e5c8c5f35f4b5e98fce3fe328dd006aae23ebebe99e822a703b2a7cd38d957",
+        "model_sha256": "6f52a751e2349abe7a76735eb09dc1875298c77ea2342ffd2fef79ff81b87f22",
+        "peer_id_sha256": "77421aa81ce7ae2e865455348e9aa5ae17013d8f5e1f72d38d71d09f110ef868",
+        "provider_class": "app.services.tts.providers.piper.PiperTTSProvider",
+        "receiver_id": "personal-k1-mesh-tts-v1710",
+        "sample_rate": 22050,
+        "source_sha256": "6fe434a7d3f07350ba7e8c9fce00414bb5cff8a1ee69b33eafbace73c5473b82",
+        "use_cuda": false
+      },
+      "receiver_pid": 3194394,
+      "request_text_sha256": "5dd272b4f316b776a7b8e3d0894b37e1e42be3d5d3b204b8a5836cc50597a6b1",
+      "route_observation": {
+        "after_path_classes": [
+          "direct"
+        ],
+        "before_path_classes": [
+          "direct"
+        ],
+        "continuous_route_stability_claimed": false,
+        "correlation_id": "audio-campaign-2a62a2f81f784b879f6f6d611a423887",
+        "peer_connection_instance_sha256": "a7c4ad59373de9b709f295a16e649d0d923fa91e6519527fd817b2462d4bf0f7",
+        "peer_id_sha256": "77421aa81ce7ae2e865455348e9aa5ae17013d8f5e1f72d38d71d09f110ef868",
+        "requester_pid": 2360768,
+        "same_pair_identity_available": false,
+        "session_peer_id_sha256": "765b609287cd5739bf5cf5592207f1deee7378bc7b5f38faed5f1a645785e31b",
+        "status": "selected_nominated_pair_observed_before_and_after"
+      },
+      "selected_peer_id_sha256": "77421aa81ce7ae2e865455348e9aa5ae17013d8f5e1f72d38d71d09f110ef868"
+    },
+    {
+      "attempt_id": "b4b0c93d7c834ff1a846be986d7ade03",
+      "handler": "tts.model_invoke",
+      "harness_case_id": "audio-campaign-v1719-0005",
+      "local_correlation_id": "audio-campaign-69c7edf587c6468c87661023965d5e1a",
+      "mesh_correlation_id": "audio-campaign-69c7edf587c6468c87661023965d5e1a",
+      "native_correlation_id": "audio-campaign-69c7edf587c6468c87661023965d5e1a",
+      "operation_id": "9f534854a5424a139815806d073ffc35",
+      "outcome": "completed",
+      "provider": {
+        "config_sha256": "141d612cc0a95ed7efc1ca936b845c2364967f2e9217c5dbfcf69fc4d6c65860",
+        "hardware_fingerprint_sha256": "d5e5c8c5f35f4b5e98fce3fe328dd006aae23ebebe99e822a703b2a7cd38d957",
+        "model_sha256": "6f52a751e2349abe7a76735eb09dc1875298c77ea2342ffd2fef79ff81b87f22",
+        "peer_id_sha256": "77421aa81ce7ae2e865455348e9aa5ae17013d8f5e1f72d38d71d09f110ef868",
+        "provider_class": "app.services.tts.providers.piper.PiperTTSProvider",
+        "receiver_id": "personal-k1-mesh-tts-v1710",
+        "sample_rate": 22050,
+        "source_sha256": "6fe434a7d3f07350ba7e8c9fce00414bb5cff8a1ee69b33eafbace73c5473b82",
+        "use_cuda": false
+      },
+      "receiver_pid": 3194394,
+      "request_text_sha256": "5dd272b4f316b776a7b8e3d0894b37e1e42be3d5d3b204b8a5836cc50597a6b1",
+      "route_observation": {
+        "after_path_classes": [
+          "direct"
+        ],
+        "before_path_classes": [
+          "direct"
+        ],
+        "continuous_route_stability_claimed": false,
+        "correlation_id": "audio-campaign-69c7edf587c6468c87661023965d5e1a",
+        "peer_connection_instance_sha256": "a7c4ad59373de9b709f295a16e649d0d923fa91e6519527fd817b2462d4bf0f7",
+        "peer_id_sha256": "77421aa81ce7ae2e865455348e9aa5ae17013d8f5e1f72d38d71d09f110ef868",
+        "requester_pid": 2360768,
+        "same_pair_identity_available": false,
+        "session_peer_id_sha256": "765b609287cd5739bf5cf5592207f1deee7378bc7b5f38faed5f1a645785e31b",
+        "status": "selected_nominated_pair_observed_before_and_after"
+      },
+      "selected_peer_id_sha256": "77421aa81ce7ae2e865455348e9aa5ae17013d8f5e1f72d38d71d09f110ef868"
+    },
+    {
+      "attempt_id": "e33936a67a144c95a6d4b2b2e7bffd66",
+      "handler": "tts.model_invoke",
+      "harness_case_id": "audio-campaign-v1719-0006",
+      "local_correlation_id": "audio-campaign-b1379c3524e5473c8a3d2fefc289c529",
+      "mesh_correlation_id": "audio-campaign-b1379c3524e5473c8a3d2fefc289c529",
+      "native_correlation_id": "audio-campaign-b1379c3524e5473c8a3d2fefc289c529",
+      "operation_id": "90f053012c284509a5b428fbafaaab50",
+      "outcome": "completed",
+      "provider": {
+        "config_sha256": "141d612cc0a95ed7efc1ca936b845c2364967f2e9217c5dbfcf69fc4d6c65860",
+        "hardware_fingerprint_sha256": "d5e5c8c5f35f4b5e98fce3fe328dd006aae23ebebe99e822a703b2a7cd38d957",
+        "model_sha256": "6f52a751e2349abe7a76735eb09dc1875298c77ea2342ffd2fef79ff81b87f22",
+        "peer_id_sha256": "77421aa81ce7ae2e865455348e9aa5ae17013d8f5e1f72d38d71d09f110ef868",
+        "provider_class": "app.services.tts.providers.piper.PiperTTSProvider",
+        "receiver_id": "personal-k1-mesh-tts-v1710",
+        "sample_rate": 22050,
+        "source_sha256": "6fe434a7d3f07350ba7e8c9fce00414bb5cff8a1ee69b33eafbace73c5473b82",
+        "use_cuda": false
+      },
+      "receiver_pid": 3194394,
+      "request_text_sha256": "5dd272b4f316b776a7b8e3d0894b37e1e42be3d5d3b204b8a5836cc50597a6b1",
+      "route_observation": {
+        "after_path_classes": [
+          "direct"
+        ],
+        "before_path_classes": [
+          "direct"
+        ],
+        "continuous_route_stability_claimed": false,
+        "correlation_id": "audio-campaign-b1379c3524e5473c8a3d2fefc289c529",
+        "peer_connection_instance_sha256": "a7c4ad59373de9b709f295a16e649d0d923fa91e6519527fd817b2462d4bf0f7",
+        "peer_id_sha256": "77421aa81ce7ae2e865455348e9aa5ae17013d8f5e1f72d38d71d09f110ef868",
+        "requester_pid": 2360768,
+        "same_pair_identity_available": false,
+        "session_peer_id_sha256": "765b609287cd5739bf5cf5592207f1deee7378bc7b5f38faed5f1a645785e31b",
+        "status": "selected_nominated_pair_observed_before_and_after"
+      },
+      "selected_peer_id_sha256": "77421aa81ce7ae2e865455348e9aa5ae17013d8f5e1f72d38d71d09f110ef868"
+    },
+    {
+      "attempt_id": "8175d784d35945c2a0ca56e33e0e7ec5",
+      "handler": "tts.model_invoke",
+      "harness_case_id": "audio-campaign-v1719-0007",
+      "local_correlation_id": "audio-campaign-e06c2fd1417b4a03a2b5cb9308132a76",
+      "mesh_correlation_id": "audio-campaign-e06c2fd1417b4a03a2b5cb9308132a76",
+      "native_correlation_id": "audio-campaign-e06c2fd1417b4a03a2b5cb9308132a76",
+      "operation_id": "c36d16520dac48a48953077e1777883c",
+      "outcome": "completed",
+      "provider": {
+        "config_sha256": "141d612cc0a95ed7efc1ca936b845c2364967f2e9217c5dbfcf69fc4d6c65860",
+        "hardware_fingerprint_sha256": "d5e5c8c5f35f4b5e98fce3fe328dd006aae23ebebe99e822a703b2a7cd38d957",
+        "model_sha256": "6f52a751e2349abe7a76735eb09dc1875298c77ea2342ffd2fef79ff81b87f22",
+        "peer_id_sha256": "77421aa81ce7ae2e865455348e9aa5ae17013d8f5e1f72d38d71d09f110ef868",
+        "provider_class": "app.services.tts.providers.piper.PiperTTSProvider",
+        "receiver_id": "personal-k1-mesh-tts-v1710",
+        "sample_rate": 22050,
+        "source_sha256": "6fe434a7d3f07350ba7e8c9fce00414bb5cff8a1ee69b33eafbace73c5473b82",
+        "use_cuda": false
+      },
+      "receiver_pid": 3194394,
+      "request_text_sha256": "5dd272b4f316b776a7b8e3d0894b37e1e42be3d5d3b204b8a5836cc50597a6b1",
+      "route_observation": {
+        "after_path_classes": [
+          "direct"
+        ],
+        "before_path_classes": [
+          "direct"
+        ],
+        "continuous_route_stability_claimed": false,
+        "correlation_id": "audio-campaign-e06c2fd1417b4a03a2b5cb9308132a76",
+        "peer_connection_instance_sha256": "a7c4ad59373de9b709f295a16e649d0d923fa91e6519527fd817b2462d4bf0f7",
+        "peer_id_sha256": "77421aa81ce7ae2e865455348e9aa5ae17013d8f5e1f72d38d71d09f110ef868",
+        "requester_pid": 2360768,
+        "same_pair_identity_available": false,
+        "session_peer_id_sha256": "765b609287cd5739bf5cf5592207f1deee7378bc7b5f38faed5f1a645785e31b",
+        "status": "selected_nominated_pair_observed_before_and_after"
+      },
+      "selected_peer_id_sha256": "77421aa81ce7ae2e865455348e9aa5ae17013d8f5e1f72d38d71d09f110ef868"
+    },
+    {
+      "attempt_id": "eda2a27ffc7447f799bce06ebd5d4338",
+      "handler": "tts.model_invoke",
+      "harness_case_id": "audio-campaign-v1719-0008",
+      "local_correlation_id": "audio-campaign-fb2a3398bbef4034bc5d93063f11f26e",
+      "mesh_correlation_id": "audio-campaign-fb2a3398bbef4034bc5d93063f11f26e",
+      "native_correlation_id": "audio-campaign-fb2a3398bbef4034bc5d93063f11f26e",
+      "operation_id": "399db7cf3026425690e9d18547874a07",
+      "outcome": "completed",
+      "provider": {
+        "config_sha256": "141d612cc0a95ed7efc1ca936b845c2364967f2e9217c5dbfcf69fc4d6c65860",
+        "hardware_fingerprint_sha256": "d5e5c8c5f35f4b5e98fce3fe328dd006aae23ebebe99e822a703b2a7cd38d957",
+        "model_sha256": "6f52a751e2349abe7a76735eb09dc1875298c77ea2342ffd2fef79ff81b87f22",
+        "peer_id_sha256": "77421aa81ce7ae2e865455348e9aa5ae17013d8f5e1f72d38d71d09f110ef868",
+        "provider_class": "app.services.tts.providers.piper.PiperTTSProvider",
+        "receiver_id": "personal-k1-mesh-tts-v1710",
+        "sample_rate": 22050,
+        "source_sha256": "6fe434a7d3f07350ba7e8c9fce00414bb5cff8a1ee69b33eafbace73c5473b82",
+        "use_cuda": false
+      },
+      "receiver_pid": 3194394,
+      "request_text_sha256": "5dd272b4f316b776a7b8e3d0894b37e1e42be3d5d3b204b8a5836cc50597a6b1",
+      "route_observation": {
+        "after_path_classes": [
+          "direct"
+        ],
+        "before_path_classes": [
+          "direct"
+        ],
+        "continuous_route_stability_claimed": false,
+        "correlation_id": "audio-campaign-fb2a3398bbef4034bc5d93063f11f26e",
+        "peer_connection_instance_sha256": "a7c4ad59373de9b709f295a16e649d0d923fa91e6519527fd817b2462d4bf0f7",
+        "peer_id_sha256": "77421aa81ce7ae2e865455348e9aa5ae17013d8f5e1f72d38d71d09f110ef868",
+        "requester_pid": 2360768,
+        "same_pair_identity_available": false,
+        "session_peer_id_sha256": "765b609287cd5739bf5cf5592207f1deee7378bc7b5f38faed5f1a645785e31b",
+        "status": "selected_nominated_pair_observed_before_and_after"
+      },
+      "selected_peer_id_sha256": "77421aa81ce7ae2e865455348e9aa5ae17013d8f5e1f72d38d71d09f110ef868"
+    },
+    {
+      "attempt_id": "851e5b63c8024fb5b02b3e05ec874632",
+      "handler": "tts.model_invoke",
+      "harness_case_id": "audio-campaign-v1719-0009",
+      "local_correlation_id": "audio-campaign-fca4729104814b6d9a0a3ee88b2d5a88",
+      "mesh_correlation_id": "audio-campaign-fca4729104814b6d9a0a3ee88b2d5a88",
+      "native_correlation_id": "audio-campaign-fca4729104814b6d9a0a3ee88b2d5a88",
+      "operation_id": "fe0f8d29655140f7bfe1c105d0f4b3df",
+      "outcome": "completed",
+      "provider": {
+        "config_sha256": "141d612cc0a95ed7efc1ca936b845c2364967f2e9217c5dbfcf69fc4d6c65860",
+        "hardware_fingerprint_sha256": "d5e5c8c5f35f4b5e98fce3fe328dd006aae23ebebe99e822a703b2a7cd38d957",
+        "model_sha256": "6f52a751e2349abe7a76735eb09dc1875298c77ea2342ffd2fef79ff81b87f22",
+        "peer_id_sha256": "77421aa81ce7ae2e865455348e9aa5ae17013d8f5e1f72d38d71d09f110ef868",
+        "provider_class": "app.services.tts.providers.piper.PiperTTSProvider",
+        "receiver_id": "personal-k1-mesh-tts-v1710",
+        "sample_rate": 22050,
+        "source_sha256": "6fe434a7d3f07350ba7e8c9fce00414bb5cff8a1ee69b33eafbace73c5473b82",
+        "use_cuda": false
+      },
+      "receiver_pid": 3194394,
+      "request_text_sha256": "5dd272b4f316b776a7b8e3d0894b37e1e42be3d5d3b204b8a5836cc50597a6b1",
+      "route_observation": {
+        "after_path_classes": [
+          "direct"
+        ],
+        "before_path_classes": [
+          "direct"
+        ],
+        "continuous_route_stability_claimed": false,
+        "correlation_id": "audio-campaign-fca4729104814b6d9a0a3ee88b2d5a88",
+        "peer_connection_instance_sha256": "a7c4ad59373de9b709f295a16e649d0d923fa91e6519527fd817b2462d4bf0f7",
+        "peer_id_sha256": "77421aa81ce7ae2e865455348e9aa5ae17013d8f5e1f72d38d71d09f110ef868",
+        "requester_pid": 2360768,
+        "same_pair_identity_available": false,
+        "session_peer_id_sha256": "765b609287cd5739bf5cf5592207f1deee7378bc7b5f38faed5f1a645785e31b",
+        "status": "selected_nominated_pair_observed_before_and_after"
+      },
+      "selected_peer_id_sha256": "77421aa81ce7ae2e865455348e9aa5ae17013d8f5e1f72d38d71d09f110ef868"
+    },
+    {
+      "attempt_id": "7c0a07cd803246ef9492ce5b39d17542",
+      "handler": "tts.model_invoke",
+      "harness_case_id": "audio-campaign-v1719-0010",
+      "local_correlation_id": "audio-campaign-831a9a2124574862a580be714de7e620",
+      "mesh_correlation_id": "audio-campaign-831a9a2124574862a580be714de7e620",
+      "native_correlation_id": "audio-campaign-831a9a2124574862a580be714de7e620",
+      "operation_id": "b44366e262564321972204f4103bd5c1",
+      "outcome": "completed",
+      "provider": {
+        "config_sha256": "141d612cc0a95ed7efc1ca936b845c2364967f2e9217c5dbfcf69fc4d6c65860",
+        "hardware_fingerprint_sha256": "d5e5c8c5f35f4b5e98fce3fe328dd006aae23ebebe99e822a703b2a7cd38d957",
+        "model_sha256": "6f52a751e2349abe7a76735eb09dc1875298c77ea2342ffd2fef79ff81b87f22",
+        "peer_id_sha256": "77421aa81ce7ae2e865455348e9aa5ae17013d8f5e1f72d38d71d09f110ef868",
+        "provider_class": "app.services.tts.providers.piper.PiperTTSProvider",
+        "receiver_id": "personal-k1-mesh-tts-v1710",
+        "sample_rate": 22050,
+        "source_sha256": "6fe434a7d3f07350ba7e8c9fce00414bb5cff8a1ee69b33eafbace73c5473b82",
+        "use_cuda": false
+      },
+      "receiver_pid": 3194394,
+      "request_text_sha256": "5dd272b4f316b776a7b8e3d0894b37e1e42be3d5d3b204b8a5836cc50597a6b1",
+      "route_observation": {
+        "after_path_classes": [
+          "direct"
+        ],
+        "before_path_classes": [
+          "direct"
+        ],
+        "continuous_route_stability_claimed": false,
+        "correlation_id": "audio-campaign-831a9a2124574862a580be714de7e620",
+        "peer_connection_instance_sha256": "a7c4ad59373de9b709f295a16e649d0d923fa91e6519527fd817b2462d4bf0f7",
+        "peer_id_sha256": "77421aa81ce7ae2e865455348e9aa5ae17013d8f5e1f72d38d71d09f110ef868",
+        "requester_pid": 2360768,
+        "same_pair_identity_available": false,
+        "session_peer_id_sha256": "765b609287cd5739bf5cf5592207f1deee7378bc7b5f38faed5f1a645785e31b",
+        "status": "selected_nominated_pair_observed_before_and_after"
+      },
+      "selected_peer_id_sha256": "77421aa81ce7ae2e865455348e9aa5ae17013d8f5e1f72d38d71d09f110ef868"
+    },
+    {
+      "attempt_id": "db978d5b8a36432aaa82cbe212477228",
+      "handler": "tts.model_invoke",
+      "harness_case_id": "audio-campaign-v1719-0011",
+      "local_correlation_id": "audio-campaign-147021632b654ef091da2ebebba0186a",
+      "mesh_correlation_id": "audio-campaign-147021632b654ef091da2ebebba0186a",
+      "native_correlation_id": "audio-campaign-147021632b654ef091da2ebebba0186a",
+      "operation_id": "2903caa9b3bb4b299b89fc1cb032e03d",
+      "outcome": "completed",
+      "provider": {
+        "config_sha256": "141d612cc0a95ed7efc1ca936b845c2364967f2e9217c5dbfcf69fc4d6c65860",
+        "hardware_fingerprint_sha256": "d5e5c8c5f35f4b5e98fce3fe328dd006aae23ebebe99e822a703b2a7cd38d957",
+        "model_sha256": "6f52a751e2349abe7a76735eb09dc1875298c77ea2342ffd2fef79ff81b87f22",
+        "peer_id_sha256": "77421aa81ce7ae2e865455348e9aa5ae17013d8f5e1f72d38d71d09f110ef868",
+        "provider_class": "app.services.tts.providers.piper.PiperTTSProvider",
+        "receiver_id": "personal-k1-mesh-tts-v1710",
+        "sample_rate": 22050,
+        "source_sha256": "6fe434a7d3f07350ba7e8c9fce00414bb5cff8a1ee69b33eafbace73c5473b82",
+        "use_cuda": false
+      },
+      "receiver_pid": 3194394,
+      "request_text_sha256": "5dd272b4f316b776a7b8e3d0894b37e1e42be3d5d3b204b8a5836cc50597a6b1",
+      "route_observation": {
+        "after_path_classes": [
+          "direct"
+        ],
+        "before_path_classes": [
+          "direct"
+        ],
+        "continuous_route_stability_claimed": false,
+        "correlation_id": "audio-campaign-147021632b654ef091da2ebebba0186a",
+        "peer_connection_instance_sha256": "a7c4ad59373de9b709f295a16e649d0d923fa91e6519527fd817b2462d4bf0f7",
+        "peer_id_sha256": "77421aa81ce7ae2e865455348e9aa5ae17013d8f5e1f72d38d71d09f110ef868",
+        "requester_pid": 2360768,
+        "same_pair_identity_available": false,
+        "session_peer_id_sha256": "765b609287cd5739bf5cf5592207f1deee7378bc7b5f38faed5f1a645785e31b",
+        "status": "selected_nominated_pair_observed_before_and_after"
+      },
+      "selected_peer_id_sha256": "77421aa81ce7ae2e865455348e9aa5ae17013d8f5e1f72d38d71d09f110ef868"
+    },
+    {
+      "attempt_id": "4a8254dbf1e04b3db73e7619a769c219",
+      "handler": "tts.model_invoke",
+      "harness_case_id": "audio-campaign-v1719-0012",
+      "local_correlation_id": "audio-campaign-7f01ebb027464430bd5b3e9beb88137a",
+      "mesh_correlation_id": "audio-campaign-7f01ebb027464430bd5b3e9beb88137a",
+      "native_correlation_id": "audio-campaign-7f01ebb027464430bd5b3e9beb88137a",
+      "operation_id": "a23d66fe40514049beba30d951af0ed4",
+      "outcome": "completed",
+      "provider": {
+        "config_sha256": "141d612cc0a95ed7efc1ca936b845c2364967f2e9217c5dbfcf69fc4d6c65860",
+        "hardware_fingerprint_sha256": "d5e5c8c5f35f4b5e98fce3fe328dd006aae23ebebe99e822a703b2a7cd38d957",
+        "model_sha256": "6f52a751e2349abe7a76735eb09dc1875298c77ea2342ffd2fef79ff81b87f22",
+        "peer_id_sha256": "77421aa81ce7ae2e865455348e9aa5ae17013d8f5e1f72d38d71d09f110ef868",
+        "provider_class": "app.services.tts.providers.piper.PiperTTSProvider",
+        "receiver_id": "personal-k1-mesh-tts-v1710",
+        "sample_rate": 22050,
+        "source_sha256": "6fe434a7d3f07350ba7e8c9fce00414bb5cff8a1ee69b33eafbace73c5473b82",
+        "use_cuda": false
+      },
+      "receiver_pid": 3194394,
+      "request_text_sha256": "5dd272b4f316b776a7b8e3d0894b37e1e42be3d5d3b204b8a5836cc50597a6b1",
+      "route_observation": {
+        "after_path_classes": [
+          "direct"
+        ],
+        "before_path_classes": [
+          "direct"
+        ],
+        "continuous_route_stability_claimed": false,
+        "correlation_id": "audio-campaign-7f01ebb027464430bd5b3e9beb88137a",
+        "peer_connection_instance_sha256": "a7c4ad59373de9b709f295a16e649d0d923fa91e6519527fd817b2462d4bf0f7",
+        "peer_id_sha256": "77421aa81ce7ae2e865455348e9aa5ae17013d8f5e1f72d38d71d09f110ef868",
+        "requester_pid": 2360768,
+        "same_pair_identity_available": false,
+        "session_peer_id_sha256": "765b609287cd5739bf5cf5592207f1deee7378bc7b5f38faed5f1a645785e31b",
+        "status": "selected_nominated_pair_observed_before_and_after"
+      },
+      "selected_peer_id_sha256": "77421aa81ce7ae2e865455348e9aa5ae17013d8f5e1f72d38d71d09f110ef868"
+    },
+    {
+      "attempt_id": "a98ce931e4d9434c86af8f83d77053ce",
+      "handler": "tts.model_invoke",
+      "harness_case_id": "audio-campaign-v1719-0013",
+      "local_correlation_id": "audio-campaign-a3af48990d5d4b73aec479042c2fa4b1",
+      "mesh_correlation_id": "audio-campaign-a3af48990d5d4b73aec479042c2fa4b1",
+      "native_correlation_id": "audio-campaign-a3af48990d5d4b73aec479042c2fa4b1",
+      "operation_id": "574ee5c926254789918d3727a2097997",
+      "outcome": "completed",
+      "provider": {
+        "config_sha256": "141d612cc0a95ed7efc1ca936b845c2364967f2e9217c5dbfcf69fc4d6c65860",
+        "hardware_fingerprint_sha256": "d5e5c8c5f35f4b5e98fce3fe328dd006aae23ebebe99e822a703b2a7cd38d957",
+        "model_sha256": "6f52a751e2349abe7a76735eb09dc1875298c77ea2342ffd2fef79ff81b87f22",
+        "peer_id_sha256": "77421aa81ce7ae2e865455348e9aa5ae17013d8f5e1f72d38d71d09f110ef868",
+        "provider_class": "app.services.tts.providers.piper.PiperTTSProvider",
+        "receiver_id": "personal-k1-mesh-tts-v1710",
+        "sample_rate": 22050,
+        "source_sha256": "6fe434a7d3f07350ba7e8c9fce00414bb5cff8a1ee69b33eafbace73c5473b82",
+        "use_cuda": false
+      },
+      "receiver_pid": 3194394,
+      "request_text_sha256": "5dd272b4f316b776a7b8e3d0894b37e1e42be3d5d3b204b8a5836cc50597a6b1",
+      "route_observation": {
+        "after_path_classes": [
+          "direct"
+        ],
+        "before_path_classes": [
+          "direct"
+        ],
+        "continuous_route_stability_claimed": false,
+        "correlation_id": "audio-campaign-a3af48990d5d4b73aec479042c2fa4b1",
+        "peer_connection_instance_sha256": "a7c4ad59373de9b709f295a16e649d0d923fa91e6519527fd817b2462d4bf0f7",
+        "peer_id_sha256": "77421aa81ce7ae2e865455348e9aa5ae17013d8f5e1f72d38d71d09f110ef868",
+        "requester_pid": 2360768,
+        "same_pair_identity_available": false,
+        "session_peer_id_sha256": "765b609287cd5739bf5cf5592207f1deee7378bc7b5f38faed5f1a645785e31b",
+        "status": "selected_nominated_pair_observed_before_and_after"
+      },
+      "selected_peer_id_sha256": "77421aa81ce7ae2e865455348e9aa5ae17013d8f5e1f72d38d71d09f110ef868"
+    },
+    {
+      "attempt_id": "f81bd239258340d1bea26b38999888cf",
+      "handler": "tts.model_invoke",
+      "harness_case_id": "audio-campaign-v1719-0014",
+      "local_correlation_id": "audio-campaign-c2eaf4bf74a74c8cbe4250085d3b9a5c",
+      "mesh_correlation_id": "audio-campaign-c2eaf4bf74a74c8cbe4250085d3b9a5c",
+      "native_correlation_id": "audio-campaign-c2eaf4bf74a74c8cbe4250085d3b9a5c",
+      "operation_id": "c95a7dca295f4701a66265567cdef8dd",
+      "outcome": "completed",
+      "provider": {
+        "config_sha256": "141d612cc0a95ed7efc1ca936b845c2364967f2e9217c5dbfcf69fc4d6c65860",
+        "hardware_fingerprint_sha256": "d5e5c8c5f35f4b5e98fce3fe328dd006aae23ebebe99e822a703b2a7cd38d957",
+        "model_sha256": "6f52a751e2349abe7a76735eb09dc1875298c77ea2342ffd2fef79ff81b87f22",
+        "peer_id_sha256": "77421aa81ce7ae2e865455348e9aa5ae17013d8f5e1f72d38d71d09f110ef868",
+        "provider_class": "app.services.tts.providers.piper.PiperTTSProvider",
+        "receiver_id": "personal-k1-mesh-tts-v1710",
+        "sample_rate": 22050,
+        "source_sha256": "6fe434a7d3f07350ba7e8c9fce00414bb5cff8a1ee69b33eafbace73c5473b82",
+        "use_cuda": false
+      },
+      "receiver_pid": 3194394,
+      "request_text_sha256": "5dd272b4f316b776a7b8e3d0894b37e1e42be3d5d3b204b8a5836cc50597a6b1",
+      "route_observation": {
+        "after_path_classes": [
+          "direct"
+        ],
+        "before_path_classes": [
+          "direct"
+        ],
+        "continuous_route_stability_claimed": false,
+        "correlation_id": "audio-campaign-c2eaf4bf74a74c8cbe4250085d3b9a5c",
+        "peer_connection_instance_sha256": "a7c4ad59373de9b709f295a16e649d0d923fa91e6519527fd817b2462d4bf0f7",
+        "peer_id_sha256": "77421aa81ce7ae2e865455348e9aa5ae17013d8f5e1f72d38d71d09f110ef868",
+        "requester_pid": 2360768,
+        "same_pair_identity_available": false,
+        "session_peer_id_sha256": "765b609287cd5739bf5cf5592207f1deee7378bc7b5f38faed5f1a645785e31b",
+        "status": "selected_nominated_pair_observed_before_and_after"
+      },
+      "selected_peer_id_sha256": "77421aa81ce7ae2e865455348e9aa5ae17013d8f5e1f72d38d71d09f110ef868"
+    },
+    {
+      "attempt_id": "7055d62fbd5c41be9da3cf507630e78a",
+      "handler": "tts.model_invoke",
+      "harness_case_id": "audio-campaign-v1719-0015",
+      "local_correlation_id": "audio-campaign-433924e034334cc999c1ac827c990d18",
+      "mesh_correlation_id": "audio-campaign-433924e034334cc999c1ac827c990d18",
+      "native_correlation_id": "audio-campaign-433924e034334cc999c1ac827c990d18",
+      "operation_id": "2c3617ea8ed94e79a2c04f64f1a067f5",
+      "outcome": "completed",
+      "provider": {
+        "config_sha256": "141d612cc0a95ed7efc1ca936b845c2364967f2e9217c5dbfcf69fc4d6c65860",
+        "hardware_fingerprint_sha256": "d5e5c8c5f35f4b5e98fce3fe328dd006aae23ebebe99e822a703b2a7cd38d957",
+        "model_sha256": "6f52a751e2349abe7a76735eb09dc1875298c77ea2342ffd2fef79ff81b87f22",
+        "peer_id_sha256": "77421aa81ce7ae2e865455348e9aa5ae17013d8f5e1f72d38d71d09f110ef868",
+        "provider_class": "app.services.tts.providers.piper.PiperTTSProvider",
+        "receiver_id": "personal-k1-mesh-tts-v1710",
+        "sample_rate": 22050,
+        "source_sha256": "6fe434a7d3f07350ba7e8c9fce00414bb5cff8a1ee69b33eafbace73c5473b82",
+        "use_cuda": false
+      },
+      "receiver_pid": 3194394,
+      "request_text_sha256": "5dd272b4f316b776a7b8e3d0894b37e1e42be3d5d3b204b8a5836cc50597a6b1",
+      "route_observation": {
+        "after_path_classes": [
+          "direct"
+        ],
+        "before_path_classes": [
+          "direct"
+        ],
+        "continuous_route_stability_claimed": false,
+        "correlation_id": "audio-campaign-433924e034334cc999c1ac827c990d18",
+        "peer_connection_instance_sha256": "a7c4ad59373de9b709f295a16e649d0d923fa91e6519527fd817b2462d4bf0f7",
+        "peer_id_sha256": "77421aa81ce7ae2e865455348e9aa5ae17013d8f5e1f72d38d71d09f110ef868",
+        "requester_pid": 2360768,
+        "same_pair_identity_available": false,
+        "session_peer_id_sha256": "765b609287cd5739bf5cf5592207f1deee7378bc7b5f38faed5f1a645785e31b",
+        "status": "selected_nominated_pair_observed_before_and_after"
+      },
+      "selected_peer_id_sha256": "77421aa81ce7ae2e865455348e9aa5ae17013d8f5e1f72d38d71d09f110ef868"
+    }
+  ],
+  "candidate_manifest_sha256": "ce75b965ee5879ebece6ea7dfe133441547d20ccf89ecd5d66ea510bd9645e60",
+  "evidence_sha256": {
+    "provider_bindings": "c93f7e619843c4c13d1d57d84012310d61ba68045d992a3d9262a915c754dd06",
+    "receiver_identity": "fb740636830382fac5ad46798efe93c4cea3eeebf9e8c7a67e4c5594df7ba92f",
+    "requester_mesh_calls": "2baae79e98e4e2a49695c762368ba25ed82593217d05f4b913a52fd064cc5bd1",
+    "requester_route_observations": "06bf49f0615becdc7f221382ce3d965cf63000f49411345fafb83bbf513ca276",
+    "route_runtime_pin_source": "db270c9c6373b24e669bdf2b002da5fadb3e3841ee1ecc6ad8dec5a7ad26daf8",
+    "route_runtime_pins": "314825413c1335d47e9998b39a2f3a0b4c1a3e0aedb98868801c8bb398fcba91",
+    "route_sink_status": "d6f3fa20335863f9a36ebbb2828518fbe78669ae846db9121d926803de089c53",
+    "stage_rows": "f943410816b252f64a31f3436845a1c0b633250f6946adcaa3d1b6f586a7de45"
+  },
+  "proof_generator_sha256": "4357fb4809eb3c5d6042eb5ceb215b4662b2cd449c79c0fe9b2322cf892c1c4d",
+  "provider": {
+    "config_sha256": "141d612cc0a95ed7efc1ca936b845c2364967f2e9217c5dbfcf69fc4d6c65860",
+    "hardware_fingerprint_sha256": "d5e5c8c5f35f4b5e98fce3fe328dd006aae23ebebe99e822a703b2a7cd38d957",
+    "model_sha256": "6f52a751e2349abe7a76735eb09dc1875298c77ea2342ffd2fef79ff81b87f22",
+    "peer_id_sha256": "77421aa81ce7ae2e865455348e9aa5ae17013d8f5e1f72d38d71d09f110ef868",
+    "provider_class": "app.services.tts.providers.piper.PiperTTSProvider",
+    "receiver_id": "personal-k1-mesh-tts-v1710",
+    "sample_rate": 22050,
+    "source_sha256": "6fe434a7d3f07350ba7e8c9fce00414bb5cff8a1ee69b33eafbace73c5473b82",
+    "use_cuda": false
+  },
+  "receiver_pid": 3194394,
+  "route_observation_gate": {
+    "continuous_route_stability_claimed": false,
+    "frozen_manifest_sha256": "120dd99a4de0a242c30ebe4bb46d854ca77313c482a0c74f024edb624829a6e8",
+    "joined_receiver_calls": 15,
+    "observed_calls": 15,
+    "observed_path_class_rows": {
+      "after": {
+        "direct": 15,
+        "relay": 0
+      },
+      "before": {
+        "direct": 15,
+        "relay": 0
+      }
+    },
+    "requester_pid": 2360768,
+    "route_observer_sha256": "2c23fd2bc69b00b746c2c5dc28c1d2b77428016314045363dceea5fe9ee5cdbb",
+    "route_runtime_pins_sha256": "db270c9c6373b24e669bdf2b002da5fadb3e3841ee1ecc6ad8dec5a7ad26daf8",
+    "route_sink_sha256": "2b235781c15410e6dbfc8829971a34e8334714cdf015053edfd127756325cfb8",
+    "runtime_source_pin_status": "verified_before_observer_install",
+    "schema": "aurora.mesh_route_warmup_gate.v1",
+    "sink_dropped_rows": 0,
+    "sink_invalid_rows": 0,
+    "sink_oversize_rows": 0,
+    "sink_quota_rows": 0,
+    "sink_written_rows": 15,
+    "snapshot_scope": "before_after_snapshots_all_pc_transports_no_pair_id_no_continuous_stability",
+    "status": "passed"
+  },
+  "schema": "aurora.distributed_k1_mesh_tts_warmup.v1"
+}

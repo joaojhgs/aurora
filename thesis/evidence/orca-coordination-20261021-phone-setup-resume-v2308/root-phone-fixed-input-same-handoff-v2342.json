@@ -1,0 +1,35 @@
+{
+  "id": "30610256-2967-4e71-a895-86c4a89cb6d4",
+  "ok": true,
+  "result": {
+    "message": {
+      "id": "msg_e2de7f9fea87",
+      "run_id": "run_e6054e76e9fc",
+      "delivery_contract": "current_delivery",
+      "from_handle": "term_6a00d9ee-792a-4daf-8578-236290e33108",
+      "to_handle": "term_1f27be31-0284-4366-bb91-30fe538cd30e",
+      "subject": "Original fixedWAV included SAME small source handoff/caps, total12,355,726B",
+      "body": "Consumed47a22dc17afd; exact source READY/admitted already sent130802a842bb. Add original fixed fixture to SAME bounded source handoff, not new job/transfer or774MB gate: thesis/evidence/source-sync-ebde-runtime-v2340/ORIGINAL-FIXED-INPUT.wav219794B SHAda0ecc4ad0885746ab6e716585473917ab2b543a505bf0db09ebacfaa7943cbb. Copied/hash-verified from already physical frozen-source candidate-input.wav; original unchanged. SOURCE-TRANSFER-AUDIO-AMENDMENT-v2342.json binds samewindow absoluteend01:01:07.881437Z, <=120sactive ONEsourcehandoff, <=256KiB/s payload512KiB/swire; combined archive+gzmanifest+receipt+WAV12,355,726B <12MiB. Preserve exact hashes/effective setup; receiver receipt needed, no acceptedoperation retry/900start inferred. You own actual approved route/source staging/app prep; Root stays main tests, no notebook/device query. Independent public exact model/runtime acquisition authorization already acknowledged, no full campaignend dependency.",
+      "type": "status",
+      "priority": "normal",
+      "thread_id": null,
+      "payload": null,
+      "created_at": "2026-10-22T00:54:17Z",
+      "delivered_at": null
+    },
+    "warnings": [
+      {
+        "code": "legacy_terminal_recipient",
+        "recipient": "term_1f27be31-0284-4366-bb91-30fe538cd30e",
+        "message": "term_1f27be31-0284-4366-bb91-30fe538cd30e is a live terminal-only mailbox. Delivery is not durable after that terminal closes; prefer run:<id> or dispatch:<id>."
+      }
+    ],
+    "mutation": {
+      "requestId": "01f8d0cb-2a30-4c14-a0c8-f337a6da177b",
+      "replayed": false
+    }
+  },
+  "_meta": {
+    "runtimeId": "cc9e3275-28c6-4c45-85cc-bdcd2262aa7d"
+  }
+}

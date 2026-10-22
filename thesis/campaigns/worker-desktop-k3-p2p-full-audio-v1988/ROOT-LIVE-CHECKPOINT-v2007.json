@@ -1,0 +1,112 @@
+{
+  "at": "2026-10-20T23:07:07.167434+00:00",
+  "observationStartedAt": "2026-10-20T23:07:07.160339+00:00",
+  "observationEndedAt": "2026-10-20T23:07:07.167434+00:00",
+  "source": "fresh primary case files, custody CURRENT and /proc; no previous receipt reused",
+  "primaryCasesDirectory": "/home/developer/projects/aurora/.git/aurora-handoff-import-20261006/distributed-k3-mesh-cell-v1988/campaign/attempts",
+  "primaryProgressPath": "/home/developer/projects/aurora/.git/aurora-handoff-import-20261006/distributed-k3-mesh-cell-v1988/campaign/progress.json",
+  "custodyCurrentPath": "/home/developer/projects/aurora/thesis/campaigns/worker-desktop-k3-p2p-full-audio-v1988/CURRENT.json",
+  "status": "running",
+  "actors": {
+    "3154212": {
+      "state": "S",
+      "startTicks": 131502232,
+      "sameStart": true
+    },
+    "3154248": {
+      "state": "S",
+      "startTicks": 131502574,
+      "sameStart": true
+    },
+    "3154213": {
+      "state": "S",
+      "startTicks": 131502236,
+      "sameStart": true
+    }
+  },
+  "measured": {
+    "attempted": 67,
+    "correct": 62,
+    "incorrect": 0,
+    "failed": 5,
+    "timeouts": 0,
+    "remaining": 833
+  },
+  "custody": {
+    "sequence": 18,
+    "cases": 80,
+    "audio": 74,
+    "files": 285
+  },
+  "freeBytes": 4160413696,
+  "measuredNonCorrect": [
+    {
+      "phase_index": 15,
+      "status": "failed",
+      "failure": {
+        "code": "preaccept_capability_changed",
+        "stage": "stt"
+      },
+      "timeout": false,
+      "partial_quality_incorrect": false
+    },
+    {
+      "phase_index": 24,
+      "status": "failed",
+      "failure": {
+        "code": "preaccept_capability_changed",
+        "stage": "stt"
+      },
+      "timeout": false,
+      "partial_quality_incorrect": false
+    },
+    {
+      "phase_index": 28,
+      "status": "failed",
+      "failure": {
+        "code": "preaccept_capability_changed",
+        "stage": "stt"
+      },
+      "timeout": false,
+      "partial_quality_incorrect": false
+    },
+    {
+      "phase_index": 54,
+      "status": "failed",
+      "failure": {
+        "code": "preaccept_capability_changed",
+        "stage": "stt"
+      },
+      "timeout": false,
+      "partial_quality_incorrect": false
+    },
+    {
+      "phase_index": 66,
+      "status": "failed",
+      "failure": {
+        "code": "preaccept_capability_changed",
+        "stage": "stt"
+      },
+      "timeout": false,
+      "partial_quality_incorrect": false
+    }
+  ],
+  "priorCheckpointMeasuredCount": 54,
+  "newMeasuredAttempts": 13,
+  "classification": "verified_wait",
+  "nextRoutineCheckUtc": "2026-10-20T23:12:07.167434+00:00",
+  "nativeGoalThreadId": "01a112a5-d6bb-74e2-bf7c-ace73cb513b5",
+  "phoneTaskSeparate": true,
+  "sutCalls": 0,
+  "reportingCorrection": {
+    "supersedesReportingReceipt": "thesis/campaigns/worker-desktop-k3-p2p-full-audio-v1988/ROOT-LIVE-CHECKPOINT-v2004.json",
+    "preservedOriginalSha256": "8f785ca4ca640361f90557df8e80c40e430e7f5cd0fb0bd95091ee885bfcc86c",
+    "defect": "A broad ROOT-LIVE glob selected an older CHECKPOINT receipt; primary experiment data was unaffected.",
+    "historical54PrimarySnapshot": "thesis/campaigns/worker-desktop-k3-p2p-full-audio-v1988/ROOT-LIVE-20261020T230436Z.json",
+    "historical54ObservedAt": "2026-10-20T23:04:36.416326+00:00",
+    "historical54SnapshotSha256": "71b861dc953af5a3233997c7929d7b551786868e0d8ba1270a15079ed5a118af",
+    "fix": "This entrypoint reads current primary data directly and never selects an earlier receipt.",
+    "experimentRerun": false,
+    "oldRawOrFrozenSourceChanged": false
+  }
+}

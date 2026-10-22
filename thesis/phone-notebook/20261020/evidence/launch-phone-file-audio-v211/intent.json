@@ -1,0 +1,12 @@
+{
+  "controlDeadline": "2026-10-22T07:30:00Z",
+  "explicitNewline": true,
+  "host": "ssh:ssh-sem-notebook-personal",
+  "incarnation": "328cd72f-c7ea-49ff-a2db-b9275b085037",
+  "remoteResult": "/home/developer/projects/aurora/thesis/phone-notebook/20261020/evidence/launch-phone-file-audio-v211.json",
+  "rootAdmissionMessage": "owner-real-native-one-file-flow-controller-CAS-contract-correction-reuse-verified-packs",
+  "script": "scripts/launch_phone_file_audio_v211.py",
+  "scriptSha256": "8d39ed37d7383d73fc1397cac0d28e5452e67decc5fb93b00d75510acf54ac52",
+  "singleSend": true,
+  "terminal": "term_a2ed5feb-7c92-48e4-bd88-d1b0e6737989"
+}

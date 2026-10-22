@@ -1,0 +1,17 @@
+{
+  "command": [
+    "uv",
+    "run",
+    "--no-sync",
+    "python",
+    "-m",
+    "pytest",
+    "--no-cov",
+    "-q",
+    "tests/unit/stt_transcription/test_runtime_speech_announcement.py",
+    "tests/unit/gateway/test_rtc_client_lifecycle.py"
+  ],
+  "exitCode": 0,
+  "capSeconds": 90,
+  "newBenchmarkTraffic": 0
+}

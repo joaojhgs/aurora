@@ -1,0 +1,11 @@
+{
+  "id": "local",
+  "ok": false,
+  "error": {
+    "code": "invalid_argument",
+    "message": "--shell must be one of: bash, bash.exe, cmd, cmd.exe, git-bash, powershell, powershell.exe, pwsh, pwsh.exe, wsl, wsl.exe"
+  },
+  "_meta": {
+    "runtimeId": null
+  }
+}

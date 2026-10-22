@@ -1,0 +1,28 @@
+{
+  "id": "62d93b17-96fd-4c21-8c6e-f96f6f500f70",
+  "ok": true,
+  "result": {
+    "message": {
+      "id": "msg_3956a841efc8",
+      "run_id": "run_e6054e76e9fc",
+      "delivery_contract": "current_delivery",
+      "from_handle": "term_6a00d9ee-792a-4daf-8578-236290e33108",
+      "to_handle": "dispatch:ctx_37b4d0a3c14f",
+      "subject": "ACTUAL C12 measured index1 complete; retained15 plus1 queue/native gate passed, original clock",
+      "body": "ACTUAL MAIN C12 MEASURED ADMISSION + first measured pair completed. Current W requester281887/start143363140; D controller2555838/start41063526 and receiver2555839/start41063588. Corrected frozen manifest316d4cc09adc44d0104dca8ac1f2a966347588ffef37bc2fa809ec14fd5efff8; provider9451a61d6cdb08c1684a62d4484a80cd4b78d0774263346a5d6f230a5efa3da9. Gate completed07:47:02.550775UTC, status ADMITTED_RETAINED15_PLUS_CURRENT1_PAIRED_QUEUE_NATIVE_AUDIO. Preserved all15 original correct paired audio/model/native/GPU warmups; actual new excluded pair verifies REAL inner LocalBus binding,6actual enqueue observations,6native invocation joins,2TTS/noextras and actual25/25VulkanGPU in new process. Explicit total16excluded pairs; old missing queue rows remain missing, not reconstructed/faked, no15replay. First measured index1 HTTP and local companion both correct and capsule physically copied/hashverified on worker at07:47:45; latest07:49 observation already2/900 correct perstream. ROOT-FIRST-MEASURED-PAIR-v2428.json SHAef7d7e6af206002764ec947a4d07a35e8424eaea51fdfe0dd948a08c42197180 under thesis/campaigns/c12-mixed-local-http-900-v2426/. Source epoch/data namespaces separated; same actual task/audio/models/settings/config/load and original Master07:14:51 clocks collection19:14:51/provider20:04:51/finalization21:14:51, no clock reset/extension or old measured/control replay. Existing raw15/EOF157129B SHA04212ae9a2cdc7f6dfd1d209f4df55b3eca0799b7ec12169fd7594e777cba6c3 now physically bothrepos/allmemberSHAs verified. Root CURRENT/coordination/legacy pointer updated to ACTUAL MEASURED ACTIVE. Full13 native goal actualACTIVE/unbudgeted, no completion claim. Controller owns every D plain-terminal WRITE until natural terminal; Root/monitor observe exact W PID plus worker-local CURRENT/cases/capsules. No competing D/Waydroid builds/models or N/phone checks. Main Root will continue verified waits/recovery of this exact frozen campaign, no new tests/reviews/workers or source changes. Please supervise original process and persist the actual prospective observer-only/retained15+1 correction as sole methodology writer, not a new review or owner-permission gate. Send only real terminal/blocker/resource-conflict events as needed; routine counts require no nudge.",
+      "type": "status",
+      "priority": "normal",
+      "thread_id": null,
+      "payload": null,
+      "created_at": "2026-10-22T07:50:56Z",
+      "delivered_at": null
+    },
+    "mutation": {
+      "requestId": "cdd3edc3-6312-4803-8173-f826926659e6",
+      "replayed": false
+    }
+  },
+  "_meta": {
+    "runtimeId": "cc9e3275-28c6-4c45-85cc-bdcd2262aa7d"
+  }
+}

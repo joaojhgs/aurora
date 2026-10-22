@@ -1,0 +1,276 @@
+{
+  "at": "2026-10-22T05:56:06.735600+00:00",
+  "status": "K1_HTTP_FULL900_SEALED_SCOPED_ANALYSIS_EOF_AND_RELEASE_COMPLETE",
+  "sameNativeGoal": "01a112a5-d6bb-74e2-bf7c-ace73cb513b5",
+  "nativeGoalStatus": "active",
+  "nativeGoalBudget": null,
+  "measured": {
+    "attempted": 900,
+    "correct": 899,
+    "incorrect": 0,
+    "failed": 1,
+    "timeouts": 0,
+    "unattempted": 0,
+    "target": 900
+  },
+  "conditionIndices": {
+    "min": 1,
+    "max": 900,
+    "unique": 900,
+    "gaps": [],
+    "duplicates": []
+  },
+  "uniqueMeasuredCaseIds": 900,
+  "caseIdDuplicates": [],
+  "excludedWarmups": 45,
+  "totalRetainedCaseRecords": 945,
+  "original195RawCaseHashesReverified": 195,
+  "originalAudioPresent": 194,
+  "originalOptionalAudioMissing": [],
+  "failedCasePreserved": {
+    "conditionIndex": 180,
+    "epoch": "V1197",
+    "caseId": "audio-campaign-v802-0195",
+    "requestId": "audio-request-54b03464eefe4cbda93ce0f3b6f8439c",
+    "correlationId": "audio-campaign-39c9fc5ca30a4131a555f1200f49fe04",
+    "status": "failed",
+    "failure": {
+      "code": "remote_transport_error",
+      "stage": "tts"
+    },
+    "timeout": false,
+    "sourceIndex": "thesis/evidence/k1-http-remaining720-offline-prep-v2173/PARENT-CASE-INDEX.json",
+    "sourceCase": "thesis/evidence/orca-relayed-http-v1197/attempts/attempt-0195-measured.jsonl",
+    "sourceCaseSha256": "14de56c396a4e83154d628a4cac8c70a98760e515ed301631472d21a08de5955"
+  },
+  "epochs": [
+    {
+      "epoch": "V1197",
+      "conditionRange": [
+        1,
+        180
+      ],
+      "measured": {
+        "attempted": 180,
+        "correct": 179,
+        "failed": 1,
+        "timeouts": 0
+      },
+      "warmupsExcluded": 15,
+      "correctOnlyLatencyMs": {
+        "denominator": 179,
+        "p50_ms": 50322.932153,
+        "p90_ms": 57463.302423199995,
+        "p95_ms": 60305.3512957
+      },
+      "metricsBasis": "Retained original summary aggregate; not recomputed by this closure",
+      "summary": {
+        "path": "thesis/evidence/orca-relayed-http-v1197/terminal-v1377/summary.json",
+        "bytes": 45803,
+        "sha256": "641c6fc03929cd7c455d4b9f6460dd9923925069e99da69023079ae88b37563b"
+      }
+    },
+    {
+      "epoch": "V2234",
+      "conditionRange": [
+        181,
+        450
+      ],
+      "measured": {
+        "attempted": 270,
+        "outcomes": {
+          "completed_correct": 270
+        },
+        "correct": 270,
+        "incorrect": 0,
+        "failedOrInterrupted": 0,
+        "timeouts": 0
+      },
+      "warmupsExcluded": {
+        "attempted": 15,
+        "outcomes": {
+          "completed_correct": 15
+        },
+        "correct": 15,
+        "incorrect": 0,
+        "failedOrInterrupted": 0,
+        "timeouts": 0
+      },
+      "correctOnlyLatencyMs": {
+        "denominator": 270,
+        "p50_ms": 50957.1080565,
+        "p90_ms": 58608.017694199996,
+        "p95_ms": 60103.400722399994
+      },
+      "metricsBasis": "Recomputed from retained raw data by the existing saved-data analyzer",
+      "nativeObservedStageCounts": {
+        "stt": 270,
+        "assistant": 270,
+        "tts": 270
+      },
+      "allPhasesNativeStageJoins": 855,
+      "positiveFlowNativeGaps": [],
+      "summary": {
+        "path": "thesis/campaigns/worker-desktop-k1-orca-relayed-http-first270-v2234/analysis-v2254/SUMMARY.json",
+        "bytes": 4259,
+        "sha256": "c7f4e401c59be2e73e81593c0d0c989b4fa64a3103b3d6d81d505ed652916f1f"
+      }
+    },
+    {
+      "epoch": "V2296",
+      "conditionRange": [
+        451,
+        900
+      ],
+      "measured": {
+        "attempted": 450,
+        "outcomes": {
+          "completed_correct": 450
+        },
+        "correct": 450,
+        "incorrect": 0,
+        "failedOrInterrupted": 0,
+        "timeouts": 0
+      },
+      "warmupsExcluded": {
+        "attempted": 15,
+        "outcomes": {
+          "completed_correct": 15
+        },
+        "correct": 15,
+        "incorrect": 0,
+        "failedOrInterrupted": 0,
+        "timeouts": 0
+      },
+      "correctOnlyLatencyMs": {
+        "denominator": 450,
+        "p50_ms": 55696.430387500004,
+        "p90_ms": 63354.6776362,
+        "p95_ms": 64783.729364499995
+      },
+      "metricsBasis": "Recomputed from retained raw data by the existing saved-data analyzer",
+      "nativeObservedStageCounts": {
+        "stt": 450,
+        "assistant": 450,
+        "tts": 450
+      },
+      "allPhasesNativeStageJoins": 1395,
+      "positiveFlowNativeGaps": [],
+      "summary": {
+        "path": "thesis/campaigns/worker-desktop-k1-orca-relayed-http-remaining450-v2296/analysis-v2303/SUMMARY.json",
+        "bytes": 4610,
+        "sha256": "250da0112cbbbf73d00d35e78cbcca58626eca740edd620a91bc4195869b5148"
+      }
+    }
+  ],
+  "latencyPolicy": "Counts combine only declared contiguous outcome indices; no cross-epoch pooling of latency percentiles",
+  "quantileMethod": "Hyndman-Fan Type7; h=(n-1)*p with linear interpolation; milliseconds",
+  "currentEpochProviderPrefix": {
+    "path": "thesis/campaigns/worker-desktop-k1-orca-relayed-http-remaining450-v2296/provider-prefix-transfer-v2302/provider-prefix-v2301.tar.gz",
+    "bytes": 6871434,
+    "sha256": "3a22bd10761d9fa54755d319b4ef86fb8c7319da906b4716fb2bb1f67f7e19dc"
+  },
+  "providerEofDelta": {
+    "path": "thesis/campaigns/worker-desktop-k1-orca-relayed-http-remaining450-v2296/provider-eof-delta-v2400/provider-eof-delta-v2400.tar.gz",
+    "bytes": 670362,
+    "sha256": "252799b425f284ecd66c79718405bf3bc51d28f0b4e616906fda5052f87cc6d2"
+  },
+  "eofChain": [
+    {
+      "source": "/home/developer/projects/aurora/thesis/campaigns/worker-desktop-k1-http-provider-v2296/provider/resources.jsonl",
+      "prefix": "thesis/campaigns/worker-desktop-k1-orca-relayed-http-remaining450-v2296/provider-prefix-transfer-v2302/extracted/raw/resources.jsonl",
+      "deltaMember": "delta/resources.jsonl.tail",
+      "fullEofBytes": 124438276,
+      "fullEofSha256": "08336fa771b66c8f6c6eaced47461024d29c2a4aca50c490709ac7f047df37b1",
+      "verified": true
+    }
+  ],
+  "resourceRelease": {
+    "path": "thesis/results/worker-desktop-k1-http-full900-v2403/RESOURCE-RELEASE.json",
+    "bytes": 2264,
+    "sha256": "92422e2c83f0358873813d57e4a51806bdfd6dc7ba2f3634633df8ab0c8cfe37"
+  },
+  "measuredIdIndex": {
+    "path": "thesis/results/worker-desktop-k1-http-full900-v2403/MEASURED-ID-INDEX.jsonl",
+    "bytes": 294416,
+    "sha256": "b92356a7c929f5f566de8bdfa1c0d3f02c198af4f0cb5a6878ab55f7b0b442aa"
+  },
+  "inputs": [
+    {
+      "path": "thesis/evidence/k1-http-remaining720-offline-prep-v2173/PARENT-180-SEAL.json",
+      "bytes": 2900,
+      "sha256": "613158562e914f5d952f009b87c3d6438b350d4809d6a97f9bf82ed301918829"
+    },
+    {
+      "path": "thesis/evidence/k1-http-remaining720-offline-prep-v2173/PARENT-FROZEN-CONDITION.json",
+      "bytes": 13753,
+      "sha256": "6bc65cf5cc3c4eddb90b80b0764a01e6a9fc4afbed66f33c731e3ab58528e101"
+    },
+    {
+      "path": "thesis/evidence/k1-http-remaining720-offline-prep-v2173/PARENT-CASE-INDEX.json",
+      "bytes": 154427,
+      "sha256": "2e7569bec753a58fc5dd20fafa56393c64087ce0611490ccddef5955b283746d"
+    },
+    {
+      "path": "thesis/campaigns/worker-desktop-k1-orca-relayed-http-first270-v2234/analysis-v2254/CASE-HISTORY.jsonl",
+      "bytes": 2008220,
+      "sha256": "e6df159c9f7c5ddc8636853f85b29ac152a779f746ef944d1a52ac086e7b0a3a"
+    },
+    {
+      "path": "thesis/campaigns/worker-desktop-k1-orca-relayed-http-first270-v2234/analysis-v2254/SUMMARY.json",
+      "bytes": 4259,
+      "sha256": "c7f4e401c59be2e73e81593c0d0c989b4fa64a3103b3d6d81d505ed652916f1f"
+    },
+    {
+      "path": "thesis/campaigns/worker-desktop-k1-orca-relayed-http-first270-v2234/condition-frozen.json",
+      "bytes": 19236,
+      "sha256": "11bbea3fc1e45e65da1ecb7b501aee77739870cb087d792e5bc5197f9b1027be"
+    },
+    {
+      "path": "thesis/campaigns/worker-desktop-k1-orca-relayed-http-remaining450-v2296/analysis-v2303/CASE-HISTORY.jsonl",
+      "bytes": 3276191,
+      "sha256": "f73b1df44ea73fdd51ba68ee4b8b6569a7e3a88007bdaf285aa4cbb3b681f85b"
+    },
+    {
+      "path": "thesis/campaigns/worker-desktop-k1-orca-relayed-http-remaining450-v2296/analysis-v2303/SUMMARY.json",
+      "bytes": 4610,
+      "sha256": "250da0112cbbbf73d00d35e78cbcca58626eca740edd620a91bc4195869b5148"
+    },
+    {
+      "path": ".git/aurora-handoff-import-20261006/distributed-k1-orca-relayed-http-launch-v2296/condition-frozen-v2296.json",
+      "bytes": 21417,
+      "sha256": "9adbf9ba3a7ec0948a087edad3655cf94ee344b3a2371a78d15f188f44150d42"
+    },
+    {
+      "path": "thesis/evidence/orca-relayed-http-v1197/terminal-v1377/summary.json",
+      "bytes": 45803,
+      "sha256": "641c6fc03929cd7c455d4b9f6460dd9923925069e99da69023079ae88b37563b"
+    },
+    {
+      "path": "thesis/campaigns/worker-desktop-k1-orca-relayed-http-remaining450-v2296/provider-prefix-transfer-v2302/CUSTODY.json",
+      "bytes": 58845,
+      "sha256": "fdcd61fc89b66c301b516406dbb468a91e7f8b294a0e3eb016053da9d5ac63dd"
+    },
+    {
+      "path": "thesis/campaigns/worker-desktop-k1-orca-relayed-http-remaining450-v2296/provider-eof-delta-v2400/CUSTODY.json",
+      "bytes": 7655,
+      "sha256": "6d8557957b57ace619af78834c388e8b8ad07ec224f90bddfde2170a936b11c5"
+    },
+    {
+      "path": "thesis/campaigns/worker-desktop-k1-orca-relayed-http-remaining450-v2296/provider-eof-delta-v2400/REMOTE-RETIREMENT-EXPORT-RECEIPT.json",
+      "bytes": 1589,
+      "sha256": "4cb766153b708a78352d1cfc2500b83b88bae6048bdb2715b0d5d9069dbb0dc8"
+    },
+    {
+      "path": "thesis/campaigns/worker-desktop-k1-orca-relayed-http-remaining450-v2296/ROOT-SAVED-ANALYSIS-EXIT-v2399.json",
+      "bytes": 1520,
+      "sha256": "14a2764b72537dc131f6e87a70fe3d28dcd244c764e46ed213a05a4fa239558c"
+    }
+  ],
+  "sourceReplayOrInferenceReruns": 0,
+  "allOldFailuresAndTransportAttemptsPreserved": true,
+  "remainingFull13AndFullMatrixOpen": true,
+  "ownerCompletionEmitter": "original monitor only",
+  "ownerNotificationDedupKey": "run_e6054e76e9fc:K1_HTTP_FULL900_FINAL_SEAL_RELEASE:OWNER_REQUEST_20261022",
+  "ownerNotificationDelivery": "PENDING_MONITOR_AND_CODING_RECEIPT"
+}

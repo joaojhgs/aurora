@@ -1,0 +1,22 @@
+{
+  "kind": "actual_first_gpu_epoch_terminal_v416",
+  "files": [
+    {
+      "name": "README.md",
+      "sha256": "c293a56ce75d7466bb4e8fc49543f8717ac09969dc7424ece67060c8a36106ca",
+      "bytes": 1215
+    },
+    {
+      "name": "actual-fresh-epoch2-progress.json",
+      "sha256": "63d3d9b704428c6b7e90d05394047c1b9166a1427c8c6e0820d66c0f25ea14dc",
+      "bytes": 3296
+    },
+    {
+      "name": "closed-epoch1-metadata.json",
+      "sha256": "59a42e04d9449fcfd5feabdcb865679a87cceb7fb9fb3c9d4070f5db98f3b43b",
+      "bytes": 7361
+    }
+  ],
+  "wholeGPUAccepted": false,
+  "crossDeviceMeasuredAllowed": false
+}

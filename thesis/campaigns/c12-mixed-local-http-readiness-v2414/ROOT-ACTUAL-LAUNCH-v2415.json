@@ -1,0 +1,43 @@
+{
+  "at": "2026-10-22T06:38:49.008834+00:00",
+  "worker": {
+    "pid": 230839,
+    "startTicks": 142958959
+  },
+  "provider": {
+    "at": "2026-10-22T06:38:13.673517+00:00",
+    "host": "personal.skyron-server",
+    "controller": {
+      "pid": 2474823,
+      "startTicks": 40661463,
+      "state": "S"
+    },
+    "manifestSha256": "1c45cd0fe50628da36e00f74e62039a06f16b1f42cf3828d0c5c90887f12a6c1",
+    "readinessManifestSha256": "c0fc1aa69bd6abfdfeb5709d39cb07625d65389887c4b1026defe8f490d45565",
+    "newWorker": false,
+    "measured": 0,
+    "pilotCallsStarted": false,
+    "deadline": "2026-10-22T06:47:13.434835+00:00",
+    "controllerState": {
+      "pid": 2474823,
+      "startTicks": 40661463,
+      "state": "S"
+    },
+    "localDriverArmed": true,
+    "runtime": {
+      "at": "2026-10-22T06:38:14.317565+00:00",
+      "controllerPid": 2474823,
+      "host": "personal.skyron-server",
+      "manifestSha256": "1c45cd0fe50628da36e00f74e62039a06f16b1f42cf3828d0c5c90887f12a6c1",
+      "measurementStartedByController": false,
+      "receiverPid": 2474824,
+      "receiverStartTicks": 40661528
+    }
+  },
+  "releaseAtUtc": "2026-10-22T06:39:33.442586+00:00",
+  "primaryMeasured": 0,
+  "sameDeadline": "2026-10-22T06:47:13.434835+00:00",
+  "newModelCallsMaximum": 2,
+  "triggerDeliveryAndLaunchHandledSequentially": true,
+  "workerSourceSha256": "77b116b7ac9931be3316dbffc2a244cd53d0ef018054ffb6f0602040faacb633"
+}

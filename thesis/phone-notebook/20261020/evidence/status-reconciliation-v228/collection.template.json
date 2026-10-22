@@ -1,0 +1,493 @@
+{
+  "schema": "aurora.phone_notebook.collection_manifest.v1",
+  "status": "NATIVE_COLD_SPEECH_PACK_PREPARATION_RECOVERY_ONE_LOCAL_FLOW_PENDING",
+  "source": {
+    "rootVerifiedRemoteSha": null,
+    "immutableSourceManifestSha256": "88c7330effe93499e9c673921e9b12c90c54db53e572885f34bbd40644c8d47b",
+    "rootApprovalMessage": "msg_4dbe5c7c5f1e",
+    "acquisitionMode": "root-approved-local-archive",
+    "rootApprovedLocalSha": "ebde3a8acf6315f920d03593845f17a1fc65a733",
+    "stagedSourcePath": "/home/developer/projects/aurora/thesis/phone-notebook/20261020/deployment/ebde3a8acf6315f920d03593845f17a1fc65a733/source-ebde3a8a-verified-v37",
+    "actualSourceAssemblyReceipt": "evidence/assemble-exact-repair-20261022T014230/result.json",
+    "applicationSourceIdentity": "ebde3a8acf6315f920d03593845f17a1fc65a733 + source-closure-overlay-v2383 + android-bundled-model-rename-v1 + android-node-policy-initial-publication-v2 + android-finite-file-audio-v3 + android-finite-file-audio-v3a",
+    "applicationOverlayManifestSha256": "6fb03ee20bc4bed033b3edf49ef48d952583710cebfa34cbd81ffdeb928c0f87",
+    "repairManifest": "repairs/android-bundled-model-rename-v1/MANIFEST.json",
+    "repairManifests": [
+      "repairs/android-bundled-model-rename-v1/MANIFEST.json",
+      "repairs/android-node-policy-initial-publication-v2/MANIFEST.json",
+      "repairs/android-finite-file-audio-v3/MANIFEST.json",
+      "repairs/android-finite-file-audio-v3a/MANIFEST.json"
+    ]
+  },
+  "phone": {
+    "approvedDeviceId": "KBX8LNFUBE5XGQRG",
+    "adbControlEndpoint": "tcp:127.0.0.1:5037",
+    "model": "Xiaomi POCO X7 Pro /2412DPC0AG",
+    "abi": "arm64-v8a",
+    "appPackage": "dev.aurora.desktop.phonenotebook",
+    "apkSha256": "1aaabb06746a70247562040a265a4efa6b80dcc4dc8f1fb25a0fb9da881025d6",
+    "appSourceSha": "ebde3a8acf6315f920d03593845f17a1fc65a733",
+    "securePairingReceipt": null,
+    "featureConsentReceipt": null,
+    "androidVersion": "16",
+    "androidApi": 36,
+    "usbControlOnly": true,
+    "latestUsbAccess": "actual authorized device06:01 native load/generate, refresh before next operation",
+    "observedWifiAddress": "192.168.1.94/24 at04:10:22UTC; route pilot not yet proved",
+    "historicalWifiAddress": "192.168.1.94/24 at00:14UTC; not current route proof",
+    "applicationSourceIdentity": "ebde3a8acf6315f920d03593845f17a1fc65a733 + source-closure-overlay-v2383 + android-bundled-model-rename-v1 + android-node-policy-initial-publication-v2 + android-finite-file-audio-v3 + android-finite-file-audio-v3a",
+    "packageOverrideSha256": "cade4d7f7a539cc17bc94b4c61e29a16d281627f72a08a1035bc0520d10d76d0",
+    "apkBuildReceipt": "evidence/read-file-audio-update-v202/result.json",
+    "canonicalExistingAppPreserved": true,
+    "installedVersionName": "1.0.0",
+    "installedVersionCode": 100,
+    "signingCertificateSha256": "57bee2b41e922fd1ee2fb08e1839ec3d423d78cc361afc22e2f1d11672293963",
+    "normalUpdateReceipt": "evidence/read-file-audio-update-v202/result.json",
+    "phoneLocalLlmQualificationReceipt": "PHONE-LOCAL-LLM-QUALIFIED-20261022.json"
+  },
+  "notebook": {
+    "host": "ssh:ssh-sem-notebook-personal",
+    "hostname": "skyron-notebook",
+    "namespace": "Personal",
+    "codingAgentAllowed": false,
+    "observedSourceHead": "df23fd6e1f80e87dc45b6221bed87c00b4187e66",
+    "observedWifiAddress": "192.168.1.250/24",
+    "actualLoadedBackend": null,
+    "stagedSourcePath": "/home/developer/projects/aurora/thesis/phone-notebook/20261020/deployment/ebde3a8acf6315f920d03593845f17a1fc65a733/source-ebde3a8a-verified-v37",
+    "publicInputReceipt": "ASSET-READINESS-20261022.json",
+    "runtimeCompileStatus": "BUILT_PINNED_LLAMA_CPP_PYTHON_0_3_19_VULKAN",
+    "isolatedPython": "/home/developer/projects/aurora/thesis/phone-notebook/20261020/deployment/ebde3a8acf6315f920d03593845f17a1fc65a733/.venv/bin/python",
+    "runtimeCapabilityReceipt": "evidence/owner-fixed-fresh-check-v90/result.json",
+    "gpuDevicesVisible": [
+      "AMD Radeon 660M",
+      "NVIDIA GeForce RTX 3050 Laptop GPU"
+    ]
+  },
+  "ownerAvailability": {
+    "schema": "aurora.owner.availability.v1",
+    "recordedAt": "2026-10-22T05:03:20.263104+00:00",
+    "authority": "direct owner message in existing phone setup session",
+    "startUtc": "2026-10-22T04:57:25.269652Z",
+    "endUtc": "2026-10-22T11:57:25.269652Z",
+    "durationSeconds": 25200,
+    "explicitStartSignal": true,
+    "conditionalAutomaticStart": true,
+    "conditions": [
+      "actual native route/model/correctness/cancellation readiness",
+      "qualified unchanged cohort",
+      "resource noninterference"
+    ],
+    "includesSetupPilotCollection": true,
+    "automaticExtensionAllowed": false,
+    "priority": [
+      "K2",
+      "K3",
+      "K1",
+      "LOCAL"
+    ],
+    "urgentUpdateConsentProofRequired": true,
+    "approvalMessage": "direct-owner-existing-session-20261022T045725.269652Z"
+  },
+  "rootResourceWindow": {
+    "startUtc": null,
+    "endUtc": null,
+    "durationSeconds": null,
+    "approvalMessage": null
+  },
+  "gates": {
+    "actualPhoneNativeFileAudio": null,
+    "actualPhoneModelCompatibility": null,
+    "notebookExactAssetsAndBackend": null,
+    "samePairHttpDirect": null,
+    "samePairP2pSelectedIce": null,
+    "nativeStageCorrelation": null,
+    "bothHostCustody": null,
+    "pilotCapacity": null,
+    "rootNoninterference": null
+  },
+  "baseline": {
+    "eligibility": "unverified",
+    "nativeCompatibilityReceipt": null,
+    "reason": "Actual POCO X7 Pro Android16/API36/arm64-v8a identified; local model/backend/catalog compatibility has not been qualified. Exact native compatibility and capacity remain unverified.",
+    "requiresLocalPhoneLlm": true,
+    "localStages": [
+      "stt",
+      "llm",
+      "tts"
+    ],
+    "ownerHistoricalOnnxSttTtsValidation": true
+  },
+  "cells": [
+    {
+      "id": "http-direct-lan-tts",
+      "route": "http-direct-lan",
+      "requester": "owner-physical-phone",
+      "provider": "Personal-notebook",
+      "remoteStages": [
+        "tts"
+      ],
+      "localStages": [
+        "stt",
+        "llm"
+      ],
+      "measuredTarget": 900,
+      "excludedWarmups": 15,
+      "cohortFingerprint": null,
+      "eligibility": "unverified",
+      "caseTimeoutSeconds": 180,
+      "coolingSecondsPerCase": null,
+      "condition": "K1",
+      "requiresLocalPhoneLlm": true,
+      "localPhoneLlmGateApplicable": true
+    },
+    {
+      "id": "http-direct-lan-tts-llm",
+      "route": "http-direct-lan",
+      "requester": "owner-physical-phone",
+      "provider": "Personal-notebook",
+      "remoteStages": [
+        "llm",
+        "tts"
+      ],
+      "localStages": [
+        "stt"
+      ],
+      "measuredTarget": 900,
+      "excludedWarmups": 15,
+      "cohortFingerprint": null,
+      "eligibility": "unverified",
+      "caseTimeoutSeconds": 180,
+      "coolingSecondsPerCase": null,
+      "condition": "K2",
+      "requiresLocalPhoneLlm": false,
+      "localPhoneLlmGateApplicable": false
+    },
+    {
+      "id": "http-direct-lan-tts-llm-stt",
+      "route": "http-direct-lan",
+      "requester": "owner-physical-phone",
+      "provider": "Personal-notebook",
+      "remoteStages": [
+        "stt",
+        "llm",
+        "tts"
+      ],
+      "localStages": [],
+      "measuredTarget": 900,
+      "excludedWarmups": 15,
+      "cohortFingerprint": null,
+      "eligibility": "unverified",
+      "caseTimeoutSeconds": 180,
+      "coolingSecondsPerCase": null,
+      "condition": "K3",
+      "requiresLocalPhoneLlm": false,
+      "localPhoneLlmGateApplicable": false
+    },
+    {
+      "id": "p2p-mqtt-ice-tts",
+      "route": "p2p-mqtt-ice",
+      "requester": "owner-physical-phone",
+      "provider": "Personal-notebook",
+      "remoteStages": [
+        "tts"
+      ],
+      "localStages": [
+        "stt",
+        "llm"
+      ],
+      "measuredTarget": 900,
+      "excludedWarmups": 15,
+      "cohortFingerprint": null,
+      "eligibility": "unverified",
+      "caseTimeoutSeconds": 180,
+      "coolingSecondsPerCase": null,
+      "condition": "K1",
+      "requiresLocalPhoneLlm": true,
+      "localPhoneLlmGateApplicable": true
+    },
+    {
+      "id": "p2p-mqtt-ice-tts-llm",
+      "route": "p2p-mqtt-ice",
+      "requester": "owner-physical-phone",
+      "provider": "Personal-notebook",
+      "remoteStages": [
+        "llm",
+        "tts"
+      ],
+      "localStages": [
+        "stt"
+      ],
+      "measuredTarget": 900,
+      "excludedWarmups": 15,
+      "cohortFingerprint": null,
+      "eligibility": "unverified",
+      "caseTimeoutSeconds": 180,
+      "coolingSecondsPerCase": null,
+      "condition": "K2",
+      "requiresLocalPhoneLlm": false,
+      "localPhoneLlmGateApplicable": false
+    },
+    {
+      "id": "p2p-mqtt-ice-tts-llm-stt",
+      "route": "p2p-mqtt-ice",
+      "requester": "owner-physical-phone",
+      "provider": "Personal-notebook",
+      "remoteStages": [
+        "stt",
+        "llm",
+        "tts"
+      ],
+      "localStages": [],
+      "measuredTarget": 900,
+      "excludedWarmups": 15,
+      "cohortFingerprint": null,
+      "eligibility": "unverified",
+      "caseTimeoutSeconds": 180,
+      "coolingSecondsPerCase": null,
+      "condition": "K3",
+      "requiresLocalPhoneLlm": false,
+      "localPhoneLlmGateApplicable": false
+    }
+  ],
+  "fixedAudio": {
+    "path": "/home/developer/projects/aurora/thesis/phone-notebook/20261020/deployment/ebde3a8acf6315f920d03593845f17a1fc65a733/source-delta-v33-copy-v2353-20261022/ORIGINAL-FIXED-INPUT.wav",
+    "bytes": 219794,
+    "sha256": "da0ecc4ad0885746ab6e716585473917ab2b543a505bf0db09ebacfaa7943cbb",
+    "actualPhysicalCopyVerified": true
+  },
+  "models": [
+    {
+      "bytes": 563036064,
+      "path": "/home/developer/projects/aurora/thesis/phone-notebook/20261020/deployment/ebde3a8acf6315f920d03593845f17a1fc65a733/models/Qwen3.5-0.8B-Q4_0.gguf",
+      "sha256": "57d1997790d1744fba5b40a7317df71ea5e2acee28c47e78f0cce39c0703f8cf",
+      "name": "Qwen3.5-0.8B-Q4_0.gguf",
+      "acquisition": "Direct public original immutable revision; size and SHA256 verified on Personal notebook01:21:25UTC",
+      "pinnedUrl": "https://huggingface.co/ggml-org/Qwen3.5-0.8B-GGUF/resolve/9447f74101aeb4e93621884dfa36ee8effb8831b/Qwen3.5-0.8B-Q4_0.gguf",
+      "referenceOriginalPath": "/home/developer/projects/aurora/.artifacts/local-inference/models/Qwen3.5-0.8B-Q4_0.gguf"
+    },
+    {
+      "bytes": 2309,
+      "path": "/home/developer/projects/aurora/thesis/phone-notebook/20261020/deployment/ebde3a8acf6315f920d03593845f17a1fc65a733/models/whisper-base/config.json",
+      "sha256": "56a6d8110d311f19c8f0471e562832c7527f146b567275bfca59fcf7c184da9a",
+      "name": "whisper-base/config.json",
+      "pinnedUrl": "https://huggingface.co/Systran/faster-whisper-base/resolve/ebe41f70d5b6dfa9166e2c581c45c9c0cfc57b66/config.json",
+      "referenceOriginalPath": "/home/developer/.cache/huggingface/hub/models--Systran--faster-whisper-base/snapshots/ebe41f70d5b6dfa9166e2c581c45c9c0cfc57b66/config.json",
+      "acquisition": "Direct public original immutable revision; size and SHA256 verified on Personal notebook01:21:25UTC"
+    },
+    {
+      "bytes": 145217532,
+      "path": "/home/developer/projects/aurora/thesis/phone-notebook/20261020/deployment/ebde3a8acf6315f920d03593845f17a1fc65a733/models/whisper-base/model.bin",
+      "sha256": "d01c3014881c9c6f3133c182f3d2887eb6ca1c789a7538c5c007196857a0a6a9",
+      "name": "whisper-base/model.bin",
+      "pinnedUrl": "https://huggingface.co/Systran/faster-whisper-base/resolve/ebe41f70d5b6dfa9166e2c581c45c9c0cfc57b66/model.bin",
+      "referenceOriginalPath": "/home/developer/.cache/huggingface/hub/models--Systran--faster-whisper-base/snapshots/ebe41f70d5b6dfa9166e2c581c45c9c0cfc57b66/model.bin",
+      "acquisition": "Direct public original immutable revision; size and SHA256 verified on Personal notebook01:21:25UTC"
+    },
+    {
+      "bytes": 2203239,
+      "path": "/home/developer/projects/aurora/thesis/phone-notebook/20261020/deployment/ebde3a8acf6315f920d03593845f17a1fc65a733/models/whisper-base/tokenizer.json",
+      "sha256": "fb7b63191e9bb045082c79fd742a3106a12c99513ab30df4a0d47fa6cb6fd0ab",
+      "name": "whisper-base/tokenizer.json",
+      "pinnedUrl": "https://huggingface.co/Systran/faster-whisper-base/resolve/ebe41f70d5b6dfa9166e2c581c45c9c0cfc57b66/tokenizer.json",
+      "referenceOriginalPath": "/home/developer/.cache/huggingface/hub/models--Systran--faster-whisper-base/snapshots/ebe41f70d5b6dfa9166e2c581c45c9c0cfc57b66/tokenizer.json",
+      "acquisition": "Direct public original immutable revision; size and SHA256 verified on Personal notebook01:21:25UTC"
+    },
+    {
+      "bytes": 459861,
+      "path": "/home/developer/projects/aurora/thesis/phone-notebook/20261020/deployment/ebde3a8acf6315f920d03593845f17a1fc65a733/models/whisper-base/vocabulary.txt",
+      "sha256": "34ce3fe1c5041027b3f8d42912270993f986dbc4bb34cf27f951e34a1e453913",
+      "name": "whisper-base/vocabulary.txt",
+      "pinnedUrl": "https://huggingface.co/Systran/faster-whisper-base/resolve/ebe41f70d5b6dfa9166e2c581c45c9c0cfc57b66/vocabulary.txt",
+      "referenceOriginalPath": "/home/developer/.cache/huggingface/hub/models--Systran--faster-whisper-base/snapshots/ebe41f70d5b6dfa9166e2c581c45c9c0cfc57b66/vocabulary.txt",
+      "acquisition": "Direct public original immutable revision; size and SHA256 verified on Personal notebook01:21:25UTC"
+    },
+    {
+      "bytes": 63531379,
+      "path": "/home/developer/projects/aurora/thesis/phone-notebook/20261020/deployment/ebde3a8acf6315f920d03593845f17a1fc65a733/models/en_US-ljspeech-medium.onnx",
+      "sha256": "6f52a751e2349abe7a76735eb09dc1875298c77ea2342ffd2fef79ff81b87f22",
+      "name": "en_US-ljspeech-medium.onnx",
+      "acquisition": "Direct public original immutable revision; size and SHA256 verified on Personal notebook01:21:25UTC",
+      "referenceOriginalPath": "/home/developer/projects/aurora/.git/aurora-handoff-import-20261006/cpu-full-audio-v483/models/en_US-ljspeech-medium.onnx",
+      "pinnedUrl": "https://huggingface.co/rhasspy/piper-voices/resolve/bae641dcb5a608cff81ccaf7ff018baaca1a33e1/en/en_US/ljspeech/medium/en_US-ljspeech-medium.onnx"
+    },
+    {
+      "bytes": 4972,
+      "path": "/home/developer/projects/aurora/thesis/phone-notebook/20261020/deployment/ebde3a8acf6315f920d03593845f17a1fc65a733/models/en_US-ljspeech-medium.onnx.json",
+      "sha256": "141d612cc0a95ed7efc1ca936b845c2364967f2e9217c5dbfcf69fc4d6c65860",
+      "name": "en_US-ljspeech-medium.onnx.json",
+      "acquisition": "Direct public original immutable revision; size and SHA256 verified on Personal notebook01:21:25UTC",
+      "referenceOriginalPath": "/home/developer/projects/aurora/.git/aurora-handoff-import-20261006/cpu-full-audio-v483/models/en_US-ljspeech-medium.onnx.json",
+      "pinnedUrl": "https://huggingface.co/rhasspy/piper-voices/resolve/bae641dcb5a608cff81ccaf7ff018baaca1a33e1/en/en_US/ljspeech/medium/en_US-ljspeech-medium.onnx.json"
+    }
+  ],
+  "runtimeVersions": {
+    "ctranslate2": "4.7.1",
+    "faster-whisper": "1.1.1",
+    "llama-cpp-python": "0.3.19",
+    "numpy": "2.2.6",
+    "onnxruntime": "1.20.1",
+    "piper-tts": "1.2.0"
+  },
+  "llmEffectiveOptions": {
+    "chat_format": "chatml-function-calling",
+    "max_tokens": 128,
+    "min_p": 0.0,
+    "model_path": "/home/developer/projects/aurora/thesis/phone-notebook/20261020/deployment/ebde3a8acf6315f920d03593845f17a1fc65a733/models/Qwen3.5-0.8B-Q4_0.gguf",
+    "n_batch": 64,
+    "n_ctx": 4096,
+    "n_gpu_layers": 100,
+    "n_threads": 2,
+    "repeat_penalty": 1.0,
+    "seed": 42,
+    "temperature": 0.0,
+    "top_k": 1,
+    "top_p": 1.0,
+    "verbose": true
+  },
+  "sttEffectiveOptions": {
+    "model": "base",
+    "device": "cpu",
+    "configuredComputeType": "int8",
+    "referenceActualComputeType": "int8_float32",
+    "actualPhoneBackend": null,
+    "actualNotebookBackend": null
+  },
+  "ttsEffectiveOptions": {
+    "provider": "piper",
+    "device": "cpu",
+    "voice": "en_US-ljspeech-medium",
+    "actualPhoneBackend": null,
+    "actualNotebookBackend": null
+  },
+  "guards": {
+    "minDiskFreeBytes": 2147483648,
+    "maxPreparationNewBytes": 104857600,
+    "minNotebookAvailableMemoryBytes": 4294967296,
+    "maxPhoneBatteryC": 42,
+    "minPhoneBatteryPercent": 40,
+    "phoneChargingRequired": true,
+    "maxNotebookSensorC": null,
+    "maxPhoneThermalStatus": 2,
+    "maxTelemetryAgeSeconds": 10,
+    "noAutomaticRetry": true,
+    "checkpointEveryCase": true,
+    "notebookTemperaturePolicy": "observe_only_owner_correction"
+  },
+  "statistics": {
+    "quantileEstimator": "Hyndman-Fan type7",
+    "poolChangedCohorts": false,
+    "keepAllOutcomes": true,
+    "warmupsExcluded": true
+  },
+  "secrets": {
+    "handling": "Reuse existing approved opaque profiles and app secure storage. Never put tokens, pairing codes, keys or credentials in this manifest or evidence.",
+    "newIdentityOrGrantCreationAllowed": false
+  },
+  "nativeAdapter": {
+    "path": null,
+    "sha256": null,
+    "rootReviewMessage": null,
+    "boundedNativeCancellationReceipt": null,
+    "qualificationReceipt": null
+  },
+  "resume": {
+    "attemptedMeasuredIds": [],
+    "rootSameCohortRecoveryApproval": null
+  },
+  "phoneLocalInferenceAudit": "PHONE-LOCAL-LLM-AUDIT-20261022.json",
+  "actualReadinessSummary": {
+    "schema": "aurora.phone_notebook.current_setup.v2",
+    "at": "2026-10-22T06:56:16.255638+00:00",
+    "status": "NATIVE_COLD_SPEECH_PACK_PREPARATION_RECOVERY_ONE_LOCAL_FLOW_PENDING",
+    "sourceIdentity": "ebde3a8acf6315f920d03593845f17a1fc65a733 + source-closure-overlay-v2383 + android-bundled-model-rename-v1 + android-node-policy-initial-publication-v2 + android-finite-file-audio-v3 + android-finite-file-audio-v3a",
+    "baseSourceSha": "ebde3a8acf6315f920d03593845f17a1fc65a733",
+    "remoteSha": null,
+    "sourceAcquisition": "Root-approved exact local archive plus immutable isolated overlays; no shared Git writes",
+    "installedPackage": "dev.aurora.desktop.phonenotebook",
+    "installedVersionName": "1.0.0",
+    "installedVersionCode": 100,
+    "apkSha256": "1aaabb06746a70247562040a265a4efa6b80dcc4dc8f1fb25a0fb9da881025d6",
+    "apkBytes": 749091846,
+    "signingCertificateSha256": "57bee2b41e922fd1ee2fb08e1839ec3d423d78cc361afc22e2f1d11672293963",
+    "actualUpdateReceipt": "evidence/read-file-audio-update-v202/result.json",
+    "normalReplacementInstallResult": "Success06:43:02UTC, same certificate and installed APK SHA;9 foreground checks no installer observed; no automated consent; future update prompting not guaranteed",
+    "canonicalAppAndUserdataPreserved": true,
+    "phoneSerial": "KBX8LNFUBE5XGQRG",
+    "phoneModel": "POCO X7 Pro /2412DPC0AG",
+    "androidApi": 36,
+    "abi": "arm64-v8a",
+    "phoneController": "existing Personal notebook host ADB127.0.0.1:5037 USB; control only",
+    "phoneLocalLlmQualified": true,
+    "phoneLocalLlmReceipt": "PHONE-LOCAL-LLM-QUALIFIED-20261022.json",
+    "phoneLocalLlmModelSha256": "57d1997790d1744fba5b40a7317df71ea5e2acee28c47e78f0cce39c0703f8cf",
+    "phoneLocalLlmEngine": "llama.cpp0.4.1 CPU,2threads,4096context,512batch,256ubatch",
+    "successfulNativePhoneModelLoads": 1,
+    "successfulNativePhoneGenerationCalls": 1,
+    "nativePhoneGenerationAttempts": 2,
+    "nativePhoneGenerationCancelled": 1,
+    "nativePhoneSessionClosed": true,
+    "phoneLocalSttQualified": false,
+    "phoneLocalTtsQualified": false,
+    "nativeFileAudioQualified": false,
+    "authenticatedDirectHttpVerified": false,
+    "samePairP2pMqttIceVerified": false,
+    "httpActualResult": "06:06:36 UTC production CSP connect-src blocked single credential-free LAN plaintext health GET",
+    "httpResultReceipt": "evidence/http-policy-probe-v180/result.json",
+    "httpNextRequirement": "existing trusted LAN HTTPS endpoint/secure route; no CSP/cleartext/CA/security bypass",
+    "notebookExactAssetReceipt": "ASSET-READINESS-20261022.json",
+    "notebookExactAssetsVerifiedBytes": 833499307,
+    "notebookRuntime": "llama-cpp-python0.3.19 Vulkan built/imported; model offload/inference unvalidated",
+    "notebookReferenceAssetsRepeated": false,
+    "newPhoneSpeechAssetsPlan": "PHONE-SPEECH-ASSET-PLAN-20261022.json",
+    "newPhoneSpeechAssetsJob": "phone-speech-assets-v181",
+    "newPhoneSpeechAssetsBytes": 274727275,
+    "newPhoneSpeechAssetsRateCapBytes": 1048576,
+    "newPhoneSpeechAssetsAuthority": "owner direct Personal public exact pinned fetch",
+    "nextRepair": null,
+    "notebookThermalPolicy": "observe_only_owner_correction; OS protections intact",
+    "buildMaxJobs": 2,
+    "ownPreviousBuildClosed": true,
+    "resourceAdmissionOldLease": "consumed and normally released04:47:57UTC;0phone nativecalls",
+    "newNotebookInferenceAdmissionRequest": "msg_204c54ccc425",
+    "newNotebookInferenceAdmission": null,
+    "ownerWindow": "OWNER-AUTOMATIC-WINDOW-20261022.json",
+    "ownerStartUtc": "2026-10-22T04:57:25.269652Z",
+    "hardStopUtc": "2026-10-22T11:57:25.269652Z",
+    "ownerConditionalAutoStartAuthorized": true,
+    "ownerAdditionalStartRequired": false,
+    "measuredCases": 0,
+    "nativeAudioPilotCalls": 0,
+    "nativePipelineForecastHours": null,
+    "mainCampaignUntouched": true,
+    "nextSteps": [
+      "Finish finite debug file-audio adapter build/install with genuine production providers",
+      "Install exact ONNX packs and prove local STT/TTS correctness and valid output WAV",
+      "Qualify authenticated same-pair LAN HTTPS and P2P after resource admission",
+      "Pilot capacity then collect only qualified unchanged conditions before hardstop"
+    ],
+    "minimalOwnerAction": null,
+    "historicalStatusPreserved": "evidence/status-reconciliation-v185",
+    "newPhoneSpeechAssetsState": "274727275B archives verified on Notebook and phone; Whisper extracted, install registration timedout180s, bounded600s cold-prep recovery;0native speech cases yet",
+    "phoneSpeechAssetsReceipt": "evidence/read-file-audio-setup-v193/result.json",
+    "phoneSpeechModelMapping": "PHONE-SPEECH-MODEL-MAPPING-20261022.json",
+    "matchedPhoneStt900Eligibility": false,
+    "matchedPhoneSttGap": "Original Whisper ONNX conversion checkpoint mapping to exact CT2 weights not in pinned catalog; UNKNOWN, no substitution or pooled claim",
+    "fileAudioRepairManifests": [
+      "repairs/android-finite-file-audio-v3/MANIFEST.json",
+      "repairs/android-finite-file-audio-v3a/MANIFEST.json"
+    ],
+    "priorNativePreparationFailure": "evidence/reconcile-native-pack-v206/result.json",
+    "currentNativePilotJob": "phone-file-audio-v207",
+    "currentNativePilotMaximumSeconds": 1680,
+    "coldPreparePerPackDeadlineSeconds": 600,
+    "nativePipelineDeadlineSeconds": 420,
+    "phoneLatestBatteryPercent": 79,
+    "phoneLatestBatteryC": 27.7,
+    "phoneLatestBatteryCharging": true,
+    "phoneLatestBatteryAt": "2026-10-22T06:47:19.664629Z",
+    "latestSuccessfulApkBuild": "android-apk-build-v199",
+    "latestSuccessfulApkBuildReceipt": "evidence/read-file-audio-update-v202/result.json",
+    "buildRawDualCustody": "evidence/build-raw-dual-v205/COPY-RECEIPT.json"
+  },
+  "remainingSleepStartPermissionRequired": false
+}

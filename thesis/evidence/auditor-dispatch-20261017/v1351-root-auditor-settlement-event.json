@@ -1,0 +1,38 @@
+{
+  "id": "remote-cli-1792276229173",
+  "ok": true,
+  "result": {
+    "runId": "run_e6054e76e9fc",
+    "deliveryId": "delivery_88768522c518",
+    "messages": [
+      {
+        "id": "msg_3e098587ba28",
+        "run_id": "run_e6054e76e9fc",
+        "delivery_contract": "current_delivery",
+        "from_handle": "term_ce58b81d-c119-46dd-b816-6792a29065db",
+        "to_handle": "run:run_e6054e76e9fc",
+        "subject": "Audit complete: inventory, recovered observations, loss impact and verified saved-data analysis",
+        "body": "Completed the audit in thesis/audit/20261017-data-and-results/ with 31 primary or coverage entries, 26 historical mesh families, 4523 checksum-verified imported objects and one passing saved-data smoke with zero new measurements. Reconciled all seven audio raw or projected cohorts and the original V491 allocation, recovered four C06 observations, and preserved V799 as author-reported plus V1197 as dated INCOMPLETE; final receipt SHA256 is 4135b9b80d0af56cbbe438a9d9e321e0551eed7fa8a529087d65bd93713bf2e2. Root review and owner delivery remain, with V799 raw whereabouts and C06 final outcomes unresolved, no confirmed irrecoverability or forced rerun requirement, and all live processes and reservations preserved.",
+        "type": "worker_done",
+        "priority": "normal",
+        "thread_id": null,
+        "payload": "{\"taskId\":\"task_c626834bf1c6\",\"dispatchId\":\"ctx_dda469327d6f\",\"outcome\":\"succeeded\",\"filesModified\":[\"thesis/audit/20261017-data-and-results/README.md\",\"thesis/audit/20261017-data-and-results/cohort-inventory.json\",\"thesis/audit/20261017-data-and-results/missing-data-impact.md\",\"thesis/audit/20261017-data-and-results/consolidated-results.md\",\"thesis/audit/20261017-data-and-results/analyze_saved_data.py\",\"thesis/audit/20261017-data-and-results/smoke/smoke-receipt.json\",\"thesis/audit/20261017-data-and-results/copy-checksum-source-dedup-manifest.json\",\"thesis/audit/20261017-data-and-results/final-completion-receipt.json\",\"thesis/audit/20261017-data-and-results/artifact-checksums.json\"],\"reportPath\":\"thesis/audit/20261017-data-and-results/consolidated-results.md\"}",
+        "created_at": "2026-10-17T22:30:42Z",
+        "delivered_at": null
+      }
+    ],
+    "count": 1,
+    "replayed": false,
+    "acknowledged": null,
+    "timedOut": false,
+    "cancelled": false,
+    "connectionLost": false,
+    "mutation": {
+      "requestId": "7cd4856d-d7ed-4119-8281-2b88959d3aa3",
+      "replayed": false
+    }
+  },
+  "_meta": {
+    "runtimeId": "cc9e3275-28c6-4c45-85cc-bdcd2262aa7d"
+  }
+}

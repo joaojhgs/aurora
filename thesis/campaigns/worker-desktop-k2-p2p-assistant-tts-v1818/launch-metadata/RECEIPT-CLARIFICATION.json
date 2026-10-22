@@ -1,0 +1,10 @@
+{
+  "originalResultSha256": "499682f05b927264a6c3f940a902e19aabbd98b64d6600293629a504ba6dd2c1",
+  "actualWorkerOperation": "Added registered Orchestrator.use to existing three outbound task permissions; no unused method-name scope was present on worker. Desktop prior1811 removed that unused entry.",
+  "httpListenerStarted": false,
+  "normalMqttRtcControlNetworkActivityOccurred": true,
+  "modelServicesStarted": [],
+  "inferenceCalls": 0,
+  "rawInheritedLabelCorrection": "Original networkListenerStarted=false denotes HTTP only; its removal wording was inherited from desktop helper. Before/after permission lists and model-free route proof remain exact.",
+  "rawOriginalPreserved": true
+}

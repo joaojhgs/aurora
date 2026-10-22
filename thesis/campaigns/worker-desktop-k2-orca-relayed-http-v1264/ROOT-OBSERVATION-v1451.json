@@ -1,0 +1,58 @@
+{
+  "at": "2026-10-18T04:35:32.054208+00:00",
+  "classification": "VERIFIED_WAIT",
+  "progress": {
+    "attempted": 611,
+    "last_attempt_file": "attempts/attempt-0611-measured.jsonl",
+    "last_attempt_status": "completed_correct",
+    "measured_attempted": 596,
+    "planned_measured": 900,
+    "planned_warmups": 15,
+    "status": "running",
+    "unattempted_measured": 304,
+    "warmups_attempted": 15
+  },
+  "measuredOutcomeCounts": {
+    "completed_correct": 596
+  },
+  "outcomeCountProvenance": {
+    "previousObservation": "thesis/campaigns/worker-desktop-k2-orca-relayed-http-v1264/ROOT-OBSERVATION-v1450.json",
+    "previousMeasured": 575,
+    "newClosedCaseRowsRead": 21
+  },
+  "processes": {
+    "588011": {
+      "same": true,
+      "state": "S",
+      "startTicks": 105853078
+    },
+    "588053": {
+      "same": true,
+      "state": "S",
+      "startTicks": 105853326
+    },
+    "588276": {
+      "same": true,
+      "state": "S",
+      "startTicks": 105855021
+    },
+    "421717": {
+      "same": true,
+      "state": "S",
+      "startTicks": 104535394
+    }
+  },
+  "frozenManifestSha256": "b15a49adffc5aaa43b426563d5776fa384c92f58e339030b69cb3877e98f2399",
+  "custody": {
+    "cases": 611,
+    "audio": 611,
+    "audioReferences": 611,
+    "receiptRetainedAudioBlobs": 611,
+    "at": "2026-10-18T04:35:30.325529+00:00",
+    "missingPhysicalPaths": [],
+    "copierErrors": [],
+    "pendingStatic": [],
+    "receipt": "thesis/campaigns/worker-desktop-k2-orca-relayed-http-v1264/receipts/000301.json"
+  },
+  "observationWindow": "04:27:56 to04:35:00 read-only original PID/startTicks/progress,580->595; no SUT calls"
+}

@@ -1,0 +1,11 @@
+{
+  "admissionSha256": "b17065daf5e8e3722e6640c276c28d60ffd4182b5d64747a33439d5cea23493c",
+  "at": "2026-10-20T04:35:17.063467+00:00",
+  "conditionCapSeconds": 72000,
+  "epochOuterPlusPriorRecoverySeconds": 71220.487895,
+  "manifestSha256": "120dd99a4de0a242c30ebe4bb46d854ca77313c482a0c74f024edb624829a6e8",
+  "maximumPopenCalls": 1,
+  "originalConditionAbsoluteDeadlineUtc": "2026-10-20T23:45:36.570727+00:00",
+  "priorElapsedIncludingRecoverySeconds": 2980.487895,
+  "reviewSha256": "e08bc1f49021e5eae429c4bed9d5054cb2a9ee3cc458bff15dcb8d79e0378b70"
+}

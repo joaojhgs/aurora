@@ -1,0 +1,41 @@
+{
+  "at": "2026-10-22T05:31:35.500836+00:00",
+  "kind": "RESUME_SAVED_ANALYSIS_AFTER_VERIFIED_PROVIDER_COPY",
+  "command": [
+    "/home/developer/projects/aurora/.git/aurora-handoff-import-20261006/cpu-audio-campaign-v491/env/bin/python",
+    "/home/developer/projects/aurora/thesis/analysis/analyze_k1_http_epoch_saved_v2242.py",
+    "--requester-custody",
+    "/home/developer/projects/aurora/thesis/campaigns/worker-desktop-k1-orca-relayed-http-remaining450-v2296",
+    "--requester-snapshot",
+    "/home/developer/projects/aurora/thesis/campaigns/worker-desktop-k1-orca-relayed-http-remaining450-v2296/terminal-v2300/REQUESTER-CURRENT.snapshot.json",
+    "--requester-pid",
+    "3965978",
+    "--requester-start-ticks",
+    "139740616",
+    "--manifest-sha256",
+    "9adbf9ba3a7ec0948a087edad3655cf94ee344b3a2371a78d15f188f44150d42",
+    "--provider-dir",
+    "/home/developer/projects/aurora/thesis/campaigns/worker-desktop-k1-orca-relayed-http-remaining450-v2296/provider-prefix-transfer-v2302/extracted/raw",
+    "--output-dir",
+    "/home/developer/projects/aurora/thesis/campaigns/worker-desktop-k1-orca-relayed-http-remaining450-v2296/analysis-v2303"
+  ],
+  "sourceSha256": "a8c40fad5537af133b4212e63a1932a4f6242904c3996c988d83d578d742c04c",
+  "custodySha256": "fdcd61fc89b66c301b516406dbb468a91e7f8b294a0e3eb016053da9d5ac63dd",
+  "nativeGoal": {
+    "goal": {
+      "threadId": "01a112a5-d6bb-74e2-bf7c-ace73cb513b5",
+      "objective": "Complete the durable ultragoal plan in .omx/ultragoal/goals.json, including later accepted/appended stories, under the original brief constraints; use .omx/ultragoal/ledger.jsonl as the audit trail.",
+      "status": "active",
+      "tokensUsed": 245681082,
+      "timeUsedSeconds": 900265,
+      "createdAt": 1791314947,
+      "updatedAt": 1792646994
+    },
+    "remainingTokens": null,
+    "completionBudgetReport": null
+  },
+  "originalFinalizerNotRerun": true,
+  "inferenceReruns": 0,
+  "scope": "Only current450 epoch metrics; full900 counts do not pool incompatible epoch percentiles",
+  "providerReservationStillHeld": true
+}

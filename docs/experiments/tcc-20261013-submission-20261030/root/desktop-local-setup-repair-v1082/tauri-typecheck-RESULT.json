@@ -1,0 +1,13 @@
+{
+  "command": [
+    "pnpm",
+    "--filter",
+    "@aurora/tauri-ui",
+    "typecheck"
+  ],
+  "startedAt": "2026-10-16T14:34:28.942205+00:00",
+  "endedAt": "2026-10-16T14:35:17.844901+00:00",
+  "exitCode": 0,
+  "error": null,
+  "log": ".git/aurora-handoff-import-20261006/desktop-local-profile-integration-v1082/tauri-typecheck.log"
+}

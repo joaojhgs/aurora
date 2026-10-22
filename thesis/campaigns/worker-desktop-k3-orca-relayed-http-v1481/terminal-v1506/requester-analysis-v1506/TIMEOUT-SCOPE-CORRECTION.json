@@ -1,0 +1,8 @@
+{
+  "scope": "Report wording only; no numerical results recomputed or changed",
+  "beforeSha256": "4b4328e501ca4cb29197e031974ddef5893ee0cc32bc3c80f592edf55fc177f4",
+  "afterSha256": "a6681da152968c9a431ce7bfb34e38718a968b45c620d3646fae1c0ab91015f7",
+  "executedSourceSha256": "2cd1339f7e72c3aacab6069bab08acce6056674c7d97ebbe7422683d1a640370",
+  "timeoutDefinition": "Exact requester harness boolean; hidden transport-level timeout detail remains unknown.",
+  "newMeasurements": 0
+}

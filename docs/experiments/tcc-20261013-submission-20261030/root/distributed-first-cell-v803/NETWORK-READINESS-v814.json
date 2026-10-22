@@ -1,0 +1,27 @@
+{
+  "at": "2026-10-16T02:50:08.979659+00:00",
+  "host": "code-worker",
+  "scope": "Two bounded TCP connects to already-listening SSH port22 on the owner-approved Personal desktop addresses; close immediately, no SSH authentication or product/inference requests",
+  "securityOrConfigurationChanges": false,
+  "measuredCampaignRequests": 0,
+  "results": [
+    {
+      "address": "100.64.0.3",
+      "port": 22,
+      "tcpConnected": false,
+      "errorClass": "ConnectionRefusedError",
+      "errno": 111,
+      "error": "[Errno 111] Connection refused",
+      "elapsedSeconds": 0.010295
+    },
+    {
+      "address": "192.168.1.11",
+      "port": 22,
+      "tcpConnected": false,
+      "errorClass": "ConnectionRefusedError",
+      "errno": 111,
+      "error": "[Errno 111] Connection refused",
+      "elapsedSeconds": 6.2e-05
+    }
+  ]
+}

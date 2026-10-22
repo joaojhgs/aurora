@@ -1,0 +1,28 @@
+{
+  "id": "local",
+  "ok": false,
+  "error": {
+    "code": "invalid_argument",
+    "message": "Unknown flag --run for command: orchestration run-show",
+    "data": {
+      "validFlags": [
+        "environment",
+        "help",
+        "id",
+        "json",
+        "pairing-code"
+      ],
+      "suggestions": [
+        "id",
+        "json"
+      ],
+      "nextSteps": [
+        "Did you mean: --id, --json",
+        "Valid flags: --environment, --help, --id, --json, --pairing-code"
+      ]
+    }
+  },
+  "_meta": {
+    "runtimeId": null
+  }
+}

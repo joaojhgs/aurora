@@ -1,0 +1,69 @@
+{
+  "steps": [
+    {
+      "name": "ui-capture-tests",
+      "at": "2026-10-15T00:53:39.141453+00:00",
+      "command": [
+        "pnpm",
+        "exec",
+        "vitest",
+        "run",
+        "src/use-assistant-browser-capture.test.ts",
+        "--maxWorkers=1"
+      ],
+      "cwd": "/home/developer/projects/aurora/packages/aurora-ui",
+      "exitCode": 0,
+      "elapsedSeconds": 2.379710496054031,
+      "globalBuildLockHeld": true
+    },
+    {
+      "name": "worklet-capture-tests",
+      "at": "2026-10-15T00:53:41.522098+00:00",
+      "command": [
+        "pnpm",
+        "exec",
+        "vitest",
+        "run",
+        "tests/audio-worklet-source.test.ts",
+        "--maxWorkers=1"
+      ],
+      "cwd": "/home/developer/projects/aurora/packages/aurora-voice-web",
+      "exitCode": 0,
+      "elapsedSeconds": 1.926796315005049,
+      "globalBuildLockHeld": true
+    },
+    {
+      "name": "voice-web-typecheck",
+      "at": "2026-10-15T00:53:43.449664+00:00",
+      "command": [
+        "pnpm",
+        "exec",
+        "tsc",
+        "--noEmit",
+        "--incremental",
+        "false"
+      ],
+      "cwd": "/home/developer/projects/aurora/packages/aurora-voice-web",
+      "exitCode": 0,
+      "elapsedSeconds": 7.8656004960648715,
+      "globalBuildLockHeld": true
+    },
+    {
+      "name": "ui-typecheck",
+      "at": "2026-10-15T00:53:51.317089+00:00",
+      "command": [
+        "pnpm",
+        "exec",
+        "tsc",
+        "--noEmit",
+        "--incremental",
+        "false"
+      ],
+      "cwd": "/home/developer/projects/aurora/packages/aurora-ui",
+      "exitCode": 2,
+      "elapsedSeconds": 43.63630297302734,
+      "globalBuildLockHeld": true
+    }
+  ],
+  "finished": true
+}

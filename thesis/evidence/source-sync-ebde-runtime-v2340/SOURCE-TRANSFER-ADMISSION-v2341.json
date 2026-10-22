@@ -1,0 +1,102 @@
+{
+  "at": "2026-10-22T00:51:07.881437+00:00",
+  "state": "ADMITTED_ONE_BOUNDED_SOURCE_TRANSFER_NOT_STARTED",
+  "runId": "run_e6054e76e9fc",
+  "rootNativeGoal": "01a112a5-d6bb-74e2-bf7c-ace73cb513b5",
+  "recipient": "term_1f27be31-0284-4366-bb91-30fe538cd30e",
+  "sourceSha": "ebde3a8acf6315f920d03593845f17a1fc65a733",
+  "eligibleStartUtc": "2026-10-22T00:51:07.881437+00:00",
+  "absoluteEndUtc": "2026-10-22T01:01:07.881437+00:00",
+  "maximumActiveSeconds": 120,
+  "maximumSourceBytes": 12582912,
+  "totalFilesBytes": 12135932,
+  "maximumPayloadBytesPerSecond": 262144,
+  "maximumWireBytesPerSecond": 524288,
+  "maximumConcurrentTransfers": 1,
+  "route": "Existing approved Orca worker-to-Personal-notebook file/control route only; no new forward or credentials",
+  "sourceFiles": [
+    {
+      "path": "thesis/evidence/source-sync-ebde-runtime-v2340/aurora-ebde3a8a-runtime.tar.gz",
+      "bytes": 12017639,
+      "sha256": "4489e655cd3b949303ca49be9d8fe52df2c31dd11676ec0ed4ea9ac28fd62c9f"
+    },
+    {
+      "path": "thesis/evidence/source-sync-ebde-runtime-v2340/SOURCE-FILE-INVENTORY.json.gz",
+      "bytes": 114458,
+      "sha256": "8939411a36fc6d6b09b48099ad388a70e09c24269996609669e4fbb6e0342bd6"
+    },
+    {
+      "path": "thesis/evidence/source-sync-ebde-runtime-v2340/ARCHIVE-RECEIPT.json",
+      "bytes": 3835,
+      "sha256": "89ddff582f957f7206960bb3f7a2a8208ea9f8a225616f4fa4fce12f8cc52d22"
+    }
+  ],
+  "inventoryDecompressedSha256": "88c7330effe93499e9c673921e9b12c90c54db53e572885f34bbd40644c8d47b",
+  "mainAtAdmission": {
+    "at": "2026-10-22T00:51:07.913277+00:00",
+    "classification": "VERIFIED_WAIT",
+    "manifestSha256": "9adbf9ba3a7ec0948a087edad3655cf94ee344b3a2371a78d15f188f44150d42",
+    "actors": [
+      {
+        "pid": 3965950,
+        "expectedStartTicks": 139740362,
+        "state": "S",
+        "startTicks": 139740362,
+        "matches": true
+      },
+      {
+        "pid": 3965978,
+        "expectedStartTicks": 139740616,
+        "state": "S",
+        "startTicks": 139740616,
+        "matches": true
+      },
+      {
+        "pid": 3965951,
+        "expectedStartTicks": 139740363,
+        "state": "S",
+        "startTicks": 139740363,
+        "matches": true
+      }
+    ],
+    "epochMeasured": {
+      "attempted": 189,
+      "correct": 189,
+      "failed": 0,
+      "incorrect": 0,
+      "timeouts": 0,
+      "planned": 450
+    },
+    "conditionCountsOnly": {
+      "attempted": 639,
+      "correct": 638,
+      "failed": 1,
+      "incorrect": 0,
+      "unattempted": 261,
+      "planned": 900
+    },
+    "copier": {
+      "receipt": "thesis/campaigns/worker-desktop-k1-orca-relayed-http-remaining450-v2296/receipts/000189.json",
+      "sha256": "f5cfc370c5c5e5df53623241788f1408cb319b8af6fa1bddd4b0eba9aa00717d",
+      "cases": 204,
+      "WAV": 204,
+      "errors": [],
+      "freeBytes": 3217825792
+    },
+    "terminalSummaryPresent": false,
+    "observationOnly": true,
+    "newSutCalls": 0,
+    "processSignals": 0,
+    "measurementInputsNotModifiedByThisObserver": true
+  },
+  "resourceGuards": [
+    "Root worker free disk >=2GiB and original main actors unchanged",
+    "Receiver checks actual own disk/RAM/thermal guards before receiving; preserve dirty notebook Git work",
+    "Source transfer end is earlier of start+120s or absoluteEndUtc; no silent extension or ambiguous resend",
+    "No provider, frozen config/source/manifest, Git index/refs or shared model transfer changes"
+  ],
+  "supersedes": "Old source wait-until-main-terminal restriction only. Prior 774675150B shared assets queue is unneeded for owner-authorized independent public notebook downloads. Closed offline lease unchanged.",
+  "scope": "Source copy only; ordinary independent notebook prep continues under newer owner authorization. This receipt does not claim transfer/build/pilot complete or authorize phone900 overnight START.",
+  "newWorkers": 0,
+  "phoneChecksByRoot": 0
+}

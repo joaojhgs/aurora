@@ -1,0 +1,71 @@
+{
+  "schema": "aurora.thesis.manual-cpu-admission-check.v753",
+  "at": "2026-10-15T23:38:38.769847+00:00",
+  "python": "3.11.17 (main, Oct  3 2026, 01:03:29) [Clang 22.1.3 ]",
+  "scope": "Three NEW manual-entrypoint checks: held existing build reservation refuses setup before model reads/run writes; default controller and launcher refuse before execution. No existing900 tests rerun.",
+  "newMeasuredRequests": 0,
+  "modelsOrServicesLoaded": false,
+  "runDirectoryCreated": false,
+  "existingCpuOwnersLive": {
+    "3038114": true,
+    "3038148": true
+  },
+  "results": [
+    {
+      "command": [
+        "/home/developer/projects/aurora/.venv/bin/python",
+        "thesis/setup_cpu.py",
+        "--source",
+        "/home/developer/projects/aurora/.git/aurora-handoff-import-20261006/cpu-full-audio-v490/source",
+        "--python",
+        "/home/developer/projects/aurora/.git/aurora-handoff-import-20261006/cpu-audio-campaign-v491/env/bin/python",
+        "--stt-dir",
+        "/home/developer/.cache/huggingface/hub/models--Systran--faster-whisper-base/snapshots/ebe41f70d5b6dfa9166e2c581c45c9c0cfc57b66",
+        "--llm",
+        "/home/developer/projects/aurora/.artifacts/local-inference/models/Qwen3.5-0.8B-Q4_0.gguf",
+        "--tts",
+        "/home/developer/projects/aurora/.git/aurora-handoff-import-20261006/cpu-full-audio-v483/models/en_US-ljspeech-medium.onnx",
+        "--tts-config",
+        "/home/developer/projects/aurora/.git/aurora-handoff-import-20261006/cpu-full-audio-v483/models/en_US-ljspeech-medium.onnx.json",
+        "--piper",
+        "/home/developer/projects/aurora/.git/aurora-handoff-import-20261006/cpu-full-audio-v483/env/bin/piper",
+        "--fixture-config",
+        "/home/developer/projects/aurora/.git/aurora-handoff-import-20261006/worker-padded900-prep-v737/runtime/config.json",
+        "--run-dir",
+        "/home/developer/projects/aurora/.git/aurora-handoff-import-20261006/manual-cpu-admission-never-created-v753"
+      ],
+      "expectedExitCode": 2,
+      "exitCode": 2,
+      "durationSeconds": 0.3482782170176506,
+      "stderr": "Aurora's build/measurement reservation is active; preparation refused.",
+      "source": "thesis/setup_cpu.py",
+      "sourceSHA256": "fc710df91ed4e802aac32f57a133d50cede3dfbbc4dd10df60322cc0a21cf6cc"
+    },
+    {
+      "command": [
+        "/home/developer/projects/aurora/.venv/bin/python",
+        "thesis/harness/python-cpu-v1/controller.py"
+      ],
+      "expectedExitCode": 1,
+      "exitCode": 1,
+      "durationSeconds": 0.22010433406103402,
+      "stderr": "Use the manual launcher with explicit measurement opt-in.",
+      "source": "thesis/harness/python-cpu-v1/controller.py",
+      "sourceSHA256": "6f7d51d142e087615372cd8cb37989bfe1cc06df3f12b377ce126b5a4581e229"
+    },
+    {
+      "command": [
+        "/home/developer/projects/aurora/.venv/bin/python",
+        "thesis/launch_cpu.py",
+        "--run-dir",
+        "/home/developer/projects/aurora/.git/aurora-handoff-import-20261006/manual-cpu-admission-never-created-v753"
+      ],
+      "expectedExitCode": 2,
+      "exitCode": 2,
+      "durationSeconds": 0.3557597530307248,
+      "stderr": "usage: launch_cpu.py [-h] --run-dir RUN_DIR [--execute-measurements]\nlaunch_cpu.py: error: Measurement execution requires --execute-measurements.",
+      "source": "thesis/launch_cpu.py",
+      "sourceSHA256": "d6274ecdd99ba0e884766cfd607a203ad77c67180b3e0801d85e9f3b874357ab"
+    }
+  ]
+}

@@ -1,0 +1,45 @@
+{
+  "at": "2026-10-20T21:11:56.732654+00:00",
+  "status": "SAME_K3_PROVIDER_AND_FIRST_ACTUAL_REQUESTER_BACKEND_LIVE_PREMEASUREMENT",
+  "conditionSha256": "540a35ffa68bf41f321562d28601bd281cabfa51b0c55539d77a6c7ba9d1f674",
+  "actors": [
+    {
+      "pid": 3061666,
+      "startTicks": 130910712,
+      "state": "S"
+    },
+    {
+      "pid": 3061871,
+      "startTicks": 130912515,
+      "state": "S"
+    },
+    {
+      "pid": 3061667,
+      "startTicks": 130910740,
+      "state": "S"
+    },
+    {
+      "pid": 3061668,
+      "startTicks": 130910740,
+      "state": "S"
+    }
+  ],
+  "provider": {
+    "controllerPid": 161159,
+    "controllerStartTicks": 28568726,
+    "receiverPid": 161160,
+    "receiverStartTicks": 28568788,
+    "manifestSha256": "ff1d2edc13fe65e646dccad691f4c0a3f83f31b224b796ef5f752402ce298e69",
+    "deadlineUtc": "2026-10-21T12:49:24.259537+00:00",
+    "notRestarted": true
+  },
+  "plannedMeasured": 900,
+  "excludedWarmups": 15,
+  "warmupAdmission": "PENDING_ACTUAL_15_CORRECT_NATIVE_45_ROUTE_90_AND_NEW_GPU",
+  "closedK2": "thesis/campaigns/worker-desktop-k2-p2p-assistant-tts-v1826/CONDITION-CLOSURE-v1906.json",
+  "zeroAudioPreflightHistories": [
+    "thesis/campaigns/worker-desktop-k3-p2p-full-audio-v1915/REQUESTER-PREFLIGHT-TERMINAL-v1918.json",
+    "thesis/campaigns/worker-desktop-k3-p2p-full-audio-v1920/REQUESTER-PREFLIGHT-TERMINAL-v1923.json"
+  ],
+  "sameOriginalGoalActive": true
+}

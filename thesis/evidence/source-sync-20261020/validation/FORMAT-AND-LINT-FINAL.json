@@ -1,0 +1,16 @@
+{
+  "changedOnlyFormatting": [
+    "app/services/gateway/webrtc/rtc_client.py",
+    "app/services/stt_transcription/service.py",
+    "tests/unit/stt_transcription/test_runtime_speech_announcement.py",
+    "app/shared/contracts/models/speech_runtime.py",
+    "scripts/experiments/assistant_local_api_pilot.py"
+  ],
+  "importSorting": [
+    "app/services/stt_transcription/service.py",
+    "tests/unit/stt_transcription/test_runtime_speech_announcement.py"
+  ],
+  "ruffCheckExit": 0,
+  "ruffFormatCheckExit": 0,
+  "frozenMeasuredSourceSnapshotsUnchanged": true
+}

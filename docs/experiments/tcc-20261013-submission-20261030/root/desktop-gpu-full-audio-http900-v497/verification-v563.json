@@ -1,0 +1,857 @@
+{
+  "archive": {
+    "bytes": 35127102,
+    "manifestSHA256": "651260895cf864d92764bcd32852fea38622a1f6aa8c49a66afbb944d0b46725",
+    "membersIncludingManifest": 1868,
+    "payloadMembers": 1867,
+    "sha256": "c0679cba9c544d029b5df45d5cb0a76a3b4045ffb2b23137df656a78c19b53cd"
+  },
+  "attempts": {
+    "correct": 853,
+    "failedOrInterrupted": 0,
+    "incorrect": 47,
+    "measured": 900,
+    "timeouts": 0,
+    "total": 915,
+    "warmupsExcluded": 15
+  },
+  "audio": {
+    "inputBytes": 153644,
+    "inputSHA256": "139fa0c34b6d18600ad9608fd2d11c9389cae2f5f548ce0f4f23b735b176f0b3",
+    "verifiedOutputReferences": 915,
+    "wavDecodingRepeated": false
+  },
+  "cohortId": "aurora-full-audio-capital-v1-desktop-gpu-http-20261015",
+  "collectorOmissions": [
+    {
+      "files": 390,
+      "path": "source-noncritical/",
+      "reason": "remaining source files are retained by path/size/hash in the archived 403-file frozen inventory, not copied as code"
+    },
+    {
+      "bytes": 21489,
+      "path": "harness/controller.py",
+      "reason": "controller source withheld; private fixture/environment handling",
+      "sha256": "a2337af9265073aaf1353b6c990e8bbd52457bc02e65fc1d056b0b9fd1eb5b8b",
+      "sourcePath": "/home/developer/projects/aurora/.git/aurora-handoff-import-20261006/http-full-audio-v497/controller.py"
+    },
+    {
+      "bytes": 15592,
+      "path": "input/launch-config.json",
+      "reason": "authenticated fixture configuration withheld",
+      "sha256": "d0cb41c6dc91d495602911c5405180334ab486f6aec316ee4401c9178ec98fdc",
+      "sourcePath": "/home/developer/projects/aurora/.git/aurora-handoff-import-20261006/http-full-audio-v497/input/launch-config.json"
+    },
+    {
+      "bytes": 15486,
+      "path": "runtime/config.json",
+      "reason": "runtime credential-bearing config withheld",
+      "sha256": "bebe7e82e32da8cafcbf230c3e5b9325e8d97ed435e27bf0cb21171019e24333",
+      "sourcePath": "/home/developer/projects/aurora/.git/aurora-handoff-import-20261006/http-full-audio-v497/runtime/config.json"
+    },
+    {
+      "bytes": 1474370,
+      "path": "runtime/backend.private.log",
+      "reason": "raw backend log withheld",
+      "sha256": "95626034377f94001291e0e60b58d792580238f97b8951f4a27382714422391b",
+      "sourcePath": "/home/developer/projects/aurora/.git/aurora-handoff-import-20261006/http-full-audio-v497/runtime/backend.private.log"
+    },
+    {
+      "bytes": 138,
+      "path": "runtime/absent.env",
+      "reason": "controller environment file withheld",
+      "sha256": "f50b1b9ef94096bbbb7924aaf8bc3de95bae48ae70909d0a7a4a8a7504643b4c",
+      "sourcePath": "/home/developer/projects/aurora/.git/aurora-handoff-import-20261006/http-full-audio-v497/runtime/absent.env"
+    },
+    {
+      "bytes": 20328,
+      "path": "environment/interpreter",
+      "reason": "shared environment executable withheld; exact admitted interpreter identity recorded",
+      "sha256": "89b2f5166fb529c259aedd43e5f718c60e35d58e630cb40ae6accb48fc4f961a",
+      "sourcePath": "/home/developer/.local/share/uv/python/cpython-3.11.11-linux-x86_64-gnu/bin/python3.11"
+    },
+    {
+      "path": "environment/",
+      "reason": "shared environment and dependencies withheld; package versions and interpreter pin remain in frozen manifest",
+      "sourcePath": "/tmp/aurora-root-voice-primary-v426/env"
+    },
+    {
+      "bytes": 2309,
+      "path": "models/stt/0",
+      "reason": "model asset is referenced by frozen manifest and is not copied",
+      "sha256": "56a6d8110d311f19c8f0471e562832c7527f146b567275bfca59fcf7c184da9a",
+      "sourcePath": "/dev/shm/aurora-root-accurate-base-v443/model/config.json"
+    },
+    {
+      "bytes": 145217532,
+      "path": "models/stt/1",
+      "reason": "model asset is referenced by frozen manifest and is not copied",
+      "sha256": "d01c3014881c9c6f3133c182f3d2887eb6ca1c789a7538c5c007196857a0a6a9",
+      "sourcePath": "/dev/shm/aurora-root-accurate-base-v443/model/model.bin"
+    },
+    {
+      "bytes": 2203239,
+      "path": "models/stt/2",
+      "reason": "model asset is referenced by frozen manifest and is not copied",
+      "sha256": "fb7b63191e9bb045082c79fd742a3106a12c99513ab30df4a0d47fa6cb6fd0ab",
+      "sourcePath": "/dev/shm/aurora-root-accurate-base-v443/model/tokenizer.json"
+    },
+    {
+      "bytes": 459861,
+      "path": "models/stt/3",
+      "reason": "model asset is referenced by frozen manifest and is not copied",
+      "sha256": "34ce3fe1c5041027b3f8d42912270993f986dbc4bb34cf27f951e34a1e453913",
+      "sourcePath": "/dev/shm/aurora-root-accurate-base-v443/model/vocabulary.txt"
+    },
+    {
+      "bytes": 563036064,
+      "path": "models/llm/0",
+      "reason": "model asset is referenced by frozen manifest and is not copied",
+      "sha256": "57d1997790d1744fba5b40a7317df71ea5e2acee28c47e78f0cce39c0703f8cf",
+      "sourcePath": "/tmp/aurora-root-gpu-primary-v409/models/Qwen3.5-0.8B-Q4_0.gguf"
+    },
+    {
+      "bytes": 63531379,
+      "path": "models/tts/0",
+      "reason": "model asset is referenced by frozen manifest and is not copied",
+      "sha256": "6f52a751e2349abe7a76735eb09dc1875298c77ea2342ffd2fef79ff81b87f22",
+      "sourcePath": "/tmp/aurora-root-voice-primary-v426/models-v427/piper-ljspeech/en_US-ljspeech-medium.onnx"
+    }
+  ],
+  "frozenSourceAliases": [],
+  "incorrectOutcomes": {
+    "falseCheckCounts": {
+      "all_expected": 47,
+      "assistant_reply_matches_expected_words": 47
+    },
+    "responseGroups": [
+      {
+        "attempts": [
+          {
+            "failedStage": "assistant",
+            "falseChecks": [
+              "all_expected",
+              "assistant_reply_matches_expected_words"
+            ],
+            "idMatches": {
+              "correlation_id_matches": true,
+              "request_id_matches": true,
+              "session_id_matches": true
+            },
+            "ordinal": 869
+          },
+          {
+            "failedStage": "assistant",
+            "falseChecks": [
+              "all_expected",
+              "assistant_reply_matches_expected_words"
+            ],
+            "idMatches": {
+              "correlation_id_matches": true,
+              "request_id_matches": true,
+              "session_id_matches": true
+            },
+            "ordinal": 870
+          },
+          {
+            "failedStage": "assistant",
+            "falseChecks": [
+              "all_expected",
+              "assistant_reply_matches_expected_words"
+            ],
+            "idMatches": {
+              "correlation_id_matches": true,
+              "request_id_matches": true,
+              "session_id_matches": true
+            },
+            "ordinal": 871
+          },
+          {
+            "failedStage": "assistant",
+            "falseChecks": [
+              "all_expected",
+              "assistant_reply_matches_expected_words"
+            ],
+            "idMatches": {
+              "correlation_id_matches": true,
+              "request_id_matches": true,
+              "session_id_matches": true
+            },
+            "ordinal": 872
+          },
+          {
+            "failedStage": "assistant",
+            "falseChecks": [
+              "all_expected",
+              "assistant_reply_matches_expected_words"
+            ],
+            "idMatches": {
+              "correlation_id_matches": true,
+              "request_id_matches": true,
+              "session_id_matches": true
+            },
+            "ordinal": 873
+          },
+          {
+            "failedStage": "assistant",
+            "falseChecks": [
+              "all_expected",
+              "assistant_reply_matches_expected_words"
+            ],
+            "idMatches": {
+              "correlation_id_matches": true,
+              "request_id_matches": true,
+              "session_id_matches": true
+            },
+            "ordinal": 874
+          },
+          {
+            "failedStage": "assistant",
+            "falseChecks": [
+              "all_expected",
+              "assistant_reply_matches_expected_words"
+            ],
+            "idMatches": {
+              "correlation_id_matches": true,
+              "request_id_matches": true,
+              "session_id_matches": true
+            },
+            "ordinal": 875
+          },
+          {
+            "failedStage": "assistant",
+            "falseChecks": [
+              "all_expected",
+              "assistant_reply_matches_expected_words"
+            ],
+            "idMatches": {
+              "correlation_id_matches": true,
+              "request_id_matches": true,
+              "session_id_matches": true
+            },
+            "ordinal": 876
+          },
+          {
+            "failedStage": "assistant",
+            "falseChecks": [
+              "all_expected",
+              "assistant_reply_matches_expected_words"
+            ],
+            "idMatches": {
+              "correlation_id_matches": true,
+              "request_id_matches": true,
+              "session_id_matches": true
+            },
+            "ordinal": 877
+          },
+          {
+            "failedStage": "assistant",
+            "falseChecks": [
+              "all_expected",
+              "assistant_reply_matches_expected_words"
+            ],
+            "idMatches": {
+              "correlation_id_matches": true,
+              "request_id_matches": true,
+              "session_id_matches": true
+            },
+            "ordinal": 878
+          },
+          {
+            "failedStage": "assistant",
+            "falseChecks": [
+              "all_expected",
+              "assistant_reply_matches_expected_words"
+            ],
+            "idMatches": {
+              "correlation_id_matches": true,
+              "request_id_matches": true,
+              "session_id_matches": true
+            },
+            "ordinal": 879
+          },
+          {
+            "failedStage": "assistant",
+            "falseChecks": [
+              "all_expected",
+              "assistant_reply_matches_expected_words"
+            ],
+            "idMatches": {
+              "correlation_id_matches": true,
+              "request_id_matches": true,
+              "session_id_matches": true
+            },
+            "ordinal": 880
+          },
+          {
+            "failedStage": "assistant",
+            "falseChecks": [
+              "all_expected",
+              "assistant_reply_matches_expected_words"
+            ],
+            "idMatches": {
+              "correlation_id_matches": true,
+              "request_id_matches": true,
+              "session_id_matches": true
+            },
+            "ordinal": 881
+          },
+          {
+            "failedStage": "assistant",
+            "falseChecks": [
+              "all_expected",
+              "assistant_reply_matches_expected_words"
+            ],
+            "idMatches": {
+              "correlation_id_matches": true,
+              "request_id_matches": true,
+              "session_id_matches": true
+            },
+            "ordinal": 882
+          },
+          {
+            "failedStage": "assistant",
+            "falseChecks": [
+              "all_expected",
+              "assistant_reply_matches_expected_words"
+            ],
+            "idMatches": {
+              "correlation_id_matches": true,
+              "request_id_matches": true,
+              "session_id_matches": true
+            },
+            "ordinal": 883
+          },
+          {
+            "failedStage": "assistant",
+            "falseChecks": [
+              "all_expected",
+              "assistant_reply_matches_expected_words"
+            ],
+            "idMatches": {
+              "correlation_id_matches": true,
+              "request_id_matches": true,
+              "session_id_matches": true
+            },
+            "ordinal": 884
+          },
+          {
+            "failedStage": "assistant",
+            "falseChecks": [
+              "all_expected",
+              "assistant_reply_matches_expected_words"
+            ],
+            "idMatches": {
+              "correlation_id_matches": true,
+              "request_id_matches": true,
+              "session_id_matches": true
+            },
+            "ordinal": 885
+          },
+          {
+            "failedStage": "assistant",
+            "falseChecks": [
+              "all_expected",
+              "assistant_reply_matches_expected_words"
+            ],
+            "idMatches": {
+              "correlation_id_matches": true,
+              "request_id_matches": true,
+              "session_id_matches": true
+            },
+            "ordinal": 886
+          },
+          {
+            "failedStage": "assistant",
+            "falseChecks": [
+              "all_expected",
+              "assistant_reply_matches_expected_words"
+            ],
+            "idMatches": {
+              "correlation_id_matches": true,
+              "request_id_matches": true,
+              "session_id_matches": true
+            },
+            "ordinal": 887
+          },
+          {
+            "failedStage": "assistant",
+            "falseChecks": [
+              "all_expected",
+              "assistant_reply_matches_expected_words"
+            ],
+            "idMatches": {
+              "correlation_id_matches": true,
+              "request_id_matches": true,
+              "session_id_matches": true
+            },
+            "ordinal": 888
+          },
+          {
+            "failedStage": "assistant",
+            "falseChecks": [
+              "all_expected",
+              "assistant_reply_matches_expected_words"
+            ],
+            "idMatches": {
+              "correlation_id_matches": true,
+              "request_id_matches": true,
+              "session_id_matches": true
+            },
+            "ordinal": 889
+          },
+          {
+            "failedStage": "assistant",
+            "falseChecks": [
+              "all_expected",
+              "assistant_reply_matches_expected_words"
+            ],
+            "idMatches": {
+              "correlation_id_matches": true,
+              "request_id_matches": true,
+              "session_id_matches": true
+            },
+            "ordinal": 890
+          },
+          {
+            "failedStage": "assistant",
+            "falseChecks": [
+              "all_expected",
+              "assistant_reply_matches_expected_words"
+            ],
+            "idMatches": {
+              "correlation_id_matches": true,
+              "request_id_matches": true,
+              "session_id_matches": true
+            },
+            "ordinal": 891
+          },
+          {
+            "failedStage": "assistant",
+            "falseChecks": [
+              "all_expected",
+              "assistant_reply_matches_expected_words"
+            ],
+            "idMatches": {
+              "correlation_id_matches": true,
+              "request_id_matches": true,
+              "session_id_matches": true
+            },
+            "ordinal": 892
+          },
+          {
+            "failedStage": "assistant",
+            "falseChecks": [
+              "all_expected",
+              "assistant_reply_matches_expected_words"
+            ],
+            "idMatches": {
+              "correlation_id_matches": true,
+              "request_id_matches": true,
+              "session_id_matches": true
+            },
+            "ordinal": 893
+          },
+          {
+            "failedStage": "assistant",
+            "falseChecks": [
+              "all_expected",
+              "assistant_reply_matches_expected_words"
+            ],
+            "idMatches": {
+              "correlation_id_matches": true,
+              "request_id_matches": true,
+              "session_id_matches": true
+            },
+            "ordinal": 894
+          },
+          {
+            "failedStage": "assistant",
+            "falseChecks": [
+              "all_expected",
+              "assistant_reply_matches_expected_words"
+            ],
+            "idMatches": {
+              "correlation_id_matches": true,
+              "request_id_matches": true,
+              "session_id_matches": true
+            },
+            "ordinal": 895
+          },
+          {
+            "failedStage": "assistant",
+            "falseChecks": [
+              "all_expected",
+              "assistant_reply_matches_expected_words"
+            ],
+            "idMatches": {
+              "correlation_id_matches": true,
+              "request_id_matches": true,
+              "session_id_matches": true
+            },
+            "ordinal": 896
+          },
+          {
+            "failedStage": "assistant",
+            "falseChecks": [
+              "all_expected",
+              "assistant_reply_matches_expected_words"
+            ],
+            "idMatches": {
+              "correlation_id_matches": true,
+              "request_id_matches": true,
+              "session_id_matches": true
+            },
+            "ordinal": 897
+          },
+          {
+            "failedStage": "assistant",
+            "falseChecks": [
+              "all_expected",
+              "assistant_reply_matches_expected_words"
+            ],
+            "idMatches": {
+              "correlation_id_matches": true,
+              "request_id_matches": true,
+              "session_id_matches": true
+            },
+            "ordinal": 898
+          },
+          {
+            "failedStage": "assistant",
+            "falseChecks": [
+              "all_expected",
+              "assistant_reply_matches_expected_words"
+            ],
+            "idMatches": {
+              "correlation_id_matches": true,
+              "request_id_matches": true,
+              "session_id_matches": true
+            },
+            "ordinal": 899
+          },
+          {
+            "failedStage": "assistant",
+            "falseChecks": [
+              "all_expected",
+              "assistant_reply_matches_expected_words"
+            ],
+            "idMatches": {
+              "correlation_id_matches": true,
+              "request_id_matches": true,
+              "session_id_matches": true
+            },
+            "ordinal": 900
+          },
+          {
+            "failedStage": "assistant",
+            "falseChecks": [
+              "all_expected",
+              "assistant_reply_matches_expected_words"
+            ],
+            "idMatches": {
+              "correlation_id_matches": true,
+              "request_id_matches": true,
+              "session_id_matches": true
+            },
+            "ordinal": 901
+          },
+          {
+            "failedStage": "assistant",
+            "falseChecks": [
+              "all_expected",
+              "assistant_reply_matches_expected_words"
+            ],
+            "idMatches": {
+              "correlation_id_matches": true,
+              "request_id_matches": true,
+              "session_id_matches": true
+            },
+            "ordinal": 902
+          },
+          {
+            "failedStage": "assistant",
+            "falseChecks": [
+              "all_expected",
+              "assistant_reply_matches_expected_words"
+            ],
+            "idMatches": {
+              "correlation_id_matches": true,
+              "request_id_matches": true,
+              "session_id_matches": true
+            },
+            "ordinal": 903
+          },
+          {
+            "failedStage": "assistant",
+            "falseChecks": [
+              "all_expected",
+              "assistant_reply_matches_expected_words"
+            ],
+            "idMatches": {
+              "correlation_id_matches": true,
+              "request_id_matches": true,
+              "session_id_matches": true
+            },
+            "ordinal": 904
+          },
+          {
+            "failedStage": "assistant",
+            "falseChecks": [
+              "all_expected",
+              "assistant_reply_matches_expected_words"
+            ],
+            "idMatches": {
+              "correlation_id_matches": true,
+              "request_id_matches": true,
+              "session_id_matches": true
+            },
+            "ordinal": 905
+          },
+          {
+            "failedStage": "assistant",
+            "falseChecks": [
+              "all_expected",
+              "assistant_reply_matches_expected_words"
+            ],
+            "idMatches": {
+              "correlation_id_matches": true,
+              "request_id_matches": true,
+              "session_id_matches": true
+            },
+            "ordinal": 906
+          },
+          {
+            "failedStage": "assistant",
+            "falseChecks": [
+              "all_expected",
+              "assistant_reply_matches_expected_words"
+            ],
+            "idMatches": {
+              "correlation_id_matches": true,
+              "request_id_matches": true,
+              "session_id_matches": true
+            },
+            "ordinal": 907
+          },
+          {
+            "failedStage": "assistant",
+            "falseChecks": [
+              "all_expected",
+              "assistant_reply_matches_expected_words"
+            ],
+            "idMatches": {
+              "correlation_id_matches": true,
+              "request_id_matches": true,
+              "session_id_matches": true
+            },
+            "ordinal": 908
+          },
+          {
+            "failedStage": "assistant",
+            "falseChecks": [
+              "all_expected",
+              "assistant_reply_matches_expected_words"
+            ],
+            "idMatches": {
+              "correlation_id_matches": true,
+              "request_id_matches": true,
+              "session_id_matches": true
+            },
+            "ordinal": 909
+          },
+          {
+            "failedStage": "assistant",
+            "falseChecks": [
+              "all_expected",
+              "assistant_reply_matches_expected_words"
+            ],
+            "idMatches": {
+              "correlation_id_matches": true,
+              "request_id_matches": true,
+              "session_id_matches": true
+            },
+            "ordinal": 910
+          },
+          {
+            "failedStage": "assistant",
+            "falseChecks": [
+              "all_expected",
+              "assistant_reply_matches_expected_words"
+            ],
+            "idMatches": {
+              "correlation_id_matches": true,
+              "request_id_matches": true,
+              "session_id_matches": true
+            },
+            "ordinal": 911
+          },
+          {
+            "failedStage": "assistant",
+            "falseChecks": [
+              "all_expected",
+              "assistant_reply_matches_expected_words"
+            ],
+            "idMatches": {
+              "correlation_id_matches": true,
+              "request_id_matches": true,
+              "session_id_matches": true
+            },
+            "ordinal": 912
+          },
+          {
+            "failedStage": "assistant",
+            "falseChecks": [
+              "all_expected",
+              "assistant_reply_matches_expected_words"
+            ],
+            "idMatches": {
+              "correlation_id_matches": true,
+              "request_id_matches": true,
+              "session_id_matches": true
+            },
+            "ordinal": 913
+          },
+          {
+            "failedStage": "assistant",
+            "falseChecks": [
+              "all_expected",
+              "assistant_reply_matches_expected_words"
+            ],
+            "idMatches": {
+              "correlation_id_matches": true,
+              "request_id_matches": true,
+              "session_id_matches": true
+            },
+            "ordinal": 914
+          },
+          {
+            "failedStage": "assistant",
+            "falseChecks": [
+              "all_expected",
+              "assistant_reply_matches_expected_words"
+            ],
+            "idMatches": {
+              "correlation_id_matches": true,
+              "request_id_matches": true,
+              "session_id_matches": true
+            },
+            "ordinal": 915
+          }
+        ],
+        "count": 47,
+        "ordinals": [
+          869,
+          870,
+          871,
+          872,
+          873,
+          874,
+          875,
+          876,
+          877,
+          878,
+          879,
+          880,
+          881,
+          882,
+          883,
+          884,
+          885,
+          886,
+          887,
+          888,
+          889,
+          890,
+          891,
+          892,
+          893,
+          894,
+          895,
+          896,
+          897,
+          898,
+          899,
+          900,
+          901,
+          902,
+          903,
+          904,
+          905,
+          906,
+          907,
+          908,
+          909,
+          910,
+          911,
+          912,
+          913,
+          914,
+          915
+        ],
+        "response": "The capital of France is Paris.",
+        "responseSHA256": "a1b7eb2ee7a6aded8dda4e6cf30826f5afffb28a5597ee9389e91eb326d4e319"
+      }
+    ]
+  },
+  "latencyMs": {
+    "measuredAllIncludingIncorrect": {
+      "denominator": 900,
+      "type7": {
+        "p90": 11637.4428838,
+        "p95": 12029.8744915
+      }
+    },
+    "stagePercentilesAreIndependent": true,
+    "stages": {
+      "assistant": {
+        "type7Ms": {
+          "p50": 5763.707173500001,
+          "p90": 6245.155023,
+          "p95": 6617.536526249999
+        },
+        "validMeasuredCount": 900
+      },
+      "stt": {
+        "type7Ms": {
+          "p50": 3322.0624005,
+          "p90": 3732.9782218,
+          "p95": 3996.0484233499997
+        },
+        "validMeasuredCount": 900
+      },
+      "tts": {
+        "type7Ms": {
+          "p50": 1490.0685939999998,
+          "p90": 1757.9350856,
+          "p95": 2182.43624225
+        },
+        "validMeasuredCount": 900
+      }
+    },
+    "successfulCorrect": {
+      "denominator": 853,
+      "type7": {
+        "p90": 11625.1542258,
+        "p95": 12000.3750672
+      }
+    }
+  },
+  "measuredOutcomes": {
+    "completed_correct": 853,
+    "completed_incorrect": 47
+  },
+  "schema": "aurora.desktop_http_audio_seal_verification.v1",
+  "sourceHashValidation": "collector_only",
+  "unknowns": [
+    "queue",
+    "first_token",
+    "first_audio",
+    "playback",
+    "physical_audibility"
+  ],
+  "verifiedAt": "2026-10-15T10:21:59.787730+00:00",
+  "warmupOutcomes": {
+    "completed_correct": 15
+  }
+}

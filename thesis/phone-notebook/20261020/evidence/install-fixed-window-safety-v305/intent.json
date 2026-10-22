@@ -1,0 +1,12 @@
+{
+  "controlDeadline": "2026-10-22T11:15:00Z",
+  "explicitNewline": true,
+  "host": "ssh:ssh-sem-notebook-personal",
+  "incarnation": "328cd72f-c7ea-49ff-a2db-b9275b085037",
+  "remoteResult": "/home/developer/projects/aurora/thesis/phone-notebook/20261020/evidence/install-fixed-window-safety-v305.json",
+  "rootAdmissionMessage": "existing owner fixed window: one finite safe phone return and existing read-only retirement collector updated for proven replacement epoch",
+  "script": "scripts/install_fixed_window_safety_v305.py",
+  "scriptSha256": "3d6ccbf03fb4d1363c6a33f96ec73ca0d4ab3ea44d2cde30c6d72580308e05c2",
+  "singleSend": true,
+  "terminal": "term_a2ed5feb-7c92-48e4-bd88-d1b0e6737989"
+}

@@ -1,0 +1,13 @@
+{
+  "sourceHashes": {
+    "stage_adapter.py": "f678712c75a50146194ccb34331fab8d995f057461e565be99be8d69c2b364a6",
+    "provider_controller.py": "82413b36c2de85cc09d1661e17c8de5c70817062fd67f8e62b0a851c34cdf6aa",
+    "paired_case.py": "380296b45e11e8ad3398a70cb8bdf667d91627dbc64090fd3ad9d8d7562b2c6b",
+    "k3_composition.py": "777bfb6abf34a1485a38c1076c86a06776de4017f1f27715b326403aba15effa",
+    "prepare_and_launch.py": "553256a9079c952a4a26aba1e0a3e95e5abdf0f91ec3cf1677f06d47daddf302"
+  },
+  "parentComposition": "thesis/harness/distributed-k3-http-remaining-v1682",
+  "strictCorrectnessChanged": false,
+  "providerProductionSourceChanged": false,
+  "delta": "Finite local typed-bus task and existing peer bearer HTTP header only"
+}

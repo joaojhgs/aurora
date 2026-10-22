@@ -1,0 +1,19 @@
+{
+  "at": "2026-10-16T07:58:50.709274+00:00",
+  "source": ".git/aurora-handoff-import-20261006/v964-desktop-app-build-metadata-RESULT.json",
+  "canonical": "thesis/validation/desktop-app-build-readiness-v964.json",
+  "bytes": 1590,
+  "sha256": "0a4e9496598cc42f291322f9185f30fcfae99d0f6af676465bf5c8f5be1ac44d",
+  "scope": "Read-only current existing Personal desktop control/display/toolchain/source/capacity metadata; no executable test/build/app launch",
+  "plainTerminal": "term_00a86bfb-1ede-4fbf-8b5e-72e2a2629f62",
+  "incarnation": "9d7a67b9-7786-4073-8c58-b9c260aa643f",
+  "nextCursor": 181421,
+  "sourceFilesDifferFromApprovedWorkerApp": true,
+  "projectFreeObservedBytes": 25403392,
+  "tmpFreeObservedBytes": 5888159744,
+  "buildAdmission": "NOT_ADMITTED_CURRENT_APP_SOURCE_ALIGNMENT_AND_BOUNDED_BUILD_CAPACITY_REQUIRED",
+  "selectedArtifactPathsOnly": "No artifact at the four specific debug/release aurora-tauri locations probed; not a claim of global artifact absence",
+  "securityAccessCredentialInstallationOrCleanupChanges": false,
+  "firstSNHTTPGate": false,
+  "frozenPythonProviderSnapshotUnaffected": true
+}

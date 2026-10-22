@@ -1,0 +1,46 @@
+{
+  "message": "msg_b54f6158814e",
+  "at": "2026-10-15T03:40:26Z",
+  "cpuReadiness": {
+    "actualStartedAt": "2026-10-15T03:39:56.917094Z",
+    "controllerPID": 2216218,
+    "childPID": 2216285,
+    "flowCapSeconds": 180,
+    "outerCapSeconds": 300,
+    "outerDeadline": "2026-10-15T03:44:56.917094Z",
+    "threads": 2,
+    "GPU": false,
+    "nMeasured": 0,
+    "exactWAV13Core7ModelHashesMatchedBeforeStart": true,
+    "extraAlignedVersions": {
+      "av": "16.0.1",
+      "tokenizers": "0.23.3",
+      "piper-phonemize": "1.1.0",
+      "langchain": "0.3.25",
+      "langchain-core": "0.3.62",
+      "langchain-community": "0.3.24",
+      "langgraph": "0.4.6",
+      "pydantic": "2.12.5",
+      "scipy": "1.15.1",
+      "huggingface-hub": "1.16.1"
+    },
+    "sourceReviewPrefix": "40c3162e"
+  },
+  "desktopV484": {
+    "nWarmup": 0,
+    "nAudio": 0,
+    "nMeasured": 0,
+    "exitCode": 1,
+    "durationSeconds": 12.537,
+    "retiredAt": "2026-10-15T03:39:04Z",
+    "locksFree": true,
+    "reason": "case predicate expected en; actual retained language en-us"
+  },
+  "desktopV485": {
+    "fix": "single-line admission predicate en-US -> en-us against retained actual configuration",
+    "sourceReviewPrefix": "cf394862",
+    "purePredicateAdmissionBeforeModelRun": true,
+    "actual900LaunchVerified": false
+  },
+  "phase2MeasuredAllowed": false
+}

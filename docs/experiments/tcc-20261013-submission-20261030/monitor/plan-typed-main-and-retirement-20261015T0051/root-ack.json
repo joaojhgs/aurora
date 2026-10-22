@@ -1,0 +1,11 @@
+{
+  "message": "msg_c224254c692b",
+  "at": "2026-10-15T00:53:10Z",
+  "delivery": "delivery_9cdcf0d8fe08",
+  "lines": 1543,
+  "sha256": "0dbcb1a05f524199144ca096f11a63870a3bd93139e2b139323aad6cf81341b3",
+  "newLines": 21,
+  "oldPrefixUnchanged": true,
+  "receiptRead": true,
+  "diffRead": true
+}

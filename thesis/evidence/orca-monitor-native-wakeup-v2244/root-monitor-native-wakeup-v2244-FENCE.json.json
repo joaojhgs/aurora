@@ -1,0 +1,30 @@
+{
+  "id": "101e14c0-c76d-4220-99fb-4eced2e2a05b",
+  "ok": true,
+  "result": {
+    "terminal": {
+      "handle": "term_2eab47ed-ab9b-4e35-bd9b-fc068c60e3fc",
+      "ptyId": "ssh:ssh-oci-coding-worker@@pty2:47ec4130-fe3d-49e5-91b0-384bab6e8b15:19",
+      "incarnationId": "37e50d9c-6cf5-4e28-a63b-f2bc3eed5661",
+      "orphaned": false,
+      "worktreeId": "314e7b89-8f19-4535-9443-22b342aedff7::/home/developer/projects/aurora",
+      "worktreePath": "/home/developer/projects/aurora",
+      "branch": "refs/heads/codex/aurora-native-speech-routing-20261007",
+      "tabId": "012973e7-fec0-48be-9587-06bf47823aa0",
+      "leafId": "8f67f02b-58f5-4ed4-a7e8-0042dae84d0e",
+      "title": "Report task outcome | aurora",
+      "connected": true,
+      "writable": true,
+      "lastOutputAt": 1792599678825,
+      "preview": "warmups, and new measurements remain unverified. The monitor is                 still blocked, and the time-budget mismatch is unresolved.                      Next: Reconcile the existing provider launch, verify measurement                restart, and determine what fits within the original budget.",
+      "executionHostId": "ssh:ssh-oci-coding-worker",
+      "agentIdentity": "codex",
+      "paneRuntimeId": -1,
+      "rendererGraphEpoch": 0,
+      "agentWait": null
+    }
+  },
+  "_meta": {
+    "runtimeId": "cc9e3275-28c6-4c45-85cc-bdcd2262aa7d"
+  }
+}

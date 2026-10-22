@@ -1,0 +1,24 @@
+{
+  "at": "2026-10-20T22:19:23.894181+00:00",
+  "corrections": [
+    {
+      "path": "thesis/evidence/k3-retired-provider-custody-v1964/provider-1/CUSTODY.json",
+      "beforeSha256": "2ef9d8025ad1e3c30b60791206acac031d5ab5d56a18439770d31ff58db67e90",
+      "afterSha256": "93e8347669cbe8a7e178ab226585546030952ddb706ddde51fcf1c13675c27a6",
+      "reason": "Correct an unverified free-text note; neither seal had a literal escaped newline suffix",
+      "actualTrailingOrdinals": [
+        10
+      ]
+    },
+    {
+      "path": "thesis/evidence/k3-retired-provider-custody-v1964/provider-2/CUSTODY.json",
+      "beforeSha256": "3b5a1731a66a6187b8a0dbe5fd87a721d5b5e8fa07a79799f5740adbab3959ea",
+      "afterSha256": "acadf99406fd0f757cce4da4ee51c429f96c9e42d602370aa1ff8a42760b30dc",
+      "reason": "Correct an unverified free-text note; neither seal had a literal escaped newline suffix",
+      "actualTrailingOrdinals": [
+        10
+      ]
+    }
+  ],
+  "allScientificAndOriginalArchiveBytesUnchanged": true
+}

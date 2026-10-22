@@ -1,0 +1,15 @@
+{
+  "id": "msg_1a099c5453cf",
+  "run_id": "run_e6054e76e9fc",
+  "delivery_contract": "current_delivery",
+  "from_handle": "term_2eab47ed-ab9b-4e35-bd9b-fc068c60e3fc",
+  "to_handle": "run:run_e6054e76e9fc",
+  "subject": "Monitor verified v1440 custody result; branch closed",
+  "body": "Independently read v1440 RECEIPT1896B/85d8169d and actual result2019B/46314ad5; pins match. Original Personal provider/copier live before/after;1060 repo files142516245B size-verified, missing0/mismatch0/errors[], prefixes live/incomplete, control released15046. No new raw rehash/transfer/SUT/test/Personal command by monitor; worker transferred541/93627933 unchanged. Closure report attached; branch CLOSED until genuine need/terminal, no additional review/check request. Original monitor ACTIVE/fullmatrix incomplete.",
+  "type": "status",
+  "priority": "normal",
+  "thread_id": "msg_bb6bc04abbc5",
+  "payload": "{\"taskId\":\"task_d7ea336050cf\",\"dispatchId\":\"ctx_37b4d0a3c14f\",\"reportPath\":\".omx/evidence/orca-monitor-20261010/PROVIDER-CUSTODY-READ-CLOSED-20261018T025116.json\"}",
+  "created_at": "2026-10-18T02:51:36Z",
+  "delivered_at": null
+}

@@ -1,0 +1,64 @@
+{
+  "at": "2026-10-20T03:21:10.701065+00:00",
+  "status": "EXACT_SPEECH_ROUTE_ADMISSION_RUNNING_BEFORE_FURTHER_AUDIO",
+  "nativeGoal": "01a112a5-d6bb-74e2-bf7c-ace73cb513b5",
+  "nativeStatus": "active",
+  "run": "run_e6054e76e9fc",
+  "originalMonitor": "ctx_37b4d0a3c14f",
+  "currentRequester": {
+    "at": "2026-10-20T03:19:16.171132+00:00",
+    "cell": "/home/developer/projects/aurora/.git/aurora-handoff-import-20261006/distributed-k1-mesh-cell-v1702",
+    "conditionManifestSha256": "4877082de39b7be8fe5d8639d148333d97d96176f3e1e060d1925fe9907bfd0e",
+    "controllerPid": 2309829,
+    "controllerStartTicks": 124481676,
+    "excludedWarmups": 15,
+    "measurementAdmitted": false,
+    "newOrcaWorker": false,
+    "plannedMeasured": 900,
+    "providerReceiver": {
+      "pid": 3159877,
+      "startTicks": 22126487
+    },
+    "sourceRoot": "/home/developer/projects/aurora/.git/aurora-handoff-import-20261006/distributed-k1-mesh-requester-v1702",
+    "startupIsNotCompletion": true
+  },
+  "currentRequesterBackendPid": 2309839,
+  "providerController": {
+    "pid": 3159861,
+    "startTicks": 22126465
+  },
+  "providerReceiver": {
+    "pid": 3159877,
+    "startTicks": 22126487
+  },
+  "providerManifestSha256": "ee66b83078410588f3af09db6f496319ea10e75ad6c4074c8180a8d2f5728543",
+  "providerReservation": "Root; existing Task-local approved profile; no restart, pairing or grant changes",
+  "k3": "900 collected/885correct12format3transport, final custody/native/resource complete",
+  "priorP2PWarmup": {
+    "cohort": "V1700",
+    "attempted": 1,
+    "correctSttAndLlm": true,
+    "tts": "Routing rejected before any PeerBridge call",
+    "correct": 0,
+    "measured": 0,
+    "rawSaved": "thesis/campaigns/worker-desktop-k1-p2p-tts-v1700/attempts/attempt-0001-warmup.jsonl",
+    "rawSha256": "a52df6531bee958cc434d5afd4e9e0af6c89d4f0ed284f31134bdecccc03db1d"
+  },
+  "currentAdmissionChange": "Normal ExplainRoute includes the same non-null speech constraints as real TTSSynthesizeRequest; 120s finite metadata-only readiness before warmup1",
+  "newP2PMeasured": 0,
+  "nextAction": "Read current V1702 exact speech admission outcome at natural120s boundary; resolve exact route/capability rejection if present. Once actually admitted,15 ordinary excluded fullaudio/native-correlated warmups then900 measured. No blind rerun or closedbaseline replay.",
+  "android": {
+    "state": "UNKNOWN",
+    "existingPersonalAdbServer": "OKAY; devices-l empty in Personal container",
+    "originalWaydroidBinding": "192.168.240.112:5555",
+    "owningHostBridgeRead": "distrobox-host-exec python3 returned127/no output; original Orca screenshot observer error99984f91 preserved",
+    "noDaemonOrAccessChange": true
+  },
+  "methodology": {
+    "path": "thesis/methodology/owner-requirements-20261020-94e9e10e.md",
+    "bytes": 637437,
+    "sha256": "94e9e10e579499fd619ca2d2471c916978767d0b960f31d339696c824628cf02",
+    "soleWriter": "original monitor"
+  },
+  "pendingAcceptedPersonalControl": null
+}

@@ -1,0 +1,8 @@
+{
+  "scope": "Same immutable authority values; original host files retained",
+  "workerPrettyJsonWithFinalNewlineSha256": "d0e80e307425eb9e84b4c5184a51adcca1be7c7df9c41ad0e822990847d4a066",
+  "notebookOriginalJsonWithoutFinalNewlineSha256": "3cdda65db3e62e0d35e664d0bee19cb091a6a82786fc116fc83f2abedce2ca9b",
+  "startAndDeadlineSemanticallyEqual": true,
+  "sourceRuntimeUnaffected": true,
+  "existingProviderResourceReceiptFieldRefersToWorkerSerialization": true
+}

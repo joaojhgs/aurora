@@ -1,0 +1,27 @@
+{
+  "at": "2026-10-22T05:41:16.231366+00:00",
+  "operation": "k1-http-current-provider-retirement-v2400",
+  "pid": 180937,
+  "startTicks": 142609619,
+  "exitCode": 0,
+  "originalRequestMustNotBeResent": true,
+  "signalsByRootWrapper": 0,
+  "remoteStatus": "original_provider_eof_delta_archive",
+  "providerRetired": true,
+  "actors": [
+    {
+      "pid": 1820862,
+      "state": "absent",
+      "sameStart": false
+    },
+    {
+      "pid": 1820863,
+      "state": "absent",
+      "sameStart": false
+    }
+  ],
+  "archive": "/home/developer/projects/aurora/thesis/campaigns/worker-desktop-k1-http-provider-v2296/terminal-v2400/provider-eof-delta-v2400.tar.gz",
+  "archiveBytes": 670362,
+  "archiveSha256": "252799b425f284ecd66c79718405bf3bc51d28f0b4e616906fda5052f87cc6d2",
+  "receiptSha256": "4cb766153b708a78352d1cfc2500b83b88bae6048bdb2715b0d5d9069dbb0dc8"
+}

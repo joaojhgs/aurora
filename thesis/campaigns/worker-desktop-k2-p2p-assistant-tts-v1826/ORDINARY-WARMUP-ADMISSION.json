@@ -1,0 +1,145 @@
+{
+  "actualGpu": {
+    "actualOffloadedLayers": 25,
+    "actualTotalLayers": 25,
+    "backend": "Vulkan",
+    "configuredLayers": 100,
+    "nativeLogPrefix": {
+      "bytes": 66910,
+      "sha256": "5d2784a53b4382e6f60fadc1092530bfb5d32adbdd5451e843ba392c2105c8c1",
+      "source": "/home/developer/projects/aurora/.git/aurora-handoff-import-20261006/k2-mesh-provider-v1812/backend.private.log"
+    },
+    "notCrossHostClockSubtraction": true,
+    "receiverPid": 3938202,
+    "receiverStartTicks": 26503353,
+    "selectedNativeLines": [
+      {
+        "lineNumber": 101,
+        "text": "ggml_vulkan: Found 1 Vulkan devices:"
+      },
+      {
+        "lineNumber": 103,
+        "text": "llama_model_load_from_file_impl: using device Vulkan0 (AMD Radeon RX 7600 (RADV NAVI33)) (0000:03:00.0) - 8129 MiB free"
+      },
+      {
+        "lineNumber": 253,
+        "text": "load_tensors: layer   0 assigned to device Vulkan0, is_swa = 0"
+      },
+      {
+        "lineNumber": 254,
+        "text": "load_tensors: layer   1 assigned to device Vulkan0, is_swa = 0"
+      },
+      {
+        "lineNumber": 255,
+        "text": "load_tensors: layer   2 assigned to device Vulkan0, is_swa = 0"
+      },
+      {
+        "lineNumber": 256,
+        "text": "load_tensors: layer   3 assigned to device Vulkan0, is_swa = 0"
+      },
+      {
+        "lineNumber": 257,
+        "text": "load_tensors: layer   4 assigned to device Vulkan0, is_swa = 0"
+      },
+      {
+        "lineNumber": 258,
+        "text": "load_tensors: layer   5 assigned to device Vulkan0, is_swa = 0"
+      },
+      {
+        "lineNumber": 259,
+        "text": "load_tensors: layer   6 assigned to device Vulkan0, is_swa = 0"
+      },
+      {
+        "lineNumber": 260,
+        "text": "load_tensors: layer   7 assigned to device Vulkan0, is_swa = 0"
+      },
+      {
+        "lineNumber": 261,
+        "text": "load_tensors: layer   8 assigned to device Vulkan0, is_swa = 0"
+      },
+      {
+        "lineNumber": 262,
+        "text": "load_tensors: layer   9 assigned to device Vulkan0, is_swa = 0"
+      },
+      {
+        "lineNumber": 263,
+        "text": "load_tensors: layer  10 assigned to device Vulkan0, is_swa = 0"
+      },
+      {
+        "lineNumber": 264,
+        "text": "load_tensors: layer  11 assigned to device Vulkan0, is_swa = 0"
+      },
+      {
+        "lineNumber": 265,
+        "text": "load_tensors: layer  12 assigned to device Vulkan0, is_swa = 0"
+      },
+      {
+        "lineNumber": 266,
+        "text": "load_tensors: layer  13 assigned to device Vulkan0, is_swa = 0"
+      },
+      {
+        "lineNumber": 267,
+        "text": "load_tensors: layer  14 assigned to device Vulkan0, is_swa = 0"
+      },
+      {
+        "lineNumber": 268,
+        "text": "load_tensors: layer  15 assigned to device Vulkan0, is_swa = 0"
+      },
+      {
+        "lineNumber": 269,
+        "text": "load_tensors: layer  16 assigned to device Vulkan0, is_swa = 0"
+      },
+      {
+        "lineNumber": 270,
+        "text": "load_tensors: layer  17 assigned to device Vulkan0, is_swa = 0"
+      },
+      {
+        "lineNumber": 271,
+        "text": "load_tensors: layer  18 assigned to device Vulkan0, is_swa = 0"
+      },
+      {
+        "lineNumber": 272,
+        "text": "load_tensors: layer  19 assigned to device Vulkan0, is_swa = 0"
+      },
+      {
+        "lineNumber": 273,
+        "text": "load_tensors: layer  20 assigned to device Vulkan0, is_swa = 0"
+      },
+      {
+        "lineNumber": 274,
+        "text": "load_tensors: layer  21 assigned to device Vulkan0, is_swa = 0"
+      },
+      {
+        "lineNumber": 275,
+        "text": "load_tensors: layer  22 assigned to device Vulkan0, is_swa = 0"
+      },
+      {
+        "lineNumber": 276,
+        "text": "load_tensors: layer  23 assigned to device Vulkan0, is_swa = 0"
+      },
+      {
+        "lineNumber": 277,
+        "text": "load_tensors: layer  24 assigned to device Vulkan0, is_swa = 0"
+      },
+      {
+        "lineNumber": 602,
+        "text": "load_tensors: offloaded 25/25 layers to GPU"
+      },
+      {
+        "lineNumber": 604,
+        "text": "load_tensors:      Vulkan0 model buffer size =   526.50 MiB"
+      }
+    ]
+  },
+  "at": "2026-10-20T16:06:00.462156+00:00",
+  "excludedWarmups": 15,
+  "measured900ForecastSecondsWith20PercentPlus300": 19623.937121543993,
+  "measuredAdmission": "unchanged runner independently validates local STT and remote proof",
+  "proofSha256": "e95e22998292ee5035b243f5a97dfd6825a8ef36403304a525b88a04ed8e6490",
+  "providerRemainingSeconds": 53950.104593,
+  "remoteModelJoins": 30,
+  "requesterRemainingSeconds": 51882.263869,
+  "status": "K2_15_ORDINARY_WARMUPS_REMOTE_NATIVE_GPU_ROUTE_PROOF_PUBLISHED",
+  "sutCallsByFinalizer": 0,
+  "warmupP95MsType7": 17892.534371799993
+}

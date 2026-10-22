@@ -1,0 +1,34 @@
+{
+  "_meta": {
+    "runtimeId": "cc9e3275-28c6-4c45-85cc-bdcd2262aa7d"
+  },
+  "id": "574f60ae-d8d8-4af6-8a53-bc426a10b11f",
+  "ok": true,
+  "result": {
+    "terminal": {
+      "handle": "term_a2ed5feb-7c92-48e4-bd88-d1b0e6737989",
+      "latestCursor": "468",
+      "limited": false,
+      "nextCursor": "468",
+      "oldestCursor": "171",
+      "returnedLineCount": 12,
+      "source": "stream",
+      "status": "running",
+      "tail": [
+        "                                                     >....",
+        "",
+        "Traceback (most recent call last):",
+        "  File \"<string>\", line 1, in <module>",
+        "  File \"approved-notebook-script\", line 5, in <module>",
+        "  File \"/home/developer/.local/share/uv/python/cpython-3.11.14-linux-x86_64-gnu/lib/python3.11/pathlib.py\", line 1058, in read_text",
+        "    with self.open(mode='r', encoding=encoding, errors=errors) as f:",
+        "         ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^",
+        "  File \"/home/developer/.local/share/uv/python/cpython-3.11.14-linux-x86_64-gnu/lib/python3.11/pathlib.py\", line 1044, in open",
+        "    return io.open(self, mode, buffering, encoding, errors, newline)",
+        "           ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^",
+        "FileNotFoundError: [Errno 2] No such file or directory: '/home/developer/projects/aurora/thesis/phone-notebook/20261020/templates/notebook-exact-model-overlay.json'"
+      ],
+      "truncated": false
+    }
+  }
+}

@@ -1,0 +1,48 @@
+{
+  "status": "LIVE",
+  "cell": 1,
+  "route": "local-only",
+  "planned_measured_in_cell": 100,
+  "counts": {
+    "warmups_correct": 5,
+    "measured_correct": 28,
+    "other_observed_outcomes": 0
+  },
+  "observed_at": "2026-10-14T07:49:32.414314+00:00",
+  "campaign_complete": false,
+  "cell_complete": false,
+  "exec_session_id": 33217,
+  "root_pid_pgid": 1305953,
+  "owned_cell_pid_pgid": 1311134,
+  "resource_sample": {
+    "phase": "cell",
+    "monotonic_ns": 742633005828652,
+    "observed_at": "2026-10-14T07:49:32.414314+00:00",
+    "cpu_ticks_raw": [
+      12513706,
+      21549234,
+      2601158,
+      110216821,
+      853705,
+      0,
+      102709,
+      658785,
+      0,
+      0
+    ],
+    "memory": {
+      "MemTotal_kib": 12213568,
+      "MemAvailable_kib": 5414424,
+      "SwapTotal_kib": 0,
+      "SwapFree_kib": 0
+    },
+    "load_avg": [
+      7.03125,
+      6.70263671875,
+      5.67822265625
+    ],
+    "free_artifact_disk_bytes": 2420416512,
+    "host_network_rx_bytes_sum": 65450989332,
+    "host_network_tx_bytes_sum": 22168518934
+  }
+}

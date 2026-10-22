@@ -1,0 +1,28 @@
+{
+  "archiveBytes": 1759811,
+  "archiveMembers": 111,
+  "archivePath": "/home/developer/projects/aurora/docs/experiments/tcc-20261013-submission-20261030/root/desktop-gpu-padded-http-incomplete-v684/aurora-desktop-gpu-padded-http-incomplete-v684.zip",
+  "archiveSHA256": "53396a777a5f1edef786c48b2e5897bd05fc3b449c2ebe6999a87f7af86fa541",
+  "at": "2026-10-15T18:35:35.175674+00:00",
+  "failureCause": "controller project-disk reserve guard: observed18980864B below80000000B; source of transient host storage drop unknown",
+  "frozenManifestSHA256": "f1c270de7ef94b867f2f969f763b0c4c9a46a66f5329b8b3b011b7926f30c626",
+  "host": "personal.skyron-server",
+  "measuredAttempted": 29,
+  "outcomes": {
+    "completed_correct": 28,
+    "failed": 1
+  },
+  "partialCompletedQuantilesType7Ms": {
+    "denominator": 28,
+    "p90": 10983.5844039,
+    "p95": 11296.084442849999,
+    "scope": "completed subset of INCOMPLETE condition; no900acceptance"
+  },
+  "rawAndReportLocality": "personal desktop projectdocs; worker receives receipt/report only",
+  "rawOriginalsPreserved": true,
+  "retirementSHA256": "1fb73e885a984ac7c9e83d8855762ba482698a325e0c3b9b842043b6b5c5d226",
+  "savedZipIntegrityAndHashesPassed": true,
+  "timeouts": 0,
+  "unattempted": 871,
+  "warmupsExcluded": 15
+}

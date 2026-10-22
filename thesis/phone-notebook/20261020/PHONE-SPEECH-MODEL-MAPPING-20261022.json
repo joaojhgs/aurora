@@ -1,0 +1,37 @@
+{
+  "schema": "aurora.phone.speech.model_mapping.v1",
+  "at": "2026-10-22T06:39:04.441332+00:00",
+  "piper": {
+    "originalFileSha256": "6f52a751e2349abe7a76735eb09dc1875298c77ea2342ffd2fef79ff81b87f22",
+    "phoneArchiveModelSha256": "8ceba58a4b540d4e7e7e24ad079cf0d92762a4fd334e059f12940787c6c37b3d",
+    "byteDifference": 128,
+    "serializedGraphAndAllOtherModelFieldsEqual": true,
+    "graphFieldSha256": "5ccc7d6887e0be376599f423f7fbc865523922b1af251a98faca220f02a73a3e",
+    "onlyDifference": "128 bytes of ModelProto metadata_props field14; graph/operators/initializer bytes are identical",
+    "configSha256": "141d612cc0a95ed7efc1ca936b845c2364967f2e9217c5dbfcf69fc4d6c65860",
+    "officialFieldDefinition": "https://raw.githubusercontent.com/onnx/onnx/v1.19.0/onnx/onnx.proto",
+    "fieldDefinition": "ModelProto graph=7, metadata_props=14",
+    "receipt": "evidence/compare-piper-graph-v192/result.json",
+    "backend": "Phone Sherpa ONNX/ORT vs Notebook Piper Python, separate cohorts"
+  },
+  "whisper": {
+    "phoneId": "stt:whisper:base",
+    "phoneArchiveSha256": "911b2083efd7c0dca2ac3b358b75222660dc09fb716d64fbfc417ba6c99ff3de",
+    "phoneRepresentation": "Whisper base multilingual int8 encoder/decoder ONNX, original pinned Sherpa catalog",
+    "notebookRepresentation": "Systran faster-whisper-base CT2 CPUint8 actualint8_float32",
+    "notebookWeightSha256": "d01c3014881c9c6f3133c182f3d2887eb6ca1c789a7538c5c007196857a0a6a9",
+    "conversionOriginalCheckpointMapping": "UNKNOWN; catalog pins archive but not original OpenAI weight revision or conversion recipe",
+    "matched900Eligibility": false,
+    "allowedScope": "bounded native feasibility/functionality with explicitly distinct assets/backend; no silent substitution or pooled latency claims"
+  },
+  "fixedAudio": {
+    "wavSha256": "da0ecc4ad0885746ab6e716585473917ab2b543a505bf0db09ebacfaa7943cbb",
+    "sourceRateHz": 22050,
+    "sourceFrames": 109875,
+    "normalizedPcm16RateHz": 16000,
+    "normalizedPcmSha256": "1d5147ec00b8582ffeeb2d6a196cfab6e713cc33c9beea9212e7bc91eeed8fbf",
+    "normalization": "existing faster_whisper.audio.decode_audio/PyAV then documented round/clip int16, preparation before phone timing; no replacement inference"
+  },
+  "measuredCases": 0,
+  "poolingAllowed": false
+}

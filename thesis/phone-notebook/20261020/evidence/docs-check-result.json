@@ -1,0 +1,11 @@
+{
+  "command": "make check-docs",
+  "exitCode": 2,
+  "status": "FAILED_PRE_EXISTING_OUT_OF_SCOPE",
+  "examples": [
+    "docs/experiments/tcc-20261013-submission-20261030/root/matched-main-campaign-v319/runner-report.md:3 broken campaign.py link",
+    "docs/experiments/tcc-20261013-submission-20261030/root/CUSTODY-relay-correction-v1186.json generated/report artifact in current docs"
+  ],
+  "ownedFilesCausedReportedFailure": false,
+  "unrelatedFilesChanged": false
+}

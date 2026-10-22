@@ -1,0 +1,92 @@
+[
+  {
+    "path": "provider/bootstrap.py",
+    "bytes": 1673,
+    "sha256": "bf0da2f51e174193ceca7636ddfa1d602e56027afca339d23cb9366f96916926"
+  },
+  {
+    "path": "provider/controller.py",
+    "bytes": 24773,
+    "sha256": "27a09e195d1a82f6dde770f60b15bcdcbf93f3743bf661c012405ae22eece5de"
+  },
+  {
+    "path": "provider/hook/aurora_voice_telemetry_v430.py",
+    "bytes": 11584,
+    "sha256": "8129ffe7591a47a0107ede53b101aead9fc1f58b92f0c0c4203176cc7608325d"
+  },
+  {
+    "path": "provider/hook/bindings.py",
+    "bytes": 3230,
+    "sha256": "52182f956b34788ecbfbbb241c8243ff88baebe2874e3605791793777ed0dc91"
+  },
+  {
+    "path": "provider/hook/observer.py",
+    "bytes": 11873,
+    "sha256": "784cc4bffc0d6824bbe378d17a7f632d587ca0a315896b048b2ebef727082df5"
+  },
+  {
+    "path": "provider/resource_sample.py",
+    "bytes": 7475,
+    "sha256": "8f62ec378e74036d4539d9159e3caf29b8fd7a9115de1ab0f482dfd58b6e1857"
+  },
+  {
+    "path": "requester/aurora_voice_telemetry_v430.py",
+    "bytes": 11584,
+    "sha256": "8129ffe7591a47a0107ede53b101aead9fc1f58b92f0c0c4203176cc7608325d"
+  },
+  {
+    "path": "requester/bindings.py",
+    "bytes": 3230,
+    "sha256": "52182f956b34788ecbfbbb241c8243ff88baebe2874e3605791793777ed0dc91"
+  },
+  {
+    "path": "requester/bootstrap.py",
+    "bytes": 1950,
+    "sha256": "05303915a1617a3fbc163017902fa084e687257d7b0af9bc692877d08a6a3b7e"
+  },
+  {
+    "path": "requester/candidate-input.wav",
+    "bytes": 219794,
+    "sha256": "da0ecc4ad0885746ab6e716585473917ab2b543a505bf0db09ebacfaa7943cbb"
+  },
+  {
+    "path": "requester/candidate-manifest.json",
+    "bytes": 220,
+    "sha256": "ce75b965ee5879ebece6ea7dfe133441547d20ccf89ecd5d66ea510bd9645e60"
+  },
+  {
+    "path": "requester/controller.py",
+    "bytes": 15673,
+    "sha256": "ada49340e64d3f9069c88b4329389d907c6a484291451297ff67658726a2ffc8"
+  },
+  {
+    "path": "requester/freeze-template.json",
+    "bytes": 1737,
+    "sha256": "5e7e3498a4f4da22356e3e9772a9855879f011991cf2a8baa50e6c5aef599c79"
+  },
+  {
+    "path": "requester/observer.py",
+    "bytes": 11873,
+    "sha256": "784cc4bffc0d6824bbe378d17a7f632d587ca0a315896b048b2ebef727082df5"
+  },
+  {
+    "path": "requester/receiver_proof.py",
+    "bytes": 11029,
+    "sha256": "aed9bd0f6109f8ab97c8b4eba8c3809bf1d865c9cba05999b52769f2862d857d"
+  },
+  {
+    "path": "requester/resource_sample.py",
+    "bytes": 7475,
+    "sha256": "8f62ec378e74036d4539d9159e3caf29b8fd7a9115de1ab0f482dfd58b6e1857"
+  },
+  {
+    "path": "requester/runner.py",
+    "bytes": 64870,
+    "sha256": "45d2c3f4df7353c2fc162c6986d125096b64216a76575a8a1d5bae4e5c154b0f"
+  },
+  {
+    "path": "requester/tts_http_adapter.py",
+    "bytes": 4870,
+    "sha256": "29ad1e394257720eb1cad16f67a20f7e637f3fe354bbe16c462723853e5ee9a5"
+  }
+]

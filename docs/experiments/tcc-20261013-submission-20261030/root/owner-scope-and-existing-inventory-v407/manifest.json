@@ -1,0 +1,14 @@
+{
+  "created_at": "2026-10-14T15:23:03.199303+00:00",
+  "owner_amendment": "msg_bb31f4d08581",
+  "files": {
+    "inventory-receipt.json": {
+      "bytes": 5248,
+      "sha256": "5f9ad0a9f562261f0aae0e23b69b4a5b89fcbdca017c3eb763f4fbc628568010"
+    },
+    "README.md": {
+      "bytes": 3340,
+      "sha256": "69b760810dc6df61c946f1aed461a7a6d0199a5ae113861cb3757699d4d09a68"
+    }
+  }
+}

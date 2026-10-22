@@ -1,0 +1,60 @@
+{
+  "schema": "aurora.phone_notebook.pilot.v1",
+  "status": "TEMPLATE_NO_PILOT_EXECUTED",
+  "cells": [
+    {
+      "cellId": "http-direct-lan-tts",
+      "observedSeconds": [],
+      "observedFailures": 0,
+      "caseTimeoutSeconds": 180,
+      "excludedWarmups": 15,
+      "coolingSecondsPerCase": null,
+      "setupSeconds": null
+    },
+    {
+      "cellId": "http-direct-lan-tts-llm",
+      "observedSeconds": [],
+      "observedFailures": 0,
+      "caseTimeoutSeconds": 180,
+      "excludedWarmups": 15,
+      "coolingSecondsPerCase": null,
+      "setupSeconds": null
+    },
+    {
+      "cellId": "http-direct-lan-tts-llm-stt",
+      "observedSeconds": [],
+      "observedFailures": 0,
+      "caseTimeoutSeconds": 180,
+      "excludedWarmups": 15,
+      "coolingSecondsPerCase": null,
+      "setupSeconds": null
+    },
+    {
+      "cellId": "p2p-mqtt-ice-tts",
+      "observedSeconds": [],
+      "observedFailures": 0,
+      "caseTimeoutSeconds": 180,
+      "excludedWarmups": 15,
+      "coolingSecondsPerCase": null,
+      "setupSeconds": null
+    },
+    {
+      "cellId": "p2p-mqtt-ice-tts-llm",
+      "observedSeconds": [],
+      "observedFailures": 0,
+      "caseTimeoutSeconds": 180,
+      "excludedWarmups": 15,
+      "coolingSecondsPerCase": null,
+      "setupSeconds": null
+    },
+    {
+      "cellId": "p2p-mqtt-ice-tts-llm-stt",
+      "observedSeconds": [],
+      "observedFailures": 0,
+      "caseTimeoutSeconds": 180,
+      "excludedWarmups": 15,
+      "coolingSecondsPerCase": null,
+      "setupSeconds": null
+    }
+  ]
+}

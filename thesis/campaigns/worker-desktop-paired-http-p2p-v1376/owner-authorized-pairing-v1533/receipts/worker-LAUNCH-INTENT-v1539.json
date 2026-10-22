@@ -1,0 +1,1 @@
+{"previousAttemptRetired": true, "reason": "Use typed response models for LocalBus QueryResult.data mappings; preserve same task-local identity/data/config", "sourceSha256": "a69bcb36cfd6e0372cd28dfa4a8642d9c47e3510d213e6312e9fdb1a625e966f", "maximumLaunches": 1}

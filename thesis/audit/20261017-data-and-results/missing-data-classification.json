@@ -1,0 +1,83 @@
+{
+  "at": "2026-10-17T22:27:02.200021+00:00",
+  "classificationDefinitions": {
+    "confirmedIrrecoverable": "requires affirmative exhaustive/authoritative destruction proof; none established here",
+    "present": "physical source or retained observation directly located",
+    "recovered": "surviving source content copied/extracted into audited custody",
+    "unlocated": "not located within authorized bounded search/access; other copies not excluded"
+  },
+  "cohorts": [
+    {
+      "cohort": "five worker audio archives",
+      "rawTimingRows": "recovered selected original JSONL; canonical full ZIP physically referenced",
+      "state": "present"
+    },
+    {
+      "cohort": "V485/V497",
+      "completeRawReconstruction": false,
+      "state": "present_on_Personal",
+      "timingProjection": "recovered to verified worker packet;1830rows including30warmups"
+    },
+    {
+      "cohort": "V799",
+      "expectedArchiveBytes": 130072923,
+      "expectedArchiveSHA256": "489404814e7667b4c85d371e9e2e895372dc075d1e310669593dff47b1f56e72",
+      "missingOptionalArtifacts": [
+        "original WAV outputs",
+        "screenshots/logs where not separately retained"
+      ],
+      "state": "unlocated_original_raw_archive",
+      "surviving": "reported900attempts/889correct/11incorrect+15warmups; aggregate and eleven-case diagnosis"
+    },
+    {
+      "caseOrdinals": [
+        104,
+        159,
+        218,
+        272
+      ],
+      "cohort": "C06/V1068",
+      "finalAttempted": null,
+      "finalOutcome": null,
+      "lostFileCount": null,
+      "state": "partially_recovered_observations_final_population_unlocated",
+      "uniqueMeasuredRows": 4
+    },
+    {
+      "cohort": "V1197",
+      "excludedWarmups": 15,
+      "missingNativeSpansInOldPrefix": "custody lag; not model failures",
+      "olderNativePopulation": 36,
+      "requesterMeasuredRows": 135,
+      "snapshotAt": "2026-10-17T22:15:24.539734+00:00",
+      "state": "present_incomplete_timestamped_snapshot"
+    }
+  ],
+  "confirmedIrrecoverableItems": [],
+  "forcedRerunAuthorized": false,
+  "futureRerunIsRecovery": false,
+  "localDirectoryObservations": [
+    {
+      "bytes": 25551,
+      "files": 6,
+      "path": "docs/experiments/tcc-20261013-submission-20261030/root/browser-normal-ui-padded900-v799"
+    },
+    {
+      "bytes": 147368,
+      "files": 21,
+      "path": "docs/experiments/tcc-20261013-submission-20261030/root/native-desktop-sdk-audio900-v1068"
+    },
+    {
+      "bytes": 29647,
+      "files": 7,
+      "path": "thesis/evidence/sealed-cohorts-v1215/browser-normal-ui-padded900-v799"
+    },
+    {
+      "bytes": 147368,
+      "files": 21,
+      "path": "thesis/evidence/sealed-cohorts-v1215/native-desktop-sdk-audio900-v1068"
+    }
+  ],
+  "retainedOrcaSearch": "unavailable/disabled",
+  "searchReceipt": "bounded-search-receipt.json"
+}

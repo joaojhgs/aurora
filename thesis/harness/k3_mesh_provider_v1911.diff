@@ -1,0 +1,105 @@
+--- k2_mesh_provider_v1733.py
++++ k3_mesh_provider_v1911.py
+@@ -78,6 +78,7 @@
+         GetMeshStatusResponse, GetRegistryResponse,
+     )
+     from app.shared.contracts.models.common import EmptyInput
++    from app.shared.contracts.models.stt import TranscriptionMethods
+     from app.shared.contracts.models.tts import TTSMethods
+     from app.shared.contracts.models.auth import AuthMethods
+     from app.shared.contracts.models.mesh import MeshPeerListRequest, MeshPeerListResponse
+@@ -98,6 +99,7 @@
+         gateway = next(s for s in supervisor.services if type(s).__name__ == 'GatewayService')
+         ready_at = time.monotonic()
+         method_constraints = None
++        stt_constraints = None
+         end = time.monotonic() + manifest['lifetimeSeconds']
+         while not stop.is_set() and time.monotonic() < end:
+             if time.monotonic() - ready_at > manifest['noRequesterDeadlineSeconds']:
+@@ -110,7 +112,7 @@
+                 GatewayMethods.GET_MESH_STATUS, EmptyInput(), timeout=10))).model_dump(mode='json')
+             catalogue = CapabilityCatalogResponse.model_validate(unwrap(await supervisor.bus.request(
+                 GatewayMethods.GET_CAPABILITY_CATALOG,
+-                CapabilityCatalogRequest(modules=['Orchestrator', 'TTS'], include_schemas=False), timeout=10))).model_dump(mode='json')
++                CapabilityCatalogRequest(modules=['Transcription', 'Orchestrator', 'TTS'], include_schemas=False), timeout=10))).model_dump(mode='json')
+             peers = MeshPeerListResponse.model_validate(unwrap(await supervisor.bus.request(
+                 AuthMethods.MESH_LIST_PEERS, MeshPeerListRequest(), timeout=10)))
+             local_id = catalogue.get('local_peer_id')
+@@ -120,14 +122,18 @@
+             if gateway._rtc_client is not None:
+                 sample = runpy.run_path(manifest['routeObserver'])['sample_peer_route']
+                 route = sample(gateway._rtc_client, manifest['expectedRequesterPeerId'])
+-            if method_constraints is None:
++            if method_constraints is None or stt_constraints is None:
+                 registry = GetRegistryResponse.model_validate(unwrap(await supervisor.bus.request(
+                     GatewayMethods.GET_REGISTRY, EmptyInput(), timeout=10)))
+                 method_constraints = next((method.speech_constraints
+                     for module in registry.modules if module.module == 'TTS'
+                     for method in module.methods if method.bus_topic == TTSMethods.SYNTHESIZE), None)
++                stt_constraints = next((method.speech_constraints
++                    for module in registry.modules if module.module == 'Transcription'
++                    for method in module.methods if method.bus_topic == TranscriptionMethods.TRANSCRIBE), None)
+             state.update(at=now(),
+-                         phase='normal_services_live' if method_constraints is not None else 'waiting_actual_speech_projection',
++                         phase='normal_services_live' if method_constraints is not None and stt_constraints is not None else 'waiting_actual_speech_projection',
++                         sttMethodConstraints=stt_constraints.model_dump(mode='json') if stt_constraints is not None else None,
+                          ttsMethodConstraints=method_constraints.model_dump(mode='json') if method_constraints is not None else None,
+                          mesh=mesh, catalogue=catalogue,
+                          observedRoute=route, trust=[{
+@@ -167,9 +173,14 @@
+     assert shutil.disk_usage(output).free > 2 * 1024**3
+     assert next(int(l.split()[1]) * 1024 for l in Path('/proc/meminfo').read_text().splitlines()
+                 if l.startswith('MemAvailable:')) > 2_000_000_000
+-    for field in ('model', 'voiceConfig', 'piperExecutable', 'llmModel'):
++    for field in ('model', 'voiceConfig', 'piperExecutable', 'llmModel', 'sttModel'):
+         value = m['actualFiles'][field]
+         assert sha(value['path']) == value['sha256'], 'actual_provider_file_drift'
++    stt = m['remoteMeshSttReceiver']
++    assert stt['model_sha256'] == m['actualFiles']['sttModel']['sha256']
++    assert stt['config_sha256'] == m['configSha256']
++    assert m['remoteSttEffectiveSettings']['device'] == 'cpu'
++    assert m['remoteSttEffectiveSettings']['compute_type'] == 'int8'
+     assistant = m['remoteMeshAssistantReceiver']
+     assert assistant['model_sha256'] == m['actualFiles']['llmModel']['sha256']
+     assert assistant['config_sha256'] == m['configSha256']
+@@ -183,7 +194,7 @@
+                AURORA_DATA_DIR=m['existingDataDir'], AURORA_BACKUP_DIR=m['privateRoot'] + '/backups',
+                AURORA_ARCHITECTURE_MODE='threads', AURORA_VOICE_STAGE_OUTPUT=str(output/'voice-stages.jsonl'),
+                AURORA_V409_OBSERVER_PATH=str(Path(m['hookRoot'])/'observer.py'),
+-               AURORA_VOICE_STAGE_HOST_ID='personal-k2-mesh-assistant-tts-v1733', AURORA_VOICE_TELEMETRY_V430='1',
++               AURORA_VOICE_STAGE_HOST_ID='personal-k3-mesh-assistant-tts-v1911', AURORA_VOICE_TELEMETRY_V430='1',
+                PYTHONDONTWRITEBYTECODE='1', HF_HUB_OFFLINE='1', HF_HUB_DISABLE_TELEMETRY='1')
+     packages = {n: importlib.metadata.version(n) for n in m['runtimeVersions']}
+     assert packages == m['runtimeVersions'], 'runtime_versions_changed'
+@@ -202,7 +213,7 @@
+             record.update(receiverPid=child.pid, receiverStartTicks=ticks)
+             write(output/'controller-launch.json', record, exclusive=True)
+             write(output/'receiver-identity.json', {
+-                'schema': 'aurora.distributed_k2_receiver_identity.v1', 'receiver_pid': child.pid,
++                'schema': 'aurora.distributed_k3_receiver_identity.v1', 'receiver_pid': child.pid,
+                 'provider': m['remoteMeshTtsReceiver'], 'manifest_sha256': sha(path),
+                 'actual_provider_files': {'source_receipt_sha256': m['actualFileReceiptSha256'],
+                     'model': {'canonical_path': m['actualFiles']['model']['path'], 'sha256': m['actualFiles']['model']['sha256']},
+@@ -213,12 +224,21 @@
+             # rehashes these actual files and joins the real constructor/native
+             # spans. This declaration alone makes no loaded-GPU claim.
+             write(output/'assistant-identity.json', {
+-                'schema': 'aurora.distributed_k2_receiver_identity.v1', 'receiver_pid': child.pid,
++                'schema': 'aurora.distributed_k3_receiver_identity.v1', 'receiver_pid': child.pid,
+                 'provider': assistant, 'manifest_sha256': sha(path),
+                 'actual_provider_files': {'source_receipt_sha256': m['actualFileReceiptSha256'],
+                     'model': {'canonical_path': m['actualFiles']['llmModel']['path'], 'sha256': m['actualFiles']['llmModel']['sha256']},
+                     'config': {'canonical_path': m['config'], 'sha256': m['configSha256']}},
+                 'actual_loaded_acceleration': 'PENDING_NEW_PROCESS_ORDINARY_WARMUP_PROOF',
++                'credential_value_logged': False,
++            }, exclusive=True)
++            write(output/'stt-identity.json', {
++                'schema': 'aurora.distributed_k3_receiver_identity.v1', 'receiver_pid': child.pid,
++                'provider': stt, 'manifest_sha256': sha(path),
++                'actual_provider_files': {'source_receipt_sha256': m['actualFileReceiptSha256'],
++                    'model': {'canonical_path': m['actualFiles']['sttModel']['path'], 'sha256': m['actualFiles']['sttModel']['sha256']},
++                    'config': {'canonical_path': m['config'], 'sha256': m['configSha256']}},
++                'actual_loaded_engine': 'PENDING_NEW_PROCESS_ORDINARY_WARMUP_PROOF',
+                 'credential_value_logged': False,
+             }, exclusive=True)
+             while child.poll() is None and time.monotonic()-start < m['lifetimeSeconds']+180:

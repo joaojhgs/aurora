@@ -1,0 +1,41 @@
+{
+  "messageId": "msg_a3770b99f384",
+  "messageAt": "2026-10-15T06:32:38Z",
+  "finishedAt": "2026-10-15T06:30:46.949421Z",
+  "desktop": {
+    "cohort": "aurora-full-audio-capital-v1-desktop-gpu-local-20261015",
+    "status": "completed_with_failures_or_incorrect",
+    "exitCode": 1,
+    "attemptsTotal": 915,
+    "warmupsExcluded": 15,
+    "measuredRecorded": 900,
+    "unattempted": 0,
+    "pids": [
+      2910571,
+      2910591
+    ],
+    "bothAbsentObservedAt": "2026-10-15T06:31:26Z",
+    "aggregateOutcomeCounts": null,
+    "p90": null,
+    "p95": null,
+    "rawSealComplete": false,
+    "postTerminalResourceReconciliation": "Root issued once; actualresultpending",
+    "unchangedRerun": false
+  },
+  "cpu": {
+    "cohort": "aurora-full-audio-capital-v1-worker-cpu-local-20261015",
+    "measuredRecorded": 182,
+    "nPlanned": 900,
+    "warmupsExcluded": 15,
+    "observedAt": "2026-10-15T06:31:52Z",
+    "pids": [
+      2232517,
+      2232566
+    ],
+    "bothLive": true
+  },
+  "crossDeviceMeasuredAllowed": false,
+  "rootGoalActive": true,
+  "monitorGoalActive": true,
+  "workerDoneSent": false
+}

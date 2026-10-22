@@ -1,0 +1,16 @@
+{
+  "at": "2026-10-20T03:29:16.175227+00:00",
+  "trigger": "Real first fullaudio P2P warmup and corrected admission: selector_language_capability_unknown; live ready TTS stage projection absent from method route constraints",
+  "filesOwnedByRoot": [
+    "app/shared/services/base_service.py",
+    "app/services/tts/service.py",
+    "app/services/gateway/registry_aggregator.py",
+    "tests/unit/tts/test_runtime_speech_announcement.py"
+  ],
+  "sourceBeforeFixMatchesHistoricalFrozenAndHead": true,
+  "workloadModelsAudioSettingsChanged": false,
+  "weakeningRouteOrAuthChecks": false,
+  "oldMeasurementsRemainPreserved": true,
+  "sourceVersionPolicy": "New snapshots/manifests after old unadmitted runtimes fully retire; never change active source/config/manifest",
+  "nextValidation": "Targeted tests, one Sol review, then same mainflow15 ordinary excluded warmups+900 actual P2P"
+}

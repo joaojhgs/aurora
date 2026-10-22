@@ -1,0 +1,14 @@
+{
+  "at": "2026-10-20T06:24:20.397978+00:00",
+  "source": ".omx/evidence/orca-monitor-20261010/PLAN-AFTER-K3-ROUTE-NOTEBOOK-READINESS-20261020T0615.md",
+  "destination": "thesis/methodology/owner-requirements-20261020-47c7f96a.md",
+  "bytes": 683551,
+  "sha256": "47c7f96aa8182f5979ea2fb36e7c5354c18ebba08123de3cc011bf76fa5b02db",
+  "priorBytes": 677179,
+  "exactPriorPrefix": true,
+  "appendBytes": 6372,
+  "completeCanonicalMirror": true,
+  "methodologyWriter": "Original monitor only",
+  "rootCopyOnly": true,
+  "sutCalls": 0
+}

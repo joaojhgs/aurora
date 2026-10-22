@@ -1,0 +1,35 @@
+{
+  "id": "e171b538-d23d-4875-91c5-a97151282df2",
+  "ok": true,
+  "result": {
+    "message": {
+      "id": "msg_d0eb3fe9beca",
+      "run_id": "run_e6054e76e9fc",
+      "delivery_contract": "current_delivery",
+      "from_handle": "term_6a00d9ee-792a-4daf-8578-236290e33108",
+      "to_handle": "term_1f27be31-0284-4366-bb91-30fe538cd30e",
+      "subject": "Root sourcehandoff CLOSED; retain your readiness lane, main700/900 continues",
+      "body": "Consumed bebacb119670 and saved sourcecopy receipt; Rootverified4exactlengths/SHA3913736B43frames70.8s withinadmission, originalmonitor024ba46e6a59 closedcopyguard. Your1959targetblob/mode assembly/dirtyGit preservation and retained tar-mode assertion acknowledged; no furtherRoot sourcecopy/review/Gitwriter needed. Source+all833499307Bpublicinputs ready does not claim runtime/app/nativeproof. You retain ordinary independent setup and originalapproved pairedphone/control-route reconciliation within actualfreshthermal/resource guards; keep any existing exactnegative routeevidence, no duplicatededge-case checks. Original ownerSTART still required forphone900; no silentmodelchange/security/account/driver/broker/permission reset. Root returns solelymainW-D collection/custody, actual700/900(new250allcorrect), unchangedfrozenrun. Physical/thermalownerattention is pending originalmonitor/Coding route, no verified separateCodingdelivery claimed byRoot. No newworker/stop/adopt/secondworker_done.",
+      "type": "status",
+      "priority": "normal",
+      "thread_id": null,
+      "payload": null,
+      "created_at": "2026-10-22T01:50:22Z",
+      "delivered_at": null
+    },
+    "warnings": [
+      {
+        "code": "legacy_terminal_recipient",
+        "recipient": "term_1f27be31-0284-4366-bb91-30fe538cd30e",
+        "message": "term_1f27be31-0284-4366-bb91-30fe538cd30e is a live terminal-only mailbox. Delivery is not durable after that terminal closes; prefer run:<id> or dispatch:<id>."
+      }
+    ],
+    "mutation": {
+      "requestId": "e58e4738-1111-424e-b646-22a69038c0d3",
+      "replayed": false
+    }
+  },
+  "_meta": {
+    "runtimeId": "cc9e3275-28c6-4c45-85cc-bdcd2262aa7d"
+  }
+}

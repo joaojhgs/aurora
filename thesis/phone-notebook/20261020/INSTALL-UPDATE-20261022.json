@@ -1,0 +1,65 @@
+{
+  "apk": {
+    "bytes": 749091842,
+    "path": "/home/developer/projects/aurora/thesis/phone-notebook/20261020/deployment/ebde3a8acf6315f920d03593845f17a1fc65a733/android-build-ebde-v2383-native-rename-v1/apps/aurora-tauri/src-tauri/gen/android/app/build/outputs/apk/universal/debug/app-universal-debug.apk",
+    "sha256": "ac043bd2f36071af8bc82c68de382d4e5cde495a612738d1ec78902d84fe8f72"
+  },
+  "apkMetadata": "package: name='dev.aurora.desktop.phonenotebook' versionCode='100' versionName='1.0.0' platformBuildVersionName='16' platformBuildVersionCode='36' compileSdkVersion='36' compileSdkVersionCodename='16'",
+  "at": "2026-10-22T11:51:54.029390+00:00",
+  "buildStatus": "BUILDING_PINNED_ANDROID_VOICE_LIVE_APK",
+  "command": [
+    "/home/developer/Android/Sdk/platform-tools/adb",
+    "-H",
+    "127.0.0.1",
+    "-P",
+    "5037",
+    "-s",
+    "KBX8LNFUBE5XGQRG",
+    "install",
+    "-r",
+    "/home/developer/projects/aurora/thesis/phone-notebook/20261020/deployment/ebde3a8acf6315f920d03593845f17a1fc65a733/android-build-ebde-v2383-native-rename-v1/apps/aurora-tauri/src-tauri/gen/android/app/build/outputs/apk/universal/debug/app-universal-debug.apk"
+  ],
+  "finishedAt": "2026-10-22T11:52:55.741076+00:00",
+  "installAttempts": 1,
+  "installReceipt": {
+    "exit": 0,
+    "stderr": "",
+    "stdout": "Performing Streamed Install\nSuccess\n"
+  },
+  "installStartedAt": "2026-10-22T11:52:27.274778+00:00",
+  "installedApkMatchesBuilt": true,
+  "installedApkSha256Receipt": {
+    "exit": 0,
+    "stderr": "",
+    "stdout": "ac043bd2f36071af8bc82c68de382d4e5cde495a612738d1ec78902d84fe8f72  /data/app/~~5qXTyFbrXZlV31doKUSd-A==/dev.aurora.desktop.phonenotebook-qliWIIONaXnsMuxsE0l4og==/base.apk\n"
+  },
+  "installedPackageMetadata": [
+    "primaryCpuAbi=arm64-v8a",
+    "versionCode=100 minSdk=24 targetSdk=36",
+    "versionName=1.0.0",
+    "lastUpdateTime=2026-10-22 12:52:53"
+  ],
+  "installerDeadlineUtc": "2026-10-22T11:55:27.274791+00:00",
+  "installerElapsedSeconds": 27.348492962002638,
+  "installerForegroundObserved": false,
+  "installerPid": 375843,
+  "installerUiChecks": 13,
+  "ownerConfirmationAutomated": false,
+  "package": "dev.aurora.desktop.phonenotebook",
+  "priorPackageMetadata": [
+    "versionCode=100 minSdk=24 targetSdk=36",
+    "versionName=1.0.0",
+    "lastUpdateTime=2026-10-22 12:27:50"
+  ],
+  "sameSigningCertificateSha256": "57bee2b41e922fd1ee2fb08e1839ec3d423d78cc361afc22e2f1d11672293963",
+  "serial": "KBX8LNFUBE5XGQRG",
+  "sourceIdentity": "ebde3a8acf6315f920d03593845f17a1fc65a733 + source-closure-overlay-v2383 + android-bundled-model-rename-v1 + android-node-policy-initial-publication-v2 + android-finite-file-audio-v3 + android-finite-file-audio-v3a + android-k3-sdk-file-audio-v4 + android-k3-sdk-mode-v4a + android-k3-sdk-build-flag-v5 + android-k3-native-surface-v6 + android-native-pairing-role-v7 + isolated-workspace-resolution-v7a + unchanged-voice-package-reuse-v7b + android-sdk-speech-binding-v8 + android-sdk-consumer-lease-v8a",
+  "state": {
+    "exit": 0,
+    "stderr": "",
+    "stdout": "device\n"
+  },
+  "status": "UPDATED_VERIFIED_INSTALLER_SUCCESS",
+  "unattendedReplacement": "installer succeeded; whether owner tapped must not be inferred from adb success alone",
+  "userdataWiped": false
+}

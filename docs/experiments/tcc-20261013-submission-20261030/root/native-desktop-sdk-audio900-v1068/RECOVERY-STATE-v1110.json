@@ -1,0 +1,55 @@
+{
+  "at": "2026-10-17T16:43:07.837636+00:00",
+  "status": "ORIGINAL_EXECUTION_RETIRED_FINAL_OUTCOME_AND_RAW_UNRECOVERED",
+  "actualRecoveryControl": {
+    "terminal": "term_d5651d8d-58e2-4b38-85e2-51c668cc933c",
+    "incarnation": "034ff933-61a3-4c74-b5ad-98a75e8ac21c",
+    "host": "ssh:ssh-1786238480967-semdev",
+    "plainShellOnly": true,
+    "sameExistingWorkspace": true
+  },
+  "originalControl": {
+    "terminal": "term_00a86bfb-1ede-4fbf-8b5e-72e2a2629f62",
+    "incarnation": "9d7a67b9-7786-4073-8c58-b9c260aa643f",
+    "focusError": "terminal_exited",
+    "historicalRequestsNotResent": [
+      "219e01dc-8616-42f6-90e6-6a5ce1590fea",
+      "d2cc0e31-dc5f-43d7-b2d2-cd85d538d2b6"
+    ]
+  },
+  "lastObserved": {
+    "at": "2026-10-16T14:49:35.684913Z",
+    "measuredPlanned": 900,
+    "measuredAttempted": 273,
+    "measuredCompleted": 272,
+    "inFlight": 1,
+    "warmupsCompleted": 15,
+    "source": "RUNNING-v1085.json"
+  },
+  "finalMeasuredAttempted": null,
+  "finalMeasuredCompleted": null,
+  "finalCorrectIncorrectFailureTimeoutDenominators": null,
+  "finalUnattempted": null,
+  "p90": null,
+  "p95": null,
+  "reason": "Last known sample counts are historical; collection may have completed or stopped after observation. Newer boot and absent original processes establish retired execution, not its final outcome. Expected temporary data roots are missing and bounded known persistent locations yielded no replacement archive.",
+  "no900Acceptance": true,
+  "closedOtherCohortsReplayed": false,
+  "originalRawOverwrittenOrDeletedByRoot": false,
+  "replacementConditionLaunched": false,
+  "remainingSameSurface900Requirement": "OPEN, no pooling or top-up from unverifiable old final outcomes",
+  "copies": [
+    {
+      "copy": "RECOVERY-FIRST-READ-v1105.json",
+      "source": "v1105-c06-original-recovery-RESULT.json",
+      "bytes": 515,
+      "sha256": "d76c25c3cfa25d94a453438c1777bffc78b4caa5c3b42c3f633dcea62c81f1af"
+    },
+    {
+      "copy": "RECOVERY-RETIREMENT-AND-LOCATE-v1106.json",
+      "source": "v1106-c06-existing-results-locate-RESULT.json",
+      "bytes": 4029,
+      "sha256": "6c195879e8b41f9d8f99787248185426245fcb3599720d5f5294d61703b7d1f7"
+    }
+  ]
+}

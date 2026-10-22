@@ -1,0 +1,12 @@
+{
+  "controlDeadline": "2026-10-22T04:10:00Z",
+  "explicitNewline": true,
+  "host": "ssh:ssh-sem-notebook-personal",
+  "incarnation": "328cd72f-c7ea-49ff-a2db-b9275b085037",
+  "remoteResult": "/home/developer/projects/aurora/thesis/phone-notebook/20261020/evidence/copy-owner-policy-kit-20261022T0318.json",
+  "rootAdmissionMessage": "owner-temperature-correction-current-setup-authority",
+  "script": "scripts/copy_owner_policy_metadata_0_v51.py",
+  "scriptSha256": "e231f52223405566440294b4404537cf129ab97a0b2fa83995311c9d44ddeab2",
+  "singleSend": true,
+  "terminal": "term_a2ed5feb-7c92-48e4-bd88-d1b0e6737989"
+}

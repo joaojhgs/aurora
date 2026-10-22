@@ -1,0 +1,1 @@
+{"real_redis_ping_pass": true, "loopback_only_host_publish": true, "run_owned_container": "aurora-redis-root-v270"}

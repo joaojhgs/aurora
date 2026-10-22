@@ -1,0 +1,39 @@
+{
+  "command": [
+    "flock",
+    "--nonblock",
+    "/tmp/aurora-global-build.lock",
+    "timeout",
+    "--signal=INT",
+    "--kill-after=10s",
+    "120s",
+    ".venv/bin/python",
+    "-m",
+    "pytest",
+    "tests/unit/gateway/test_rtc_client_lifecycle.py",
+    "-k",
+    "registry_invalidation_during_refresh_runs_latest_trailing_refresh",
+    "-q",
+    "--tb=short",
+    "--basetemp",
+    "/tmp/aurora-mesh-refresh-regression-v313",
+    "--junitxml",
+    ".git/aurora-handoff-import-20261006/mesh-refresh-generation-v312/root-regression-v313.xml"
+  ],
+  "exit_code": 0,
+  "junit_suites": [
+    {
+      "name": "pytest",
+      "errors": "0",
+      "failures": "0",
+      "skipped": "0",
+      "tests": "1",
+      "time": "31.198",
+      "timestamp": "2026-10-14T06:39:32.473312+00:00",
+      "hostname": "code-worker"
+    }
+  ],
+  "stdout_tool_truncation": true,
+  "raw_junit_complete": true,
+  "scope": "one selected regression; 38 deselected; existing pytest coverage automatic/no extra cases"
+}

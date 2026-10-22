@@ -1,0 +1,21 @@
+{
+  "at": "2026-10-22T12:06:01.136390+00:00",
+  "status": "PUBLIC_RAW_DUAL_CUSTODY_VERIFIED",
+  "sourceHost": "ssh:ssh-sem-notebook-personal",
+  "sourceRelative": "evidence/window-final-public-v343.zip",
+  "terminalIncarnation": "328cd72f-c7ea-49ff-a2db-b9275b085037",
+  "bytes": 236203,
+  "sha256": "90e4441fd579cfe6e894693ea3403b6e69da84a300f0f7407da6c18548598c91",
+  "framedChunks": 58,
+  "copyOnly": true,
+  "postWindowDataCustodyOnly": true,
+  "phoneWindowExtended": false,
+  "phoneCommands": 0,
+  "inferenceCalls": 0,
+  "ownerHardStopUtc": "2026-10-22T11:57:25.269652Z",
+  "atomicPublication": true,
+  "sourceDeleted": false,
+  "prefixRecoverySupported": true,
+  "decompressedBytes": 1225744,
+  "commandElapsedSeconds": 10.004079409874976
+}

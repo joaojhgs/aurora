@@ -1,0 +1,15 @@
+{
+  "startedAt": "2026-10-14T23:53:49.669742+00:00",
+  "controllerPid": 2851517,
+  "capSeconds": 420,
+  "measurementStarted": false,
+  "acceptedMeasuredSamples": 0,
+  "previousTinyLogicalFlows": 6,
+  "previousAccurateTransportFailures": 1,
+  "newOrdinalOnlyOnFirstSTT": 8,
+  "childPid": 2851531,
+  "driverSHA256": "63dbd3fce267482808b16916a72509ca949451612dcbffe65378d350ab3e364f",
+  "webRuntimePid": 2850885,
+  "backendPid": 2850887,
+  "sourceRuntimeControllerPid": 2850865
+}

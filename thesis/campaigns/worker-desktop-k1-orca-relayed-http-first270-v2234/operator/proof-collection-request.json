@@ -1,0 +1,12 @@
+{
+  "at": "2026-10-21T16:54:35.641985+00:00",
+  "name": "k1-http-native-warmups-v2234",
+  "sendLimit": 1,
+  "receiver": {
+    "pid": 1440196,
+    "state": "S",
+    "startTicks": 35427408
+  },
+  "newSutCalls": 0,
+  "onObservationFailure": "reconcile this accepted command; never resend or repeat warmups"
+}

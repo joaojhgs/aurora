@@ -1,0 +1,5 @@
+# Desktop readiness observation
+
+Original Root performed a bounded read-only inspection in the registered existing personal Aurora checkout. The adjacent projection records exact source SHA and observation time. Eight CPU cores and checkout `2a7d0da4f6fb1054e6bdc0ad6cde83fdd954ca69` are observed. The selected GPU query could not start because `nvidia-smi` was unavailable; the specific checked model and project-Python paths did not exist. Inference did not start and source was not changed. These are readiness gaps, not proof of absent GPU, model or Python everywhere.
+
+Exact desktop-to-frozen-version transfer/model/setup receiver proof and actual accelerator/backend/offloaded-layer/utilization/reservation evidence remain required. Original CPU campaign proceeds unchanged as extra evidence; 700 measured samples are reviewed, with cell08 still in progress. The reference to800/900 in monitor message `msg_03abb02b1779` was a future closure limit, not a new observed accepted count. There is no verified measured GPU baseline launch, so the two-individual-campaign completion barrier remains false. No duplicate readiness command or product edit was run by the monitor.

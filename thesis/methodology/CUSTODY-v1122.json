@@ -1,0 +1,19 @@
+{
+  "at": "2026-10-17T17:04:30.962836+00:00",
+  "canonical": "thesis/methodology/owner-requirements-20261017-e443ad3c.md",
+  "bytes": 474846,
+  "sha256": "e443ad3c92a10a5935074e0d80ee1de77ec251e2cd75b01e609fd7f7b1c21a41",
+  "sourceWriter": "original Orca monitor",
+  "canonicalCopyWriter": "original Root",
+  "originalPlanChangedByRoot": false,
+  "previousCanonical": "thesis/methodology/owner-requirements-20261016-40caf3ec.md",
+  "previousPrefixBytes": 465527,
+  "previousPrefixVerifiedIdentical": true,
+  "fullyReadThrough": "30.45 corrected sidecar wording",
+  "correctedAppend": ".omx/evidence/orca-monitor-20261010/plan-append-30.45-corrected-20261017T1647.md",
+  "correctedAppendBytes": 9319,
+  "correctedAppendSha256": "231e8813dd044abe6fe7d3b011fd1cf2d5118fb5e3b10696322c1a293014cf8f",
+  "sourceReceipt": ".omx/evidence/orca-monitor-20261010/authoritative-plan-sidecar-correction-20261017T1647.json",
+  "intermediateSnapshotPreserved": "thesis/methodology/owner-requirements-20261017-0cebbadf.md",
+  "executionHeldForPromotion": false
+}

@@ -1,0 +1,59 @@
+{
+  "at": "2026-10-22T06:23:36.826900+00:00",
+  "state": "ACTUAL_PROVIDER_AND_REQUESTER_LAUNCHED_PAIRED_RELEASE_SCHEDULED",
+  "provider": {
+    "at": "2026-10-22T06:21:30.915761+00:00",
+    "host": "personal.skyron-server",
+    "controller": {
+      "pid": 2454776,
+      "startTicks": 40561188,
+      "state": "R"
+    },
+    "manifestSha256": "c819d75ea03fe49046f9500768a2ae5916e4ea71c2b05c66d552314c96d80062",
+    "readinessManifestSha256": "38ee90a5c07c791ddc1cd3f39bd5e50b9894743b7c0f924fdeed56645118025a",
+    "newWorker": false,
+    "measured": 0,
+    "pilotCallsStarted": false,
+    "deadline": "2026-10-22T06:47:13.434835+00:00",
+    "controllerState": {
+      "pid": 2454776,
+      "startTicks": 40561188,
+      "state": "S"
+    },
+    "localDriverArmed": true,
+    "runtime": {
+      "at": "2026-10-22T06:21:31.678668+00:00",
+      "controllerPid": 2454776,
+      "host": "personal.skyron-server",
+      "manifestSha256": "c819d75ea03fe49046f9500768a2ae5916e4ea71c2b05c66d552314c96d80062",
+      "measurementStartedByController": false,
+      "receiverPid": 2454777,
+      "receiverStartTicks": 40561264
+    }
+  },
+  "requester": {
+    "pid": 217763,
+    "startTicks": 142864478,
+    "releaseAtUtc": "2026-10-22T06:24:06.836259+00:00",
+    "measured": 0,
+    "mode": "One paired excluded HTTP full audio flow, no retry",
+    "sourceSha256": "a9264f0106ea7b097eba14a22ab3d8903c5df6bcc6e683669f1ad2ad125990cd"
+  },
+  "trigger": {
+    "at": "2026-10-22T06:22:36.836242+00:00",
+    "releaseAtUtc": "2026-10-22T06:24:06.836259+00:00",
+    "readinessManifestSha256": "38ee90a5c07c791ddc1cd3f39bd5e50b9894743b7c0f924fdeed56645118025a",
+    "maximumLocalFlows": 1,
+    "maximumRemoteFlows": 1,
+    "measured": 0
+  },
+  "measured": 0,
+  "warmups": "Two total excluded finite readiness flows, one per stream; not900 admission",
+  "condition": "C12 mixed desktop-local + worker Orca-relayed HTTP K3 concurrency2",
+  "rootNativeGoal": "01a112a5-d6bb-74e2-bf7c-ace73cb513b5 ACTIVE",
+  "exactFixtureSha256": "da0ecc4ad0885746ab6e716585473917ab2b543a505bf0db09ebacfaa7943cbb",
+  "existingConfigSha256": "1b2e464a9dd2a191954504161862d3aa19a991126eb2b08c4de55a40778fd002",
+  "phoneResourcesTouched": false,
+  "newWorkers": 0,
+  "retry": false
+}

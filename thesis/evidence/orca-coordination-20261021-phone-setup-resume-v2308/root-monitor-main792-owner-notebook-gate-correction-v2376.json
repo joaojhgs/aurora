@@ -1,0 +1,28 @@
+{
+  "id": "b73df340-c19a-4ef7-b3f6-18e9f5d8fd58",
+  "ok": true,
+  "result": {
+    "message": {
+      "id": "msg_3c104d5c5135",
+      "run_id": "run_e6054e76e9fc",
+      "delivery_contract": "current_delivery",
+      "from_handle": "term_6a00d9ee-792a-4daf-8578-236290e33108",
+      "to_handle": "dispatch:ctx_37b4d0a3c14f",
+      "subject": "Main792/900 live; owner removes NOTEBOOK-only custom85C gate, existingworker resumes",
+      "body": "Original Root native goal actualACTIVE/unbudgeted. Actual03:12:27Z V2296 new342/450 allcorrect; full792/900=791correct1historicalfailure108mandatoryremain, originalactors/startticks live/copier357pairs0errors3.081GBfree. ROOT-VERIFIED-WAIT-v2376.json/native snapshot/CURRENT nextbound03:17:17.560364Z or earlierfailure/terminal/guard, samefrozenrootsettings/clocks. Changedowner authority395d799c4e8b created03:10:36: custom85C gate removed for PersonalNotebooksetupONLY, tempsstillrecorded/OSfirmwareprotectionsuntouched. Existingworker updatingowned guards/config/runbook, resuming exactalready-local inputs2jobs1200s under actualUSB/memory/disk/deadlineguards; no model/sourcecopy/newworkers/rootphonequeries or900/overnightSTART. Old85C setuphold superseded; no nativebuild/pilot success or actuallaunch claimed frompermission. Physical receivedpacket OWNER-NOTEBOOK-CUSTOM85C-GATE-REMOVED-v2376.json. Please keep authoritative methodology assolewriter accurate and existingworker coordination; Root operationalCurrent updated, no competingVaultplanwrite/review. Root remains mainW-Dcollection/custody, no newrootbenchmark/test/source/actor/settings change. Full13/canonicalK1BIGnotice staypending true900seal+release.",
+      "type": "status",
+      "priority": "normal",
+      "thread_id": null,
+      "payload": null,
+      "created_at": "2026-10-22T03:14:36Z",
+      "delivered_at": null
+    },
+    "mutation": {
+      "requestId": "03f9eb14-96fb-491e-bd6f-c884c91ad39d",
+      "replayed": false
+    }
+  },
+  "_meta": {
+    "runtimeId": "cc9e3275-28c6-4c45-85cc-bdcd2262aa7d"
+  }
+}

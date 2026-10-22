@@ -1,0 +1,15 @@
+{
+  "id": "9ff04e39-359f-4bdf-b2fb-1bfc7385a0b4",
+  "ok": true,
+  "result": {
+    "requestId": "cdac7533-7309-4015-be6f-69bae4a8f0ee",
+    "state": "pending",
+    "method": "terminal.send",
+    "createdAt": "2026-10-18 13:57:48",
+    "updatedAt": "2026-10-18 13:57:48",
+    "interpretation": "Request cdac7533-7309-4015-be6f-69bae4a8f0ee was accepted by terminal.send but its outcome is not recorded yet. The original mutation may still be running, or Orca may have restarted before recording its outcome. Wait for the original command when it is still running; otherwise replay it with --retry-request cdac7533-7309-4015-be6f-69bae4a8f0ee. Do not issue a fresh mutation."
+  },
+  "_meta": {
+    "runtimeId": "cc9e3275-28c6-4c45-85cc-bdcd2262aa7d"
+  }
+}

@@ -1,0 +1,24 @@
+{
+  "at": "2026-10-18T22:34:28.074424+00:00",
+  "status": "REAL_SAVED_GUARD_FAILURE_REPRODUCED_NEW_DRAFT_GUARD_PASSES",
+  "oldFrozenManifestSha256": "369f518fb7a67f3e5df44a6bd5039ef5fc3f64efddb91946f1c0623f11e3bc2b",
+  "oldFullGuardRejects": true,
+  "exactFailedConditions": [
+    "PRIOR_MEASURED_COUNT + MEASURED_COUNT != CONDITION_TARGET",
+    "epoch.get('lastConditionMeasuredIndex') != CONDITION_TARGET"
+  ],
+  "newDraftGuardRejects": false,
+  "newDraftSha256": "f822386e88af69b7bdff2b17157d9dbe3cbd4294b427e95db69854b004bc3e2a",
+  "newEpoch": {
+    "first": 717,
+    "last": 812,
+    "count": 96,
+    "stillRequired": 88,
+    "target": 900
+  },
+  "existingSameCorrectnessAndModelPredicates": true,
+  "scientificParametersSha256": "f683a1c7e330076240bbb1d495b8f5b8af3d03cc70bb5a931980ebb142a4a7a7",
+  "newModelRequests": 0,
+  "newNetworkRequests": 0,
+  "doesNotClaim": "Actual runtime/native admission or provider delivery"
+}

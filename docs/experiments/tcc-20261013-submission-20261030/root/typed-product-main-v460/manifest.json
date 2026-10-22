@@ -1,0 +1,236 @@
+{
+  "at": "2026-10-15T00:32:22.724300+00:00",
+  "host": "personal.skyron-server",
+  "sampleClass": "two typedUI readiness failures before normal submit; no model requests",
+  "typedMainAttempts": 2,
+  "globalVoiceLogicalFlowsUnchanged": 8,
+  "voiceMeasuredSamples": 0,
+  "phase2Allowed": false,
+  "omitted": "fixture credentials/config/DB/full private backend logs/auth bodies; earlier unobserved list bodies not invented; originals retained",
+  "files": {
+    "retained-input-alignment-v458.json": {
+      "bytes": 1084,
+      "sha256": "77e574e9c4c4ffc1f62efeb7565388322bd861a9bbdabe40fe1e8b945d6d077d"
+    },
+    "retirement-v459.json": {
+      "bytes": 755,
+      "sha256": "8158f66ffc631549d7bea877695cb6eb440258e208869b4d45e5a33e434413a1"
+    },
+    "typed-v457/driver-progress.json": {
+      "bytes": 535,
+      "sha256": "17951589b5c05eab63453448ada57bc4247747b8fccd448940c1b05ee8a6e9f2"
+    },
+    "typed-v457/driver-spawn.json": {
+      "bytes": 2438,
+      "sha256": "d143b0cdba7611314325c8a00275104d584c8b4d4a774caa26e5846785aab1b9"
+    },
+    "typed-v457/driver-terminal.json": {
+      "bytes": 643,
+      "sha256": "5f564eeb0388cd4f16438e83a4edd4601799c39a988ed86db062f8d36ae85f20"
+    },
+    "typed-v457/ready.json": {
+      "bytes": 1915,
+      "sha256": "f609c0e9811269adf538edb7fd48b321ef894bf885104d5f9909f020c05bb1eb"
+    },
+    "typed-v457/runtime-manifest.json": {
+      "bytes": 693,
+      "sha256": "a24702ed178cb207c7a238970f388c3f6336885d58ac03c0b6dbcbbdea61169d"
+    },
+    "typed-v457/runtime/launch.json": {
+      "bytes": 1840,
+      "sha256": "bc8eb8de73e7b56f899b76a8d1a1b44a47e370b11004afbbc7aa8a47e5c50f6d"
+    },
+    "typed-v457/runtime/terminal.json": {
+      "bytes": 2050,
+      "sha256": "724a8e71ad26f3f25813c198bfa3bc40614228ec1a037d0bcb0ac89a4c160fdf"
+    },
+    "typed-v457/runtime/voice-stages.installed.json": {
+      "bytes": 121,
+      "sha256": "0dd9f9ac840913f2ac587437cdc55321063fb31b3a48df72bd40b3e825feeccc"
+    },
+    "typed-v457/runtime/voice-stages.jsonl": {
+      "bytes": 2286,
+      "sha256": "bcc4764941771dc418de513b851999b63c1dae6b31c7f146584bed5823157e5e"
+    },
+    "typed-v457/runtime/voice-stages.status.json": {
+      "bytes": 132,
+      "sha256": "1e366543f29a7e627d5fc2ad406df9817b554c0540881c6aa2cdbf142034900f"
+    },
+    "typed-v457/source-guard.json": {
+      "bytes": 455,
+      "sha256": "b4e9393cb033da4482d78eac2633d7e2ad0d980292abf86e5b3a2ec5c4e8f7bc"
+    },
+    "typed-v457/spawn.json": {
+      "bytes": 444,
+      "sha256": "852adadde276cf87e35adc2ac547a0737542bd5fd8fad2731275c55d7f8c9b28"
+    },
+    "typed-v457/terminal.json": {
+      "bytes": 2194,
+      "sha256": "a5b3c99f5646ad05a99b557cbe99e65e348de94ba18b26a592f98510098ad38f"
+    },
+    "typed-v457/ui-case/private/driver-error.txt": {
+      "bytes": 2984,
+      "sha256": "0fd5567faa4321161893922519270d6bbebb76f37a075af9bc7e1464ebc35f3f"
+    },
+    "typed-v457/ui-case/private/network-events.jsonl": {
+      "bytes": 32415,
+      "sha256": "8f587df057d3f86b6f25224fc59bbb370036bc6e24bd8d8d1cd3fdd6637eedd1"
+    },
+    "typed-v457/ui-case/result.json": {
+      "bytes": 1111,
+      "sha256": "ed4eacd5397e467f3ef67e45aa2ef245eba41b71922692592dd78a51c8dbf204"
+    },
+    "typed-v457/ui-case/safe-projection.json": {
+      "bytes": 38006,
+      "sha256": "9f33213e8794c0dab137c20389fb466822ecfd054c3ac43465e72f592c8ef59c"
+    },
+    "typed-v459/driver-progress.json": {
+      "bytes": 535,
+      "sha256": "520819fda81ea0511a5d78669829635b6c21f5694c23c6d94df9c653d8810a24"
+    },
+    "typed-v459/driver-spawn.json": {
+      "bytes": 802,
+      "sha256": "8a731b3d85165f139bea977127d3c5f95c35d432ac2977cd0f4bc869591591c8"
+    },
+    "typed-v459/driver-terminal.json": {
+      "bytes": 643,
+      "sha256": "c009418ac1b3e8199e54c772fa6eb8049162223b16dd635fcf37dcb19d7e949e"
+    },
+    "typed-v459/manifest.json": {
+      "bytes": 1037,
+      "sha256": "94a3b8aa0c1057f5f07751dbddff2470292915142727676a5558c0d2b0609561"
+    },
+    "typed-v459/ready.json": {
+      "bytes": 1915,
+      "sha256": "9c581058cfee1e3888b143c17d608f6a10cc47ac285c951eaf485f26bc633ff7"
+    },
+    "typed-v459/runtime/launch.json": {
+      "bytes": 1840,
+      "sha256": "ddc0706808e8ae537b889b5711ce00e94811f7d3fa2a0518109cf0f827be8fc5"
+    },
+    "typed-v459/runtime/terminal.json": {
+      "bytes": 2050,
+      "sha256": "37e56c7044d7e64a957425f3b17df027d4df370efca676ef1e2b3e9813d3689c"
+    },
+    "typed-v459/runtime/voice-stages.installed.json": {
+      "bytes": 121,
+      "sha256": "d13415b6d106f3f9ab03243ccc7a052471f904d7d089ee0e65d7ee77b701f408"
+    },
+    "typed-v459/runtime/voice-stages.jsonl": {
+      "bytes": 2286,
+      "sha256": "80d39ca88e3dec09ba588dd118814412758f2b7512fef50e0b06740abd613d75"
+    },
+    "typed-v459/runtime/voice-stages.status.json": {
+      "bytes": 132,
+      "sha256": "1e366543f29a7e627d5fc2ad406df9817b554c0540881c6aa2cdbf142034900f"
+    },
+    "typed-v459/source-guard.json": {
+      "bytes": 455,
+      "sha256": "740fb2470b78400a8d9cc08f4f27b8e43bc9c0918b235cd5e127dd1e5032528e"
+    },
+    "typed-v459/spawn.json": {
+      "bytes": 444,
+      "sha256": "803d1b4ce663e323c6e4721e295e8f04ea16fcaadd16a04439bb321236c43193"
+    },
+    "typed-v459/terminal.json": {
+      "bytes": 2194,
+      "sha256": "e48ee3532c92b02e72e4cc5091064a33f070a673ab304cfbb725a8638aaafa92"
+    },
+    "typed-v459/ui-case/private/bodies/0006-request.bin": {
+      "bytes": 52,
+      "sha256": "0121f14bd363f438a4649151fca63a0d51959cc229a961cf0f67640cbd652de0"
+    },
+    "typed-v459/ui-case/private/bodies/0007-request.bin": {
+      "bytes": 0,
+      "sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+    },
+    "typed-v459/ui-case/private/bodies/0016-request.bin": {
+      "bytes": 52,
+      "sha256": "0121f14bd363f438a4649151fca63a0d51959cc229a961cf0f67640cbd652de0"
+    },
+    "typed-v459/ui-case/private/bodies/0016-response.bin": {
+      "bytes": 63,
+      "sha256": "80c5210259ccdb6020be93bed493e0c31db34a622fed57af0cecac3c5f3585f4"
+    },
+    "typed-v459/ui-case/private/bodies/0017-request.bin": {
+      "bytes": 0,
+      "sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+    },
+    "typed-v459/ui-case/private/bodies/0017-response.bin": {
+      "bytes": 63,
+      "sha256": "80c5210259ccdb6020be93bed493e0c31db34a622fed57af0cecac3c5f3585f4"
+    },
+    "typed-v459/ui-case/private/bodies/0021-request.bin": {
+      "bytes": 52,
+      "sha256": "0121f14bd363f438a4649151fca63a0d51959cc229a961cf0f67640cbd652de0"
+    },
+    "typed-v459/ui-case/private/bodies/0021-response.bin": {
+      "bytes": 63,
+      "sha256": "80c5210259ccdb6020be93bed493e0c31db34a622fed57af0cecac3c5f3585f4"
+    },
+    "typed-v459/ui-case/private/bodies/0022-request.bin": {
+      "bytes": 0,
+      "sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+    },
+    "typed-v459/ui-case/private/bodies/0022-response.bin": {
+      "bytes": 63,
+      "sha256": "80c5210259ccdb6020be93bed493e0c31db34a622fed57af0cecac3c5f3585f4"
+    },
+    "typed-v459/ui-case/private/bodies/0024-request.bin": {
+      "bytes": 52,
+      "sha256": "0121f14bd363f438a4649151fca63a0d51959cc229a961cf0f67640cbd652de0"
+    },
+    "typed-v459/ui-case/private/bodies/0024-response.bin": {
+      "bytes": 1183282,
+      "sha256": "5693243bdec53e72f594d3f349b2b884753af3572f13d44e71156ef0e806458f"
+    },
+    "typed-v459/ui-case/private/bodies/0025-request.bin": {
+      "bytes": 0,
+      "sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+    },
+    "typed-v459/ui-case/private/bodies/0025-response.bin": {
+      "bytes": 927790,
+      "sha256": "a389e152b0de921051358a92c3beea2832cd90fe47985a49ac32e9cd5d3b0b95"
+    },
+    "typed-v459/ui-case/private/bodies/0031-request.bin": {
+      "bytes": 52,
+      "sha256": "0121f14bd363f438a4649151fca63a0d51959cc229a961cf0f67640cbd652de0"
+    },
+    "typed-v459/ui-case/private/bodies/0031-response.bin": {
+      "bytes": 1183282,
+      "sha256": "d5d9bdd8d37069637537cad62035a73464ec6f5b05db008a998ad96c3b8700a8"
+    },
+    "typed-v459/ui-case/private/bodies/0032-request.bin": {
+      "bytes": 0,
+      "sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+    },
+    "typed-v459/ui-case/private/bodies/0032-response.bin": {
+      "bytes": 927790,
+      "sha256": "a389e152b0de921051358a92c3beea2832cd90fe47985a49ac32e9cd5d3b0b95"
+    },
+    "typed-v459/ui-case/private/driver-error.txt": {
+      "bytes": 2950,
+      "sha256": "e29d055bf83134266ea5fa9a3e25f13b0b0d03c4dce5a2fd36098f7fd364ff44"
+    },
+    "typed-v459/ui-case/private/in-context-primary.json": {
+      "bytes": 2856,
+      "sha256": "e92c23357a763d07dac6c18cc807393ab8947f91cfebdef62a61896c76432678"
+    },
+    "typed-v459/ui-case/private/in-context-primary.png": {
+      "bytes": 84860,
+      "sha256": "97ad8c113ce4cfe4e48523ef636151e0e6e191ca48ce5b7969c8a3e033b667c0"
+    },
+    "typed-v459/ui-case/private/network-events.jsonl": {
+      "bytes": 26213,
+      "sha256": "9b0f374b24f84a244190ae08316701befcb2e5b498700b4d055483ab41855226"
+    },
+    "typed-v459/ui-case/result.json": {
+      "bytes": 1110,
+      "sha256": "207eff4c8aefd23f98e818446e88af72795bedc330dee9daf13a10cfc88591e2"
+    },
+    "typed-v459/ui-case/safe-projection.json": {
+      "bytes": 30947,
+      "sha256": "383ebfc9aee1ba218315cfc0effec10b6e9786ccda1e06f0170de6199350cf3b"
+    }
+  }
+}

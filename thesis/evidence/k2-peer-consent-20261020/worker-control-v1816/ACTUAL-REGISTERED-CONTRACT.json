@@ -1,0 +1,9 @@
+{
+  "method": "Orchestrator.ExternalUserInput",
+  "requiredPermissions": [
+    "Orchestrator.use"
+  ],
+  "source": "/home/developer/projects/aurora/thesis/sources/python-audio-p2p-tts-wiring-v1706/source/app/services/orchestrator/service.py",
+  "sourceSha256": "0b77092091946b94130945b3bfb670a922a209b846d5ffe30e23f75b52f982f3",
+  "unusedMethodNamePermissionRemoved": "Orchestrator.ExternalUserInput"
+}

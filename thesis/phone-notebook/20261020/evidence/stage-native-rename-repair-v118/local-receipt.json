@@ -1,0 +1,8 @@
+{
+  "bytes": 1405,
+  "copyOnly": true,
+  "custody": "Notebook result persisted and fsynced before relay; remote receipt in same output",
+  "localPath": "/home/developer/projects/aurora/thesis/phone-notebook/20261020/evidence/stage-native-rename-repair-v118/result.json",
+  "remotePath": "/home/developer/projects/aurora/thesis/phone-notebook/20261020/evidence/stage-native-rename-repair-v118.json",
+  "sha256": "7c0689bd1ede96386d8a71a099dfa17b8012264f16e78ebf360e651c202f79b4"
+}

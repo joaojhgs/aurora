@@ -1,0 +1,37 @@
+{
+  "observedAt": "2026-10-17T21:46:54.269721+00:00",
+  "run": "run_e6054e76e9fc",
+  "task": "task_d7ea336050cf",
+  "dispatch": "ctx_37b4d0a3c14f",
+  "rootRequest": "msg_faa72fdea41c",
+  "scope": "ONE read-only changed-resolver/pathing diff check; prior statistical review reused. No tests/replay/metrics recalculation/archive/model/WAV hashes/SUT/Personalcommands.",
+  "source": {
+    "path": "thesis/analysis/k1_saved_case_history.py",
+    "sha256": "4a406dd330e2396d38a6ce3b8b5a38362a7727058aff644d0232bdff54474608",
+    "previousSource": "thesis/analysis/source-history/k1-before-coverage-chain-v1289/k1_saved_case_history.py",
+    "previousSHA256": "e8e531b95dedac0296b6dcb24cab44d5461f6cf9e44d4291cdde962a4ad1d2c3",
+    "unchangedFunctionAST": {
+      "sha": true,
+      "finite": true,
+      "distribution": true,
+      "read_bound": true,
+      "paired_spans": true,
+      "phase_counts": true,
+      "write_once": true,
+      "write_bytes_once": true
+    }
+  },
+  "verdict": "NO_MATERIAL_RESOLVER_OR_PATHING_DEFECT_FOUND",
+  "facts": [
+    "Optional provider-coverage-chain adds exact checkpointsequence/time and allfilekey/bytes/SHA metadata checks. Relative local paths must resolve canonically to existing files under physical repo/thesis.",
+    "Consumed voicechunks still use existing read_bound size/SHA verification and contiguous prefix-range checks; unconsumed resource/model files are not claimed freshly rehashed.",
+    "Default single-extraction behavior remains, only optional chain chooses other immutable file locations; source-records bind actual chain bytes. No span/mathematical/outcome function changed.",
+    "ExistingRoot one51-case replay retained36measured/15excluded; flow,harness,requester metrics unchanged. Provider service/model coverage24->36 is earlier-prefix custody completion, not new experiment measurements, overwritten outcomes or900seal."
+  ],
+  "actualSavedValidation": "thesis/evidence/orca-relayed-http-v1197/analysis-v1290/VALIDATION.json",
+  "savedValidationStatus": "PASS_SAME_CASES_UNCHANGED_LOCAL_AND_FLOW_METRICS_PROVIDER_COVERAGE_COMPLETED",
+  "retainedCurrentExecutedSource": "thesis/evidence/orca-relayed-http-v1197/analysis-v1290/analysis-source.py",
+  "stillUnknownMetrics": "Existing queue/firstToken/firstAudio/playback/relay-only/externalPiperper-requestCPU remain explicitly unknown; no added claim.",
+  "materialDefects": [],
+  "nextAction": "Close this bounded review. Root owns canonical publication and future finalcase-report run; no extra scenarios/review/test/benchmark gate."
+}

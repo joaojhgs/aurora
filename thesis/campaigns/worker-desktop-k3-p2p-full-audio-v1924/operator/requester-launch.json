@@ -1,0 +1,15 @@
+{
+  "at": "2026-10-20T21:10:46.736633+00:00",
+  "conditionManifestSha256": "540a35ffa68bf41f321562d28601bd281cabfa51b0c55539d77a6c7ba9d1f674",
+  "controllerPid": 3061666,
+  "controllerStartTicks": 130910712,
+  "excludedWarmups": 15,
+  "measurementAdmitted": false,
+  "newWorker": false,
+  "plannedMeasured": 900,
+  "provider": {
+    "pid": 161160,
+    "startTicks": 28568788,
+    "state": "R"
+  }
+}

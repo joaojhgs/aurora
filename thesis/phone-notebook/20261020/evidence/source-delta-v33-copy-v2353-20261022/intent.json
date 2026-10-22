@@ -1,0 +1,155 @@
+{
+  "admission": {
+    "absoluteEndUtc": "2026-10-22T01:40:08.259445+00:00",
+    "at": "2026-10-22T01:34:08.259445+00:00",
+    "baseSha": "df23fd6e1f80e87dc45b6221bed87c00b4187e66",
+    "baseTreeInventorySha256": "a9699da8ab6c086674dfa5abfb8add03e8029708eb35da8adf3ab2fb0f1777c4",
+    "computedPerFileDataFrames": 43,
+    "copyOutcomeNotYetKnown": true,
+    "copyWindowSeconds": 120,
+    "deltaSourceFiles": 1200,
+    "earliestStartUtc": "2026-10-22T01:38:08.259445+00:00",
+    "existingWorker": "term_1f27be31-0284-4366-bb91-30fe538cd30e",
+    "files": [
+      {
+        "bytes": 219794,
+        "name": "ORIGINAL-FIXED-INPUT.wav",
+        "path": "thesis/phone-notebook/20261020/source-delta-v28/ORIGINAL-FIXED-INPUT.wav",
+        "sha256": "da0ecc4ad0885746ab6e716585473917ab2b543a505bf0db09ebacfaa7943cbb"
+      },
+      {
+        "bytes": 3575664,
+        "name": "SOURCE-DELTA.tar.xz",
+        "path": "thesis/phone-notebook/20261020/source-delta-v28/SOURCE-DELTA.tar.xz",
+        "sha256": "b3fbbc88962f4882710a92a7d49b70ab14a31edc63b39526867ba6d7e7f1f966"
+      },
+      {
+        "bytes": 114458,
+        "name": "SOURCE-FILE-INVENTORY.json.gz",
+        "path": "thesis/phone-notebook/20261020/source-delta-v28/SOURCE-FILE-INVENTORY.json.gz",
+        "sha256": "8939411a36fc6d6b09b48099ad388a70e09c24269996609669e4fbb6e0342bd6"
+      },
+      {
+        "bytes": 3820,
+        "name": "SOURCE-REUSE-INDEX.json",
+        "path": "thesis/phone-notebook/20261020/source-delta-v28/SOURCE-REUSE-INDEX.json",
+        "sha256": "214813fc362db20f409b532d934de268ca60d54de0b44f729985f70f193601e8"
+      }
+    ],
+    "guards": [
+      "Receiver --until equals exact absoluteEndUtc and existing hard alarm/TTY restoration; preserve failure/partial evidence",
+      "Single sequential sender; no overlapping terminal writes or ambiguous accepted-send retries",
+      "Worker checks own current free disk/RAM/thermal/data-only95C or stricter existing guards before start; build/inference85C unchanged",
+      "Validate four lengths/hashes, exact Notebook base and complete1959target source blob/mode inventory before assembly/execution; preserve dirty repository",
+      "No provider restart/new forward/credentials/Git writes/new worker/model inference/phone900 from this source-only admission"
+    ],
+    "historicalV28ManifestFramePlan": {
+      "bytes": 65536,
+      "frames": 60
+    },
+    "mainAtAdmission": {
+      "actors": [
+        {
+          "expectedStartTicks": 139740362,
+          "matches": true,
+          "pid": 3965950,
+          "startTicks": 139740362,
+          "state": "S"
+        },
+        {
+          "expectedStartTicks": 139740616,
+          "matches": true,
+          "pid": 3965978,
+          "startTicks": 139740616,
+          "state": "R"
+        },
+        {
+          "expectedStartTicks": 139740363,
+          "matches": true,
+          "pid": 3965951,
+          "startTicks": 139740363,
+          "state": "S"
+        }
+      ],
+      "at": "2026-10-22T01:34:08.253878+00:00",
+      "classification": "VERIFIED_WAIT",
+      "conditionCountsOnly": {
+        "attempted": 685,
+        "correct": 684,
+        "failed": 1,
+        "incorrect": 0,
+        "planned": 900,
+        "unattempted": 215
+      },
+      "copier": {
+        "WAV": 249,
+        "cases": 249,
+        "errors": [],
+        "freeBytes": 3169144832,
+        "receipt": "thesis/campaigns/worker-desktop-k1-orca-relayed-http-remaining450-v2296/receipts/000231.json",
+        "sha256": "944e4311477e2a2c6c2a80a2c145571b643564ceabfe3a353f1e7bcb2ab8f8a5"
+      },
+      "epochMeasured": {
+        "attempted": 235,
+        "correct": 235,
+        "failed": 0,
+        "incorrect": 0,
+        "planned": 450,
+        "timeouts": 0
+      },
+      "manifestSha256": "9adbf9ba3a7ec0948a087edad3655cf94ee344b3a2371a78d15f188f44150d42",
+      "measurementInputsNotModifiedByThisObserver": true,
+      "newSutCalls": 0,
+      "observationOnly": true,
+      "processSignals": 0,
+      "terminalSummaryPresent": false
+    },
+    "maximumActiveSeconds": 120,
+    "maximumBytes": 12582912,
+    "maximumConcurrentSenders": 1,
+    "maximumFrameRawBytes": 98048,
+    "maximumPayloadBytesPerSecond": 131072,
+    "maximumWireBytesPerSecond": 262144,
+    "newOperationNotOldWindowExtension": true,
+    "newSutCalls": 0,
+    "noReceiverOrSenderStartupBeforeEarliestStart": true,
+    "notebookControl": "term_a2ed5feb-7c92-48e4-bd88-d1b0e6737989",
+    "notebookControlIncarnation": "328cd72f-c7ea-49ff-a2db-b9275b085037",
+    "notebookTarget": "ssh:ssh-sem-notebook-personal",
+    "oldUnusedConfirmationMessages": [
+      "msg_6f8ea0aafa90",
+      "msg_6b1ac7496156"
+    ],
+    "operationId": "source-delta-v33-copy-v2353-20261022",
+    "preparedNotebookManifest": "source-control-v29/source-manifest-admitted-v33.json",
+    "preparedNotebookManifestSha256": "c4ab9f18b9189e8c4fe15ce4897cc3f241e535720dfff9136eb291b402acf0c9",
+    "preparedReceiverNotebookPath": "source-control-v29/receiver-admitted-v33.py",
+    "preparedReceiverReceipt": "thesis/phone-notebook/20261020/evidence/prepare-admitted-receiver-20261022T013044/result.json",
+    "preparedReceiverReceiptSha256": "fdbf7b8ed4dbcc24aef42753bbfffcc49684d17554a2b9f15df452dc43b7396c",
+    "priorAdmission": "thesis/evidence/source-sync-ebde-runtime-v2340/SOURCE-DELTA-TRANSFER-ADMISSION-v2350.json",
+    "priorAdmissionClosedUnusedNotExtended": true,
+    "priorWindowClosedUnusedMessage": "msg_4508e660588b",
+    "receiverScript": "thesis/phone-notebook/20261020/scripts/source_frame_receiver_v29.py",
+    "receiverScriptSha256": "f47d791347a08378f25f6865405e1e93a310e5072b699174d850e69459628975",
+    "requestMessage": "msg_6b1ac7496156",
+    "reusedGitObjects": 759,
+    "rootNativeGoal": "01a112a5-d6bb-74e2-bf7c-ace73cb513b5",
+    "route": "Existing approved Orca text control stream to same Personal notebook only",
+    "runId": "run_e6054e76e9fc",
+    "schedulingLeadTimeSeconds": 240,
+    "schedulingPolicy": "4minute pre-copy delivery/ACK lead; actual receiver+sender and copy bounded to fixed120second UTC window, never oldwindow extension",
+    "sourceManifest": "thesis/phone-notebook/20261020/source-delta-v28/DELTA-MANIFEST.json",
+    "sourceManifestSha256": "67ca748ae480e0061c95a19d9f771648ff454133e1fbe5379580be0977b7739f",
+    "sourceSha": "ebde3a8acf6315f920d03593845f17a1fc65a733",
+    "state": "NEW_FUTURE_SOURCE_DELTA_COPY_ADMITTED_NOT_LAUNCHED",
+    "targetSourceFiles": 1959,
+    "totalPayloadBytes": 3913736
+  },
+  "at": "2026-10-22T01:38:16.477796+00:00",
+  "bytes": 3913736,
+  "deadline": "2026-10-22T01:40:08.259445+00:00",
+  "maximumFrameBytes": 98048,
+  "noAmbiguousReplay": true,
+  "remote": "/home/developer/projects/aurora/thesis/phone-notebook/20261020/deployment/ebde3a8acf6315f920d03593845f17a1fc65a733/source-delta-v33-copy-v2353-20261022",
+  "singleSendStream": true
+}

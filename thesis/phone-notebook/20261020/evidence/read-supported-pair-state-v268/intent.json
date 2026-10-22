@@ -1,0 +1,12 @@
+{
+  "controlDeadline": "2026-10-22T10:10:00Z",
+  "explicitNewline": true,
+  "host": "ssh:ssh-sem-notebook-personal",
+  "incarnation": "328cd72f-c7ea-49ff-a2db-b9275b085037",
+  "remoteResult": "/home/developer/projects/aurora/thesis/phone-notebook/20261020/evidence/read-supported-pair-state-v268.json",
+  "rootAdmissionMessage": "existing-owner-maintained-safe-native-pair-readiness-reader-no-secret-values",
+  "script": "scripts/read_supported_pair_state_v268.py",
+  "scriptSha256": "c029d22e7c0ef9076ec7142d6f3ade37835e7f26406aba28f71b1a0a82197ca7",
+  "singleSend": true,
+  "terminal": "term_a2ed5feb-7c92-48e4-bd88-d1b0e6737989"
+}

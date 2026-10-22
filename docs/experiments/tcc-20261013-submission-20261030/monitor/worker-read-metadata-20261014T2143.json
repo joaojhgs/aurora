@@ -1,0 +1,15 @@
+{
+  "receipt": "0180719a-1979-4626-ba3a-f6463ada20fa",
+  "dispatchId": "ctx_37b4d0a3c14f",
+  "status": {
+    "worker": "ready",
+    "terminal": "running",
+    "liveness": "live"
+  },
+  "sourceExact": true,
+  "contentComplete": false,
+  "warnings": [
+    "Older transcript records were clipped by the remote scan limit and are not pageable through this EOF cursor; the cursor only follows records appended after this read."
+  ],
+  "scope": "limit1 metadata only; no transcript completion claim"
+}

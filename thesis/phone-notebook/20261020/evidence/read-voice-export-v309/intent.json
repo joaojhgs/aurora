@@ -1,0 +1,12 @@
+{
+  "controlDeadline": "2026-10-22T11:20:00Z",
+  "explicitNewline": true,
+  "host": "ssh:ssh-sem-notebook-personal",
+  "incarnation": "328cd72f-c7ea-49ff-a2db-b9275b085037",
+  "remoteResult": "/home/developer/projects/aurora/thesis/phone-notebook/20261020/evidence/read-voice-export-v309.json",
+  "rootAdmissionMessage": "existing v2398 exact failed method export and own configuration read, no inference repeat",
+  "script": "scripts/read_voice_export_v309.py",
+  "scriptSha256": "9a69d3eae5e66721522a28d93bcc9b309ebb782170e3feba4acc7749a877917d",
+  "singleSend": true,
+  "terminal": "term_a2ed5feb-7c92-48e4-bd88-d1b0e6737989"
+}

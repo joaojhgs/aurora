@@ -1,0 +1,18 @@
+{
+  "requesterCopier": {
+    "at": "2026-10-18T14:45:15.183653+00:00",
+    "modelCalls": 0,
+    "pid": 1231601,
+    "role": "Original Root collection utility; not an agent",
+    "sourceSha256": "c11a7c4d0d8133603e52a0658eba797747cbb5ac99b87dd9f7248cf57ea0279a",
+    "startTicks": 111317577
+  },
+  "warmupFinalizer": {
+    "at": "2026-10-18T14:45:15.196727+00:00",
+    "modelCalls": 0,
+    "pid": 1231602,
+    "role": "Original Root collection utility; not an agent",
+    "sourceSha256": "1b4116ea46226bfc96cf5c56190662caf3070fc93c05f59465d332e5843a9488",
+    "startTicks": 111317578
+  }
+}

@@ -1,0 +1,146 @@
+{
+  "at": "2026-10-22T11:24:27.200092+00:00",
+  "status": "MEASURED_COLLECTION_RESUMED_FIRST_REMAINING_PAIR_CORRECT_AND_COPIED",
+  "requester": {
+    "pid": 462924,
+    "startTicks": 144596371,
+    "state": "S"
+  },
+  "providerController": {
+    "pid": 2866664,
+    "startTicks": 42281259
+  },
+  "providerReceiver": {
+    "pid": 2866665,
+    "startTicks": 42281319
+  },
+  "manifestSha256": "3bfca19d2dd0a9eec3981eae256168a5badd9ac2bb58a270ff8a55df1d986cce",
+  "gateSha256": "917f4e01e96ebf29e8af661840976a2a9f2952194b0f0f604ea7b29be12d4f34",
+  "gate": {
+    "actualEnqueueObservations": 90,
+    "at": "2026-10-22T11:22:22.030089+00:00",
+    "campaignManifestSha256": "3bfca19d2dd0a9eec3981eae256168a5badd9ac2bb58a270ff8a55df1d986cce",
+    "companionTarget": 640,
+    "correctHTTP": 15,
+    "correctLocal": 15,
+    "excludedFlows": 30,
+    "extraAutomaticTts": 0,
+    "measuredConsumed": 0,
+    "nativeAcceleration": [
+      {
+        "actualOffloadedLayers": 25,
+        "totalLayers": 25
+      }
+    ],
+    "nativeInvocationPairs": 90,
+    "nativeTtsInvocations": 30,
+    "previousQueueObservationsInvented": false,
+    "primaryTarget": 640,
+    "priorAcceptedWarmupPairs": 16,
+    "providerManifestSha256": "1535884cdd504a1dd76b6df7b5e9815d5acdea4867a9fbda1cacd5cef168a15f",
+    "sameStageParallelismClaim": false,
+    "status": "ADMITTED_FRESH15_PAIRED_QUEUE_NATIVE_AUDIO_REMAINING640",
+    "totalActualExcludedPairs": 31,
+    "warmupPooledIntoMeasured": false
+  },
+  "firstRemainingGlobalIndex": 261,
+  "firstPerStreamStatus": {
+    "HTTP": "completed_correct",
+    "local": "completed_correct"
+  },
+  "firstPerStreamDurationMs": {
+    "HTTP": 31474.371544,
+    "local": 14089.079486
+  },
+  "audio": {
+    "HTTP": {
+      "bytes": 30252,
+      "sha256": "3cee46b33ca4802dfa289b4f1cc5f2c6f1e6b576587b7352f6994b0423d92efe",
+      "frames": 15104,
+      "sampleRate": 22050,
+      "channels": 1
+    },
+    "local": {
+      "bytes": 31276,
+      "sha256": "744e51ea62848d7f10c097167b2b9022504c39a9969007f9d88172e2cd1755af",
+      "frames": 15616,
+      "sampleRate": 22050,
+      "channels": 1
+    }
+  },
+  "archiveBytes": 44557,
+  "archiveSha256": "a182686cec0b1e98980981595427568a26313e7a3bf9bfb5f66bf9853944a95c",
+  "priorRetainedCorrectPerStream": 260,
+  "currentSnapshot": {
+    "at": "2026-10-22T11:23:49.927602+00:00",
+    "companion": {
+      "measured": {
+        "attempted": 2,
+        "correct": 2,
+        "failed": 0,
+        "harnessErrorsIncludedInFailed": 0,
+        "incorrectIncludedInFailed": 0,
+        "offered": 2,
+        "planned": 640,
+        "timeouts": 0,
+        "unstarted": 638
+      },
+      "warmup": {
+        "attempted": 15,
+        "correct": 15,
+        "failed": 0,
+        "harnessErrorsIncludedInFailed": 0,
+        "incorrectIncludedInFailed": 0,
+        "offered": 15,
+        "planned": 15,
+        "timeouts": 0,
+        "unstarted": 0
+      }
+    },
+    "completePairedCapsules": 17,
+    "elapsedSeconds": 719.688330997,
+    "lastIndex": 2,
+    "lastNativeParent": "879af78ec56c27fea29d6d8e50c9ffa2",
+    "lastOrdinal": 17,
+    "manifestSha256": "3bfca19d2dd0a9eec3981eae256168a5badd9ac2bb58a270ff8a55df1d986cce",
+    "phase": "measured",
+    "pid": 462924,
+    "primary": {
+      "measured": {
+        "attempted": 2,
+        "correct": 2,
+        "failed": 0,
+        "harnessErrorsIncludedInFailed": 0,
+        "incorrectIncludedInFailed": 0,
+        "offered": 2,
+        "planned": 640,
+        "timeouts": 0,
+        "unstarted": 638
+      },
+      "warmup": {
+        "attempted": 15,
+        "correct": 15,
+        "failed": 0,
+        "harnessErrorsIncludedInFailed": 0,
+        "incorrectIncludedInFailed": 0,
+        "offered": 15,
+        "planned": 15,
+        "timeouts": 0,
+        "unstarted": 0
+      }
+    },
+    "status": "running"
+  },
+  "combinedMeasuredAtThisCutoff": {
+    "primary": 262,
+    "companion": 262
+  },
+  "originalCollectionDeadlineUtc": "2026-10-22T19:14:51.316179+00:00",
+  "clockRenewed": false,
+  "sourceModelAudioSettingsChanged": false,
+  "rootPhoneReadinessActions": 0,
+  "phoneOwnerTerminal": "term_1f27be31-0284-4366-bb91-30fe538cd30e",
+  "sourceIntegrationHandoffSha": "ebde3a8acf6315f920d03593845f17a1fc65a733",
+  "nativeGoalStatus": "active",
+  "fullAggregateGoalComplete": false
+}

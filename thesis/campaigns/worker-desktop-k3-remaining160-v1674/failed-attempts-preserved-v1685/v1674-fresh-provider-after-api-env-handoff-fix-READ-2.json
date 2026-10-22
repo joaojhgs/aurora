@@ -1,0 +1,43 @@
+{
+  "id": "854f8675-ae6e-4c34-a808-225f5d09775f",
+  "ok": true,
+  "result": {
+    "terminal": {
+      "handle": "term_d5651d8d-58e2-4b38-85e2-51c668cc933c",
+      "status": "running",
+      "tail": [
+        "",
+        "",
+        "",
+        "",
+        "",
+        "",
+        "",
+        "",
+        "",
+        "",
+        "",
+        "",
+        "",
+        "",
+        "",
+        "",
+        "",
+        "",
+        "Traceback (most recent call last):",
+        "  File \"<stdin>\", line 67, in <module>",
+        "AssertionError: Existing approved process binding missing; no credentials change"
+      ],
+      "truncated": false,
+      "limited": false,
+      "oldestCursor": "74043",
+      "nextCursor": "74740",
+      "latestCursor": "74740",
+      "returnedLineCount": 21,
+      "source": "stream"
+    }
+  },
+  "_meta": {
+    "runtimeId": "cc9e3275-28c6-4c45-85cc-bdcd2262aa7d"
+  }
+}

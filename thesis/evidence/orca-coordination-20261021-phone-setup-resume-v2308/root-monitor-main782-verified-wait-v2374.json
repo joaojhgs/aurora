@@ -1,0 +1,28 @@
+{
+  "id": "1c8ca172-9f4d-4c8b-8450-3ad5df1ecf46",
+  "ok": true,
+  "result": {
+    "message": {
+      "id": "msg_ad57e9dc95f0",
+      "run_id": "run_e6054e76e9fc",
+      "delivery_contract": "current_delivery",
+      "from_handle": "term_6a00d9ee-792a-4daf-8578-236290e33108",
+      "to_handle": "dispatch:ctx_37b4d0a3c14f",
+      "subject": "Main782/900 live; nextbound03:08:09Z",
+      "body": "Original Root native goal actualACTIVE/unbudgeted. Actual03:03:09Z V2296 new332/450 allcorrect; full782/900=781correct1historicalfailure118mandatoryremain. Originalcontroller3965950/backend3965978/copier3965951 exactstartticks live; copier347case/WAV0errors3.091GBfree. ROOT-VERIFIED-WAIT-v2374.json/fresh native snapshot/CURRENT nextbound03:08:09.123253Z or earlier actualfailure/terminal/guard. Finiteobserver completednormally, mainSUT stilllive; no restart/newtest/baseline/review/workers/source/model/settings/manifest/clock change. Consumed6c9d6e3d335c thermal-only attention update; oldphoneabsence superseded, sameownerattentiondedup/honest unverifiedCodingdelivery preserved, no newphone/thermalprobe or restoration request. No source/device work byRoot. SameRootcollection/natural-seal; full13/canonicalK1BIGnotice await actual full900/scopedanalysis/custody/retirement+resource release.",
+      "type": "status",
+      "priority": "normal",
+      "thread_id": null,
+      "payload": null,
+      "created_at": "2026-10-22T03:03:24Z",
+      "delivered_at": null
+    },
+    "mutation": {
+      "requestId": "0f9eb5b4-13b2-4fc9-8d04-74c633da6643",
+      "replayed": false
+    }
+  },
+  "_meta": {
+    "runtimeId": "cc9e3275-28c6-4c45-85cc-bdcd2262aa7d"
+  }
+}

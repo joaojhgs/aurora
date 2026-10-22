@@ -1,0 +1,19 @@
+{
+  "at": "2026-10-18T18:29:21.136537+00:00",
+  "status": "ACTUAL_NATIVE_GOAL_BLOCKED_SAME_FULL_OBJECTIVE",
+  "nativeThread": "01a112a5-d6bb-74e2-bf7c-ace73cb513b5",
+  "nativeStatus": "blocked",
+  "nativeUpdatedAt": 1792348105,
+  "budget": null,
+  "completionClaimed": false,
+  "blockedAudit": "BLOCKED-AUDIT-v1606.json",
+  "nativeSnapshot": "NATIVE-GOAL-BLOCKED-v1606.json",
+  "sameBlockerConsecutiveGoalTurns": 3,
+  "sourceReviews": "All requested reviews CLOSED",
+  "oldResultsAndSourcePreserved": true,
+  "newWorkersOrSessions": 0,
+  "providerStopRestartOrDeadlineChanges": 0,
+  "nextRequiredCapability": "Restore writes to existing Personal term_d5651d8d-58e2-4b38-85e2-51c668cc933c/inc034ff933-61a3-4c74-b5ad-98a75e8ac21c through supported owning Orca controls; changed evidence before any send or campaign.",
+  "nextMeasuredPriority": "K3remaining184, then authorized remainder/matrix; same full13 intact",
+  "resumeBehavior": "Owner-supported same-native-goal continuation after capability changes; do not create or repeatedly resume a replacement. A later owner resume starts fresh blocked audit."
+}

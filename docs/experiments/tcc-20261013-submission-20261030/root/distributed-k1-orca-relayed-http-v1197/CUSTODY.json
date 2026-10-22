@@ -1,0 +1,72 @@
+{
+  "at": "2026-10-17T20:14:01.766440+00:00",
+  "files": [
+    {
+      "path": "original-provider-revalidation-v1193.json",
+      "bytes": 3103,
+      "sha256": "97f5a73ad6bfbf30e5861c047a83f1e935fb3f91d3a2a0ba5d40a9417dd74770"
+    },
+    {
+      "path": "existing-orca-network-routes-v1191.json",
+      "bytes": 413,
+      "sha256": "d434623d9085d920738c5e86824c7b9a303d1ce2c4e06f6bcbee31042eefe66b"
+    },
+    {
+      "path": "existing-forward-service.json",
+      "bytes": 358,
+      "sha256": "dc52eb1403c502cf939eef98674ccb390441e4617e5b5e0e761e9f2736a1cc76"
+    },
+    {
+      "path": "health-first5s-timeout.json",
+      "bytes": 537,
+      "sha256": "4d6229fb020fe9c859b54c6d0fd279c898f05dd8023fdf723a49d7d05804d7aa"
+    },
+    {
+      "path": "health-authenticated-http200.json",
+      "bytes": 460,
+      "sha256": "daa86dfbf8e2c2abe9a971480539d636f9176df84e74aa77a18472f356694b9a"
+    },
+    {
+      "path": "prestart-config-drift-failure-v1194.json",
+      "bytes": 729,
+      "sha256": "7e6892890aa8cdb2fe92d7b40081bc202671e7325c0cdb7e65cc2746f4d3fe45"
+    },
+    {
+      "path": "requester-launch.json",
+      "bytes": 768,
+      "sha256": "75ddb067bf311c3e9cb4dec53d9353886567ce855e4a86397da9a7755c3dd21d"
+    },
+    {
+      "path": "condition-frozen.json",
+      "bytes": 13753,
+      "sha256": "6bc65cf5cc3c4eddb90b80b0764a01e6a9fc4afbed66f33c731e3ab58528e101"
+    },
+    {
+      "path": "root-proof-finalizer-launch.json",
+      "bytes": 293,
+      "sha256": "897844daaf8024fa5af52728d6f53f069a9cdd160a0715d09dc8bab3ea2aedbd"
+    },
+    {
+      "path": "warmup-progress-v1202.json",
+      "bytes": 374,
+      "sha256": "7cd01fdc034d1fce4192726dc5179535c8c6267d882e620ddeaace895d86a028"
+    },
+    {
+      "path": "provider-budget-v1203.json",
+      "bytes": 941,
+      "sha256": "896d026ac80113ff01a7d54e05bd0fde78dabfde03690de6003e17d5ceffe102"
+    },
+    {
+      "path": "first-ordinary-warmup.raw.json",
+      "bytes": 4764,
+      "sha256": "57346def628af8f6806a04da3c6d8c910d045b77620e106521dbaaf917835a27"
+    },
+    {
+      "path": "REPORT.md",
+      "bytes": 4750,
+      "sha256": "17bab000af072d21ab04ec2ef3e193937e84463caafceb89713d5349a8fe47ea"
+    }
+  ],
+  "credentialsAndPrivateConfigExcluded": true,
+  "fullMeasuredResultsNotYetAvailable": true
+}

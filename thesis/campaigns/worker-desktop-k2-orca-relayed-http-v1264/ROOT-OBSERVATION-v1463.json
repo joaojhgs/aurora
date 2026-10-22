@@ -1,0 +1,763 @@
+{
+  "at": "2026-10-18T06:35:21.355359+00:00",
+  "classification": "VERIFIED_WAIT",
+  "progress": {
+    "attempted": 876,
+    "last_attempt_file": "attempts/attempt-0876-measured.jsonl",
+    "last_attempt_status": "failed",
+    "measured_attempted": 861,
+    "planned_measured": 900,
+    "planned_warmups": 15,
+    "status": "running",
+    "unattempted_measured": 39,
+    "warmups_attempted": 15
+  },
+  "measuredOutcomeCounts": {
+    "completed_correct": 797,
+    "failed": 64
+  },
+  "outcomeCountProvenance": {
+    "previousObservation": "thesis/campaigns/worker-desktop-k2-orca-relayed-http-v1264/ROOT-OBSERVATION-v1462.json",
+    "previousMeasured": 833,
+    "newClosedCaseRowsRead": 28
+  },
+  "processes": {
+    "588011": {
+      "same": true,
+      "state": "S",
+      "startTicks": 105853078
+    },
+    "588053": {
+      "same": true,
+      "state": "S",
+      "startTicks": 105853326
+    },
+    "588276": {
+      "same": true,
+      "state": "S",
+      "startTicks": 105855021
+    },
+    "421717": {
+      "same": true,
+      "state": "S",
+      "startTicks": 104535394
+    }
+  },
+  "frozenManifestSha256": "b15a49adffc5aaa43b426563d5776fa384c92f58e339030b69cb3877e98f2399",
+  "custody": {
+    "cases": 875,
+    "audio": 812,
+    "audioReferences": 812,
+    "receiptRetainedAudioBlobs": 812,
+    "at": "2026-10-18T06:34:52.201949+00:00",
+    "missingPhysicalPaths": [],
+    "copierErrors": [],
+    "pendingStatic": [],
+    "receipt": "thesis/campaigns/worker-desktop-k2-orca-relayed-http-v1264/receipts/000420.json"
+  },
+  "observationWindow": "Read-only window06:28:44 through2026-10-18T06:34:47.452665+00:00: measured842->860; original PID/startTicks live; observer made no SUT calls or lifecycle/source/settings changes. Failed outcomes remain in the declared frozen900.",
+  "newFailedCaseObservations": [
+    {
+      "phase_index": 834,
+      "ordinal": 849,
+      "status": "failed",
+      "failure": {
+        "code": "assistant_reply_predicate_failed",
+        "stage": "assistant"
+      },
+      "correctness": {
+        "assistant_reply_matches_expected_words": false,
+        "transcript_matches_reference_words": true
+      },
+      "flow_duration_ms": 21267.747962,
+      "timeout": false,
+      "within_request_deadline": true,
+      "output_audio": null,
+      "assistant": {
+        "status": "completed",
+        "http_status": 200,
+        "server_tts_status": "skipped",
+        "metadata_error": false,
+        "response_chars": 31,
+        "response_sha256": "a1b7eb2ee7a6aded8dda4e6cf30826f5afffb28a5597ee9389e91eb326d4e319"
+      }
+    },
+    {
+      "phase_index": 835,
+      "ordinal": 850,
+      "status": "failed",
+      "failure": {
+        "code": "assistant_reply_predicate_failed",
+        "stage": "assistant"
+      },
+      "correctness": {
+        "assistant_reply_matches_expected_words": false,
+        "transcript_matches_reference_words": true
+      },
+      "flow_duration_ms": 19331.640642,
+      "timeout": false,
+      "within_request_deadline": true,
+      "output_audio": null,
+      "assistant": {
+        "status": "completed",
+        "http_status": 200,
+        "server_tts_status": "skipped",
+        "metadata_error": false,
+        "response_chars": 31,
+        "response_sha256": "a1b7eb2ee7a6aded8dda4e6cf30826f5afffb28a5597ee9389e91eb326d4e319"
+      }
+    },
+    {
+      "phase_index": 836,
+      "ordinal": 851,
+      "status": "failed",
+      "failure": {
+        "code": "assistant_reply_predicate_failed",
+        "stage": "assistant"
+      },
+      "correctness": {
+        "assistant_reply_matches_expected_words": false,
+        "transcript_matches_reference_words": true
+      },
+      "flow_duration_ms": 19162.337547,
+      "timeout": false,
+      "within_request_deadline": true,
+      "output_audio": null,
+      "assistant": {
+        "status": "completed",
+        "http_status": 200,
+        "server_tts_status": "skipped",
+        "metadata_error": false,
+        "response_chars": 31,
+        "response_sha256": "a1b7eb2ee7a6aded8dda4e6cf30826f5afffb28a5597ee9389e91eb326d4e319"
+      }
+    },
+    {
+      "phase_index": 837,
+      "ordinal": 852,
+      "status": "failed",
+      "failure": {
+        "code": "assistant_reply_predicate_failed",
+        "stage": "assistant"
+      },
+      "correctness": {
+        "assistant_reply_matches_expected_words": false,
+        "transcript_matches_reference_words": true
+      },
+      "flow_duration_ms": 21290.18037,
+      "timeout": false,
+      "within_request_deadline": true,
+      "output_audio": null,
+      "assistant": {
+        "status": "completed",
+        "http_status": 200,
+        "server_tts_status": "skipped",
+        "metadata_error": false,
+        "response_chars": 31,
+        "response_sha256": "a1b7eb2ee7a6aded8dda4e6cf30826f5afffb28a5597ee9389e91eb326d4e319"
+      }
+    },
+    {
+      "phase_index": 838,
+      "ordinal": 853,
+      "status": "failed",
+      "failure": {
+        "code": "assistant_reply_predicate_failed",
+        "stage": "assistant"
+      },
+      "correctness": {
+        "assistant_reply_matches_expected_words": false,
+        "transcript_matches_reference_words": true
+      },
+      "flow_duration_ms": 19534.331229,
+      "timeout": false,
+      "within_request_deadline": true,
+      "output_audio": null,
+      "assistant": {
+        "status": "completed",
+        "http_status": 200,
+        "server_tts_status": "skipped",
+        "metadata_error": false,
+        "response_chars": 31,
+        "response_sha256": "a1b7eb2ee7a6aded8dda4e6cf30826f5afffb28a5597ee9389e91eb326d4e319"
+      }
+    },
+    {
+      "phase_index": 839,
+      "ordinal": 854,
+      "status": "failed",
+      "failure": {
+        "code": "assistant_reply_predicate_failed",
+        "stage": "assistant"
+      },
+      "correctness": {
+        "assistant_reply_matches_expected_words": false,
+        "transcript_matches_reference_words": true
+      },
+      "flow_duration_ms": 19101.760562,
+      "timeout": false,
+      "within_request_deadline": true,
+      "output_audio": null,
+      "assistant": {
+        "status": "completed",
+        "http_status": 200,
+        "server_tts_status": "skipped",
+        "metadata_error": false,
+        "response_chars": 31,
+        "response_sha256": "a1b7eb2ee7a6aded8dda4e6cf30826f5afffb28a5597ee9389e91eb326d4e319"
+      }
+    },
+    {
+      "phase_index": 840,
+      "ordinal": 855,
+      "status": "failed",
+      "failure": {
+        "code": "assistant_reply_predicate_failed",
+        "stage": "assistant"
+      },
+      "correctness": {
+        "assistant_reply_matches_expected_words": false,
+        "transcript_matches_reference_words": true
+      },
+      "flow_duration_ms": 21100.339197,
+      "timeout": false,
+      "within_request_deadline": true,
+      "output_audio": null,
+      "assistant": {
+        "status": "completed",
+        "http_status": 200,
+        "server_tts_status": "skipped",
+        "metadata_error": false,
+        "response_chars": 31,
+        "response_sha256": "a1b7eb2ee7a6aded8dda4e6cf30826f5afffb28a5597ee9389e91eb326d4e319"
+      }
+    },
+    {
+      "phase_index": 841,
+      "ordinal": 856,
+      "status": "failed",
+      "failure": {
+        "code": "assistant_reply_predicate_failed",
+        "stage": "assistant"
+      },
+      "correctness": {
+        "assistant_reply_matches_expected_words": false,
+        "transcript_matches_reference_words": true
+      },
+      "flow_duration_ms": 21673.914021,
+      "timeout": false,
+      "within_request_deadline": true,
+      "output_audio": null,
+      "assistant": {
+        "status": "completed",
+        "http_status": 200,
+        "server_tts_status": "skipped",
+        "metadata_error": false,
+        "response_chars": 31,
+        "response_sha256": "a1b7eb2ee7a6aded8dda4e6cf30826f5afffb28a5597ee9389e91eb326d4e319"
+      }
+    },
+    {
+      "phase_index": 842,
+      "ordinal": 857,
+      "status": "failed",
+      "failure": {
+        "code": "assistant_reply_predicate_failed",
+        "stage": "assistant"
+      },
+      "correctness": {
+        "assistant_reply_matches_expected_words": false,
+        "transcript_matches_reference_words": true
+      },
+      "flow_duration_ms": 23881.13505,
+      "timeout": false,
+      "within_request_deadline": true,
+      "output_audio": null,
+      "assistant": {
+        "status": "completed",
+        "http_status": 200,
+        "server_tts_status": "skipped",
+        "metadata_error": false,
+        "response_chars": 31,
+        "response_sha256": "a1b7eb2ee7a6aded8dda4e6cf30826f5afffb28a5597ee9389e91eb326d4e319"
+      }
+    },
+    {
+      "phase_index": 843,
+      "ordinal": 858,
+      "status": "failed",
+      "failure": {
+        "code": "assistant_reply_predicate_failed",
+        "stage": "assistant"
+      },
+      "correctness": {
+        "assistant_reply_matches_expected_words": false,
+        "transcript_matches_reference_words": true
+      },
+      "flow_duration_ms": 24265.485147,
+      "timeout": false,
+      "within_request_deadline": true,
+      "output_audio": null,
+      "assistant": {
+        "status": "completed",
+        "http_status": 200,
+        "server_tts_status": "skipped",
+        "metadata_error": false,
+        "response_chars": 31,
+        "response_sha256": "a1b7eb2ee7a6aded8dda4e6cf30826f5afffb28a5597ee9389e91eb326d4e319"
+      }
+    },
+    {
+      "phase_index": 844,
+      "ordinal": 859,
+      "status": "failed",
+      "failure": {
+        "code": "assistant_reply_predicate_failed",
+        "stage": "assistant"
+      },
+      "correctness": {
+        "assistant_reply_matches_expected_words": false,
+        "transcript_matches_reference_words": true
+      },
+      "flow_duration_ms": 21065.648008,
+      "timeout": false,
+      "within_request_deadline": true,
+      "output_audio": null,
+      "assistant": {
+        "status": "completed",
+        "http_status": 200,
+        "server_tts_status": "skipped",
+        "metadata_error": false,
+        "response_chars": 31,
+        "response_sha256": "a1b7eb2ee7a6aded8dda4e6cf30826f5afffb28a5597ee9389e91eb326d4e319"
+      }
+    },
+    {
+      "phase_index": 845,
+      "ordinal": 860,
+      "status": "failed",
+      "failure": {
+        "code": "assistant_reply_predicate_failed",
+        "stage": "assistant"
+      },
+      "correctness": {
+        "assistant_reply_matches_expected_words": false,
+        "transcript_matches_reference_words": true
+      },
+      "flow_duration_ms": 20011.633032,
+      "timeout": false,
+      "within_request_deadline": true,
+      "output_audio": null,
+      "assistant": {
+        "status": "completed",
+        "http_status": 200,
+        "server_tts_status": "skipped",
+        "metadata_error": false,
+        "response_chars": 31,
+        "response_sha256": "a1b7eb2ee7a6aded8dda4e6cf30826f5afffb28a5597ee9389e91eb326d4e319"
+      }
+    },
+    {
+      "phase_index": 846,
+      "ordinal": 861,
+      "status": "failed",
+      "failure": {
+        "code": "assistant_reply_predicate_failed",
+        "stage": "assistant"
+      },
+      "correctness": {
+        "assistant_reply_matches_expected_words": false,
+        "transcript_matches_reference_words": true
+      },
+      "flow_duration_ms": 19901.660271,
+      "timeout": false,
+      "within_request_deadline": true,
+      "output_audio": null,
+      "assistant": {
+        "status": "completed",
+        "http_status": 200,
+        "server_tts_status": "skipped",
+        "metadata_error": false,
+        "response_chars": 31,
+        "response_sha256": "a1b7eb2ee7a6aded8dda4e6cf30826f5afffb28a5597ee9389e91eb326d4e319"
+      }
+    },
+    {
+      "phase_index": 847,
+      "ordinal": 862,
+      "status": "failed",
+      "failure": {
+        "code": "assistant_reply_predicate_failed",
+        "stage": "assistant"
+      },
+      "correctness": {
+        "assistant_reply_matches_expected_words": false,
+        "transcript_matches_reference_words": true
+      },
+      "flow_duration_ms": 20642.895816,
+      "timeout": false,
+      "within_request_deadline": true,
+      "output_audio": null,
+      "assistant": {
+        "status": "completed",
+        "http_status": 200,
+        "server_tts_status": "skipped",
+        "metadata_error": false,
+        "response_chars": 31,
+        "response_sha256": "a1b7eb2ee7a6aded8dda4e6cf30826f5afffb28a5597ee9389e91eb326d4e319"
+      }
+    },
+    {
+      "phase_index": 848,
+      "ordinal": 863,
+      "status": "failed",
+      "failure": {
+        "code": "assistant_reply_predicate_failed",
+        "stage": "assistant"
+      },
+      "correctness": {
+        "assistant_reply_matches_expected_words": false,
+        "transcript_matches_reference_words": true
+      },
+      "flow_duration_ms": 23382.131912,
+      "timeout": false,
+      "within_request_deadline": true,
+      "output_audio": null,
+      "assistant": {
+        "status": "completed",
+        "http_status": 200,
+        "server_tts_status": "skipped",
+        "metadata_error": false,
+        "response_chars": 31,
+        "response_sha256": "a1b7eb2ee7a6aded8dda4e6cf30826f5afffb28a5597ee9389e91eb326d4e319"
+      }
+    },
+    {
+      "phase_index": 849,
+      "ordinal": 864,
+      "status": "failed",
+      "failure": {
+        "code": "assistant_reply_predicate_failed",
+        "stage": "assistant"
+      },
+      "correctness": {
+        "assistant_reply_matches_expected_words": false,
+        "transcript_matches_reference_words": true
+      },
+      "flow_duration_ms": 21241.899033,
+      "timeout": false,
+      "within_request_deadline": true,
+      "output_audio": null,
+      "assistant": {
+        "status": "completed",
+        "http_status": 200,
+        "server_tts_status": "skipped",
+        "metadata_error": false,
+        "response_chars": 31,
+        "response_sha256": "a1b7eb2ee7a6aded8dda4e6cf30826f5afffb28a5597ee9389e91eb326d4e319"
+      }
+    },
+    {
+      "phase_index": 850,
+      "ordinal": 865,
+      "status": "failed",
+      "failure": {
+        "code": "assistant_reply_predicate_failed",
+        "stage": "assistant"
+      },
+      "correctness": {
+        "assistant_reply_matches_expected_words": false,
+        "transcript_matches_reference_words": true
+      },
+      "flow_duration_ms": 22593.651084,
+      "timeout": false,
+      "within_request_deadline": true,
+      "output_audio": null,
+      "assistant": {
+        "status": "completed",
+        "http_status": 200,
+        "server_tts_status": "skipped",
+        "metadata_error": false,
+        "response_chars": 31,
+        "response_sha256": "a1b7eb2ee7a6aded8dda4e6cf30826f5afffb28a5597ee9389e91eb326d4e319"
+      }
+    },
+    {
+      "phase_index": 851,
+      "ordinal": 866,
+      "status": "failed",
+      "failure": {
+        "code": "assistant_reply_predicate_failed",
+        "stage": "assistant"
+      },
+      "correctness": {
+        "assistant_reply_matches_expected_words": false,
+        "transcript_matches_reference_words": true
+      },
+      "flow_duration_ms": 19484.736362,
+      "timeout": false,
+      "within_request_deadline": true,
+      "output_audio": null,
+      "assistant": {
+        "status": "completed",
+        "http_status": 200,
+        "server_tts_status": "skipped",
+        "metadata_error": false,
+        "response_chars": 31,
+        "response_sha256": "a1b7eb2ee7a6aded8dda4e6cf30826f5afffb28a5597ee9389e91eb326d4e319"
+      }
+    },
+    {
+      "phase_index": 852,
+      "ordinal": 867,
+      "status": "failed",
+      "failure": {
+        "code": "assistant_reply_predicate_failed",
+        "stage": "assistant"
+      },
+      "correctness": {
+        "assistant_reply_matches_expected_words": false,
+        "transcript_matches_reference_words": true
+      },
+      "flow_duration_ms": 19053.156542,
+      "timeout": false,
+      "within_request_deadline": true,
+      "output_audio": null,
+      "assistant": {
+        "status": "completed",
+        "http_status": 200,
+        "server_tts_status": "skipped",
+        "metadata_error": false,
+        "response_chars": 31,
+        "response_sha256": "a1b7eb2ee7a6aded8dda4e6cf30826f5afffb28a5597ee9389e91eb326d4e319"
+      }
+    },
+    {
+      "phase_index": 853,
+      "ordinal": 868,
+      "status": "failed",
+      "failure": {
+        "code": "assistant_reply_predicate_failed",
+        "stage": "assistant"
+      },
+      "correctness": {
+        "assistant_reply_matches_expected_words": false,
+        "transcript_matches_reference_words": true
+      },
+      "flow_duration_ms": 21450.443465,
+      "timeout": false,
+      "within_request_deadline": true,
+      "output_audio": null,
+      "assistant": {
+        "status": "completed",
+        "http_status": 200,
+        "server_tts_status": "skipped",
+        "metadata_error": false,
+        "response_chars": 31,
+        "response_sha256": "a1b7eb2ee7a6aded8dda4e6cf30826f5afffb28a5597ee9389e91eb326d4e319"
+      }
+    },
+    {
+      "phase_index": 854,
+      "ordinal": 869,
+      "status": "failed",
+      "failure": {
+        "code": "assistant_reply_predicate_failed",
+        "stage": "assistant"
+      },
+      "correctness": {
+        "assistant_reply_matches_expected_words": false,
+        "transcript_matches_reference_words": true
+      },
+      "flow_duration_ms": 19435.767427,
+      "timeout": false,
+      "within_request_deadline": true,
+      "output_audio": null,
+      "assistant": {
+        "status": "completed",
+        "http_status": 200,
+        "server_tts_status": "skipped",
+        "metadata_error": false,
+        "response_chars": 31,
+        "response_sha256": "a1b7eb2ee7a6aded8dda4e6cf30826f5afffb28a5597ee9389e91eb326d4e319"
+      }
+    },
+    {
+      "phase_index": 855,
+      "ordinal": 870,
+      "status": "failed",
+      "failure": {
+        "code": "assistant_reply_predicate_failed",
+        "stage": "assistant"
+      },
+      "correctness": {
+        "assistant_reply_matches_expected_words": false,
+        "transcript_matches_reference_words": true
+      },
+      "flow_duration_ms": 18724.785912,
+      "timeout": false,
+      "within_request_deadline": true,
+      "output_audio": null,
+      "assistant": {
+        "status": "completed",
+        "http_status": 200,
+        "server_tts_status": "skipped",
+        "metadata_error": false,
+        "response_chars": 31,
+        "response_sha256": "a1b7eb2ee7a6aded8dda4e6cf30826f5afffb28a5597ee9389e91eb326d4e319"
+      }
+    },
+    {
+      "phase_index": 856,
+      "ordinal": 871,
+      "status": "failed",
+      "failure": {
+        "code": "assistant_reply_predicate_failed",
+        "stage": "assistant"
+      },
+      "correctness": {
+        "assistant_reply_matches_expected_words": false,
+        "transcript_matches_reference_words": true
+      },
+      "flow_duration_ms": 22050.201287,
+      "timeout": false,
+      "within_request_deadline": true,
+      "output_audio": null,
+      "assistant": {
+        "status": "completed",
+        "http_status": 200,
+        "server_tts_status": "skipped",
+        "metadata_error": false,
+        "response_chars": 31,
+        "response_sha256": "a1b7eb2ee7a6aded8dda4e6cf30826f5afffb28a5597ee9389e91eb326d4e319"
+      }
+    },
+    {
+      "phase_index": 857,
+      "ordinal": 872,
+      "status": "failed",
+      "failure": {
+        "code": "assistant_reply_predicate_failed",
+        "stage": "assistant"
+      },
+      "correctness": {
+        "assistant_reply_matches_expected_words": false,
+        "transcript_matches_reference_words": true
+      },
+      "flow_duration_ms": 17656.661748,
+      "timeout": false,
+      "within_request_deadline": true,
+      "output_audio": null,
+      "assistant": {
+        "status": "completed",
+        "http_status": 200,
+        "server_tts_status": "skipped",
+        "metadata_error": false,
+        "response_chars": 31,
+        "response_sha256": "a1b7eb2ee7a6aded8dda4e6cf30826f5afffb28a5597ee9389e91eb326d4e319"
+      }
+    },
+    {
+      "phase_index": 858,
+      "ordinal": 873,
+      "status": "failed",
+      "failure": {
+        "code": "assistant_reply_predicate_failed",
+        "stage": "assistant"
+      },
+      "correctness": {
+        "assistant_reply_matches_expected_words": false,
+        "transcript_matches_reference_words": true
+      },
+      "flow_duration_ms": 20333.189764,
+      "timeout": false,
+      "within_request_deadline": true,
+      "output_audio": null,
+      "assistant": {
+        "status": "completed",
+        "http_status": 200,
+        "server_tts_status": "skipped",
+        "metadata_error": false,
+        "response_chars": 31,
+        "response_sha256": "a1b7eb2ee7a6aded8dda4e6cf30826f5afffb28a5597ee9389e91eb326d4e319"
+      }
+    },
+    {
+      "phase_index": 859,
+      "ordinal": 874,
+      "status": "failed",
+      "failure": {
+        "code": "assistant_reply_predicate_failed",
+        "stage": "assistant"
+      },
+      "correctness": {
+        "assistant_reply_matches_expected_words": false,
+        "transcript_matches_reference_words": true
+      },
+      "flow_duration_ms": 21857.443653,
+      "timeout": false,
+      "within_request_deadline": true,
+      "output_audio": null,
+      "assistant": {
+        "status": "completed",
+        "http_status": 200,
+        "server_tts_status": "skipped",
+        "metadata_error": false,
+        "response_chars": 31,
+        "response_sha256": "a1b7eb2ee7a6aded8dda4e6cf30826f5afffb28a5597ee9389e91eb326d4e319"
+      }
+    },
+    {
+      "phase_index": 860,
+      "ordinal": 875,
+      "status": "failed",
+      "failure": {
+        "code": "assistant_reply_predicate_failed",
+        "stage": "assistant"
+      },
+      "correctness": {
+        "assistant_reply_matches_expected_words": false,
+        "transcript_matches_reference_words": true
+      },
+      "flow_duration_ms": 19305.572909,
+      "timeout": false,
+      "within_request_deadline": true,
+      "output_audio": null,
+      "assistant": {
+        "status": "completed",
+        "http_status": 200,
+        "server_tts_status": "skipped",
+        "metadata_error": false,
+        "response_chars": 31,
+        "response_sha256": "a1b7eb2ee7a6aded8dda4e6cf30826f5afffb28a5597ee9389e91eb326d4e319"
+      }
+    },
+    {
+      "phase_index": 861,
+      "ordinal": 876,
+      "status": "failed",
+      "failure": {
+        "code": "assistant_reply_predicate_failed",
+        "stage": "assistant"
+      },
+      "correctness": {
+        "assistant_reply_matches_expected_words": false,
+        "transcript_matches_reference_words": true
+      },
+      "flow_duration_ms": 20173.408461,
+      "timeout": false,
+      "within_request_deadline": true,
+      "output_audio": null,
+      "assistant": {
+        "status": "completed",
+        "http_status": 200,
+        "server_tts_status": "skipped",
+        "metadata_error": false,
+        "response_chars": 31,
+        "response_sha256": "a1b7eb2ee7a6aded8dda4e6cf30826f5afffb28a5597ee9389e91eb326d4e319"
+      }
+    }
+  ],
+  "failureCause": "UNKNOWN; answer-predicate failure does not establish model quality versus runtime cause.",
+  "firstFailureIndependentObservation": "thesis/campaigns/worker-desktop-k2-orca-relayed-http-v1264/MONITOR-FAILED-CASE-OBSERVATION-v1461.json"
+}

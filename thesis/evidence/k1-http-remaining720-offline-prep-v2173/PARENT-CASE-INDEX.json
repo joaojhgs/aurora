@@ -1,0 +1,3511 @@
+[
+  {
+    "path": "thesis/evidence/orca-relayed-http-v1197/attempts/attempt-0001-warmup.jsonl",
+    "bytes": 4764,
+    "sha256": "57346def628af8f6806a04da3c6d8c910d045b77620e106521dbaaf917835a27",
+    "phase": "warmup",
+    "phaseIndex": 1,
+    "caseId": "audio-campaign-v802-0001",
+    "correlationId": "audio-campaign-cf6f61967a9d45df91fe48e291c91656",
+    "requestId": "audio-request-d9273c0376f046ae87f3adc261d6d502",
+    "status": "completed_correct",
+    "failure": null,
+    "timeout": false,
+    "audio": {
+      "path": "thesis/evidence/orca-relayed-http-v1197/audio/1812cb4ce885f04317c359ac339b8ccf84befdcdfd63507a12c346385bd118fb.wav",
+      "exists": true,
+      "sha256FromOriginalCaseNotRehashed": "1812cb4ce885f04317c359ac339b8ccf84befdcdfd63507a12c346385bd118fb"
+    }
+  },
+  {
+    "path": "thesis/evidence/orca-relayed-http-v1197/attempts/attempt-0002-warmup.jsonl",
+    "bytes": 4763,
+    "sha256": "04dc318058f525fe2b8a5cced2cd194ec087a08df47ea0017a93d0984e85eaae",
+    "phase": "warmup",
+    "phaseIndex": 2,
+    "caseId": "audio-campaign-v802-0002",
+    "correlationId": "audio-campaign-d928d56d422f4d5388188d06ea62038c",
+    "requestId": "audio-request-38b86d3743e647e39dcd6b7ec4e6d0b8",
+    "status": "completed_correct",
+    "failure": null,
+    "timeout": false,
+    "audio": {
+      "path": "thesis/evidence/orca-relayed-http-v1197/audio/42aeab09bea932078b22076496c59f87724119d4cdcc333975b0a89ab4c89f79.wav",
+      "exists": true,
+      "sha256FromOriginalCaseNotRehashed": "42aeab09bea932078b22076496c59f87724119d4cdcc333975b0a89ab4c89f79"
+    }
+  },
+  {
+    "path": "thesis/evidence/orca-relayed-http-v1197/attempts/attempt-0003-warmup.jsonl",
+    "bytes": 4765,
+    "sha256": "befb4baa7ae627b4d30ee5617ffe33889397f1bb80cbb63b5f4da64dd8b1557e",
+    "phase": "warmup",
+    "phaseIndex": 3,
+    "caseId": "audio-campaign-v802-0003",
+    "correlationId": "audio-campaign-f0e9c3ee14e446528cdefa56f1cda127",
+    "requestId": "audio-request-3047600c057e4f47a955055e3d829e04",
+    "status": "completed_correct",
+    "failure": null,
+    "timeout": false,
+    "audio": {
+      "path": "thesis/evidence/orca-relayed-http-v1197/audio/60f225041626fbfe9393ed36110a059e7f97495bc52dfcb92a92989122cf9f50.wav",
+      "exists": true,
+      "sha256FromOriginalCaseNotRehashed": "60f225041626fbfe9393ed36110a059e7f97495bc52dfcb92a92989122cf9f50"
+    }
+  },
+  {
+    "path": "thesis/evidence/orca-relayed-http-v1197/attempts/attempt-0004-warmup.jsonl",
+    "bytes": 4763,
+    "sha256": "c40472425a65bee0d37055c42c05e2daa17ec1689a42a581fb6db18eeabb91cd",
+    "phase": "warmup",
+    "phaseIndex": 4,
+    "caseId": "audio-campaign-v802-0004",
+    "correlationId": "audio-campaign-7b5e3b97408641abb27bdf0cdc33b63b",
+    "requestId": "audio-request-fa8f025e92434255a198b84ccecf8462",
+    "status": "completed_correct",
+    "failure": null,
+    "timeout": false,
+    "audio": {
+      "path": "thesis/evidence/orca-relayed-http-v1197/audio/21b047c88a378adff74957cafb8ad14f8f3173b9c23e583795d8cdd2bdc9c16d.wav",
+      "exists": true,
+      "sha256FromOriginalCaseNotRehashed": "21b047c88a378adff74957cafb8ad14f8f3173b9c23e583795d8cdd2bdc9c16d"
+    }
+  },
+  {
+    "path": "thesis/evidence/orca-relayed-http-v1197/attempts/attempt-0005-warmup.jsonl",
+    "bytes": 4763,
+    "sha256": "c62a030064abcdf33f88aae1c0aabef857a1b915cded6a4e9092601fc5ac472a",
+    "phase": "warmup",
+    "phaseIndex": 5,
+    "caseId": "audio-campaign-v802-0005",
+    "correlationId": "audio-campaign-686a993184544a45a18dd4b09100e275",
+    "requestId": "audio-request-19cc5010d6334748a8181df4a78d0efe",
+    "status": "completed_correct",
+    "failure": null,
+    "timeout": false,
+    "audio": {
+      "path": "thesis/evidence/orca-relayed-http-v1197/audio/7949daa4e8b34c1d3d206700e35bfc56ae869adcf2e62ae41f3347051fda050b.wav",
+      "exists": true,
+      "sha256FromOriginalCaseNotRehashed": "7949daa4e8b34c1d3d206700e35bfc56ae869adcf2e62ae41f3347051fda050b"
+    }
+  },
+  {
+    "path": "thesis/evidence/orca-relayed-http-v1197/attempts/attempt-0006-warmup.jsonl",
+    "bytes": 4762,
+    "sha256": "6047d88b2de0eebc591921f8d29ca0329a7831c8f1a090ff2d099cf07c152b64",
+    "phase": "warmup",
+    "phaseIndex": 6,
+    "caseId": "audio-campaign-v802-0006",
+    "correlationId": "audio-campaign-b51573c012174979b091d3270d462714",
+    "requestId": "audio-request-ada9b346dae14ffd98deb3caf332c873",
+    "status": "completed_correct",
+    "failure": null,
+    "timeout": false,
+    "audio": {
+      "path": "thesis/evidence/orca-relayed-http-v1197/audio/826bf0463cff0c4c711376fcb61b2e394f06c8293794ac0063705d16e5930557.wav",
+      "exists": true,
+      "sha256FromOriginalCaseNotRehashed": "826bf0463cff0c4c711376fcb61b2e394f06c8293794ac0063705d16e5930557"
+    }
+  },
+  {
+    "path": "thesis/evidence/orca-relayed-http-v1197/attempts/attempt-0007-warmup.jsonl",
+    "bytes": 4762,
+    "sha256": "a4fe70ece76535e8e3d89f384b3181dbead491d740c3e3da3b15a565eacd53ab",
+    "phase": "warmup",
+    "phaseIndex": 7,
+    "caseId": "audio-campaign-v802-0007",
+    "correlationId": "audio-campaign-dfde73c0c55a470ea700b690bdd45c89",
+    "requestId": "audio-request-7ad875d317974461ab74e32b44db8646",
+    "status": "completed_correct",
+    "failure": null,
+    "timeout": false,
+    "audio": {
+      "path": "thesis/evidence/orca-relayed-http-v1197/audio/41275ecc8df473fe36066f13e28b903df00057f0189a0e4654e96e47a49af8fa.wav",
+      "exists": true,
+      "sha256FromOriginalCaseNotRehashed": "41275ecc8df473fe36066f13e28b903df00057f0189a0e4654e96e47a49af8fa"
+    }
+  },
+  {
+    "path": "thesis/evidence/orca-relayed-http-v1197/attempts/attempt-0008-warmup.jsonl",
+    "bytes": 4763,
+    "sha256": "c24034664822610c985e38b2ed3b023da0b3a0fa99f43669213d41cb33a9bd64",
+    "phase": "warmup",
+    "phaseIndex": 8,
+    "caseId": "audio-campaign-v802-0008",
+    "correlationId": "audio-campaign-d125df448576459da2f968e72b158c09",
+    "requestId": "audio-request-fbfe265c11ba428ca87a1061953e32e3",
+    "status": "completed_correct",
+    "failure": null,
+    "timeout": false,
+    "audio": {
+      "path": "thesis/evidence/orca-relayed-http-v1197/audio/0701a0a55a0f74afd190e69bb3c9450a0ee893e16b774b330a999a921903be14.wav",
+      "exists": true,
+      "sha256FromOriginalCaseNotRehashed": "0701a0a55a0f74afd190e69bb3c9450a0ee893e16b774b330a999a921903be14"
+    }
+  },
+  {
+    "path": "thesis/evidence/orca-relayed-http-v1197/attempts/attempt-0009-warmup.jsonl",
+    "bytes": 4763,
+    "sha256": "037743379a1f24e6899cc5e1141a166ee09c684a5275c6e0639e4ac04a47110f",
+    "phase": "warmup",
+    "phaseIndex": 9,
+    "caseId": "audio-campaign-v802-0009",
+    "correlationId": "audio-campaign-80834617fbff490bb03c55c4720491bc",
+    "requestId": "audio-request-39e800c1d085492ea04cbfb17c38e581",
+    "status": "completed_correct",
+    "failure": null,
+    "timeout": false,
+    "audio": {
+      "path": "thesis/evidence/orca-relayed-http-v1197/audio/6b253d3d1a0471b195401f8026ce61e3720b2d22abd153249ac820d1a7a4e737.wav",
+      "exists": true,
+      "sha256FromOriginalCaseNotRehashed": "6b253d3d1a0471b195401f8026ce61e3720b2d22abd153249ac820d1a7a4e737"
+    }
+  },
+  {
+    "path": "thesis/evidence/orca-relayed-http-v1197/attempts/attempt-0010-warmup.jsonl",
+    "bytes": 4765,
+    "sha256": "338ee569c6fc0dac2648c6655c4fb79f0259be9bc22abfbd154b487618e9a471",
+    "phase": "warmup",
+    "phaseIndex": 10,
+    "caseId": "audio-campaign-v802-0010",
+    "correlationId": "audio-campaign-769fc87c8f134f63a150f7490de928de",
+    "requestId": "audio-request-b8f25faf94014e72aaa958d992fe67ed",
+    "status": "completed_correct",
+    "failure": null,
+    "timeout": false,
+    "audio": {
+      "path": "thesis/evidence/orca-relayed-http-v1197/audio/457890ed31916bdcf39616bdd586141a7e4a5c66ec6552dbeee11a660c0df32c.wav",
+      "exists": true,
+      "sha256FromOriginalCaseNotRehashed": "457890ed31916bdcf39616bdd586141a7e4a5c66ec6552dbeee11a660c0df32c"
+    }
+  },
+  {
+    "path": "thesis/evidence/orca-relayed-http-v1197/attempts/attempt-0011-warmup.jsonl",
+    "bytes": 4765,
+    "sha256": "9338db8fc023fcc504bddef6c6b11c216820e615fc2a261035c2e272e3d74059",
+    "phase": "warmup",
+    "phaseIndex": 11,
+    "caseId": "audio-campaign-v802-0011",
+    "correlationId": "audio-campaign-94831e731fa447a794359365eaa76fe6",
+    "requestId": "audio-request-3b5a6b352b6041b98a165305cdc93429",
+    "status": "completed_correct",
+    "failure": null,
+    "timeout": false,
+    "audio": {
+      "path": "thesis/evidence/orca-relayed-http-v1197/audio/43c851968ccfb511c0de8c2dcefe367dbcd8e74b4df6351f04c91da3473b2fb4.wav",
+      "exists": true,
+      "sha256FromOriginalCaseNotRehashed": "43c851968ccfb511c0de8c2dcefe367dbcd8e74b4df6351f04c91da3473b2fb4"
+    }
+  },
+  {
+    "path": "thesis/evidence/orca-relayed-http-v1197/attempts/attempt-0012-warmup.jsonl",
+    "bytes": 4765,
+    "sha256": "def223c7933dcad29efe807e6856a9671259e67ae9275ad4113f56a3cee69df5",
+    "phase": "warmup",
+    "phaseIndex": 12,
+    "caseId": "audio-campaign-v802-0012",
+    "correlationId": "audio-campaign-3fc618457e6a4e4d908e56d4102f696d",
+    "requestId": "audio-request-604082b635b14e01b5507966d6aaa69e",
+    "status": "completed_correct",
+    "failure": null,
+    "timeout": false,
+    "audio": {
+      "path": "thesis/evidence/orca-relayed-http-v1197/audio/97413a96cddde8579adbb9847f5bad9e84e5d4f3cd82d558d843fef2fe406f34.wav",
+      "exists": true,
+      "sha256FromOriginalCaseNotRehashed": "97413a96cddde8579adbb9847f5bad9e84e5d4f3cd82d558d843fef2fe406f34"
+    }
+  },
+  {
+    "path": "thesis/evidence/orca-relayed-http-v1197/attempts/attempt-0013-warmup.jsonl",
+    "bytes": 4763,
+    "sha256": "681bc3fd87488d48acfc57e00f8a324f43707faa3513b20a5c603730dcd30acc",
+    "phase": "warmup",
+    "phaseIndex": 13,
+    "caseId": "audio-campaign-v802-0013",
+    "correlationId": "audio-campaign-bef27df601b14ba7a89855dc6aaf8ebf",
+    "requestId": "audio-request-3ebdec4fb70d4c5780d053c9f986e539",
+    "status": "completed_correct",
+    "failure": null,
+    "timeout": false,
+    "audio": {
+      "path": "thesis/evidence/orca-relayed-http-v1197/audio/a078a1200232dfd34825fa0af3b06f52150cbe5ee2faeb04cac107a932081aa3.wav",
+      "exists": true,
+      "sha256FromOriginalCaseNotRehashed": "a078a1200232dfd34825fa0af3b06f52150cbe5ee2faeb04cac107a932081aa3"
+    }
+  },
+  {
+    "path": "thesis/evidence/orca-relayed-http-v1197/attempts/attempt-0014-warmup.jsonl",
+    "bytes": 4763,
+    "sha256": "edcdce1dc0292587b2102bd7dae3ab7d7e329a41478f4f77970ca87fb65a7989",
+    "phase": "warmup",
+    "phaseIndex": 14,
+    "caseId": "audio-campaign-v802-0014",
+    "correlationId": "audio-campaign-ba350d71649b489a8d57cfb23a0bef64",
+    "requestId": "audio-request-8f4c9f534f5d4b4b8786c8f0832ba539",
+    "status": "completed_correct",
+    "failure": null,
+    "timeout": false,
+    "audio": {
+      "path": "thesis/evidence/orca-relayed-http-v1197/audio/775e1a3e359f56c6a30e3a0322113677f72c2c3519297e5fd287ebb863c2928a.wav",
+      "exists": true,
+      "sha256FromOriginalCaseNotRehashed": "775e1a3e359f56c6a30e3a0322113677f72c2c3519297e5fd287ebb863c2928a"
+    }
+  },
+  {
+    "path": "thesis/evidence/orca-relayed-http-v1197/attempts/attempt-0015-warmup.jsonl",
+    "bytes": 4765,
+    "sha256": "abd2e2190c12372f9c146cfe3d00543b028db0c8d656b4cdda797d26d60fbdc4",
+    "phase": "warmup",
+    "phaseIndex": 15,
+    "caseId": "audio-campaign-v802-0015",
+    "correlationId": "audio-campaign-1f2779e411e447ff91c97ee9e5d22b71",
+    "requestId": "audio-request-6578f89edf28440ea2a73f248c30b222",
+    "status": "completed_correct",
+    "failure": null,
+    "timeout": false,
+    "audio": {
+      "path": "thesis/evidence/orca-relayed-http-v1197/audio/afb1efad779082cf455d7cfb18eac677c073088f8d1f03524843af0d04308077.wav",
+      "exists": true,
+      "sha256FromOriginalCaseNotRehashed": "afb1efad779082cf455d7cfb18eac677c073088f8d1f03524843af0d04308077"
+    }
+  },
+  {
+    "path": "thesis/evidence/orca-relayed-http-v1197/attempts/attempt-0016-measured.jsonl",
+    "bytes": 4766,
+    "sha256": "eedaa82018cb32fd9c9205644f8a4c682308a1a9a81b9cd5c2b9eaf982226f54",
+    "phase": "measured",
+    "phaseIndex": 1,
+    "caseId": "audio-campaign-v802-0016",
+    "correlationId": "audio-campaign-1b07ecc2feb340e49141af33db4c1a2a",
+    "requestId": "audio-request-58e7e911b2174b2f8c889c925074f6b1",
+    "status": "completed_correct",
+    "failure": null,
+    "timeout": false,
+    "audio": {
+      "path": "thesis/evidence/orca-relayed-http-v1197/audio/428786d18688423998699e628f7a0e6c51d6fedf9874391799b98de944394b07.wav",
+      "exists": true,
+      "sha256FromOriginalCaseNotRehashed": "428786d18688423998699e628f7a0e6c51d6fedf9874391799b98de944394b07"
+    }
+  },
+  {
+    "path": "thesis/evidence/orca-relayed-http-v1197/attempts/attempt-0017-measured.jsonl",
+    "bytes": 4764,
+    "sha256": "fca6d77c724980b74d616571a224583b63620d7ffb399476657390b9852ae411",
+    "phase": "measured",
+    "phaseIndex": 2,
+    "caseId": "audio-campaign-v802-0017",
+    "correlationId": "audio-campaign-19becf353a9b4588a0bb89922153ec8a",
+    "requestId": "audio-request-525a04f89c2a4ea98239477449cf1361",
+    "status": "completed_correct",
+    "failure": null,
+    "timeout": false,
+    "audio": {
+      "path": "thesis/evidence/orca-relayed-http-v1197/audio/fb0decdff3adeaf20d9eb14bd110a21f86cdc72672ff52a8f9102ec5897e5be7.wav",
+      "exists": true,
+      "sha256FromOriginalCaseNotRehashed": "fb0decdff3adeaf20d9eb14bd110a21f86cdc72672ff52a8f9102ec5897e5be7"
+    }
+  },
+  {
+    "path": "thesis/evidence/orca-relayed-http-v1197/attempts/attempt-0018-measured.jsonl",
+    "bytes": 4766,
+    "sha256": "dfd1e112bcb0a4141abb661fe02aebfb6f0136258bccd77c8a760f4897902aa0",
+    "phase": "measured",
+    "phaseIndex": 3,
+    "caseId": "audio-campaign-v802-0018",
+    "correlationId": "audio-campaign-822a9b8ff0ac43658c8eaf65265cb3dd",
+    "requestId": "audio-request-b4700becacee4ee0813915aa661bd3bf",
+    "status": "completed_correct",
+    "failure": null,
+    "timeout": false,
+    "audio": {
+      "path": "thesis/evidence/orca-relayed-http-v1197/audio/87e702a3695b6557023c263f0d2168b9bba99a3bdc7738cd3ed77c8e5cc49da3.wav",
+      "exists": true,
+      "sha256FromOriginalCaseNotRehashed": "87e702a3695b6557023c263f0d2168b9bba99a3bdc7738cd3ed77c8e5cc49da3"
+    }
+  },
+  {
+    "path": "thesis/evidence/orca-relayed-http-v1197/attempts/attempt-0019-measured.jsonl",
+    "bytes": 4766,
+    "sha256": "547b93a9fc8e02cc6521c9e091b4f7b5369e8fa628762f8e563377ec0f41767d",
+    "phase": "measured",
+    "phaseIndex": 4,
+    "caseId": "audio-campaign-v802-0019",
+    "correlationId": "audio-campaign-90cd9f6e27184e6c9c67dbb69155667a",
+    "requestId": "audio-request-0ab73a7b001d44f8aa1fa2b74b682317",
+    "status": "completed_correct",
+    "failure": null,
+    "timeout": false,
+    "audio": {
+      "path": "thesis/evidence/orca-relayed-http-v1197/audio/aceef9b8236b53102387a6c741e885741c5f05f6222acb1c7df2fe7ae7e62386.wav",
+      "exists": true,
+      "sha256FromOriginalCaseNotRehashed": "aceef9b8236b53102387a6c741e885741c5f05f6222acb1c7df2fe7ae7e62386"
+    }
+  },
+  {
+    "path": "thesis/evidence/orca-relayed-http-v1197/attempts/attempt-0020-measured.jsonl",
+    "bytes": 4765,
+    "sha256": "8e30908bcf0a8e7dc68636829f99901fb7bd5f60f19f9f50e74ec0058ade908f",
+    "phase": "measured",
+    "phaseIndex": 5,
+    "caseId": "audio-campaign-v802-0020",
+    "correlationId": "audio-campaign-e2594b43a7154354aba6d31beacecd57",
+    "requestId": "audio-request-e66514719b334fe5b85978901460a740",
+    "status": "completed_correct",
+    "failure": null,
+    "timeout": false,
+    "audio": {
+      "path": "thesis/evidence/orca-relayed-http-v1197/audio/f5824efb50d6e716f6e12c6e05940e7be4b409b1c41999da1bf80097289d4a40.wav",
+      "exists": true,
+      "sha256FromOriginalCaseNotRehashed": "f5824efb50d6e716f6e12c6e05940e7be4b409b1c41999da1bf80097289d4a40"
+    }
+  },
+  {
+    "path": "thesis/evidence/orca-relayed-http-v1197/attempts/attempt-0021-measured.jsonl",
+    "bytes": 4765,
+    "sha256": "3c5ae8462f32959b6529f58baa545983c14ef59145d24e1e3f3584236eb00872",
+    "phase": "measured",
+    "phaseIndex": 6,
+    "caseId": "audio-campaign-v802-0021",
+    "correlationId": "audio-campaign-6d1e92b495154c9296cfe6f81eb9d308",
+    "requestId": "audio-request-fa33d851f0a34c669d95b56fd1769a67",
+    "status": "completed_correct",
+    "failure": null,
+    "timeout": false,
+    "audio": {
+      "path": "thesis/evidence/orca-relayed-http-v1197/audio/02eac466f5d04be94b360647169372fe4bf3ec77a40e6e10d90a8e6dcf6f1b37.wav",
+      "exists": true,
+      "sha256FromOriginalCaseNotRehashed": "02eac466f5d04be94b360647169372fe4bf3ec77a40e6e10d90a8e6dcf6f1b37"
+    }
+  },
+  {
+    "path": "thesis/evidence/orca-relayed-http-v1197/attempts/attempt-0022-measured.jsonl",
+    "bytes": 4765,
+    "sha256": "5d67ef7b2e8ff4d7ed0aa1ebc1bc2304c150de548896fdcac58636e35bc6a3b5",
+    "phase": "measured",
+    "phaseIndex": 7,
+    "caseId": "audio-campaign-v802-0022",
+    "correlationId": "audio-campaign-1847a78093a249559692671f3352aef3",
+    "requestId": "audio-request-1839a3d7525c4c3291d63e6b79d95b0f",
+    "status": "completed_correct",
+    "failure": null,
+    "timeout": false,
+    "audio": {
+      "path": "thesis/evidence/orca-relayed-http-v1197/audio/4180077d4abecc7684451133b6d3a7f9656c906d9eac64c3ad7e5118b8ebe95f.wav",
+      "exists": true,
+      "sha256FromOriginalCaseNotRehashed": "4180077d4abecc7684451133b6d3a7f9656c906d9eac64c3ad7e5118b8ebe95f"
+    }
+  },
+  {
+    "path": "thesis/evidence/orca-relayed-http-v1197/attempts/attempt-0023-measured.jsonl",
+    "bytes": 4766,
+    "sha256": "246eadb954a7547bfa8868b7ab5680ef03cd13e040a605028244c7ada2c59c22",
+    "phase": "measured",
+    "phaseIndex": 8,
+    "caseId": "audio-campaign-v802-0023",
+    "correlationId": "audio-campaign-c049fb01727a4677b202e9e34b2573e5",
+    "requestId": "audio-request-a882790ae7f547109451b61bda5d066d",
+    "status": "completed_correct",
+    "failure": null,
+    "timeout": false,
+    "audio": {
+      "path": "thesis/evidence/orca-relayed-http-v1197/audio/348a378b0f85074c84a88df6302dc7e46c79781e6600205c8c4363bdf0006503.wav",
+      "exists": true,
+      "sha256FromOriginalCaseNotRehashed": "348a378b0f85074c84a88df6302dc7e46c79781e6600205c8c4363bdf0006503"
+    }
+  },
+  {
+    "path": "thesis/evidence/orca-relayed-http-v1197/attempts/attempt-0024-measured.jsonl",
+    "bytes": 4766,
+    "sha256": "6abf661ee5a46ecd68b45b20273cd6c64bfdd5d89c2aeb9f2805c754f2ac6cf7",
+    "phase": "measured",
+    "phaseIndex": 9,
+    "caseId": "audio-campaign-v802-0024",
+    "correlationId": "audio-campaign-60a5e08322d34ef9b8b9319049a3b4c3",
+    "requestId": "audio-request-a6b12f5c39c54679a18e59c3b2b11843",
+    "status": "completed_correct",
+    "failure": null,
+    "timeout": false,
+    "audio": {
+      "path": "thesis/evidence/orca-relayed-http-v1197/audio/c34d3ce99f60260f75f2cdaedc1913eef620d36815dd47cea6eb2e275522fa92.wav",
+      "exists": true,
+      "sha256FromOriginalCaseNotRehashed": "c34d3ce99f60260f75f2cdaedc1913eef620d36815dd47cea6eb2e275522fa92"
+    }
+  },
+  {
+    "path": "thesis/evidence/orca-relayed-http-v1197/attempts/attempt-0025-measured.jsonl",
+    "bytes": 4765,
+    "sha256": "d1c5387044a64352b20dad69dc14312026ea7c51e4a959f5df24afa5e3da00ee",
+    "phase": "measured",
+    "phaseIndex": 10,
+    "caseId": "audio-campaign-v802-0025",
+    "correlationId": "audio-campaign-08a4125e866b4a2f9f2a150b2550c125",
+    "requestId": "audio-request-d03780dd9b864fe38099fd0685e32138",
+    "status": "completed_correct",
+    "failure": null,
+    "timeout": false,
+    "audio": {
+      "path": "thesis/evidence/orca-relayed-http-v1197/audio/23053455cd1be24b437373d41e84a307a9fa2dba9bf3a9297304c146d9ea5f68.wav",
+      "exists": true,
+      "sha256FromOriginalCaseNotRehashed": "23053455cd1be24b437373d41e84a307a9fa2dba9bf3a9297304c146d9ea5f68"
+    }
+  },
+  {
+    "path": "thesis/evidence/orca-relayed-http-v1197/attempts/attempt-0026-measured.jsonl",
+    "bytes": 4766,
+    "sha256": "ef5e66bc0e9d85334e9521bc4d3bdc7660817a9ac1dfbb2d524c697e71f7d08f",
+    "phase": "measured",
+    "phaseIndex": 11,
+    "caseId": "audio-campaign-v802-0026",
+    "correlationId": "audio-campaign-5eb16f615e8e469aa0476c15167a2347",
+    "requestId": "audio-request-475cda62cd1246b5b95950e41c50fba3",
+    "status": "completed_correct",
+    "failure": null,
+    "timeout": false,
+    "audio": {
+      "path": "thesis/evidence/orca-relayed-http-v1197/audio/a36c5c60d532e34175d60363ba2d51223630d79202bfa18e5fe1aca119862336.wav",
+      "exists": true,
+      "sha256FromOriginalCaseNotRehashed": "a36c5c60d532e34175d60363ba2d51223630d79202bfa18e5fe1aca119862336"
+    }
+  },
+  {
+    "path": "thesis/evidence/orca-relayed-http-v1197/attempts/attempt-0027-measured.jsonl",
+    "bytes": 4767,
+    "sha256": "b4153c13cc1dea4e077a5652354b7dac561b9be2ef22eb2f7ef32a84ace210cd",
+    "phase": "measured",
+    "phaseIndex": 12,
+    "caseId": "audio-campaign-v802-0027",
+    "correlationId": "audio-campaign-f7d45b3c5daa4e5797dfc6e4d6b52942",
+    "requestId": "audio-request-a5370abf73844ae2be52a2e479c456e8",
+    "status": "completed_correct",
+    "failure": null,
+    "timeout": false,
+    "audio": {
+      "path": "thesis/evidence/orca-relayed-http-v1197/audio/bb95660e83c5839019d2713f256817d32fba377fad6f98208894bd0039fb46aa.wav",
+      "exists": true,
+      "sha256FromOriginalCaseNotRehashed": "bb95660e83c5839019d2713f256817d32fba377fad6f98208894bd0039fb46aa"
+    }
+  },
+  {
+    "path": "thesis/evidence/orca-relayed-http-v1197/attempts/attempt-0028-measured.jsonl",
+    "bytes": 4765,
+    "sha256": "54f97073a60ea02418c8534c6cc98e82d07fc6fc3df22c742e01ff51688c7cfb",
+    "phase": "measured",
+    "phaseIndex": 13,
+    "caseId": "audio-campaign-v802-0028",
+    "correlationId": "audio-campaign-1ddd06490d504116b4e242ed63f89f7e",
+    "requestId": "audio-request-9efb87e9c32142e794ee095bc909e09c",
+    "status": "completed_correct",
+    "failure": null,
+    "timeout": false,
+    "audio": {
+      "path": "thesis/evidence/orca-relayed-http-v1197/audio/0591f9a79d66f7d98f78de8048eddc9b79cbeba1db3f8f66e6592a10b9746abb.wav",
+      "exists": true,
+      "sha256FromOriginalCaseNotRehashed": "0591f9a79d66f7d98f78de8048eddc9b79cbeba1db3f8f66e6592a10b9746abb"
+    }
+  },
+  {
+    "path": "thesis/evidence/orca-relayed-http-v1197/attempts/attempt-0029-measured.jsonl",
+    "bytes": 4767,
+    "sha256": "01e4f20d354cec619eadaa8466f9b770889935d14c7cacf6412bdcc6bc3bbe4e",
+    "phase": "measured",
+    "phaseIndex": 14,
+    "caseId": "audio-campaign-v802-0029",
+    "correlationId": "audio-campaign-df311ade75164218bf5c3661777ba4f6",
+    "requestId": "audio-request-1f03e38376084c36ae199eafe462a96e",
+    "status": "completed_correct",
+    "failure": null,
+    "timeout": false,
+    "audio": {
+      "path": "thesis/evidence/orca-relayed-http-v1197/audio/e887ed4d9dc0166f2e33ba754d8b5ca6999d5bd6827d76c2524c11ba1e7614e7.wav",
+      "exists": true,
+      "sha256FromOriginalCaseNotRehashed": "e887ed4d9dc0166f2e33ba754d8b5ca6999d5bd6827d76c2524c11ba1e7614e7"
+    }
+  },
+  {
+    "path": "thesis/evidence/orca-relayed-http-v1197/attempts/attempt-0030-measured.jsonl",
+    "bytes": 4767,
+    "sha256": "4a1fc24e5c875f8864c392ef0d2e7c05f97fca5a8a407ba3609e5641829f88ea",
+    "phase": "measured",
+    "phaseIndex": 15,
+    "caseId": "audio-campaign-v802-0030",
+    "correlationId": "audio-campaign-7f93bb1cc5b94230832010e223c67cd0",
+    "requestId": "audio-request-64f825d6aec542eab0f755516f7ecfdc",
+    "status": "completed_correct",
+    "failure": null,
+    "timeout": false,
+    "audio": {
+      "path": "thesis/evidence/orca-relayed-http-v1197/audio/ef55c0912cd666b4e5e46c37e5971abf0afa824be2bd1948245533a2dfff8537.wav",
+      "exists": true,
+      "sha256FromOriginalCaseNotRehashed": "ef55c0912cd666b4e5e46c37e5971abf0afa824be2bd1948245533a2dfff8537"
+    }
+  },
+  {
+    "path": "thesis/evidence/orca-relayed-http-v1197/attempts/attempt-0031-measured.jsonl",
+    "bytes": 4767,
+    "sha256": "616f89d376c310f8cfedc35df01747f1f0f68d8180290eb43f854ed75a439307",
+    "phase": "measured",
+    "phaseIndex": 16,
+    "caseId": "audio-campaign-v802-0031",
+    "correlationId": "audio-campaign-3656567ff4644c459add2e321df73b2d",
+    "requestId": "audio-request-fe1d57302af746528e61555cf80bfe00",
+    "status": "completed_correct",
+    "failure": null,
+    "timeout": false,
+    "audio": {
+      "path": "thesis/evidence/orca-relayed-http-v1197/audio/115be4eaa7274228750a335ae861f700b0797c307846ac3838e89649469d9a8d.wav",
+      "exists": true,
+      "sha256FromOriginalCaseNotRehashed": "115be4eaa7274228750a335ae861f700b0797c307846ac3838e89649469d9a8d"
+    }
+  },
+  {
+    "path": "thesis/evidence/orca-relayed-http-v1197/attempts/attempt-0032-measured.jsonl",
+    "bytes": 4766,
+    "sha256": "6d219f155db02e9ebfbb2c49f35565fce236cf026f22d60ae525d30e3c82ca13",
+    "phase": "measured",
+    "phaseIndex": 17,
+    "caseId": "audio-campaign-v802-0032",
+    "correlationId": "audio-campaign-e466f28e1f8547099250bc02c0f98426",
+    "requestId": "audio-request-deecf90fd36f42f98e5ffebfc40f2cd5",
+    "status": "completed_correct",
+    "failure": null,
+    "timeout": false,
+    "audio": {
+      "path": "thesis/evidence/orca-relayed-http-v1197/audio/5a99fcf159b4613c04183f01c22d6521ef4559d9865efcdc4622f7b2fd4ae3e9.wav",
+      "exists": true,
+      "sha256FromOriginalCaseNotRehashed": "5a99fcf159b4613c04183f01c22d6521ef4559d9865efcdc4622f7b2fd4ae3e9"
+    }
+  },
+  {
+    "path": "thesis/evidence/orca-relayed-http-v1197/attempts/attempt-0033-measured.jsonl",
+    "bytes": 4766,
+    "sha256": "456887b602555db0df5126d54e9f564f386bbd24536fdaf00a90dac54e300d33",
+    "phase": "measured",
+    "phaseIndex": 18,
+    "caseId": "audio-campaign-v802-0033",
+    "correlationId": "audio-campaign-d79cab322b6b48c2a86729e113a813ec",
+    "requestId": "audio-request-8292082b710343abb3292778d3e466cf",
+    "status": "completed_correct",
+    "failure": null,
+    "timeout": false,
+    "audio": {
+      "path": "thesis/evidence/orca-relayed-http-v1197/audio/431560910fe75c9d09ccb1d1b06e4fd7be0f7bc2489b783cdb28c3f57d713808.wav",
+      "exists": true,
+      "sha256FromOriginalCaseNotRehashed": "431560910fe75c9d09ccb1d1b06e4fd7be0f7bc2489b783cdb28c3f57d713808"
+    }
+  },
+  {
+    "path": "thesis/evidence/orca-relayed-http-v1197/attempts/attempt-0034-measured.jsonl",
+    "bytes": 4767,
+    "sha256": "398b990e2aa7be36150bed50c8ebfa32bf890a57f24d354764b6c69229b1062a",
+    "phase": "measured",
+    "phaseIndex": 19,
+    "caseId": "audio-campaign-v802-0034",
+    "correlationId": "audio-campaign-d4a07ea240b042f4a68ae17ec087b75b",
+    "requestId": "audio-request-b3cc82bdfb114fb29bb06d2d4aa66d59",
+    "status": "completed_correct",
+    "failure": null,
+    "timeout": false,
+    "audio": {
+      "path": "thesis/evidence/orca-relayed-http-v1197/audio/b0e707eadc4ac9731d9df0e41ee098dabbb79d3e47ad18bcdbeea072eb413cba.wav",
+      "exists": true,
+      "sha256FromOriginalCaseNotRehashed": "b0e707eadc4ac9731d9df0e41ee098dabbb79d3e47ad18bcdbeea072eb413cba"
+    }
+  },
+  {
+    "path": "thesis/evidence/orca-relayed-http-v1197/attempts/attempt-0035-measured.jsonl",
+    "bytes": 4767,
+    "sha256": "92a75a25091a78328f0485d3a615785eddcee2af677def0cfe6332e10c59125c",
+    "phase": "measured",
+    "phaseIndex": 20,
+    "caseId": "audio-campaign-v802-0035",
+    "correlationId": "audio-campaign-853f63cb70d04433a82a635588fc9c2e",
+    "requestId": "audio-request-48e254de021d4ec58eb260a46fb61325",
+    "status": "completed_correct",
+    "failure": null,
+    "timeout": false,
+    "audio": {
+      "path": "thesis/evidence/orca-relayed-http-v1197/audio/589c90cbf58ffa773d49eed0a1802bc41464aac2cc69107daf74c1a63f829787.wav",
+      "exists": true,
+      "sha256FromOriginalCaseNotRehashed": "589c90cbf58ffa773d49eed0a1802bc41464aac2cc69107daf74c1a63f829787"
+    }
+  },
+  {
+    "path": "thesis/evidence/orca-relayed-http-v1197/attempts/attempt-0036-measured.jsonl",
+    "bytes": 4767,
+    "sha256": "9a6cf4b60c59e60caa0875ec1d0e38d5fde6b61ef50be3fa88556a7af4daaf54",
+    "phase": "measured",
+    "phaseIndex": 21,
+    "caseId": "audio-campaign-v802-0036",
+    "correlationId": "audio-campaign-ce0797d27b2848499830979538765364",
+    "requestId": "audio-request-121b3d2489334b9e93eafd198241b1d4",
+    "status": "completed_correct",
+    "failure": null,
+    "timeout": false,
+    "audio": {
+      "path": "thesis/evidence/orca-relayed-http-v1197/audio/e775f8bd6f70981ca35cb19a9882517bab402fe61a70f93ef68badf0517a84d9.wav",
+      "exists": true,
+      "sha256FromOriginalCaseNotRehashed": "e775f8bd6f70981ca35cb19a9882517bab402fe61a70f93ef68badf0517a84d9"
+    }
+  },
+  {
+    "path": "thesis/evidence/orca-relayed-http-v1197/attempts/attempt-0037-measured.jsonl",
+    "bytes": 4765,
+    "sha256": "2a65a1d967335df4954b41e3e99b8de66d3e8b432806d1e4b65abe359e935b1d",
+    "phase": "measured",
+    "phaseIndex": 22,
+    "caseId": "audio-campaign-v802-0037",
+    "correlationId": "audio-campaign-89b31e4d8bdc48cba2f05aff06b57ea7",
+    "requestId": "audio-request-e464a7e8706b4c92b06f6f0f082f110b",
+    "status": "completed_correct",
+    "failure": null,
+    "timeout": false,
+    "audio": {
+      "path": "thesis/evidence/orca-relayed-http-v1197/audio/8b973f0f0569d6be73089e1e53d0f9e51956f398a96dec301e64891d036106b8.wav",
+      "exists": true,
+      "sha256FromOriginalCaseNotRehashed": "8b973f0f0569d6be73089e1e53d0f9e51956f398a96dec301e64891d036106b8"
+    }
+  },
+  {
+    "path": "thesis/evidence/orca-relayed-http-v1197/attempts/attempt-0038-measured.jsonl",
+    "bytes": 4765,
+    "sha256": "e9f3adb413e7df757c263eb3e8a512672aa1be981214d8607208f3e4afc95c0f",
+    "phase": "measured",
+    "phaseIndex": 23,
+    "caseId": "audio-campaign-v802-0038",
+    "correlationId": "audio-campaign-bc791143203b43db8660687b70344e86",
+    "requestId": "audio-request-bcb49150173949beb1f617b43566dd71",
+    "status": "completed_correct",
+    "failure": null,
+    "timeout": false,
+    "audio": {
+      "path": "thesis/evidence/orca-relayed-http-v1197/audio/abb3a1f5f881dd8d2f4af18d086b0b3267ae5cadb468aac05b7b90653e088a4d.wav",
+      "exists": true,
+      "sha256FromOriginalCaseNotRehashed": "abb3a1f5f881dd8d2f4af18d086b0b3267ae5cadb468aac05b7b90653e088a4d"
+    }
+  },
+  {
+    "path": "thesis/evidence/orca-relayed-http-v1197/attempts/attempt-0039-measured.jsonl",
+    "bytes": 4767,
+    "sha256": "5b6c8b08a4efe3e499a110dc5b2e92b1eebc8aab4979efb1201b02eca8ba3a73",
+    "phase": "measured",
+    "phaseIndex": 24,
+    "caseId": "audio-campaign-v802-0039",
+    "correlationId": "audio-campaign-2feb4943099746c5aef18888cac29267",
+    "requestId": "audio-request-0725d4ce2a2c43b8a94dca384129c8d7",
+    "status": "completed_correct",
+    "failure": null,
+    "timeout": false,
+    "audio": {
+      "path": "thesis/evidence/orca-relayed-http-v1197/audio/bcad9f3cca14048715bf63a1e3467d42c1694e2107be119adfa79bafcd22364a.wav",
+      "exists": true,
+      "sha256FromOriginalCaseNotRehashed": "bcad9f3cca14048715bf63a1e3467d42c1694e2107be119adfa79bafcd22364a"
+    }
+  },
+  {
+    "path": "thesis/evidence/orca-relayed-http-v1197/attempts/attempt-0040-measured.jsonl",
+    "bytes": 4766,
+    "sha256": "eb3e1408a188b0870e189036183e96e1af6cab11c1aa25817f99dd1a56518743",
+    "phase": "measured",
+    "phaseIndex": 25,
+    "caseId": "audio-campaign-v802-0040",
+    "correlationId": "audio-campaign-8d97a15a003f490a8554cf83d17a9138",
+    "requestId": "audio-request-f6072953fbd1467da24bf1558b903410",
+    "status": "completed_correct",
+    "failure": null,
+    "timeout": false,
+    "audio": {
+      "path": "thesis/evidence/orca-relayed-http-v1197/audio/c498103d2464ba4dd5a51d2efc209edc2feadbbb593e69d597cac16cee0c53c0.wav",
+      "exists": true,
+      "sha256FromOriginalCaseNotRehashed": "c498103d2464ba4dd5a51d2efc209edc2feadbbb593e69d597cac16cee0c53c0"
+    }
+  },
+  {
+    "path": "thesis/evidence/orca-relayed-http-v1197/attempts/attempt-0041-measured.jsonl",
+    "bytes": 4767,
+    "sha256": "5bf6b7630136ecdce10fdf482d8240ed0d5abe0fdb1b42ef88d9904f46581a6c",
+    "phase": "measured",
+    "phaseIndex": 26,
+    "caseId": "audio-campaign-v802-0041",
+    "correlationId": "audio-campaign-c1c62c105ce245a69916bbe8bee69f72",
+    "requestId": "audio-request-4a5b0d255ebe442da65275de484774f9",
+    "status": "completed_correct",
+    "failure": null,
+    "timeout": false,
+    "audio": {
+      "path": "thesis/evidence/orca-relayed-http-v1197/audio/99c5cc2994baad52c728c0adee03ae697f92d595a73e5a7fb588babfc7e7d306.wav",
+      "exists": true,
+      "sha256FromOriginalCaseNotRehashed": "99c5cc2994baad52c728c0adee03ae697f92d595a73e5a7fb588babfc7e7d306"
+    }
+  },
+  {
+    "path": "thesis/evidence/orca-relayed-http-v1197/attempts/attempt-0042-measured.jsonl",
+    "bytes": 4768,
+    "sha256": "bf8f7d3970fda7d7296a29d72bd9bbee700dac2b765dcb0d26eed9ca74deb391",
+    "phase": "measured",
+    "phaseIndex": 27,
+    "caseId": "audio-campaign-v802-0042",
+    "correlationId": "audio-campaign-7cba680e28764a389e4370b898ffb5f9",
+    "requestId": "audio-request-dde4ca3ca4c948c08adfd80ea7bba320",
+    "status": "completed_correct",
+    "failure": null,
+    "timeout": false,
+    "audio": {
+      "path": "thesis/evidence/orca-relayed-http-v1197/audio/f10782e1e60fd1fa33982f6dadc90aef684b8a6035434c3f00f2d93fcd9c7dc6.wav",
+      "exists": true,
+      "sha256FromOriginalCaseNotRehashed": "f10782e1e60fd1fa33982f6dadc90aef684b8a6035434c3f00f2d93fcd9c7dc6"
+    }
+  },
+  {
+    "path": "thesis/evidence/orca-relayed-http-v1197/attempts/attempt-0043-measured.jsonl",
+    "bytes": 4768,
+    "sha256": "f5a9049305958c006b86112b2e160938af1c549877f1becb1e1b9035ffef5b8a",
+    "phase": "measured",
+    "phaseIndex": 28,
+    "caseId": "audio-campaign-v802-0043",
+    "correlationId": "audio-campaign-913be9e2201143c2a27ea3e0967c2435",
+    "requestId": "audio-request-f803008aefee4985b8ba4ebdf97cc400",
+    "status": "completed_correct",
+    "failure": null,
+    "timeout": false,
+    "audio": {
+      "path": "thesis/evidence/orca-relayed-http-v1197/audio/498d35a39ab854cd9a761f8a9ec765ccc5ce14e8472d1676c0095f35de1b5021.wav",
+      "exists": true,
+      "sha256FromOriginalCaseNotRehashed": "498d35a39ab854cd9a761f8a9ec765ccc5ce14e8472d1676c0095f35de1b5021"
+    }
+  },
+  {
+    "path": "thesis/evidence/orca-relayed-http-v1197/attempts/attempt-0044-measured.jsonl",
+    "bytes": 4767,
+    "sha256": "5fd3afc9a4f2490956de8bac2af8e51f06532f4cb9bc330e5f7194631fda5a12",
+    "phase": "measured",
+    "phaseIndex": 29,
+    "caseId": "audio-campaign-v802-0044",
+    "correlationId": "audio-campaign-8c00e219cd094d298ee42b640aa60369",
+    "requestId": "audio-request-3afe447e555446e7a57469585941d895",
+    "status": "completed_correct",
+    "failure": null,
+    "timeout": false,
+    "audio": {
+      "path": "thesis/evidence/orca-relayed-http-v1197/audio/2be59f37acf7c6b1bbd364aac968576f6e2b09c5c3f2649514441f64d45eafa1.wav",
+      "exists": true,
+      "sha256FromOriginalCaseNotRehashed": "2be59f37acf7c6b1bbd364aac968576f6e2b09c5c3f2649514441f64d45eafa1"
+    }
+  },
+  {
+    "path": "thesis/evidence/orca-relayed-http-v1197/attempts/attempt-0045-measured.jsonl",
+    "bytes": 4767,
+    "sha256": "a6be3716eee4b9dea2ab4ceb027b2cfddc5c698bb35a0551d01c93e56ab06c1e",
+    "phase": "measured",
+    "phaseIndex": 30,
+    "caseId": "audio-campaign-v802-0045",
+    "correlationId": "audio-campaign-7a293493bc6b4b31a1af398198c318f2",
+    "requestId": "audio-request-3406ead8e5b94d7d9e0f442df3d0c998",
+    "status": "completed_correct",
+    "failure": null,
+    "timeout": false,
+    "audio": {
+      "path": "thesis/evidence/orca-relayed-http-v1197/audio/0adee106ee6e7f0b7f8922dd283edf4018ab7ca41b6fdefe920fe3338cbcc77a.wav",
+      "exists": true,
+      "sha256FromOriginalCaseNotRehashed": "0adee106ee6e7f0b7f8922dd283edf4018ab7ca41b6fdefe920fe3338cbcc77a"
+    }
+  },
+  {
+    "path": "thesis/evidence/orca-relayed-http-v1197/attempts/attempt-0046-measured.jsonl",
+    "bytes": 4767,
+    "sha256": "f5aba40b57972e9aaa7f57c2a63044fed3541faf7bed6b5c8de7f6dbb4761e9b",
+    "phase": "measured",
+    "phaseIndex": 31,
+    "caseId": "audio-campaign-v802-0046",
+    "correlationId": "audio-campaign-5f646528660f482da4346e1c94292ad5",
+    "requestId": "audio-request-ebbe951d530e4cda921ebeb8cf687b7c",
+    "status": "completed_correct",
+    "failure": null,
+    "timeout": false,
+    "audio": {
+      "path": "thesis/evidence/orca-relayed-http-v1197/audio/bd6908ff21a6f89e5f5e487fe8393612687d2d094f1cb2e380123ddb3b007268.wav",
+      "exists": true,
+      "sha256FromOriginalCaseNotRehashed": "bd6908ff21a6f89e5f5e487fe8393612687d2d094f1cb2e380123ddb3b007268"
+    }
+  },
+  {
+    "path": "thesis/evidence/orca-relayed-http-v1197/attempts/attempt-0047-measured.jsonl",
+    "bytes": 4769,
+    "sha256": "303b7d6c9b215b69cb1c988453c5c4fc7caa54deaef7dcaa1bc303174e2f9265",
+    "phase": "measured",
+    "phaseIndex": 32,
+    "caseId": "audio-campaign-v802-0047",
+    "correlationId": "audio-campaign-a586c0c393094fd3b726c710853db4f5",
+    "requestId": "audio-request-55b294762cbf49e3a1765e1c7411a8c9",
+    "status": "completed_correct",
+    "failure": null,
+    "timeout": false,
+    "audio": {
+      "path": "thesis/evidence/orca-relayed-http-v1197/audio/164b69efb460597701e63f3fcff3c4fc70d8b7f918889c5b65d34afaafb9bf9b.wav",
+      "exists": true,
+      "sha256FromOriginalCaseNotRehashed": "164b69efb460597701e63f3fcff3c4fc70d8b7f918889c5b65d34afaafb9bf9b"
+    }
+  },
+  {
+    "path": "thesis/evidence/orca-relayed-http-v1197/attempts/attempt-0048-measured.jsonl",
+    "bytes": 4770,
+    "sha256": "5ad89362d8ac1f6b4730120cbcadb5c1af479b4e4bbf1192c2f455f13913a91a",
+    "phase": "measured",
+    "phaseIndex": 33,
+    "caseId": "audio-campaign-v802-0048",
+    "correlationId": "audio-campaign-041518f7980e420a9c88818d4823ef8d",
+    "requestId": "audio-request-6014c51e88b44a4b866a0edc4c3c747b",
+    "status": "completed_correct",
+    "failure": null,
+    "timeout": false,
+    "audio": {
+      "path": "thesis/evidence/orca-relayed-http-v1197/audio/af991b54c182482a47cfc95a61b4c078904ebf0b189f7f9c29b9fdf94d51c626.wav",
+      "exists": true,
+      "sha256FromOriginalCaseNotRehashed": "af991b54c182482a47cfc95a61b4c078904ebf0b189f7f9c29b9fdf94d51c626"
+    }
+  },
+  {
+    "path": "thesis/evidence/orca-relayed-http-v1197/attempts/attempt-0049-measured.jsonl",
+    "bytes": 4766,
+    "sha256": "da383c9b91367ca911ef3a11b1c423ee9f38581733f962dc1600db0d94a34da0",
+    "phase": "measured",
+    "phaseIndex": 34,
+    "caseId": "audio-campaign-v802-0049",
+    "correlationId": "audio-campaign-4ee7095abb5f427faaf07199d86cc842",
+    "requestId": "audio-request-79e5571640324c8385d28d78818183a3",
+    "status": "completed_correct",
+    "failure": null,
+    "timeout": false,
+    "audio": {
+      "path": "thesis/evidence/orca-relayed-http-v1197/audio/1269b1e00d24eecea93a74d02a3a28dcf7b814b36504238993c4d6d283e4c1de.wav",
+      "exists": true,
+      "sha256FromOriginalCaseNotRehashed": "1269b1e00d24eecea93a74d02a3a28dcf7b814b36504238993c4d6d283e4c1de"
+    }
+  },
+  {
+    "path": "thesis/evidence/orca-relayed-http-v1197/attempts/attempt-0050-measured.jsonl",
+    "bytes": 4765,
+    "sha256": "8c01bde60025374af02479509b420386e5a8d762fbd7c2bd6c61276c5b6e5425",
+    "phase": "measured",
+    "phaseIndex": 35,
+    "caseId": "audio-campaign-v802-0050",
+    "correlationId": "audio-campaign-83083eb5c14c4ef69e21d14395a5273b",
+    "requestId": "audio-request-1d59e763e4bf405f8b6f2419c621f195",
+    "status": "completed_correct",
+    "failure": null,
+    "timeout": false,
+    "audio": {
+      "path": "thesis/evidence/orca-relayed-http-v1197/audio/0c301a1c7e51728af6cbc6eb54fd0410e236ad692d8027b369df53c6d5718e22.wav",
+      "exists": true,
+      "sha256FromOriginalCaseNotRehashed": "0c301a1c7e51728af6cbc6eb54fd0410e236ad692d8027b369df53c6d5718e22"
+    }
+  },
+  {
+    "path": "thesis/evidence/orca-relayed-http-v1197/attempts/attempt-0051-measured.jsonl",
+    "bytes": 4767,
+    "sha256": "6fd25fe011dbb347c25ff7088fd28a76a021552f97a2ca4b208e08ec0936d153",
+    "phase": "measured",
+    "phaseIndex": 36,
+    "caseId": "audio-campaign-v802-0051",
+    "correlationId": "audio-campaign-17496c8145d448d086b54513673cd554",
+    "requestId": "audio-request-524fd50f679645b8afb47bdd347eaab1",
+    "status": "completed_correct",
+    "failure": null,
+    "timeout": false,
+    "audio": {
+      "path": "thesis/evidence/orca-relayed-http-v1197/audio/1433564246a132d5edeb40e2ffe6b42d4da2eb399fff79a920b264e534051ecf.wav",
+      "exists": true,
+      "sha256FromOriginalCaseNotRehashed": "1433564246a132d5edeb40e2ffe6b42d4da2eb399fff79a920b264e534051ecf"
+    }
+  },
+  {
+    "path": "thesis/evidence/orca-relayed-http-v1197/attempts/attempt-0052-measured.jsonl",
+    "bytes": 4765,
+    "sha256": "ab5c8b91251958bbf7ea3108c27e0585b3fd1841d26e1a6d5a71e554609b2ac4",
+    "phase": "measured",
+    "phaseIndex": 37,
+    "caseId": "audio-campaign-v802-0052",
+    "correlationId": "audio-campaign-a9ccc96fe02a42eba5806afe271eb4c9",
+    "requestId": "audio-request-e2071e0b47ad4d5ea6909c4b2d56c0b7",
+    "status": "completed_correct",
+    "failure": null,
+    "timeout": false,
+    "audio": {
+      "path": "thesis/evidence/orca-relayed-http-v1197/audio/a32d6f7c5fed0e1c29f39741cd0efe9152f68cfd3dba7010d752e89638bec5e1.wav",
+      "exists": true,
+      "sha256FromOriginalCaseNotRehashed": "a32d6f7c5fed0e1c29f39741cd0efe9152f68cfd3dba7010d752e89638bec5e1"
+    }
+  },
+  {
+    "path": "thesis/evidence/orca-relayed-http-v1197/attempts/attempt-0053-measured.jsonl",
+    "bytes": 4766,
+    "sha256": "e2f1ef0e90c91822a4fd5e73b89bad443c431c39bfdfece8eb72778562cbead1",
+    "phase": "measured",
+    "phaseIndex": 38,
+    "caseId": "audio-campaign-v802-0053",
+    "correlationId": "audio-campaign-d4b4f8633ed542bca7a8ca3a58d2093d",
+    "requestId": "audio-request-35374772c5d245ffbeedd4d37503d57c",
+    "status": "completed_correct",
+    "failure": null,
+    "timeout": false,
+    "audio": {
+      "path": "thesis/evidence/orca-relayed-http-v1197/audio/3dd7576fad00714b6f3ddb45cf023214f8bd170cf92b85a0a34c412d7d7ae777.wav",
+      "exists": true,
+      "sha256FromOriginalCaseNotRehashed": "3dd7576fad00714b6f3ddb45cf023214f8bd170cf92b85a0a34c412d7d7ae777"
+    }
+  },
+  {
+    "path": "thesis/evidence/orca-relayed-http-v1197/attempts/attempt-0054-measured.jsonl",
+    "bytes": 4766,
+    "sha256": "c458a86b784aa1b18423759772b54cc58628555a1ed06f2d8fb08bdef30154cc",
+    "phase": "measured",
+    "phaseIndex": 39,
+    "caseId": "audio-campaign-v802-0054",
+    "correlationId": "audio-campaign-8dbfc12fa87647b8a6b42169cd9a33d3",
+    "requestId": "audio-request-c1447374f4774ba79aa56c89ee2fb80b",
+    "status": "completed_correct",
+    "failure": null,
+    "timeout": false,
+    "audio": {
+      "path": "thesis/evidence/orca-relayed-http-v1197/audio/f9f412c10f45d1f342ac1fb651197ed1e13a8adafc042e85cc605e745fef6ce2.wav",
+      "exists": true,
+      "sha256FromOriginalCaseNotRehashed": "f9f412c10f45d1f342ac1fb651197ed1e13a8adafc042e85cc605e745fef6ce2"
+    }
+  },
+  {
+    "path": "thesis/evidence/orca-relayed-http-v1197/attempts/attempt-0055-measured.jsonl",
+    "bytes": 4767,
+    "sha256": "2ed4de222ff0d6bb34487bd8b0a731b15e16dfb20fdf15e0f7b5c6dbed9ec193",
+    "phase": "measured",
+    "phaseIndex": 40,
+    "caseId": "audio-campaign-v802-0055",
+    "correlationId": "audio-campaign-bd20cf9649814364a18a190819f02e64",
+    "requestId": "audio-request-51f057e11f324992985e51f17c5b92dc",
+    "status": "completed_correct",
+    "failure": null,
+    "timeout": false,
+    "audio": {
+      "path": "thesis/evidence/orca-relayed-http-v1197/audio/d2eaf9784912f8de16f264f1cbef44ccd62ea3310c9031520de4d2196c1d0c43.wav",
+      "exists": true,
+      "sha256FromOriginalCaseNotRehashed": "d2eaf9784912f8de16f264f1cbef44ccd62ea3310c9031520de4d2196c1d0c43"
+    }
+  },
+  {
+    "path": "thesis/evidence/orca-relayed-http-v1197/attempts/attempt-0056-measured.jsonl",
+    "bytes": 4768,
+    "sha256": "08450e939bc4eae76ce00a27b4e1968578604db2604212b90449f8be4332948a",
+    "phase": "measured",
+    "phaseIndex": 41,
+    "caseId": "audio-campaign-v802-0056",
+    "correlationId": "audio-campaign-ee18afe0d74f472f96ed357ff53eb492",
+    "requestId": "audio-request-5cd4b812ffce4971a64b9dbec05cb45d",
+    "status": "completed_correct",
+    "failure": null,
+    "timeout": false,
+    "audio": {
+      "path": "thesis/evidence/orca-relayed-http-v1197/audio/63e7da138ae2731386ec7293b239223e8ad23a6e526a9bed035f52cf21d738e3.wav",
+      "exists": true,
+      "sha256FromOriginalCaseNotRehashed": "63e7da138ae2731386ec7293b239223e8ad23a6e526a9bed035f52cf21d738e3"
+    }
+  },
+  {
+    "path": "thesis/evidence/orca-relayed-http-v1197/attempts/attempt-0057-measured.jsonl",
+    "bytes": 4765,
+    "sha256": "97a1ec4f75ed1f55c4bb3f48cb8cb8ef09ac0d8e14d5ebc38e4ab179ce5d034b",
+    "phase": "measured",
+    "phaseIndex": 42,
+    "caseId": "audio-campaign-v802-0057",
+    "correlationId": "audio-campaign-5862a03f32ff444f8e6f034366cc3d4b",
+    "requestId": "audio-request-a542d6d1cea44441a8fb54ca1014497b",
+    "status": "completed_correct",
+    "failure": null,
+    "timeout": false,
+    "audio": {
+      "path": "thesis/evidence/orca-relayed-http-v1197/audio/046a70f28bb25f04c254de024f7cdc29499947e2d5c73aab064cf801fa0070e5.wav",
+      "exists": true,
+      "sha256FromOriginalCaseNotRehashed": "046a70f28bb25f04c254de024f7cdc29499947e2d5c73aab064cf801fa0070e5"
+    }
+  },
+  {
+    "path": "thesis/evidence/orca-relayed-http-v1197/attempts/attempt-0058-measured.jsonl",
+    "bytes": 4767,
+    "sha256": "5e8735fff2f0c39ca868ecf5fe9e51b67747eef528114499863e6ab6038662e6",
+    "phase": "measured",
+    "phaseIndex": 43,
+    "caseId": "audio-campaign-v802-0058",
+    "correlationId": "audio-campaign-600ee7e86f7c463485e5ea207db48623",
+    "requestId": "audio-request-f9a889d8defb45cc86d9ee85edd606a6",
+    "status": "completed_correct",
+    "failure": null,
+    "timeout": false,
+    "audio": {
+      "path": "thesis/evidence/orca-relayed-http-v1197/audio/4da1b9588fd2fa97dc335b66815a23a04268f75930d3baecb2b64d65854171a5.wav",
+      "exists": true,
+      "sha256FromOriginalCaseNotRehashed": "4da1b9588fd2fa97dc335b66815a23a04268f75930d3baecb2b64d65854171a5"
+    }
+  },
+  {
+    "path": "thesis/evidence/orca-relayed-http-v1197/attempts/attempt-0059-measured.jsonl",
+    "bytes": 4766,
+    "sha256": "0c98400da98247d226120f547e4a296143c0758c9c2bc1e6b6c9d2ce326c1ef6",
+    "phase": "measured",
+    "phaseIndex": 44,
+    "caseId": "audio-campaign-v802-0059",
+    "correlationId": "audio-campaign-6f9aebcfb8b54a5faec6131c9e47ca6e",
+    "requestId": "audio-request-9164769996e3400ba97fdaebbfd783a1",
+    "status": "completed_correct",
+    "failure": null,
+    "timeout": false,
+    "audio": {
+      "path": "thesis/evidence/orca-relayed-http-v1197/audio/957cb99c0c178a334205ecc1931f8475da9488e0020e426fd44fd371000cb6cf.wav",
+      "exists": true,
+      "sha256FromOriginalCaseNotRehashed": "957cb99c0c178a334205ecc1931f8475da9488e0020e426fd44fd371000cb6cf"
+    }
+  },
+  {
+    "path": "thesis/evidence/orca-relayed-http-v1197/attempts/attempt-0060-measured.jsonl",
+    "bytes": 4766,
+    "sha256": "496510ca3cb3a44906c2e0cd3e575d57ca881c6a629ec411e8509cafa373f709",
+    "phase": "measured",
+    "phaseIndex": 45,
+    "caseId": "audio-campaign-v802-0060",
+    "correlationId": "audio-campaign-f60d5460b19248369121b34be731ad0d",
+    "requestId": "audio-request-b8e6575c7d91451099b046fddd2b2c31",
+    "status": "completed_correct",
+    "failure": null,
+    "timeout": false,
+    "audio": {
+      "path": "thesis/evidence/orca-relayed-http-v1197/audio/abc88c684a0042b8ae909a8c93e3da5fc1a87488d18a55cdb6b55bfedb66378b.wav",
+      "exists": true,
+      "sha256FromOriginalCaseNotRehashed": "abc88c684a0042b8ae909a8c93e3da5fc1a87488d18a55cdb6b55bfedb66378b"
+    }
+  },
+  {
+    "path": "thesis/evidence/orca-relayed-http-v1197/attempts/attempt-0061-measured.jsonl",
+    "bytes": 4767,
+    "sha256": "f8070f94721a9560dd1f7f1f9e64c624778c0688de41c92e7258be22a1874fd5",
+    "phase": "measured",
+    "phaseIndex": 46,
+    "caseId": "audio-campaign-v802-0061",
+    "correlationId": "audio-campaign-82ccbb2eff764360b10bc2a53b78ff44",
+    "requestId": "audio-request-72e1e2ef3d1447f99b23bf0be35cef18",
+    "status": "completed_correct",
+    "failure": null,
+    "timeout": false,
+    "audio": {
+      "path": "thesis/evidence/orca-relayed-http-v1197/audio/f9aa9f5d87d45f3f81a5c5378e80531370d3291809b45e5dc06545e8163f2173.wav",
+      "exists": true,
+      "sha256FromOriginalCaseNotRehashed": "f9aa9f5d87d45f3f81a5c5378e80531370d3291809b45e5dc06545e8163f2173"
+    }
+  },
+  {
+    "path": "thesis/evidence/orca-relayed-http-v1197/attempts/attempt-0062-measured.jsonl",
+    "bytes": 4765,
+    "sha256": "aaa0205f6b1a9da0c7063d0629a65e322230de3e9b6b66e041903f37c7657ed6",
+    "phase": "measured",
+    "phaseIndex": 47,
+    "caseId": "audio-campaign-v802-0062",
+    "correlationId": "audio-campaign-d22067efeb974f8fb37db9fe7ebfc76d",
+    "requestId": "audio-request-9bcf6c572c4b4713910abb5bf4ce86b9",
+    "status": "completed_correct",
+    "failure": null,
+    "timeout": false,
+    "audio": {
+      "path": "thesis/evidence/orca-relayed-http-v1197/audio/3b240869ba77423a56b0a7c159fb74067d447c44d99f7bf384b33c0304940d0d.wav",
+      "exists": true,
+      "sha256FromOriginalCaseNotRehashed": "3b240869ba77423a56b0a7c159fb74067d447c44d99f7bf384b33c0304940d0d"
+    }
+  },
+  {
+    "path": "thesis/evidence/orca-relayed-http-v1197/attempts/attempt-0063-measured.jsonl",
+    "bytes": 4767,
+    "sha256": "cebb31f1318f6d0ad3a6e64687719c74c4227b0053def9c536b2e9532b75a414",
+    "phase": "measured",
+    "phaseIndex": 48,
+    "caseId": "audio-campaign-v802-0063",
+    "correlationId": "audio-campaign-85bc058a0037484d96476fa2503341b0",
+    "requestId": "audio-request-473bda253eaa47bd94d1de7da438e372",
+    "status": "completed_correct",
+    "failure": null,
+    "timeout": false,
+    "audio": {
+      "path": "thesis/evidence/orca-relayed-http-v1197/audio/513556b4bcc49f10bbfbc6da6fcae584561cc21bc2c9d1803f968068d75ac35e.wav",
+      "exists": true,
+      "sha256FromOriginalCaseNotRehashed": "513556b4bcc49f10bbfbc6da6fcae584561cc21bc2c9d1803f968068d75ac35e"
+    }
+  },
+  {
+    "path": "thesis/evidence/orca-relayed-http-v1197/attempts/attempt-0064-measured.jsonl",
+    "bytes": 4767,
+    "sha256": "effc7527d33d7571521a3971e457e1424cc1625b66044b4f1ba6d149f694f8c3",
+    "phase": "measured",
+    "phaseIndex": 49,
+    "caseId": "audio-campaign-v802-0064",
+    "correlationId": "audio-campaign-72c6db70c65a480ab20509ffeb444048",
+    "requestId": "audio-request-f51cb3f81d684330b098284bed7608c2",
+    "status": "completed_correct",
+    "failure": null,
+    "timeout": false,
+    "audio": {
+      "path": "thesis/evidence/orca-relayed-http-v1197/audio/f68c03bb05e62fab8c0c59bcd93db22a186afa3c2593825930a4e9de4a6d0e95.wav",
+      "exists": true,
+      "sha256FromOriginalCaseNotRehashed": "f68c03bb05e62fab8c0c59bcd93db22a186afa3c2593825930a4e9de4a6d0e95"
+    }
+  },
+  {
+    "path": "thesis/evidence/orca-relayed-http-v1197/attempts/attempt-0065-measured.jsonl",
+    "bytes": 4767,
+    "sha256": "d42799ca4efce4a7cc0152e832d3a28c6edc239966cf62c9dd987d8f0759efdf",
+    "phase": "measured",
+    "phaseIndex": 50,
+    "caseId": "audio-campaign-v802-0065",
+    "correlationId": "audio-campaign-a1e0e555ec334d76b9a055da8c096cad",
+    "requestId": "audio-request-ca5744de91804cc29a639127be966ea4",
+    "status": "completed_correct",
+    "failure": null,
+    "timeout": false,
+    "audio": {
+      "path": "thesis/evidence/orca-relayed-http-v1197/audio/080c4d79fe852de7d3400516642f0d2e4ff21cb94f5c1facfeeb625f89bfb27b.wav",
+      "exists": true,
+      "sha256FromOriginalCaseNotRehashed": "080c4d79fe852de7d3400516642f0d2e4ff21cb94f5c1facfeeb625f89bfb27b"
+    }
+  },
+  {
+    "path": "thesis/evidence/orca-relayed-http-v1197/attempts/attempt-0066-measured.jsonl",
+    "bytes": 4766,
+    "sha256": "2f46567be8c279ee40c2b23de1c558f93bafbfa679f042b4669814bd94c9621a",
+    "phase": "measured",
+    "phaseIndex": 51,
+    "caseId": "audio-campaign-v802-0066",
+    "correlationId": "audio-campaign-38b406a5ea52485bb1c3a667f5726bc4",
+    "requestId": "audio-request-71ee9b90c55e403abfff463477c62fe9",
+    "status": "completed_correct",
+    "failure": null,
+    "timeout": false,
+    "audio": {
+      "path": "thesis/evidence/orca-relayed-http-v1197/audio/82e15c53546a733a2df6ce11ce2e0122d56476e188924d027b7a016a274a73e3.wav",
+      "exists": true,
+      "sha256FromOriginalCaseNotRehashed": "82e15c53546a733a2df6ce11ce2e0122d56476e188924d027b7a016a274a73e3"
+    }
+  },
+  {
+    "path": "thesis/evidence/orca-relayed-http-v1197/attempts/attempt-0067-measured.jsonl",
+    "bytes": 4765,
+    "sha256": "f885dfd28634cdcae180674be9c3a67958a97a984f5307e90309f9a86a72348f",
+    "phase": "measured",
+    "phaseIndex": 52,
+    "caseId": "audio-campaign-v802-0067",
+    "correlationId": "audio-campaign-edad0fa67d1b4e108789d8f0625586bb",
+    "requestId": "audio-request-029a31445e404995bfcfec94ed918c05",
+    "status": "completed_correct",
+    "failure": null,
+    "timeout": false,
+    "audio": {
+      "path": "thesis/evidence/orca-relayed-http-v1197/audio/ac345c2026ce8dde05eecab65ac62dc6ca59812a27e1e3164796cb53b5a33956.wav",
+      "exists": true,
+      "sha256FromOriginalCaseNotRehashed": "ac345c2026ce8dde05eecab65ac62dc6ca59812a27e1e3164796cb53b5a33956"
+    }
+  },
+  {
+    "path": "thesis/evidence/orca-relayed-http-v1197/attempts/attempt-0068-measured.jsonl",
+    "bytes": 4764,
+    "sha256": "206f4c24cafc733499d1e649598738d1a1a01f59716ac98c176c3008b0ecad3d",
+    "phase": "measured",
+    "phaseIndex": 53,
+    "caseId": "audio-campaign-v802-0068",
+    "correlationId": "audio-campaign-3ee0a2170b61420faeeca3adbb22bf97",
+    "requestId": "audio-request-dda478754bc748ebbc70d3acbd00b8d9",
+    "status": "completed_correct",
+    "failure": null,
+    "timeout": false,
+    "audio": {
+      "path": "thesis/evidence/orca-relayed-http-v1197/audio/a01dc8c5b0663ef608d72b0be57bced776f57fd545cb296be025cf4806d53067.wav",
+      "exists": true,
+      "sha256FromOriginalCaseNotRehashed": "a01dc8c5b0663ef608d72b0be57bced776f57fd545cb296be025cf4806d53067"
+    }
+  },
+  {
+    "path": "thesis/evidence/orca-relayed-http-v1197/attempts/attempt-0069-measured.jsonl",
+    "bytes": 4765,
+    "sha256": "413700eeee25fd4ec0fdde7b516c6384eb4874a9bbb6bdf22bd1ed6fc745cc99",
+    "phase": "measured",
+    "phaseIndex": 54,
+    "caseId": "audio-campaign-v802-0069",
+    "correlationId": "audio-campaign-092307693e9c4adfbfdf89ad3ea57e3f",
+    "requestId": "audio-request-d3c4daaedbae4278b653509897a2d83b",
+    "status": "completed_correct",
+    "failure": null,
+    "timeout": false,
+    "audio": {
+      "path": "thesis/evidence/orca-relayed-http-v1197/audio/255567870e1b7dd998c3e6524d5ad1ac932c390ced1e7b7864b0c5ae2944355e.wav",
+      "exists": true,
+      "sha256FromOriginalCaseNotRehashed": "255567870e1b7dd998c3e6524d5ad1ac932c390ced1e7b7864b0c5ae2944355e"
+    }
+  },
+  {
+    "path": "thesis/evidence/orca-relayed-http-v1197/attempts/attempt-0070-measured.jsonl",
+    "bytes": 4766,
+    "sha256": "0d30410377c94adbfd07ac3f6fa80e1574f0a2511f698dd388b4c77dbdb4ddba",
+    "phase": "measured",
+    "phaseIndex": 55,
+    "caseId": "audio-campaign-v802-0070",
+    "correlationId": "audio-campaign-785230ec9f304043a463e9e2f1e9ea7e",
+    "requestId": "audio-request-36e6556181c641e08b31866eb2cebb4a",
+    "status": "completed_correct",
+    "failure": null,
+    "timeout": false,
+    "audio": {
+      "path": "thesis/evidence/orca-relayed-http-v1197/audio/75765ea5703a5aadbf69b7323183e9182e3a019dda78afeab5dd922ed9c17119.wav",
+      "exists": true,
+      "sha256FromOriginalCaseNotRehashed": "75765ea5703a5aadbf69b7323183e9182e3a019dda78afeab5dd922ed9c17119"
+    }
+  },
+  {
+    "path": "thesis/evidence/orca-relayed-http-v1197/attempts/attempt-0071-measured.jsonl",
+    "bytes": 4767,
+    "sha256": "10aa43cf44a0ac8ada1eca58afa0d99bfe7425b9490055b0c065582817c7064d",
+    "phase": "measured",
+    "phaseIndex": 56,
+    "caseId": "audio-campaign-v802-0071",
+    "correlationId": "audio-campaign-b85cec30041c4c38a2ed1495299d61a8",
+    "requestId": "audio-request-480a8af87b5d42c8b8093dd2767a9243",
+    "status": "completed_correct",
+    "failure": null,
+    "timeout": false,
+    "audio": {
+      "path": "thesis/evidence/orca-relayed-http-v1197/audio/b273141b3f50de2d9c0c58663062177ea0442716e5d530555b4568d269ba13f1.wav",
+      "exists": true,
+      "sha256FromOriginalCaseNotRehashed": "b273141b3f50de2d9c0c58663062177ea0442716e5d530555b4568d269ba13f1"
+    }
+  },
+  {
+    "path": "thesis/evidence/orca-relayed-http-v1197/attempts/attempt-0072-measured.jsonl",
+    "bytes": 4767,
+    "sha256": "323d9898b79d032b99d710d2e3111383999f4e2bfc914c39cc1044a6ea29f9af",
+    "phase": "measured",
+    "phaseIndex": 57,
+    "caseId": "audio-campaign-v802-0072",
+    "correlationId": "audio-campaign-63a95d3c30514e8a80ca3ddc4021ae3e",
+    "requestId": "audio-request-6aadf45799a74508bf6de64732d2f1ad",
+    "status": "completed_correct",
+    "failure": null,
+    "timeout": false,
+    "audio": {
+      "path": "thesis/evidence/orca-relayed-http-v1197/audio/623290d790a0b6b0b658048674633c85668769c465f40a9c2887a36d9cc4732e.wav",
+      "exists": true,
+      "sha256FromOriginalCaseNotRehashed": "623290d790a0b6b0b658048674633c85668769c465f40a9c2887a36d9cc4732e"
+    }
+  },
+  {
+    "path": "thesis/evidence/orca-relayed-http-v1197/attempts/attempt-0073-measured.jsonl",
+    "bytes": 4768,
+    "sha256": "112a584aba3c9384f87f7380e7f508e67faf39ea5ef4e7b806123e39a9af132a",
+    "phase": "measured",
+    "phaseIndex": 58,
+    "caseId": "audio-campaign-v802-0073",
+    "correlationId": "audio-campaign-94edf5ba9903473f9f556557c60f7ff9",
+    "requestId": "audio-request-2c48317ff5db433b9f1a26932a73209e",
+    "status": "completed_correct",
+    "failure": null,
+    "timeout": false,
+    "audio": {
+      "path": "thesis/evidence/orca-relayed-http-v1197/audio/46908cd960466c65ab841a5bb5a118d6e0226a86b72dde1859f4349391b20826.wav",
+      "exists": true,
+      "sha256FromOriginalCaseNotRehashed": "46908cd960466c65ab841a5bb5a118d6e0226a86b72dde1859f4349391b20826"
+    }
+  },
+  {
+    "path": "thesis/evidence/orca-relayed-http-v1197/attempts/attempt-0074-measured.jsonl",
+    "bytes": 4767,
+    "sha256": "bb19f052aba072a95c9cb839f65f57e2c9fa1ad711c9d37464bc9449518f912d",
+    "phase": "measured",
+    "phaseIndex": 59,
+    "caseId": "audio-campaign-v802-0074",
+    "correlationId": "audio-campaign-3aed275018ea46abb6525bef247596d3",
+    "requestId": "audio-request-e194964e3d7641e1a169aef05ba1e739",
+    "status": "completed_correct",
+    "failure": null,
+    "timeout": false,
+    "audio": {
+      "path": "thesis/evidence/orca-relayed-http-v1197/audio/59d6d136cd6dfba7309d9837994154ac71858bd7962a1a84ec393b1209726a0c.wav",
+      "exists": true,
+      "sha256FromOriginalCaseNotRehashed": "59d6d136cd6dfba7309d9837994154ac71858bd7962a1a84ec393b1209726a0c"
+    }
+  },
+  {
+    "path": "thesis/evidence/orca-relayed-http-v1197/attempts/attempt-0075-measured.jsonl",
+    "bytes": 4767,
+    "sha256": "2291949a59dec8345feb3dad1e140036c4a78799135c2e47595456588e6c1a83",
+    "phase": "measured",
+    "phaseIndex": 60,
+    "caseId": "audio-campaign-v802-0075",
+    "correlationId": "audio-campaign-9ea72a95ce8e4077a8f83b397b643743",
+    "requestId": "audio-request-2f45218171344476b2f77a564e6978c8",
+    "status": "completed_correct",
+    "failure": null,
+    "timeout": false,
+    "audio": {
+      "path": "thesis/evidence/orca-relayed-http-v1197/audio/f0f2dc8cac24acb559399761e9db486aa9d21c660d0943e214218353793ad462.wav",
+      "exists": true,
+      "sha256FromOriginalCaseNotRehashed": "f0f2dc8cac24acb559399761e9db486aa9d21c660d0943e214218353793ad462"
+    }
+  },
+  {
+    "path": "thesis/evidence/orca-relayed-http-v1197/attempts/attempt-0076-measured.jsonl",
+    "bytes": 4768,
+    "sha256": "8fa9bfa167e30020a8d383cef399d0b1d3b34ef5f39f3c12d7d9b928d3a1a4dc",
+    "phase": "measured",
+    "phaseIndex": 61,
+    "caseId": "audio-campaign-v802-0076",
+    "correlationId": "audio-campaign-e66243f37d4749abb51c36fd3b0e824c",
+    "requestId": "audio-request-ec55f6bd8f42451e9dd481813c8b3578",
+    "status": "completed_correct",
+    "failure": null,
+    "timeout": false,
+    "audio": {
+      "path": "thesis/evidence/orca-relayed-http-v1197/audio/a6b246f86feb8527c6ad6b98faced2c0db6862b7f879fa235a1cd037e68642a6.wav",
+      "exists": true,
+      "sha256FromOriginalCaseNotRehashed": "a6b246f86feb8527c6ad6b98faced2c0db6862b7f879fa235a1cd037e68642a6"
+    }
+  },
+  {
+    "path": "thesis/evidence/orca-relayed-http-v1197/attempts/attempt-0077-measured.jsonl",
+    "bytes": 4766,
+    "sha256": "72d02eda8328affd701f9e88ae59285a8e6ecfbbddd15f051027d524d19033f5",
+    "phase": "measured",
+    "phaseIndex": 62,
+    "caseId": "audio-campaign-v802-0077",
+    "correlationId": "audio-campaign-6441ff815b1445279a03513fc7189e0c",
+    "requestId": "audio-request-c2426736e96a489390a548f0d891cc73",
+    "status": "completed_correct",
+    "failure": null,
+    "timeout": false,
+    "audio": {
+      "path": "thesis/evidence/orca-relayed-http-v1197/audio/8920aedbac8caeec88a8af6c415856d3a8cf69f6aee138640259f4f74a7500fb.wav",
+      "exists": true,
+      "sha256FromOriginalCaseNotRehashed": "8920aedbac8caeec88a8af6c415856d3a8cf69f6aee138640259f4f74a7500fb"
+    }
+  },
+  {
+    "path": "thesis/evidence/orca-relayed-http-v1197/attempts/attempt-0078-measured.jsonl",
+    "bytes": 4767,
+    "sha256": "c77486f4ec7a646abbd75dabb33597adeeae0b31d1b5ecba0b785cd2dd74428e",
+    "phase": "measured",
+    "phaseIndex": 63,
+    "caseId": "audio-campaign-v802-0078",
+    "correlationId": "audio-campaign-df0f6aabe677432387da860488321485",
+    "requestId": "audio-request-f790f5075b4e45a2824e01384d4a9b88",
+    "status": "completed_correct",
+    "failure": null,
+    "timeout": false,
+    "audio": {
+      "path": "thesis/evidence/orca-relayed-http-v1197/audio/385ebb51729cee3386ba7011158d7a83f553a48f9873a229e2d278341c6e9f9f.wav",
+      "exists": true,
+      "sha256FromOriginalCaseNotRehashed": "385ebb51729cee3386ba7011158d7a83f553a48f9873a229e2d278341c6e9f9f"
+    }
+  },
+  {
+    "path": "thesis/evidence/orca-relayed-http-v1197/attempts/attempt-0079-measured.jsonl",
+    "bytes": 4766,
+    "sha256": "19287ddefe58ebf842745272c5b6fee453cdec6e171dc8e5278ef91872aeaf38",
+    "phase": "measured",
+    "phaseIndex": 64,
+    "caseId": "audio-campaign-v802-0079",
+    "correlationId": "audio-campaign-dec2853a8ca64b72bd480ece7692f5ef",
+    "requestId": "audio-request-16de8c9897bd439db2302f9c32c41322",
+    "status": "completed_correct",
+    "failure": null,
+    "timeout": false,
+    "audio": {
+      "path": "thesis/evidence/orca-relayed-http-v1197/audio/aeebe93f8f24722052ad9fe18cf4e253dbd6d9f5810aa8113b0b77ef38024e58.wav",
+      "exists": true,
+      "sha256FromOriginalCaseNotRehashed": "aeebe93f8f24722052ad9fe18cf4e253dbd6d9f5810aa8113b0b77ef38024e58"
+    }
+  },
+  {
+    "path": "thesis/evidence/orca-relayed-http-v1197/attempts/attempt-0080-measured.jsonl",
+    "bytes": 4766,
+    "sha256": "885a505dbd65e42a3c5082a41c2080af4578310c2a9077a2c872aae77ab5bac4",
+    "phase": "measured",
+    "phaseIndex": 65,
+    "caseId": "audio-campaign-v802-0080",
+    "correlationId": "audio-campaign-3f0ba3e52f374bdc84e246bdfd44f3c3",
+    "requestId": "audio-request-7104954bf84b43489970e0b0b570c57f",
+    "status": "completed_correct",
+    "failure": null,
+    "timeout": false,
+    "audio": {
+      "path": "thesis/evidence/orca-relayed-http-v1197/audio/388be4f55c1dfc9ccc5ae909c64a245027d6f177e06ecb4e7458ebf395d8a9b3.wav",
+      "exists": true,
+      "sha256FromOriginalCaseNotRehashed": "388be4f55c1dfc9ccc5ae909c64a245027d6f177e06ecb4e7458ebf395d8a9b3"
+    }
+  },
+  {
+    "path": "thesis/evidence/orca-relayed-http-v1197/attempts/attempt-0081-measured.jsonl",
+    "bytes": 4768,
+    "sha256": "8c3e782848bf9568415aafc3dfece1e8f5ca447992b95c5134751511146503ec",
+    "phase": "measured",
+    "phaseIndex": 66,
+    "caseId": "audio-campaign-v802-0081",
+    "correlationId": "audio-campaign-1f8208949d33414ea40232a0e0fa4060",
+    "requestId": "audio-request-efbc8961eda94a8d969b9bfc725d39bd",
+    "status": "completed_correct",
+    "failure": null,
+    "timeout": false,
+    "audio": {
+      "path": "thesis/evidence/orca-relayed-http-v1197/audio/d85cd84a5969ddc6417a808328ed5d5d35072ce2bf805125c9eaed4d5644350d.wav",
+      "exists": true,
+      "sha256FromOriginalCaseNotRehashed": "d85cd84a5969ddc6417a808328ed5d5d35072ce2bf805125c9eaed4d5644350d"
+    }
+  },
+  {
+    "path": "thesis/evidence/orca-relayed-http-v1197/attempts/attempt-0082-measured.jsonl",
+    "bytes": 4763,
+    "sha256": "3eee0107a0b2e1954d071739a0522deb09e81001f0e41b80fb2c96dde8420d6a",
+    "phase": "measured",
+    "phaseIndex": 67,
+    "caseId": "audio-campaign-v802-0082",
+    "correlationId": "audio-campaign-b8d1ab4d7ea1487fb61284ba38b189f1",
+    "requestId": "audio-request-41fb9298b74e41b9a9fc834691a09d67",
+    "status": "completed_correct",
+    "failure": null,
+    "timeout": false,
+    "audio": {
+      "path": "thesis/evidence/orca-relayed-http-v1197/audio/880ba6d35392bdb1a0735be6c86e036776b36344ba1f3bb9ccec1e213d090e13.wav",
+      "exists": true,
+      "sha256FromOriginalCaseNotRehashed": "880ba6d35392bdb1a0735be6c86e036776b36344ba1f3bb9ccec1e213d090e13"
+    }
+  },
+  {
+    "path": "thesis/evidence/orca-relayed-http-v1197/attempts/attempt-0083-measured.jsonl",
+    "bytes": 4767,
+    "sha256": "1f1b8d27561ced19f10bccebff6c7f4be4dc27b6d4589987aef230c97a995ab6",
+    "phase": "measured",
+    "phaseIndex": 68,
+    "caseId": "audio-campaign-v802-0083",
+    "correlationId": "audio-campaign-8ab99ea1bae045eba190830270f61c8f",
+    "requestId": "audio-request-cb2b10719a3345c0b428efcf53683181",
+    "status": "completed_correct",
+    "failure": null,
+    "timeout": false,
+    "audio": {
+      "path": "thesis/evidence/orca-relayed-http-v1197/audio/daf15a01f5f3b11841a02682628d67051565fdc01b26b590f5c0cbe80421a791.wav",
+      "exists": true,
+      "sha256FromOriginalCaseNotRehashed": "daf15a01f5f3b11841a02682628d67051565fdc01b26b590f5c0cbe80421a791"
+    }
+  },
+  {
+    "path": "thesis/evidence/orca-relayed-http-v1197/attempts/attempt-0084-measured.jsonl",
+    "bytes": 4766,
+    "sha256": "7c12d4104110dcdf0726a5a1f68cce5916f35d8b3df8ef825f9ef3c743bbd7b4",
+    "phase": "measured",
+    "phaseIndex": 69,
+    "caseId": "audio-campaign-v802-0084",
+    "correlationId": "audio-campaign-5c8f3c87c51f414b8d67985140d3951c",
+    "requestId": "audio-request-6b34beaf242347c8854562975374fb71",
+    "status": "completed_correct",
+    "failure": null,
+    "timeout": false,
+    "audio": {
+      "path": "thesis/evidence/orca-relayed-http-v1197/audio/1c7321a47de9bda849e62052cefb6691680c59503a45038199b8220b47ebbbaf.wav",
+      "exists": true,
+      "sha256FromOriginalCaseNotRehashed": "1c7321a47de9bda849e62052cefb6691680c59503a45038199b8220b47ebbbaf"
+    }
+  },
+  {
+    "path": "thesis/evidence/orca-relayed-http-v1197/attempts/attempt-0085-measured.jsonl",
+    "bytes": 4767,
+    "sha256": "25eca67cb250c8f7eb3e40a8fae5d71e64108b4d101cf0884a612fb3cda8fadc",
+    "phase": "measured",
+    "phaseIndex": 70,
+    "caseId": "audio-campaign-v802-0085",
+    "correlationId": "audio-campaign-da69bf91bb714bcc9cd027c04057c522",
+    "requestId": "audio-request-059b6ccdcf1144239ff560adb056057d",
+    "status": "completed_correct",
+    "failure": null,
+    "timeout": false,
+    "audio": {
+      "path": "thesis/evidence/orca-relayed-http-v1197/audio/7d416b1b9fc4cffad0438af79c2bf2c78c7a918b7e9cba0fddef2a013a8bea6f.wav",
+      "exists": true,
+      "sha256FromOriginalCaseNotRehashed": "7d416b1b9fc4cffad0438af79c2bf2c78c7a918b7e9cba0fddef2a013a8bea6f"
+    }
+  },
+  {
+    "path": "thesis/evidence/orca-relayed-http-v1197/attempts/attempt-0086-measured.jsonl",
+    "bytes": 4766,
+    "sha256": "5631bd362ca073f3e9940a4fb6ddddfff34f3faa2cb83b8a924c625d0ce3d8dc",
+    "phase": "measured",
+    "phaseIndex": 71,
+    "caseId": "audio-campaign-v802-0086",
+    "correlationId": "audio-campaign-4dc62da4200f43f88d5844c780508483",
+    "requestId": "audio-request-5998903d4321496ba45531cacc8897fe",
+    "status": "completed_correct",
+    "failure": null,
+    "timeout": false,
+    "audio": {
+      "path": "thesis/evidence/orca-relayed-http-v1197/audio/bee123fcaa4822553617d21abd77839050ef29c48c6d71a7d1a2f15753d94a44.wav",
+      "exists": true,
+      "sha256FromOriginalCaseNotRehashed": "bee123fcaa4822553617d21abd77839050ef29c48c6d71a7d1a2f15753d94a44"
+    }
+  },
+  {
+    "path": "thesis/evidence/orca-relayed-http-v1197/attempts/attempt-0087-measured.jsonl",
+    "bytes": 4767,
+    "sha256": "b2a8dfc8c7847e44910f711b017c20976ae60fb730dacc99c2de05a79ae78cd2",
+    "phase": "measured",
+    "phaseIndex": 72,
+    "caseId": "audio-campaign-v802-0087",
+    "correlationId": "audio-campaign-d7eea53746b941a1b9983fae75787bdf",
+    "requestId": "audio-request-bd50ede97c0b4e6c8f93a2f4e93156fa",
+    "status": "completed_correct",
+    "failure": null,
+    "timeout": false,
+    "audio": {
+      "path": "thesis/evidence/orca-relayed-http-v1197/audio/b9b163923e08efd9405c1e8df8a3288a182a15efff89a8041fbbb4284266be72.wav",
+      "exists": true,
+      "sha256FromOriginalCaseNotRehashed": "b9b163923e08efd9405c1e8df8a3288a182a15efff89a8041fbbb4284266be72"
+    }
+  },
+  {
+    "path": "thesis/evidence/orca-relayed-http-v1197/attempts/attempt-0088-measured.jsonl",
+    "bytes": 4767,
+    "sha256": "07bf2527acd339a0912d836438ee9e0fa2a87d14ac9a5cb89582d36b323f3d19",
+    "phase": "measured",
+    "phaseIndex": 73,
+    "caseId": "audio-campaign-v802-0088",
+    "correlationId": "audio-campaign-f8160f49e710401fb29b9a033ea862cd",
+    "requestId": "audio-request-5ad5d61511d24133b0c8710bb28c6e2f",
+    "status": "completed_correct",
+    "failure": null,
+    "timeout": false,
+    "audio": {
+      "path": "thesis/evidence/orca-relayed-http-v1197/audio/16c0ca4313972250816e32402a52509ecbf5aa4d8c838a72b3aad38fd4fb192b.wav",
+      "exists": true,
+      "sha256FromOriginalCaseNotRehashed": "16c0ca4313972250816e32402a52509ecbf5aa4d8c838a72b3aad38fd4fb192b"
+    }
+  },
+  {
+    "path": "thesis/evidence/orca-relayed-http-v1197/attempts/attempt-0089-measured.jsonl",
+    "bytes": 4767,
+    "sha256": "082d9414e09e8bd7e5e12d9903ab2534cd730ddff7da71f38fcac2df7f4c53a2",
+    "phase": "measured",
+    "phaseIndex": 74,
+    "caseId": "audio-campaign-v802-0089",
+    "correlationId": "audio-campaign-beb14492ebdc43b09c793453dd118bdb",
+    "requestId": "audio-request-3a37d94d4627470f8763fc8332b2edcf",
+    "status": "completed_correct",
+    "failure": null,
+    "timeout": false,
+    "audio": {
+      "path": "thesis/evidence/orca-relayed-http-v1197/audio/37eb5e9f94606378f974b8caf2a0ec38a467dd260979e89f9d230d0c3f7f1433.wav",
+      "exists": true,
+      "sha256FromOriginalCaseNotRehashed": "37eb5e9f94606378f974b8caf2a0ec38a467dd260979e89f9d230d0c3f7f1433"
+    }
+  },
+  {
+    "path": "thesis/evidence/orca-relayed-http-v1197/attempts/attempt-0090-measured.jsonl",
+    "bytes": 4767,
+    "sha256": "c0a1abefc057297dc21ff1d67573afb8465e5c4ac2fc4cf8efa69ea209441516",
+    "phase": "measured",
+    "phaseIndex": 75,
+    "caseId": "audio-campaign-v802-0090",
+    "correlationId": "audio-campaign-332b8d6cdd5547a4b7331f8cebf21990",
+    "requestId": "audio-request-50b712c28ded4cb7928c280f97fe393e",
+    "status": "completed_correct",
+    "failure": null,
+    "timeout": false,
+    "audio": {
+      "path": "thesis/evidence/orca-relayed-http-v1197/audio/1c76952c6a4ee7f94e373c447065c9351153e27307660e11dfb29221b738b890.wav",
+      "exists": true,
+      "sha256FromOriginalCaseNotRehashed": "1c76952c6a4ee7f94e373c447065c9351153e27307660e11dfb29221b738b890"
+    }
+  },
+  {
+    "path": "thesis/evidence/orca-relayed-http-v1197/attempts/attempt-0091-measured.jsonl",
+    "bytes": 4767,
+    "sha256": "17a3286a905a9b2211a382e4897646ec2c33600bb9373fef8a3c06877286d73b",
+    "phase": "measured",
+    "phaseIndex": 76,
+    "caseId": "audio-campaign-v802-0091",
+    "correlationId": "audio-campaign-2d3dfc83e0364038928d854732e036b2",
+    "requestId": "audio-request-f20fd22e4742492aa2947055fa955776",
+    "status": "completed_correct",
+    "failure": null,
+    "timeout": false,
+    "audio": {
+      "path": "thesis/evidence/orca-relayed-http-v1197/audio/46e2b3ad4a6b06492dfdaf96dedd30d89a5901655d49a42d89c7b614e7e8ceb8.wav",
+      "exists": true,
+      "sha256FromOriginalCaseNotRehashed": "46e2b3ad4a6b06492dfdaf96dedd30d89a5901655d49a42d89c7b614e7e8ceb8"
+    }
+  },
+  {
+    "path": "thesis/evidence/orca-relayed-http-v1197/attempts/attempt-0092-measured.jsonl",
+    "bytes": 4766,
+    "sha256": "1efd6a5b75cd727a2a294a76ec3065362cd8da200687bc1ba8ed80a35f0b44ff",
+    "phase": "measured",
+    "phaseIndex": 77,
+    "caseId": "audio-campaign-v802-0092",
+    "correlationId": "audio-campaign-1517e5a1d84f4ec185b7bd1d8236b53e",
+    "requestId": "audio-request-e96d2c2aacfb48c4a23e40657f51497e",
+    "status": "completed_correct",
+    "failure": null,
+    "timeout": false,
+    "audio": {
+      "path": "thesis/evidence/orca-relayed-http-v1197/audio/0c232634efcb91be3528a40b39bebc3b0aea59ea51ba1acbb6b1c81748ed6d79.wav",
+      "exists": true,
+      "sha256FromOriginalCaseNotRehashed": "0c232634efcb91be3528a40b39bebc3b0aea59ea51ba1acbb6b1c81748ed6d79"
+    }
+  },
+  {
+    "path": "thesis/evidence/orca-relayed-http-v1197/attempts/attempt-0093-measured.jsonl",
+    "bytes": 4766,
+    "sha256": "4c7a7a7d641685aca3b5545cb250c85790f8abf1cf0afdd822e598bc3fbc3b3e",
+    "phase": "measured",
+    "phaseIndex": 78,
+    "caseId": "audio-campaign-v802-0093",
+    "correlationId": "audio-campaign-3d93672105bf4a579b1619eb0a9d87cb",
+    "requestId": "audio-request-a913954cacb34569bd3a55694b478e74",
+    "status": "completed_correct",
+    "failure": null,
+    "timeout": false,
+    "audio": {
+      "path": "thesis/evidence/orca-relayed-http-v1197/audio/c83f6c5f2466bb3907405804b6808f443832dc9092be0dacf0252d884f9e6c4b.wav",
+      "exists": true,
+      "sha256FromOriginalCaseNotRehashed": "c83f6c5f2466bb3907405804b6808f443832dc9092be0dacf0252d884f9e6c4b"
+    }
+  },
+  {
+    "path": "thesis/evidence/orca-relayed-http-v1197/attempts/attempt-0094-measured.jsonl",
+    "bytes": 4767,
+    "sha256": "a43e1a73d6de3416b2e088f04d6e80df544714e6963016c766409968456a8c1b",
+    "phase": "measured",
+    "phaseIndex": 79,
+    "caseId": "audio-campaign-v802-0094",
+    "correlationId": "audio-campaign-0870cd79fdd14a48a60a8663f8faca81",
+    "requestId": "audio-request-c32bfdf91c28419491b0c4eafda8902b",
+    "status": "completed_correct",
+    "failure": null,
+    "timeout": false,
+    "audio": {
+      "path": "thesis/evidence/orca-relayed-http-v1197/audio/ebe9088dbb91886877d007485f21ce8a2e3d24e2ec15831da5929ee9c48f005d.wav",
+      "exists": true,
+      "sha256FromOriginalCaseNotRehashed": "ebe9088dbb91886877d007485f21ce8a2e3d24e2ec15831da5929ee9c48f005d"
+    }
+  },
+  {
+    "path": "thesis/evidence/orca-relayed-http-v1197/attempts/attempt-0095-measured.jsonl",
+    "bytes": 4766,
+    "sha256": "7a8e557e336480d26ee4f02605da2ef048fb28de979276db6fe8d82b08471f62",
+    "phase": "measured",
+    "phaseIndex": 80,
+    "caseId": "audio-campaign-v802-0095",
+    "correlationId": "audio-campaign-81564cb7e6ec49e69c4ab0e1a2b6f382",
+    "requestId": "audio-request-b841cc6a0b92477e841010cd65129e14",
+    "status": "completed_correct",
+    "failure": null,
+    "timeout": false,
+    "audio": {
+      "path": "thesis/evidence/orca-relayed-http-v1197/audio/b5f45a01f71c15a2d05069bf0e8c6f2a8cf464d81aff37a0357e36d20b1c4e87.wav",
+      "exists": true,
+      "sha256FromOriginalCaseNotRehashed": "b5f45a01f71c15a2d05069bf0e8c6f2a8cf464d81aff37a0357e36d20b1c4e87"
+    }
+  },
+  {
+    "path": "thesis/evidence/orca-relayed-http-v1197/attempts/attempt-0096-measured.jsonl",
+    "bytes": 4766,
+    "sha256": "517210215f9ecaafc247f53b27d51fac8f5a0bd14f5e9e188259dd85090c750e",
+    "phase": "measured",
+    "phaseIndex": 81,
+    "caseId": "audio-campaign-v802-0096",
+    "correlationId": "audio-campaign-9862160b84ab417eb72216cd5257fc9c",
+    "requestId": "audio-request-447f578123a6435b9448f12f5f7824be",
+    "status": "completed_correct",
+    "failure": null,
+    "timeout": false,
+    "audio": {
+      "path": "thesis/evidence/orca-relayed-http-v1197/audio/3f70fbf5e7e4fec6d0b0a076ffef6d2d04848a3f44bbb5bbfe2227cf89cf2be7.wav",
+      "exists": true,
+      "sha256FromOriginalCaseNotRehashed": "3f70fbf5e7e4fec6d0b0a076ffef6d2d04848a3f44bbb5bbfe2227cf89cf2be7"
+    }
+  },
+  {
+    "path": "thesis/evidence/orca-relayed-http-v1197/attempts/attempt-0097-measured.jsonl",
+    "bytes": 4763,
+    "sha256": "a2758d39de75ec804ebdb7597b2d57879ea582e3f687eff7b4b4cc59f29d702e",
+    "phase": "measured",
+    "phaseIndex": 82,
+    "caseId": "audio-campaign-v802-0097",
+    "correlationId": "audio-campaign-f70810d72b8342b1824da030cc1b2388",
+    "requestId": "audio-request-2abb2cb71c01484b86291b8c7d0bfcfa",
+    "status": "completed_correct",
+    "failure": null,
+    "timeout": false,
+    "audio": {
+      "path": "thesis/evidence/orca-relayed-http-v1197/audio/830b02a1bff6078fa49ccddb4d637aa65b941493f95f8b659d926b8ef8a77912.wav",
+      "exists": true,
+      "sha256FromOriginalCaseNotRehashed": "830b02a1bff6078fa49ccddb4d637aa65b941493f95f8b659d926b8ef8a77912"
+    }
+  },
+  {
+    "path": "thesis/evidence/orca-relayed-http-v1197/attempts/attempt-0098-measured.jsonl",
+    "bytes": 4767,
+    "sha256": "e33719a6fbfa7613102949bd59fc749b044fe5b4af1904705e12f1a76973ca2b",
+    "phase": "measured",
+    "phaseIndex": 83,
+    "caseId": "audio-campaign-v802-0098",
+    "correlationId": "audio-campaign-64113e65c6b741a2a1a0e4915c23c22b",
+    "requestId": "audio-request-52924ff46c194d30a90f6bbc5440ba39",
+    "status": "completed_correct",
+    "failure": null,
+    "timeout": false,
+    "audio": {
+      "path": "thesis/evidence/orca-relayed-http-v1197/audio/f0d03f933771e381626db8b4e2d11b485fa00dee9199a2ba76712210331e7cf4.wav",
+      "exists": true,
+      "sha256FromOriginalCaseNotRehashed": "f0d03f933771e381626db8b4e2d11b485fa00dee9199a2ba76712210331e7cf4"
+    }
+  },
+  {
+    "path": "thesis/evidence/orca-relayed-http-v1197/attempts/attempt-0099-measured.jsonl",
+    "bytes": 4766,
+    "sha256": "b30c8b049b7506aa6d2fbae7591607b7f4348579d29928570e8595d7357d8a7a",
+    "phase": "measured",
+    "phaseIndex": 84,
+    "caseId": "audio-campaign-v802-0099",
+    "correlationId": "audio-campaign-67e8a447858c44b89af0127e24058cb6",
+    "requestId": "audio-request-8c6c6827f5ef4b77990fbc2fa6f9b3e4",
+    "status": "completed_correct",
+    "failure": null,
+    "timeout": false,
+    "audio": {
+      "path": "thesis/evidence/orca-relayed-http-v1197/audio/8418d27138123e21ec70e9bbab4c99609585ca85a21440b3f8e0f08a0bb84a38.wav",
+      "exists": true,
+      "sha256FromOriginalCaseNotRehashed": "8418d27138123e21ec70e9bbab4c99609585ca85a21440b3f8e0f08a0bb84a38"
+    }
+  },
+  {
+    "path": "thesis/evidence/orca-relayed-http-v1197/attempts/attempt-0100-measured.jsonl",
+    "bytes": 4768,
+    "sha256": "dc8599b35f931da1c2841c1cd3b2bc6711e70d3d75fc5c407ca5a37fc3d1eae2",
+    "phase": "measured",
+    "phaseIndex": 85,
+    "caseId": "audio-campaign-v802-0100",
+    "correlationId": "audio-campaign-1543351dd2ad4a2bba4a0ac0b413633a",
+    "requestId": "audio-request-4c778bcf8d364684b4a7283345c2d42a",
+    "status": "completed_correct",
+    "failure": null,
+    "timeout": false,
+    "audio": {
+      "path": "thesis/evidence/orca-relayed-http-v1197/audio/eb6c33a94e74fb73204bad262a3135b64445c9a320efce8eb56f20a1dc5a4c73.wav",
+      "exists": true,
+      "sha256FromOriginalCaseNotRehashed": "eb6c33a94e74fb73204bad262a3135b64445c9a320efce8eb56f20a1dc5a4c73"
+    }
+  },
+  {
+    "path": "thesis/evidence/orca-relayed-http-v1197/attempts/attempt-0101-measured.jsonl",
+    "bytes": 4766,
+    "sha256": "c131d83e2fc780805e29db5d020b4389cb7c72b43765ee7a8172f8397adf46b9",
+    "phase": "measured",
+    "phaseIndex": 86,
+    "caseId": "audio-campaign-v802-0101",
+    "correlationId": "audio-campaign-1182e9b62d1f4a728e63efa31bcc3eaa",
+    "requestId": "audio-request-5fd10a9c3711438c84c5efcb29a4e335",
+    "status": "completed_correct",
+    "failure": null,
+    "timeout": false,
+    "audio": {
+      "path": "thesis/evidence/orca-relayed-http-v1197/audio/af1c784dee73d5fd951a783c8c6ad2e1e10d82156cbf053e361189ad14520af3.wav",
+      "exists": true,
+      "sha256FromOriginalCaseNotRehashed": "af1c784dee73d5fd951a783c8c6ad2e1e10d82156cbf053e361189ad14520af3"
+    }
+  },
+  {
+    "path": "thesis/evidence/orca-relayed-http-v1197/attempts/attempt-0102-measured.jsonl",
+    "bytes": 4767,
+    "sha256": "1691d7750665718e6fd811017ae76719002a4437e004d4a63e70b2ba71ca3050",
+    "phase": "measured",
+    "phaseIndex": 87,
+    "caseId": "audio-campaign-v802-0102",
+    "correlationId": "audio-campaign-5f5c236396ef4a7798fabde31c93d39c",
+    "requestId": "audio-request-4f62d6439dc04c7ebb5593b161ceb0a3",
+    "status": "completed_correct",
+    "failure": null,
+    "timeout": false,
+    "audio": {
+      "path": "thesis/evidence/orca-relayed-http-v1197/audio/0ecf4c36ebbaab4cb9c7c9d0eddb0cc2aff91211c3e13c408cc475aa5033073a.wav",
+      "exists": true,
+      "sha256FromOriginalCaseNotRehashed": "0ecf4c36ebbaab4cb9c7c9d0eddb0cc2aff91211c3e13c408cc475aa5033073a"
+    }
+  },
+  {
+    "path": "thesis/evidence/orca-relayed-http-v1197/attempts/attempt-0103-measured.jsonl",
+    "bytes": 4768,
+    "sha256": "a520b4995d8f5800180cc7258d10590ba80d12cc358d069053909704d9acdf66",
+    "phase": "measured",
+    "phaseIndex": 88,
+    "caseId": "audio-campaign-v802-0103",
+    "correlationId": "audio-campaign-0401ae4e5f9e4e2483b8b3479fd9a6e3",
+    "requestId": "audio-request-c83c6af079ef4cfc8405552b49bdf8be",
+    "status": "completed_correct",
+    "failure": null,
+    "timeout": false,
+    "audio": {
+      "path": "thesis/evidence/orca-relayed-http-v1197/audio/1615957dee06284814feb3180950e2efb2d54985a1412b915c01d67ca39e9207.wav",
+      "exists": true,
+      "sha256FromOriginalCaseNotRehashed": "1615957dee06284814feb3180950e2efb2d54985a1412b915c01d67ca39e9207"
+    }
+  },
+  {
+    "path": "thesis/evidence/orca-relayed-http-v1197/attempts/attempt-0104-measured.jsonl",
+    "bytes": 4768,
+    "sha256": "041b08ffeab7c726070999907dd2a585b0d82b568663bb767c1e45de523a7750",
+    "phase": "measured",
+    "phaseIndex": 89,
+    "caseId": "audio-campaign-v802-0104",
+    "correlationId": "audio-campaign-4308e23d847d4f0c9aa614e37a443061",
+    "requestId": "audio-request-6e1f1d7aea264340aa0c09f4441bdacb",
+    "status": "completed_correct",
+    "failure": null,
+    "timeout": false,
+    "audio": {
+      "path": "thesis/evidence/orca-relayed-http-v1197/audio/f383e7e4bf079094276d181f35691c1267c92f6215f251cebf43a34dd444eef3.wav",
+      "exists": true,
+      "sha256FromOriginalCaseNotRehashed": "f383e7e4bf079094276d181f35691c1267c92f6215f251cebf43a34dd444eef3"
+    }
+  },
+  {
+    "path": "thesis/evidence/orca-relayed-http-v1197/attempts/attempt-0105-measured.jsonl",
+    "bytes": 4768,
+    "sha256": "73ce8407df7f0da044795c91709b8af699aa31b3a48eff7297ca49316b8766d6",
+    "phase": "measured",
+    "phaseIndex": 90,
+    "caseId": "audio-campaign-v802-0105",
+    "correlationId": "audio-campaign-66293aff4c2d4cc8a26f3ae133d532a5",
+    "requestId": "audio-request-4a602d70e922411b90a0a28184558958",
+    "status": "completed_correct",
+    "failure": null,
+    "timeout": false,
+    "audio": {
+      "path": "thesis/evidence/orca-relayed-http-v1197/audio/5862871fa3f61202947e02f6c7e3c5080f8ed2e61da95e1e178081c5318dce06.wav",
+      "exists": true,
+      "sha256FromOriginalCaseNotRehashed": "5862871fa3f61202947e02f6c7e3c5080f8ed2e61da95e1e178081c5318dce06"
+    }
+  },
+  {
+    "path": "thesis/evidence/orca-relayed-http-v1197/attempts/attempt-0106-measured.jsonl",
+    "bytes": 4768,
+    "sha256": "494c5c0b84e7a506ae4893d5a565b80e82a6b09f4e1136e2976bd4962f3a2ed5",
+    "phase": "measured",
+    "phaseIndex": 91,
+    "caseId": "audio-campaign-v802-0106",
+    "correlationId": "audio-campaign-74a6ab4c4188441294d0f9d3fdea45b2",
+    "requestId": "audio-request-8a50be33f82f4f6f9dc8f424767f8571",
+    "status": "completed_correct",
+    "failure": null,
+    "timeout": false,
+    "audio": {
+      "path": "thesis/evidence/orca-relayed-http-v1197/audio/cbba08500409d6a52513364c63e7b70fc17842278296f008771d7537a8befd27.wav",
+      "exists": true,
+      "sha256FromOriginalCaseNotRehashed": "cbba08500409d6a52513364c63e7b70fc17842278296f008771d7537a8befd27"
+    }
+  },
+  {
+    "path": "thesis/evidence/orca-relayed-http-v1197/attempts/attempt-0107-measured.jsonl",
+    "bytes": 4768,
+    "sha256": "5122fb821287f7556f222d628f60f2c0ccc048de453fa60af047abe2b227e0b3",
+    "phase": "measured",
+    "phaseIndex": 92,
+    "caseId": "audio-campaign-v802-0107",
+    "correlationId": "audio-campaign-b4abe834240b44ad9ad22f7d2d30314c",
+    "requestId": "audio-request-d0d4c7e451dc40899808a2a729404c78",
+    "status": "completed_correct",
+    "failure": null,
+    "timeout": false,
+    "audio": {
+      "path": "thesis/evidence/orca-relayed-http-v1197/audio/3181ec507a76c44dcef8e010ca1d11c8a6cae97d26989a459483def205e5dba3.wav",
+      "exists": true,
+      "sha256FromOriginalCaseNotRehashed": "3181ec507a76c44dcef8e010ca1d11c8a6cae97d26989a459483def205e5dba3"
+    }
+  },
+  {
+    "path": "thesis/evidence/orca-relayed-http-v1197/attempts/attempt-0108-measured.jsonl",
+    "bytes": 4768,
+    "sha256": "7443ddbfcd9c62367f8cb2884b077b9d1f93beb3bd196a388cb761bf2f61391a",
+    "phase": "measured",
+    "phaseIndex": 93,
+    "caseId": "audio-campaign-v802-0108",
+    "correlationId": "audio-campaign-d825391d86eb42749b84652b873e27bd",
+    "requestId": "audio-request-6f84f29773134ce8a5e4143c7e0024d0",
+    "status": "completed_correct",
+    "failure": null,
+    "timeout": false,
+    "audio": {
+      "path": "thesis/evidence/orca-relayed-http-v1197/audio/b9cfae06dc1adaadbfc6aec0ab1355d6558c93fb8c77a91e314f685cb7fddd87.wav",
+      "exists": true,
+      "sha256FromOriginalCaseNotRehashed": "b9cfae06dc1adaadbfc6aec0ab1355d6558c93fb8c77a91e314f685cb7fddd87"
+    }
+  },
+  {
+    "path": "thesis/evidence/orca-relayed-http-v1197/attempts/attempt-0109-measured.jsonl",
+    "bytes": 4768,
+    "sha256": "a31bdf008761da2831142d89145b11ef006f6794c2b5af7280938582d1e57853",
+    "phase": "measured",
+    "phaseIndex": 94,
+    "caseId": "audio-campaign-v802-0109",
+    "correlationId": "audio-campaign-5d601f6a581b4f6c8bc2fdd274c21b94",
+    "requestId": "audio-request-4598629980a6431a8405bac821a15a7b",
+    "status": "completed_correct",
+    "failure": null,
+    "timeout": false,
+    "audio": {
+      "path": "thesis/evidence/orca-relayed-http-v1197/audio/47cd73d49596e2c58b39cd3795b5ed1e8af83c5a451e33cffda9b3d1280ab16f.wav",
+      "exists": true,
+      "sha256FromOriginalCaseNotRehashed": "47cd73d49596e2c58b39cd3795b5ed1e8af83c5a451e33cffda9b3d1280ab16f"
+    }
+  },
+  {
+    "path": "thesis/evidence/orca-relayed-http-v1197/attempts/attempt-0110-measured.jsonl",
+    "bytes": 4768,
+    "sha256": "feb2e67aca29ddf15494bb30532c82462cbf08c3810107515368a0ccdace21e4",
+    "phase": "measured",
+    "phaseIndex": 95,
+    "caseId": "audio-campaign-v802-0110",
+    "correlationId": "audio-campaign-2321befeeb2c4b55bf5ef7819514b159",
+    "requestId": "audio-request-e17db82cda624407b2de4af4a75e6266",
+    "status": "completed_correct",
+    "failure": null,
+    "timeout": false,
+    "audio": {
+      "path": "thesis/evidence/orca-relayed-http-v1197/audio/2b3f1c2b0be77fb48747e67092245ebae45189583b0067b241dd9495dce2fa8c.wav",
+      "exists": true,
+      "sha256FromOriginalCaseNotRehashed": "2b3f1c2b0be77fb48747e67092245ebae45189583b0067b241dd9495dce2fa8c"
+    }
+  },
+  {
+    "path": "thesis/evidence/orca-relayed-http-v1197/attempts/attempt-0111-measured.jsonl",
+    "bytes": 4766,
+    "sha256": "a520e1a742d481f1ac8ea7e17f02f9d245e89c1d85ec7e230ceb013d081205a9",
+    "phase": "measured",
+    "phaseIndex": 96,
+    "caseId": "audio-campaign-v802-0111",
+    "correlationId": "audio-campaign-3216f2c94d0744c68f47a50f72a01409",
+    "requestId": "audio-request-22d2146b353b42d5909ad0c74faff33c",
+    "status": "completed_correct",
+    "failure": null,
+    "timeout": false,
+    "audio": {
+      "path": "thesis/evidence/orca-relayed-http-v1197/audio/bb81608fec0ab59f9d640919249bb7fc6e6cc7e9f4234903c15a1779809820e8.wav",
+      "exists": true,
+      "sha256FromOriginalCaseNotRehashed": "bb81608fec0ab59f9d640919249bb7fc6e6cc7e9f4234903c15a1779809820e8"
+    }
+  },
+  {
+    "path": "thesis/evidence/orca-relayed-http-v1197/attempts/attempt-0112-measured.jsonl",
+    "bytes": 4769,
+    "sha256": "b640be7a7744a0a81180bc7c4635273dcebfa9d215879ebbfb99707fbdb46828",
+    "phase": "measured",
+    "phaseIndex": 97,
+    "caseId": "audio-campaign-v802-0112",
+    "correlationId": "audio-campaign-175b4b6ad6db4b15956f0eeb2d1debaf",
+    "requestId": "audio-request-2bd4d8aff21743c68b247aaed1c35003",
+    "status": "completed_correct",
+    "failure": null,
+    "timeout": false,
+    "audio": {
+      "path": "thesis/evidence/orca-relayed-http-v1197/audio/933ca440dd26e05557fd183d0c5c1321aad47d89eabcca7fc54f5a3e6b87ac0a.wav",
+      "exists": true,
+      "sha256FromOriginalCaseNotRehashed": "933ca440dd26e05557fd183d0c5c1321aad47d89eabcca7fc54f5a3e6b87ac0a"
+    }
+  },
+  {
+    "path": "thesis/evidence/orca-relayed-http-v1197/attempts/attempt-0113-measured.jsonl",
+    "bytes": 4768,
+    "sha256": "04bc98a709b6c740219823fd2a01fbd7dbe7a225dad7debdfda2610c00091fa6",
+    "phase": "measured",
+    "phaseIndex": 98,
+    "caseId": "audio-campaign-v802-0113",
+    "correlationId": "audio-campaign-7b1faa19f0a84fe5aae07983e6ef2403",
+    "requestId": "audio-request-7465cdcc49df4adca425374d96f2643a",
+    "status": "completed_correct",
+    "failure": null,
+    "timeout": false,
+    "audio": {
+      "path": "thesis/evidence/orca-relayed-http-v1197/audio/cb31635207aeca018544a9133d982dc4ef0dc1bc3b328a3b5ad29870c8c9681d.wav",
+      "exists": true,
+      "sha256FromOriginalCaseNotRehashed": "cb31635207aeca018544a9133d982dc4ef0dc1bc3b328a3b5ad29870c8c9681d"
+    }
+  },
+  {
+    "path": "thesis/evidence/orca-relayed-http-v1197/attempts/attempt-0114-measured.jsonl",
+    "bytes": 4766,
+    "sha256": "63e00f3e78560517c22817da7a1f959625ebad683352da9c49a1bb2d4df7f8ce",
+    "phase": "measured",
+    "phaseIndex": 99,
+    "caseId": "audio-campaign-v802-0114",
+    "correlationId": "audio-campaign-870819a7711f40fb9715da8972212acd",
+    "requestId": "audio-request-8105aaa0501f4c9d9ba702b6f8e5be6a",
+    "status": "completed_correct",
+    "failure": null,
+    "timeout": false,
+    "audio": {
+      "path": "thesis/evidence/orca-relayed-http-v1197/audio/4fc1e42fa0b421d6497e7857bb3b42b498d995dbf918b30c713141039c6cb9dc.wav",
+      "exists": true,
+      "sha256FromOriginalCaseNotRehashed": "4fc1e42fa0b421d6497e7857bb3b42b498d995dbf918b30c713141039c6cb9dc"
+    }
+  },
+  {
+    "path": "thesis/evidence/orca-relayed-http-v1197/attempts/attempt-0115-measured.jsonl",
+    "bytes": 4769,
+    "sha256": "15ed1505551ed1a3d287d7eca89d3c6d3cb9cc1f4ee726f598ab58ed7d0762cd",
+    "phase": "measured",
+    "phaseIndex": 100,
+    "caseId": "audio-campaign-v802-0115",
+    "correlationId": "audio-campaign-f8a112397eae419485e1f8a2dea6417d",
+    "requestId": "audio-request-abd7a2ff7588451cbe043101e1274ff8",
+    "status": "completed_correct",
+    "failure": null,
+    "timeout": false,
+    "audio": {
+      "path": "thesis/evidence/orca-relayed-http-v1197/audio/4c7df23fe689e17f5ede0222710e7dc9cf2dfa69364f2e1f3b5a75693bc2b413.wav",
+      "exists": true,
+      "sha256FromOriginalCaseNotRehashed": "4c7df23fe689e17f5ede0222710e7dc9cf2dfa69364f2e1f3b5a75693bc2b413"
+    }
+  },
+  {
+    "path": "thesis/evidence/orca-relayed-http-v1197/attempts/attempt-0116-measured.jsonl",
+    "bytes": 4769,
+    "sha256": "ffd1fbddd8d3e1fbf8fd1f90315e726313c1e6e1c6f5f61ce75112e5d278a6ff",
+    "phase": "measured",
+    "phaseIndex": 101,
+    "caseId": "audio-campaign-v802-0116",
+    "correlationId": "audio-campaign-43ff64eab50d45e99e4dda26275b8c86",
+    "requestId": "audio-request-5db9d124cbed4b3399fe7d93194b5f9b",
+    "status": "completed_correct",
+    "failure": null,
+    "timeout": false,
+    "audio": {
+      "path": "thesis/evidence/orca-relayed-http-v1197/audio/7e29253d512a3d591e7b2c4ef5779a1a6b39cfb4e8ea5059a080dc67043f530c.wav",
+      "exists": true,
+      "sha256FromOriginalCaseNotRehashed": "7e29253d512a3d591e7b2c4ef5779a1a6b39cfb4e8ea5059a080dc67043f530c"
+    }
+  },
+  {
+    "path": "thesis/evidence/orca-relayed-http-v1197/attempts/attempt-0117-measured.jsonl",
+    "bytes": 4769,
+    "sha256": "96f0179edd96a63b380ad40c2af2c006eb0a14b24070090ee3a9f88a69cd9375",
+    "phase": "measured",
+    "phaseIndex": 102,
+    "caseId": "audio-campaign-v802-0117",
+    "correlationId": "audio-campaign-90252de62e6042699ccddcf57b4d72a8",
+    "requestId": "audio-request-f3b1c3d4ef1d460299267db7a10b896e",
+    "status": "completed_correct",
+    "failure": null,
+    "timeout": false,
+    "audio": {
+      "path": "thesis/evidence/orca-relayed-http-v1197/audio/0a5e6ad115ea2b957ee21ba9447368bcf5cd839decec496e6d93e355b66da0ee.wav",
+      "exists": true,
+      "sha256FromOriginalCaseNotRehashed": "0a5e6ad115ea2b957ee21ba9447368bcf5cd839decec496e6d93e355b66da0ee"
+    }
+  },
+  {
+    "path": "thesis/evidence/orca-relayed-http-v1197/attempts/attempt-0118-measured.jsonl",
+    "bytes": 4768,
+    "sha256": "299e75978336e931b4aa6088b79bc508cf521690cad45f6736477289b4b1937e",
+    "phase": "measured",
+    "phaseIndex": 103,
+    "caseId": "audio-campaign-v802-0118",
+    "correlationId": "audio-campaign-a2705dd580e043d8a1364c5197ad534b",
+    "requestId": "audio-request-562f5d58042145eea09d41e3beefd884",
+    "status": "completed_correct",
+    "failure": null,
+    "timeout": false,
+    "audio": {
+      "path": "thesis/evidence/orca-relayed-http-v1197/audio/aabe6b669f704519cda68b8ee7f79255c1e739da6715fc1a2ef1f5f238bbb77b.wav",
+      "exists": true,
+      "sha256FromOriginalCaseNotRehashed": "aabe6b669f704519cda68b8ee7f79255c1e739da6715fc1a2ef1f5f238bbb77b"
+    }
+  },
+  {
+    "path": "thesis/evidence/orca-relayed-http-v1197/attempts/attempt-0119-measured.jsonl",
+    "bytes": 4769,
+    "sha256": "5a9755553064f6c26075cb12efa42ad16d2fb42852f528865281b71e641d024c",
+    "phase": "measured",
+    "phaseIndex": 104,
+    "caseId": "audio-campaign-v802-0119",
+    "correlationId": "audio-campaign-783fa262a45346da8f7511bea5b19e19",
+    "requestId": "audio-request-5359c9e30b48470fb7d2b09236d863c2",
+    "status": "completed_correct",
+    "failure": null,
+    "timeout": false,
+    "audio": {
+      "path": "thesis/evidence/orca-relayed-http-v1197/audio/ac5727b0f680f8b80fb3e2a1b56d988fd8f1d87cd4380dfebc8919d6da95d2ca.wav",
+      "exists": true,
+      "sha256FromOriginalCaseNotRehashed": "ac5727b0f680f8b80fb3e2a1b56d988fd8f1d87cd4380dfebc8919d6da95d2ca"
+    }
+  },
+  {
+    "path": "thesis/evidence/orca-relayed-http-v1197/attempts/attempt-0120-measured.jsonl",
+    "bytes": 4768,
+    "sha256": "08f74a5f2ee15666ffad3917c54c50901a3f142632930337a010814fc0532003",
+    "phase": "measured",
+    "phaseIndex": 105,
+    "caseId": "audio-campaign-v802-0120",
+    "correlationId": "audio-campaign-e644c297a3bb489986bf6b094cd581a9",
+    "requestId": "audio-request-6c3b4903b2e14039925c2d7903453503",
+    "status": "completed_correct",
+    "failure": null,
+    "timeout": false,
+    "audio": {
+      "path": "thesis/evidence/orca-relayed-http-v1197/audio/411e1d4627ef92db70d23d29d759bbe8cdfdc60a67787a8585139ec9f1a66c86.wav",
+      "exists": true,
+      "sha256FromOriginalCaseNotRehashed": "411e1d4627ef92db70d23d29d759bbe8cdfdc60a67787a8585139ec9f1a66c86"
+    }
+  },
+  {
+    "path": "thesis/evidence/orca-relayed-http-v1197/attempts/attempt-0121-measured.jsonl",
+    "bytes": 4768,
+    "sha256": "e78f37a6d49eeb5c5c3edf72c35bee9a393c66532058257944b881080d8ab3e5",
+    "phase": "measured",
+    "phaseIndex": 106,
+    "caseId": "audio-campaign-v802-0121",
+    "correlationId": "audio-campaign-977c831eb26b418f8ed04cd5b16cea12",
+    "requestId": "audio-request-cda842cfb03748e09d164af13a81c722",
+    "status": "completed_correct",
+    "failure": null,
+    "timeout": false,
+    "audio": {
+      "path": "thesis/evidence/orca-relayed-http-v1197/audio/8783e8f080b68784a1de5a680b4ea4265f6d91dfca51cc3880fd42239dd3565a.wav",
+      "exists": true,
+      "sha256FromOriginalCaseNotRehashed": "8783e8f080b68784a1de5a680b4ea4265f6d91dfca51cc3880fd42239dd3565a"
+    }
+  },
+  {
+    "path": "thesis/evidence/orca-relayed-http-v1197/attempts/attempt-0122-measured.jsonl",
+    "bytes": 4768,
+    "sha256": "e36852728233f5ca15e47e9a4b6517eb14ca73e2d3d05c708864c1dbd8ef2131",
+    "phase": "measured",
+    "phaseIndex": 107,
+    "caseId": "audio-campaign-v802-0122",
+    "correlationId": "audio-campaign-7b78d93fa70e4ffc8b9ae13fd9f23635",
+    "requestId": "audio-request-58f0aa42c4154b9ca007a5b50aab033d",
+    "status": "completed_correct",
+    "failure": null,
+    "timeout": false,
+    "audio": {
+      "path": "thesis/evidence/orca-relayed-http-v1197/audio/311e495c7f5f69124daaa89fe21bccc2b7dfa59d75e1a75c8fe9977cd1b5eaaa.wav",
+      "exists": true,
+      "sha256FromOriginalCaseNotRehashed": "311e495c7f5f69124daaa89fe21bccc2b7dfa59d75e1a75c8fe9977cd1b5eaaa"
+    }
+  },
+  {
+    "path": "thesis/evidence/orca-relayed-http-v1197/attempts/attempt-0123-measured.jsonl",
+    "bytes": 4769,
+    "sha256": "2689261085005d5e182ff37ee6ddeef322aa606267eb703e52d219ce6b5761bc",
+    "phase": "measured",
+    "phaseIndex": 108,
+    "caseId": "audio-campaign-v802-0123",
+    "correlationId": "audio-campaign-414eb8498feb437caaa476d3771ed8d2",
+    "requestId": "audio-request-95e78661952347018a9cc599356990c0",
+    "status": "completed_correct",
+    "failure": null,
+    "timeout": false,
+    "audio": {
+      "path": "thesis/evidence/orca-relayed-http-v1197/audio/d823e31a7b81731311e6543a9644b3f194630774d2e7ce4616c8a44bcd010b2a.wav",
+      "exists": true,
+      "sha256FromOriginalCaseNotRehashed": "d823e31a7b81731311e6543a9644b3f194630774d2e7ce4616c8a44bcd010b2a"
+    }
+  },
+  {
+    "path": "thesis/evidence/orca-relayed-http-v1197/attempts/attempt-0124-measured.jsonl",
+    "bytes": 4768,
+    "sha256": "663d49f8cf7d86bd8ba457bb4922b6db81d82549c5912e6942d579426f7b40f1",
+    "phase": "measured",
+    "phaseIndex": 109,
+    "caseId": "audio-campaign-v802-0124",
+    "correlationId": "audio-campaign-af27367ca70c463f9f63500f22e3da49",
+    "requestId": "audio-request-0cb5798fadbf42168c1e2977ac62abe7",
+    "status": "completed_correct",
+    "failure": null,
+    "timeout": false,
+    "audio": {
+      "path": "thesis/evidence/orca-relayed-http-v1197/audio/fa970f28d9105e8f438a49174305f51d2359023fdf7118113c047a28b0b4face.wav",
+      "exists": true,
+      "sha256FromOriginalCaseNotRehashed": "fa970f28d9105e8f438a49174305f51d2359023fdf7118113c047a28b0b4face"
+    }
+  },
+  {
+    "path": "thesis/evidence/orca-relayed-http-v1197/attempts/attempt-0125-measured.jsonl",
+    "bytes": 4769,
+    "sha256": "a6cc64aaf6d3567caaa7d015f1ef0ffda0911181ea896c214e07c50744aedeb1",
+    "phase": "measured",
+    "phaseIndex": 110,
+    "caseId": "audio-campaign-v802-0125",
+    "correlationId": "audio-campaign-909f5d4e02a2413494ab3a2dcd1f530d",
+    "requestId": "audio-request-60093087e8a8496aa67a172ecc1aad9b",
+    "status": "completed_correct",
+    "failure": null,
+    "timeout": false,
+    "audio": {
+      "path": "thesis/evidence/orca-relayed-http-v1197/audio/e66f8e8cc346456959809634386b1cc4d7d4b1b175d1435c6fe8302748197d80.wav",
+      "exists": true,
+      "sha256FromOriginalCaseNotRehashed": "e66f8e8cc346456959809634386b1cc4d7d4b1b175d1435c6fe8302748197d80"
+    }
+  },
+  {
+    "path": "thesis/evidence/orca-relayed-http-v1197/attempts/attempt-0126-measured.jsonl",
+    "bytes": 4768,
+    "sha256": "8ac3f603200f87da22866cdeba036c4349b12403eba69dd47293ea28a54e13f1",
+    "phase": "measured",
+    "phaseIndex": 111,
+    "caseId": "audio-campaign-v802-0126",
+    "correlationId": "audio-campaign-131f29788e4b4b95b51801b9cf4edbc8",
+    "requestId": "audio-request-cbf67e03baa44b1d95599824bdb6f07b",
+    "status": "completed_correct",
+    "failure": null,
+    "timeout": false,
+    "audio": {
+      "path": "thesis/evidence/orca-relayed-http-v1197/audio/586dd04dede2990886702b009d53e548b943c668a4fe93366861bd57953c589d.wav",
+      "exists": true,
+      "sha256FromOriginalCaseNotRehashed": "586dd04dede2990886702b009d53e548b943c668a4fe93366861bd57953c589d"
+    }
+  },
+  {
+    "path": "thesis/evidence/orca-relayed-http-v1197/attempts/attempt-0127-measured.jsonl",
+    "bytes": 4768,
+    "sha256": "23f606299110c2e732d21631d514575b826d76beb2d921d252f455307606fbcc",
+    "phase": "measured",
+    "phaseIndex": 112,
+    "caseId": "audio-campaign-v802-0127",
+    "correlationId": "audio-campaign-1a6814495f0a471587ed490754f692fe",
+    "requestId": "audio-request-c7ef8ce5276b4df1b503392387f8c51d",
+    "status": "completed_correct",
+    "failure": null,
+    "timeout": false,
+    "audio": {
+      "path": "thesis/evidence/orca-relayed-http-v1197/audio/56ca2d1f0f97f9d28abf2d12d97a14f3592cc52b20d3c620886224fe605afb6f.wav",
+      "exists": true,
+      "sha256FromOriginalCaseNotRehashed": "56ca2d1f0f97f9d28abf2d12d97a14f3592cc52b20d3c620886224fe605afb6f"
+    }
+  },
+  {
+    "path": "thesis/evidence/orca-relayed-http-v1197/attempts/attempt-0128-measured.jsonl",
+    "bytes": 4769,
+    "sha256": "b64ec8e6ce5faf5e2f20c685eb5f72c0c560d64cb97034c5611b64f83f1891e1",
+    "phase": "measured",
+    "phaseIndex": 113,
+    "caseId": "audio-campaign-v802-0128",
+    "correlationId": "audio-campaign-f74446de570d47c6b347fbf98fe2d3f8",
+    "requestId": "audio-request-0efc833279fe46e58ea09e174f8d3213",
+    "status": "completed_correct",
+    "failure": null,
+    "timeout": false,
+    "audio": {
+      "path": "thesis/evidence/orca-relayed-http-v1197/audio/86b9e7d18804efa5e395b74118ed8f023c154b4037a718be9417536b8147d65c.wav",
+      "exists": true,
+      "sha256FromOriginalCaseNotRehashed": "86b9e7d18804efa5e395b74118ed8f023c154b4037a718be9417536b8147d65c"
+    }
+  },
+  {
+    "path": "thesis/evidence/orca-relayed-http-v1197/attempts/attempt-0129-measured.jsonl",
+    "bytes": 4769,
+    "sha256": "a17fe59d3b94105ff55ac639cb3e01808aa5d816850229f978e3fd34c48aa883",
+    "phase": "measured",
+    "phaseIndex": 114,
+    "caseId": "audio-campaign-v802-0129",
+    "correlationId": "audio-campaign-748de8f0ab884b56ad705de65b6ffa6f",
+    "requestId": "audio-request-af80b471c4724a48945b55f2e254f14d",
+    "status": "completed_correct",
+    "failure": null,
+    "timeout": false,
+    "audio": {
+      "path": "thesis/evidence/orca-relayed-http-v1197/audio/51b0d2550486656686ec1f9053264ef424ad19df9ebfb37dd4195775ebb3cf51.wav",
+      "exists": true,
+      "sha256FromOriginalCaseNotRehashed": "51b0d2550486656686ec1f9053264ef424ad19df9ebfb37dd4195775ebb3cf51"
+    }
+  },
+  {
+    "path": "thesis/evidence/orca-relayed-http-v1197/attempts/attempt-0130-measured.jsonl",
+    "bytes": 4769,
+    "sha256": "6c6b7ade0eee4914444ee010e83ec5ed1a194ead77ab1ebaefbe1c1217f3b788",
+    "phase": "measured",
+    "phaseIndex": 115,
+    "caseId": "audio-campaign-v802-0130",
+    "correlationId": "audio-campaign-719c4acc47274dcbbe42da46ecec5477",
+    "requestId": "audio-request-6e50a7f942d3469fad80c415c2b5b3b7",
+    "status": "completed_correct",
+    "failure": null,
+    "timeout": false,
+    "audio": {
+      "path": "thesis/evidence/orca-relayed-http-v1197/audio/89f18a166e21e5869c22be5f27a9f8bac311a1b45782d432cc7ba46aa4a526c5.wav",
+      "exists": true,
+      "sha256FromOriginalCaseNotRehashed": "89f18a166e21e5869c22be5f27a9f8bac311a1b45782d432cc7ba46aa4a526c5"
+    }
+  },
+  {
+    "path": "thesis/evidence/orca-relayed-http-v1197/attempts/attempt-0131-measured.jsonl",
+    "bytes": 4768,
+    "sha256": "ec48e6ade95a7c5a0b29898b17a77a164880063a4c20ff9d61f1d5142420fdd7",
+    "phase": "measured",
+    "phaseIndex": 116,
+    "caseId": "audio-campaign-v802-0131",
+    "correlationId": "audio-campaign-e4ff4f81e1634c2d8a1fdb0ebcb5f575",
+    "requestId": "audio-request-aec960b60fe14b0b8f898e59f0e2b993",
+    "status": "completed_correct",
+    "failure": null,
+    "timeout": false,
+    "audio": {
+      "path": "thesis/evidence/orca-relayed-http-v1197/audio/6acb36fd2b91869e4be4b99fee92231c0093aa6c6deffc7f27a6f48e6a14b592.wav",
+      "exists": true,
+      "sha256FromOriginalCaseNotRehashed": "6acb36fd2b91869e4be4b99fee92231c0093aa6c6deffc7f27a6f48e6a14b592"
+    }
+  },
+  {
+    "path": "thesis/evidence/orca-relayed-http-v1197/attempts/attempt-0132-measured.jsonl",
+    "bytes": 4768,
+    "sha256": "e5bf7b034ab9d8c2256852e9a592a19771f009b2e3c9d67db37ab3780ca8b5a0",
+    "phase": "measured",
+    "phaseIndex": 117,
+    "caseId": "audio-campaign-v802-0132",
+    "correlationId": "audio-campaign-04f06f38044d416899e462a63f64d449",
+    "requestId": "audio-request-10717e51f7bb4105ad2b43febdbddebf",
+    "status": "completed_correct",
+    "failure": null,
+    "timeout": false,
+    "audio": {
+      "path": "thesis/evidence/orca-relayed-http-v1197/audio/127c452bc39df9b7c6860a1992c9aa351311e27a4e313e8687ab7bfae0400bef.wav",
+      "exists": true,
+      "sha256FromOriginalCaseNotRehashed": "127c452bc39df9b7c6860a1992c9aa351311e27a4e313e8687ab7bfae0400bef"
+    }
+  },
+  {
+    "path": "thesis/evidence/orca-relayed-http-v1197/attempts/attempt-0133-measured.jsonl",
+    "bytes": 4769,
+    "sha256": "cc5835bb9e22d6ac6079e16a0a22119d848d18119c71c0bbe79c0e330dd37d1a",
+    "phase": "measured",
+    "phaseIndex": 118,
+    "caseId": "audio-campaign-v802-0133",
+    "correlationId": "audio-campaign-1fce55a2fc1349e09720c90495a86e13",
+    "requestId": "audio-request-4d3846dd36a549a3ba1ff27100679a81",
+    "status": "completed_correct",
+    "failure": null,
+    "timeout": false,
+    "audio": {
+      "path": "thesis/evidence/orca-relayed-http-v1197/audio/18e45d20541250fdc1cc25ad789d9dc417ae9f91aacb02bbdda77991f139ec5b.wav",
+      "exists": true,
+      "sha256FromOriginalCaseNotRehashed": "18e45d20541250fdc1cc25ad789d9dc417ae9f91aacb02bbdda77991f139ec5b"
+    }
+  },
+  {
+    "path": "thesis/evidence/orca-relayed-http-v1197/attempts/attempt-0134-measured.jsonl",
+    "bytes": 4769,
+    "sha256": "5bfd677315aef345360528e23029cb9f2e0d7b2177436267d581eaaeaf3f6c5d",
+    "phase": "measured",
+    "phaseIndex": 119,
+    "caseId": "audio-campaign-v802-0134",
+    "correlationId": "audio-campaign-a7796812f7e348ec8260d6bab44320d4",
+    "requestId": "audio-request-448daa5d28c9452591088528f24860ca",
+    "status": "completed_correct",
+    "failure": null,
+    "timeout": false,
+    "audio": {
+      "path": "thesis/evidence/orca-relayed-http-v1197/audio/1751390a4c1ec69034d00f2c17d36d5335e3794d35578c3ba8fb2a7eb14c89df.wav",
+      "exists": true,
+      "sha256FromOriginalCaseNotRehashed": "1751390a4c1ec69034d00f2c17d36d5335e3794d35578c3ba8fb2a7eb14c89df"
+    }
+  },
+  {
+    "path": "thesis/evidence/orca-relayed-http-v1197/attempts/attempt-0135-measured.jsonl",
+    "bytes": 4769,
+    "sha256": "352e21aee1b1bb571ff6159f5a61cc48f1dfd4be1a5b1d003dda144ba82c2623",
+    "phase": "measured",
+    "phaseIndex": 120,
+    "caseId": "audio-campaign-v802-0135",
+    "correlationId": "audio-campaign-a671e240785a45a2aeaf840b000d32a0",
+    "requestId": "audio-request-64c6d86847b34e0b88d46e84857843db",
+    "status": "completed_correct",
+    "failure": null,
+    "timeout": false,
+    "audio": {
+      "path": "thesis/evidence/orca-relayed-http-v1197/audio/8e7b4bd3f67ef2e47df03df22bad87da05e3f7a6cd71b536bebae2683dbf5f00.wav",
+      "exists": true,
+      "sha256FromOriginalCaseNotRehashed": "8e7b4bd3f67ef2e47df03df22bad87da05e3f7a6cd71b536bebae2683dbf5f00"
+    }
+  },
+  {
+    "path": "thesis/evidence/orca-relayed-http-v1197/attempts/attempt-0136-measured.jsonl",
+    "bytes": 4768,
+    "sha256": "e92dac83dd05709efbb48c27a5e509d90340b41418906e5b40d571a0206f2259",
+    "phase": "measured",
+    "phaseIndex": 121,
+    "caseId": "audio-campaign-v802-0136",
+    "correlationId": "audio-campaign-2bad4c365d164579a41766e08d2c0a3a",
+    "requestId": "audio-request-9ea1f08b277e4e0c9820648896d6c09e",
+    "status": "completed_correct",
+    "failure": null,
+    "timeout": false,
+    "audio": {
+      "path": "thesis/evidence/orca-relayed-http-v1197/audio/af8a47dd71092fb02f1b15d9f506615048531532fc2e7e855a854f114a1e4041.wav",
+      "exists": true,
+      "sha256FromOriginalCaseNotRehashed": "af8a47dd71092fb02f1b15d9f506615048531532fc2e7e855a854f114a1e4041"
+    }
+  },
+  {
+    "path": "thesis/evidence/orca-relayed-http-v1197/attempts/attempt-0137-measured.jsonl",
+    "bytes": 4769,
+    "sha256": "7bfc0d26a895d8d0f9543f9e29f5c74cdf78c0bd2e158b6be6a630f74621ca05",
+    "phase": "measured",
+    "phaseIndex": 122,
+    "caseId": "audio-campaign-v802-0137",
+    "correlationId": "audio-campaign-7abaf9c674e64f9e94e094d1246c9050",
+    "requestId": "audio-request-9574b4791ae04e5c883bb433d826c26d",
+    "status": "completed_correct",
+    "failure": null,
+    "timeout": false,
+    "audio": {
+      "path": "thesis/evidence/orca-relayed-http-v1197/audio/7e995c6ed7a2d291394f5c82d2b5d66a3f0892d0bc95514784d6d10b219e69c4.wav",
+      "exists": true,
+      "sha256FromOriginalCaseNotRehashed": "7e995c6ed7a2d291394f5c82d2b5d66a3f0892d0bc95514784d6d10b219e69c4"
+    }
+  },
+  {
+    "path": "thesis/evidence/orca-relayed-http-v1197/attempts/attempt-0138-measured.jsonl",
+    "bytes": 4768,
+    "sha256": "c2cd999a6732d720889f97319ecfe0c1bf43faeafd5dede7a51928f15583c2c4",
+    "phase": "measured",
+    "phaseIndex": 123,
+    "caseId": "audio-campaign-v802-0138",
+    "correlationId": "audio-campaign-e6b8539c490a4323bc86eaedaeeff3d1",
+    "requestId": "audio-request-7a495e715a754ef2abec2de54e394d00",
+    "status": "completed_correct",
+    "failure": null,
+    "timeout": false,
+    "audio": {
+      "path": "thesis/evidence/orca-relayed-http-v1197/audio/def49970e572218b1e8298964118d3bdb72f5fac686c05a9c7f7e6e9008431df.wav",
+      "exists": true,
+      "sha256FromOriginalCaseNotRehashed": "def49970e572218b1e8298964118d3bdb72f5fac686c05a9c7f7e6e9008431df"
+    }
+  },
+  {
+    "path": "thesis/evidence/orca-relayed-http-v1197/attempts/attempt-0139-measured.jsonl",
+    "bytes": 4769,
+    "sha256": "522f255f308cc2cc9d2acbee717e6f7244c48a87f991ed566c2abcac1726a7ea",
+    "phase": "measured",
+    "phaseIndex": 124,
+    "caseId": "audio-campaign-v802-0139",
+    "correlationId": "audio-campaign-bf9c85a7080842b0a2bad582201a1d92",
+    "requestId": "audio-request-9575c6d5798f40cba18c5c45a1b7c078",
+    "status": "completed_correct",
+    "failure": null,
+    "timeout": false,
+    "audio": {
+      "path": "thesis/evidence/orca-relayed-http-v1197/audio/1185ad1d80eaf84a53be955fbd36618d1f5303602495573483954a06ea01b701.wav",
+      "exists": true,
+      "sha256FromOriginalCaseNotRehashed": "1185ad1d80eaf84a53be955fbd36618d1f5303602495573483954a06ea01b701"
+    }
+  },
+  {
+    "path": "thesis/evidence/orca-relayed-http-v1197/attempts/attempt-0140-measured.jsonl",
+    "bytes": 4768,
+    "sha256": "640951db98e06f178e92c0fe474bba1bdee2448e65c390c0614b8a73f966a8e6",
+    "phase": "measured",
+    "phaseIndex": 125,
+    "caseId": "audio-campaign-v802-0140",
+    "correlationId": "audio-campaign-06dced71d5034745bcf1f6613f8f6145",
+    "requestId": "audio-request-ab789ff740994b6d80fa4ac13d48cff0",
+    "status": "completed_correct",
+    "failure": null,
+    "timeout": false,
+    "audio": {
+      "path": "thesis/evidence/orca-relayed-http-v1197/audio/04892b62a3f8023f34430f507de7d9f40ffe4c6f5a0ef671b621f4773bbc29e2.wav",
+      "exists": true,
+      "sha256FromOriginalCaseNotRehashed": "04892b62a3f8023f34430f507de7d9f40ffe4c6f5a0ef671b621f4773bbc29e2"
+    }
+  },
+  {
+    "path": "thesis/evidence/orca-relayed-http-v1197/attempts/attempt-0141-measured.jsonl",
+    "bytes": 4769,
+    "sha256": "b2a25b66b8386bc7a51e549438e4386a6286167bf9763907203f1d358e37f563",
+    "phase": "measured",
+    "phaseIndex": 126,
+    "caseId": "audio-campaign-v802-0141",
+    "correlationId": "audio-campaign-0894990c6f2d41e299a5a952c3079032",
+    "requestId": "audio-request-9e741bda6e8242d6b4188b583ea75e0a",
+    "status": "completed_correct",
+    "failure": null,
+    "timeout": false,
+    "audio": {
+      "path": "thesis/evidence/orca-relayed-http-v1197/audio/fb7dfe878d1f7d2cb85a79eabdd4677f3a9541171dad68f3568911d558cd1125.wav",
+      "exists": true,
+      "sha256FromOriginalCaseNotRehashed": "fb7dfe878d1f7d2cb85a79eabdd4677f3a9541171dad68f3568911d558cd1125"
+    }
+  },
+  {
+    "path": "thesis/evidence/orca-relayed-http-v1197/attempts/attempt-0142-measured.jsonl",
+    "bytes": 4768,
+    "sha256": "37465081533c8dd1c41192d77cc6c3b190d5950bffbcba872cb8390a5690f646",
+    "phase": "measured",
+    "phaseIndex": 127,
+    "caseId": "audio-campaign-v802-0142",
+    "correlationId": "audio-campaign-9c62acecb9c04f4ea28870ba53e5c927",
+    "requestId": "audio-request-cd517100182c4ee482dccd44e955bd39",
+    "status": "completed_correct",
+    "failure": null,
+    "timeout": false,
+    "audio": {
+      "path": "thesis/evidence/orca-relayed-http-v1197/audio/f40063ed304672cf55095c5e37fb0d7ae0d1110eca4435564fb6eed2ccf75deb.wav",
+      "exists": true,
+      "sha256FromOriginalCaseNotRehashed": "f40063ed304672cf55095c5e37fb0d7ae0d1110eca4435564fb6eed2ccf75deb"
+    }
+  },
+  {
+    "path": "thesis/evidence/orca-relayed-http-v1197/attempts/attempt-0143-measured.jsonl",
+    "bytes": 4769,
+    "sha256": "ba410ed9a11388d4462c98399b3a5591653698cfca0f22cf94e33a9e54d458b2",
+    "phase": "measured",
+    "phaseIndex": 128,
+    "caseId": "audio-campaign-v802-0143",
+    "correlationId": "audio-campaign-dd785dea4a4b4d09b583bbb964afe189",
+    "requestId": "audio-request-e4af594a82f942218f5acca7b7f1ca35",
+    "status": "completed_correct",
+    "failure": null,
+    "timeout": false,
+    "audio": {
+      "path": "thesis/evidence/orca-relayed-http-v1197/audio/9277177b5707440ee6c0dd8019895c587bff884959d0323018455cbca243e59a.wav",
+      "exists": true,
+      "sha256FromOriginalCaseNotRehashed": "9277177b5707440ee6c0dd8019895c587bff884959d0323018455cbca243e59a"
+    }
+  },
+  {
+    "path": "thesis/evidence/orca-relayed-http-v1197/attempts/attempt-0144-measured.jsonl",
+    "bytes": 4769,
+    "sha256": "6d22c0ffe174b3101674dcb6a0db1766c0f897b81a230c12dd20de8098dbf398",
+    "phase": "measured",
+    "phaseIndex": 129,
+    "caseId": "audio-campaign-v802-0144",
+    "correlationId": "audio-campaign-e8ecb5cb494c4543bdea82b1e0d3773e",
+    "requestId": "audio-request-7349cd65040747cda8dea8af3e748ff7",
+    "status": "completed_correct",
+    "failure": null,
+    "timeout": false,
+    "audio": {
+      "path": "thesis/evidence/orca-relayed-http-v1197/audio/254dab3f8b1eedaa944c921b1cd13d44383ba9aae8f5b4161d15e64b512a380c.wav",
+      "exists": true,
+      "sha256FromOriginalCaseNotRehashed": "254dab3f8b1eedaa944c921b1cd13d44383ba9aae8f5b4161d15e64b512a380c"
+    }
+  },
+  {
+    "path": "thesis/evidence/orca-relayed-http-v1197/attempts/attempt-0145-measured.jsonl",
+    "bytes": 4768,
+    "sha256": "ee8e127532ef9dc2ef142f0dd99909bdb47cb5896d77177cfb3f449d9e2ff5ee",
+    "phase": "measured",
+    "phaseIndex": 130,
+    "caseId": "audio-campaign-v802-0145",
+    "correlationId": "audio-campaign-34c09379eb3d491896146dca274c6d03",
+    "requestId": "audio-request-8a47e01c0154429fa8ebef88303336d4",
+    "status": "completed_correct",
+    "failure": null,
+    "timeout": false,
+    "audio": {
+      "path": "thesis/evidence/orca-relayed-http-v1197/audio/df2de12737a50f8a4cd36da04313a43d985ae14c93f31fe7546e2b9e8c594a5e.wav",
+      "exists": true,
+      "sha256FromOriginalCaseNotRehashed": "df2de12737a50f8a4cd36da04313a43d985ae14c93f31fe7546e2b9e8c594a5e"
+    }
+  },
+  {
+    "path": "thesis/evidence/orca-relayed-http-v1197/attempts/attempt-0146-measured.jsonl",
+    "bytes": 4769,
+    "sha256": "9f24d7fea1c908d0ede4fb9c3fdf29423380588234cb996f4ac955097504bf9a",
+    "phase": "measured",
+    "phaseIndex": 131,
+    "caseId": "audio-campaign-v802-0146",
+    "correlationId": "audio-campaign-9a8a8adda3aa46a19ab44badbb93fb2e",
+    "requestId": "audio-request-7f80653feea941b68972ed10c3556f20",
+    "status": "completed_correct",
+    "failure": null,
+    "timeout": false,
+    "audio": {
+      "path": "thesis/evidence/orca-relayed-http-v1197/audio/472b804e812bd81dc2adc8bcf9ce0cb5dbbf379b5f856d7b2d2e4f70108cd06c.wav",
+      "exists": true,
+      "sha256FromOriginalCaseNotRehashed": "472b804e812bd81dc2adc8bcf9ce0cb5dbbf379b5f856d7b2d2e4f70108cd06c"
+    }
+  },
+  {
+    "path": "thesis/evidence/orca-relayed-http-v1197/attempts/attempt-0147-measured.jsonl",
+    "bytes": 4768,
+    "sha256": "3dd469b3a40c7bd7870088cd569af1267f100772a23fa7499bffc81d7082337e",
+    "phase": "measured",
+    "phaseIndex": 132,
+    "caseId": "audio-campaign-v802-0147",
+    "correlationId": "audio-campaign-b95acde3cc6d4beeac12621481552cd2",
+    "requestId": "audio-request-2ef183e0af59490292c8679b9220ee24",
+    "status": "completed_correct",
+    "failure": null,
+    "timeout": false,
+    "audio": {
+      "path": "thesis/evidence/orca-relayed-http-v1197/audio/577fffa1cf7289200e1e9044157204cf3c0ddd48d09ec3b862ff62f247d83281.wav",
+      "exists": true,
+      "sha256FromOriginalCaseNotRehashed": "577fffa1cf7289200e1e9044157204cf3c0ddd48d09ec3b862ff62f247d83281"
+    }
+  },
+  {
+    "path": "thesis/evidence/orca-relayed-http-v1197/attempts/attempt-0148-measured.jsonl",
+    "bytes": 4769,
+    "sha256": "6046d2e531d0559fb945b673086c52ed05c0a996212ec0f76d69a1210d843951",
+    "phase": "measured",
+    "phaseIndex": 133,
+    "caseId": "audio-campaign-v802-0148",
+    "correlationId": "audio-campaign-76e439943c3d47b0bc1c57f1a3a29fd9",
+    "requestId": "audio-request-13c96ea0cec04f8c899c25a45b98c1be",
+    "status": "completed_correct",
+    "failure": null,
+    "timeout": false,
+    "audio": {
+      "path": "thesis/evidence/orca-relayed-http-v1197/audio/e8372d0b26e7c76a94dc594c2e8ed1d189734e3bf1b8621491bc7d9edc2bda19.wav",
+      "exists": true,
+      "sha256FromOriginalCaseNotRehashed": "e8372d0b26e7c76a94dc594c2e8ed1d189734e3bf1b8621491bc7d9edc2bda19"
+    }
+  },
+  {
+    "path": "thesis/evidence/orca-relayed-http-v1197/attempts/attempt-0149-measured.jsonl",
+    "bytes": 4770,
+    "sha256": "e7855ca2550de7b6c06642c8e9e092e166452550fb234cd9f9dbd1decc618d9b",
+    "phase": "measured",
+    "phaseIndex": 134,
+    "caseId": "audio-campaign-v802-0149",
+    "correlationId": "audio-campaign-7e2b54d357134fd4adf9f13450d62106",
+    "requestId": "audio-request-45bc2a5ec10a43179c6071bb32a30418",
+    "status": "completed_correct",
+    "failure": null,
+    "timeout": false,
+    "audio": {
+      "path": "thesis/evidence/orca-relayed-http-v1197/audio/f93488a0503d17ec02ef2be0dc2e737073c208f718738458c1690f22359a479e.wav",
+      "exists": true,
+      "sha256FromOriginalCaseNotRehashed": "f93488a0503d17ec02ef2be0dc2e737073c208f718738458c1690f22359a479e"
+    }
+  },
+  {
+    "path": "thesis/evidence/orca-relayed-http-v1197/attempts/attempt-0150-measured.jsonl",
+    "bytes": 4769,
+    "sha256": "270ba5db27138d5f5179161fc7013cea39c084263e7b7eab6746761f70883f8d",
+    "phase": "measured",
+    "phaseIndex": 135,
+    "caseId": "audio-campaign-v802-0150",
+    "correlationId": "audio-campaign-6d738ca9380043deab9a2bd484628804",
+    "requestId": "audio-request-97547dd7838149a0bd5b6c957a0fc735",
+    "status": "completed_correct",
+    "failure": null,
+    "timeout": false,
+    "audio": {
+      "path": "thesis/evidence/orca-relayed-http-v1197/audio/c093971e59a5d00abe4f1a9abb5b197cb4c5e72903dbf7cf98b5cdff87fbbe68.wav",
+      "exists": true,
+      "sha256FromOriginalCaseNotRehashed": "c093971e59a5d00abe4f1a9abb5b197cb4c5e72903dbf7cf98b5cdff87fbbe68"
+    }
+  },
+  {
+    "path": "thesis/evidence/orca-relayed-http-v1197/attempts/attempt-0151-measured.jsonl",
+    "bytes": 4770,
+    "sha256": "82b0caf7a8e39e3284182817590bfef74b2c6aeba0bf220c4447030ce9570d9c",
+    "phase": "measured",
+    "phaseIndex": 136,
+    "caseId": "audio-campaign-v802-0151",
+    "correlationId": "audio-campaign-fc89c4cf6e74462381439690cd8dc501",
+    "requestId": "audio-request-25ad1558f32b4aeb8a4b3c957edf3f9e",
+    "status": "completed_correct",
+    "failure": null,
+    "timeout": false,
+    "audio": {
+      "path": "thesis/evidence/orca-relayed-http-v1197/audio/879b94c367d0e89ab375fb09f85036f834020e94bb21dbe5e2ade6d7ccec0e66.wav",
+      "exists": true,
+      "sha256FromOriginalCaseNotRehashed": "879b94c367d0e89ab375fb09f85036f834020e94bb21dbe5e2ade6d7ccec0e66"
+    }
+  },
+  {
+    "path": "thesis/evidence/orca-relayed-http-v1197/attempts/attempt-0152-measured.jsonl",
+    "bytes": 4766,
+    "sha256": "508c9fd8cfe34333c6b8de152db2d1e877b439a309503c20755a7cd33250eee6",
+    "phase": "measured",
+    "phaseIndex": 137,
+    "caseId": "audio-campaign-v802-0152",
+    "correlationId": "audio-campaign-b8b665a3bbd74df4acb1bb8087211f83",
+    "requestId": "audio-request-1243c539ebe14a76a7e53260a79b6fb0",
+    "status": "completed_correct",
+    "failure": null,
+    "timeout": false,
+    "audio": {
+      "path": "thesis/evidence/orca-relayed-http-v1197/audio/d2b849938901da509892bfc596687f47f42a52e0bc0f58b0351e7a06b89a32ec.wav",
+      "exists": true,
+      "sha256FromOriginalCaseNotRehashed": "d2b849938901da509892bfc596687f47f42a52e0bc0f58b0351e7a06b89a32ec"
+    }
+  },
+  {
+    "path": "thesis/evidence/orca-relayed-http-v1197/attempts/attempt-0153-measured.jsonl",
+    "bytes": 4768,
+    "sha256": "867a4212df24ad0a458b5255a01e7734527be5fd5db27e5c39aa4b5e1c558fd4",
+    "phase": "measured",
+    "phaseIndex": 138,
+    "caseId": "audio-campaign-v802-0153",
+    "correlationId": "audio-campaign-2d69ae2dc4d14b9abbd9e26668d9a715",
+    "requestId": "audio-request-36a5789e854d4980bbc820412acb2385",
+    "status": "completed_correct",
+    "failure": null,
+    "timeout": false,
+    "audio": {
+      "path": "thesis/evidence/orca-relayed-http-v1197/audio/c5028b19e1a48c2158eec39ef67a0183d45f99813efa892f18ee06242529d58e.wav",
+      "exists": true,
+      "sha256FromOriginalCaseNotRehashed": "c5028b19e1a48c2158eec39ef67a0183d45f99813efa892f18ee06242529d58e"
+    }
+  },
+  {
+    "path": "thesis/evidence/orca-relayed-http-v1197/attempts/attempt-0154-measured.jsonl",
+    "bytes": 4769,
+    "sha256": "878be075ff1a9b9c6022c9f461454758e5ebbbaee873f213a0e5f35e1704173c",
+    "phase": "measured",
+    "phaseIndex": 139,
+    "caseId": "audio-campaign-v802-0154",
+    "correlationId": "audio-campaign-e7b24e11c70643c38915d5e59b60e645",
+    "requestId": "audio-request-325eee53376a40b4a30277e75343af06",
+    "status": "completed_correct",
+    "failure": null,
+    "timeout": false,
+    "audio": {
+      "path": "thesis/evidence/orca-relayed-http-v1197/audio/fba99d56f09e67944dfce738429e4e4b4f277bfb95ce0f9c2fbe942dce61a504.wav",
+      "exists": true,
+      "sha256FromOriginalCaseNotRehashed": "fba99d56f09e67944dfce738429e4e4b4f277bfb95ce0f9c2fbe942dce61a504"
+    }
+  },
+  {
+    "path": "thesis/evidence/orca-relayed-http-v1197/attempts/attempt-0155-measured.jsonl",
+    "bytes": 4769,
+    "sha256": "d0fa13f86b811b21b97ae2639b5d3e0e1db1461f6aabd35455a891bbef37e507",
+    "phase": "measured",
+    "phaseIndex": 140,
+    "caseId": "audio-campaign-v802-0155",
+    "correlationId": "audio-campaign-a0852a3bd95f446fa3c4b22313aff09c",
+    "requestId": "audio-request-90746edb8bc549458a8d337c05cd65b4",
+    "status": "completed_correct",
+    "failure": null,
+    "timeout": false,
+    "audio": {
+      "path": "thesis/evidence/orca-relayed-http-v1197/audio/d102f1e38e76d50e238ec49cd9b26850d200789d744fbd61d2e81b762ae0ec71.wav",
+      "exists": true,
+      "sha256FromOriginalCaseNotRehashed": "d102f1e38e76d50e238ec49cd9b26850d200789d744fbd61d2e81b762ae0ec71"
+    }
+  },
+  {
+    "path": "thesis/evidence/orca-relayed-http-v1197/attempts/attempt-0156-measured.jsonl",
+    "bytes": 4768,
+    "sha256": "630f95ace1189e0ea598a06e4905a330fae7a6a0c40863253032a8a5525e3314",
+    "phase": "measured",
+    "phaseIndex": 141,
+    "caseId": "audio-campaign-v802-0156",
+    "correlationId": "audio-campaign-1f7171a53e6f4da48f6751444ee5dfcf",
+    "requestId": "audio-request-e2d5e2d0d11a4f4e92facc0fb4d0b97d",
+    "status": "completed_correct",
+    "failure": null,
+    "timeout": false,
+    "audio": {
+      "path": "thesis/evidence/orca-relayed-http-v1197/audio/bd84372080ecac2eaa76b69fa08d0acf7dce5f1859afa98776b15dacf9e2eaab.wav",
+      "exists": true,
+      "sha256FromOriginalCaseNotRehashed": "bd84372080ecac2eaa76b69fa08d0acf7dce5f1859afa98776b15dacf9e2eaab"
+    }
+  },
+  {
+    "path": "thesis/evidence/orca-relayed-http-v1197/attempts/attempt-0157-measured.jsonl",
+    "bytes": 4768,
+    "sha256": "5b9d15ac66deb6089caeddaeb99e463b92b4d3e17ddbbf30219c160ad11325b8",
+    "phase": "measured",
+    "phaseIndex": 142,
+    "caseId": "audio-campaign-v802-0157",
+    "correlationId": "audio-campaign-a52b9de79691421e95da044dab91f339",
+    "requestId": "audio-request-03d7b8fc06a7499db704b67c2881edaf",
+    "status": "completed_correct",
+    "failure": null,
+    "timeout": false,
+    "audio": {
+      "path": "thesis/evidence/orca-relayed-http-v1197/audio/0895643642d63728a1a332add1b6dfa77f5b0e73b3313d1208e52edd2cf8326e.wav",
+      "exists": true,
+      "sha256FromOriginalCaseNotRehashed": "0895643642d63728a1a332add1b6dfa77f5b0e73b3313d1208e52edd2cf8326e"
+    }
+  },
+  {
+    "path": "thesis/evidence/orca-relayed-http-v1197/attempts/attempt-0158-measured.jsonl",
+    "bytes": 4768,
+    "sha256": "cdea4a8f6efcf92976d002ef3f5284176dfbb99150a427a81af8955b60d21f0e",
+    "phase": "measured",
+    "phaseIndex": 143,
+    "caseId": "audio-campaign-v802-0158",
+    "correlationId": "audio-campaign-8a5c7db3c2874b9e95651ace41296133",
+    "requestId": "audio-request-4552892cec05424ba6338a95bf9e8b6e",
+    "status": "completed_correct",
+    "failure": null,
+    "timeout": false,
+    "audio": {
+      "path": "thesis/evidence/orca-relayed-http-v1197/audio/7cc0a5f76b9aa586efb9f7bbfb4befc681ad36f60ceeecce8a080da2b7e2dd71.wav",
+      "exists": true,
+      "sha256FromOriginalCaseNotRehashed": "7cc0a5f76b9aa586efb9f7bbfb4befc681ad36f60ceeecce8a080da2b7e2dd71"
+    }
+  },
+  {
+    "path": "thesis/evidence/orca-relayed-http-v1197/attempts/attempt-0159-measured.jsonl",
+    "bytes": 4768,
+    "sha256": "3f68d3b0478364198dffe293b93b21948e887939769d5f63f8efdb37b5a40d9d",
+    "phase": "measured",
+    "phaseIndex": 144,
+    "caseId": "audio-campaign-v802-0159",
+    "correlationId": "audio-campaign-995af11cd01547fca8649d33c8cefd2c",
+    "requestId": "audio-request-8d4a570ddf64437d887d42bb03970830",
+    "status": "completed_correct",
+    "failure": null,
+    "timeout": false,
+    "audio": {
+      "path": "thesis/evidence/orca-relayed-http-v1197/audio/1107a3821b1a0d67cbafce2b688c3ba672206917eea8603fb7f0b9bc7c118016.wav",
+      "exists": true,
+      "sha256FromOriginalCaseNotRehashed": "1107a3821b1a0d67cbafce2b688c3ba672206917eea8603fb7f0b9bc7c118016"
+    }
+  },
+  {
+    "path": "thesis/evidence/orca-relayed-http-v1197/attempts/attempt-0160-measured.jsonl",
+    "bytes": 4770,
+    "sha256": "9fda89b84b877f9cbc96af5085a899b7628d5bc62101a39cd5187d4b98d59fde",
+    "phase": "measured",
+    "phaseIndex": 145,
+    "caseId": "audio-campaign-v802-0160",
+    "correlationId": "audio-campaign-33d1c22454094ed79b443c9b6148b1b1",
+    "requestId": "audio-request-a99bde5a9ef2468393f938621aa78b9c",
+    "status": "completed_correct",
+    "failure": null,
+    "timeout": false,
+    "audio": {
+      "path": "thesis/evidence/orca-relayed-http-v1197/audio/0117858aa8291e39b068c854a5763e2671cd0c07cb322451fb5a86d599241936.wav",
+      "exists": true,
+      "sha256FromOriginalCaseNotRehashed": "0117858aa8291e39b068c854a5763e2671cd0c07cb322451fb5a86d599241936"
+    }
+  },
+  {
+    "path": "thesis/evidence/orca-relayed-http-v1197/attempts/attempt-0161-measured.jsonl",
+    "bytes": 4769,
+    "sha256": "114d5a59b7f0d47da291d0c8d5393c871d7afa7e9e155c917e729196655cbc52",
+    "phase": "measured",
+    "phaseIndex": 146,
+    "caseId": "audio-campaign-v802-0161",
+    "correlationId": "audio-campaign-fca29881a5fc430a90c7770f3112446e",
+    "requestId": "audio-request-d4ea93ecc7494c3892acdac2321d976a",
+    "status": "completed_correct",
+    "failure": null,
+    "timeout": false,
+    "audio": {
+      "path": "thesis/evidence/orca-relayed-http-v1197/audio/d3ff90911bdb1d5da29646d59c95085f3833edb7bb4693be4fe9dd4463724421.wav",
+      "exists": true,
+      "sha256FromOriginalCaseNotRehashed": "d3ff90911bdb1d5da29646d59c95085f3833edb7bb4693be4fe9dd4463724421"
+    }
+  },
+  {
+    "path": "thesis/evidence/orca-relayed-http-v1197/attempts/attempt-0162-measured.jsonl",
+    "bytes": 4767,
+    "sha256": "56b327396f77f4f477ffb0883c8a86bd77060e7493a6f9c7e3f0ac86e515dd63",
+    "phase": "measured",
+    "phaseIndex": 147,
+    "caseId": "audio-campaign-v802-0162",
+    "correlationId": "audio-campaign-96a9c862798149b2b623317914b94e08",
+    "requestId": "audio-request-b6d0c1fc006c4f4f8a9080ad476d5aa4",
+    "status": "completed_correct",
+    "failure": null,
+    "timeout": false,
+    "audio": {
+      "path": "thesis/evidence/orca-relayed-http-v1197/audio/2c79b1ee5c66a7a44f977812a5c8b3dc340a9c4b9d0ce271ca18dd358b70d5a1.wav",
+      "exists": true,
+      "sha256FromOriginalCaseNotRehashed": "2c79b1ee5c66a7a44f977812a5c8b3dc340a9c4b9d0ce271ca18dd358b70d5a1"
+    }
+  },
+  {
+    "path": "thesis/evidence/orca-relayed-http-v1197/attempts/attempt-0163-measured.jsonl",
+    "bytes": 4767,
+    "sha256": "a3079c0818010056bafdbf2ccd0e04feb5a84ac4489a103133c4c57cb748bd60",
+    "phase": "measured",
+    "phaseIndex": 148,
+    "caseId": "audio-campaign-v802-0163",
+    "correlationId": "audio-campaign-3edb6d861a7c4b7ab0490d38782ba8fe",
+    "requestId": "audio-request-18ce68346b894596be8564cb07e55605",
+    "status": "completed_correct",
+    "failure": null,
+    "timeout": false,
+    "audio": {
+      "path": "thesis/evidence/orca-relayed-http-v1197/audio/54a2df2aa2782f8670a9c3f5f1917846e9f5cf4b25748a2eb39a9ec0947372b8.wav",
+      "exists": true,
+      "sha256FromOriginalCaseNotRehashed": "54a2df2aa2782f8670a9c3f5f1917846e9f5cf4b25748a2eb39a9ec0947372b8"
+    }
+  },
+  {
+    "path": "thesis/evidence/orca-relayed-http-v1197/attempts/attempt-0164-measured.jsonl",
+    "bytes": 4769,
+    "sha256": "240587e04223244611161768794e4e6b7f7ad5be74e7dc2a3405e146d2303deb",
+    "phase": "measured",
+    "phaseIndex": 149,
+    "caseId": "audio-campaign-v802-0164",
+    "correlationId": "audio-campaign-cf6fa5ed81624914b42dbb68086daea5",
+    "requestId": "audio-request-fc8e048061bb4530b20a18c042868247",
+    "status": "completed_correct",
+    "failure": null,
+    "timeout": false,
+    "audio": {
+      "path": "thesis/evidence/orca-relayed-http-v1197/audio/8ed3c991748819658b39388fd5d4748a0643eb25123f493959e5e63199092654.wav",
+      "exists": true,
+      "sha256FromOriginalCaseNotRehashed": "8ed3c991748819658b39388fd5d4748a0643eb25123f493959e5e63199092654"
+    }
+  },
+  {
+    "path": "thesis/evidence/orca-relayed-http-v1197/attempts/attempt-0165-measured.jsonl",
+    "bytes": 4769,
+    "sha256": "a6f7a0838a7576fb2a728db96d82f10306e5508580d6acf07f5d41a2349ede3b",
+    "phase": "measured",
+    "phaseIndex": 150,
+    "caseId": "audio-campaign-v802-0165",
+    "correlationId": "audio-campaign-6a49c1b775bc4fe3853b5ba4c407a02b",
+    "requestId": "audio-request-46f6e280740548d99e8b90d2a536a126",
+    "status": "completed_correct",
+    "failure": null,
+    "timeout": false,
+    "audio": {
+      "path": "thesis/evidence/orca-relayed-http-v1197/audio/df95e54b4d959e746c6dc3dae4a7307300e83657a8bfe8d5e34a2e2b3828e036.wav",
+      "exists": true,
+      "sha256FromOriginalCaseNotRehashed": "df95e54b4d959e746c6dc3dae4a7307300e83657a8bfe8d5e34a2e2b3828e036"
+    }
+  },
+  {
+    "path": "thesis/evidence/orca-relayed-http-v1197/attempts/attempt-0166-measured.jsonl",
+    "bytes": 4769,
+    "sha256": "e88820c9c91e8ee50a3081d584cbdd7b3ed23d00bbdfcc8da4b5b58f4d51b386",
+    "phase": "measured",
+    "phaseIndex": 151,
+    "caseId": "audio-campaign-v802-0166",
+    "correlationId": "audio-campaign-9fc5edf024cc46718b123af1364445fb",
+    "requestId": "audio-request-29ebec40aa12402eadc17307c59df70a",
+    "status": "completed_correct",
+    "failure": null,
+    "timeout": false,
+    "audio": {
+      "path": "thesis/evidence/orca-relayed-http-v1197/audio/0c4f0f527de06346705511e5977f64c4fc0c67722811ada8aa798ae604c1e9d8.wav",
+      "exists": true,
+      "sha256FromOriginalCaseNotRehashed": "0c4f0f527de06346705511e5977f64c4fc0c67722811ada8aa798ae604c1e9d8"
+    }
+  },
+  {
+    "path": "thesis/evidence/orca-relayed-http-v1197/attempts/attempt-0167-measured.jsonl",
+    "bytes": 4769,
+    "sha256": "9d68691309962478e54fa37288154b7ce4fea7b03e4b824257b9bd5eb74d8398",
+    "phase": "measured",
+    "phaseIndex": 152,
+    "caseId": "audio-campaign-v802-0167",
+    "correlationId": "audio-campaign-8bbc50d9993d49e7b566ed3ea8f2f6d6",
+    "requestId": "audio-request-202d0f9dc92846a38c4df5a29ace8a9e",
+    "status": "completed_correct",
+    "failure": null,
+    "timeout": false,
+    "audio": {
+      "path": "thesis/evidence/orca-relayed-http-v1197/audio/af0e075a0147f2b212b1726d072b73463283e4393cabe3e40248d5cd7f6d0047.wav",
+      "exists": true,
+      "sha256FromOriginalCaseNotRehashed": "af0e075a0147f2b212b1726d072b73463283e4393cabe3e40248d5cd7f6d0047"
+    }
+  },
+  {
+    "path": "thesis/evidence/orca-relayed-http-v1197/attempts/attempt-0168-measured.jsonl",
+    "bytes": 4768,
+    "sha256": "544f0298bbbd7722214fa947724d12cb42f5ed5a57c86b38ae0b445ec7340c4e",
+    "phase": "measured",
+    "phaseIndex": 153,
+    "caseId": "audio-campaign-v802-0168",
+    "correlationId": "audio-campaign-707b660a66c34e91ad13dfb06ed51045",
+    "requestId": "audio-request-3163e86fca4c48fbb02d9e4aa0033745",
+    "status": "completed_correct",
+    "failure": null,
+    "timeout": false,
+    "audio": {
+      "path": "thesis/evidence/orca-relayed-http-v1197/audio/567efeb8832d97e84e6798d9b002c027b45d68aff82d88b0ef4bf78339c8b61f.wav",
+      "exists": true,
+      "sha256FromOriginalCaseNotRehashed": "567efeb8832d97e84e6798d9b002c027b45d68aff82d88b0ef4bf78339c8b61f"
+    }
+  },
+  {
+    "path": "thesis/evidence/orca-relayed-http-v1197/attempts/attempt-0169-measured.jsonl",
+    "bytes": 4768,
+    "sha256": "f2815cc451bdc54d94b2aed99486732521dc4ba7e09fbdbd02f4f79a51a321e0",
+    "phase": "measured",
+    "phaseIndex": 154,
+    "caseId": "audio-campaign-v802-0169",
+    "correlationId": "audio-campaign-9309861d3c0c4b26984a645f5e4bcfd2",
+    "requestId": "audio-request-768c0dcde90c43c791e8d843f4abf149",
+    "status": "completed_correct",
+    "failure": null,
+    "timeout": false,
+    "audio": {
+      "path": "thesis/evidence/orca-relayed-http-v1197/audio/64e8987112d46ad8ad0dd87ba6f6327ca5ac3821775c710c825160e92199ba64.wav",
+      "exists": true,
+      "sha256FromOriginalCaseNotRehashed": "64e8987112d46ad8ad0dd87ba6f6327ca5ac3821775c710c825160e92199ba64"
+    }
+  },
+  {
+    "path": "thesis/evidence/orca-relayed-http-v1197/attempts/attempt-0170-measured.jsonl",
+    "bytes": 4769,
+    "sha256": "136c58cae125d3b8fa14fb4df85a5feb12e8da8af3bdf50d6c86170168df5926",
+    "phase": "measured",
+    "phaseIndex": 155,
+    "caseId": "audio-campaign-v802-0170",
+    "correlationId": "audio-campaign-dd20ff6e6d01471abb1658ab0b0bb6ef",
+    "requestId": "audio-request-64666fad5a254f28bf409cf79e3baa97",
+    "status": "completed_correct",
+    "failure": null,
+    "timeout": false,
+    "audio": {
+      "path": "thesis/evidence/orca-relayed-http-v1197/audio/93cdfe077a51bae243211d0078e676548c1f9560660ea19ff0e6c08c697c7f96.wav",
+      "exists": true,
+      "sha256FromOriginalCaseNotRehashed": "93cdfe077a51bae243211d0078e676548c1f9560660ea19ff0e6c08c697c7f96"
+    }
+  },
+  {
+    "path": "thesis/evidence/orca-relayed-http-v1197/attempts/attempt-0171-measured.jsonl",
+    "bytes": 4769,
+    "sha256": "29fccda60a87235f26551a5780606313956c8253999f1de2ea8373f075817327",
+    "phase": "measured",
+    "phaseIndex": 156,
+    "caseId": "audio-campaign-v802-0171",
+    "correlationId": "audio-campaign-1353f37f757f4799ad14236700c956b5",
+    "requestId": "audio-request-8d78862259c04a1aac8831cf42d9b402",
+    "status": "completed_correct",
+    "failure": null,
+    "timeout": false,
+    "audio": {
+      "path": "thesis/evidence/orca-relayed-http-v1197/audio/ad512fe6232cca9cb60c6a55fbd8701004687bef07b393e883de50548634f183.wav",
+      "exists": true,
+      "sha256FromOriginalCaseNotRehashed": "ad512fe6232cca9cb60c6a55fbd8701004687bef07b393e883de50548634f183"
+    }
+  },
+  {
+    "path": "thesis/evidence/orca-relayed-http-v1197/attempts/attempt-0172-measured.jsonl",
+    "bytes": 4770,
+    "sha256": "7d0a9504a81ca1aa693c3215fb67851635e031ede138c0b2b1b3209746eae818",
+    "phase": "measured",
+    "phaseIndex": 157,
+    "caseId": "audio-campaign-v802-0172",
+    "correlationId": "audio-campaign-6df2386ff6cb4cb6999333e992dc7d9a",
+    "requestId": "audio-request-7adc83cb3a6f45f98c4e566650f2f25f",
+    "status": "completed_correct",
+    "failure": null,
+    "timeout": false,
+    "audio": {
+      "path": "thesis/evidence/orca-relayed-http-v1197/audio/82604f222f1eea4c6c2138c61ec398d5b8f8830f70953dd508659c9230515875.wav",
+      "exists": true,
+      "sha256FromOriginalCaseNotRehashed": "82604f222f1eea4c6c2138c61ec398d5b8f8830f70953dd508659c9230515875"
+    }
+  },
+  {
+    "path": "thesis/evidence/orca-relayed-http-v1197/attempts/attempt-0173-measured.jsonl",
+    "bytes": 4769,
+    "sha256": "491f2f8df147610753264534ca85e32685c9a883aa1fa6a12e40d20139027b5d",
+    "phase": "measured",
+    "phaseIndex": 158,
+    "caseId": "audio-campaign-v802-0173",
+    "correlationId": "audio-campaign-8391f56f3cb147f490a386e8d2853841",
+    "requestId": "audio-request-77a45fdc0ff9417494bb8b59b2d4a9c7",
+    "status": "completed_correct",
+    "failure": null,
+    "timeout": false,
+    "audio": {
+      "path": "thesis/evidence/orca-relayed-http-v1197/audio/0b73339540be2795888dda8602305ceef87b48c2ea4e6e40ec11aefb6da2cb41.wav",
+      "exists": true,
+      "sha256FromOriginalCaseNotRehashed": "0b73339540be2795888dda8602305ceef87b48c2ea4e6e40ec11aefb6da2cb41"
+    }
+  },
+  {
+    "path": "thesis/evidence/orca-relayed-http-v1197/attempts/attempt-0174-measured.jsonl",
+    "bytes": 4768,
+    "sha256": "dd40bd007dd94439dfb436971127090215e793e76cf6837e2b25403ae5d2c259",
+    "phase": "measured",
+    "phaseIndex": 159,
+    "caseId": "audio-campaign-v802-0174",
+    "correlationId": "audio-campaign-0b57ed671e904e6491ba0dde56692095",
+    "requestId": "audio-request-d55d01a3f225495092c10b6bbea200a5",
+    "status": "completed_correct",
+    "failure": null,
+    "timeout": false,
+    "audio": {
+      "path": "thesis/evidence/orca-relayed-http-v1197/audio/814c86a243f896419bdb84b338ef60f069ac18e6faf0fbf4386ad54038f89070.wav",
+      "exists": true,
+      "sha256FromOriginalCaseNotRehashed": "814c86a243f896419bdb84b338ef60f069ac18e6faf0fbf4386ad54038f89070"
+    }
+  },
+  {
+    "path": "thesis/evidence/orca-relayed-http-v1197/attempts/attempt-0175-measured.jsonl",
+    "bytes": 4769,
+    "sha256": "585aed2d38a6f2c0116c2870989595bd4d253fcc06acca3b6b69b05d1a2c72bb",
+    "phase": "measured",
+    "phaseIndex": 160,
+    "caseId": "audio-campaign-v802-0175",
+    "correlationId": "audio-campaign-d80ef4e813d542c3baeef52280bc6c66",
+    "requestId": "audio-request-1ab2c5d745ee4d41a41dc451201424ce",
+    "status": "completed_correct",
+    "failure": null,
+    "timeout": false,
+    "audio": {
+      "path": "thesis/evidence/orca-relayed-http-v1197/audio/d6f8bb6f7fcc4ff57472d58aa849eef6b0d7064e2224af49b34f059167b88128.wav",
+      "exists": true,
+      "sha256FromOriginalCaseNotRehashed": "d6f8bb6f7fcc4ff57472d58aa849eef6b0d7064e2224af49b34f059167b88128"
+    }
+  },
+  {
+    "path": "thesis/evidence/orca-relayed-http-v1197/attempts/attempt-0176-measured.jsonl",
+    "bytes": 4769,
+    "sha256": "ddbc64e7ff042869b8b42d18a601a861ed1026f1d96e2aa4983684294a654675",
+    "phase": "measured",
+    "phaseIndex": 161,
+    "caseId": "audio-campaign-v802-0176",
+    "correlationId": "audio-campaign-3afe1bda4d0540e28016799244d501e9",
+    "requestId": "audio-request-d8ce037e5dc2491c9801fcd2a8f4068a",
+    "status": "completed_correct",
+    "failure": null,
+    "timeout": false,
+    "audio": {
+      "path": "thesis/evidence/orca-relayed-http-v1197/audio/6b06af6ae4b380028c7958b39b84c7e84bd48262507affb2fcfe71255302af72.wav",
+      "exists": true,
+      "sha256FromOriginalCaseNotRehashed": "6b06af6ae4b380028c7958b39b84c7e84bd48262507affb2fcfe71255302af72"
+    }
+  },
+  {
+    "path": "thesis/evidence/orca-relayed-http-v1197/attempts/attempt-0177-measured.jsonl",
+    "bytes": 4769,
+    "sha256": "72732350f37fbfa662cc73b86763c3629ddec0aaa8069b714efc6a71552d4927",
+    "phase": "measured",
+    "phaseIndex": 162,
+    "caseId": "audio-campaign-v802-0177",
+    "correlationId": "audio-campaign-aac4ec56a90047b782fbd5c193bfb526",
+    "requestId": "audio-request-f95683e7070c4257811af492cbd30d53",
+    "status": "completed_correct",
+    "failure": null,
+    "timeout": false,
+    "audio": {
+      "path": "thesis/evidence/orca-relayed-http-v1197/audio/542b63e6fad198df1c24998cae26dfbb52a5c852517c3e3e2087342b70ab5d14.wav",
+      "exists": true,
+      "sha256FromOriginalCaseNotRehashed": "542b63e6fad198df1c24998cae26dfbb52a5c852517c3e3e2087342b70ab5d14"
+    }
+  },
+  {
+    "path": "thesis/evidence/orca-relayed-http-v1197/attempts/attempt-0178-measured.jsonl",
+    "bytes": 4768,
+    "sha256": "d1f4e4dec6b57f81087fd6d4ad00a1ed24c9f685e675f714ca71d8e019c29f68",
+    "phase": "measured",
+    "phaseIndex": 163,
+    "caseId": "audio-campaign-v802-0178",
+    "correlationId": "audio-campaign-f6285f57ceea47fd82c90c4047026845",
+    "requestId": "audio-request-6ee034721bdb4c53b7a4ad9298d61443",
+    "status": "completed_correct",
+    "failure": null,
+    "timeout": false,
+    "audio": {
+      "path": "thesis/evidence/orca-relayed-http-v1197/audio/5413fed3ac0281c3c730b152151945903b3f2d5a8ebedf464cd1ff3b5fd992dd.wav",
+      "exists": true,
+      "sha256FromOriginalCaseNotRehashed": "5413fed3ac0281c3c730b152151945903b3f2d5a8ebedf464cd1ff3b5fd992dd"
+    }
+  },
+  {
+    "path": "thesis/evidence/orca-relayed-http-v1197/attempts/attempt-0179-measured.jsonl",
+    "bytes": 4768,
+    "sha256": "c554b696020838c71030b400a2c8ffc2e062485228ce2aed0579258fddc4ec31",
+    "phase": "measured",
+    "phaseIndex": 164,
+    "caseId": "audio-campaign-v802-0179",
+    "correlationId": "audio-campaign-258dcd3bfb8d459cb3e388b07037f888",
+    "requestId": "audio-request-e9920b4432ca495ca4b9fe861a950c10",
+    "status": "completed_correct",
+    "failure": null,
+    "timeout": false,
+    "audio": {
+      "path": "thesis/evidence/orca-relayed-http-v1197/audio/1779a6d0dc862e3558cb4954c5666d84d6a647a6e5e175b12fab2e9d601137b7.wav",
+      "exists": true,
+      "sha256FromOriginalCaseNotRehashed": "1779a6d0dc862e3558cb4954c5666d84d6a647a6e5e175b12fab2e9d601137b7"
+    }
+  },
+  {
+    "path": "thesis/evidence/orca-relayed-http-v1197/attempts/attempt-0180-measured.jsonl",
+    "bytes": 4769,
+    "sha256": "71c5f4c89e0f0443b24941d67899ec0ad55eaf4423d7104c884421d3b6c3f63f",
+    "phase": "measured",
+    "phaseIndex": 165,
+    "caseId": "audio-campaign-v802-0180",
+    "correlationId": "audio-campaign-0525ad8f086e47599c360fcc34030c6b",
+    "requestId": "audio-request-a119b915f5d34a0b97eb0710cca72216",
+    "status": "completed_correct",
+    "failure": null,
+    "timeout": false,
+    "audio": {
+      "path": "thesis/evidence/orca-relayed-http-v1197/audio/e9ece9e159a3586e5226817ddbab268699661be7835d2e4c5bf9e3c40ab4e823.wav",
+      "exists": true,
+      "sha256FromOriginalCaseNotRehashed": "e9ece9e159a3586e5226817ddbab268699661be7835d2e4c5bf9e3c40ab4e823"
+    }
+  },
+  {
+    "path": "thesis/evidence/orca-relayed-http-v1197/attempts/attempt-0181-measured.jsonl",
+    "bytes": 4768,
+    "sha256": "1661dcf943ab1070c6c6521c3b877c88945e6f1253c97474f5ffa1b50cafb304",
+    "phase": "measured",
+    "phaseIndex": 166,
+    "caseId": "audio-campaign-v802-0181",
+    "correlationId": "audio-campaign-49e8b8a9afeb47c8b32973e2706bb0f6",
+    "requestId": "audio-request-90cc9edfe42a4b3e9c3783e795eecb37",
+    "status": "completed_correct",
+    "failure": null,
+    "timeout": false,
+    "audio": {
+      "path": "thesis/evidence/orca-relayed-http-v1197/audio/3adca70b830c8413f8a89dbd10595c81e2dd1a535a12be1efc051eb5472ea42c.wav",
+      "exists": true,
+      "sha256FromOriginalCaseNotRehashed": "3adca70b830c8413f8a89dbd10595c81e2dd1a535a12be1efc051eb5472ea42c"
+    }
+  },
+  {
+    "path": "thesis/evidence/orca-relayed-http-v1197/attempts/attempt-0182-measured.jsonl",
+    "bytes": 4769,
+    "sha256": "28a5febc0a5afe0b4227142d4e6ea13ba70f25185c049d1fd7a8f1e7b80d7308",
+    "phase": "measured",
+    "phaseIndex": 167,
+    "caseId": "audio-campaign-v802-0182",
+    "correlationId": "audio-campaign-8bc3bc0652a74c618d51f901221cb8b5",
+    "requestId": "audio-request-a0f0d724f4a24f8cabfed289182d09ea",
+    "status": "completed_correct",
+    "failure": null,
+    "timeout": false,
+    "audio": {
+      "path": "thesis/evidence/orca-relayed-http-v1197/audio/1bbb6c99f6fc32bd84de216a6f948e51ad26ff1ffa7b238e278af1975e7d333f.wav",
+      "exists": true,
+      "sha256FromOriginalCaseNotRehashed": "1bbb6c99f6fc32bd84de216a6f948e51ad26ff1ffa7b238e278af1975e7d333f"
+    }
+  },
+  {
+    "path": "thesis/evidence/orca-relayed-http-v1197/attempts/attempt-0183-measured.jsonl",
+    "bytes": 4769,
+    "sha256": "c4d84aba6031e76cf727319795a8b09801dd3c284db33231b000d353d5c5e4a7",
+    "phase": "measured",
+    "phaseIndex": 168,
+    "caseId": "audio-campaign-v802-0183",
+    "correlationId": "audio-campaign-b4cc99fae02c4fe1a8d3533557d862c6",
+    "requestId": "audio-request-f9e21c3458364f44a174cc7f991c05ae",
+    "status": "completed_correct",
+    "failure": null,
+    "timeout": false,
+    "audio": {
+      "path": "thesis/evidence/orca-relayed-http-v1197/audio/07326991e8f153cb9866babb05593edd512e72767b9c340b28e944d2c0fe053d.wav",
+      "exists": true,
+      "sha256FromOriginalCaseNotRehashed": "07326991e8f153cb9866babb05593edd512e72767b9c340b28e944d2c0fe053d"
+    }
+  },
+  {
+    "path": "thesis/evidence/orca-relayed-http-v1197/attempts/attempt-0184-measured.jsonl",
+    "bytes": 4768,
+    "sha256": "bd4a2d5b13872142b95fb0945f3f16a6a6446b80ab6b54b18107ef919a5dca2e",
+    "phase": "measured",
+    "phaseIndex": 169,
+    "caseId": "audio-campaign-v802-0184",
+    "correlationId": "audio-campaign-1cc368296bcc4527992e9ba11e66dee9",
+    "requestId": "audio-request-35bca720b8894099abf9f4367212bd1b",
+    "status": "completed_correct",
+    "failure": null,
+    "timeout": false,
+    "audio": {
+      "path": "thesis/evidence/orca-relayed-http-v1197/audio/3a5d92259c5b30f80bc52b2f92e7a86f79e794dd1334cf553b1adb1ecbacb727.wav",
+      "exists": true,
+      "sha256FromOriginalCaseNotRehashed": "3a5d92259c5b30f80bc52b2f92e7a86f79e794dd1334cf553b1adb1ecbacb727"
+    }
+  },
+  {
+    "path": "thesis/evidence/orca-relayed-http-v1197/attempts/attempt-0185-measured.jsonl",
+    "bytes": 4769,
+    "sha256": "cd054034d3dd531b78f6922cb0a5ea1f91e3927709acc3e5d9e4b149f260aa7c",
+    "phase": "measured",
+    "phaseIndex": 170,
+    "caseId": "audio-campaign-v802-0185",
+    "correlationId": "audio-campaign-d2c374be5ff84ef6af9e245e2ef6b870",
+    "requestId": "audio-request-c2c6ba22fe184966bca592b6ad1232d0",
+    "status": "completed_correct",
+    "failure": null,
+    "timeout": false,
+    "audio": {
+      "path": "thesis/evidence/orca-relayed-http-v1197/audio/b2511a0f12061997151d58e9ea91c24d15880d040faa3e94ada10648e2e95314.wav",
+      "exists": true,
+      "sha256FromOriginalCaseNotRehashed": "b2511a0f12061997151d58e9ea91c24d15880d040faa3e94ada10648e2e95314"
+    }
+  },
+  {
+    "path": "thesis/evidence/orca-relayed-http-v1197/attempts/attempt-0186-measured.jsonl",
+    "bytes": 4769,
+    "sha256": "0f2060236c82c345fac85f9243b17116c1aad542f59eeeaee363327d651116ac",
+    "phase": "measured",
+    "phaseIndex": 171,
+    "caseId": "audio-campaign-v802-0186",
+    "correlationId": "audio-campaign-7cae13b440c44023abccbb1dda400bd1",
+    "requestId": "audio-request-94c65603b5a04d5da695b14b6e91a31e",
+    "status": "completed_correct",
+    "failure": null,
+    "timeout": false,
+    "audio": {
+      "path": "thesis/evidence/orca-relayed-http-v1197/audio/1031c97260f5ccf961fab6745c9a7930ee28a331c3000a4d928e6e53b030f838.wav",
+      "exists": true,
+      "sha256FromOriginalCaseNotRehashed": "1031c97260f5ccf961fab6745c9a7930ee28a331c3000a4d928e6e53b030f838"
+    }
+  },
+  {
+    "path": "thesis/evidence/orca-relayed-http-v1197/attempts/attempt-0187-measured.jsonl",
+    "bytes": 4769,
+    "sha256": "06d2dc7b383ade4e3599f50bf30a0ce34bd95a6d514d0f808e2e920248a50e1b",
+    "phase": "measured",
+    "phaseIndex": 172,
+    "caseId": "audio-campaign-v802-0187",
+    "correlationId": "audio-campaign-c0dbd1d757f04880ae0619ff571ead9f",
+    "requestId": "audio-request-cf02bdcb53d34458986411b376af2d2b",
+    "status": "completed_correct",
+    "failure": null,
+    "timeout": false,
+    "audio": {
+      "path": "thesis/evidence/orca-relayed-http-v1197/audio/775afb54d68d1d9e853663a9fe1f39bb617b0afd248b0b1b9bf3c84b554a14e7.wav",
+      "exists": true,
+      "sha256FromOriginalCaseNotRehashed": "775afb54d68d1d9e853663a9fe1f39bb617b0afd248b0b1b9bf3c84b554a14e7"
+    }
+  },
+  {
+    "path": "thesis/evidence/orca-relayed-http-v1197/attempts/attempt-0188-measured.jsonl",
+    "bytes": 4767,
+    "sha256": "620cea0f9c85ad730eb967278cc2dca062e152ed83700a410fa701c90d76f93e",
+    "phase": "measured",
+    "phaseIndex": 173,
+    "caseId": "audio-campaign-v802-0188",
+    "correlationId": "audio-campaign-8f86f126c46c4cd7887eca7d29718601",
+    "requestId": "audio-request-2984ce93e1854eda92804530e7889db4",
+    "status": "completed_correct",
+    "failure": null,
+    "timeout": false,
+    "audio": {
+      "path": "thesis/evidence/orca-relayed-http-v1197/audio/ff2a5bbdd07aa1cf7e2890f185a3c12d61f30b3ba0755daebc7b71ca1acdece7.wav",
+      "exists": true,
+      "sha256FromOriginalCaseNotRehashed": "ff2a5bbdd07aa1cf7e2890f185a3c12d61f30b3ba0755daebc7b71ca1acdece7"
+    }
+  },
+  {
+    "path": "thesis/evidence/orca-relayed-http-v1197/attempts/attempt-0189-measured.jsonl",
+    "bytes": 4769,
+    "sha256": "b6958c393dce3b8aed3478fa889aa174544e56ecf83f209cd6b16da9fc902006",
+    "phase": "measured",
+    "phaseIndex": 174,
+    "caseId": "audio-campaign-v802-0189",
+    "correlationId": "audio-campaign-d1bde4a8393e43bc9b797b3f20ed2a99",
+    "requestId": "audio-request-1700f2adcea840208c159219cd4b8ae1",
+    "status": "completed_correct",
+    "failure": null,
+    "timeout": false,
+    "audio": {
+      "path": "thesis/evidence/orca-relayed-http-v1197/audio/58eaf9bb09b9d4c16500c622f7f11769add8fd4adf030f8ed8c30424bd7bdfbf.wav",
+      "exists": true,
+      "sha256FromOriginalCaseNotRehashed": "58eaf9bb09b9d4c16500c622f7f11769add8fd4adf030f8ed8c30424bd7bdfbf"
+    }
+  },
+  {
+    "path": "thesis/evidence/orca-relayed-http-v1197/attempts/attempt-0190-measured.jsonl",
+    "bytes": 4769,
+    "sha256": "c3495f443c5022dc56bc1fedb7ebf2a4ab80ffeb0ca7283f9563185dcda8c2ac",
+    "phase": "measured",
+    "phaseIndex": 175,
+    "caseId": "audio-campaign-v802-0190",
+    "correlationId": "audio-campaign-388c1d14111c4920ae09407ecc2b09eb",
+    "requestId": "audio-request-ba1d8e01fca44b23b95b522ab8578068",
+    "status": "completed_correct",
+    "failure": null,
+    "timeout": false,
+    "audio": {
+      "path": "thesis/evidence/orca-relayed-http-v1197/audio/a1139848134dfdfad9dbc6265cfe2d771e6add900c9827af92c77f42a28e14c1.wav",
+      "exists": true,
+      "sha256FromOriginalCaseNotRehashed": "a1139848134dfdfad9dbc6265cfe2d771e6add900c9827af92c77f42a28e14c1"
+    }
+  },
+  {
+    "path": "thesis/evidence/orca-relayed-http-v1197/attempts/attempt-0191-measured.jsonl",
+    "bytes": 4770,
+    "sha256": "dfa1686955d61ba151eb0d35bd025bdaf8b1fbde9333e87de18a76a599374c77",
+    "phase": "measured",
+    "phaseIndex": 176,
+    "caseId": "audio-campaign-v802-0191",
+    "correlationId": "audio-campaign-84f091bf004d4c03a748745961d9773e",
+    "requestId": "audio-request-d5cb86d7d7654ac7b535c3f744a51f5d",
+    "status": "completed_correct",
+    "failure": null,
+    "timeout": false,
+    "audio": {
+      "path": "thesis/evidence/orca-relayed-http-v1197/audio/86864598a16287aa3bb70cb68191001497ec902f49b5e7bed5e76f4f78ec88ef.wav",
+      "exists": true,
+      "sha256FromOriginalCaseNotRehashed": "86864598a16287aa3bb70cb68191001497ec902f49b5e7bed5e76f4f78ec88ef"
+    }
+  },
+  {
+    "path": "thesis/evidence/orca-relayed-http-v1197/attempts/attempt-0192-measured.jsonl",
+    "bytes": 4768,
+    "sha256": "2548531f98a4e486fdb966c6e99203805082bde5458b32839637091631bc16c8",
+    "phase": "measured",
+    "phaseIndex": 177,
+    "caseId": "audio-campaign-v802-0192",
+    "correlationId": "audio-campaign-aef9927328ee4daab516bfdd65518bb8",
+    "requestId": "audio-request-b07e62f9111e4a61ab423680ece0c50c",
+    "status": "completed_correct",
+    "failure": null,
+    "timeout": false,
+    "audio": {
+      "path": "thesis/evidence/orca-relayed-http-v1197/audio/ee647780f0aa9caabe5330f552723ebc7071bb089ea93091065ceb09c3d1e5fc.wav",
+      "exists": true,
+      "sha256FromOriginalCaseNotRehashed": "ee647780f0aa9caabe5330f552723ebc7071bb089ea93091065ceb09c3d1e5fc"
+    }
+  },
+  {
+    "path": "thesis/evidence/orca-relayed-http-v1197/attempts/attempt-0193-measured.jsonl",
+    "bytes": 4768,
+    "sha256": "eb745daeaed35600cbc8a4d6a11927e9de27f8daa3fd1b2a9131b36df7f962d4",
+    "phase": "measured",
+    "phaseIndex": 178,
+    "caseId": "audio-campaign-v802-0193",
+    "correlationId": "audio-campaign-80afcfe04c134550b8f1b5c0fac52132",
+    "requestId": "audio-request-6c7c34eedb3b4b2cb0455e466eee8906",
+    "status": "completed_correct",
+    "failure": null,
+    "timeout": false,
+    "audio": {
+      "path": "thesis/evidence/orca-relayed-http-v1197/audio/74c4c42584512ddd5afaa70c5bf2236b3de947518554e1b80f49fb5d162bc562.wav",
+      "exists": true,
+      "sha256FromOriginalCaseNotRehashed": "74c4c42584512ddd5afaa70c5bf2236b3de947518554e1b80f49fb5d162bc562"
+    }
+  },
+  {
+    "path": "thesis/evidence/orca-relayed-http-v1197/attempts/attempt-0194-measured.jsonl",
+    "bytes": 4769,
+    "sha256": "f2ce32811e8ba8fe9076f69209a9d4b74de2d7bf83bcc4d436cded84f2f62ccf",
+    "phase": "measured",
+    "phaseIndex": 179,
+    "caseId": "audio-campaign-v802-0194",
+    "correlationId": "audio-campaign-5df94759b7b54a42a63b40c8db2b2870",
+    "requestId": "audio-request-225e9335e7194908a255e74d2ccde7b3",
+    "status": "completed_correct",
+    "failure": null,
+    "timeout": false,
+    "audio": {
+      "path": "thesis/evidence/orca-relayed-http-v1197/audio/aec9aba49a2e1034364792cce21ad7063b004ec80cb22a43042825c6db80899b.wav",
+      "exists": true,
+      "sha256FromOriginalCaseNotRehashed": "aec9aba49a2e1034364792cce21ad7063b004ec80cb22a43042825c6db80899b"
+    }
+  },
+  {
+    "path": "thesis/evidence/orca-relayed-http-v1197/attempts/attempt-0195-measured.jsonl",
+    "bytes": 3877,
+    "sha256": "14de56c396a4e83154d628a4cac8c70a98760e515ed301631472d21a08de5955",
+    "phase": "measured",
+    "phaseIndex": 180,
+    "caseId": "audio-campaign-v802-0195",
+    "correlationId": "audio-campaign-39c9fc5ca30a4131a555f1200f49fe04",
+    "requestId": "audio-request-54b03464eefe4cbda93ce0f3b6f8439c",
+    "status": "failed",
+    "failure": {
+      "code": "remote_transport_error",
+      "stage": "tts"
+    },
+    "timeout": false,
+    "audio": null
+  }
+]

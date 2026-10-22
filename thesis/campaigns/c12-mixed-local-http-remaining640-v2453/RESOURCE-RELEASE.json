@@ -1,0 +1,47 @@
+{
+  "analysisCustody": "thesis/results/c12-mixed-local-http-289partial-v2479/CUSTODY.json",
+  "analysisCustodySha256": "6f0b23b04516b66f826b48ea8450ecfcdea23c22b466ae4e16c8c5afd0e8ef65",
+  "at": "2026-10-22T15:34:27.168785+00:00",
+  "audioCustodyReceipt": {
+    "bytes": 220047,
+    "path": "thesis/campaigns/c12-mixed-local-http-remaining640-v2453/AUDIO-CUSTODY-VERIFIED-v2479.json",
+    "sha256": "eed4f030ecef5a29a721557ba73507f55d4f7f4db089800f134d8d2c3dbf738b"
+  },
+  "classification": "PARTIAL_EPOCH_SEALED_AND_ALLOCATION_RELEASED_FULL_CONDITION_STILL_OPEN",
+  "cohortAllocationReleased": true,
+  "conditionMeasuredCorrectPerStream": 549,
+  "conditionMeasuredTargetComplete": false,
+  "currentEpochMeasuredCorrectPerStream": 289,
+  "excludedCurrentEpochWarmupsPerStream": 15,
+  "failedPerStream": 0,
+  "fullAggregateGoalComplete": false,
+  "manifestSha256": "3bfca19d2dd0a9eec3981eae256168a5badd9ac2bb58a270ff8a55df1d986cce",
+  "newInference": 0,
+  "oldEvidencePreserved": true,
+  "pairedCapsules": 304,
+  "positiveFlowEvidenceGaps": 0,
+  "priorRetainedMeasuredCorrectPerStream": 260,
+  "providerOriginalActorsAbsent": [
+    {
+      "originalPresent": false,
+      "pid": 2866664
+    },
+    {
+      "originalPresent": false,
+      "pid": 2866665
+    }
+  ],
+  "providerOwnRuntimeRetired": true,
+  "providerRetirementMethod": "Frozen requester normal finally STOP; EOF collector observes absence and sends0signals.",
+  "rawAndAudioCustodyVerified": true,
+  "rawPrefixEofProof": "thesis/campaigns/c12-mixed-local-http-remaining640-v2453/terminal-v2455/RAW-PREFIX-PLUS-EOF-VERIFIED.json",
+  "rawPrefixEofProofSha256": "6efaf0cf9936b394ec0fe75a3aab9e419a01d7eb749eb8b42738a885b021b8c6",
+  "remainingAction": "351 unstarted per stream remain OPEN; new Main resumption requires actual worker storage admission. No full900 replay, source/manifest changes in-place, or P2P launch. Root full-goal/global orchestration ownership retained.",
+  "requesterOriginalAbsent": true,
+  "requesterOriginalPid": 462924,
+  "rootSignalsSent": 0,
+  "terminalReason": "worker_free_disk_floor",
+  "timeoutsPerStream": 0,
+  "unstartedPerStream": 351,
+  "workerFreeBytesAtSeal": 2167783424
+}

@@ -1,0 +1,29 @@
+{
+  "observedAt": "2026-10-17T20:36:05.603282+00:00",
+  "run": "run_e6054e76e9fc",
+  "task": "task_d7ea336050cf",
+  "dispatch": "ctx_37b4d0a3c14f",
+  "amends": ".omx/evidence/orca-monitor-20261010/STORAGE-CONSISTENCY-REVIEW-20261017T2036.json",
+  "classification": "No material evidence-custody defect found in bounded review. One accounting-scope clarification.",
+  "initialSubtotal": {
+    "records": 62,
+    "bytes": 143571171
+  },
+  "laterMonitorReportCopies": {
+    "records": 2,
+    "bytes": 14812,
+    "paths": [
+      "thesis/evidence/sealed-cohorts-v1215/monitor/STORAGE-RULE-AND-RECOVERY-CHECKLIST-20261017T2016.json",
+      "thesis/evidence/sealed-cohorts-v1215/monitor/KNOWN-REPO-CUSTODY-AUDIT-20261017T2021.json"
+    ]
+  },
+  "all64RetainedFileBytes": 143585983,
+  "resolution": "Initial sealed-total flag is explained by two later appended monitor-report records absent from original62-file subtotal. No missing or corrupt file detected; do not block measurements or repeat archive/model hashing. Root may label subtotal or append corrected combined count.",
+  "actualReviewResults": {
+    "copierSourcePinsMatch": true,
+    "providerRangesContiguous": true,
+    "sealed64PathsContainmentExistenceSizes": true,
+    "currentIndexUpdated2031": true
+  },
+  "remainingImportantWork": "Personal measured-provider raw physical custody is now Root-receipted, not independently remotely rehashed by monitor. Later full provider raw transfer to worker canonical thesis remains pending; V799 full raw and C06 final/raw UNKNOWN. No extra SUT calls, terminal control or source edits."
+}

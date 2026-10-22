@@ -1,0 +1,15 @@
+{
+  "at": "2026-10-22T00:20:17.415270+00:00",
+  "state": "ACK_COMPLETED_OFFLINE_PREPARATION_OPERATION_UNUSED_LEASE_BRANCH",
+  "operationResult": "thesis/phone-notebook/20261020/evidence/admitted-offline-runtime-20261022T000353/result.json",
+  "operationResultSha256": "d4d30eb494f60795e47f8729ad9e591eb8929eac6c317fd3531fcd6ebaeddd86",
+  "operationDoneAtUtc": "2026-10-22T00:04:00.170161+00:00",
+  "verifiedByOriginalMonitorMessage": "msg_75c60f661217",
+  "lastReportedOwnActiveBuildProcesses": 0,
+  "laterSeparatelyRootAdmittedBuildInferenceTransferProcesses": 0,
+  "leaseHardDeadlineUnchanged": "2026-10-22T00:19:55.341599+00:00",
+  "noSilentExtension": true,
+  "noNewProbeBuildReviewRequestedForClosure": true,
+  "noWorkerAgentServiceTerminalStopOrAdoption": true,
+  "meaning": "Partial readiness only: five package pins usable, required llama0.3.19 absent in inspected caches (0.3.34 not substituted), exact ebde source absent; no build/model/pilot/900. This operation is terminal; any remaining unused lease expires unchanged, not a new work request."
+}

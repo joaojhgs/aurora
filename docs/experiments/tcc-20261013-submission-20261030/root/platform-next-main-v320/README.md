@@ -1,0 +1,7 @@
+# Native platform main gates after the matched campaign
+
+These bounded source/artifact preparations reuse completed evidence; they do not claim native device validation or introduce another worker/build. Root retains serial executable ownership while the V319 campaign runs.
+
+[Android](android-next-main-v320.md): the approved Orca Waydroid route is booted. The existing foreground voice followed by offline Assistant reply and saved-history selector needs a current run-owned APK and a supported device-host installation/SDK route. No current packaged artifact was found in the inspected paths. The SSH emulator relay supports GUI/logcat operations but excludes raw execution and APK installation. This is a packaging/access-route gap, not an absent emulator. No physical-phone or Doze/OEM claims are made.
+
+[iOS](ios-next-main-v320.md): the retained successful existing workflow run38181244730/job114594073207 corresponds to headc0f4c0013cea5bb11ef81297194d0dc142a47bc4; its native voice/Assistant main step was skipped. Build-cache skips are separate from runtime acceptance. The earlier real main failed before audio/inference with selected/available/activeSTT false, cause unverified. The existing workflow accepts native_voice_main_flow:true; a repeat needs an actionable readiness change and exact source/app mapping. The current acceptance helper also lacks an explicit executed-tool predicate, so its nonempty answer cannot establish an offline tool flow. No replacement workflow or blind CI replay was launched.

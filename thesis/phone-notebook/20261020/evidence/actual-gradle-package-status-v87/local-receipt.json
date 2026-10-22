@@ -1,0 +1,8 @@
+{
+  "bytes": 5728,
+  "copyOnly": true,
+  "custody": "Notebook result persisted and fsynced before relay; remote receipt in same output",
+  "localPath": "/home/developer/projects/aurora/thesis/phone-notebook/20261020/evidence/actual-gradle-package-status-v87/result.json",
+  "remotePath": "/home/developer/projects/aurora/thesis/phone-notebook/20261020/evidence/actual-gradle-package-status-v87.json",
+  "sha256": "084ce9d03941b1f787da36e3c915ca10bdedeb94d785c2da1e770e608e604384"
+}

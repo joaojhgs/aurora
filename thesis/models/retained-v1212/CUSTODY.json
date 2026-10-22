@@ -1,0 +1,99 @@
+{
+  "startedAt": "2026-10-17T20:26:37.759420+00:00",
+  "diskBefore": {
+    "total": 109128826880,
+    "used": 101448200192,
+    "free": 7663849472
+  },
+  "freeSpaceFloorBytes": 2147483648,
+  "copyRateBytesPerSecond": 4194304,
+  "records": [
+    {
+      "role": "stt",
+      "name": "config.json",
+      "bytes": 2309,
+      "sha256": "56a6d8110d311f19c8f0471e562832c7527f146b567275bfca59fcf7c184da9a",
+      "source": "/home/developer/.cache/huggingface/hub/models--Systran--faster-whisper-base/snapshots/ebe41f70d5b6dfa9166e2c581c45c9c0cfc57b66/config.json",
+      "destination": "thesis/models/retained-v1212/stt/config.json",
+      "verifiedSha256": "56a6d8110d311f19c8f0471e562832c7527f146b567275bfca59fcf7c184da9a",
+      "state": "VERIFIED_REPO_COPY",
+      "at": "2026-10-17T20:26:37.773293+00:00"
+    },
+    {
+      "role": "stt",
+      "name": "model.bin",
+      "bytes": 145217532,
+      "sha256": "d01c3014881c9c6f3133c182f3d2887eb6ca1c789a7538c5c007196857a0a6a9",
+      "source": "/home/developer/.cache/huggingface/hub/models--Systran--faster-whisper-base/snapshots/ebe41f70d5b6dfa9166e2c581c45c9c0cfc57b66/model.bin",
+      "destination": "thesis/models/retained-v1212/stt/model.bin",
+      "verifiedSha256": "d01c3014881c9c6f3133c182f3d2887eb6ca1c789a7538c5c007196857a0a6a9",
+      "state": "VERIFIED_REPO_COPY",
+      "at": "2026-10-17T20:27:14.852677+00:00"
+    },
+    {
+      "role": "stt",
+      "name": "tokenizer.json",
+      "bytes": 2203239,
+      "sha256": "fb7b63191e9bb045082c79fd742a3106a12c99513ab30df4a0d47fa6cb6fd0ab",
+      "source": "/home/developer/.cache/huggingface/hub/models--Systran--faster-whisper-base/snapshots/ebe41f70d5b6dfa9166e2c581c45c9c0cfc57b66/tokenizer.json",
+      "destination": "thesis/models/retained-v1212/stt/tokenizer.json",
+      "verifiedSha256": "fb7b63191e9bb045082c79fd742a3106a12c99513ab30df4a0d47fa6cb6fd0ab",
+      "state": "VERIFIED_REPO_COPY",
+      "at": "2026-10-17T20:27:15.420273+00:00"
+    },
+    {
+      "role": "stt",
+      "name": "vocabulary.txt",
+      "bytes": 459861,
+      "sha256": "34ce3fe1c5041027b3f8d42912270993f986dbc4bb34cf27f951e34a1e453913",
+      "source": "/home/developer/.cache/huggingface/hub/models--Systran--faster-whisper-base/snapshots/ebe41f70d5b6dfa9166e2c581c45c9c0cfc57b66/vocabulary.txt",
+      "destination": "thesis/models/retained-v1212/stt/vocabulary.txt",
+      "verifiedSha256": "34ce3fe1c5041027b3f8d42912270993f986dbc4bb34cf27f951e34a1e453913",
+      "state": "VERIFIED_REPO_COPY",
+      "at": "2026-10-17T20:27:15.539964+00:00"
+    },
+    {
+      "role": "llm",
+      "name": "Qwen3.5-0.8B-Q4_0.gguf",
+      "bytes": 563036064,
+      "sha256": "57d1997790d1744fba5b40a7317df71ea5e2acee28c47e78f0cce39c0703f8cf",
+      "source": "/home/developer/projects/aurora/.artifacts/local-inference/models/Qwen3.5-0.8B-Q4_0.gguf",
+      "destination": ".artifacts/local-inference/models/Qwen3.5-0.8B-Q4_0.gguf",
+      "verifiedSha256": "57d1997790d1744fba5b40a7317df71ea5e2acee28c47e78f0cce39c0703f8cf",
+      "state": "VERIFIED_EXISTING_REPO_OBJECT",
+      "at": "2026-10-17T20:27:16.895339+00:00"
+    },
+    {
+      "role": "tts",
+      "name": "en_US-ljspeech-medium.onnx",
+      "bytes": 63531379,
+      "sha256": "6f52a751e2349abe7a76735eb09dc1875298c77ea2342ffd2fef79ff81b87f22",
+      "source": "/home/developer/projects/aurora/.git/aurora-handoff-import-20261006/cpu-full-audio-v483/models/en_US-ljspeech-medium.onnx",
+      "destination": "thesis/models/retained-v1212/tts/en_US-ljspeech-medium.onnx",
+      "verifiedSha256": "6f52a751e2349abe7a76735eb09dc1875298c77ea2342ffd2fef79ff81b87f22",
+      "state": "VERIFIED_REPO_COPY",
+      "at": "2026-10-17T20:27:32.637325+00:00"
+    },
+    {
+      "role": "tts",
+      "name": "en_US-ljspeech-medium.onnx.json",
+      "bytes": 4972,
+      "sha256": "141d612cc0a95ed7efc1ca936b845c2364967f2e9217c5dbfcf69fc4d6c65860",
+      "source": "/home/developer/projects/aurora/.git/aurora-handoff-import-20261006/cpu-full-audio-v483/models/en_US-ljspeech-medium.onnx.json",
+      "destination": "thesis/models/retained-v1212/tts/en_US-ljspeech-medium.onnx.json",
+      "verifiedSha256": "141d612cc0a95ed7efc1ca936b845c2364967f2e9217c5dbfcf69fc4d6c65860",
+      "state": "VERIFIED_REPO_COPY",
+      "at": "2026-10-17T20:27:32.644298+00:00"
+    }
+  ],
+  "sutCalls": 0,
+  "modelsChanged": false,
+  "possibleConfound": "Concurrent disk copying/checksums; all measured cases retained.",
+  "status": "all_seven_frozen_assets_physically_verified",
+  "finishedAt": "2026-10-17T20:27:32.644310+00:00",
+  "diskAfter": {
+    "total": 109128826880,
+    "used": 101660557312,
+    "free": 7451492352
+  }
+}

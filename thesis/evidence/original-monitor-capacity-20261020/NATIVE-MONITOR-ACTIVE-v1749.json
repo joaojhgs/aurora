@@ -1,0 +1,17 @@
+{
+  "at": "2026-10-20T08:06:28.915660+00:00",
+  "status": "ORIGINAL_NATIVE_MONITOR_ACTIVE_VERIFIED_BY_ACTUAL_MONITOR_GET_GOAL",
+  "nativeGoalId": "01a123ff-19ba-7332-a2f7-346a722af79f",
+  "actualGetGoalAt": "2026-10-20T08:04:10Z",
+  "sameOriginalRunTaskDispatchTerminalAndIncarnation": true,
+  "supportedSingleResumeRequestId": "46748383-5b38-4f43-8a26-35a3748408bb",
+  "actualStatusMessageId": "msg_7190e9ad71bb",
+  "source": "thesis/evidence/original-monitor-capacity-20261020/root-monitor-resume-confirmation-mail-v1749.json",
+  "sourceBytes": 2481,
+  "sourceSha256": "29a2e501ff8d3c3b3785f03a7dd71522d3ba8ee05da2638acf81ea46167ec821",
+  "observationLimit": "Original monitor called its native tool and reported the result through original Orca. Root own native tool queries only Root; no cross-session hidden-state edit. Numerical K1 counts in message contain a typo and are not used for denominator evidence; Root recomputes from physical case index.",
+  "modelAndIdentityChanged": false,
+  "newMonitorGoalOrWorker": false,
+  "furtherResumeAuthorizedOrNeeded": false,
+  "rootGoalAndK1Continued": true
+}

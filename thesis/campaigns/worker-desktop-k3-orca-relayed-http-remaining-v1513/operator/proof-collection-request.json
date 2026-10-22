@@ -1,0 +1,8 @@
+{
+  "at": "2026-10-18T14:53:27.679438+00:00",
+  "commandSha256": "2ea6239e90ee90c642bbd52b2512322080c029c28392a08966bd27fdd474e7c3",
+  "expectedNativeJoins": 45,
+  "modelRequestsByFinalizer": 0,
+  "sendCountPlanned": 1,
+  "warmups": 15
+}

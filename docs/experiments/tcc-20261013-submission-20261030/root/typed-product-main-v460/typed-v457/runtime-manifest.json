@@ -1,0 +1,22 @@
+{
+  "files": {
+    "supervisor.py": {
+      "sha256": "2590cceedcf8b2c00f29f2a8759a2e802feecac4280b67e30f3bfe02cc0a3244",
+      "bytes": 8054
+    },
+    "backend-controller.py": {
+      "sha256": "d746fe7b443d019f553f89351ebedab6ff31d78f88576cd123abb6b09234f3d8",
+      "bytes": 7197
+    },
+    "source_guard_v455.py": {
+      "sha256": "14edacb2e227f614f50282b3e038ffda278111481576283e05fb7ed768ce2410",
+      "bytes": 1588
+    }
+  },
+  "sampleClass": "typedUI readiness NOT voice",
+  "sameProductSource": "c90ade3dc52f1dfdf3840225894d24cefa530b063b2b32e1b289139772e65273",
+  "sameFrozenModelsSettings": true,
+  "globalVoiceFlowsRemain": 8,
+  "measuredSamples": 0,
+  "phase2Allowed": false
+}

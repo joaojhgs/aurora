@@ -1,0 +1,25 @@
+{
+  "at": "2026-10-16T13:23:37.174425+00:00",
+  "originalManifestPreserved": "MANIFEST.json",
+  "compilerExitCode": 0,
+  "originalPostBuildGuardFailurePreserved": true,
+  "generatedOnlyReconciled": true,
+  "artifact": {
+    "path": "/tmp/aurora-root-c06-current-source-v1019/.artifacts/native-target-v1031/x86_64-unknown-linux-gnu/debug/aurora-tauri",
+    "bytes": 166568472,
+    "sha256": "e156c76b676bf6566765c769d211413243f8d7f48026275465e085f4fd21a3b6"
+  },
+  "files": [
+    {
+      "path": "native-build-terminal-v1035.json",
+      "bytes": 15666,
+      "sha256": "891e00fd607588ea46a9b3d657230d93abd5154cbebc8e4e85175e1e580259e3"
+    },
+    {
+      "path": "generated-reconciliation-v1036.json",
+      "bytes": 11261,
+      "sha256": "183f0745998da70a4275aab4c3121239970194e301b14d62bfdcd59c9cc437c0"
+    }
+  ],
+  "runtimeReadinessReport": "../native-desktop-file-audio-readiness-v1049/REPORT.md"
+}

@@ -1,0 +1,61 @@
+{
+  "at": "2026-10-18T22:22:45.892528+00:00",
+  "actualRootNativeGoal": "ACTIVE 01a112a5-d6bb-74e2-bf7c-ace73cb513b5",
+  "ownerCorrection": "msg_d615f1563183 DESKTOP control recovery, not broker",
+  "historicalCdacRequest": "cdac7533-7309-4015-be6f-69bae4a8f0ee remains UNKNOWN and unresent",
+  "rejectedOldRequests": [
+    {
+      "id": "8357569b-3463-4576-951a-0c975a3b4cc2",
+      "accepted": false,
+      "error": {
+        "code": "terminal_not_writable",
+        "message": "terminal_not_writable"
+      },
+      "source": ".git/aurora-handoff-import-20261006/v1591-same-provider-firstwarmup-diagnostic-readmission-SEND.json"
+    },
+    {
+      "id": "b3e29dd0-3f85-444a-a865-a37495190408",
+      "accepted": false,
+      "error": {
+        "code": "terminal_not_writable",
+        "message": "terminal_not_writable"
+      },
+      "source": ".git/aurora-handoff-import-20261006/v1593-short-staged-reader-derivation-readmission-SEND.json"
+    }
+  ],
+  "processes": {
+    "forward": {
+      "pid": 421717,
+      "startTicks": 104535394,
+      "state": "S",
+      "same": true
+    },
+    "oldRequesterController": {
+      "pid": 1364182,
+      "present": false
+    },
+    "oldRequesterBackend": {
+      "pid": 1364246,
+      "present": false
+    },
+    "oldRequesterCopier": {
+      "pid": 1364183,
+      "present": false
+    },
+    "oldRequesterFinalizer": {
+      "pid": 1364184,
+      "present": false
+    }
+  },
+  "lastRequesterSummary": {
+    "sha256": "8c2313d6b6dfd1c01399a95c67e58a30fe33ffd3b6b29d9f018c4d4498d63e65",
+    "status": "stopped_system_failure",
+    "measured": 0,
+    "warmups": 1,
+    "reason": "transport_ambiguous"
+  },
+  "workerFreeBytes": 5700214784,
+  "workerBuildLockKernelEntries": [
+    "16: FLOCK  ADVISORY  WRITE 846273 08:01:530933 0 EOF"
+  ]
+}

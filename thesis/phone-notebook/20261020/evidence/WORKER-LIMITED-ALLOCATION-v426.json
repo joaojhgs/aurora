@@ -1,0 +1,14 @@
+{
+  "at": "2026-10-22T14:22:16.593097+00:00",
+  "rootAdmissionMessage": "msg_b70a5b5bbb2c",
+  "baselinePhysicalAllocatedBytes": 48820224,
+  "baselineCountedEntries": 7032,
+  "cumulativeNewPhysicalCapBytes": 2097152,
+  "freeFloorPlusReserveBytes": 2164260864,
+  "workerFreeBytes": 2183897088,
+  "scope": "/home/developer/projects/aurora/thesis/phone-notebook/20261020",
+  "includesAllFutureOwnedFilesDirectoriesAtomicTemporaryPeaks": true,
+  "notebookNewCollectionPhysicalCapBytes": 50331648,
+  "mainCampaignUntouched": true,
+  "rawNotebookRepoAcceptedAsPrimaryCustody": true
+}

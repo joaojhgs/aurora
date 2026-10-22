@@ -1,0 +1,55 @@
+{
+  "at": "2026-10-15T04:05:51.276294+00:00",
+  "source": "/home/developer/projects/aurora/docs/experiments/tcc-20261013-submission-20261030/root/full-audio-worker-cpu-v490",
+  "outerManifestSHA256": "3176d21181acc8c8998e9bc48a11771eb94e716728abe6ea86f541ab6bc4bf94",
+  "listedMembers": 74,
+  "actualFiles": 75,
+  "allListedHashesMatch": true,
+  "frozenManifestSHA256": "364832a627e2f45b4b1c2b80ca05739f809132a28ff26511f0eda5e30f89127a",
+  "registrySHA256": "2d1610a0bc2794ba26acd8aa3e21e130a4b6a8202b946408008b2761ba6c345e",
+  "fullManifestAndRegistryRead": true,
+  "readinessRawResultAndRetirementRead": true,
+  "rootReceipt": {
+    "id": "msg_cd23dbfdeab2",
+    "createdAt": "2026-10-15T04:03:07Z",
+    "cpuPilot": {
+      "version": "V490",
+      "passed": true,
+      "flowMs": 49633.587315,
+      "STTms": 6301.671373,
+      "assistantMs": 39262.118801,
+      "TTSms": 4065.091185,
+      "endedAt": "2026-10-15T03:55:10.323625Z",
+      "retiredAt": "2026-10-15T03:57:38.621262Z",
+      "cohort": "aurora-full-audio-capital-v1-worker-cpu-local-20261015",
+      "manifestHash": "364832a627e2f45b4b1c2b80ca05739f809132a28ff26511f0eda5e30f89127a",
+      "registryHash": "2d1610a0bc2794ba26acd8aa3e21e130a4b6a8202b946408008b2761ba6c345e"
+    },
+    "cpuCampaign": {
+      "version": "V491",
+      "controllerPID": 2232517,
+      "startedAt": "2026-10-15T04:00:53.523642Z",
+      "warmupsPlanned": 15,
+      "nPlanned": 900,
+      "conditionCapSeconds": 57600,
+      "outerCapSeconds": 57840,
+      "requestCapSeconds": 180,
+      "capBasis": "915*observed49.634*1.25 rounded16h"
+    },
+    "desktop": {
+      "version": "V485",
+      "controllerPID": 2910571,
+      "childPID": 2910591,
+      "observedAt": "2026-10-15T04:00:58.573679Z",
+      "warmupsComplete": 15,
+      "measuredRecorded": 91,
+      "unattempted": 809,
+      "lastOutcome": "completed_correct",
+      "allOutcomesAggregated": false
+    },
+    "fullMatrixComplete": false,
+    "phase2Allowed": false
+  },
+  "executableValidationByMonitor": false,
+  "phase2MeasuredAllowed": false
+}

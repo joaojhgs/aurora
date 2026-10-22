@@ -1,0 +1,31 @@
+{
+  "at": "2026-10-18T17:51:00.031370+00:00",
+  "status": "CORRECTED_ENTIRE_COLLECTOR_QUALIFIED_ON_SAME_REAL15_NO_NEW_MODELS",
+  "correctedCollectorSha256": "0382e56a20289f4ffec91af1ceec9e98866afcd3218eb3c769b574c8f220b23e",
+  "qualificationSourceCohort": "V1562/f5381b6f24422bd61a4a41b3a561c7be8bd7f20bd05dcf7bff6caf67cf1a5426",
+  "qualifiedActualWarmups": 15,
+  "qualifiedActualNativeJoins": 45,
+  "newModelRequestsForQualification": 0,
+  "stagedSourceOnSamePersonal": {
+    "host": "personal.skyron-server",
+    "source": "/home/developer/projects/aurora/.git/aurora-handoff-import-20261006/k3-collector-v1573.py",
+    "sha256": "0382e56a20289f4ffec91af1ceec9e98866afcd3218eb3c769b574c8f220b23e",
+    "bytes": 7451,
+    "newModelRequests": 0,
+    "sameFrozenReaderNoService": true
+  },
+  "correction": "Proof helper bytes must match the current trusted frozen manifest receiverProofSourceSha256, not the obsolete V1513 literal. Full existing collector executed against the actual saved15 in a separate output directory.",
+  "callerChange": "Finalizer executes same SHA-pinned staged reader using a shorter normal raw-shell command. Rejected52241B extraqualification was notexecuted or retried; qualifiedshort29270B command succeeded. No proven generalized cause inferred from terminal_not_writable.",
+  "oldAllFrozenSourcesPreserved": true,
+  "v1562RetiredSetupChargeSeconds": 652.5055120009999,
+  "cumulativeUsedConditionSeconds": 23516.074452657,
+  "remainingOf57600Seconds": 34083.925547342995,
+  "futureRange": [
+    717,
+    900
+  ],
+  "futureMeasured": 184,
+  "freshProcessWarmups": "Standard15excluded/45native gate remains; no warmup borrowing/predicateweakening; retainedold15 notcountedasmeasurement",
+  "newRuntimeLaunched": false,
+  "sourceDiff": "thesis/campaigns/worker-desktop-k3-orca-relayed-http-remaining-v1573/CORRECTED-COLLECTOR-AND-ACCOUNTING-v1578.patch"
+}

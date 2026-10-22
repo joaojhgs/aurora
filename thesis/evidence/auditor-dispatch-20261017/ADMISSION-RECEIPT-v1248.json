@@ -1,0 +1,60 @@
+{
+  "RootDoesNotWriteAuditorFiles": true,
+  "at": "2026-10-17T20:59:37.364298+00:00",
+  "distinctAuditorWriteClaim": "thesis/audit/20261017-data-and-results/",
+  "records": [
+    {
+      "bytes": 7037,
+      "destination": "thesis/evidence/auditor-dispatch-20261017/v1243-live-runtime.json",
+      "sha256": "07c25c716b8b8e8398b67ebcf152d6d197713ca65fa7b2498591910caaf37e65",
+      "source": ".git/aurora-handoff-import-20261006/v1243-live-runtime.json"
+    },
+    {
+      "bytes": 187,
+      "destination": "thesis/evidence/auditor-dispatch-20261017/v1243-live-manager-usage.json",
+      "sha256": "b5aa77869886478c76c6780363701a5fce5e7829003543be260ed5d20e5447b7",
+      "source": ".git/aurora-handoff-import-20261006/v1243-live-manager-usage.json"
+    },
+    {
+      "bytes": 187,
+      "destination": "thesis/evidence/auditor-dispatch-20261017/v1243-live-manager-resources.json",
+      "sha256": "b5aa77869886478c76c6780363701a5fce5e7829003543be260ed5d20e5447b7",
+      "source": ".git/aurora-handoff-import-20261006/v1243-live-manager-resources.json"
+    },
+    {
+      "bytes": 187,
+      "destination": "thesis/evidence/auditor-dispatch-20261017/v1243-live-manager-placements.json",
+      "sha256": "b5aa77869886478c76c6780363701a5fce5e7829003543be260ed5d20e5447b7",
+      "source": ".git/aurora-handoff-import-20261006/v1243-live-manager-placements.json"
+    },
+    {
+      "bytes": 187,
+      "destination": "thesis/evidence/auditor-dispatch-20261017/v1243-original-run.json",
+      "sha256": "b5aa77869886478c76c6780363701a5fce5e7829003543be260ed5d20e5447b7",
+      "source": ".git/aurora-handoff-import-20261006/v1243-original-run.json"
+    },
+    {
+      "bytes": 1400,
+      "destination": "thesis/evidence/auditor-dispatch-20261017/v1244-root-fence.json",
+      "sha256": "10e09ee79e309ee9471d6df04e49e537b70c1802d993c05b65caca12323195cc",
+      "source": ".git/aurora-handoff-import-20261006/v1244-root-fence.json"
+    },
+    {
+      "bytes": 249,
+      "destination": "thesis/evidence/auditor-dispatch-20261017/v1244-host-usage.json",
+      "sha256": "1667fde4e999990f2e172424dd4b233ed0ac9af992c8416929e8358613d3eaad",
+      "source": ".git/aurora-handoff-import-20261006/v1244-host-usage.json"
+    },
+    {
+      "bytes": 746,
+      "destination": "thesis/evidence/auditor-dispatch-20261017/v1245-original-run-public.json",
+      "sha256": "5b2ffaaeb2f336858ffe908a6eb66dcc3655394100419983e2927c1e0d9140a8",
+      "source": ".git/aurora-handoff-import-20261006/v1245-original-run-public.json"
+    }
+  ],
+  "run": "run_e6054e76e9fc",
+  "status": "PENDING_AUTHORIZED_OWNING_HOST_MODEL_QUOTA_ADMISSION",
+  "task": "task_c626834bf1c6",
+  "workerLaunchAttempted": false,
+  "workerRequestId": "15142b33-da95-45c7-b9fd-6303d9cb3d61"
+}

@@ -1,0 +1,58 @@
+{
+  "at": "2026-10-16T02:45:09.659843+00:00",
+  "scope": "Source-only inert custody, source review closes three deterministic main-path issues; not launch or runtime acceptance",
+  "review": "thesis/validation/distributed-k1-control-source-review-v810.md",
+  "reviewSHA256": "57bea1f112ed0b95e3f60b4ebe98e25b2239fcccd8b8de1fd3196caa34e85b09",
+  "files": [
+    {
+      "path": "controller.py",
+      "source": "/home/developer/projects/aurora/.git/aurora-handoff-import-20261006/distributed-k1-control-prep-v804/controller.py",
+      "bytes": 15348,
+      "sha256": "66a81f0f32d142a037fc090ba9c201d7600d38e7fd668de7bf4bcdc8e1911a3a"
+    },
+    {
+      "path": "bootstrap.py",
+      "source": "/home/developer/projects/aurora/.git/aurora-handoff-import-20261006/distributed-k1-control-prep-v804/bootstrap.py",
+      "bytes": 1950,
+      "sha256": "05303915a1617a3fbc163017902fa084e687257d7b0af9bc692877d08a6a3b7e"
+    },
+    {
+      "path": "receiver_proof.py",
+      "source": "/home/developer/projects/aurora/.git/aurora-handoff-import-20261006/distributed-k1-control-prep-v804/receiver_proof.py",
+      "bytes": 11029,
+      "sha256": "aed9bd0f6109f8ab97c8b4eba8c3809bf1d865c9cba05999b52769f2862d857d"
+    },
+    {
+      "path": "freeze-template.json",
+      "source": "/home/developer/projects/aurora/.git/aurora-handoff-import-20261006/distributed-k1-control-prep-v804/freeze-template.json",
+      "bytes": 1640,
+      "sha256": "619715a16280466ba21c71f66416f0a6c4779fa9c13eb3b100b74588d8df2fb0"
+    },
+    {
+      "path": "bindings.py",
+      "source": "/home/developer/projects/aurora/.git/aurora-handoff-import-20261006/distributed-k1-control-prep-v804/bindings.py",
+      "bytes": 3230,
+      "sha256": "52182f956b34788ecbfbbb241c8243ff88baebe2874e3605791793777ed0dc91"
+    },
+    {
+      "path": "observer.py",
+      "source": "/home/developer/projects/aurora/.git/aurora-handoff-import-20261006/distributed-k1-control-prep-v804/observer.py",
+      "bytes": 11873,
+      "sha256": "784cc4bffc0d6824bbe378d17a7f632d587ca0a315896b048b2ebef727082df5"
+    },
+    {
+      "path": "aurora_voice_telemetry_v430.py",
+      "source": "/home/developer/projects/aurora/.git/aurora-handoff-import-20261006/distributed-k1-control-prep-v804/aurora_voice_telemetry_v430.py",
+      "bytes": 11584,
+      "sha256": "8129ffe7591a47a0107ede53b101aead9fc1f58b92f0c0c4203176cc7608325d"
+    },
+    {
+      "path": "candidate-manifest.json",
+      "source": "/home/developer/projects/aurora/.git/aurora-handoff-import-20261006/distributed-k1-control-prep-v804/candidate-manifest.json",
+      "bytes": 220,
+      "sha256": "ce75b965ee5879ebece6ea7dfe133441547d20ccf89ecd5d66ea510bd9645e60"
+    }
+  ],
+  "fixtureReuse": "thesis/fixtures/capital-padded-v1/input.wav; retain original fixture name and SHA from fixture.json when staging",
+  "notIncluded": "No endpoint, credential, receiver identity, source inventory, staged runtime config, resource admission or runtime proof exists here."
+}

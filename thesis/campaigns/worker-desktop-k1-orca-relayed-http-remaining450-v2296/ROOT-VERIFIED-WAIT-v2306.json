@@ -1,0 +1,61 @@
+{
+  "at": "2026-10-21T22:05:16.835111+00:00",
+  "version": "V2306",
+  "classification": "VERIFIED_WAIT",
+  "previousGoalTurn": "PROGRESS: prospective450 frozen, exactidleoldprovider retiredwithEOFcustody, newprovider/requester launched,15warmups45nativejoins admitted andfirst451physicallyverified",
+  "status": "SAME_FROZEN_V2296_REQUESTER_BACKEND_COPIER_LIVE_MEASURED_PROGRESS",
+  "nativeGoalThread": "01a112a5-d6bb-74e2-bf7c-ace73cb513b5",
+  "nativeGoalStatus": "active",
+  "nativeGoalBudget": null,
+  "manifestSha256": "9adbf9ba3a7ec0948a087edad3655cf94ee344b3a2371a78d15f188f44150d42",
+  "actors": [
+    {
+      "pid": 3965950,
+      "startTicks": 139740362,
+      "state": "S"
+    },
+    {
+      "pid": 3965978,
+      "startTicks": 139740616,
+      "state": "S"
+    },
+    {
+      "pid": 3965951,
+      "startTicks": 139740363,
+      "state": "S"
+    }
+  ],
+  "epochMeasured": {
+    "attempted": 11,
+    "correct": 11,
+    "failed": 0,
+    "incorrect": 0,
+    "timeouts": 0,
+    "planned": 450
+  },
+  "conditionCountsOnly": {
+    "attempted": 461,
+    "correct": 460,
+    "failed": 1,
+    "incorrect": 0,
+    "unattempted": 439,
+    "planned": 900
+  },
+  "copier": {
+    "receipt": "thesis/campaigns/worker-desktop-k1-orca-relayed-http-remaining450-v2296/receipts/000023.json",
+    "sha256": "e10f5b3c0f4d469add657e47a7f59cf99d6f706a2312d73d0ac7a5131a1c0ad5",
+    "cases": 25,
+    "WAV": 25,
+    "errors": [],
+    "freeBytes": 3411841024
+  },
+  "nextBoundedCheckUtc": "2026-10-21T22:10:16.835111+00:00",
+  "earlierFor": "actual failure/terminal/resourceguard; re-poll same original handles, no uncertain restart",
+  "normalNextAction": "Continue current unchanged450collection; finalization2303 only after actualterminal and exactrequester/controller/copier naturalretirement",
+  "noNewInferenceBeyondFrozenRun": true,
+  "sourceManifestSettingsDeadlinesUnchanged": true,
+  "phoneExclusivelyDelegated": true,
+  "closedMethodologyMirror": "Monitor msg_853ef933ab0c consumed+ACKed; full827981B mirror verified CLOSED, no further mirror/source/native reviewgate",
+  "newWorkers": 0,
+  "nativeGoalMutations": 0
+}

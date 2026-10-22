@@ -1,0 +1,43 @@
+{
+  "status": "PREPARED_NOT_EXECUTED",
+  "files": [
+    {
+      "path": "thesis/harness/prepare_k1_http_provider_v2209.py",
+      "bytes": 5681,
+      "sha256": "cb36289d003a97f79a4b6e3fef6969d861366ad8d0c1aa74cd0cccf295fb9e48"
+    },
+    {
+      "path": "thesis/harness/launch_k1_http_provider_v2210.py",
+      "bytes": 3931,
+      "sha256": "502bc05756141e5e59786a65d002f29ac9d0fc81c33a02f9bb2530472ca54b7d"
+    },
+    {
+      "path": "thesis/harness/custody_k1_http_requester_v2211.py",
+      "bytes": 17573,
+      "sha256": "3ec846b8f47dc9303f4e262c22ffb8f1f77396a1480bda71b79b391a9eb6663a"
+    },
+    {
+      "path": "thesis/harness/k1_http_remaining_root_v2212.py",
+      "bytes": 12207,
+      "sha256": "78646ece30e2327967da7c9ae4229eedabcde914d9f3ee445b73542fe670aac2"
+    },
+    {
+      "path": "thesis/harness/k1_http_warmup_finalize_v2213.py",
+      "bytes": 8162,
+      "sha256": "45be997c9a5a06156ba2e9a356553d9a6ad7a762c3b10cafded105df3ddaafa9"
+    },
+    {
+      "path": "thesis/harness/retire_idle_provider_and_export_v2215.py",
+      "bytes": 7737,
+      "sha256": "930e3929c37dc513b07f796315c0761d7ec4441bcd1ee1ed16205ba16ad11f75"
+    },
+    {
+      "path": "thesis/harness/transfer_k1_old_provider_eof_delta_v2216.py",
+      "bytes": 8511,
+      "sha256": "8e2688fa8b06029a60c5efd5b701725f0dc5666112e7d17aef43589abc5f3977"
+    }
+  ],
+  "syntax": "AST passed",
+  "sourcePackage": "thesis/harness/distributed-k1-http-remaining720-v2207/PREPARATION.json",
+  "scope": "OriginalRoot finite missing720 cell; no newworkers/reviews/closed900 replay; same source/models/actual authroute"
+}

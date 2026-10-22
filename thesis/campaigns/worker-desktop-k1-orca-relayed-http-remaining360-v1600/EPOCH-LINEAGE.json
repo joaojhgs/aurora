@@ -1,0 +1,19 @@
+{
+  "epochId": "V1600",
+  "parentManifestPath": "thesis/evidence/orca-relayed-http-v1197/frozen/condition.json",
+  "parentManifestSha256": "6bc65cf5cc3c4eddb90b80b0764a01e6a9fc4afbed66f33c731e3ab58528e101",
+  "parentSummaryPath": "thesis/evidence/orca-relayed-http-v1197/terminal-v1377/summary.json",
+  "parentSummarySha256": "641c6fc03929cd7c455d4b9f6460dd9923925069e99da69023079ae88b37563b",
+  "priorAttemptedMeasured": 180,
+  "priorCorrect": 179,
+  "priorFailed": 1,
+  "plannedEpochMeasured": 360,
+  "firstConditionMeasuredIndex": 181,
+  "lastConditionMeasuredIndex": 540,
+  "conditionTargetMeasured": 900,
+  "excludedWarmups": 15,
+  "sameProcessResume": false,
+  "preserveOldFailure": true,
+  "automaticRetry": false,
+  "secondSession": "541..900 separate future actual admission; never automatically replay or top up"
+}

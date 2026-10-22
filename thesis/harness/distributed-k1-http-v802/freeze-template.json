@@ -1,0 +1,48 @@
+{
+  "schema": "aurora.distributed_k1_http_tts_condition.v1",
+  "cohortId": null,
+  "comparisonFamilyId": "aurora-full-audio-capital-base-qwen-piper-v1",
+  "measurementPlan": {
+    "plannedWarmups": 15,
+    "plannedMeasuredPerCondition": 900,
+    "requestCapSeconds": 180,
+    "conditionOverallCapSeconds": 57600
+  },
+  "audio": {
+    "wavSha256": "da0ecc4ad0885746ab6e716585473917ab2b543a505bf0db09ebacfaa7943cbb",
+    "wavBytes": 219794,
+    "sampleRate": 22050,
+    "channels": 1,
+    "sampleWidthBytes": 2
+  },
+  "candidateManifestSha256": "ce75b965ee5879ebece6ea7dfe133441547d20ccf89ecd5d66ea510bd9645e60",
+  "remoteTtsEndpointSha256": null,
+  "remoteTtsAuthBinding": "existing_gateway_api_key",
+  "remoteTtsReceiver": null,
+  "sourceClosure": {
+    "equivalenceVerified": false,
+    "cpuSourceRoot": null,
+    "cpuSourceInventorySha256": null
+  },
+  "implementation": {
+    "runnerSha256": "45d2c3f4df7353c2fc162c6986d125096b64216a76575a8a1d5bae4e5c154b0f",
+    "controllerSha256": null,
+    "adapterSha256": "81a44fb0180fe540c087ba1f81410e07f51f6c6d96eee2eeffb49f471da2e49c",
+    "bootstrapSha256": null,
+    "bindingsSha256": null,
+    "observerSha256": null,
+    "telemetrySha256": null
+  },
+  "models": {
+    "stt": "d01c3014881c9c6f3133c182f3d2887eb6ca1c789a7538c5c007196857a0a6a9",
+    "llm": "57d1997790d1744fba5b40a7317df71ea5e2acee28c47e78f0cce39c0703f8cf",
+    "tts": "6f52a751e2349abe7a76735eb09dc1875298c77ea2342ffd2fef79ff81b87f22",
+    "ttsConfig": null
+  },
+  "runtime": {
+    "venvExecutable": null,
+    "resolvedInterpreterSha256": null
+  },
+  "runtimeConfigSha256": null,
+  "status": "template_only_not_launchable"
+}

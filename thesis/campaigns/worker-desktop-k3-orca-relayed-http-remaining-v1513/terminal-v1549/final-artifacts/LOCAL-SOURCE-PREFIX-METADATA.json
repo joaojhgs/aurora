@@ -1,0 +1,34 @@
+{
+  "actual-provider-bindings.jsonl": {
+    "sourceBytesAtRetirement": 847,
+    "sourceInodeAtRetirement": 1928064
+  },
+  "backend.private.log": {
+    "sourceBytesAtRetirement": 42966,
+    "sourceInodeAtRetirement": 1928053
+  },
+  "controller.private.log": {
+    "sourceBytesAtRetirement": 0,
+    "sourceInodeAtRetirement": 1928042
+  },
+  "proof-collection.private.log": {
+    "sourceBytesAtRetirement": 122,
+    "sourceInodeAtRetirement": 1928098
+  },
+  "requesterCopier.private.log": {
+    "sourceBytesAtRetirement": 56316,
+    "sourceInodeAtRetirement": 1928044
+  },
+  "resources.jsonl": {
+    "sourceBytesAtRetirement": 8644964,
+    "sourceInodeAtRetirement": 1928054
+  },
+  "voice-stages.jsonl": {
+    "sourceBytesAtRetirement": 0,
+    "sourceInodeAtRetirement": 1928056
+  },
+  "warmupFinalizer.private.log": {
+    "sourceBytesAtRetirement": 1077,
+    "sourceInodeAtRetirement": 1928046
+  }
+}

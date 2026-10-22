@@ -1,0 +1,17 @@
+# V872 independent source review
+
+APPROVE — limited to the private nominated-pair snapshot observer. This is not live route, continuous-stability, bounded-sink, or measurement admission.
+
+Reviewed immutable source: `mesh-route-telemetry-prep-v868/mesh_route_observer.py` SHA256 `2c23fd2bc69b00b746c2c5dc28c1d2b77428016314045363dceea5fe9ee5cdbb`; REPORT SHA256 `977b7a16e3f462cea8e7357c7f3e8926c10bec92a03381f66f35b5e0afd46d5a`. Candidate standard-library AST parse passed; no candidate/dependency import or runtime/test/network action occurred.
+
+The installed primary source matches the reported aiortc 1.14.0 / aioice 0.10.2 pins. `rtcpeerconnection.py` SHA256 `c75eb9037a62380ab08670deae32a51f2c15b8d8145a80a8e72e9d4ea1ddf3bd` stores the private ICE transport set (line 299); its getStats implementation (746–758) aggregates RTP sender/receiver statistics. `rtcicetransport.py` SHA256 `810c0f3eb4b09b5eebe7c6ac48d7b8296762fc9c977ebf8bc8d751be0d922422` associates the transport with its gatherer's actual ICE connection (261). `aioice/ice.py` SHA256 `4f2b060e541236b53614e7702a09eb363f9897d5aed3a8a40267d9891f8c2b7e` defines CandidatePair state/local/remote candidates and the nominated map, populated by successful nomination. Thus observer lines 39–83 read actual nominated/succeeded pairs, rather than SDP/configured ICE servers or signaling candidates. Unknown structure/type/state stays unavailable, not direct.
+
+The production RTC client SHA256 `d3a5ee5e02c976839d221ba7a4996a30f074b42a53fc25530b987879e7dc58b7` resolves the exact stable peer to its session (613), and the observer uses only that session's `_pcs` entry. PeerBridge SHA256 `3a0748a6fd8093f4b8f616a578af94f8a86ae0700cd0099ab5847f9235f2330d` supports the captured correlation argument position. The wrapper delegates the original call once, retains its return object and re-raises the original exception/cancellation; sink exceptions are suppressed. Request end is captured before after-sampling/emission, and clocks remain process-local. Allowlisted types/protocols and hashed identities omit addresses, ports, foundations, SDP, payloads and exception text.
+
+Important limits for Root integration:
+
+- Compare before/after peer/session/PC hashes and finite observations. The observer emits every ICE transport on that PC and no pair identity; equal snapshots do not establish an unchanged candidate pair or continuous stability throughout the call. Current RTC client creates its RPC data channel without media tracks; no universal multi-transport selection claim is approved. Missing/ambiguous route evidence remains unknown.
+- `_emit` (201–206) calls a synchronous injected writer. It isolates raised sink failures but supplies no wall-time bound or record quota itself. Root must supply and pin a bounded private sink before installation; this review does not certify an arbitrary writer as passive or bounded.
+- Runtime version/source admission is still external. The module itself does not enforce the reported version pins. Root must reject mismatched versions before installing this private-internals hook, integrate its actual evidence path, and validate the 15 real warmup joins before measured cases. No live direct/relay classification is established here.
+
+No concrete first-call source-breaking defect found within this limited observer contract. Actual peer authorization, route association, runtime pins, sink ownership/bounds, record retention and warmup measurement admission remain Root gates. No earlier K1/K2/K3 acceptance is reopened.

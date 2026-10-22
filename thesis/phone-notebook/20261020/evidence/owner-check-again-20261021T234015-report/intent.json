@@ -1,0 +1,12 @@
+{
+  "controlDeadline": "2026-10-21T23:45:15.317307+00:00",
+  "explicitNewline": true,
+  "host": "ssh:ssh-sem-notebook-personal",
+  "incarnation": "328cd72f-c7ea-49ff-a2db-b9275b085037",
+  "remoteResult": "/home/developer/projects/aurora/thesis/phone-notebook/20261020/evidence/owner-check-again-20261021T234015-report.json",
+  "rootAdmissionMessage": "owner-direct-check-again-20261021T234015",
+  "script": "evidence/owner-check-again-20261021T234015/copy-check-report.py",
+  "scriptSha256": "93fbfa7f09154fa8c0fd84476620eff29fb6976202c887c6f21fae559a37b92b",
+  "singleSend": true,
+  "terminal": "term_a2ed5feb-7c92-48e4-bd88-d1b0e6737989"
+}

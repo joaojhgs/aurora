@@ -1,0 +1,159 @@
+{
+  "at": "2026-10-20T20:01:09.552635+00:00",
+  "classification": "new_saved_reply_format_failure_category_and_frozen_policy_reconciled",
+  "status": "FROZEN_K2_RUNNING_WITH_RETAINED_PREACCEPT_AND_REPLY_FORMAT_FAILURES",
+  "nativeGoalThread": "01a112a5-d6bb-74e2-bf7c-ace73cb513b5",
+  "nativeGoalStatus": "active",
+  "fullObjectivePreserved": true,
+  "measuredCompleted": 842,
+  "measuredOutcomes": {
+    "completed_correct": 774,
+    "failed": 68
+  },
+  "failureKinds": {
+    "preaccept_capability_changed": 11,
+    "assistant_reply_predicate_failed": 57
+  },
+  "firstReplyFailureMeasuredIndex": 786,
+  "latestReplyFailureMeasuredIndex": 842,
+  "allMeasuredSinceFirstReplyFailureFailSamePredicate": true,
+  "replyDiagnostic": {
+    "count": 57,
+    "responseCharCounts": {
+      "31": 57
+    },
+    "responseHashCounts": {
+      "a1b7eb2ee7a6aded8dda4e6cf30826f5afffb28a5597ee9389e91eb326d4e319": 57
+    },
+    "knownPlaintextCandidate": "thesis/campaigns/worker-desktop-k2-p2p-assistant-tts-v1826/reply-format-diagnostic-v1895/known-plaintext-candidate.txt",
+    "candidateUtf8Bytes": 31,
+    "candidateSha256": "a1b7eb2ee7a6aded8dda4e6cf30826f5afffb28a5597ee9389e91eb326d4e319",
+    "allRecordedReplyHashesAndLengthsMatchCandidate": true,
+    "provenance": "Known plaintext candidate verified by its SHA256 against retained response hashes; no additional model call or invented timing sample. Original hashes and raw rows remain unchanged.",
+    "completedAssistantMetadataErrorCount": 0,
+    "correctTranscriptCount": 57,
+    "timeoutCount": 0,
+    "interpretation": "Hash-matched reply gives the correct city in a full sentence, violating the unchanged expected city-only word predicate. Count every such attempt as failed. This is distinct from an Orca lifecycle-signal rejection.",
+    "cause": "UNKNOWN; no runtime/model-cause inference and no live source/settings/predicate changes."
+  },
+  "frozenPolicyReconciliation": {
+    "sourceEvidence": "thesis/campaigns/worker-desktop-k2-p2p-assistant-tts-v1826/reply-format-diagnostic-v1895/frozen-policy-excerpts.json",
+    "measuredQualityFailureStopsCampaign": false,
+    "warmupAnyFailureStopsCampaign": true,
+    "measuredQualityFailureSkipsTTS": true,
+    "preacceptConsecutiveHardStop": 3,
+    "measuredQualityFailureResetsPreacceptStreak": true,
+    "finitePlannedMeasured": 900,
+    "policyChanged": false,
+    "action": "Preserve and finish the existing frozen attempt count; no retries, replacement attempts, new fixture/model, predicate relaxation or interruption."
+  },
+  "sourceManifestReferenceFields": [
+    {
+      "path": ".existingAuthorizedTaskProfile.existingEnvFileReferencedWithoutCopy",
+      "value": true
+    }
+  ],
+  "firstFailedCaseCopies": [
+    {
+      "path": "thesis/campaigns/worker-desktop-k2-p2p-assistant-tts-v1826/attempts/attempt-0801-measured.jsonl",
+      "bytes": 4873,
+      "sha256": "bb1a19e4fb4a58c5753c252c1460d175c5671af1f3bf0344da89298917fed4b2",
+      "phaseIndex": 786
+    },
+    {
+      "path": "thesis/campaigns/worker-desktop-k2-p2p-assistant-tts-v1826/attempts/attempt-0802-measured.jsonl",
+      "bytes": 4873,
+      "sha256": "364ee03c54620d53c9804cfe60f101c3ddd759d20301a1d3e0e3d3ef096ab28a",
+      "phaseIndex": 787
+    },
+    {
+      "path": "thesis/campaigns/worker-desktop-k2-p2p-assistant-tts-v1826/attempts/attempt-0803-measured.jsonl",
+      "bytes": 4872,
+      "sha256": "6f514b749921d16b3020c1e29519bd0bf155d8ffe2727f10955bd40008eb7d61",
+      "phaseIndex": 788
+    }
+  ],
+  "requesterProcesses": [
+    {
+      "pid": 2830732,
+      "startTicks": 129050331,
+      "state": "S",
+      "identityMatches": true
+    },
+    {
+      "pid": 2830763,
+      "startTicks": 129050436,
+      "state": "S",
+      "identityMatches": true
+    },
+    {
+      "pid": 2831081,
+      "startTicks": 129052325,
+      "state": "S",
+      "identityMatches": true
+    }
+  ],
+  "custody": {
+    "updatedAt": "2026-10-20T20:00:15.116322+00:00",
+    "receipt": "thesis/campaigns/worker-desktop-k2-p2p-assistant-tts-v1826/receipts/000239.json",
+    "receiptSha256": "914e24b61bf40858e728530397452b0789aa409e3b3715c8ae9fe68a71d871e4",
+    "cases": 853,
+    "audioBlobs": 789,
+    "errors": [],
+    "diskAfter": {
+      "free": 4289241088,
+      "total": 109128826880,
+      "used": 104822808576
+    }
+  },
+  "monitorReconciliation": {
+    "originalDispatch": "ctx_37b4d0a3c14f",
+    "originalTask": "task_d7ea336050cf",
+    "originalTerminal": "term_2eab47ed-ab9b-4e35-bd9b-fc068c60e3fc",
+    "workerShowVerdict": "live, exactWorker true, connected and writable; same incarnation and Sol6.1/xhigh",
+    "monitorNativeGoalStatusReported": "active",
+    "monitorAcknowledgementMessages": [
+      "msg_7406a3d9b803",
+      "msg_94546169e33d"
+    ],
+    "rejectedSignalType": "escalation",
+    "rejectedSignalReceipt": "thesis/campaigns/worker-desktop-k2-p2p-assistant-tts-v1826/reply-format-diagnostic-v1895/control/root-assistant-outcome-monitor-v1895.json",
+    "rejectionCode": "worker_identity_changed",
+    "rejectionMeaning": "Root cannot report a worker lifecycle escalation as the monitor Dispatch; ordinary status communication is supported. No replacement or goal resume needed."
+  },
+  "physicalDiagnosticCopies": [
+    {
+      "source": ".git/aurora-handoff-import-20261006/root-assistant-outcome-monitor-v1895.json",
+      "path": "thesis/campaigns/worker-desktop-k2-p2p-assistant-tts-v1826/reply-format-diagnostic-v1895/control/root-assistant-outcome-monitor-v1895.json",
+      "bytes": 253,
+      "sha256": "fbcc05f6c72bed1558ecfa6063e73b3794b7133d38f3e47f56db7520c7478abd"
+    },
+    {
+      "source": ".git/aurora-handoff-import-20261006/root-monitor-worker-show-v1895.json",
+      "path": "thesis/campaigns/worker-desktop-k2-p2p-assistant-tts-v1826/reply-format-diagnostic-v1895/control/root-monitor-worker-show-v1895.json",
+      "bytes": 7896,
+      "sha256": "7d53b3914eab7f7f32782555e82f7ee7664c8c15643adf1c6397543cd54fe1e0"
+    },
+    {
+      "source": ".git/aurora-handoff-import-20261006/root-monitor-reconciliation-v1895.json",
+      "path": "thesis/campaigns/worker-desktop-k2-p2p-assistant-tts-v1826/reply-format-diagnostic-v1895/control/root-monitor-reconciliation-v1895.json",
+      "bytes": 5421,
+      "sha256": "b5e2fe362906d9e83b0c74a2194024334996ca7c5d8b41088b014a03a90287ab"
+    },
+    {
+      "source": ".git/aurora-handoff-import-20261006/root-ack766ee-v1895.json",
+      "path": "thesis/campaigns/worker-desktop-k2-p2p-assistant-tts-v1826/reply-format-diagnostic-v1895/control/root-ack766ee-v1895.json",
+      "bytes": 1088,
+      "sha256": "ec9c58cb03920b0e1fe41dd903d42e3e16b9fe629168055410e34f85e8ed4d6d"
+    },
+    {
+      "source": ".omx/evidence/orca-monitor-20261010/K2-NEW-ASSISTANT-QUALITY-FAILURES-20261020T1952Z.json",
+      "path": "thesis/campaigns/worker-desktop-k2-p2p-assistant-tts-v1826/reply-format-diagnostic-v1895/control/K2-NEW-ASSISTANT-QUALITY-FAILURES-20261020T1952Z.json",
+      "bytes": 4890,
+      "sha256": "9eadb4038a9f6e433ec378e7a0e025560a56778c58617bab13dc753de61fbbd2"
+    }
+  ],
+  "newTestsOrInference": false,
+  "sourceOrSettingsChanged": false,
+  "nextGate": "Same frozen 900 natural terminal boundary, then requester/provider EOF custody and honest saved-data stage/resource/outcome summaries. K1 remaining191 and full matrix remain open."
+}

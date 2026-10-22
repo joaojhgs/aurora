@@ -1,0 +1,91 @@
+{
+  "at": "2026-10-20T16:05:17.529033+00:00",
+  "inputs": {
+    "attempts/attempt-0001-warmup.jsonl": {
+      "bytes": 6125,
+      "sha256": "daa8a4cbc02b9574ea3f9a3bebf1bd720e131c2665d90ffae06071d15cb1501c"
+    },
+    "attempts/attempt-0002-warmup.jsonl": {
+      "bytes": 6125,
+      "sha256": "e0b5e9573527eab480c3f814fb5bf055c5abef4c2df9097dca83260e440560cf"
+    },
+    "attempts/attempt-0003-warmup.jsonl": {
+      "bytes": 6126,
+      "sha256": "93e76bbe40127805fe5ccc02263a8a871663f2c195f8ae795a7b5bc08a9003cb"
+    },
+    "attempts/attempt-0004-warmup.jsonl": {
+      "bytes": 6126,
+      "sha256": "ee25b5b4ce7d16cfa843954c9d30c1af8e334d8ce79bd45665300ee23ce8d4f9"
+    },
+    "attempts/attempt-0005-warmup.jsonl": {
+      "bytes": 6125,
+      "sha256": "ce8fd1c91e527592605bb3cdf55fb47818b52e75ed7b740d56f6cce7302e063b"
+    },
+    "attempts/attempt-0006-warmup.jsonl": {
+      "bytes": 6124,
+      "sha256": "c9bc8e58781ec5815a0c28011149a5a497b514ecd20e3a15d5eae8aacaf2b8d0"
+    },
+    "attempts/attempt-0007-warmup.jsonl": {
+      "bytes": 6125,
+      "sha256": "2a8a1031b5bdbf693165f46bdca658410b634606795128a77f68373b7bc79f54"
+    },
+    "attempts/attempt-0008-warmup.jsonl": {
+      "bytes": 6123,
+      "sha256": "dd4105c966a4ea68ce7d7fc5b6cfab0bcd08a4d675de231ddb50added9a3237c"
+    },
+    "attempts/attempt-0009-warmup.jsonl": {
+      "bytes": 6126,
+      "sha256": "3e0809e83005510198f46871f98c7483fdd7256acd95421f397b069d2ce6ce08"
+    },
+    "attempts/attempt-0010-warmup.jsonl": {
+      "bytes": 6126,
+      "sha256": "7391581cee349c91798b79d791b75404726b40953fd9e200baef546f5bf16f3a"
+    },
+    "attempts/attempt-0011-warmup.jsonl": {
+      "bytes": 6128,
+      "sha256": "d7b1bf840bdca1c508d16591a845f8ed011a7d80457f673d53f537701570ce89"
+    },
+    "attempts/attempt-0012-warmup.jsonl": {
+      "bytes": 6127,
+      "sha256": "5f370cf928caa519a8b8acbef49f93d113115c56cd5f91589026edc54a324218"
+    },
+    "attempts/attempt-0013-warmup.jsonl": {
+      "bytes": 6127,
+      "sha256": "90582784822f9aed6d9187e66063874010f944436ccf33e5b7501dbe154df4ee"
+    },
+    "attempts/attempt-0014-warmup.jsonl": {
+      "bytes": 6127,
+      "sha256": "0d1fb73190d264998e67e483fa5dcefa3cc7dd99a83dc30afe01b6fef660a18b"
+    },
+    "attempts/attempt-0015-warmup.jsonl": {
+      "bytes": 6128,
+      "sha256": "3fa883b3f17de2d0ad75941665338f1d47c423b8eb1e9cf2243327bd9afda678"
+    },
+    "frozen-manifest.json": {
+      "bytes": 9613,
+      "sha256": "a653d60065616e34844d956d1ed47038aa94f3ff876c36bf3a98e904ca838641"
+    },
+    "mesh-route-observations.jsonl": {
+      "bytes": 49470,
+      "sha256": "6208c9772146f0432b9ba6813d3ab197335cda5086918656bccfb6137709309e"
+    },
+    "mesh-route-runtime-pins.json": {
+      "bytes": 2880,
+      "sha256": "e53f54c181bac702707974e9dc28e1b0b75ceccec8f5b89a2e7dc5fe1c9fe596"
+    },
+    "mesh-route-sink-status.json": {
+      "bytes": 326,
+      "sha256": "313376224dc218a0ef6e62f12be622dcde1ea0d13a8984bfde42f18db298f908"
+    },
+    "receiver_proof.py": {
+      "bytes": 25942,
+      "sha256": "3bb4af79cf2579023c0f1ff2025f69367717d49db7d09831c682c1bf52fc441f"
+    },
+    "requester-mesh-calls.jsonl": {
+      "bytes": 20370,
+      "sha256": "fe3d8ba15b0e39c679ae39afcb2abd0a84ff8b85cfbf4b602b9542fc0ed7c1f7"
+    }
+  },
+  "maximumSends": 1,
+  "sutCalls": 0
+}

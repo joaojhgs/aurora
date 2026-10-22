@@ -1,0 +1,10 @@
+{
+  "at": "2026-10-16T04:13:50.499873+00:00",
+  "scope": "Root fixed input staging only; reviewed source unchanged",
+  "wavSHA256": "da0ecc4ad0885746ab6e716585473917ab2b543a505bf0db09ebacfaa7943cbb",
+  "wavBytes": 219794,
+  "candidateManifestSHA256": "ce75b965ee5879ebece6ea7dfe133441547d20ccf89ecd5d66ea510bd9645e60",
+  "runtimeCreated": false,
+  "newManifestFrozen": false,
+  "activeFrozenCampaignsChanged": false
+}

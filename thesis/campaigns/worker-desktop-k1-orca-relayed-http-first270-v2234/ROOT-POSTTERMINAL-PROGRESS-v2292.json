@@ -1,0 +1,40 @@
+{
+  "at": "2026-10-21T20:52:38.877649+00:00",
+  "status": "REQUESTER_SEALED_PROVIDER_PREFIX_TRANSFER_RUNNING",
+  "pipelinePhase": "PROVIDER_ARCHIVE_CAPTURED_TRANSFER_STARTING",
+  "toolSessionId": 75141,
+  "pipelinePid": 3929022,
+  "pipelineStartTicks": 139427653,
+  "transferPid": 3929126,
+  "transferStartTicks": 139428653,
+  "maximumPipelineLaunches": 1,
+  "epochMeasured": {
+    "attempted": 270,
+    "correct": 270,
+    "failed": 0,
+    "incorrect": 0,
+    "timeouts": 0,
+    "planned": 270,
+    "unattempted": 0
+  },
+  "conditionCountsOnly": {
+    "attempted": 450,
+    "correct": 449,
+    "failed": 1,
+    "incorrect": 0,
+    "unattempted": 450,
+    "target": 900
+  },
+  "excludedWarmups": 15,
+  "caseRecords": 285,
+  "WAV": 285,
+  "verifiedFiles": 1840,
+  "verifiedPayloadBytes": 33923202,
+  "requesterSeal": "thesis/campaigns/worker-desktop-k1-orca-relayed-http-first270-v2234/terminal-v2251/REQUESTER-SEAL.json",
+  "requesterSealSha256": "736694b7b16b9ad24993e804174b59f7cba66cd57fd894a766e30f71e2ca703c",
+  "providerExportReceipt": "thesis/campaigns/worker-desktop-k1-orca-relayed-http-first270-v2234/terminal-v2251/PROVIDER-EXPORT-RECEIPT.json",
+  "providerExportReceiptSha256": "70a717ff29cb8c46259f501d435b1a660a6b990bb498c437f3be9caeadcafc55",
+  "nativeGoalStatus": "active",
+  "sameOriginalGoal": "01a112a5-d6bb-74e2-bf7c-ace73cb513b5",
+  "nextAction": "Poll existing tool session75141 and saved PHASE/transfer receipts. After verified provider custody, existing pipeline analyzes saved data. Reconcile failures without relaunch or inference. Remaining450 mandatory and not yet admitted."
+}

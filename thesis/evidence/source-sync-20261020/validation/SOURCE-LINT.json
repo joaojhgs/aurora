@@ -1,0 +1,12 @@
+[
+  {
+    "name": "ruff-check",
+    "exitCode": 1,
+    "paths": 29
+  },
+  {
+    "name": "ruff-format-check",
+    "exitCode": 1,
+    "paths": 29
+  }
+]

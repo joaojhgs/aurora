@@ -1,0 +1,171 @@
+{
+  "at": "2026-10-20T22:12:56.893406+00:00",
+  "status": "original_provider_retired_raw_eof_sealed",
+  "actors": [
+    {
+      "pid": 212716,
+      "expectedStartTicks": 28836566,
+      "absent": true
+    },
+    {
+      "pid": 212717,
+      "expectedStartTicks": 28836628,
+      "absent": true
+    }
+  ],
+  "terminal": {
+    "at": "2026-10-20T21:47:25.321539+00:00",
+    "controllerPid": 212716,
+    "elapsedSeconds": 1531.356065646978,
+    "exitCode": 0,
+    "finishedAt": "2026-10-20T22:12:56.677531+00:00",
+    "host": "personal.skyron-server",
+    "manifestSha256": "016d461363c4f1d3baa2fbb67bf7a85c0aa79df1a0ebb419fc7d3f166a4de629",
+    "measurementStartedByController": false,
+    "receiverAbsent": true,
+    "receiverPid": 212717,
+    "receiverStartTicks": 28836628
+  },
+  "files": [
+    {
+      "name": "ACTUAL-FILES-v1935.json",
+      "source": "/home/developer/projects/aurora/thesis/campaigns/worker-desktop-k3-p2p-full-audio-v1935/provider/ACTUAL-FILES-v1935.json",
+      "bytes": 2221,
+      "sha256": "292868f1d4386c23a0011828e6aaef3a03c9fc1de2d516722dc7a0816573eaea",
+      "terminalEOF": true
+    },
+    {
+      "name": "PREPARATION-v1935.json",
+      "source": "/home/developer/projects/aurora/thesis/campaigns/worker-desktop-k3-p2p-full-audio-v1935/provider/PREPARATION-v1935.json",
+      "bytes": 9221,
+      "sha256": "e0315e7737c780b9bbb70f8d28b06a8d6067216058064e2de018fb02d4a5ff77",
+      "terminalEOF": true
+    },
+    {
+      "name": "ROOT-ADMISSION-v1936.json",
+      "source": "/home/developer/projects/aurora/thesis/campaigns/worker-desktop-k3-p2p-full-audio-v1935/provider/ROOT-ADMISSION-v1936.json",
+      "bytes": 8462,
+      "sha256": "fced4808b8f1e92700742227f9fda695d8913a1bf60158e5be5573a6f0d17bd8",
+      "terminalEOF": true
+    },
+    {
+      "name": "ROOT-LAUNCH-INTENT-v1936.json",
+      "source": "/home/developer/projects/aurora/thesis/campaigns/worker-desktop-k3-p2p-full-audio-v1935/provider/ROOT-LAUNCH-INTENT-v1936.json",
+      "bytes": 183,
+      "sha256": "30caf9b8b2ff9e2685835ba276de9c3dfc29cb636e7b43906f9c58ffe12fba6a",
+      "terminalEOF": true
+    },
+    {
+      "name": "ROOT-LAUNCH-v1936.json",
+      "source": "/home/developer/projects/aurora/thesis/campaigns/worker-desktop-k3-p2p-full-audio-v1935/provider/ROOT-LAUNCH-v1936.json",
+      "bytes": 275,
+      "sha256": "6f1475767376e68735c566939b90bb5aec20c430dc2357dc8508c3d5ba6d7f6f",
+      "terminalEOF": true
+    },
+    {
+      "name": "STATUS.json",
+      "source": "/home/developer/projects/aurora/thesis/campaigns/worker-desktop-k3-p2p-full-audio-v1935/provider/STATUS.json",
+      "bytes": 161092,
+      "sha256": "c707b051c133c285fe087c3a609a905126fa74065f7fd0f131444c7f38f8e7b0",
+      "terminalEOF": true
+    },
+    {
+      "name": "actual-provider-bindings.jsonl",
+      "source": "/home/developer/projects/aurora/thesis/campaigns/worker-desktop-k3-p2p-full-audio-v1935/provider/actual-provider-bindings.jsonl",
+      "bytes": 22466,
+      "sha256": "dc1349752b93a3dd0a350bb5b2cf0460d42898504f8d875e97f3f2841e4800f2",
+      "terminalEOF": true
+    },
+    {
+      "name": "assistant-identity.json",
+      "source": "/home/developer/projects/aurora/thesis/campaigns/worker-desktop-k3-p2p-full-audio-v1935/provider/assistant-identity.json",
+      "bytes": 1417,
+      "sha256": "d5c81ed53e1da4bfbde2a748e8fda5ee7447d1c4f1ba1c1b143c7932d8c5b61d",
+      "terminalEOF": true
+    },
+    {
+      "name": "controller-launch.json",
+      "source": "/home/developer/projects/aurora/thesis/campaigns/worker-desktop-k3-p2p-full-audio-v1935/provider/controller-launch.json",
+      "bytes": 300,
+      "sha256": "85ad3c2a318a7ebad37403278e63cdce28fef623920b90605a307c97d970f9b8",
+      "terminalEOF": true
+    },
+    {
+      "name": "provider-manifest.json",
+      "source": "/home/developer/projects/aurora/thesis/campaigns/worker-desktop-k3-p2p-full-audio-v1935/provider/provider-manifest.json",
+      "bytes": 7320,
+      "sha256": "016d461363c4f1d3baa2fbb67bf7a85c0aa79df1a0ebb419fc7d3f166a4de629",
+      "terminalEOF": true
+    },
+    {
+      "name": "receiver-identity.json",
+      "source": "/home/developer/projects/aurora/thesis/campaigns/worker-desktop-k3-p2p-full-audio-v1935/provider/receiver-identity.json",
+      "bytes": 1372,
+      "sha256": "1c5978697b8e89471ca34f15574dd84c466d30c01afca6d754926d06b0cfb28d",
+      "terminalEOF": true
+    },
+    {
+      "name": "resources.jsonl",
+      "source": "/home/developer/projects/aurora/thesis/campaigns/worker-desktop-k3-p2p-full-audio-v1935/provider/resources.jsonl",
+      "bytes": 6599356,
+      "sha256": "d36bcb9b97fe84b213caaf17b76e99db21feffc6121b84eb3c7c83ab92e6698e",
+      "terminalEOF": true
+    },
+    {
+      "name": "runtime-versions.json",
+      "source": "/home/developer/projects/aurora/thesis/campaigns/worker-desktop-k3-p2p-full-audio-v1935/provider/runtime-versions.json",
+      "bytes": 210,
+      "sha256": "1f497cc20227145e68a338084a561f540f21e34da47c459441b279a6f4c2a6f8",
+      "terminalEOF": true
+    },
+    {
+      "name": "stt-identity.json",
+      "source": "/home/developer/projects/aurora/thesis/campaigns/worker-desktop-k3-p2p-full-audio-v1935/provider/stt-identity.json",
+      "bytes": 1399,
+      "sha256": "a1827ac1c251fcc0505f9a802f1ac53f7fbb042ca0291d00f2b91fa218760b2f",
+      "terminalEOF": true
+    },
+    {
+      "name": "terminal.json",
+      "source": "/home/developer/projects/aurora/thesis/campaigns/worker-desktop-k3-p2p-full-audio-v1935/provider/terminal.json",
+      "bytes": 434,
+      "sha256": "3ec23b309023d6b1654bccf68eb7a1dae40fcb2d648c3b8619ff8702bcfc419c",
+      "terminalEOF": true
+    },
+    {
+      "name": "voice-stages.jsonl",
+      "source": "/home/developer/projects/aurora/thesis/campaigns/worker-desktop-k3-p2p-full-audio-v1935/provider/voice-stages.jsonl",
+      "bytes": 373315,
+      "sha256": "14469f770c7f01387c330a517eaad830a24d1b0b5766954aec1a518901637459",
+      "terminalEOF": true
+    },
+    {
+      "name": "voice-stages.status.json",
+      "source": "/home/developer/projects/aurora/thesis/campaigns/worker-desktop-k3-p2p-full-audio-v1935/provider/voice-stages.status.json",
+      "bytes": 136,
+      "sha256": "0f11fbceca55da2f2d41204080441abafd856b1c68bfe304a7f8a7cb64954e1d",
+      "terminalEOF": true
+    }
+  ],
+  "rawPayloadBytes": 7189179,
+  "measuredAttempts": 0,
+  "warmupEpochs": [
+    {
+      "id": "v1937",
+      "correct": 15,
+      "failed": 0
+    },
+    {
+      "id": "v1949",
+      "correct": 12,
+      "failed": 1
+    },
+    {
+      "id": "v1957",
+      "correct": 0,
+      "failed": 1
+    }
+  ],
+  "allOriginalsPreserved": true,
+  "noCredentialOrAuthorityChange": true
+}

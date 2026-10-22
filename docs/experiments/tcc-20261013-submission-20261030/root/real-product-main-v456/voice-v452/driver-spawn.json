@@ -1,0 +1,9 @@
+{
+  "at": "2026-10-14T23:53:49.634335+00:00",
+  "controllerPid": 2851517,
+  "controllerSHA256": "f0416f3101ceec0778355a89371cbd322ac3592784b8d3083154d1d2491f68a6",
+  "driverSHA256": "63dbd3fce267482808b16916a72509ca949451612dcbffe65378d350ab3e364f",
+  "onlyDriverDelta": "logicalordinal8; all seven priorNONPASS preserved",
+  "capSeconds": 420,
+  "measurementStarted": false
+}

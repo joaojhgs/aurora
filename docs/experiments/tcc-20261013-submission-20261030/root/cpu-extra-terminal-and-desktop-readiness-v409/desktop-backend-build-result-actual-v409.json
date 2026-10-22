@@ -1,0 +1,46 @@
+{
+  "backend_package": "llama-cpp-python==0.3.19",
+  "benchmark_started": false,
+  "build_started_at": "2026-10-14T16:24:21.780433+00:00",
+  "caps": {
+    "available_ram_floor_bytes": 10737418240,
+    "compiler_jobs": 2,
+    "owned_directory_bytes": 4294967296,
+    "tmp_available_floor_bytes": 3221225472,
+    "wall_seconds": 900
+  },
+  "child_pid": 2676589,
+  "child_startticks": "62337023",
+  "cmake_args": "-DGGML_VULKAN=ON -DGGML_NATIVE=OFF -DVulkan_INCLUDE_DIR=/tmp/aurora-root-gpu-primary-v409/toolchain/usr/include -DVulkan_LIBRARY=/usr/lib/x86_64-linux-gnu/libvulkan.so.1 -DVulkan_GLSLC_EXECUTABLE=/tmp/aurora-root-gpu-primary-v409/toolchain/usr/bin/glslc",
+  "command_argv": [
+    "/home/developer/.local/bin/uv",
+    "pip",
+    "install",
+    "--python",
+    "/tmp/aurora-root-gpu-primary-v409/env/bin/python",
+    "--no-binary",
+    "llama-cpp-python",
+    "llama-cpp-python==0.3.19"
+  ],
+  "elapsed_seconds": 445.10631669091526,
+  "exit_code": 0,
+  "finished_at": "2026-10-14T16:31:46.885269+00:00",
+  "inference_started": false,
+  "kind": "aurora_root_gpu_backend_build",
+  "last_resources": {
+    "elapsed_seconds": 440.91447183990385,
+    "mem_available_bytes": 20930514944,
+    "owned_logical_bytes": 876648797,
+    "tmp_free_bytes": 14246064128
+  },
+  "log_bytes": 380,
+  "log_sha256": "52e67fec323f5b6a586cc9c00ff1a82e915a71749e27892a22a36ff4f2c43f01",
+  "log_tail": "Using Python 3.11.11 environment at: env\nResolved 6 packages in 9.78s\n   Building llama-cpp-python==0.3.19\nDownloading numpy (16.1MiB)\n Downloaded numpy\n      Built llama-cpp-python==0.3.19\nPrepared 6 packages in 7m 14s\nInstalled 6 packages in 11ms\n + diskcache==5.6.3\n + jinja2==3.1.6\n + llama-cpp-python==0.3.19\n + markupsafe==3.0.4\n + numpy==2.4.6\n + typing-extensions==4.16.0\n",
+  "outcome": "build_completed",
+  "process_group": 2676589,
+  "recorded_at": "2026-10-14T16:24:21.778939+00:00",
+  "run_id": "v409-llamacpp019-vulkan",
+  "source_changes": false,
+  "system_changes": false,
+  "target": "/tmp/aurora-root-gpu-primary-v409"
+}

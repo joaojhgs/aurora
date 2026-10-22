@@ -1,0 +1,8 @@
+{
+  "bytes": 6213,
+  "copyOnly": true,
+  "custody": "Notebook result persisted and fsynced before relay; remote receipt in same output",
+  "localPath": "/home/developer/projects/aurora/thesis/phone-notebook/20261020/evidence/diagnose-kotlin-paths-v136/result.json",
+  "remotePath": "/home/developer/projects/aurora/thesis/phone-notebook/20261020/evidence/diagnose-kotlin-paths-v136.json",
+  "sha256": "ea5b645668b0302bb33b26b3ed7402a5818b3b4f36cae3023d4a42b355252c0d"
+}

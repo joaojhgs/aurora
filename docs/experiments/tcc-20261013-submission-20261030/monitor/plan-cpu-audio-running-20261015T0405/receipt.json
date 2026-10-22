@@ -1,0 +1,18 @@
+{
+  "at": "2026-10-15T04:05:51.320979+00:00",
+  "planPath": "/home/developer/Documents/Obsidian Vault Origin/5-full-notes/faculdade/tcc/future-work-test-requirements.md",
+  "package": "docs/experiments/tcc-20261013-submission-20261030/monitor/plan-cpu-audio-running-20261015T0405",
+  "section": "30.17",
+  "lines": 1720,
+  "sha256": "d216a47aec3a68995d9d2a57f9b88d4be177ccdae6469f98ca3956d44e775c0a",
+  "priorSHA256": "250cfea1397d24278558baa2a8f148ce1597fe0494a4f67dd78ddd52b068786e",
+  "prefixUnchanged": true,
+  "diffSha256": "8cd3db91d0f54effa6c0a3147b4e74bde1a464f2241d641dfcbf800a0207a834",
+  "root_readback_verified": false,
+  "cpuFrozenManifestVerified": true,
+  "cpuRegistryVerified": true,
+  "rootReceiptId": "msg_cd23dbfdeab2",
+  "verificationReceipt": "docs/experiments/tcc-20261013-submission-20261030/monitor/plan-cpu-audio-running-20261015T0405/cpu-freeze-verification.json",
+  "verificationReceiptSHA256": "2e0c4cfd6026905ce97c8abe0bf232aae046a891368734fa6d6e765fb5741644",
+  "monitorExecutableTests": 0
+}

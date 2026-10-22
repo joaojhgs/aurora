@@ -1,0 +1,231 @@
+{
+  "actualNewMeasured": 0,
+  "actualNewWarmups": 0,
+  "authoritativeExistingLookup": ".omx/evidence/orca-monitor-20261010/NEXT-K2-EXISTING-SOURCE-AND-ADMISSION-20261017T211428.json",
+  "executionOwner": "original Root",
+  "launched": false,
+  "lifecycle": {
+    "assumeCurrentProviderCanCoverNext900": false,
+    "current1197Changed": false,
+    "currentK1MustFinishNaturallyAndSeal": true,
+    "currentProviderHardExpiryUTC": "2026-10-18T09:58:36.115743+00:00",
+    "futureProviderLifecycle": "Root must admit a condition-sized provider lifetime only after K1 natural completion/sealing and safe owned resource retirement/release. No current stop/restart/extension.",
+    "launchNow": false
+  },
+  "measurementPlan": {
+    "conditionLimitSeconds": 57600,
+    "correctness": "Unchanged strict normalized transcript and Paris answer predicates; retain failed/partial/incorrect/timeout attempts.",
+    "excludedWarmups": 15,
+    "fullFlow": "actual audio -> worker STT -> desktop LLM -> desktop explicit TTS -> valid non-silent audio",
+    "llmBoundary": "resolved_chat_model.astream;actual span_id;null operation/attempt IDs with source-contract reason",
+    "measuredPerCondition": 900,
+    "metrics": "Per-request/stage/host resources; p50,p90,p95 with explicit units, Type7 where recomputed, outcome denominators; no cross-host clock subtraction or pooling unlike cohorts.",
+    "noRetries": true,
+    "requestLimitSeconds": 180,
+    "requiredRemoteWarmupNativeJoins": {
+      "llm": 15,
+      "tts": 15
+    },
+    "ttsBoundary": "tts.model_invoke;actual operation_id/attempt_id"
+  },
+  "methodologyOwner": "original monitor ctx_37b4d0a3c14f",
+  "nativeAggregateGoal": "01a112a5-d6bb-74e2-bf7c-ace73cb513b5",
+  "notPerformanceGates": [
+    "auditor admission",
+    "another closed CPU/local/HTTP/browser baseline",
+    "UI/microphone/Android packaging",
+    "general full13 story acceptance"
+  ],
+  "outputPaths": {
+    "attempts": "thesis/campaigns/worker-desktop-k2-orca-relayed-http-v1264/attempts",
+    "audio": "thesis/campaigns/worker-desktop-k2-orca-relayed-http-v1264/audio",
+    "copyMethod": "Future atomic incremental physical copies/checksums from start,2GiB free floor; actual copier admission remains unconfigured.",
+    "createdNow": [
+      "ADMISSION-PREPARED.json",
+      "INPUT-CUSTODY.json"
+    ],
+    "custody": "thesis/campaigns/worker-desktop-k2-orca-relayed-http-v1264/custody",
+    "inputs": "thesis/campaigns/worker-desktop-k2-orca-relayed-http-v1264/inputs",
+    "manifest": "thesis/campaigns/worker-desktop-k2-orca-relayed-http-v1264/condition-frozen.json",
+    "resources": "thesis/campaigns/worker-desktop-k2-orca-relayed-http-v1264/resources",
+    "reuseCurrent1197CopierOrPaths": false,
+    "stages": "thesis/campaigns/worker-desktop-k2-orca-relayed-http-v1264/stages"
+  },
+  "preparedAt": "2026-10-17T21:17:10Z",
+  "remainingAdmission": [
+    "Actual K1 terminal/outcome seal and owner/resource release",
+    "Actual next worker/provider source, effective settings/constructor, exact existing authorization and runtime/GPU admission",
+    "Freeze unique condition, expected assistant+TTS receiver identities and config with automatic TTS readback=false",
+    "Reserve condition-sized provider lifetime without altering current frozen run",
+    "Execute only the ordinary15excluded full-flow warmups; collect30remote native joins, then900measured"
+  ],
+  "reservedCohortId": "aurora-worker-desktop-k2-orca-relayed-http-llm-tts-v1264",
+  "run": "run_e6054e76e9fc",
+  "runtimeAdmission": {
+    "actualLoadedGpuReceipt": null,
+    "automaticTtsReadbackRequired": false,
+    "conditionFrozenManifestSha256": null,
+    "existingAuthorizationReceipt": null,
+    "freshResourceReservationReceipt": null,
+    "localSttConstructorIdentity": null,
+    "remoteConfigBinding": null,
+    "remoteReceivers": {
+      "assistant": null,
+      "tts": null
+    },
+    "sourceClosureReceipt": null,
+    "status": "UNADMITTED"
+  },
+  "runtimePreviouslyRetained": {
+    "personal": {
+      "resolved_interpreter": "/home/developer/.local/share/uv/python/cpython-3.11.11-linux-x86_64-gnu/bin/python3.11",
+      "resolved_interpreter_sha256": "89b2f5166fb529c259aedd43e5f718c60e35d58e630cb40ae6accb48fc4f961a",
+      "venv_executable": "/home/developer/projects/aurora/.git/aurora-handoff-import-20261006/k1-provider-recovery-v1120/env/bin/python",
+      "venv_root": "/home/developer/projects/aurora/.git/aurora-handoff-import-20261006/k1-provider-recovery-v1120/env"
+    },
+    "personalVersions": {
+      "packages": {
+        "ctranslate2": "4.7.1",
+        "faster-whisper": "1.1.1",
+        "llama-cpp-python": "0.3.19",
+        "numpy": "2.2.6",
+        "onnxruntime": "1.20.1",
+        "piper-tts": "1.2.0"
+      }
+    },
+    "scope": "Prior admission evidence only, not current K2 loaded-provider proof; preserve effective model/decoding/settings.",
+    "worker": {
+      "resolvedInterpreterSha256": "1e463bf849bb038214f6d4278f1aa6e079f307c04db5c9ed192543d5d866fa97",
+      "venvExecutable": "/home/developer/projects/aurora/.git/aurora-handoff-import-20261006/cpu-audio-campaign-v491/env/bin/python"
+    },
+    "workerVersions": {
+      "packages": {
+        "ctranslate2": "4.7.1",
+        "faster-whisper": "1.1.1",
+        "llama-cpp-python": "0.3.19",
+        "numpy": "2.2.6",
+        "onnxruntime": "1.20.1",
+        "piper-tts": "1.2.0"
+      }
+    }
+  },
+  "schema": "aurora.next_condition_admission_worksheet.v1",
+  "source": {
+    "acceptedReviewSha256": "b1f4c531281240e08ff1f55541d59af3bc9d0c03299916b489875eae2f514faf",
+    "canonicalRoot": "thesis/harness/distributed-k2-http-v852",
+    "custody": "thesis/harness/distributed-k2-http-v852/SOURCE-CUSTODY-v859.json",
+    "pinsFromPreviouslyClosedCustody": {
+      "README.md": {
+        "bytes": 5049,
+        "sha256": "b54e4885f8a9200fb118716f62ff65fa08f1be074848941f81768b9ce6f554e1"
+      },
+      "REPORT.md": {
+        "bytes": 2114,
+        "sha256": "623072d75f7aba873e9491eb737692f0a73d15a15fd6860dc3f570ef15dcf3de"
+      },
+      "aurora_voice_telemetry_v430.py": {
+        "bytes": 11584,
+        "sha256": "8129ffe7591a47a0107ede53b101aead9fc1f58b92f0c0c4203176cc7608325d"
+      },
+      "bindings.py": {
+        "bytes": 3230,
+        "sha256": "52182f956b34788ecbfbbb241c8243ff88baebe2874e3605791793777ed0dc91"
+      },
+      "bootstrap.py": {
+        "bytes": 1950,
+        "sha256": "6a8d7827bc9f0939e63e4f911868a178f5ba4c73bcf3aa878d50cd74895ed531"
+      },
+      "candidate-manifest.json": {
+        "bytes": 220,
+        "sha256": "ce75b965ee5879ebece6ea7dfe133441547d20ccf89ecd5d66ea510bd9645e60"
+      },
+      "controller.py": {
+        "bytes": 16504,
+        "sha256": "809bec19682eb717f016d2b9f62453b38945201c561f7d4f4ac72e242024050e"
+      },
+      "k2_composition.py": {
+        "bytes": 14287,
+        "sha256": "08be1fa730d6e49ccf4bd491539b4b8edb5b3476eb7f8f7db9656db5e7b3a053"
+      },
+      "observer.py": {
+        "bytes": 11873,
+        "sha256": "784cc4bffc0d6824bbe378d17a7f632d587ca0a315896b048b2ebef727082df5"
+      },
+      "receiver_proof.py": {
+        "bytes": 13549,
+        "sha256": "06c1bb4aeae3ba8f2de7441bd09ccfc39d426615defd5b8a38b807117df4d791"
+      },
+      "resource_sample.py": {
+        "bytes": 7475,
+        "sha256": "8f62ec378e74036d4539d9159e3caf29b8fd7a9115de1ab0f482dfd58b6e1857"
+      },
+      "runner.py": {
+        "bytes": 59239,
+        "sha256": "1f869903b4a2c5167707891bd1d32294329c5673b7386c60b4f13400c4efba06"
+      },
+      "source-inventory.json": {
+        "bytes": 58216,
+        "sha256": "96ec8e3e14233520d4cd469c4177264a193d05cf26b4b512d91d98f16bbb7dee"
+      },
+      "stage_adapter.py": {
+        "bytes": 8801,
+        "sha256": "204ea4d6b48571ab7ba0add0310a3dadd87b5e1e2afdc172634185755c9bb02c"
+      }
+    },
+    "recompileOrRereviewRequired": false,
+    "sourceClosureForActualNewRuntime": null
+  },
+  "stage_provider_map": {
+    "llm": {
+      "device": "personal desktop",
+      "expectedBackendFromRetainedGPUCohort": "llama-cpp-python/Vulkan,25/25 layers; actual next loaded backend unverified",
+      "mode": "authenticated Gateway via existing Orca relay",
+      "modelSha256": "57d1997790d1744fba5b40a7317df71ea5e2acee28c47e78f0cce39c0703f8cf"
+    },
+    "stt": {
+      "backend": "faster-whisper / CTranslate2 CPU",
+      "device": "coding-worker",
+      "expectedEffectiveComputeType": "int8_float32",
+      "mode": "LocalBus",
+      "modelSha256": "d01c3014881c9c6f3133c182f3d2887eb6ca1c789a7538c5c007196857a0a6a9"
+    },
+    "tts": {
+      "device": "personal desktop",
+      "expectedBackend": "Piper CLI CPU,useCuda=false",
+      "mode": "explicit authenticated Gateway via existing Orca relay",
+      "modelConfigSha256": "141d612cc0a95ed7efc1ca936b845c2364967f2e9217c5dbfcf69fc4d6c65860",
+      "modelSha256": "6f52a751e2349abe7a76735eb09dc1875298c77ea2342ffd2fef79ff81b87f22"
+    }
+  },
+  "status": "INERT_NOT_FROZEN_NOT_LAUNCH_ADMITTED",
+  "transport": {
+    "assistantEndpoint": "http://127.0.0.1:18000/api/Orchestrator/ExternalUserInput",
+    "assistantEndpointSha256": "9504b288bce982288679386a46bdc2fe969b83705e7e6f9655eb3d4218404ae6",
+    "authAndAssistantRouteFreshlyAdmitted": false,
+    "authBinding": "existing_gateway_api_key",
+    "authEnvName": "AURORA_HOSTED_PEER_GATEWAY_API_KEY",
+    "classification": "ORCA_RELAYED_HTTP_EXTRA_HOP",
+    "credentialValuesStored": false,
+    "existingRouteId": "desktop-aurora-tts",
+    "existingService": "orca-network-aurora-tts.service",
+    "meshCoverage": false,
+    "newForwardAuthorizedOrNeeded": false,
+    "origin": "http://127.0.0.1:18000",
+    "providerBind": "100.64.0.3:8000",
+    "ttsEndpoint": "http://127.0.0.1:18000/api/TTS/Synthesize",
+    "ttsEndpointSha256": "f479f9eb33d508640167787da28f14067bdcf72b41d7e29f2a056cb48a1567df"
+  },
+  "workload": {
+    "audio": {
+      "channels": 1,
+      "sampleRate": 22050,
+      "sampleWidthBytes": 2,
+      "wavBytes": 219794,
+      "wavSha256": "da0ecc4ad0885746ab6e716585473917ab2b543a505bf0db09ebacfaa7943cbb"
+    },
+    "candidateManifest": "thesis/harness/distributed-k2-http-v852/candidate-manifest.json",
+    "candidateManifestSha256": "ce75b965ee5879ebece6ea7dfe133441547d20ccf89ecd5d66ea510bd9645e60",
+    "changedSettingsRequireSeparateCohort": true,
+    "sameRepresentativeTaskAndCorrectnessAsK1": true
+  }
+}

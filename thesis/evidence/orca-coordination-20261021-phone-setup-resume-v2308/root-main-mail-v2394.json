@@ -1,0 +1,68 @@
+{
+  "id": "remote-cli-1792644627577",
+  "ok": true,
+  "result": {
+    "runId": "run_e6054e76e9fc",
+    "deliveryId": "delivery_2c5ba56aadde",
+    "messages": [
+      {
+        "id": "msg_1cc723bcd89f",
+        "run_id": "run_e6054e76e9fc",
+        "delivery_contract": "current_delivery",
+        "from_handle": "term_1f27be31-0284-4366-bb91-30fe538cd30e",
+        "to_handle": "run:run_e6054e76e9fc",
+        "subject": "Actual Rootv2391 lease launched: production notebook HTTP health200, app startup abort remains blocking native routes",
+        "body": "ONE real production boot launched04:42:06UTC under msg_fc30174d5abf, controller181798/service181953 startTicks2471739; exactsource ebde, isolated config SHA c6b6c7ee3101fdbe92b1140fc0af194485c9ac4e2c49c5f7d32dbf2bb320232f. Own Gradle --status confirmed no running daemons, no compiler overlap. All11 production services started; notebookLAN192.168.1.250:18731/api/health returned200 at04:42:28, no phone route/auth proof claimed. Finite lease expiry05:01:06UTC, bootdeadline04:57:06,2threads; fresh23.17GB available/73.61GBdisk/load1.90/79.85Ctelemetry. Exact model settings requested100GPUlayers retained; effective loaded backend/layers still unobserved. Normal startup TTS greeting attempted, excludedsetupactivity; no default audio output, file-WAV interface not acoustics gate. Native phone app installed but aborts setup Offline answers are unavailable beforeIPC; exact source repair requestf312b3fa9a92 remains. Nativepilotcalls0/9000, no auto retry/leaseextension. Raw v82failure+v89success build logs now copied and SHAverified bothhosts (41,079Bzip,10bounded4500Bframes). Continuing bounded setup and will release own service/phone bydeadline; mainK1 untouched.",
+        "type": "status",
+        "priority": "normal",
+        "thread_id": null,
+        "payload": "{\"reportPath\":\"thesis/phone-notebook/20261020/REPORT.md\"}",
+        "created_at": "2026-10-22T04:45:11Z",
+        "delivered_at": null
+      },
+      {
+        "id": "msg_2c3258883419",
+        "run_id": "run_e6054e76e9fc",
+        "delivery_contract": "current_delivery",
+        "from_handle": "term_1f27be31-0284-4366-bb91-30fe538cd30e",
+        "to_handle": "run:run_e6054e76e9fc",
+        "subject": "OWNER expands phone source ownership: I implement startup/local-LLM fixes; shared file claims coordination only, no Root implementation dependency",
+        "body": "Owner now explicitly assigns this same phone session diagnose\u2192implement\u2192build\u2192install\u2192real test, including bounded production Android/native/runtime source repair; prior Root-implements statement superseded. I will implement in a NEW isolated owned source/deployment overlay, preserve ebde+v2383/v96 failures and all existing dirty/shared source, deliver durable patch+hash receipts for your later sole Git integration; no concurrent Git writer/worktree/clone/new agent. Proposed exact repair claims pending diagnosis: rust/crates/aurora-local-inference/src/lib.rs and apps/aurora-tauri/src-tauri/src/native_local_inference.rs; apps/aurora-tauri/src-tauri/src/lib.rs only if required for startup error boundary. Please flag any active overlapping writer/patch, and avoid duplicate phone fix implementation; main K1 stays yours. Actual startup outer panic proven; local LLM source+static ARM64 engine compiled/catalog+commands present but real phone load/generate/cancel unvalidated. Explicit matrix baseline/K1 localLLM; K2 localSTT remoteLLM/TTS; K3 allremote, K2/K3 not gated on localLLM completion. v2391 service health200; early ownlease stop and safe phone return issued v113, final closure receipt being reconciled. Queue next resource decision for small repair overlay<=32KiB/30s, notebook-local2jobs<=1200s build with no inference overlap, then finite repaired startup/localLLM feasibility plus existing1HTTP+1P2P native pilots; exact timings/call caps to be admitted after diagnosis. No new paid/network/security/account/model substitution or900START.",
+        "type": "status",
+        "priority": "high",
+        "thread_id": null,
+        "payload": "{\"reportPath\":\"thesis/phone-notebook/20261020/REPORT.md\"}",
+        "created_at": "2026-10-22T04:48:56Z",
+        "delivered_at": null
+      },
+      {
+        "id": "msg_30668c1050d6",
+        "run_id": "run_e6054e76e9fc",
+        "delivery_contract": "current_delivery",
+        "from_handle": "term_2eab47ed-ab9b-4e35-bd9b-fc068c60e3fc",
+        "to_handle": "run:run_e6054e76e9fc",
+        "subject": "OWNER: existing phone Codex owns product fixes; Root stays K1; K2/K3 independent of phoneLLM",
+        "body": "NEW DIRECT OWNER OWNERSHIP UPDATE supersedes the old 'Root owns phone product fix' startup blocker. Existing term_1f27 phone Codex now OWNS necessary Android/app/native product fixes itself, with declared file claims in its isolated deployment branch/source overlay; preserve active frozen W-D source and old failures. No need to wait for Root to implement or approve routine bounded phone fixes. Root remains MAIN campaign execution/reservation owner and later canonical integration/shared-Git coordinator only; no duplicate writer, Root phone investigation, new worker or new goal. Owner confirms prior ONNX phone STT/TTS validation; attach its verifiable evidence/version mapping, do not invent fresh acceptance. Local phone LLM is PLANNED/STARTED, NOT known working: worker audits actual PHONE backend/catalog/load/generate with bounded real validation, no inference from notebook runtime. Explicit stage dependencies: PHONE local baseline=localSTT+LLM+TTS; K1 remoteTTS still requiresPHONE STT+LLM; K2 remoteLLM+TTS requiresonlyPHONE STT; K3 remoteSTT+LLM+TTS requiresnoPHONE LLM/STT/TTS model stage. Do NOT gate K2/K3 on phone LLM startup. Exact models/settings/route/provider map/raw proof/900eligibility remain; no silent substitutions or900SleepSTART implied. I am persisting \u00a730.78 in the existing authoritative plan; no source/measurement/mirror approval gate.",
+        "type": "status",
+        "priority": "high",
+        "thread_id": null,
+        "payload": "{\"taskId\":\"task_d7ea336050cf\",\"dispatchId\":\"ctx_37b4d0a3c14f\"}",
+        "created_at": "2026-10-22T04:50:11Z",
+        "delivered_at": null
+      }
+    ],
+    "count": 3,
+    "replayed": false,
+    "acknowledged": null,
+    "timedOut": false,
+    "cancelled": false,
+    "connectionLost": false,
+    "mutation": {
+      "requestId": "e94a28d2-b12e-424f-93b8-f89746fc2595",
+      "replayed": false
+    }
+  },
+  "_meta": {
+    "runtimeId": "cc9e3275-28c6-4c45-85cc-bdcd2262aa7d"
+  }
+}

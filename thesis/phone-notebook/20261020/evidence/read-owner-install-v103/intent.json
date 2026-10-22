@@ -1,0 +1,12 @@
+{
+  "controlDeadline": "2026-10-22T05:00:00Z",
+  "explicitNewline": true,
+  "host": "ssh:ssh-sem-notebook-personal",
+  "incarnation": "328cd72f-c7ea-49ff-a2db-b9275b085037",
+  "remoteResult": "/home/developer/projects/aurora/thesis/phone-notebook/20261020/evidence/read-owner-install-v103.json",
+  "rootAdmissionMessage": "owner-one-retry-read-actual-result-no-new-attempt",
+  "script": "scripts/read_owner_install_v103.py",
+  "scriptSha256": "1cf173812187151358bcd93ac1135f0b74b59e582d95ddaaeb6811a4305c3646",
+  "singleSend": true,
+  "terminal": "term_a2ed5feb-7c92-48e4-bd88-d1b0e6737989"
+}

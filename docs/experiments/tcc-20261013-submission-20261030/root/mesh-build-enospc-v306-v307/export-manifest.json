@@ -1,0 +1,148 @@
+{
+  "files": {
+    "failed-run/root-manifest.json": {
+      "original_sha256": "43b3ca00488c49b4634a2773105810aee3ea8aff90bc48aaeb45804685c3487e",
+      "export_sha256": "43b3ca00488c49b4634a2773105810aee3ea8aff90bc48aaeb45804685c3487e",
+      "credential_lines_withheld": 0
+    },
+    "failed-run/stdout.log": {
+      "original_sha256": "b03f93890df1af93117f3f3ae620248f9b271c914a00e829e9ac94c117743331",
+      "export_sha256": "b03f93890df1af93117f3f3ae620248f9b271c914a00e829e9ac94c117743331",
+      "credential_lines_withheld": 0
+    },
+    "failed-run/root-result.json": {
+      "original_sha256": "2537d7cd12e9d289a2868b1a0e0cbae434fc5ba57278b924411fb90567ef42e5",
+      "export_sha256": "2537d7cd12e9d289a2868b1a0e0cbae434fc5ba57278b924411fb90567ef42e5",
+      "credential_lines_withheld": 0
+    },
+    "failed-run/next-autogen-cleanup.json": {
+      "original_sha256": "70753b32c719b1c24e962784ba2dcde46113b934d0b3f4cda7cbb23ffae3b670",
+      "export_sha256": "70753b32c719b1c24e962784ba2dcde46113b934d0b3f4cda7cbb23ffae3b670",
+      "credential_lines_withheld": 0
+    },
+    "failed-run/resources.jsonl": {
+      "original_sha256": "2f8e066d4338d1a1ab5719b58032118b60c3091d35d4a20c3a7a9c0ce143a302",
+      "export_sha256": "2f8e066d4338d1a1ab5719b58032118b60c3091d35d4a20c3a7a9c0ce143a302",
+      "credential_lines_withheld": 0
+    },
+    "failed-run/live-handle.json": {
+      "original_sha256": "35dc07373986b73b1f215895751ebd048d0b33a71e4dec9baa34a78dfa32fd24",
+      "export_sha256": "35dc07373986b73b1f215895751ebd048d0b33a71e4dec9baa34a78dfa32fd24",
+      "credential_lines_withheld": 0
+    },
+    "failed-run/stderr.log": {
+      "original_sha256": "2f48862ed3605d91f419228755dcbf08679ec263adf618d06ce296abb8f86806",
+      "export_sha256": "2f48862ed3605d91f419228755dcbf08679ec263adf618d06ce296abb8f86806",
+      "credential_lines_withheld": 0
+    },
+    "failed-run/source/docker-compose.webrtc-interop.yml": {
+      "original_sha256": "59e78d7a3c3f75aead932006675c2ec8d1f743954ed994c19df6bb5cc36cdfe9",
+      "export_sha256": "59e78d7a3c3f75aead932006675c2ec8d1f743954ed994c19df6bb5cc36cdfe9",
+      "credential_lines_withheld": 0
+    },
+    "failed-run/source/scripts/hosted_peer_e2e.sh": {
+      "original_sha256": "887c545c60010c9ec3540fb59290ab72ba9a4bb3021e87e54a94d7b14497b78e",
+      "export_sha256": "887c545c60010c9ec3540fb59290ab72ba9a4bb3021e87e54a94d7b14497b78e",
+      "credential_lines_withheld": 0
+    },
+    "failed-run/source/app/services/supervisor.py": {
+      "original_sha256": "4ac2b5578fa8b3759bf30e7dfe8c68364e3453eba5020663dc3be670b838a7d8",
+      "export_sha256": "4ac2b5578fa8b3759bf30e7dfe8c68364e3453eba5020663dc3be670b838a7d8",
+      "credential_lines_withheld": 0
+    },
+    "failed-run/source/app/shared/services/process_launcher.py": {
+      "original_sha256": "c6e102416d03b092d5ac33ef50caa5dc4f5448daf480606a0026f72e16a4eef3",
+      "export_sha256": "c6e102416d03b092d5ac33ef50caa5dc4f5448daf480606a0026f72e16a4eef3",
+      "credential_lines_withheld": 0
+    },
+    "failed-run/source/app/services/gateway/fastapi_app.py": {
+      "original_sha256": "319469ee90ab706eaf5066bcde9f3f65b69b2894a4054c4bfe07190b25f6e94b",
+      "export_sha256": "319469ee90ab706eaf5066bcde9f3f65b69b2894a4054c4bfe07190b25f6e94b",
+      "credential_lines_withheld": 0
+    },
+    "failed-run/source/app/services/orchestrator/service.py": {
+      "original_sha256": "0b77092091946b94130945b3bfb670a922a209b846d5ffe30e23f75b52f982f3",
+      "export_sha256": "0b77092091946b94130945b3bfb670a922a209b846d5ffe30e23f75b52f982f3",
+      "credential_lines_withheld": 0
+    },
+    "failed-run/source/app/services/orchestrator/chat_llama_cpp.py": {
+      "original_sha256": "bbb7a3d247af8b53f55ee0b15be81db520f02ab1a53a6aff49c1d2e523f0b55e",
+      "export_sha256": "bbb7a3d247af8b53f55ee0b15be81db520f02ab1a53a6aff49c1d2e523f0b55e",
+      "credential_lines_withheld": 0
+    },
+    "failed-run/source/app/services/orchestrator/agents/chatbot.py": {
+      "original_sha256": "4e6d2b21a2eb672a47128340700a6d5f09adeabbab99980b6ba5d4e4e9e692ee",
+      "export_sha256": "4e6d2b21a2eb672a47128340700a6d5f09adeabbab99980b6ba5d4e4e9e692ee",
+      "credential_lines_withheld": 0
+    },
+    "failed-run/source/apps/aurora-web/app/browser-shell-runtime.tsx": {
+      "original_sha256": "241aadf4e9cc740be7d7366b1701282e3ef43191de1527d7ab26191b2feffdcc",
+      "export_sha256": "241aadf4e9cc740be7d7366b1701282e3ef43191de1527d7ab26191b2feffdcc",
+      "credential_lines_withheld": 0
+    },
+    "failed-run/source/scripts/experiments/assistant_local_api_pilot.py": {
+      "original_sha256": "de351707df153a38c0b8d0fb5a2df411895c5e63868b32ae1f3ab5864552c93c",
+      "export_sha256": "de351707df153a38c0b8d0fb5a2df411895c5e63868b32ae1f3ab5864552c93c",
+      "credential_lines_withheld": 0
+    },
+    "failed-run/source/scripts/experiments/assistant_matched_input_hook.py": {
+      "original_sha256": "1e342abe17092ac6b237564f51c31344e60f84fde8c1d1636b8876bd33a1f622",
+      "export_sha256": "1e342abe17092ac6b237564f51c31344e60f84fde8c1d1636b8876bd33a1f622",
+      "credential_lines_withheld": 0
+    },
+    "failed-run/source/scripts/experiments/assistant_measurement_records.py": {
+      "original_sha256": "2648b5579c487e15936bf2eafd70ae8b63db5567915ff4c1c1b318989da2a646",
+      "export_sha256": "2648b5579c487e15936bf2eafd70ae8b63db5567915ff4c1c1b318989da2a646",
+      "credential_lines_withheld": 0
+    },
+    "failed-run/source/packages/aurora-sdk/src/mesh.ts": {
+      "original_sha256": "d6e0876ca0e4d25d873eac7e19b48681ef929bdb85f5adf5371a036a05214f44",
+      "export_sha256": "d6e0876ca0e4d25d873eac7e19b48681ef929bdb85f5adf5371a036a05214f44",
+      "credential_lines_withheld": 0
+    },
+    "failed-run/source/packages/aurora-sdk/src/client.ts": {
+      "original_sha256": "252df51b7a86b1b6595f75c542dd2d797d2a39b10ec1faa15f736c4094a46491",
+      "export_sha256": "252df51b7a86b1b6595f75c542dd2d797d2a39b10ec1faa15f736c4094a46491",
+      "credential_lines_withheld": 0
+    },
+    "failed-run/source/packages/aurora-sdk/src/webrtc/mesh-peer-bridge.ts": {
+      "original_sha256": "3a8fc52f5ba67f19b7d83c801189652249ada7b2151ce117ea4d11cd05810be1",
+      "export_sha256": "3a8fc52f5ba67f19b7d83c801189652249ada7b2151ce117ea4d11cd05810be1",
+      "credential_lines_withheld": 0
+    },
+    "failed-run/source/packages/aurora-sdk/src/webrtc/runtime.ts": {
+      "original_sha256": "849a820c8f94261996307d1e06b0dc421e4a4f13f70a4d38e26c002a338dbc15",
+      "export_sha256": "849a820c8f94261996307d1e06b0dc421e4a4f13f70a4d38e26c002a338dbc15",
+      "credential_lines_withheld": 0
+    },
+    "failed-run/source/packages/aurora-ui/src/web-thin-runtime.ts": {
+      "original_sha256": "8034f4f1e7b1545851fe1c5f14bc8aac3f9e6ad90a389ce7962d41dc356d667d",
+      "export_sha256": "8034f4f1e7b1545851fe1c5f14bc8aac3f9e6ad90a389ce7962d41dc356d667d",
+      "credential_lines_withheld": 0
+    },
+    "failed-run/source/tests/e2e/hosted_peer/hosted-peer-live-helpers.ts": {
+      "original_sha256": "fc1a89f4925ea419f3eb14b68568a95b04d5a8375fbf1ff512f81e199a35b6cd",
+      "export_sha256": "fc1a89f4925ea419f3eb14b68568a95b04d5a8375fbf1ff512f81e199a35b6cd",
+      "credential_lines_withheld": 0
+    },
+    "failed-run/source/tests/e2e/hosted_peer/hosted-peer-live-shell.spec.ts": {
+      "original_sha256": "1bb439b04037525086b1483ee216a848d312317fdab00fac9781211cd5d5e68e",
+      "export_sha256": "1bb439b04037525086b1483ee216a848d312317fdab00fac9781211cd5d5e68e",
+      "credential_lines_withheld": 0
+    },
+    "root-disk-recovery-v307.json": {
+      "export_sha256": "eb134605ccc597ec9a8c2c48365a90ddc0c6ed3247d7d6d48c5132e26e6e9e4c",
+      "byte_identical": true
+    },
+    "next-product-gate-v306.md": {
+      "export_sha256": "e23f77e4c1acb30ca8090baa06cdb861b6bd6b33408fecb858bbde68aa1bcc25",
+      "byte_identical": true
+    },
+    "mesh-error-boundary-v305c-sol-review.md": {
+      "export_sha256": "7c09a50aa5bf6a97b5ad3e6e3caa46227dd0d6ce297e393df36be2934f8e1a57",
+      "byte_identical": true
+    }
+  },
+  "model_attempts": 0,
+  "next_run": "V307 same source/control-only disk guard"
+}

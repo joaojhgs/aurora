@@ -1,0 +1,6 @@
+{
+  "phase": "redis-start",
+  "exit_code": 0,
+  "elapsed_seconds": 4.851084224996157,
+  "deadline_reached": false
+}

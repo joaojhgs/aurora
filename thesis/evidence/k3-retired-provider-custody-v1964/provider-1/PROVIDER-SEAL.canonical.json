@@ -1,0 +1,128 @@
+{
+  "actorsAbsent": [
+    161159,
+    161160
+  ],
+  "at": "2026-10-20T21:45:27.324484+00:00",
+  "files": [
+    {
+      "bytes": 2221,
+      "name": "ACTUAL-FILES-v1912.json",
+      "sha256": "989081631a65f5d5494a3d9b9e369d2bbb62f6bb8c14e53aa37e21d10d3fc368",
+      "terminalEOF": true
+    },
+    {
+      "bytes": 8840,
+      "name": "PREPARATION-v1912.json",
+      "sha256": "537b17bba18ef42a2bf73aab03e04614e3d3dd948b1cb354d4e50be4530696d0",
+      "terminalEOF": true
+    },
+    {
+      "bytes": 8272,
+      "name": "ROOT-ADMISSION-v1914.json",
+      "sha256": "239c310e8773661a04a505c6b64bd2df505f843fb7b2613bbae5554bcaf6b9be",
+      "terminalEOF": true
+    },
+    {
+      "bytes": 183,
+      "name": "ROOT-LAUNCH-INTENT-v1914.json",
+      "sha256": "7191ca082821d081b8e3c30f6b7567468b51e048eb88d9d5a97fe8fc0d670c0b",
+      "terminalEOF": true
+    },
+    {
+      "bytes": 275,
+      "name": "ROOT-LAUNCH-v1914.json",
+      "sha256": "2ccd20103416a7d25c3677064767dd53676f260ed71abcf19e14e00481a417eb",
+      "terminalEOF": true
+    },
+    {
+      "bytes": 161081,
+      "name": "STATUS.json",
+      "sha256": "f9eec249869dcbfa2b4f20bcef3fbba284443feda2d0bd719a7a808c58700bab",
+      "terminalEOF": true
+    },
+    {
+      "bytes": 819,
+      "name": "actual-provider-bindings.jsonl",
+      "sha256": "e98e3e508de67ffa5788a3f08dfafa19751f045bf5721a9bd1007ad4a405a49f",
+      "terminalEOF": true
+    },
+    {
+      "bytes": 1417,
+      "name": "assistant-identity.json",
+      "sha256": "6f1ad2702ddb4860ddf57d54566b8b4a5febfcfb117d750871c7d0e6c6be1554",
+      "terminalEOF": true
+    },
+    {
+      "bytes": 300,
+      "name": "controller-launch.json",
+      "sha256": "79ddd84d907dd7157775bf941ebcdb4e7fd01354e2acdcc3e3242681f4529fbb",
+      "terminalEOF": true
+    },
+    {
+      "bytes": 7138,
+      "name": "provider-manifest.json",
+      "sha256": "ff1d2edc13fe65e646dccad691f4c0a3f83f31b224b796ef5f752402ce298e69",
+      "terminalEOF": true
+    },
+    {
+      "bytes": 1372,
+      "name": "receiver-identity.json",
+      "sha256": "5f02bde5cc7867a42ed0c42f7c851b1c7744a57255e3cf4d3f785f91850400e4",
+      "terminalEOF": true
+    },
+    {
+      "bytes": 7899549,
+      "name": "resources.jsonl",
+      "sha256": "7e7dd7c04b9e2d6515d33036d9799e06980e4dbcb8dba6bb1535e693ecb6992d",
+      "terminalEOF": true
+    },
+    {
+      "bytes": 210,
+      "name": "runtime-versions.json",
+      "sha256": "078733593a3d1af44ffa754d8dafac30459e993b219da96295614854c1cd2e57",
+      "terminalEOF": true
+    },
+    {
+      "bytes": 1399,
+      "name": "stt-identity.json",
+      "sha256": "153f8a3da48253e0c936a6f40afef97e35cd98c54b221d8c0eee49af7f044a56",
+      "terminalEOF": true
+    },
+    {
+      "bytes": 435,
+      "name": "terminal.json",
+      "sha256": "4f691037cb48c0dff29f93335bfe31611288824097a5011dd9053835ec89dbef",
+      "terminalEOF": true
+    },
+    {
+      "bytes": 0,
+      "name": "voice-stages.jsonl",
+      "sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+      "terminalEOF": true
+    },
+    {
+      "bytes": 129,
+      "name": "voice-stages.status.json",
+      "sha256": "33092f425f332f5fd463fbc1b5a24197757503094adc77bc92d814f09735bb68",
+      "terminalEOF": true
+    }
+  ],
+  "originalsPreserved": true,
+  "rawPayloadBytes": 8093640,
+  "requesterMeasured": 0,
+  "requesterWarmups": 0,
+  "terminal": {
+    "at": "2026-10-20T21:02:46.917438+00:00",
+    "controllerPid": 161159,
+    "elapsedSeconds": 1835.8520026379847,
+    "exitCode": 0,
+    "finishedAt": "2026-10-20T21:33:22.769405+00:00",
+    "host": "personal.skyron-server",
+    "manifestSha256": "ff1d2edc13fe65e646dccad691f4c0a3f83f31b224b796ef5f752402ce298e69",
+    "measurementStartedByController": false,
+    "receiverAbsent": true,
+    "receiverPid": 161160,
+    "receiverStartTicks": 28568788
+  }
+}

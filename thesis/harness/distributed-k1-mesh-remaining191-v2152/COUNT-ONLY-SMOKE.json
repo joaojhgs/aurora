@@ -1,0 +1,15 @@
+{
+  "status": "PASS_COUNT_ONLY_NO_SUT",
+  "excludedSyntheticWarmupCount": 17,
+  "qualifiedSyntheticWarmups": 15,
+  "measuredCount": 191,
+  "globalFirst": 710,
+  "globalLast": 900,
+  "extraMeasuredCalls": 0,
+  "noFailedIndexRetry": true,
+  "fixtureScope": "Phase accounting only, not real STT/LLM/TTS correctness/native/readiness or latency evidence",
+  "sutCalls": 0,
+  "sourceSha256": "cd44f514f160b0f967c8bdee8422176f2b022bea135e7b16e599707452d4768e",
+  "originalCountWitness": "thesis/harness/distributed-k1-mesh-remaining191-v2142/COUNT-ONLY-SMOKE.json",
+  "phaseFunctionAstByteIdentical": true
+}

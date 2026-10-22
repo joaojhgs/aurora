@@ -1,0 +1,28 @@
+{
+  "id": "25904f43-06b5-49ab-b2ac-0aed5bd04d05",
+  "ok": false,
+  "error": {
+    "code": "operation_unknown",
+    "message": "Terminal prompt d2cc0e31-dc5f-43d7-b2d2-cd85d538d2b6 may have reached its exact terminal incarnation before restart. It will not be sent again. Terminal prompt request ID: d2cc0e31-dc5f-43d7-b2d2-cd85d538d2b6. Re-issue the exact command with --retry-request d2cc0e31-dc5f-43d7-b2d2-cd85d538d2b6 --wait-submit <seconds>; do not retry it without that ID.",
+    "data": {
+      "requestId": "d2cc0e31-dc5f-43d7-b2d2-cd85d538d2b6",
+      "orchestrationRequestId": "d2cc0e31-dc5f-43d7-b2d2-cd85d538d2b6",
+      "originalCommand": [
+        "orca",
+        "terminal",
+        "send",
+        "--terminal",
+        "term_00a86bfb-1ede-4fbf-8b5e-72e2a2629f62",
+        "--text",
+        "printf '%s\\n' 'AURORA_ROOT_CONTROL_PROBE_V1090'",
+        "--enter",
+        "--json",
+        "--wait-submit",
+        "10"
+      ]
+    }
+  },
+  "_meta": {
+    "runtimeId": "c056e640-4085-4377-83d5-c299190ee880"
+  }
+}

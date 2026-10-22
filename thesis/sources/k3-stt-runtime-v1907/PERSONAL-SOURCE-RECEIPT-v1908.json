@@ -1,0 +1,25 @@
+{
+  "at": "2026-10-20T20:49:16.034191+00:00",
+  "host": "personal.skyron-server",
+  "status": "K3_PERSONAL_SOURCE_FROZEN_NO_RUNTIME_LAUNCH",
+  "sourceRoot": "/home/developer/projects/aurora/thesis/sources/k3-stt-runtime-v1907/personal/source",
+  "sourceInventory": "/home/developer/projects/aurora/thesis/sources/k3-stt-runtime-v1907/personal/source-inventory.json",
+  "sourceInventorySha256": "25026c4031e07d2e7cdac2afe269f78611ed375e53d3b64cd751b31867a552cf",
+  "files": 403,
+  "sourceBytes": 7545932,
+  "baseInventorySha256": "6fe434a7d3f07350ba7e8c9fce00414bb5cff8a1ee69b33eafbace73c5473b82",
+  "deltaSha256": "b9e270b99545ed630cddcbea337acecca2c29dc5bd5410ddd0faad1e510da79c",
+  "changedPaths": [
+    "app/services/stt_transcription/service.py",
+    "app/shared/contracts/models/speech_runtime.py"
+  ],
+  "oldProviderActorsAbsent": [
+    3938174,
+    3938202
+  ],
+  "oldSourcesUnchanged": true,
+  "runtimeImports": 0,
+  "sutCalls": 0,
+  "modelsConfigCredentialsChanged": false,
+  "freeBytesAfter": 145486667776
+}

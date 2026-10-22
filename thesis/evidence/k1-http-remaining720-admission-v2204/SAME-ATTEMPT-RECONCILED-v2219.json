@@ -1,0 +1,55 @@
+{
+  "at": "2026-10-21T15:56:42.497619+00:00",
+  "status": "ORIGINAL_LAUNCH_RECONCILED_SETUP_ONLY_NATURAL_NO_REQUESTER_RETIREMENT",
+  "source": ".git/aurora-handoff-import-20261006/k1-http-provider-reconcile-v2219-RESULT.json",
+  "sourceSha256": "ed654f38a4310a6348f248ea93ec50ee766628b150c04c82d4965c9d5b83c9a7",
+  "observation": {
+    "at": "2026-10-21T15:52:13.646355+00:00",
+    "host": "personal.skyron-server",
+    "actors": [
+      {
+        "pid": 852896,
+        "state": "absent",
+        "sameStart": false
+      },
+      {
+        "pid": 852897,
+        "state": "absent",
+        "sameStart": false
+      }
+    ],
+    "status": {
+      "at": "2026-10-21T07:35:34.047534+00:00",
+      "phase": "no_requester_admission_deadline",
+      "ownRuntimeRetired": true,
+      "errorCategory": null,
+      "errorLocation": null
+    },
+    "terminal": {
+      "at": "2026-10-21T07:05:03.415365+00:00",
+      "controllerPid": 852896,
+      "elapsedSeconds": 1833.0813337740256,
+      "exitCode": 0,
+      "finishedAt": "2026-10-21T07:35:36.496666+00:00",
+      "host": "personal.skyron-server",
+      "manifestSha256": "b10a45969bb9f13c21d9d0fb6b36d4961efcab57d12298f85e9c3e656c356ddd",
+      "measurementStartedByController": false,
+      "receiverAbsent": true,
+      "receiverPid": 852897,
+      "receiverStartTicks": 32182438
+    },
+    "noRequesterDeadlineSeconds": 1800,
+    "lifetimeSeconds": 55000,
+    "nativeModelSpanEnds": 0,
+    "piperCallStarts": 0,
+    "signalsSent": 0,
+    "newInference": 0
+  },
+  "workerRequesterCellExists": false,
+  "workerLaunchIntentExists": false,
+  "newWarmups": 0,
+  "newMeasured": 0,
+  "rootDeadlineUnchanged": "2026-10-21T23:36:07.231887+00:00",
+  "gapEvidence": "Original monitor msg_69f0563beba1 reports selected-model-at-capacity/Goal stalled; actualRoot ACTIVE now, no quota exhaustion inference",
+  "next": "Choose a finite missing-index operational block that fits real remaining window; preserve full720remaining/900target and all clocks/zero-request provider raw"
+}

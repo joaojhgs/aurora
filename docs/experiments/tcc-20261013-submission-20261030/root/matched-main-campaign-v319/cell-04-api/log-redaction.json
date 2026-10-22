@@ -1,0 +1,25 @@
+{
+  "logs": [
+    {
+      "export": "stdout.redacted.log",
+      "export_bytes": 88306,
+      "export_sha256": "7499cb573e2227403d3e2e39839454a287c414bff616f40864fd48179173e4a8",
+      "original_bytes": 89895,
+      "original_retained_private": true,
+      "original_sha256": "4a8b390e993bb034fdd14aacdfdff04f63dc54bc5e92d32bb384592bf982c53b",
+      "source": "stdout.log",
+      "withheld_lines": 34
+    },
+    {
+      "export": "stderr.redacted.log",
+      "export_bytes": 1181,
+      "export_sha256": "7f72b8fc388421d115d730d677af128e19b4d0167a882b85b3d0332ee0ebbe82",
+      "original_bytes": 1181,
+      "original_retained_private": true,
+      "original_sha256": "7f72b8fc388421d115d730d677af128e19b4d0167a882b85b3d0332ee0ebbe82",
+      "source": "stderr.log",
+      "withheld_lines": 0
+    }
+  ],
+  "method": "Withhold complete credential-pattern-matching lines. Bounded redaction only; original logs remain private with hashes."
+}

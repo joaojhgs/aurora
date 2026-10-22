@@ -1,0 +1,63 @@
+{
+  "at": "2026-10-20T11:23:23.984789+00:00",
+  "run": "run_e6054e76e9fc",
+  "task": "task_d7ea336050cf",
+  "dispatch": "ctx_37b4d0a3c14f",
+  "classification": "NEW_ISOLATED_FAILURE_538_WITH_DISTINCT_CORRECT_539",
+  "cases": [
+    {
+      "path": "thesis/campaigns/worker-desktop-k1-p2p-tts-remaining880-v1719/attempts/attempt-0533-measured.jsonl",
+      "bytes": 3959,
+      "sha256": "158ee231fa4754a86cf413dcef312a6acfb9a24aac087a821fcb63e5cea3278d",
+      "globalMeasuredIndex": 538,
+      "status": "failed",
+      "failure": {
+        "code": "remote_mesh_preaccept_capability_changed",
+        "stage": "tts"
+      },
+      "correctness": {
+        "assistant_reply_matches_expected_words": true,
+        "transcript_matches_reference_words": true
+      },
+      "consecutivePreacceptRejections": 1,
+      "timeout": false,
+      "outputAudioRecorded": null,
+      "stageStatus": {
+        "assistant": "completed",
+        "stt": "completed",
+        "tts": "failed"
+      }
+    },
+    {
+      "path": "thesis/campaigns/worker-desktop-k1-p2p-tts-remaining880-v1719/attempts/attempt-0534-measured.jsonl",
+      "bytes": 4917,
+      "sha256": "776030175728a44dcd98eea7775c9739f7592690cb9d7dccbb52ce6efeb5315c",
+      "globalMeasuredIndex": 539,
+      "status": "completed_correct",
+      "failure": null,
+      "correctness": {
+        "all_expected": true,
+        "assistant_reply_matches_expected_words": true,
+        "transcript_matches_reference_words": true
+      },
+      "consecutivePreacceptRejections": 0,
+      "timeout": false,
+      "outputAudioRecorded": {
+        "file": "audio/4494c9a7d33006ce5825612e3683c6f3fa7dd3e15e6c999adf16288e88772ca1.wav",
+        "sha256": "4494c9a7d33006ce5825612e3683c6f3fa7dd3e15e6c999adf16288e88772ca1"
+      },
+      "stageStatus": {
+        "assistant": "completed",
+        "stt": "completed",
+        "tts": "completed"
+      }
+    }
+  ],
+  "finding": "One known-class TTS preaccept capability_changed failure at538, STT/assistant correctness true, timeout false, no output audio, streak1. Already-saved distinct539 completes correctly with recorded audio reference and streak0. Retain failed538 in denominator; no retry/top-up/fallback/source or policy change is indicated.",
+  "causeBoundary": "Current old adapter does not retain verbatim QueryResult: exact receiver validation branch/cause remains UNKNOWN. Do not infer lease race, packet content or pure transport overhead.",
+  "reviewBoundary": "Only the newly saved failed row and first already-saved subsequent success inspected; old source/classifier/model/provider/collector/custody reviews remain closed.",
+  "runtimeMutation": false,
+  "newSutCalls": 0,
+  "currentFrozenRun": "preserved",
+  "rootExecutionOwnership": "unchanged"
+}

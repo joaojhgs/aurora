@@ -1,0 +1,29 @@
+{
+  "id": "d398f4b6-93ab-432b-b1d0-f85f4d119384",
+  "ok": true,
+  "result": {
+    "terminal": {
+      "handle": "term_f40f2bd6-0f71-4484-8347-ac221cf6ce9b",
+      "ptyId": "ssh:ssh-sem-notebook-personal@@pty2:922594b2-6958-4b97-b1b9-f337a2304f64:1",
+      "incarnationId": "633939eb-60f4-4bc0-9a0c-5941dc6db36a",
+      "orphaned": false,
+      "worktreeId": "03d8a475-d62e-43b3-8885-e382b313ab1b::/home/developer/projects/aurora",
+      "worktreePath": "/home/developer/projects/aurora",
+      "branch": "refs/heads/feat/ui-multi-platform-integration",
+      "tabId": "27c1f189-f3bc-467f-a639-73475e9428a3",
+      "leafId": "c17246d3-4a6b-4c65-b221-ba95d14240aa",
+      "title": "..ojects/aurora",
+      "connected": true,
+      "writable": true,
+      "lastOutputAt": 1792476480164,
+      "preview": "uIiwgIndlaWdodHNSZWFkIjogZmFsc2V9XSwgIm1vZGVsV2VpZ2h0c1JlYWQiOiBmYWxzZSwgInBoeXNpY2FsUmVzb3VyY2VSZXNlcnZhdGlvbiI6ICJOT1RfQURNSVRURUQiLCAic2NvcGUiOiAiUEVSU09OQUxfRVhJU1RJTkdfUkVQT19LTk9XTl9QQVRIX1NUQVRTX0FORF9FWEFDVF9QQUNLQUdFX0NBQ0hFX09OTFkifQ==\"}\n\u279c  aurora git:(feat/ui-multi-platform-integration) \u2717",
+      "executionHostId": "ssh:ssh-sem-notebook-personal",
+      "paneRuntimeId": -1,
+      "rendererGraphEpoch": 0,
+      "agentWait": null
+    }
+  },
+  "_meta": {
+    "runtimeId": "cc9e3275-28c6-4c45-85cc-bdcd2262aa7d"
+  }
+}

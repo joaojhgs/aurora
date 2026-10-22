@@ -1,0 +1,13 @@
+{
+  "at": "2026-10-20T08:03:57.220078+00:00",
+  "terminal": "term_2eab47ed-ab9b-4e35-bd9b-fc068c60e3fc",
+  "incarnation": "37e50d9c-6cf5-4e28-a63b-f2bc3eed5661",
+  "nativeGoalId": "01a123ff-19ba-7332-a2f7-346a722af79f",
+  "actualNativeBlockedSource": "msg_ec4b7f7f5ebd actual get_goal07:59:26UTC",
+  "actualIdleProven": true,
+  "command": "/goal resume",
+  "maximumSends": 1,
+  "interrupt": false,
+  "newGoalOrWorker": false,
+  "authority": "Standing owner same-existing-objective supported native recovery after reconciliation; original monitor explicitly authorized, current native BLOCKED verified, capacity incident cleared by successful same-model ordinary turn. Root sole sender after actual idle."
+}

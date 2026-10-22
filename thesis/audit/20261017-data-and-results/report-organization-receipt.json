@@ -1,0 +1,12 @@
+{
+  "additionalAnalysisSmokeRuns": 0,
+  "analysisSource": "smoke/cohort-inventory.json",
+  "at": "2026-10-17T22:27:02.216422+00:00",
+  "authorApprovalClaimed": false,
+  "historicalMeshFamilies": 26,
+  "importedUniqueBytes": 50106693,
+  "importedUniqueObjects": 4523,
+  "newMeasurements": 0,
+  "primaryConditions": 31,
+  "sourceRecords": 4656
+}

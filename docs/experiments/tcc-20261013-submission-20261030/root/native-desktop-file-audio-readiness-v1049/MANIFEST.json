@@ -1,0 +1,54 @@
+{
+  "at": "2026-10-16T13:23:37.173709+00:00",
+  "scope": "Copy custody of already saved successful native readiness evidence; no experiment rerun. Original private files retained.",
+  "files": [
+    {
+      "path": "CONTROL.json",
+      "bytes": 2903,
+      "sha256": "f468f1b62fc358b391314607381d1ce0a07b55ff6d1a2355e5455fe58cdfd572"
+    },
+    {
+      "path": "TERMINAL.json",
+      "bytes": 2903,
+      "sha256": "f468f1b62fc358b391314607381d1ce0a07b55ff6d1a2355e5455fe58cdfd572"
+    },
+    {
+      "path": "runtime/source-guard.json",
+      "bytes": 237,
+      "sha256": "6fd95f6ad33cf8ab5fea416552982627e54f6984e3566d2184d3e737633b67b9"
+    },
+    {
+      "path": "runtime/runtime-versions.json",
+      "bytes": 177,
+      "sha256": "21a127dc1c2906275582dec7aac905386ac8725cc6b7eee84220ecefffb52b80"
+    },
+    {
+      "path": "runtime/voice-stages.jsonl",
+      "bytes": 18728,
+      "sha256": "5ad7ed1f8b2195c2e22815ec107803524c12d44fc2caedb21492de9c0ffaa390"
+    },
+    {
+      "path": "runtime/actual-provider-bindings.jsonl",
+      "bytes": 2549,
+      "sha256": "a9041cbad6d1f529be739227851a461e9c89fc814107955cada26a13f9fb3607"
+    },
+    {
+      "path": "result-without-audio-payload.json",
+      "bytes": 1602,
+      "sha256": "bf4ab703575c2c0a6783fee189cedc3caaf1e58d5f9631f547f8aad58d397966"
+    },
+    {
+      "path": "accelerator-log-excerpt.json",
+      "bytes": 794,
+      "sha256": "79aef209fab29ebdd86800bd0533e547ed60dc544736e6b24f2055ddd6ee0b42"
+    },
+    {
+      "path": "summary.json",
+      "bytes": 4618,
+      "sha256": "55ad960154ddd1af8027531833427ae7acb6c30208f4da830f3076a10b2d5f60"
+    }
+  ],
+  "privateRetained": "Full audio payload, window/screenshot, protocol sessions, config/DB and app logs remain in original private namespace.",
+  "sourceReceipt": "v1051-c06-native-readiness-evidence-RESULT.json",
+  "gpuReceipt": "v1052-native-gpu-personal-adb-route-RESULT.json"
+}

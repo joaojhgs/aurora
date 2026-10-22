@@ -1,0 +1,16 @@
+{
+  "status": "ONE_BOUNDED_K3_SOURCE_PACKET_PASS_CLOSED",
+  "files": [
+    {
+      "path": "thesis/harness/distributed-k3-mesh-v1910/review/K3-V1910-CUMULATIVE-STT-DELTA-REVIEW-CLOSED-20261020T2056Z.md",
+      "bytes": 7911,
+      "sha256": "9756ecd80bdccb542e48e4ad3d7a08dfadd7160892453d7e5d8d612fe3297a30"
+    },
+    {
+      "path": "thesis/harness/distributed-k3-mesh-v1910/review/K3-V1911-PROVIDER-IDENTITY-DELTA-REVIEW-CLOSED-20261020T2057Z.md",
+      "bytes": 2532,
+      "sha256": "9968bda7b28097ce5d37ddabe613a8f0c6143a0588de65e97fea9becd2379979"
+    }
+  ],
+  "runtimeAdmission": "PENDING"
+}

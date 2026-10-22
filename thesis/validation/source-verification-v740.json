@@ -1,0 +1,44 @@
+{
+  "schema": "aurora.thesis.source-verification.v1",
+  "at": "2026-10-15T22:38:12.043109+00:00",
+  "command": [
+    "/home/developer/projects/aurora/.venv/bin/python",
+    "thesis/verify_source.py",
+    "--source",
+    ".git/aurora-handoff-import-20261006/cpu-full-audio-v490/source",
+    "--output",
+    "thesis/validation/source-verification-v740.json"
+  ],
+  "python": "3.11.17 (main, Oct  3 2026, 01:03:29) [Clang 22.1.3 ]",
+  "checker": {
+    "path": "/home/developer/projects/aurora/thesis/verify_source.py",
+    "bytes": 4042,
+    "sha256": "065679193c9b162cd1522836e006f689b0027eec79788808b0011484acfb263f"
+  },
+  "helper": {
+    "path": "/home/developer/projects/aurora/thesis/preflight.py",
+    "bytes": 4537,
+    "sha256": "838bb393f19cc979c59ebd6c09e75aeb635311f6647f69d4250213fde7aa4e3d"
+  },
+  "newMeasuredRequests": 0,
+  "modelsOrServicesLoaded": false,
+  "checkoutModified": false,
+  "scope": "Exact locked production files and overlay artifact only; not dependency, hardware, route or runtime acceptance.",
+  "status": "passed",
+  "sourceRoot": "/home/developer/projects/aurora/.git/aurora-handoff-import-20261006/cpu-full-audio-v490/source",
+  "lock": {
+    "path": "/home/developer/projects/aurora/thesis/source/production-lock-v1.json",
+    "bytes": 154305,
+    "sha256": "ef351065c3985e3247d634d2ca490c1644f50e66d2bbfdf1bd98d45b1524f462"
+  },
+  "overlay": {
+    "path": "/home/developer/projects/aurora/thesis/source/production-overlay-v1.patch",
+    "bytes": 18557,
+    "sha256": "2f84818f311f6f95db0c7d05da214e37253e7a9e2e8157a9fac138d847fa1bdb"
+  },
+  "expectedFiles": 400,
+  "mismatches": [],
+  "verifiedFiles": 400,
+  "exitCode": 0,
+  "durationSeconds": 0.5560573639813811
+}

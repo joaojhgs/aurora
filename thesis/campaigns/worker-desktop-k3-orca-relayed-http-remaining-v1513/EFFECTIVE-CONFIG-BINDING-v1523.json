@@ -1,0 +1,17 @@
+{
+  "at": "2026-10-18T14:43:28.256840+00:00",
+  "status": "EXACT_PARENT_MEASURED_CONFIG_REUSED_NO_SECRET_RESET_OR_COPY",
+  "failedPreflight": "FIRST-LAUNCH-PREFLIGHT-CONFIG-FACTS-v1523.json",
+  "parentOriginalInputSha256": "2b8cc043fc75c8978e2528379badb9fff7cd2ad2bc82729e61c560d35bbd1cc1",
+  "newInputEqualsParentDuringAllMeasurementsSha256": "a7e5854794498a9fb062521dc0dd927640af92dda58d9ddd83e9f423e2f7a20b",
+  "parentStartupChangedPathOnly": [
+    "services.gateway.api.token_secret"
+  ],
+  "newConfigWriteOrCredentialChange": false,
+  "newCredentialCopy": false,
+  "allOtherScientificParametersEqual": true,
+  "originalFrozenManifestUnchanged": true,
+  "sourceSha256": "a4e54219424a3ccf7f57578340247351d3d41e329d2e1cf33dccc91822b7df14",
+  "newModelRequests": 0,
+  "launchOperatorDirExists": false
+}

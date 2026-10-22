@@ -1,0 +1,12 @@
+{
+  "controlDeadline": "2026-10-22T05:00:00Z",
+  "explicitNewline": true,
+  "host": "ssh:ssh-sem-notebook-personal",
+  "incarnation": "328cd72f-c7ea-49ff-a2db-b9275b085037",
+  "remoteResult": "/home/developer/projects/aurora/thesis/phone-notebook/20261020/evidence/owner-one-install-retry-v102.json",
+  "rootAdmissionMessage": "owner-explicit-send-installation-again-refused-by-mistake-one-retry-only",
+  "script": "scripts/retry_owner_install_v102.py",
+  "scriptSha256": "23b79b240d44134d14de463ae498459a63c8caf0ed6df79ada62962f3ce2a68d",
+  "singleSend": true,
+  "terminal": "term_a2ed5feb-7c92-48e4-bd88-d1b0e6737989"
+}

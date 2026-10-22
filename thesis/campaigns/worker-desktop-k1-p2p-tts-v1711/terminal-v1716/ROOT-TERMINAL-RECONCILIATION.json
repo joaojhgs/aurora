@@ -1,0 +1,56 @@
+{
+  "at": "2026-10-20T04:19:17.981278+00:00",
+  "status": "TERMINAL_SYSTEM_FAILURE_AT_MEASURED20_PENDING_RPC_DIAGNOSIS",
+  "nativeGoal": "01a112a5-d6bb-74e2-bf7c-ace73cb513b5",
+  "nativeGoalStatus": "active",
+  "run": "run_e6054e76e9fc",
+  "originalMonitor": "ctx_37b4d0a3c14f",
+  "frozenConditionSha256": "04872dbd3948c13a4b269a1eb116f8b92fb3c369a8b0026cbbf339a2257009c1",
+  "measurement": {
+    "planned": 900,
+    "attempted": 20,
+    "correct": 19,
+    "failed": 1,
+    "unattempted": 880
+  },
+  "excludedWarmups": {
+    "attempted": 15,
+    "correct": 15
+  },
+  "failure": {
+    "correlation": "audio-campaign-6f711259acec4556ae20578b0a702d35",
+    "code": "remote_mesh_exact_remote_peer_call_not_confirmed",
+    "actualPeerBridgeCall": true,
+    "rpcOutcome": "failed",
+    "providerInvocationFound": false,
+    "beforeAfterRoute": "DIRECT; same nominated successful UDP pair",
+    "rootCause": "Actual pre-accept capability binding rejection; exact validation subcheck historically unobserved",
+    "rpcError": "capability_changed"
+  },
+  "providerRead": {
+    "at": "2026-10-20T04:15:56.776833+00:00",
+    "actors": [
+      {
+        "pid": 3194385,
+        "present": true,
+        "state": "S",
+        "startTicks": 22320508
+      },
+      {
+        "pid": 3194394,
+        "present": true,
+        "state": "S",
+        "startTicks": 22320527
+      }
+    ],
+    "sutCalls": 0,
+    "path": "thesis/campaigns/worker-desktop-k1-p2p-tts-v1711/terminal-v1716/SAME-PROVIDER-READ.json",
+    "bytes": 79122,
+    "sha256": "53e4846cd3d481078125607e6ed416c2fdaadea7e231059f6262dda5a1c08027"
+  },
+  "requesterActors": "controller2326088/backend2326096/copier2326666 absent at04:14:35 after natural shutdown; no interrupt",
+  "nextAction": "Preserve terminal raw; inspect saved RPC trace; continue only unattempted880 after finite admission. No baseline or failed request replay.",
+  "requesterSeal": "thesis/campaigns/worker-desktop-k1-p2p-tts-v1711/terminal-v1716/seal/REQUESTER-SEAL.json",
+  "providerPrefixCustody": "thesis/campaigns/worker-desktop-k1-p2p-tts-v1711/terminal-v1716/provider-prefixes-v1718/COPY-CHECKSUM-AND-NATIVE-JOIN-RECEIPT.json",
+  "diagnosticLimit": "20s lease revision refresh is a possible read/send race, not proven historical cause."
+}

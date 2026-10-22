@@ -1,0 +1,7 @@
+# Python provider readiness diagnostic
+
+The existing pinned Qwen3.5 GGUF loads and generates through Aurora’s real Python ChatLlamaCpp backend. This is provider compatibility, not full Assistant, mobile, bus/API/mesh or performance acceptance. The one retained request observation took 8.79443127 seconds and failed its declared exact-OK predicate: the frozen 16-token budget returned only truncated thinking. Correct successes are zero; successful-request p50/p90/p95 are null. No clean-condition or speedup claim is made.
+
+The complete failed history remains: v240 failed helper initialization before any model/request; v241 performed inference but a harness direct-close mistake prevented saving the answer and request timing; v242 saved the answer and timing before proper owner-aware retirement, then cleanup reporting accessed a nonexistent field. Native cleanup success is not claimed. These harness mistakes are not established product regressions and no production safety guard was changed. The missing v241 observation is not reconstructed from engine timing logs.
+
+All available complete manifests, exact helpers/settings/public synthetic workload, stdout/stderr and request/result records are copied byte-for-byte with hashes. Private configuration and environment backups are not included. The next gate is the real full Orchestrator Assistant pilot using one declared adequate frozen budget across local/API conditions. This diagnostic will not be replayed as filler or counted as successful assistant latency.

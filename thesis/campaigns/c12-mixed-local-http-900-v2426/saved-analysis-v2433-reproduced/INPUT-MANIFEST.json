@@ -1,0 +1,358 @@
+[
+  {
+    "bytes": 10032,
+    "path": "/home/developer/projects/aurora/thesis/campaigns/c12-mixed-local-http-900-v2426/CAMPAIGN-MANIFEST.json",
+    "sha256": "316d4cc09adc44d0104dca8ac1f2a966347588ffef37bc2fa809ec14fd5efff8"
+  },
+  {
+    "bytes": 1405,
+    "path": "thesis/campaigns/c12-mixed-local-http-900-v2426/saved-analysis-v2432-partial/CURRENT.snapshot.json",
+    "physicalAnalysisCopy": "CURRENT.snapshot.json",
+    "sha256": "a1fceec459ad7aaa92496edfcc97e3d5f1ba52f3a6054bfb1fd1865e35b5ceaa"
+  },
+  {
+    "bytes": 5684,
+    "path": "/home/developer/projects/aurora/thesis/campaigns/c12-mixed-local-http-900-v2426/requester/cases/0001/CASE.json",
+    "sha256": "06f6301bf14de6d7472b7ed0fa004335e06e5632655531ed90ebfcb1d1c2c165"
+  },
+  {
+    "bytes": 7817,
+    "path": "/home/developer/projects/aurora/thesis/campaigns/c12-mixed-local-http-900-v2426/provider-custody/0001/CUSTODY.json",
+    "sha256": "8c37fbef7871e240e808437de21c29e1ee9ee116e85ddb99c8bfb593a4e8a1aa"
+  },
+  {
+    "bytes": 51784,
+    "path": "/home/developer/projects/aurora/thesis/campaigns/c12-mixed-local-http-900-v2426/provider-custody/0001/provider-pair.tar.gz",
+    "sha256": "54fd40c0f57fcb4e9928ce34369e6bdaedd32602a25fd7e2850ad4ad3d9d6037"
+  },
+  {
+    "bytes": 5683,
+    "path": "/home/developer/projects/aurora/thesis/campaigns/c12-mixed-local-http-900-v2426/requester/cases/0002/CASE.json",
+    "sha256": "7ddd20dafe696bd8806dcae502d75e58544f86fa51846806dc2898b8393ef303"
+  },
+  {
+    "bytes": 7835,
+    "path": "/home/developer/projects/aurora/thesis/campaigns/c12-mixed-local-http-900-v2426/provider-custody/0002/CUSTODY.json",
+    "sha256": "ddac19e9ea73233db6905f27ac635c5be2d50810e6a01d4a1383f1d0e44f39d0"
+  },
+  {
+    "bytes": 44104,
+    "path": "/home/developer/projects/aurora/thesis/campaigns/c12-mixed-local-http-900-v2426/provider-custody/0002/provider-pair.tar.gz",
+    "sha256": "12b21d896b7c1055d624fefe551b5d52cded946dea4b2ce78694e8347a845788"
+  },
+  {
+    "bytes": 5684,
+    "path": "/home/developer/projects/aurora/thesis/campaigns/c12-mixed-local-http-900-v2426/requester/cases/0003/CASE.json",
+    "sha256": "8e899596f12960c8c39767ed3c67263d180b1638def443a6cb7600e4eb33a46e"
+  },
+  {
+    "bytes": 7834,
+    "path": "/home/developer/projects/aurora/thesis/campaigns/c12-mixed-local-http-900-v2426/provider-custody/0003/CUSTODY.json",
+    "sha256": "a8574ea668e50fa344b30fce814023272109abcf5aff82fb2a0e03fa9b39aa7c"
+  },
+  {
+    "bytes": 43310,
+    "path": "/home/developer/projects/aurora/thesis/campaigns/c12-mixed-local-http-900-v2426/provider-custody/0003/provider-pair.tar.gz",
+    "sha256": "163b4526c5c44411b266770c9a7a47b597a23153901dd95657a480d340d100d5"
+  },
+  {
+    "bytes": 5684,
+    "path": "/home/developer/projects/aurora/thesis/campaigns/c12-mixed-local-http-900-v2426/requester/cases/0004/CASE.json",
+    "sha256": "fcac54a72ff6c6d1d961bec938815199b7dc2478140f175abd0b499d795b4546"
+  },
+  {
+    "bytes": 7837,
+    "path": "/home/developer/projects/aurora/thesis/campaigns/c12-mixed-local-http-900-v2426/provider-custody/0004/CUSTODY.json",
+    "sha256": "ca7a7f717d31fe5c017d6e84c6c656a38910618dd9fd4a3fb3c93a449d4bedea"
+  },
+  {
+    "bytes": 41908,
+    "path": "/home/developer/projects/aurora/thesis/campaigns/c12-mixed-local-http-900-v2426/provider-custody/0004/provider-pair.tar.gz",
+    "sha256": "1e84c78e17e821d12e12ec382b37175d843a9fefff26b0a2f972779da98aaa9e"
+  },
+  {
+    "bytes": 5682,
+    "path": "/home/developer/projects/aurora/thesis/campaigns/c12-mixed-local-http-900-v2426/requester/cases/0005/CASE.json",
+    "sha256": "44e83627e5afa21d6bf6128b46ac9ead982a1ae2ce3389da9813537656158b5b"
+  },
+  {
+    "bytes": 7839,
+    "path": "/home/developer/projects/aurora/thesis/campaigns/c12-mixed-local-http-900-v2426/provider-custody/0005/CUSTODY.json",
+    "sha256": "3e7403d1a2ab04c6d4ae867622a3ea05e19642500d6931f79f81672ad3a5e42c"
+  },
+  {
+    "bytes": 42611,
+    "path": "/home/developer/projects/aurora/thesis/campaigns/c12-mixed-local-http-900-v2426/provider-custody/0005/provider-pair.tar.gz",
+    "sha256": "7ac91c9729d8397945e41431f5e2988a66e3c110eab8d15c98d79cedae3f9f74"
+  },
+  {
+    "bytes": 5681,
+    "path": "/home/developer/projects/aurora/thesis/campaigns/c12-mixed-local-http-900-v2426/requester/cases/0006/CASE.json",
+    "sha256": "291ed0a2790bec3d27018a7431695b3e25da05b90b2865ac5cf6fa67acaac93a"
+  },
+  {
+    "bytes": 7842,
+    "path": "/home/developer/projects/aurora/thesis/campaigns/c12-mixed-local-http-900-v2426/provider-custody/0006/CUSTODY.json",
+    "sha256": "7dd98ef3062fe0b2b576387ea5ea00cd79e86e1f9c9086b33dce49de2e1342c8"
+  },
+  {
+    "bytes": 43161,
+    "path": "/home/developer/projects/aurora/thesis/campaigns/c12-mixed-local-http-900-v2426/provider-custody/0006/provider-pair.tar.gz",
+    "sha256": "de4b783935e0dfe0ca7afe7017dd6b7a12e472ae3809f64298dd8f5f4537ba69"
+  },
+  {
+    "bytes": 5685,
+    "path": "/home/developer/projects/aurora/thesis/campaigns/c12-mixed-local-http-900-v2426/requester/cases/0007/CASE.json",
+    "sha256": "e6a631e8ee5dd6348a123a3116814f327f01bbccdec9c3e45785f8cd7d8962ce"
+  },
+  {
+    "bytes": 7843,
+    "path": "/home/developer/projects/aurora/thesis/campaigns/c12-mixed-local-http-900-v2426/provider-custody/0007/CUSTODY.json",
+    "sha256": "d0f7f5df3a268e92d36294bda9af599b676c0f22ed4ba8342a219b4d80dd77ed"
+  },
+  {
+    "bytes": 42577,
+    "path": "/home/developer/projects/aurora/thesis/campaigns/c12-mixed-local-http-900-v2426/provider-custody/0007/provider-pair.tar.gz",
+    "sha256": "db818b6f3b889454597ac1521fa0d4161fd4499ea742fd68069c736d68297b35"
+  },
+  {
+    "bytes": 5683,
+    "path": "/home/developer/projects/aurora/thesis/campaigns/c12-mixed-local-http-900-v2426/requester/cases/0008/CASE.json",
+    "sha256": "66234b71f455beed4fed57c12ba6cccb8bb0da4c1c1469698cfb7232d2eabf84"
+  },
+  {
+    "bytes": 7841,
+    "path": "/home/developer/projects/aurora/thesis/campaigns/c12-mixed-local-http-900-v2426/provider-custody/0008/CUSTODY.json",
+    "sha256": "1f78177da8f41c78d9f5400a50485896eb476c9a049a6be992872b55a87f1ce6"
+  },
+  {
+    "bytes": 42862,
+    "path": "/home/developer/projects/aurora/thesis/campaigns/c12-mixed-local-http-900-v2426/provider-custody/0008/provider-pair.tar.gz",
+    "sha256": "43c01690d65812cde8cb238b063bd0746325a51f237b26519bee1dd2eb6612c9"
+  },
+  {
+    "bytes": 5683,
+    "path": "/home/developer/projects/aurora/thesis/campaigns/c12-mixed-local-http-900-v2426/requester/cases/0009/CASE.json",
+    "sha256": "94b63b5b419ccb008551453c850927ce8af836bfbd095e1b176aea69cfe16197"
+  },
+  {
+    "bytes": 7843,
+    "path": "/home/developer/projects/aurora/thesis/campaigns/c12-mixed-local-http-900-v2426/provider-custody/0009/CUSTODY.json",
+    "sha256": "c86a88dbad712a8628ec255f66422eb1bec115d9b46e46a21e781137944a05ec"
+  },
+  {
+    "bytes": 40904,
+    "path": "/home/developer/projects/aurora/thesis/campaigns/c12-mixed-local-http-900-v2426/provider-custody/0009/provider-pair.tar.gz",
+    "sha256": "2fc9b7af2b49b263ab155ed91d410f6217081caf1b1443a5f515bf1b064ae46d"
+  },
+  {
+    "bytes": 5683,
+    "path": "/home/developer/projects/aurora/thesis/campaigns/c12-mixed-local-http-900-v2426/requester/cases/0010/CASE.json",
+    "sha256": "e65a554574b7a281de22069276e36f2e8bb608bb58d7ce0672892cde91753f97"
+  },
+  {
+    "bytes": 7845,
+    "path": "/home/developer/projects/aurora/thesis/campaigns/c12-mixed-local-http-900-v2426/provider-custody/0010/CUSTODY.json",
+    "sha256": "0427f1701aa89f1284c3d3cde3bdd4b1e85747310e1d300ca26e2d998f11cd0b"
+  },
+  {
+    "bytes": 43557,
+    "path": "/home/developer/projects/aurora/thesis/campaigns/c12-mixed-local-http-900-v2426/provider-custody/0010/provider-pair.tar.gz",
+    "sha256": "ea27e83a472080d46c0b84bce0c9023c54234fabc97165df7062f326d9223017"
+  },
+  {
+    "bytes": 5687,
+    "path": "/home/developer/projects/aurora/thesis/campaigns/c12-mixed-local-http-900-v2426/requester/cases/0011/CASE.json",
+    "sha256": "f2e22240292dd5390e1a09dbe6bb16ec6fa2975a882df40927d2cfc945aac40f"
+  },
+  {
+    "bytes": 7843,
+    "path": "/home/developer/projects/aurora/thesis/campaigns/c12-mixed-local-http-900-v2426/provider-custody/0011/CUSTODY.json",
+    "sha256": "5bbfc4e659b53a0b4a4f70d9e8b7d53f5365cbddf7b5a76368a759b797c87ba8"
+  },
+  {
+    "bytes": 42757,
+    "path": "/home/developer/projects/aurora/thesis/campaigns/c12-mixed-local-http-900-v2426/provider-custody/0011/provider-pair.tar.gz",
+    "sha256": "5aff8f34535287e62a32accf265c00d7e94d6485a7e97d1ea32394c61f72485f"
+  },
+  {
+    "bytes": 5686,
+    "path": "/home/developer/projects/aurora/thesis/campaigns/c12-mixed-local-http-900-v2426/requester/cases/0012/CASE.json",
+    "sha256": "0c18bd18d7c9ca05893cf1926b6090833e8c2bbf88450b0194c399f92f3e2c54"
+  },
+  {
+    "bytes": 7846,
+    "path": "/home/developer/projects/aurora/thesis/campaigns/c12-mixed-local-http-900-v2426/provider-custody/0012/CUSTODY.json",
+    "sha256": "d7f0e66bafb03cfc551395a6e60bc182b0fa7b07f41162621903081954924d14"
+  },
+  {
+    "bytes": 42006,
+    "path": "/home/developer/projects/aurora/thesis/campaigns/c12-mixed-local-http-900-v2426/provider-custody/0012/provider-pair.tar.gz",
+    "sha256": "986003159504b46488a04efd7852bce19c95a73ef6bf4a57a34022b18b632f30"
+  },
+  {
+    "bytes": 5686,
+    "path": "/home/developer/projects/aurora/thesis/campaigns/c12-mixed-local-http-900-v2426/requester/cases/0013/CASE.json",
+    "sha256": "23f02319dd071bea75c7aec4a7bde3086e743f811a49ea6e5961735327d5d02b"
+  },
+  {
+    "bytes": 7844,
+    "path": "/home/developer/projects/aurora/thesis/campaigns/c12-mixed-local-http-900-v2426/provider-custody/0013/CUSTODY.json",
+    "sha256": "c51615794b6db0993e8b55f8d58761d8b12e9ee9f6dcd63b671b892eef4f74a0"
+  },
+  {
+    "bytes": 40974,
+    "path": "/home/developer/projects/aurora/thesis/campaigns/c12-mixed-local-http-900-v2426/provider-custody/0013/provider-pair.tar.gz",
+    "sha256": "1b1ec95e54e733366c2006c34c26a6ac8e74a6a7bcab7f25a0662dcd5fa33d1e"
+  },
+  {
+    "bytes": 5687,
+    "path": "/home/developer/projects/aurora/thesis/campaigns/c12-mixed-local-http-900-v2426/requester/cases/0014/CASE.json",
+    "sha256": "86836b4df242ee494fc1b4c35f283137b28272068a791a6f70deaf949e1c7663"
+  },
+  {
+    "bytes": 7846,
+    "path": "/home/developer/projects/aurora/thesis/campaigns/c12-mixed-local-http-900-v2426/provider-custody/0014/CUSTODY.json",
+    "sha256": "47642bfc9a99570c32bff504fe90377c93ca6c82a8130986555a8e01354ccb5a"
+  },
+  {
+    "bytes": 42485,
+    "path": "/home/developer/projects/aurora/thesis/campaigns/c12-mixed-local-http-900-v2426/provider-custody/0014/provider-pair.tar.gz",
+    "sha256": "b11e993764223c4a81b29e535a9afeb69b28588f91332ddffe966667506d88c9"
+  },
+  {
+    "bytes": 5685,
+    "path": "/home/developer/projects/aurora/thesis/campaigns/c12-mixed-local-http-900-v2426/requester/cases/0015/CASE.json",
+    "sha256": "f6221be084c594e47092942897d2349650f54eccc9f8c1eecc4f091861ced411"
+  },
+  {
+    "bytes": 7846,
+    "path": "/home/developer/projects/aurora/thesis/campaigns/c12-mixed-local-http-900-v2426/provider-custody/0015/CUSTODY.json",
+    "sha256": "055e94612a6ae56716fa89298791b6fe4eb65dfbf7161e197e9c274ad4ff85ed"
+  },
+  {
+    "bytes": 40899,
+    "path": "/home/developer/projects/aurora/thesis/campaigns/c12-mixed-local-http-900-v2426/provider-custody/0015/provider-pair.tar.gz",
+    "sha256": "bfc293faf0d775ee31eb35a425ff45c08c46c35cd21548cc9822953a33ac92a8"
+  },
+  {
+    "bytes": 5683,
+    "path": "/home/developer/projects/aurora/thesis/campaigns/c12-mixed-local-http-900-v2426/requester/cases/0016/CASE.json",
+    "sha256": "4e79dbb8b82a802902b655998c0c77f9fdb03901221741da2381bcbe8222bca1"
+  },
+  {
+    "bytes": 7845,
+    "path": "/home/developer/projects/aurora/thesis/campaigns/c12-mixed-local-http-900-v2426/provider-custody/0016/CUSTODY.json",
+    "sha256": "1ccb2a684107e115b55a64ffc344c69f7214a831f725612dfd25c85b4339878e"
+  },
+  {
+    "bytes": 44707,
+    "path": "/home/developer/projects/aurora/thesis/campaigns/c12-mixed-local-http-900-v2426/provider-custody/0016/provider-pair.tar.gz",
+    "sha256": "9c6d75ac943268085df56c5bdbfa4c71721b584b6d318d550c663a3e2c4a7d41"
+  },
+  {
+    "bytes": 5686,
+    "path": "/home/developer/projects/aurora/thesis/campaigns/c12-mixed-local-http-900-v2426/requester/cases/0017/CASE.json",
+    "sha256": "7a504a7e8ede122fe47730aabdae977866f43865feb1656916f24d596af22ec7"
+  },
+  {
+    "bytes": 7846,
+    "path": "/home/developer/projects/aurora/thesis/campaigns/c12-mixed-local-http-900-v2426/provider-custody/0017/CUSTODY.json",
+    "sha256": "3d62a645124c960ddb246cf07c8c9db5775a614079be6857334b14f0c0fb5840"
+  },
+  {
+    "bytes": 43700,
+    "path": "/home/developer/projects/aurora/thesis/campaigns/c12-mixed-local-http-900-v2426/provider-custody/0017/provider-pair.tar.gz",
+    "sha256": "81889aa6ce32ec750487e58bfd39de682d0484fc1902a24363198d00c0cd18ef"
+  },
+  {
+    "bytes": 5686,
+    "path": "/home/developer/projects/aurora/thesis/campaigns/c12-mixed-local-http-900-v2426/requester/cases/0018/CASE.json",
+    "sha256": "cd2714d8c728dfeb72deb9f9b8e836ee3f601615e28e1b158725ae6e03c778b0"
+  },
+  {
+    "bytes": 7845,
+    "path": "/home/developer/projects/aurora/thesis/campaigns/c12-mixed-local-http-900-v2426/provider-custody/0018/CUSTODY.json",
+    "sha256": "f75d1bcdf66fa9c146dea3e0a516f994718cec076e33a0a65bec54875a42b86e"
+  },
+  {
+    "bytes": 43696,
+    "path": "/home/developer/projects/aurora/thesis/campaigns/c12-mixed-local-http-900-v2426/provider-custody/0018/provider-pair.tar.gz",
+    "sha256": "aabe5337f12e9cf868d523e2f075348d852ff4424b042170b34bcc3a6fb8b2c4"
+  },
+  {
+    "bytes": 5686,
+    "path": "/home/developer/projects/aurora/thesis/campaigns/c12-mixed-local-http-900-v2426/requester/cases/0019/CASE.json",
+    "sha256": "ce37f8fe5ce21dd9b1db3500c8ca9c0237560338a2a707e700e49f1059a848a6"
+  },
+  {
+    "bytes": 7846,
+    "path": "/home/developer/projects/aurora/thesis/campaigns/c12-mixed-local-http-900-v2426/provider-custody/0019/CUSTODY.json",
+    "sha256": "cb86705925d6d09bf994210f07590e74cd4c2a0576d165df5ff9a28db63900c9"
+  },
+  {
+    "bytes": 41721,
+    "path": "/home/developer/projects/aurora/thesis/campaigns/c12-mixed-local-http-900-v2426/provider-custody/0019/provider-pair.tar.gz",
+    "sha256": "adb22696d89eb788714a28e8e2436816dd71b0842820c82ddcb6c5000d76bd48"
+  },
+  {
+    "bytes": 5687,
+    "path": "/home/developer/projects/aurora/thesis/campaigns/c12-mixed-local-http-900-v2426/requester/cases/0020/CASE.json",
+    "sha256": "ab781a806a07fb27b5ddd25b6e8949baee186c566fd68d01e80ff7517e841607"
+  },
+  {
+    "bytes": 7844,
+    "path": "/home/developer/projects/aurora/thesis/campaigns/c12-mixed-local-http-900-v2426/provider-custody/0020/CUSTODY.json",
+    "sha256": "92d67e602793a96c765e3b171380a2fc6d323cf34fb9ba4f47db85d38fcbe713"
+  },
+  {
+    "bytes": 43595,
+    "path": "/home/developer/projects/aurora/thesis/campaigns/c12-mixed-local-http-900-v2426/provider-custody/0020/provider-pair.tar.gz",
+    "sha256": "407e60d49dc59ca4eb9dc1a0718b65142a4a430790ce27169c8537733427a36f"
+  },
+  {
+    "bytes": 5686,
+    "path": "/home/developer/projects/aurora/thesis/campaigns/c12-mixed-local-http-900-v2426/requester/cases/0021/CASE.json",
+    "sha256": "6f5750c7aada537d6af6039a60c1098d590ba6ada8066a42da42ab9f03626ea0"
+  },
+  {
+    "bytes": 7844,
+    "path": "/home/developer/projects/aurora/thesis/campaigns/c12-mixed-local-http-900-v2426/provider-custody/0021/CUSTODY.json",
+    "sha256": "1fc8d6914d2af0b5b656bdbafa51b7e7379cdb8713314018cf1c22b51b67e5cd"
+  },
+  {
+    "bytes": 41388,
+    "path": "/home/developer/projects/aurora/thesis/campaigns/c12-mixed-local-http-900-v2426/provider-custody/0021/provider-pair.tar.gz",
+    "sha256": "b5bd49b9f91309b26ef6f9287bf1b38ab7f11bcaa44e95804ae2598a9be2e607"
+  },
+  {
+    "bytes": 5686,
+    "path": "/home/developer/projects/aurora/thesis/campaigns/c12-mixed-local-http-900-v2426/requester/cases/0022/CASE.json",
+    "sha256": "9828abc82cdbf72dbf7c881ec9d20a70fa4421da27c29730257c03dbc3d7aac0"
+  },
+  {
+    "bytes": 7844,
+    "path": "/home/developer/projects/aurora/thesis/campaigns/c12-mixed-local-http-900-v2426/provider-custody/0022/CUSTODY.json",
+    "sha256": "9741464eeb11215ade218eb043c49f82c01e4cb16576be7984c51b8270619c1f"
+  },
+  {
+    "bytes": 40914,
+    "path": "/home/developer/projects/aurora/thesis/campaigns/c12-mixed-local-http-900-v2426/provider-custody/0022/provider-pair.tar.gz",
+    "sha256": "92c1e40ab0c69b036c81932c3cbf137dcae71ee3db9a8d88e0fbe3d3ad271539"
+  },
+  {
+    "bytes": 5686,
+    "path": "/home/developer/projects/aurora/thesis/campaigns/c12-mixed-local-http-900-v2426/requester/cases/0023/CASE.json",
+    "sha256": "9096b8c678fab8a87407ce66a543c57e816f284ba76146fa646d2a880e2c4964"
+  },
+  {
+    "bytes": 7845,
+    "path": "/home/developer/projects/aurora/thesis/campaigns/c12-mixed-local-http-900-v2426/provider-custody/0023/CUSTODY.json",
+    "sha256": "3eafb59bd59080020a093415f95b28da28eafb151cf96f3ed5d04926aa84b6e9"
+  },
+  {
+    "bytes": 42910,
+    "path": "/home/developer/projects/aurora/thesis/campaigns/c12-mixed-local-http-900-v2426/provider-custody/0023/provider-pair.tar.gz",
+    "sha256": "27fe4c33f5b0f3072a108b7df57d241170c01d8f575c4653214fd1064a9ef4b0"
+  }
+]

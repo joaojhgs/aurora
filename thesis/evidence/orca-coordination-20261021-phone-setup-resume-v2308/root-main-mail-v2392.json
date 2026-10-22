@@ -1,0 +1,68 @@
+{
+  "id": "remote-cli-1792643655313",
+  "ok": true,
+  "result": {
+    "runId": "run_e6054e76e9fc",
+    "deliveryId": "delivery_41edc5f81d6b",
+    "messages": [
+      {
+        "id": "msg_f942bd96849f",
+        "run_id": "run_e6054e76e9fc",
+        "delivery_contract": "current_delivery",
+        "from_handle": "term_1f27be31-0284-4366-bb91-30fe538cd30e",
+        "to_handle": "run:run_e6054e76e9fc",
+        "subject": "Coding/owner actual phone action: scoped APK install canceled by phone; USB/GPU/build now working",
+        "body": "Fresh actual04:29:21\u201350UTC USB get-state=device, samePOCO. Safe side-by-side productionAPK built exit0 in180.15s, verified aapt package dev.aurora.desktop.phonenotebook v1.0.0/code100/API36 arm64;747895810B SHA256d830acbc44940743c19bab50c2bfecab0f810a3c197a23d5c95e0c980ae1ae6a, sameebde+Rootv2383 source+explicit scopedAGPpackageoverride. This avoids existing signature mismatch and preserves originalAurora/data. Actual install-r now fails INSTALL_FAILED_USER_RESTRICTED: Install canceled by user. This is app installation rejection, not ADBunauthorized; no authorization dialog/code invented, no install-security toggle/bypass/wipe/key search performed. Owner needs to permit this scoped test-app installation through ordinary phone installer UI; exact current installer focus is being boundedly inspected, no personal content. Please forward this genuine phone action via Coding/owner. Independent notebook source/assets/runtime/config ready; realnativepilots0, actualHTTP/P2P+WAVstillpending,900WAITsleepSTART/mainK1untouched. Receipt both repos evidence/install-side-by-side-apk-v100/result.json. Prior resource request025bc70ea7ea remains pending, no duplicate window requested.",
+        "type": "status",
+        "priority": "high",
+        "thread_id": null,
+        "payload": "{\"reportPath\":\"thesis/phone-notebook/20261020/REPORT.md\"}",
+        "created_at": "2026-10-22T04:30:46Z",
+        "delivered_at": null
+      },
+      {
+        "id": "msg_c11653194ebe",
+        "run_id": "run_e6054e76e9fc",
+        "delivery_contract": "current_delivery",
+        "from_handle": "term_1f27be31-0284-4366-bb91-30fe538cd30e",
+        "to_handle": "run:run_e6054e76e9fc",
+        "subject": "Coding owner NOW: one requested SAME APK install retry issued04:31:51; accept normal phone confirmation",
+        "body": "Owner correction applied immediately. Prior v100 install reconciled exit1 USER_RESTRICTED, explicit target pm path absent and no pending prior client; same APK SHA256d830acbc44940743c19bab50c2bfecab0f810a3c197a23d5c95e0c980ae1ae6a reverified unchanged. Exactly ONE normal adb install-r retry launched04:31:51UTC to authorized POCO KBX8LNFUBE5XGQRG for dev.aurora.desktop.phonenotebook, finite90s, no rebuild/download/uninstall/wipe/security toggle/autotap/forcegrant. Status currently request issued/pending phone confirmation, not yet success claimed. Please promptly relay owner can accept the standard installation confirmation now. Receipt both repos evidence/owner-one-install-retry-v102/result.json; I will reconcile actual result and continue setup if installed, no900START.",
+        "type": "status",
+        "priority": "high",
+        "thread_id": null,
+        "payload": "{\"reportPath\":\"thesis/phone-notebook/20261020/REPORT.md\"}",
+        "created_at": "2026-10-22T04:31:57Z",
+        "delivered_at": null
+      },
+      {
+        "id": "msg_f783c9e06b48",
+        "run_id": "run_e6054e76e9fc",
+        "delivery_contract": "current_delivery",
+        "from_handle": "term_1f27be31-0284-4366-bb91-30fe538cd30e",
+        "to_handle": "run:run_e6054e76e9fc",
+        "subject": "Coding owner INSTALL SUCCESS04:32:20: single retry accepted, test app verified, proceeding native app setup",
+        "body": "Owner requested one retry completed exit0 Success at04:32:20UTC. Verified dev.aurora.desktop.phonenotebook version1.0.0/code100, primaryCpuAbiarm64-v8a, targetSdk36 DEBUGGABLE; SAME APK SHA256d830acbc44940743c19bab50c2bfecab0f810a3c197a23d5c95e0c980ae1ae6a. Original dev.aurora.desktop/data preserved; no reinstall loop/autotap/security/grant/wipe. Actual receipt both repos evidence/read-install-finish-v104/result.json, controller90s finished in29s. Proceeding launch/capability/supported-entrypoint/secure connection setup on this package only. GPU/USB/runtime/models/build now working; native HTTP/P2P file-audio-to-WAV pilots still0 and no900sleepSTART. Existing bounded notebook service/pilot resource request025bc70ea7ea remains queued for your ownership decision; mainK1untouched.",
+        "type": "status",
+        "priority": "high",
+        "thread_id": null,
+        "payload": "{\"reportPath\":\"thesis/phone-notebook/20261020/REPORT.md\"}",
+        "created_at": "2026-10-22T04:33:18Z",
+        "delivered_at": null
+      }
+    ],
+    "count": 3,
+    "replayed": false,
+    "acknowledged": null,
+    "timedOut": false,
+    "cancelled": false,
+    "connectionLost": false,
+    "mutation": {
+      "requestId": "1c1b73c8-0b9d-40ff-96e6-d27dc7ab4f81",
+      "replayed": false
+    }
+  },
+  "_meta": {
+    "runtimeId": "cc9e3275-28c6-4c45-85cc-bdcd2262aa7d"
+  }
+}

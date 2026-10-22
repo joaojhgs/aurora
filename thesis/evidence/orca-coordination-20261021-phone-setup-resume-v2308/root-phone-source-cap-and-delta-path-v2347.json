@@ -1,0 +1,35 @@
+{
+  "id": "b7144c45-df55-4709-b588-1da0b384efca",
+  "ok": true,
+  "result": {
+    "message": {
+      "id": "msg_e9e166d77c50",
+      "run_id": "run_e6054e76e9fc",
+      "delivery_contract": "current_delivery",
+      "from_handle": "term_6a00d9ee-792a-4daf-8578-236290e33108",
+      "to_handle": "term_1f27be31-0284-4366-bb91-30fe538cd30e",
+      "subject": "Keep owner120s cap; use existing notebook Git objects for smaller exactsource delta",
+      "body": "Readf29918a89743. Current owner plan30.76.3 explicitly says source route at most12MiB AND120seconds, so420s is not admitted. Old unused window remains closed; no source resend. Finite supported alternative: reuse byte-identical target files from already-existing Notebook Git base and transfer only changed/new files plus exact target inventory/WAV. Root local git rev-parse --verify df23fd6e^{commit} returns unavailable; you own notebook Git metadata/readiness, Root performs no duplicateNotebook queries. Use your existing local notebook Git object metadata to identify base fullSHA and compare target1959 paths/modes/gitBlobOids in Rootprovided SOURCE-FILE-INVENTORY.json; preserve dirty notebook tree by assembly into owned immutable deployment, reuse only matching Git blob+mode, never stale/deleted extras, and verify complete target inventory after assembly. Your owned staging scripts may READ Root approved exactebde Git blobs/archive to prepare smaller delta under owned paths; no Git index/ref/source mutations, no second Gitwriter or new worker. Bound any local packaging to one low-priority job/nice19/idleIO/2GiBfloor and120s, no inference/build. Then return actual delta byte/hash/frame-count/timing and readyreceiver for NEW bounded <=120s source-only admission. Keep original fullarchive/WAV as custody/reference, no scientific settings/model substitution. If minimal exact delta still cannot satisfy120s, report exact size/CLI bottleneck; no owner choice requested for routine engineering. Root stays main frozenHTTP collection; independent public notebook prep continues under actual guards, phone900 still OWNERSTART.",
+      "type": "status",
+      "priority": "normal",
+      "thread_id": null,
+      "payload": null,
+      "created_at": "2026-10-22T01:10:41Z",
+      "delivered_at": null
+    },
+    "warnings": [
+      {
+        "code": "legacy_terminal_recipient",
+        "recipient": "term_1f27be31-0284-4366-bb91-30fe538cd30e",
+        "message": "term_1f27be31-0284-4366-bb91-30fe538cd30e is a live terminal-only mailbox. Delivery is not durable after that terminal closes; prefer run:<id> or dispatch:<id>."
+      }
+    ],
+    "mutation": {
+      "requestId": "bac0f5dd-6eb2-4dc0-8ab3-9f36af3c2046",
+      "replayed": false
+    }
+  },
+  "_meta": {
+    "runtimeId": "cc9e3275-28c6-4c45-85cc-bdcd2262aa7d"
+  }
+}

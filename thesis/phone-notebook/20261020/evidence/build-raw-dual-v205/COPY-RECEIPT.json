@@ -1,0 +1,10 @@
+{
+  "copyOnly": true,
+  "bothHostsPhysicalRepositoryCustody": true,
+  "originalNotebookProtectedLogsPreserved": true,
+  "secretAssignmentLinesOmitted": 11,
+  "bundleSha256": "c32973f60b09a65d332faf852ec66abc53bf9efc3ce0de46c84c4837f5a662c5",
+  "filesVerified": 23,
+  "frameBytes": 4500,
+  "noApkOrModelTransfer": true
+}

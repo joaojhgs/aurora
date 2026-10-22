@@ -1,0 +1,16 @@
+{
+  "at": "2026-10-16T05:14:30.362071+00:00",
+  "scope": "Root-only exact canonical promotion/FULLREAD through monitor-owned30.42; no competing plan write",
+  "origin": "actual authoritative local file prefix through30.42",
+  "sourceReceipt": ".omx/evidence/orca-monitor-20261010/desktop-surface-admission-20261016T0503/receipt.json",
+  "canonicalPath": "thesis/methodology/owner-requirements-20261016-797b3dd5.md",
+  "bytes": 448023,
+  "sha256": "797b3dd59096e114ba37de8995b93759f1d63ef3449086cae214ff431d962740",
+  "previousFullyReadBytes": 445046,
+  "previousPrefixUnchanged": true,
+  "newDeltaFullreadBytes": 2977,
+  "newDeltaSha256": "be815da4b82930bf88fcbe16937198dc88ca4e5b364be12a6c557fc499015372",
+  "liveFileBytesAfterSnapshot": 0,
+  "newConditionsOrBaselineGate": false,
+  "runtimeExecuted": false
+}

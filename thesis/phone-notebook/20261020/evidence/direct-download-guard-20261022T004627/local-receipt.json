@@ -1,0 +1,8 @@
+{
+  "bytes": 480,
+  "copyOnly": true,
+  "custody": "Notebook result persisted and fsynced before relay; remote receipt in same output",
+  "localPath": "/home/developer/projects/aurora/thesis/phone-notebook/20261020/evidence/direct-download-guard-20261022T004627/result.json",
+  "remotePath": "/home/developer/projects/aurora/thesis/phone-notebook/20261020/evidence/direct-download-guard-20261022T004627.json",
+  "sha256": "94a938b1a5c0fdac89fddab9c9a84664ca631a4c1017640be27276dd5700349a"
+}

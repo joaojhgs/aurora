@@ -1,0 +1,16 @@
+{
+  "receipt": "6dfd1ccc-696b-4d1f-8fd6-adaae03296c8",
+  "at": "2026-10-15T03:19:45Z",
+  "terminal": "term_6a00d9ee-792a-4daf-8578-236290e33108",
+  "reportedFullAudioPass": true,
+  "reportedFlowApproxMs": 13510,
+  "reportedExactTranscript": true,
+  "reportedParisReply": true,
+  "reportedValidNonsilentTTS": true,
+  "reportedOffloadedLayers": "25/25",
+  "reportedGPU": "RX7600",
+  "reportedSeed": 42,
+  "reportedThreads": 2,
+  "rawPackageIndependentlyRead": false,
+  "exactFreezeAndReplacementReceiptPending": true
+}

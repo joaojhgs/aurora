@@ -1,0 +1,39 @@
+{
+  "at": "2026-10-15T00:21:05.846516+00:00",
+  "objective": "tcc:20261013:submission-20261030",
+  "canonical_plan": "/home/developer/Documents/Obsidian Vault Origin/5-full-notes/faculdade/tcc/future-work-test-requirements.md",
+  "writer_terminal": "term_2eab47ed-ab9b-4e35-bd9b-fc068c60e3fc",
+  "run": "run_e6054e76e9fc",
+  "task": "task_d7ea336050cf",
+  "dispatch": "ctx_37b4d0a3c14f",
+  "guide_lineage": "hermes:42a80e3a07e6d612ba5a491a74f42ff98a0098e316694808df506ddf430cb7d4",
+  "before_lines": 1503,
+  "after_lines": 1522,
+  "before_sha256": "2e3bdbc57c49a55b3c18cd14955376b4903ab55e667cbb062783206dea41e514",
+  "after_sha256": "f5a7bcd6aed3078fb2e0de0421d4a45742e2201f14f0b18b0bfbe17b308ef6fb",
+  "diff_sha256": "0e95553ffb287f687216f2893fbf8b00b0ff64cd401dc77ed03f554bf75a0d93",
+  "source_receipts": [
+    "msg_9dab5b1d9815",
+    "msg_934bb5a00cd0",
+    "msg_87fe55d44f62",
+    "msg_c8095e18f5a8",
+    "msg_b0f960a1d141"
+  ],
+  "raw_package_manifest_sha256": "7cf4d692f2c99c2dbfa82ca64b1d87eb908484bf2ebca277f274a96d15603434",
+  "checks": {
+    "exact1503prefix_preserved": true,
+    "append_only": true,
+    "eight_failed_not_accepted": true,
+    "partial_T0_no_percentiles": true,
+    "voice_mandatory": true,
+    "typed_not_voice_substitute": true,
+    "900_per_condition": true,
+    "phase2_false": true,
+    "gpu_seal_false": true,
+    "no_runtime_execution_by_monitor": true
+  },
+  "root_readback_verified": true,
+  "runtime_validation_by_monitor": false,
+  "root_ack_message": "msg_9eab94858421",
+  "root_ack_at": "2026-10-15T00:28:14Z"
+}

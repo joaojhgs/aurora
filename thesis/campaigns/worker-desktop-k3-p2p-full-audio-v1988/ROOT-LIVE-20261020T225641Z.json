@@ -1,0 +1,47 @@
+{
+  "at": "2026-10-20T22:56:41.582135+00:00",
+  "actors": {
+    "3154212": {
+      "state": "S",
+      "sameStart": true,
+      "startTicks": 131502232
+    },
+    "3154248": {
+      "state": "S",
+      "sameStart": true,
+      "startTicks": 131502574
+    },
+    "3154213": {
+      "state": "S",
+      "sameStart": true,
+      "startTicks": 131502236
+    }
+  },
+  "measured": {
+    "attempted": 13,
+    "correct": 13,
+    "failed": 0,
+    "remaining": 887
+  },
+  "progress.json": {
+    "status": "running",
+    "attempted": 30,
+    "warmups_attempted": 17,
+    "measured_attempted": 13
+  },
+  "custody": {
+    "sequence": 8,
+    "cases": 29,
+    "audio": 27,
+    "files": 127
+  },
+  "freeBytes": 4171071488,
+  "lastCase": {
+    "ordinal": 30,
+    "phase_index": 13,
+    "status": "completed_correct",
+    "failure": null,
+    "flow_duration_ms": 12360.001574,
+    "consecutive_preaccept_rejections": 0
+  }
+}

@@ -1,0 +1,120 @@
+{
+  "at": "2026-10-20T04:05:14.851695+00:00",
+  "status": "ACTUAL_P2P_K1_MEASUREMENT_ADMITTED_AND_RUNNING",
+  "nativeGoal": "01a112a5-d6bb-74e2-bf7c-ace73cb513b5",
+  "nativeGoalStatus": "active",
+  "run": "run_e6054e76e9fc",
+  "originalMonitor": "ctx_37b4d0a3c14f",
+  "sourceFixTests": 36,
+  "sourceFixSolReview": "PASS",
+  "frozenConditionSha256": "04872dbd3948c13a4b269a1eb116f8b92fb3c369a8b0026cbbf339a2257009c1",
+  "providerManifestSha256": "245d1739111a7162287fcece91dc005958722e062a1e028613c3f85e21e3d339",
+  "actorIdentities": [
+    {
+      "pid": 2326088,
+      "startTicks": 124639716,
+      "state": "S"
+    },
+    {
+      "pid": 2326096,
+      "startTicks": 124639833,
+      "state": "S"
+    },
+    {
+      "pid": 2326666,
+      "startTicks": 124644125,
+      "state": "S"
+    }
+  ],
+  "providerReceiver": {
+    "pid": 3194394,
+    "startTicks": 22320527
+  },
+  "excludedWarmups": {
+    "attempted": 15,
+    "correct": 15,
+    "failed": 0,
+    "nativeSttJoins": 15,
+    "nativeLlmJoins": 15,
+    "nativeTtsJoins": 15,
+    "localProof": "native-warmup-admission/LOCAL-STT-LLM-WARMUP-PROOF.json",
+    "receiverAndRouteProofSha256": "905adcab330721d38e242f4deb26ade98b96459fd30922e5aaf41a71065ae2d1",
+    "route": {
+      "continuous_route_stability_claimed": false,
+      "frozen_manifest_sha256": "04872dbd3948c13a4b269a1eb116f8b92fb3c369a8b0026cbbf339a2257009c1",
+      "joined_receiver_calls": 15,
+      "observed_calls": 15,
+      "observed_path_class_rows": {
+        "after": {
+          "direct": 15,
+          "relay": 0
+        },
+        "before": {
+          "direct": 15,
+          "relay": 0
+        }
+      },
+      "requester_pid": 2326096,
+      "route_observer_sha256": "2c23fd2bc69b00b746c2c5dc28c1d2b77428016314045363dceea5fe9ee5cdbb",
+      "route_runtime_pins_sha256": "db270c9c6373b24e669bdf2b002da5fadb3e3841ee1ecc6ad8dec5a7ad26daf8",
+      "route_sink_sha256": "2b235781c15410e6dbfc8829971a34e8334714cdf015053edfd127756325cfb8",
+      "runtime_source_pin_status": "verified_before_observer_install",
+      "schema": "aurora.mesh_route_warmup_gate.v1",
+      "sink_dropped_rows": 0,
+      "sink_invalid_rows": 0,
+      "sink_oversize_rows": 0,
+      "sink_quota_rows": 0,
+      "sink_written_rows": 15,
+      "snapshot_scope": "before_after_snapshots_all_pc_transports_no_pair_id_no_continuous_stability",
+      "status": "passed"
+    }
+  },
+  "progress": {
+    "attempted": 25,
+    "last_attempt_file": "attempts/attempt-0025-measured.jsonl",
+    "last_attempt_status": "completed_correct",
+    "measured_attempted": 10,
+    "planned_measured": 900,
+    "planned_warmups": 15,
+    "status": "running",
+    "unattempted_measured": 890,
+    "warmups_attempted": 15
+  },
+  "measuredCorrect": 10,
+  "measuredFailed": 0,
+  "firstMeasured": {
+    "source": "/home/developer/projects/aurora/.git/aurora-handoff-import-20261006/distributed-k1-mesh-cell-v1711/campaign/attempts/attempt-0016-measured.jsonl",
+    "sourceSha256": "bf4a9830bfcaa855b67214436328a68f9f20098ab6d1ea6d90a69668bd7fc57f",
+    "requestId": "audio-request-5548cae85a1c462da86a81cb800e38d3",
+    "flowDurationMs": 45226.039054,
+    "validOutputWav": "/home/developer/projects/aurora/.git/aurora-handoff-import-20261006/distributed-k1-mesh-cell-v1711/campaign/audio/79719aedcd78fc5f14af5d057e814ca3feb2c65f9e9ab482387943598c6da13b.wav",
+    "wavBytes": 30252,
+    "wavSha256": "79719aedcd78fc5f14af5d057e814ca3feb2c65f9e9ab482387943598c6da13b",
+    "caseInThesis": {
+      "path": "thesis/campaigns/worker-desktop-k1-p2p-tts-v1711/attempts/attempt-0016-measured.jsonl",
+      "bytes": 4842,
+      "sha256": "bf4a9830bfcaa855b67214436328a68f9f20098ab6d1ea6d90a69668bd7fc57f"
+    },
+    "wavInThesis": {
+      "path": "thesis/campaigns/worker-desktop-k1-p2p-tts-v1711/audio/79719aedcd78fc5f14af5d057e814ca3feb2c65f9e9ab482387943598c6da13b.wav",
+      "bytes": 30252,
+      "sha256": "79719aedcd78fc5f14af5d057e814ca3feb2c65f9e9ab482387943598c6da13b"
+    }
+  },
+  "performanceQuantiles": "Not finalized; only excluded warmup p95 used for prospective budget admission. Collect900 measured outcomes without top-up.",
+  "conditionCapSeconds": 72000,
+  "providerLifetimeSeconds": 72840,
+  "nativeProofMetadataCorrection": "Original omitted top-level peer field retained. Derivative bound to saved actual catalogue/mesh peer on same receiverPID/start/manifest; no new audio/Orca send/frozen-source edit.",
+  "nextGate": "Observe SAME900 measured condition at5min or failure/terminal, preserve incremental custody. No further unchanged tests, source/model/audio changes, repeatwarmups, baseline replay or other model traffic.",
+  "nextObservationUtc": "2026-10-20T04:10:14.851835+00:00",
+  "personalControl": "Finalizer native read COMPLETE; no pending accepted control operation. Original Root only.",
+  "methodology": "thesis/methodology/owner-requirements-20261020-a6b57bc4.md",
+  "physicalCustodyAtObservation": {
+    "at": "2026-10-20T04:07:24.288030+00:00",
+    "sequence": 22,
+    "cases": 28,
+    "wavs": 28,
+    "files": 258,
+    "bytes": 3786792
+  }
+}

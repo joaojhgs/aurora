@@ -1,0 +1,10 @@
+{
+  "at": "2026-10-22T01:38:21.013308+00:00",
+  "deadline": "2026-10-22T01:40:08.259445+00:00",
+  "destination": "/home/developer/projects/aurora/thesis/phone-notebook/20261020/deployment/ebde3a8acf6315f920d03593845f17a1fc65a733/source-delta-v33-copy-v2353-20261022",
+  "maximumFrameBytes": 98048,
+  "pid": 78831,
+  "singleStream": true,
+  "startTicks": "1369105",
+  "status": "RECEIVER_READY"
+}

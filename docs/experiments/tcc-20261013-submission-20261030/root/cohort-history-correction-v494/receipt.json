@@ -1,0 +1,8 @@
+{
+  "at": "2026-10-15T04:06:49.915448+00:00",
+  "change": "scope inaccurate aggregate oldCondition label to exact linkedV477/voice9; retain mixedTiny/base history explicitly",
+  "registrySHA256": "51c1200e1baf3db5dc4ebd8cf8a80f61ab69c3d3b26d08c5b0b175a6aa7c3344",
+  "previousV1Preserved": true,
+  "noSourceModelsRequestsOrActiveInputsChanged": true,
+  "basis": "monitor plan1697section30.16/msg_b9c9d8b4058f"
+}

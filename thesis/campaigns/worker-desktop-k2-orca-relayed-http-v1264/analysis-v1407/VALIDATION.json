@@ -1,0 +1,31 @@
+{
+  "at": "2026-10-17T23:57:25.617741+00:00",
+  "verification": {
+    "AST": true,
+    "targetedRuffF_E9": true,
+    "savedMainflowExitCode": 0,
+    "measuredRows": 13,
+    "excludedWarmups": 15,
+    "allSixNativeBoundariesJoinedMeasuredCases": 13,
+    "newMeasurements": 0
+  },
+  "readme": {
+    "path": "thesis/campaigns/worker-desktop-k2-orca-relayed-http-v1264/analysis-v1407/README.md",
+    "bytes": 3159,
+    "sha256": "b9d70e4e68185f169fc9fa957346373eac553ba2dcb4ddd41e80f321ca8029a9"
+  },
+  "independentSolReview": {
+    "verdict": "CLOSED_PASS",
+    "message": "msg_1c44f8349cb7",
+    "path": "thesis/campaigns/worker-desktop-k2-orca-relayed-http-v1264/analysis-v1407/SOL-SOURCE-REVIEW.json",
+    "bytes": 3299,
+    "sha256": "3234eda9bf11deedc33bdb61897b43504ea8da9fdb42a4d5bd6c7f8969e5e541",
+    "scope": "One bounded source mapping review; actual saved mainflow separately verified, not full900 acceptance"
+  },
+  "independentSavedMainflowReceipt": {
+    "path": "thesis/campaigns/worker-desktop-k2-orca-relayed-http-v1264/analysis-v1407/INDEPENDENT-MAINFLOW-ACK-v1411.json",
+    "message": "msg_a769f1a40002",
+    "sha256": "b7e2e695b361ed8feaaa3528565b2795d65fa89c9b16758b91289707292906fd",
+    "verdict": "CLOSED_PASS"
+  }
+}

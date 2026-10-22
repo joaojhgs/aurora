@@ -1,0 +1,61 @@
+{
+  "at": "2026-10-21T21:07:19.940725+00:00",
+  "status": "DRAFT_PROSPECTIVE_ALLOCATION_NOT_FROZEN_NOT_ADMITTED_NOT_STARTED",
+  "authority": "Original owner full900percondition/fullmatrix + sole methodology writer fullplan30.74.6, physical ca11a844 mirror. Routine finite Root framing; no new owner-choice or review gate.",
+  "nativeGoalThread": "01a112a5-d6bb-74e2-bf7c-ace73cb513b5",
+  "nativeGoalBudget": "unbudgeted unchanged; proposed numbers are experimental wall-clock allocations only",
+  "eligibleCount": 450,
+  "eligibleFirst": 451,
+  "eligibleLast": 900,
+  "eligibilitySha256": "cb4921776f101fe9569c73fc54f6f3efa9bff826fb204eb229dc16aeb8c884ae",
+  "priorAccountingAtThisDraft": {
+    "originalCapSeconds": 57600,
+    "originalActualChargeSeconds": 10027.780472366,
+    "priorProspectiveAccountingCapSeconds": 72000,
+    "parentAllInclusiveAllocationSeconds": 60000,
+    "parentStartedAtUtc": "2026-10-21T06:56:07.231887+00:00",
+    "parentDeadlineUtcUnchanged": "2026-10-21T23:36:07.231887+00:00",
+    "parentActualElapsedSecondsAtDraft": 51072.708838,
+    "priorChargedTotalSecondsAtDraft": 61100.489310366,
+    "current270ActualSetupCollectionShutdownSeconds": 14825.076462135,
+    "subordinateLifetimesPolicy": "Current requester, provider, startup attempts, warmups, capacity interruption/recovery and finalization overlap enclosing60000 parent wall clock; retain each but do not add twice. Recompute actual prior total at prospective freeze, preserving all prior clocks/caps."
+  },
+  "capacity": {
+    "basis": "max(named prior reference60.3053512957s, current270 observed HF7 p95s); not pooled latency or ETA",
+    "referenceSeconds": 60.3053512957,
+    "current270P95Ms": 60103.400722399994,
+    "formula": "(450measured+15excludedwarmups)*referenceSeconds*1.2+480",
+    "forecastSeconds": 34130.386023000596,
+    "oldParentRemainingSecondsAtDraft": 8927.291162,
+    "oldProviderRemainingSecondsAtDraft": 5912.527929,
+    "bothOldWindowsInsufficient": true
+  },
+  "proposedFuture": {
+    "allInclusiveSeconds": 43200,
+    "aggregateAccountingCapSeconds": 115200,
+    "aggregateDerivation": "Prior72000 explicit accounting allowance + new43200 prospective allocation; no retroactive edit to prior caps. Must confirm actualPriorTotal+newAllocation<=newAggregate at freeze.",
+    "requestCapSeconds": 180,
+    "workerConditionCapSeconds": 39000,
+    "workerControllerOuterSeconds": 39600,
+    "providerMaximumLifetimeSeconds": 40800,
+    "setupReserveSeconds": 1200,
+    "postprocessingReserveSeconds": 2400,
+    "freshExcludedWarmups": 15,
+    "newMeasured": 450,
+    "START": "UNSET_NOT_FROZEN",
+    "DEADLINE": "UNSET_NOT_FROZEN"
+  },
+  "resourceAdmissionStillRequired": {
+    "workerAndDesktopFreshCPU_RAM_GPU_Disk_NetworkAndThermal": true,
+    "floorFreeBytes": 2147483648,
+    "additionalWorkerDiskReserveBytes": 805306368,
+    "noModelsOrCredentialsCopied": true,
+    "soleRootGlobalBuildAndProviderReservation": true,
+    "sameEffectiveModelsAudioSettingsSourceAuthRoutePlacement": true,
+    "sameExistingOrcaRelayAndPrivateIdentitiesOnly": true
+  },
+  "beforeAnyLifecycleOrInference": "Prepare exact immutable successor source, prove exact-idle existing provider metadata, freeze new versioned manifest/absolute START/DEADLINE/caps/resource identities and actual prior charges; then Root alone normal application retirement/new lifecycle if needed. Real protected-route/native/correctness15freshwarmups and finite postwarmup capacity gate precede only451-900; no failure/ambiguous index retry.",
+  "newApplicationLifecycle": 0,
+  "newInference": 0,
+  "newNativeGoalsOrWorkers": 0
+}

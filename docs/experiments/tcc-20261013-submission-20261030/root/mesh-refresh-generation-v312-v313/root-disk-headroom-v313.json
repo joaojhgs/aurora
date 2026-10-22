@@ -1,0 +1,10 @@
+{
+  "owner_receipt": ".git/aurora-handoff-import-20261006/matched-readiness-v307-mesh/next-env.d.ts.generated-after",
+  "removed_generated_cache_only": "apps/aurora-web/.next-hosted-peer-18ec0b740962befe71d74bd8/cache",
+  "removed_file_bytes": 718610571,
+  "disk_free_before": 1750753280,
+  "disk_free_after": 2469429248,
+  "successful_standalone_static_marker_preserved": true,
+  "server_sha256": "157224e01c988f41b3b042e7c3d35e902ac527b8dc9e724f0d46524662537192",
+  "latest_v310_build_untouched": true
+}

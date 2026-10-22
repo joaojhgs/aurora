@@ -1,0 +1,56 @@
+{
+  "pages": [
+    {
+      "host": "personal.skyron-server",
+      "page": "page-00.bin",
+      "bytes": 24576,
+      "sha256": "4ba3b6f128eecb3fc604458c32d9837ed0788c687227c236303ca8aa94668a1e",
+      "inference": 0
+    },
+    {
+      "host": "personal.skyron-server",
+      "page": "page-01.bin",
+      "bytes": 24576,
+      "sha256": "be98b70e9351a3531d60cec7c42f8002dc059aedf000553087901bb8f5dbfb9f",
+      "inference": 0
+    },
+    {
+      "host": "personal.skyron-server",
+      "page": "page-02.bin",
+      "bytes": 24576,
+      "sha256": "2d7bd1cfc01b30bcb148951a1ce28ddc5d907c1382e8c37484fb1823652e8e78",
+      "inference": 0
+    },
+    {
+      "host": "personal.skyron-server",
+      "page": "page-03.bin",
+      "bytes": 24576,
+      "sha256": "a4a70b2f8a1bdc57a79d3452c31fad99837547d161904399ef19c4c8ec288409",
+      "inference": 0
+    },
+    {
+      "host": "personal.skyron-server",
+      "page": "page-04.bin",
+      "bytes": 24576,
+      "sha256": "6f2a4805e5691cbd7205f97a97bb40c90974f620ba3e5548154487b0dfb57bfd",
+      "inference": 0
+    },
+    {
+      "host": "personal.skyron-server",
+      "page": "page-05.bin",
+      "bytes": 16972,
+      "sha256": "74ed9034265170050cbd40fa77a8d0417de6d95464c6505ab77f5ee08d9d3c47",
+      "inference": 0
+    }
+  ],
+  "published": {
+    "host": "personal.skyron-server",
+    "path": "/home/developer/projects/aurora/thesis/harness/c12-mixed-local-http-readiness-v2407/candidate.wav",
+    "bytes": 219794,
+    "sha256": "da0ecc4ad0885746ab6e716585473917ab2b543a505bf0db09ebacfaa7943cbb",
+    "copyOnly": true,
+    "newFixture": false,
+    "inference": 0
+  },
+  "oldTempInputMissingIsNotRawLossClaim": true
+}

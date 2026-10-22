@@ -1,0 +1,18 @@
+{
+  "at": "2026-10-17T16:50:37.420707+00:00",
+  "source": "/home/developer/Documents/Obsidian Vault Origin/5-full-notes/faculdade/tcc/future-work-test-requirements.md",
+  "canonical": "thesis/methodology/owner-requirements-20261017-0cebbadf.md",
+  "bytes": 474743,
+  "sha256": "0cebbadfe76b3a61384e6ea9acb204451516fc629886681c3cd2adf770b8df78",
+  "previousCanonical": "thesis/methodology/owner-requirements-20261016-40caf3ec.md",
+  "previousPrefixVerifiedIdentical": true,
+  "previousPrefixBytes": 465527,
+  "newAppendFullyReadBytes": 9216,
+  "newAppendSHA256": "9ac7670de4282030996c3d1ae812cae84292b91026da948d5114167ee2957cc2",
+  "fullyReadThrough": "30.45",
+  "sourceReceipt": ".omx/evidence/orca-monitor-20261010/authoritative-plan-update-30.45-20261017T1643.json",
+  "sourceWriter": "original Orca monitor",
+  "canonicalCopyWriter": "original Root",
+  "originalPlanChangedByRoot": false,
+  "executionHeldForPromotion": false
+}

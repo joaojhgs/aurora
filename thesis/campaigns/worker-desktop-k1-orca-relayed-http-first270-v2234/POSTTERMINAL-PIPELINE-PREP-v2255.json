@@ -1,0 +1,47 @@
+{
+  "at": "2026-10-21T17:47:05.210738+00:00",
+  "status": "POSTTERMINAL_PIPELINE_PREPARED_NOT_EXECUTED",
+  "sources": [
+    {
+      "path": "thesis/harness/provider_export_k1_http_prefix_v2252.py",
+      "bytes": 8194,
+      "sha256": "f37fa0f0266767043ae0e491c4b360a3ff847c2aca36cc8b804b83cb804c50c6"
+    },
+    {
+      "path": "thesis/harness/transfer_k1_http_provider_prefix_v2253.py",
+      "bytes": 12169,
+      "sha256": "608723cf882622891f1c1f59325cf523c74fc1690acbca4a6037eaffdfb0be73"
+    },
+    {
+      "path": "thesis/harness/finish_k1_http_epoch_v2254.py",
+      "bytes": 14502,
+      "sha256": "f1a88d81a299e40469b6aa2f5bf3df013e9062d17750dacce85c5dcf73b93cbb"
+    },
+    {
+      "path": "thesis/analysis/analyze_k1_http_epoch_saved_v2242.py",
+      "bytes": 18585,
+      "sha256": "a8c40fad5537af133b4212e63a1932a4f6242904c3996c988d83d578d742c04c"
+    }
+  ],
+  "targetRuff": "PASS",
+  "readOnlyCurrentAdmissionCheck": "WAIT_FOR_SAME_REQUESTER_NATURAL_RETIREMENT; actual3Widentitiesmatched/summaryabsent/0newRPC/0newFiles/0inference",
+  "liveMeasurementStillRunning": true,
+  "noProviderExportTransferOrAnalysisExecutedByThisPreparation": true,
+  "afterNaturalTerminalCommand": [
+    ".git/aurora-handoff-import-20261006/cpu-audio-campaign-v491/env/bin/python",
+    "thesis/harness/finish_k1_http_epoch_v2254.py"
+  ],
+  "futureRuntimeValidation": "UNEXECUTED; only after actualrequester/controller/copierretirement, using actualcloseddata; errorspreserved/no blindresend/no inference rerun",
+  "noSignalsOrNewSUTOrWorkers": true,
+  "pipeline": [
+    "ownglobalbuild/copierleaseafterterminal",
+    "onefinalcopierdrain",
+    "hashcheckcases/WAV/sourcepayloads andactualreceipt errors/native-resourceEOF",
+    "immutablelocalterminalseal",
+    "onefenced sameDfixedprefixarchive(no restart/retirement)",
+    "bounded96KiBpages/checksums/2GiBfloor",
+    "extract4requiredrawinputs",
+    "one saved native/resource/latency/correctnessanalysis",
+    "preserveallfailures/unattempted andleavefullnativegoalopen"
+  ]
+}

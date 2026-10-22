@@ -1,0 +1,33 @@
+{
+  "backend_package": "llama-cpp-python==0.3.19",
+  "benchmark_started": false,
+  "build_started_at": "2026-10-14T16:24:21.780433+00:00",
+  "caps": {
+    "available_ram_floor_bytes": 10737418240,
+    "compiler_jobs": 2,
+    "owned_directory_bytes": 4294967296,
+    "tmp_available_floor_bytes": 3221225472,
+    "wall_seconds": 900
+  },
+  "child_pid": 2676589,
+  "child_startticks": "62337023",
+  "cmake_args": "-DGGML_VULKAN=ON -DGGML_NATIVE=OFF -DVulkan_INCLUDE_DIR=/tmp/aurora-root-gpu-primary-v409/toolchain/usr/include -DVulkan_LIBRARY=/usr/lib/x86_64-linux-gnu/libvulkan.so.1 -DVulkan_GLSLC_EXECUTABLE=/tmp/aurora-root-gpu-primary-v409/toolchain/usr/bin/glslc",
+  "command_argv": [
+    "/home/developer/.local/bin/uv",
+    "pip",
+    "install",
+    "--python",
+    "/tmp/aurora-root-gpu-primary-v409/env/bin/python",
+    "--no-binary",
+    "llama-cpp-python",
+    "llama-cpp-python==0.3.19"
+  ],
+  "inference_started": false,
+  "kind": "aurora_root_gpu_backend_build",
+  "process_group": 2676589,
+  "recorded_at": "2026-10-14T16:24:21.778939+00:00",
+  "run_id": "v409-llamacpp019-vulkan",
+  "source_changes": false,
+  "system_changes": false,
+  "target": "/tmp/aurora-root-gpu-primary-v409"
+}

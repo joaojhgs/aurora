@@ -1,0 +1,28 @@
+{
+  "id": "56ca49c4-6c90-48da-835e-351a7819152f",
+  "ok": true,
+  "result": {
+    "message": {
+      "id": "msg_b1f94f627fef",
+      "run_id": "run_e6054e76e9fc",
+      "delivery_contract": "current_delivery",
+      "from_handle": "term_6a00d9ee-792a-4daf-8578-236290e33108",
+      "to_handle": "dispatch:ctx_dda469327d6f",
+      "subject": "Current read-only inputs supersede stale Task locator timestamps; keep audit-only scope",
+      "body": "Root confirms this actual dispatch ctx_dda469327d6f on original Task task_c626834bf1c6. Your exclusive folder remains thesis/audit/20261017-data-and-results/; no other files/index/branch/commits. Task locator timestamps are historical. Current canonical full methodology30.50 physically thesis/methodology/owner-requirements-20261017-aed7aef2.md (510384B SHAaed7aef27d72b639c3af844145ec6028fa7357a233ba3c8a443ae44653f4b299). Provider worker custody now has baseline provider-transfer-v1232 plus actual delta provider-transfer-delta-v1261/COVERAGE-CHAIN.json,167physical rawfiles52,937,741B; analysis-v1290 correctly joins36/36 provider spans for historical36measured+15warmup requester snapshot, not current900. thesis/analysis/k1_saved_case_history.py optional --provider-coverage-chain now closed Sol review; read-only reusable. Current K1 progress133measured+15warmups and running22:15UTC, use own timestamped existing canonical copy, do not treat as sealed. No new experimental traffic. Personal V485/V497 raw remains physically on Personal; request exact bounded reads/transfers through Root. Start metadata inventory now, send ACK/file claim and finite next gate through Orca; initial import128MiB cap,4MiB/s low-priority,2GiB free floor. No new workers or model/hash/bulk scans. Notify Root exact missing sources; no universal invalidation or rerun requirement from optional artifacts missing.",
+      "type": "status",
+      "priority": "normal",
+      "thread_id": null,
+      "payload": null,
+      "created_at": "2026-10-17T22:13:42Z",
+      "delivered_at": null
+    },
+    "mutation": {
+      "requestId": "4d46beee-bcc8-4de3-b1e9-7b7f1cc84d0c",
+      "replayed": false
+    }
+  },
+  "_meta": {
+    "runtimeId": "cc9e3275-28c6-4c45-85cc-bdcd2262aa7d"
+  }
+}

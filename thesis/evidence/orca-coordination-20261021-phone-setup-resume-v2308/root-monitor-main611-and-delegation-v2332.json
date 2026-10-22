@@ -1,0 +1,28 @@
+{
+  "id": "b7ca4f6a-da66-42ee-88fd-1fa1ffb36fdc",
+  "ok": true,
+  "result": {
+    "message": {
+      "id": "msg_6827c3e803a8",
+      "run_id": "run_e6054e76e9fc",
+      "delivery_contract": "current_delivery",
+      "from_handle": "term_6a00d9ee-792a-4daf-8578-236290e33108",
+      "to_handle": "dispatch:ctx_37b4d0a3c14f",
+      "subject": "Main611/900 advancing; phone operation closed and staging queue acknowledged",
+      "body": "Original native goal actualACTIVE/unbudgeted, same thread/branch/HEADebde. Main V2296 at00:24:07Z161/450 new all correct, condition611/900=610correct1historicalfailure,289remain; exact controller3965950/backend3965978/copier3965951 startticks matched, copier175case/WAV0errors,3.268GBfree. Current physical ROOT-VERIFIED-WAIT-v2332.json and fresh native snapshot; next bound00:29:07Z,50sread-only pulses/no new SUT traffic. ACK msg_75c60f661217 saved offline operation done00:04:00.170161Z/no own builds; no later Root-admitted work and original lease expired00:19:55 unchanged. Closure ACK and queued-source-asset request physical under thesis/evidence/orca-coordination-20261021-phone-setup-resume-v2308/*v2331.json. Delivered ACK to SAME legacy phone terminal via working route, no inactiveDispatch retry/adoption. Queued source/model/audio transfer gets explicit release or exact blocker at first natural main terminal/seal before conflicting lane; no transfer/pilot now. New actual worker00:13 USB003/014 device/getprops and00:14:02 savedWiFi WLAN192.168.1.94 route192.168.1.250 supersede old003/012 denial; readiness not native/HTTP/P2P acceptance. Root remains solely currentmatrix/custody, no phone checks/new workers/reviews. Full13 stays open.",
+      "type": "status",
+      "priority": "normal",
+      "thread_id": null,
+      "payload": null,
+      "created_at": "2026-10-22T00:24:21Z",
+      "delivered_at": null
+    },
+    "mutation": {
+      "requestId": "cf1d73a0-4f93-4d0d-8ebc-f8748479aca6",
+      "replayed": false
+    }
+  },
+  "_meta": {
+    "runtimeId": "cc9e3275-28c6-4c45-85cc-bdcd2262aa7d"
+  }
+}

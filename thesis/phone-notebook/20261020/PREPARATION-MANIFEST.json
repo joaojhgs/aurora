@@ -1,0 +1,106 @@
+{
+  "schema": "aurora.phone_notebook.prepared_kit.v1",
+  "destination": "/home/developer/projects/aurora/thesis/phone-notebook/20261020/prepared-kit-v1",
+  "files": [
+    {
+      "path": "scripts/adb_controller_diagnostic.py",
+      "bytes": 2648,
+      "sha256": "9fcf2fbfddfdfe1da5bae69e6a9bb4a54e78adac15678fc9722d9b21c0069e43"
+    },
+    {
+      "path": "scripts/custody.py",
+      "bytes": 6132,
+      "sha256": "43f89fed982542bf22440ad8eae478e8035540c928f2d0df361d141d1227bbd1"
+    },
+    {
+      "path": "scripts/finite_runner.py",
+      "bytes": 13931,
+      "sha256": "ecd2e1e0c7dd9881c6d0b8105be11f39c58e19b78deaa5b3068092e0ad60ee58"
+    },
+    {
+      "path": "scripts/inventory.py",
+      "bytes": 6594,
+      "sha256": "c73c2977028ed23d53044dfa0300936b8eb89c12bbb321f5b60fe681b8cef7bd"
+    },
+    {
+      "path": "scripts/matrix.py",
+      "bytes": 12020,
+      "sha256": "d665e6caf8493a0a768c76bc165a572ef03f977b3ce1f3a5cdc734876d2b2afd"
+    },
+    {
+      "path": "scripts/notebook_control.py",
+      "bytes": 6692,
+      "sha256": "5fcb8edf1e3e0899ffc7b9dfd207a09caea878780dc8c050bd6e36fe760f1331"
+    },
+    {
+      "path": "scripts/phone_readiness.py",
+      "bytes": 4060,
+      "sha256": "e4804955bde7c12af6c6e1b4dfbbf143ba126c094c7249c4437ae6c151536d58"
+    },
+    {
+      "path": "scripts/return_phone.py",
+      "bytes": 1916,
+      "sha256": "d7f35366fb2f8a4efba6337c01b8dd4497820bd117388c685d9eca5d54fd06fc"
+    },
+    {
+      "path": "scripts/verify_tooling.py",
+      "bytes": 9549,
+      "sha256": "2c3537dc7a02d06c2993966cc985b6b308d03fef22df12d63093e55933b4bcc1"
+    },
+    {
+      "path": "templates/collection.template.json",
+      "bytes": 10246,
+      "sha256": "d2ffe87de54b476ec0add8b357d67191aa875c838789350ace3eef212870e5fd"
+    },
+    {
+      "path": "templates/local-service-overlay.template.json",
+      "bytes": 1843,
+      "sha256": "98fcc83a3481ff5411c85d327c928c43d35667ed2e71a6344e93603a318fa605"
+    },
+    {
+      "path": "templates/pilot.template.json",
+      "bytes": 1539,
+      "sha256": "7e94e96fd407cfc1674fe80acea8f40b05158ec9b7a792e3a9396072a196d3fe"
+    },
+    {
+      "path": "PLAN.md",
+      "bytes": 1457,
+      "sha256": "a64e383c6fd1f0f17c67f62b9b9dbb6cc222a0f143685dc15263fc1fa697de48"
+    },
+    {
+      "path": "RUNBOOK.md",
+      "bytes": 10075,
+      "sha256": "ef4696c75665d4d46efb2d19b9762e0c327a7eb6818b8981702d37c35cd84bd0"
+    },
+    {
+      "path": "NATIVE-ADAPTER.md",
+      "bytes": 4250,
+      "sha256": "e7d22eac3699a418127a5dddfe498b6bfc0e5bde7af98f72d967fa1eecef78eb"
+    },
+    {
+      "path": "ACTUAL-READINESS.json",
+      "bytes": 8500,
+      "sha256": "ad87c5dacc76bd6fcb5bc1ada84548fcd46b20a416c3bd7a8ae37d7fe4f174b2"
+    },
+    {
+      "path": "RESOURCE-GRAPH.json",
+      "bytes": 3029,
+      "sha256": "763a8d068d629076583b4696c2483fe303d450775dfd0ba8a48216434f18f5f7"
+    },
+    {
+      "path": "SOURCE-PIN.json",
+      "bytes": 81701,
+      "sha256": "c5751d632d90cac8d60bc3d89c61721b34fbf86b057f77d5e0346a67dbcf64b3"
+    },
+    {
+      "path": "evidence/tooling-validation-final.txt",
+      "bytes": 1682,
+      "sha256": "f163df6df1bf217ede2fa35e70a8ed85004258622d56a3665707e174c9a97dc5"
+    }
+  ],
+  "groups": 7,
+  "totalBytes": 187864,
+  "sourceDeployment": false,
+  "modelTransfer": false,
+  "authorityMessage": "msg_241213ebc84e"
+}

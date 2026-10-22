@@ -1,0 +1,10 @@
+{
+  "previous_source_sha256": "0531b8ec0e3217e7453471dd1d4d1cef532a2bc217a71581ede2ba013b4ed53e",
+  "source_sha256": "443ea840263c4b24f38f51dc611f328da748080ba01babbaa61fa377888680cb",
+  "hook_sha256": "7cdbc4dfb931e6db4774f2ec857535103c4ca3e9d9462f26e2e80bcd5297bace",
+  "changes": [
+    "new-mode AND accumulator initializes true, legacy false preserved",
+    "stop new condition immediately after a failed warmup or measured main predicate"
+  ],
+  "no_executions_or_canonical_edits": true
+}

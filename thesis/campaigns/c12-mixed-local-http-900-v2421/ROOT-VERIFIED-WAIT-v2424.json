@@ -1,0 +1,64 @@
+{
+  "at": "2026-10-22T07:25:50.025843+00:00",
+  "classification": "verified_wait",
+  "actor": {
+    "pid": 259717,
+    "startTicks": 143190459,
+    "state": "S"
+  },
+  "lastCompletedOrdinal": 12,
+  "phase": "warmup",
+  "primary": {
+    "measured": {
+      "attempted": 0,
+      "correct": 0,
+      "failed": 0,
+      "harnessErrorsIncludedInFailed": 0,
+      "incorrectIncludedInFailed": 0,
+      "offered": 0,
+      "planned": 900,
+      "timeouts": 0,
+      "unstarted": 900
+    },
+    "warmup": {
+      "attempted": 12,
+      "correct": 12,
+      "failed": 0,
+      "harnessErrorsIncludedInFailed": 0,
+      "incorrectIncludedInFailed": 0,
+      "offered": 12,
+      "planned": 15,
+      "timeouts": 0,
+      "unstarted": 3
+    }
+  },
+  "companion": {
+    "measured": {
+      "attempted": 0,
+      "correct": 0,
+      "failed": 0,
+      "harnessErrorsIncludedInFailed": 0,
+      "incorrectIncludedInFailed": 0,
+      "offered": 0,
+      "planned": 900,
+      "timeouts": 0,
+      "unstarted": 900
+    },
+    "warmup": {
+      "attempted": 12,
+      "correct": 12,
+      "failed": 0,
+      "harnessErrorsIncludedInFailed": 0,
+      "incorrectIncludedInFailed": 0,
+      "offered": 12,
+      "planned": 15,
+      "timeouts": 0,
+      "unstarted": 3
+    }
+  },
+  "sourceManifestSha256": "3817e5a54ef45cf806bd337689e0172ec7185d12fdcd54f1a342d07bdac321dd",
+  "terminalAbsent": true,
+  "nextGate": "Exact15paired native/audio/queue/GPU warmups, then first measured pair; original process only",
+  "maximumNextObserveUtc": "2026-10-22T07:26:50.025889+00:00",
+  "originalNativeGoal": "ACTIVE/unbudgeted"
+}

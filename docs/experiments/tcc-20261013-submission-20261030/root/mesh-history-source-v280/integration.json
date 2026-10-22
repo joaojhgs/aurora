@@ -1,0 +1,44 @@
+{
+  "owned_only": [
+    [
+      "apps/aurora-web/app/assistant-client.tsx",
+      "73e9e16c49fefa120136fe9a7a7ae169c2d64be6a2c24d6b58574d19a36b8b15",
+      "9d5571da7fc21b99921ae7601b3cf1cd993e730581d014e19f8201162066bb96"
+    ],
+    [
+      "packages/aurora-ui/src/assistant-view-types.ts",
+      "72e14582c0ecda07ed98da7c188cc2bbd313ec2108225c0b7d1f672d54f9323c",
+      "3f129d205313eece70b3bb594f568f0511a2c38c43339d3ccf275b0e32db6dc2"
+    ],
+    [
+      "packages/aurora-ui/src/assistant-view.tsx",
+      "36e54790d389f10838f674cb7289e459d6c85226e7a21fe75e0023043240c329",
+      "d244100fdd1db1a996f304b2555821807f6c1aa973d6660ef27ff762780033bb"
+    ],
+    [
+      "packages/aurora-ui/src/use-assistant-view-coordination.ts",
+      "edfafa310ec3cb784a8843988bd7de8e75749a068f70fee0925cfbd18504c9ac",
+      "6f2d63c3ae30dd9447e939a4caf2e4bffc3925613c44446fd33a74057cc33196"
+    ],
+    [
+      "packages/aurora-ui/src/assistant-history-persistence.ts",
+      "9736ce8a07581649c4552c1299173950df78dfda8d0431f317cf5648a5340428",
+      "218fa713cc246a16549d0c205b393e9d37c9c35c833282383f4789c971a83493"
+    ],
+    [
+      "packages/aurora-ui/tests/native-assistant-view.test.tsx",
+      "33cffb4232c3dfd1cf52a31885f67e4b42966c9428f89f2ef43f8a94274f46db",
+      "5c26bab5e1cee386f578c5cf8fdcea86a0800385e2ede34d78bc485638548a2b"
+    ]
+  ],
+  "owned_sha256": {
+    "apps/aurora-web/app/assistant-client.tsx": "9d5571da7fc21b99921ae7601b3cf1cd993e730581d014e19f8201162066bb96",
+    "packages/aurora-ui/src/assistant-view-types.ts": "3f129d205313eece70b3bb594f568f0511a2c38c43339d3ccf275b0e32db6dc2",
+    "packages/aurora-ui/src/assistant-view.tsx": "d244100fdd1db1a996f304b2555821807f6c1aa973d6660ef27ff762780033bb",
+    "packages/aurora-ui/src/use-assistant-view-coordination.ts": "6f2d63c3ae30dd9447e939a4caf2e4bffc3925613c44446fd33a74057cc33196",
+    "packages/aurora-ui/src/assistant-history-persistence.ts": "218fa713cc246a16549d0c205b393e9d37c9c35c833282383f4789c971a83493",
+    "packages/aurora-ui/tests/native-assistant-view.test.tsx": "5c26bab5e1cee386f578c5cf8fdcea86a0800385e2ede34d78bc485638548a2b"
+  },
+  "review_sha256": "1695c865fce43ac9a5823bfcfeffc006ecd390869d8e63752a703cf8e34eabe0",
+  "unit_scope": "seeded LOAD/UI only; freshsave/reopen required in actualhostedmain"
+}

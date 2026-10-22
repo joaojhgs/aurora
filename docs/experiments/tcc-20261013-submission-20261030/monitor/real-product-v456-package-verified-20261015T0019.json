@@ -1,0 +1,410 @@
+{
+  "at": "2026-10-15T00:19:00.128851+00:00",
+  "scope": "Local project raw-evidence package hashes and readable claims checked against existing original Root receipts; no runtime/model/test/exporter/analyzer replay",
+  "package": "docs/experiments/tcc-20261013-submission-20261030/root/real-product-main-v456",
+  "manifest_sha256": "7cf4d692f2c99c2dbfa82ca64b1d87eb908484bf2ebca277f274a96d15603434",
+  "manifest_members": 97,
+  "files": {
+    "base-assets/MODEL-LICENSE-README.md": {
+      "bytes_match": true,
+      "sha256_match": true
+    },
+    "base-assets/asset-progress.json": {
+      "bytes_match": true,
+      "sha256_match": true
+    },
+    "base-assets/asset-terminal.json": {
+      "bytes_match": true,
+      "sha256_match": true
+    },
+    "retirement-v456.json": {
+      "bytes_match": true,
+      "sha256_match": true
+    },
+    "voice-v450/driver-progress.json": {
+      "bytes_match": true,
+      "sha256_match": true
+    },
+    "voice-v450/driver-spawn.json": {
+      "bytes_match": true,
+      "sha256_match": true
+    },
+    "voice-v450/driver-terminal.json": {
+      "bytes_match": true,
+      "sha256_match": true
+    },
+    "voice-v450/progress.json": {
+      "bytes_match": true,
+      "sha256_match": true
+    },
+    "voice-v450/ready.json": {
+      "bytes_match": true,
+      "sha256_match": true
+    },
+    "voice-v450/runtime/launch.json": {
+      "bytes_match": true,
+      "sha256_match": true
+    },
+    "voice-v450/runtime/terminal.json": {
+      "bytes_match": true,
+      "sha256_match": true
+    },
+    "voice-v450/runtime/voice-stages.installed.json": {
+      "bytes_match": true,
+      "sha256_match": true
+    },
+    "voice-v450/runtime/voice-stages.jsonl": {
+      "bytes_match": true,
+      "sha256_match": true
+    },
+    "voice-v450/runtime/voice-stages.status.json": {
+      "bytes_match": true,
+      "sha256_match": true
+    },
+    "voice-v450/source-manifest.json": {
+      "bytes_match": true,
+      "sha256_match": true
+    },
+    "voice-v450/spawn.json": {
+      "bytes_match": true,
+      "sha256_match": true
+    },
+    "voice-v450/terminal.json": {
+      "bytes_match": true,
+      "sha256_match": true
+    },
+    "voice-v450/ui-case-v451/private/bodies/0059-request.bin": {
+      "bytes_match": true,
+      "sha256_match": true
+    },
+    "voice-v450/ui-case-v451/private/driver-error.txt": {
+      "bytes_match": true,
+      "sha256_match": true
+    },
+    "voice-v450/ui-case-v451/private/network-events.jsonl": {
+      "bytes_match": true,
+      "sha256_match": true
+    },
+    "voice-v450/ui-case-v451/result.json": {
+      "bytes_match": true,
+      "sha256_match": true
+    },
+    "voice-v450/ui-case-v451/safe-projection.json": {
+      "bytes_match": true,
+      "sha256_match": true
+    },
+    "voice-v450/ui-case/private/driver-error.txt": {
+      "bytes_match": true,
+      "sha256_match": true
+    },
+    "voice-v450/ui-case/private/network-events.jsonl": {
+      "bytes_match": true,
+      "sha256_match": true
+    },
+    "voice-v450/ui-case/result.json": {
+      "bytes_match": true,
+      "sha256_match": true
+    },
+    "voice-v450/ui-case/safe-projection.json": {
+      "bytes_match": true,
+      "sha256_match": true
+    },
+    "voice-v452/driver-progress.json": {
+      "bytes_match": true,
+      "sha256_match": true
+    },
+    "voice-v452/driver-spawn.json": {
+      "bytes_match": true,
+      "sha256_match": true
+    },
+    "voice-v452/driver-terminal.json": {
+      "bytes_match": true,
+      "sha256_match": true
+    },
+    "voice-v452/progress.json": {
+      "bytes_match": true,
+      "sha256_match": true
+    },
+    "voice-v452/ready.json": {
+      "bytes_match": true,
+      "sha256_match": true
+    },
+    "voice-v452/runtime/launch.json": {
+      "bytes_match": true,
+      "sha256_match": true
+    },
+    "voice-v452/runtime/terminal.json": {
+      "bytes_match": true,
+      "sha256_match": true
+    },
+    "voice-v452/runtime/voice-stages.installed.json": {
+      "bytes_match": true,
+      "sha256_match": true
+    },
+    "voice-v452/runtime/voice-stages.jsonl": {
+      "bytes_match": true,
+      "sha256_match": true
+    },
+    "voice-v452/runtime/voice-stages.status.json": {
+      "bytes_match": true,
+      "sha256_match": true
+    },
+    "voice-v452/source-manifest.json": {
+      "bytes_match": true,
+      "sha256_match": true
+    },
+    "voice-v452/spawn.json": {
+      "bytes_match": true,
+      "sha256_match": true
+    },
+    "voice-v452/terminal.json": {
+      "bytes_match": true,
+      "sha256_match": true
+    },
+    "voice-v452/ui-case-v453/private/driver-error.txt": {
+      "bytes_match": true,
+      "sha256_match": true
+    },
+    "voice-v452/ui-case-v453/private/network-events.jsonl": {
+      "bytes_match": true,
+      "sha256_match": true
+    },
+    "voice-v452/ui-case-v453/result.json": {
+      "bytes_match": true,
+      "sha256_match": true
+    },
+    "voice-v452/ui-case-v453/safe-projection.json": {
+      "bytes_match": true,
+      "sha256_match": true
+    },
+    "voice-v452/ui-case/private/driver-error.txt": {
+      "bytes_match": true,
+      "sha256_match": true
+    },
+    "voice-v452/ui-case/private/network-events.jsonl": {
+      "bytes_match": true,
+      "sha256_match": true
+    },
+    "voice-v452/ui-case/result.json": {
+      "bytes_match": true,
+      "sha256_match": true
+    },
+    "voice-v452/ui-case/safe-projection.json": {
+      "bytes_match": true,
+      "sha256_match": true
+    },
+    "voice-v452/ui-diagnostic-v454/private/network-events.jsonl": {
+      "bytes_match": true,
+      "sha256_match": true
+    },
+    "voice-v452/ui-diagnostic-v454/result.json": {
+      "bytes_match": true,
+      "sha256_match": true
+    },
+    "voice-v452/ui-diagnostic-v454/safe-projection.json": {
+      "bytes_match": true,
+      "sha256_match": true
+    },
+    "voice-v455/manifest.json": {
+      "bytes_match": true,
+      "sha256_match": true
+    },
+    "voice-v455/progress.json": {
+      "bytes_match": true,
+      "sha256_match": true
+    },
+    "voice-v455/runtime/launch.json": {
+      "bytes_match": true,
+      "sha256_match": true
+    },
+    "voice-v455/runtime/terminal.json": {
+      "bytes_match": true,
+      "sha256_match": true
+    },
+    "voice-v455/runtime/voice-stages.installed.json": {
+      "bytes_match": true,
+      "sha256_match": true
+    },
+    "voice-v455/runtime/voice-stages.jsonl": {
+      "bytes_match": true,
+      "sha256_match": true
+    },
+    "voice-v455/runtime/voice-stages.status.json": {
+      "bytes_match": true,
+      "sha256_match": true
+    },
+    "voice-v455/source-guard.json": {
+      "bytes_match": true,
+      "sha256_match": true
+    },
+    "voice-v455/spawn.json": {
+      "bytes_match": true,
+      "sha256_match": true
+    },
+    "voice-v455/terminal.json": {
+      "bytes_match": true,
+      "sha256_match": true
+    },
+    "voice-v456/driver-progress.json": {
+      "bytes_match": true,
+      "sha256_match": true
+    },
+    "voice-v456/driver-spawn.json": {
+      "bytes_match": true,
+      "sha256_match": true
+    },
+    "voice-v456/driver-terminal.json": {
+      "bytes_match": true,
+      "sha256_match": true
+    },
+    "voice-v456/manifest.json": {
+      "bytes_match": true,
+      "sha256_match": true
+    },
+    "voice-v456/prior-retirement.json": {
+      "bytes_match": true,
+      "sha256_match": true
+    },
+    "voice-v456/progress.json": {
+      "bytes_match": true,
+      "sha256_match": true
+    },
+    "voice-v456/ready.json": {
+      "bytes_match": true,
+      "sha256_match": true
+    },
+    "voice-v456/runtime/launch.json": {
+      "bytes_match": true,
+      "sha256_match": true
+    },
+    "voice-v456/runtime/terminal.json": {
+      "bytes_match": true,
+      "sha256_match": true
+    },
+    "voice-v456/runtime/voice-stages.installed.json": {
+      "bytes_match": true,
+      "sha256_match": true
+    },
+    "voice-v456/runtime/voice-stages.jsonl": {
+      "bytes_match": true,
+      "sha256_match": true
+    },
+    "voice-v456/runtime/voice-stages.status.json": {
+      "bytes_match": true,
+      "sha256_match": true
+    },
+    "voice-v456/source-guard.json": {
+      "bytes_match": true,
+      "sha256_match": true
+    },
+    "voice-v456/spawn.json": {
+      "bytes_match": true,
+      "sha256_match": true
+    },
+    "voice-v456/terminal.json": {
+      "bytes_match": true,
+      "sha256_match": true
+    },
+    "voice-v456/ui-case/private/bodies/0049-request.bin": {
+      "bytes_match": true,
+      "sha256_match": true
+    },
+    "voice-v456/ui-case/private/bodies/0049-response.bin": {
+      "bytes_match": true,
+      "sha256_match": true
+    },
+    "voice-v456/ui-case/private/network-events.jsonl": {
+      "bytes_match": true,
+      "sha256_match": true
+    },
+    "voice-v456/ui-case/result.json": {
+      "bytes_match": true,
+      "sha256_match": true
+    },
+    "voice-v456/ui-case/safe-projection.json": {
+      "bytes_match": true,
+      "sha256_match": true
+    },
+    "web-build-v448/controller.private.log": {
+      "bytes_match": true,
+      "sha256_match": true
+    },
+    "web-build-v448/launch.json": {
+      "bytes_match": true,
+      "sha256_match": true
+    },
+    "web-build-v448/next-build.private.log": {
+      "bytes_match": true,
+      "sha256_match": true
+    },
+    "web-build-v448/progress.json": {
+      "bytes_match": true,
+      "sha256_match": true
+    },
+    "web-build-v448/spawn.json": {
+      "bytes_match": true,
+      "sha256_match": true
+    },
+    "web-build-v448/terminal.json": {
+      "bytes_match": true,
+      "sha256_match": true
+    },
+    "web-build-v449/cache-relocation.json": {
+      "bytes_match": true,
+      "sha256_match": true
+    },
+    "web-build-v449/controller.private.log": {
+      "bytes_match": true,
+      "sha256_match": true
+    },
+    "web-build-v449/next-build.private.log": {
+      "bytes_match": true,
+      "sha256_match": true
+    },
+    "web-build-v449/progress.json": {
+      "bytes_match": true,
+      "sha256_match": true
+    },
+    "web-build-v449/spawn.json": {
+      "bytes_match": true,
+      "sha256_match": true
+    },
+    "web-build-v449/terminal.json": {
+      "bytes_match": true,
+      "sha256_match": true
+    },
+    "web-build-v450/controller.private.log": {
+      "bytes_match": true,
+      "sha256_match": true
+    },
+    "web-build-v450/next-build.private.log": {
+      "bytes_match": true,
+      "sha256_match": true
+    },
+    "web-build-v450/progress.json": {
+      "bytes_match": true,
+      "sha256_match": true
+    },
+    "web-build-v450/spawn.json": {
+      "bytes_match": true,
+      "sha256_match": true
+    },
+    "web-build-v450/terminal.json": {
+      "bytes_match": true,
+      "sha256_match": true
+    }
+  },
+  "readme_sha256": "6155a9fb48bfd94f42e1ef3aac7cd87d8d36d66406e4d7c913f4946c78686078",
+  "global_excluded_logical_voice": 8,
+  "accepted_measured_voice": 0,
+  "phase2_measured_allowed": false,
+  "readme_not_assumed_in_archive_manifest": true,
+  "root_messages": [
+    "msg_87fe55d44f62",
+    "msg_c8095e18f5a8"
+  ],
+  "run": "run_e6054e76e9fc",
+  "task": "task_d7ea336050cf",
+  "dispatch": "ctx_37b4d0a3c14f",
+  "all_hashes_match": true
+}

@@ -1,0 +1,7 @@
+{
+  "at": "2026-10-20T14:28:41.544512+00:00",
+  "automaticRetry": false,
+  "error": "",
+  "errorCategory": "AssertionError",
+  "status": "retirement_or_seal_requires_reconciliation"
+}

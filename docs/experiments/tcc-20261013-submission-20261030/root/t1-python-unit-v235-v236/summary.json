@@ -1,0 +1,67 @@
+{
+  "schema_version": "aurora.unit_baseline_summary.v1",
+  "source_commit": "5782746afba213f6b36907db2f09f0017625e218",
+  "objective": "tcc:20261013:submission-20261030",
+  "runs": [
+    {
+      "run_id": "t1-unit-v235",
+      "exit_code": 1,
+      "started_at": "2026-10-13T23:54:58.921893+00:00",
+      "finished_at": "2026-10-14T00:04:58.386632+00:00",
+      "elapsed_seconds": 599.464731215,
+      "counts": {
+        "passed": 3915,
+        "skipped": 71,
+        "failure": 1
+      }
+    },
+    {
+      "run_id": "t1-recovery-v236",
+      "exit_code": 0,
+      "started_at": "2026-10-14T00:09:18.536654+00:00",
+      "finished_at": "2026-10-14T00:10:07.169856+00:00",
+      "elapsed_seconds": 48.635125579,
+      "counts": {
+        "passed": 2
+      }
+    }
+  ],
+  "attempted_case_count": 3989,
+  "attempt_outcomes": {
+    "passed": 3917,
+    "skipped": 71,
+    "failure": 1
+  },
+  "unique_case_count": 3987,
+  "latest_unique_case_outcomes": {
+    "passed": 3916,
+    "skipped": 71
+  },
+  "initial_failure_retained": true,
+  "second_full_suite_run": false,
+  "production_source_changed_for_recovery": false,
+  "initial_failure_cause": "Harness basetemp under .git triggers existing packaging archive exclusion of .git path components; changing only temp location recovers failed case.",
+  "skip_reasons": {
+    "Principal endpoints migrated to Auth service contracts (auto-generated)": 12,
+    "Token endpoints migrated to Auth service contracts (auto-generated)": 8,
+    "AudioInputService was merged into STTCoordinatorService": 18,
+    "could not import 'onnx': No module named 'onnx'": 6,
+    "could not import 'safetensors.numpy': No module named 'safetensors'": 4,
+    "pinned sherpa archive is not cached locally": 1,
+    "SHERPA_ONNX_INSTALL_DIR is required for the Rust wrapper runtime test": 1,
+    "FFmpeg tools are unavailable": 20,
+    "could not import 'pocket_tts': No module named 'pocket_tts'": 1
+  },
+  "assistant_request_samples": 0,
+  "assistant_latency_quantiles_ms": {
+    "p50": null,
+    "p90": null,
+    "p95": null
+  },
+  "latency_gap": "Unit durations are not assistant-request observations; no comparative latency result is claimed.",
+  "clean_benchmark_condition": false,
+  "benchmark_condition_reason": "Functional unit baseline on a loaded two-CPU aarch64 worker; no reserved five-minute clean-baseline window.",
+  "authoritative_plan_snapshot_sha256": "8bb017f59eeb4acb874ad812cdd740dbe6ace015e9794602961b43bd7749b785",
+  "live_plan_hash_recorded_at_initial_manifest": "8bb017f59eeb4acb874ad812cdd740dbe6ace015e9794602961b43bd7749b785",
+  "plan_note": "The monitor amended the full plan during this functional run; frozen snapshot and live manifest hash are distinguished. Latest Section25 governs following pilots."
+}

@@ -1,0 +1,124 @@
+{
+  "observed_at": "2026-10-14T17:52:20.301383+00:00",
+  "run": "run_e6054e76e9fc",
+  "task": "task_d7ea336050cf",
+  "dispatch": "ctx_37b4d0a3c14f",
+  "first_actual_attempt_source": {
+    "path": ".git/aurora-handoff-import-20261006/ORCA-V412-READINESS-LAUNCH-READ.json",
+    "sha256": "490ff0875e958d19eb1a64afe0fa3ec4cfbe4c3b74745bade65608fb55968eb3",
+    "markers": {
+      "AURORA_GPU_V412_ACTUAL_LAUNCH": {
+        "kind": "actual_desktop_gpu_excluded_readiness_launch",
+        "startedAtUtc": "2026-10-14T17:37:31.394278+00:00",
+        "pid": 2699838,
+        "startTicks": "62775984",
+        "parentPid": 2699733,
+        "host": "personal.skyron-server",
+        "sourceRoot": "/home/developer/projects/aurora/.git/aurora-root-gpu-primary-v408/source-v409",
+        "sourceCommit": "c0f4c0013cea5bb11ef81297194d0dc142a47bc4",
+        "output": "/home/developer/projects/aurora/.git/aurora-handoff-import-20261006/desktop-gpu-readiness-v412",
+        "requestCapSeconds": 300,
+        "outerCapSeconds": 350,
+        "requestsPlanned": 2,
+        "measuredRequestsPlanned": 0,
+        "GPUReservation": "exclusive original Root desktop GPU baseline flock",
+        "selectedVulkanPhysicalDevice": "1",
+        "diagnosticOnlyVerbosity": true,
+        "runnerSha256": "a07bb880eb71ae7959732c4626a673daa9e07af1eea798cea917afd8441b4e83",
+        "primary900Started": false,
+        "crossDeviceMeasuredAllowed": false
+      },
+      "AURORA_GPU_V412_ACTUAL_TERMINAL": {
+        "kind": "actual_desktop_gpu_excluded_readiness_terminal",
+        "finishedAtUtc": "2026-10-14T17:37:36.414161+00:00",
+        "elapsedSeconds": 5.01991471205838,
+        "exitCode": 1,
+        "deadlineAction": null,
+        "resourceSamples": 5,
+        "pid": 2699838,
+        "startTicks": "62775984",
+        "processPresentAfterWait": false,
+        "files": [
+          {
+            "name": "launch.json",
+            "bytes": 903,
+            "sha256": "7ad8bfe2772737f80fb7389205eebf24eb8e2b79897fa89ccf9e2b9074962b54"
+          },
+          {
+            "name": "requests.jsonl",
+            "bytes": 0,
+            "sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+          },
+          {
+            "name": "requests.jsonl.cleanup.json",
+            "bytes": 53,
+            "sha256": "b520a0441c3f52026bcd3f44fdcd6bc0f737d8f220ed62460b82564c81af2c63"
+          },
+          {
+            "name": "requests.jsonl.manifest.json",
+            "bytes": 3091,
+            "sha256": "e5fd2668aebe903a742c5b398db9832f911192f0bfd316d8678cb885e34724f6"
+          },
+          {
+            "name": "requests.jsonl.provider-inputs.jsonl",
+            "bytes": 0,
+            "sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+          },
+          {
+            "name": "resources.jsonl",
+            "bytes": 4395,
+            "sha256": "3e90ac3a75803b418d521ddf4ce67d71f2ed4c71236a88efb6bd081935c87cd7"
+          },
+          {
+            "name": "runtime-private.log",
+            "bytes": 6313,
+            "sha256": "1ef1f8741a72ac471db7cc0dc8fd552920d6de67fbbfbb9d625c542a4c4746b7"
+          }
+        ],
+        "primary900Started": false,
+        "crossDeviceMeasuredAllowed": false
+      }
+    }
+  },
+  "first_root_terminal_notice": "msg_4d23640a566f",
+  "first_diagnosis": "n_gpu_layers=-1 rejected by generated schema ge0/le100; nothardwareabsence",
+  "fresh_session_nudge": "msg_17eaedaa09f9",
+  "fresh_session_accepted_implemented": true,
+  "epoch_rule": "3FRESH Supervisor/model/process epochs with300measured+5additionalexcludedwarm each per matching condition",
+  "second_attempt_root_notice": "msg_186111f7a299",
+  "second_attempt_delivery_ack": "delivery_97af7ce7ffe8",
+  "second_attempt": {
+    "start": "2026-10-14T17:43:00.654090Z",
+    "pid": 2702058,
+    "start_ticks": 62808910,
+    "elapsed_s": 14.072,
+    "exit_code": 1,
+    "excluded_cold_correct": 1,
+    "cold_reply_latency_ms": 7824.47676,
+    "history_boundary_records": 4,
+    "llm_invocation_spans": 0,
+    "warm_request_attempted": false,
+    "readiness_pass": false,
+    "primary_measured": 0,
+    "gpu_offload_layers_proven": false,
+    "root_exact_cause": "disable_streaming true uses ainvoke/_agenerate; astreampassivehookbypassed"
+  },
+  "third_attempt_next": {
+    "private_version": "v414",
+    "change": "outerobserveractual_agenerate; diagnosticverboseactual_construct_llama_model",
+    "source_review_cap_s": 90,
+    "requests_planned": 2,
+    "main_measured": 0,
+    "extension_rule": "no expansionbeyond3failedsetupcycleswithoutboundedblocker/nextaction"
+  },
+  "authoritative_plan": {
+    "path": "/home/developer/Documents/Obsidian Vault Origin/5-full-notes/faculdade/tcc/future-work-test-requirements.md",
+    "sha256": "7028f770457f08fd64e7b2221572a45932bfb4576ff5b27082696b1522d0223e",
+    "lines": 1351,
+    "complete_backup_diff_package": "monitor/plan-session-method-20261014T1745"
+  },
+  "cpu_finished_sealed_reviewed": true,
+  "gpu_finished_sealed": false,
+  "dual_barrier": false,
+  "monitor_execution_changes": false
+}

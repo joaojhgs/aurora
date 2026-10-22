@@ -1,0 +1,65 @@
+{
+  "observedAt": "2026-10-20T13:23:21.705287+00:00",
+  "runId": "run_e6054e76e9fc",
+  "taskId": "task_d7ea336050cf",
+  "dispatchId": "ctx_37b4d0a3c14f",
+  "nativeGoal": "01a123ff-19ba-7332-a2f7-346a722af79f",
+  "scope": "One read-only saved-data verification of newly reported global691 and already-saved next distinct global692; CLOSED.",
+  "campaign": "thesis/campaigns/worker-desktop-k1-p2p-tts-remaining880-v1719",
+  "frozenManifestSha256": "120dd99a4de0a242c30ebe4bb46d854ca77313c482a0c74f024edb624829a6e8",
+  "failure": {
+    "conditionMeasuredIndex": 691,
+    "phaseIndex": 671,
+    "ordinal": 686,
+    "path": "attempts/attempt-0686-measured.jsonl",
+    "bytes": 3958,
+    "sha256": "749a153c32d0b18fb73fcea493fee07522dfdc601af58180cf4b7d83944b037d",
+    "status": "failed",
+    "stage": "tts",
+    "code": "remote_mesh_preaccept_capability_changed",
+    "consecutivePreacceptRejections": 1,
+    "timeout": false,
+    "withinRequestDeadline": true,
+    "correctness": {
+      "transcript_matches_reference_words": true,
+      "assistant_reply_matches_expected_words": true
+    },
+    "outputAudio": null,
+    "flowDurationMs": 40823.545109,
+    "stageDurationMs": {
+      "stt": 6738.274414,
+      "assistant": 33777.854058,
+      "tts": 306.757232
+    },
+    "requestId": "audio-request-91dfa1c6cd58433e987092cd3a3ef29d",
+    "correlationId": "audio-campaign-dd99808119e040abab7905cdc3583ab0"
+  },
+  "followingDistinctSavedCase": {
+    "conditionMeasuredIndex": 692,
+    "phaseIndex": 672,
+    "ordinal": 687,
+    "path": "attempts/attempt-0687-measured.jsonl",
+    "bytes": 4918,
+    "sha256": "8c54bd7a197cef1e4eeb713edb54e331c502010f464b1d95090c32a15e841cca",
+    "status": "completed_correct",
+    "consecutivePreacceptRejections": 0,
+    "timeout": false,
+    "flowDurationMs": 47150.092826,
+    "allExpected": true,
+    "recordedOutputAudioPath": "audio/161171645a9c0fb3079692b61c81206402d80ff2100f87b7a0753c1d9f1b3602.wav",
+    "recordedOutputAudioSha256": "161171645a9c0fb3079692b61c81206402d80ff2100f87b7a0753c1d9f1b3602",
+    "recordedAudioBytes": 30764,
+    "audioCustodyBoundary": "Saved case metadata inspected; no separate audio reread or playback claim."
+  },
+  "interpretation": {
+    "knownFrozenClassifier": "The saved row reports the existing preaccept category; old adapter does not retain verbatim QueryResult.",
+    "exactReceiverCause": "UNKNOWN",
+    "rawQueryResult": "UNKNOWN",
+    "failureDenominator": "Retain691 as failure; next distinct692 succeeded and reset streak.",
+    "policy": "Frozen three-consecutive hard stop unchanged; no replay, success top-up, policy/source/model change, test or new gate.",
+    "executionOwner": "Original Root only",
+    "needsAdditionalReview": false
+  },
+  "rootNotification": "msg_523ee6fefe5c",
+  "rootDeliveryAcknowledged": "delivery_8a8075bfd6ba"
+}

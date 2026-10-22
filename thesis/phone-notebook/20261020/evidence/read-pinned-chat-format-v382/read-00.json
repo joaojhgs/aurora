@@ -1,0 +1,27 @@
+{
+  "_meta": {
+    "runtimeId": "cc9e3275-28c6-4c45-85cc-bdcd2262aa7d"
+  },
+  "id": "69e9eabb-6995-41d2-b2d0-5e58773229ed",
+  "ok": true,
+  "result": {
+    "terminal": {
+      "handle": "term_a2ed5feb-7c92-48e4-bd88-d1b0e6737989",
+      "latestCursor": "1813",
+      "limited": false,
+      "nextCursor": "1813",
+      "oldestCursor": "1660",
+      "returnedLineCount": 5,
+      "source": "stream",
+      "status": "running",
+      "tail": [
+        "",
+        "Traceback (most recent call last):",
+        "  File \"<string>\", line 1, in <module>",
+        "  File \"approved-notebook-script\", line 2, in <module>",
+        "AttributeError: 'NoneType' object has no attribute 'origin'"
+      ],
+      "truncated": false
+    }
+  }
+}

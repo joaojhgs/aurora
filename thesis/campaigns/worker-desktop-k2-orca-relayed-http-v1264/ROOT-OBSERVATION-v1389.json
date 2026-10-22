@@ -1,0 +1,44 @@
+{
+  "at": "2026-10-17T23:35:50.994275+00:00",
+  "observationOnly": true,
+  "progress": {
+    "attempted": 1,
+    "last_attempt_file": "attempts/attempt-0001-warmup.jsonl",
+    "last_attempt_status": "completed_correct",
+    "measured_attempted": 0,
+    "planned_measured": 900,
+    "planned_warmups": 15,
+    "status": "running",
+    "unattempted_measured": 900,
+    "warmups_attempted": 1
+  },
+  "summary": null,
+  "finalizerResult": null,
+  "finalizerFailure": null,
+  "attempts": [
+    {
+      "ordinal": 1,
+      "phase": "warmup",
+      "status": "completed_correct",
+      "failure": null,
+      "flow_duration_ms": 29694.03898
+    }
+  ],
+  "processes": {
+    "588011": {
+      "startTicks": 105853078,
+      "same": true,
+      "state": "S"
+    },
+    "588275": {
+      "startTicks": 105855021,
+      "same": true,
+      "state": "S"
+    },
+    "588276": {
+      "startTicks": 105855021,
+      "same": true,
+      "state": "S"
+    }
+  }
+}

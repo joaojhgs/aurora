@@ -1,0 +1,19 @@
+{
+  "at": "2026-10-22T14:40:57.474064+00:00",
+  "workerFreeBytes": 2160132096,
+  "workerCopyThresholdBeforeNextWritePeakBytes": 2164260864,
+  "existingPhoneCopyGuardClosedEvenForZeroPeak": true,
+  "headroomAboveFloorBytes": 12648448,
+  "mainRequest": {
+    "pid": 462924,
+    "startTicks": 144596371,
+    "state": "S"
+  },
+  "mainCorrectPerStream": {
+    "primary": 543,
+    "companion": 543
+  },
+  "mainStoppedOrChanged": false,
+  "notebookPrimaryRawCustody": true,
+  "note": "Existing grant requires per-write reevaluation; this point observation is not a permanent hold or withdrawal of2MiBcredit; no Main-end dependency"
+}

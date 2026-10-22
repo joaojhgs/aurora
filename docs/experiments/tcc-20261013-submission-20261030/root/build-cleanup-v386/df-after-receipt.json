@@ -1,0 +1,6 @@
+{
+  "source": "obsolete-incremental-cleanup-v386-df-after.txt",
+  "bytes": 127,
+  "sha256": "c796188438cdf981af09cb590e7a5f2e172cebfa8bd09ce1639a56f93d4fab9d",
+  "before_disk_evidence": "Actual statvfs in deletion-manifest.json, no fabricated df-before command"
+}

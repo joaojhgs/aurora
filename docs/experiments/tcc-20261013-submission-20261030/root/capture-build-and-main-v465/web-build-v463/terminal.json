@@ -1,0 +1,57 @@
+{
+  "startedAt": "2026-10-15T00:56:44.528829+00:00",
+  "host": "personal.skyron-server",
+  "controllerPid": 2870376,
+  "capSeconds": 300,
+  "measurementStarted": false,
+  "globalBuildLockHeld": true,
+  "purpose": "only changed browser capture TypeScript and production web build; no dependency/native/WASM/sharedUI replay",
+  "oldSourcesAndArtifactsPreserved": true,
+  "builds": [
+    {
+      "stage": "voice-typescript",
+      "exitCode": 0,
+      "elapsedSeconds": 3.0031176729826257
+    },
+    {
+      "stage": "voice-worker-existing-wasm",
+      "exitCode": 0,
+      "elapsedSeconds": 1.0028782830340788
+    },
+    {
+      "stage": "production-web",
+      "exitCode": 0,
+      "elapsedSeconds": 66.21994856197853
+    }
+  ],
+  "sourceManifest": {
+    "files": {
+      "packages/aurora-ui/src/use-assistant-browser-capture.ts": {
+        "preimageSHA256": "f6d1d6e2f1d6d164e446271917bc8534f0e283be58a40ddabf845e4a66e069cd",
+        "sha256": "cef59aa2f2ddbc0774099ebcce27e92159734d9028ad56e09bf3ecb8efe57fd5"
+      },
+      "packages/aurora-voice-web/src/audio-worklet-source.ts": {
+        "preimageSHA256": "cd249ff9fc569da31c2cd2b1f556a8f1f779fc5b2cf36a786ace3632d686ed6c",
+        "sha256": "af88cb9a88bdc8887ac6edfcd26f4dc6bb59d75bec84a5da3418c9453b6bc643"
+      }
+    },
+    "scope": "two reviewed browsercapture TS source corrections only; oldsource/artifacts untouched",
+    "oldSource": "V448 productionweb plus frozenAndroidV438 dependencies",
+    "phase2MeasuredAllowed": false
+  },
+  "currentStage": "production-web",
+  "childPid": 2870421,
+  "initialHomeFree": 393138176,
+  "initialShmFree": 619536384,
+  "initialMemAvailable": 3043983360,
+  "exitCode": 0,
+  "buildId": "CujxufTIY73eYYc6iXAj1",
+  "captureControllerSHA256": "cef59aa2f2ddbc0774099ebcce27e92159734d9028ad56e09bf3ecb8efe57fd5",
+  "workletSourceSHA256": "af88cb9a88bdc8887ac6edfcd26f4dc6bb59d75bec84a5da3418c9453b6bc643",
+  "compiledWorkletSHA256": "cd7d76cd0cbec08a47f975eabadf76ea1804b72f513e181542ffc6979b1c18a0",
+  "finishedAt": "2026-10-15T00:57:58.542490+00:00",
+  "elapsedSeconds": 74.01391834695823,
+  "finalHomeFree": 393105408,
+  "finalShmFree": 589979648,
+  "finalMemAvailable": 3221352448
+}

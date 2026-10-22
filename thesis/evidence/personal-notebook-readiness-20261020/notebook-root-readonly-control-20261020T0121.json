@@ -1,0 +1,22 @@
+{
+  "id": "a4b82642-39a2-48e6-a8ac-86d662a07cc8",
+  "ok": true,
+  "result": {
+    "terminal": {
+      "handle": "term_f40f2bd6-0f71-4484-8347-ac221cf6ce9b",
+      "tabId": "27c1f189-f3bc-467f-a639-73475e9428a3",
+      "paneKey": "27c1f189-f3bc-467f-a639-73475e9428a3:c17246d3-4a6b-4c65-b221-ba95d14240aa",
+      "ptyId": "ssh:ssh-sem-notebook-personal@@pty2:922594b2-6958-4b97-b1b9-f337a2304f64:1",
+      "worktreeId": "03d8a475-d62e-43b3-8885-e382b313ab1b::/home/developer/projects/aurora",
+      "title": "Aurora Root Personal notebook read-only inventory",
+      "executionHostId": "ssh:ssh-sem-notebook-personal",
+      "incarnationId": "633939eb-60f4-4bc0-9a0c-5941dc6db36a",
+      "hostPlatform": "linux",
+      "surface": "background",
+      "warning": "Terminal term_f40f2bd6-0f71-4484-8347-ac221cf6ce9b is running, but Orca could not make it discoverable. Run `orca terminal focus --terminal term_f40f2bd6-0f71-4484-8347-ac221cf6ce9b` to reveal and focus it."
+    }
+  },
+  "_meta": {
+    "runtimeId": "cc9e3275-28c6-4c45-85cc-bdcd2262aa7d"
+  }
+}

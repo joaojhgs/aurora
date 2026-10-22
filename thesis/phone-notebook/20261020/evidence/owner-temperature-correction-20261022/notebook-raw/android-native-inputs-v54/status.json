@@ -1,0 +1,71 @@
+{
+  "artifacts": [
+    {
+      "actualSha256": "03fb04316eb32a7b7347004a79a8dd60531c02f5a064d853fed3b53828951723",
+      "bytes": 37437459,
+      "expectedBytes": 0,
+      "expectedSha256": "03fb04316eb32a7b7347004a79a8dd60531c02f5a064d853fed3b53828951723",
+      "name": "llama.cpp-b29c606e28a01b1bc8c1351026a0fa6e616bf6c4.tar.gz",
+      "path": "/home/developer/projects/aurora/thesis/phone-notebook/20261020/deployment/ebde3a8acf6315f920d03593845f17a1fc65a733/android-build-ebde3a8a-v48/.artifacts/local-inference/downloads/llama.cpp-b29c606e28a01b1bc8c1351026a0fa6e616bf6c4.tar.gz",
+      "pinnedBytes": 37437459,
+      "status": "VERIFIED_EXACT",
+      "url": "https://github.com/ggml-org/llama.cpp/archive/b29c606e28a01b1bc8c1351026a0fa6e616bf6c4.tar.gz"
+    },
+    {
+      "actualSha256": "b43aabfcaf1a6db6acf488076eab71d823c08697c7af4521fc1d174b60ede5ba",
+      "bytes": 13737807,
+      "expectedBytes": 13737807,
+      "expectedSha256": "b43aabfcaf1a6db6acf488076eab71d823c08697c7af4521fc1d174b60ede5ba",
+      "name": "needle2.cact",
+      "path": "/home/developer/projects/aurora/thesis/phone-notebook/20261020/deployment/ebde3a8acf6315f920d03593845f17a1fc65a733/android-build-ebde3a8a-v48/.artifacts/local-inference/runtime/android-arm64/needle2/needle2.cact",
+      "pinnedBytes": 13737807,
+      "status": "VERIFIED_EXACT",
+      "url": "https://huggingface.co/Cactus-Compute/needle2/resolve/32e9e3a93b205f786929697446ae669cf0a84579/needle2.cact"
+    },
+    {
+      "actualSha256": "93738ae3a9488cbc3104eb65bf49093683c26eb01b0d257e980e499d1d06a9f4",
+      "bytes": 20729982,
+      "expectedBytes": 20729982,
+      "expectedSha256": "93738ae3a9488cbc3104eb65bf49093683c26eb01b0d257e980e499d1d06a9f4",
+      "name": "libneedle.a",
+      "path": "/home/developer/projects/aurora/thesis/phone-notebook/20261020/deployment/ebde3a8acf6315f920d03593845f17a1fc65a733/android-build-ebde3a8a-v48/.artifacts/local-inference/runtime/android-arm64/needle2/android-arm64/libneedle.a",
+      "pinnedBytes": 20729982,
+      "status": "VERIFIED_EXACT",
+      "url": "https://huggingface.co/Cactus-Compute/needle2/resolve/32e9e3a93b205f786929697446ae669cf0a84579/android-arm64/libneedle.a"
+    },
+    {
+      "actualSha256": "cb7a720eba7bc895b5bbfa5d6f6fc635906938fdc569eb2520a2c09ba06d9eed",
+      "bytes": 562,
+      "expectedBytes": 562,
+      "expectedSha256": "cb7a720eba7bc895b5bbfa5d6f6fc635906938fdc569eb2520a2c09ba06d9eed",
+      "name": "needle.h",
+      "path": "/home/developer/projects/aurora/thesis/phone-notebook/20261020/deployment/ebde3a8acf6315f920d03593845f17a1fc65a733/android-build-ebde3a8a-v48/.artifacts/local-inference/runtime/android-arm64/needle2/android-arm64/needle.h",
+      "pinnedBytes": 562,
+      "status": "VERIFIED_EXACT",
+      "url": "https://huggingface.co/Cactus-Compute/needle2/resolve/32e9e3a93b205f786929697446ae669cf0a84579/android-arm64/needle.h"
+    }
+  ],
+  "auxiliaryPackagingModelDownloadsPlanned": 1,
+  "comparisonModelDownloads": 0,
+  "deadlineUtc": "2026-10-22T03:32:25.603009+00:00",
+  "elapsedSeconds": 138.09597810599735,
+  "finishedAt": "2026-10-22T03:24:43.698086+00:00",
+  "modelCalls": 0,
+  "pid": 123645,
+  "rateBytesPerSecond": 524288,
+  "resources": {
+    "at": "2026-10-22T03:24:43.695654+00:00",
+    "diskFreeBytes": 98865111040,
+    "load": [
+      3.48095703125,
+      4.0537109375,
+      4.49267578125
+    ],
+    "maxSensorC": 83.25,
+    "memAvailableBytes": 20832342016
+  },
+  "startTicks": "1993565",
+  "startedAt": "2026-10-22T03:22:25.602122+00:00",
+  "status": "VERIFIED_PINNED_ANDROID_LLAMA_NEEDLE_BUILD_INPUTS",
+  "temperaturePolicy": "observe_only_owner_correction"
+}

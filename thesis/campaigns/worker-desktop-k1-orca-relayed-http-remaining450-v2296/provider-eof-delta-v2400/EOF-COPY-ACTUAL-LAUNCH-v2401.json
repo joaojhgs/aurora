@@ -1,0 +1,8 @@
+{
+  "at": "2026-10-22T05:43:34.177819+00:00",
+  "pid": 183667,
+  "startTicks": 142627476,
+  "intent": "thesis/campaigns/worker-desktop-k1-orca-relayed-http-remaining450-v2296/provider-eof-delta-v2400/EOF-COPY-INTENT-v2401.json",
+  "log": "thesis/campaigns/worker-desktop-k1-orca-relayed-http-remaining450-v2296/provider-eof-delta-v2400/EOF-COPY-v2401.log",
+  "state": "LAUNCHED_NOT_COMPLETED"
+}

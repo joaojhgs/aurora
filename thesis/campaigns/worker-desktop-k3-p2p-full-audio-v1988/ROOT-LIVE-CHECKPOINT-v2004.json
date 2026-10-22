@@ -1,0 +1,73 @@
+{
+  "at": "2026-10-20T22:59:38.295850+00:00",
+  "measured": {
+    "attempted": 30,
+    "correct": 27,
+    "failed": 3,
+    "remaining": 870
+  },
+  "actors": {
+    "3154212": {
+      "state": "S",
+      "sameStart": true
+    },
+    "3154248": {
+      "state": "S",
+      "sameStart": true
+    },
+    "3154213": {
+      "state": "S",
+      "sameStart": true
+    }
+  },
+  "status": "running",
+  "custody": {
+    "sequence": 11,
+    "cases": 46,
+    "audio": 41,
+    "files": 176
+  },
+  "freeBytes": 4168294400,
+  "measuredNonCorrect": [
+    {
+      "phase_index": 15,
+      "status": "failed",
+      "failure": {
+        "code": "preaccept_capability_changed",
+        "stage": "stt"
+      },
+      "timeout": false,
+      "partial_quality_incorrect": false
+    },
+    {
+      "phase_index": 24,
+      "status": "failed",
+      "failure": {
+        "code": "preaccept_capability_changed",
+        "stage": "stt"
+      },
+      "timeout": false,
+      "partial_quality_incorrect": false
+    },
+    {
+      "phase_index": 28,
+      "status": "failed",
+      "failure": {
+        "code": "preaccept_capability_changed",
+        "stage": "stt"
+      },
+      "timeout": false,
+      "partial_quality_incorrect": false
+    }
+  ],
+  "checkpointAt": "2026-10-20T23:05:12.605307+00:00",
+  "classification": "verified_wait_with_new_measured_results",
+  "priorMeasuredCount": 13,
+  "newMeasuredAttempts": 24,
+  "nextRoutineCheckUtc": "2026-10-20T23:09:36+00:00",
+  "onError": "Reconcile the same original actors and preserved raw evidence; no blind restart or replay.",
+  "nativeGoalThreadId": "01a112a5-d6bb-74e2-bf7c-ace73cb513b5",
+  "nativeGoalStatus": "active",
+  "phoneTaskSeparate": true,
+  "priorCheckpointMeasuredCount": 30
+}

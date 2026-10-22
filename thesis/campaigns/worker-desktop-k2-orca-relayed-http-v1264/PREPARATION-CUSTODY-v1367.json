@@ -1,0 +1,50 @@
+{
+  "at": "2026-10-17T22:47:16.070917+00:00",
+  "state": "SOURCE_PREPARATION_CLOSED; zero new copier processes/model loads/application requests",
+  "files": [
+    {
+      "path": "thesis/campaigns/worker-desktop-k2-orca-relayed-http-v1264/FUTURE-CUSTODY-v1364.json",
+      "bytes": 3699,
+      "sha256": "403d5d2465ddf18031525b1bebdf26bc2e95d8904f4fd17ead4817d3546d5d8b"
+    },
+    {
+      "path": "thesis/campaigns/worker-desktop-k2-orca-relayed-http-v1264/FUTURE-CUSTODY-v1364.diff",
+      "bytes": 9968,
+      "sha256": "e549f7597f2b980db5315d6cacb4b82cf423d0f9cf4a99d9f9190bb3b92b2f30"
+    },
+    {
+      "path": "thesis/campaigns/worker-desktop-k2-orca-relayed-http-v1264/STATIC-CHECK-v1364.json",
+      "bytes": 464,
+      "sha256": "dc1aaac6ff109328c38cc2c7eb89082831b1aad338f15c236ed410482b04a391"
+    },
+    {
+      "path": "thesis/campaigns/worker-desktop-k2-orca-relayed-http-v1264/INPUT-WAV-CUSTODY-v1364.json",
+      "bytes": 777,
+      "sha256": "e9b5e6f11422947aaf03fe7c8e754eac6313d68129ce529862d62b0d9b896e7f"
+    },
+    {
+      "path": "thesis/campaigns/worker-desktop-k2-orca-relayed-http-v1264/SOL-CUSTODY-SOURCE-REVIEW-v1367.json",
+      "bytes": 5042,
+      "sha256": "f97a7c18724641a9c3103bbc8208d22bcd0bc3989f4974258af41086aba67d78"
+    },
+    {
+      "path": "thesis/campaigns/worker-desktop-k2-orca-relayed-http-v1264/inputs/candidate-input.wav",
+      "bytes": 219794,
+      "sha256": "da0ecc4ad0885746ab6e716585473917ab2b543a505bf0db09ebacfaa7943cbb"
+    },
+    {
+      "path": "thesis/harness/custody_k2_requester_v1364.py",
+      "bytes": 11961,
+      "sha256": "b739deee7a6e3c358e3fe67c48eb90029181b2306614786f9b1f79da7312545f"
+    },
+    {
+      "path": "thesis/harness/custody_k2_provider_v1364.py",
+      "bytes": 8416,
+      "sha256": "1e7881f6d294a5a8ce00f29738a21236e18439a68965cf5107d520809f4c9a4c"
+    }
+  ],
+  "currentK1SourceAndSettingsChanged": false,
+  "sameAudioAsFrozenK1": true,
+  "actualFirstWarmupCaseAudioCopy": "Future K2 ordinary warmup only, not run now",
+  "noExtraTestCases": true
+}

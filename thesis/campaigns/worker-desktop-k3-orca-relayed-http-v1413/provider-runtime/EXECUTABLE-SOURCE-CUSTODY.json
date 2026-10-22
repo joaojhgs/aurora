@@ -1,0 +1,30 @@
+{
+  "scope": "Saved source-inventory comparison only; no SUT invocation/review/model/build",
+  "providerInventory": "thesis/evidence/orca-relayed-http-v1197/provider-transfer-v1232/extracted/provider-raw/input/source-inventory.json",
+  "providerInventorySha256": "bcc9ec8765616093b0b0b4dd2bf35847a6653f242e09f809e93ee5199f409848",
+  "providerInventoryCount": 403,
+  "exactShared400PhysicalSource": "thesis/sources/python-audio-v490-96ec8e3e/source",
+  "exactSharedCount": 400,
+  "allSharedEntriesIdentical": true,
+  "commonSourceAlreadyPhysicallyRetained": true,
+  "commonSourceDuplicated": false,
+  "nonExecutableProviderOnly": [
+    {
+      "bytes": 17222,
+      "path": "readme.md",
+      "sha256": "c2a6486189fe036fa802ddf900c15106d2f78eb0a43c2569d60961a704b6f0b3"
+    },
+    {
+      "bytes": 804833,
+      "path": "uv.lock",
+      "sha256": "003a52e99a9d86914fe79e9142001672902399159348c5258902efb213ea4744"
+    },
+    {
+      "bytes": 4228,
+      "path": "voice-source-provenance.json",
+      "sha256": "7614205ec44627f1be5745f16517ce509ee2ee44c5687914e537c1377b1f3240"
+    }
+  ],
+  "supplementCopies": [],
+  "remainingSupplementCapture": "Personal known three files only after current proof finalizer releases exclusive control; not a measurement gate"
+}

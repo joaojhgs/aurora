@@ -1,0 +1,49 @@
+{
+  "message": "msg_29577e0c5b26",
+  "at": "2026-10-15T02:45:49Z",
+  "package": "docs/experiments/tcc-20261013-submission-20261030/root/headless-full-audio-v477",
+  "manifestSHA256": "bcca2e64746b8b9f3f251abf9c4ee3d9714a6e4cb3b1d56f81f2c4ea288d7b21",
+  "filesReported": 32,
+  "raw": {
+    "members": 18,
+    "frames": 533,
+    "archiveBytes": 408646,
+    "archiveSHAPrefix": "530ee72a",
+    "manifestSHAPrefix": "43d9b587"
+  },
+  "engineBindingEvents": 6,
+  "resourceSamples": 32,
+  "pairedSpans": 7,
+  "parentLinks": null,
+  "modelMs": {
+    "stt": 3374.39999,
+    "llm": 1425.107026,
+    "tts": 2216.70957
+  },
+  "flowMs": 16854.171509,
+  "retirement": {
+    "bothPIDsAbsent": true,
+    "bothLocksFree": true,
+    "observedAt": "2026-10-15T02:38:55Z",
+    "minRAMBytes": 2239414272
+  },
+  "actualGPUOffloadProven": false,
+  "vrambytesEvidenceOnly": "RX7600 27.3\u2013721.2MB allocation, no layer/kernel proof",
+  "sourceDecodeAudit": {
+    "SHAPrefix": "b6de9346",
+    "result": "Exactly one expected22050->16000 conversion; no deterministic miswire; ASR cause UNKNOWN"
+  },
+  "configFixV478": {
+    "status": "Root reports completed after retirement",
+    "fields": "seed/thread/verbose declaration propagated through typed config; wrapper defaults preserved",
+    "regression": "One typedconfig -> actualChatLlamaCpp controlledbackend constructor PASS1test32.78s/38.635souter",
+    "ruffAndGenerationPass": true,
+    "solReviewPrefix": "bbc89368",
+    "noModelReplay": true
+  },
+  "runtimeIdle": true,
+  "nMeasured": 0,
+  "taskCorrect": false,
+  "phase2MeasuredAllowed": false,
+  "next": "Route supported owner capability/method correction through original coordination, no blind same input/model pilot"
+}

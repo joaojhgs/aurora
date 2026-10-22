@@ -1,0 +1,12 @@
+{
+  "controlDeadline": "2026-10-22T01:14:05.052938+00:00",
+  "explicitNewline": true,
+  "host": "ssh:ssh-sem-notebook-personal",
+  "incarnation": "328cd72f-c7ea-49ff-a2db-b9275b085037",
+  "remoteResult": "/home/developer/projects/aurora/thesis/phone-notebook/20261020/evidence/mdns-build-inputs-20261022T010405.json",
+  "rootAdmissionMessage": "owner-direct-public-runtime-and-controller-read",
+  "script": "scripts/phone_mdns_build_inputs_v18.py",
+  "scriptSha256": "e1207f2152966f7ae7f9ff5d1a2353cf1d7a2d4752a85eb5de4f9124decb1722",
+  "singleSend": true,
+  "terminal": "term_a2ed5feb-7c92-48e4-bd88-d1b0e6737989"
+}

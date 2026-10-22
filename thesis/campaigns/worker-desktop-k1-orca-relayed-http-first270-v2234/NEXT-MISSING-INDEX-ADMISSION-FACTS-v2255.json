@@ -1,0 +1,27 @@
+{
+  "at": "2026-10-21T17:47:05.210738+00:00",
+  "status": "FUTURE_REMAINING450_NOT_ADMITTED_OR_LAUNCHED",
+  "conditionTarget": 900,
+  "priorOriginalMeasured": 180,
+  "currentFrozenBlock": {
+    "planned": 270,
+    "first": 181,
+    "last": 450,
+    "manifestSha256": "11bbea3fc1e45e65da1ecb7b501aee77739870cb087d792e5bc5197f9b1027be"
+  },
+  "remainingAfterActual270": 450,
+  "futureFirstIf270Completes": 451,
+  "futureLast": 900,
+  "actualCountsAtTerminalMustDetermineNextIndex": true,
+  "referenceSeconds": 60.3053512957,
+  "conservative450ForecastSeconds": 34130.386023000596,
+  "forecastMethod": "(15excludedwarmups+450measured)*reference*1.2+480; admissiononly/notETA",
+  "existingRootDeadline": "2026-10-21T23:36:07.231887+00:00",
+  "existingProviderDeadline": "2026-10-21T22:45:52.468654+00:00",
+  "existingRootRemainingSecondsNow": 20942.021149,
+  "existingProviderRemainingSecondsNow": 17927.257916,
+  "constraint": "450 forecast alreadyexceeds both oldwindows NOW; after current270 seal, separatelyrecorded prospectivefiniteadmission must preserve allpriorcharges/caps, notextendcurrentclocks or shrink900. Originalmonitor soleplanwriter; Rootactualresource/executionowner. No currentrun expansion/stop/interrupt.",
+  "nativeGoalBudget": "unbudgeted unchanged; no nativebudgetcreated",
+  "newSourceModelsFixturesOrSettings": false,
+  "newRequestsWarmupsOrProviders": 0
+}

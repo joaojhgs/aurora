@@ -1,0 +1,134 @@
+{
+  "correctness": {
+    "all_expected": false,
+    "assistant_reply_matches_expected": false,
+    "transcript_matches_declared_task_words": false
+  },
+  "correlation": {
+    "correlation_id": "wav-flow-564fc2196d6e4d91a3c77ef08c7dcc16",
+    "request_id": "wav-request-d67d037b8cb141458e5cb8b4fe33a43b",
+    "scope": "one parent LocalBus flow; STT/TTS contracts themselves have no caller id fields",
+    "session_id": "wav-session-fc52c80d1d80476e9af81cd240fd7990"
+  },
+  "declared_speech_task_sha256": "dcf0bf9982b7155c68f792031bd3a1e8e8e42a08a79fc4dd1136df8c602a6121",
+  "denominators": {
+    "attempted": 1,
+    "correct": 0,
+    "failed": 1,
+    "measured": 0,
+    "timeout": 0,
+    "warmup": 0
+  },
+  "expected_reply": "ORBIT",
+  "finished_monotonic_ns": 660128588737218,
+  "flow_duration_ms_excluding_setup_and_shutdown": 16854.171509,
+  "flow_ended_monotonic_ns": 660128204621159,
+  "flow_started_monotonic_ns": 660111350449650,
+  "flow_type": "prerecorded_wav_stt_assistant_tts_synthesis",
+  "input": {
+    "bytes": 193068,
+    "channels": 1,
+    "format": "wav",
+    "frames": 96512,
+    "sample_rate": 22050,
+    "sample_width_bytes": 2,
+    "sha256": "2f6361506708d0a3065a339d168c9db5412e343683dd9b4080471d8948bf82ae"
+  },
+  "missing_metrics": [
+    "first_token",
+    "first_audio",
+    "playback_start",
+    "playback_end"
+  ],
+  "physical_microphone": false,
+  "physical_playback_or_audibility": false,
+  "provider_bindings": {
+    "configured_llm": {
+      "model_file": "Qwen3.5-0.8B-Q4_0.gguf",
+      "provider": "llama_cpp",
+      "settings": {
+        "chat_format": "chatml-function-calling",
+        "max_tokens": 128,
+        "min_p": 0.0,
+        "n_batch": 64,
+        "n_ctx": 4096,
+        "n_gpu_layers": 100,
+        "n_threads": 2,
+        "repeat_penalty": 1.0,
+        "seed": 42,
+        "temperature": 0.0,
+        "top_k": 1,
+        "top_p": 1.0
+      }
+    },
+    "transcription": {
+      "configured_compute_type": "int8",
+      "configured_device": "cpu",
+      "configured_model": "model",
+      "default_sample_rate": 16000,
+      "enabled": true,
+      "model_ready": true,
+      "model_type": {
+        "class": "WhisperModel",
+        "module": "faster_whisper.transcribe"
+      },
+      "service": "TranscriptionService"
+    },
+    "tts": {
+      "executable_file": "piper",
+      "expected_sample_rate": 22050,
+      "model_config_file": "en_US-ljspeech-medium.onnx.json",
+      "model_file": "en_US-ljspeech-medium.onnx",
+      "provider_id": "piper",
+      "provider_type": {
+        "class": "PiperTTSProvider",
+        "module": "app.services.tts.providers.piper"
+      },
+      "service": "TTSService",
+      "voice_revision": 1
+    }
+  },
+  "schema_version": "aurora.headless_full_audio_pilot.v1",
+  "setup_duration_ms": 10432.664834,
+  "shutdown": "completed",
+  "stages": {
+    "assistant": {
+      "duration_ms": 11164.148923,
+      "end_monotonic_ns": 660125900554889,
+      "metadata_error": false,
+      "response": "I am ready to apply the requested tool. Please specify the tool name or action you wish to perform.",
+      "returned_correlation_id_matches": true,
+      "returned_request_id_matches": true,
+      "returned_session_id_matches": true,
+      "start_monotonic_ns": 660114736405966,
+      "status": "completed"
+    },
+    "stt": {
+      "duration_ms": 3385.510006,
+      "duration_ms_reported_by_service": 4376.961451247165,
+      "end_monotonic_ns": 660114736266390,
+      "language": "en",
+      "model_used": "accurate",
+      "start_monotonic_ns": 660111350756384,
+      "status": "completed",
+      "transcript": "apply with exactly this single word and no punctuation or bit."
+    },
+    "tts": {
+      "audio_bytes": 246316,
+      "audio_file": "tts-output.wav",
+      "audio_sha256": "7557b916c4bd4087f10f06cb41a156cada24f43c9e80deb71624cc4088cff63e",
+      "channels": 1,
+      "duration_ms": 2222.815357,
+      "end_monotonic_ns": 660128123428827,
+      "format": "wav",
+      "frames": 123136,
+      "output_audio_duration_ms": 5584.399092970521,
+      "pcm_samples": 123136,
+      "sample_rate": 22050,
+      "start_monotonic_ns": 660125900613470,
+      "status": "completed"
+    }
+  },
+  "status": "completed_correctness_failed",
+  "tts_output_kind": "synthesized_wav_bytes_only"
+}

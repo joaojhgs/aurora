@@ -1,0 +1,11 @@
+{
+  "recordedAt": "2026-10-14T16:45:29.721911+00:00",
+  "attempt": "bounded_bundle_delta",
+  "outcome": "subprocess_timeout_10_seconds",
+  "declaredTimeoutSeconds": 10,
+  "source_or_refs_mutated": false,
+  "artifactExists": false,
+  "partialBytes": null,
+  "activeGitOnlyMetadata": [],
+  "next": "do_not_repeat_bundle; existing_public_source_runtime_equivalence_plus_frozen21_overlay"
+}

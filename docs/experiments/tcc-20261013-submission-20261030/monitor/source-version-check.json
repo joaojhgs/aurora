@@ -1,0 +1,282 @@
+{
+  "observedAtUTC": "2026-10-14T00:11:29.739013+00:00",
+  "objective": "tcc:20261013:submission-20261030",
+  "scope": "Document/version inspection only; no experiment, build or product test",
+  "sources": [
+    {
+      "id": "E001",
+      "path": "/home/developer/Documents/Obsidian Vault Origin/5-full-notes/faculdade/tcc/sistemas-distribuidos.md",
+      "historicalSha256": "49aa38f0556e1dba549b44c58aaea4e409b5b1874fd9cd9680349d8f94b6c77f",
+      "currentSha256": "49aa38f0556e1dba549b44c58aaea4e409b5b1874fd9cd9680349d8f94b6c77f",
+      "status": "matches original source"
+    },
+    {
+      "id": "E002",
+      "path": "/home/developer/Documents/Obsidian Vault Origin/5-full-notes/faculdade/tcc/research/claim-map.md",
+      "historicalSha256": "072e039bae0df51d97f3a5d8678d573dd3d903a03255a604851b85406398f1bf",
+      "currentSha256": "072e039bae0df51d97f3a5d8678d573dd3d903a03255a604851b85406398f1bf",
+      "status": "matches original source"
+    },
+    {
+      "id": "E003",
+      "path": "/home/developer/Documents/Obsidian Vault Origin/5-full-notes/faculdade/tcc/research/material-passport.md",
+      "historicalSha256": "f3ce68cdb90a3ec243d19306ef95e251eac761fef13d5465a8c4e18c4ac6821a",
+      "currentSha256": "f3ce68cdb90a3ec243d19306ef95e251eac761fef13d5465a8c4e18c4ac6821a",
+      "status": "matches original source"
+    },
+    {
+      "id": "E004",
+      "path": "/home/developer/Documents/Obsidian Vault Origin/5-full-notes/faculdade/tcc/.omx/artifacts/g10/evaluation-evidence.md",
+      "historicalSha256": "d868419d2c1f3f029dbc366c0dfaa057b1f8f3d786daf97cb4694e23e2f57ccd",
+      "currentSha256": "d868419d2c1f3f029dbc366c0dfaa057b1f8f3d786daf97cb4694e23e2f57ccd",
+      "status": "matches original source"
+    },
+    {
+      "id": "E005",
+      "path": "/home/developer/Documents/Obsidian Vault Origin/5-full-notes/faculdade/tcc/.omx/artifacts/g17/final-integrity-report.md",
+      "historicalSha256": "c7d69eaae33fb7d4951e8727f2f8e698e3b9dae370ede3670c592d28d2f85e46",
+      "currentSha256": "c7d69eaae33fb7d4951e8727f2f8e698e3b9dae370ede3670c592d28d2f85e46",
+      "status": "matches original source"
+    },
+    {
+      "id": "E006",
+      "path": "/home/developer/Documents/Obsidian Vault Origin/5-full-notes/faculdade/tcc/.omx/artifacts/g17/aurora-targeted-unit-final.log",
+      "historicalSha256": "edcfa2fd11bfc88ec942b53c9b6ec22b4a4fd3e08e7eb3640bf81df7018f6fc8",
+      "currentSha256": "edcfa2fd11bfc88ec942b53c9b6ec22b4a4fd3e08e7eb3640bf81df7018f6fc8",
+      "status": "matches original source"
+    },
+    {
+      "id": "E007",
+      "path": "/home/developer/Documents/Obsidian Vault Origin/5-full-notes/faculdade/tcc/.omx/artifacts/g17/aurora-targeted-unit-final-junit.xml",
+      "historicalSha256": "afc0dfd1b6e9a5b980a1f4f739fec600b9fbce262fba2bb6aee7ba791700e476",
+      "currentSha256": "afc0dfd1b6e9a5b980a1f4f739fec600b9fbce262fba2bb6aee7ba791700e476",
+      "status": "matches original source"
+    },
+    {
+      "id": "E008",
+      "path": "/home/developer/Documents/Obsidian Vault Origin/5-full-notes/faculdade/tcc/.omx/artifacts/g13/url-doi-check.md",
+      "historicalSha256": "b8d1cffd03aa1531ef6a4dd33a1534a548501f92be8e433e04d9e56a1391dce8",
+      "currentSha256": "b8d1cffd03aa1531ef6a4dd33a1534a548501f92be8e433e04d9e56a1391dce8",
+      "status": "matches original source"
+    },
+    {
+      "id": "E009",
+      "path": "/home/developer/Documents/Obsidian Vault Origin/5-full-notes/faculdade/tcc/.omx/artifacts/g13/internal-evidence-audit.md",
+      "historicalSha256": "3049c1bdfb92d4f1b742bcd34855644c36910ae08a1e4e2ef4781112ec9e4aae",
+      "currentSha256": "3049c1bdfb92d4f1b742bcd34855644c36910ae08a1e4e2ef4781112ec9e4aae",
+      "status": "matches original source"
+    },
+    {
+      "id": "E010",
+      "path": "/home/developer/Documents/Obsidian Vault Origin/5-full-notes/faculdade/tcc/.omx/artifacts/report-en/final-quality-gate.md",
+      "historicalSha256": "7a4ede86cd4cdfc391f8b4a40fd5340604a560a2363796c486b94625a48ab8bb",
+      "currentSha256": "7a4ede86cd4cdfc391f8b4a40fd5340604a560a2363796c486b94625a48ab8bb",
+      "status": "matches original source"
+    },
+    {
+      "id": "E011",
+      "path": "/home/developer/Documents/Obsidian Vault Origin/5-full-notes/faculdade/tcc/report-en/relatorio.tex",
+      "historicalSha256": "d2ebaa989af4de29ca65a2a9aba544cf7a9269f56d8ff29208fc3caa10cc4dfb",
+      "currentSha256": "d2ebaa989af4de29ca65a2a9aba544cf7a9269f56d8ff29208fc3caa10cc4dfb",
+      "status": "matches original source"
+    },
+    {
+      "id": "E012",
+      "path": "/home/developer/Documents/Obsidian Vault Origin/5-full-notes/faculdade/tcc/report-en/lib/refs.bib",
+      "historicalSha256": "b6e698b5be053c67e43148ea002383152d20363efe3eaa47c492f084b04dc79b",
+      "currentSha256": "b6e698b5be053c67e43148ea002383152d20363efe3eaa47c492f084b04dc79b",
+      "status": "matches original source"
+    },
+    {
+      "id": "E013",
+      "path": "/home/developer/Documents/Obsidian Vault Origin/5-full-notes/faculdade/tcc/report-en/chapters/cap01.tex",
+      "historicalSha256": "b86b97da6160efdffa6ae66d4ced6ac3e6ba0dc1fc8230571e5e2761cdf98f92",
+      "currentSha256": "b86b97da6160efdffa6ae66d4ced6ac3e6ba0dc1fc8230571e5e2761cdf98f92",
+      "status": "matches original source"
+    },
+    {
+      "id": "E014",
+      "path": "/home/developer/Documents/Obsidian Vault Origin/5-full-notes/faculdade/tcc/report-en/chapters/cap02.tex",
+      "historicalSha256": "9ad38a8e4a6d4fee007186558ef7b847031ef60b5b245f5c3807bde760581362",
+      "currentSha256": "9ad38a8e4a6d4fee007186558ef7b847031ef60b5b245f5c3807bde760581362",
+      "status": "matches original source"
+    },
+    {
+      "id": "E015",
+      "path": "/home/developer/Documents/Obsidian Vault Origin/5-full-notes/faculdade/tcc/report-en/chapters/cap03.tex",
+      "historicalSha256": "f4ad15ed3c577ce2d2691ae0aa1095076003543726665b361b8d8fabb767b4c8",
+      "currentSha256": "f4ad15ed3c577ce2d2691ae0aa1095076003543726665b361b8d8fabb767b4c8",
+      "status": "matches original source"
+    },
+    {
+      "id": "E016",
+      "path": "/home/developer/Documents/Obsidian Vault Origin/5-full-notes/faculdade/tcc/report-en/chapters/cap04.tex",
+      "historicalSha256": "073f1439037aa21b8d3a976ca79d43574b43cffd14782c8d3926e81d42685702",
+      "currentSha256": "073f1439037aa21b8d3a976ca79d43574b43cffd14782c8d3926e81d42685702",
+      "status": "matches original source"
+    },
+    {
+      "id": "E017",
+      "path": "/home/developer/Documents/Obsidian Vault Origin/5-full-notes/faculdade/tcc/report-en/chapters/cap05.tex",
+      "historicalSha256": "676182892eb8a8d9474dac6a4c0f6b24b69824305dae1e8da882c1fc4a29397d",
+      "currentSha256": "676182892eb8a8d9474dac6a4c0f6b24b69824305dae1e8da882c1fc4a29397d",
+      "status": "matches original source"
+    },
+    {
+      "id": "E018",
+      "path": "/home/developer/Documents/Obsidian Vault Origin/5-full-notes/faculdade/tcc/report-en/chapters/cap06.tex",
+      "historicalSha256": "1e766a4331b49389be7be56894d783bab55afa22e6a2caff4d88820401f08eb3",
+      "currentSha256": "1e766a4331b49389be7be56894d783bab55afa22e6a2caff4d88820401f08eb3",
+      "status": "matches original source"
+    },
+    {
+      "id": "E019",
+      "path": "/home/developer/Documents/Obsidian Vault Origin/5-full-notes/faculdade/tcc/report-en/chapters/abstract.tex",
+      "historicalSha256": "fc4f0e015f276b53f8e79fb9f801d8b15fc08cec4d7ff2d820e4f899de4cca5b",
+      "currentSha256": "fc4f0e015f276b53f8e79fb9f801d8b15fc08cec4d7ff2d820e4f899de4cca5b",
+      "status": "matches original source"
+    },
+    {
+      "id": "E020",
+      "path": "/home/developer/Documents/Obsidian Vault Origin/5-full-notes/faculdade/tcc/report-en/chapters/resumo.tex",
+      "historicalSha256": "fc4f0e015f276b53f8e79fb9f801d8b15fc08cec4d7ff2d820e4f899de4cca5b",
+      "currentSha256": "fc4f0e015f276b53f8e79fb9f801d8b15fc08cec4d7ff2d820e4f899de4cca5b",
+      "status": "matches original source"
+    },
+    {
+      "id": "E021",
+      "path": "/home/developer/Documents/Obsidian Vault Origin/5-full-notes/faculdade/tcc/report-en/chapters/apendice01.tex",
+      "historicalSha256": "218c0f1a614485b443bf2432a3dbd3f1f994a77be00c2a0f90828612867ce946",
+      "currentSha256": "218c0f1a614485b443bf2432a3dbd3f1f994a77be00c2a0f90828612867ce946",
+      "status": "matches original source"
+    },
+    {
+      "id": "E022",
+      "path": "/home/developer/Documents/Obsidian Vault Origin/5-full-notes/faculdade/tcc/report-en/chapters/apendice02.tex",
+      "historicalSha256": "86840d5ba817c0b55ed5783abbf91647a78aabbdd40656f916b143cf487e72dd",
+      "currentSha256": "86840d5ba817c0b55ed5783abbf91647a78aabbdd40656f916b143cf487e72dd",
+      "status": "matches original source"
+    },
+    {
+      "id": "E023",
+      "path": "/home/developer/Documents/Obsidian Vault Origin/5-full-notes/faculdade/tcc/template latex/relatorio.tex",
+      "historicalSha256": "f71c486be834f7a59c275bdd2496c3392d5c08e917178a60dc53593a3db5c3d2",
+      "currentSha256": "f71c486be834f7a59c275bdd2496c3392d5c08e917178a60dc53593a3db5c3d2",
+      "status": "matches original source"
+    },
+    {
+      "id": "E024",
+      "path": "/home/developer/Documents/Obsidian Vault Origin/5-full-notes/faculdade/tcc/template latex/lib/refs.bib",
+      "historicalSha256": "b6e698b5be053c67e43148ea002383152d20363efe3eaa47c492f084b04dc79b",
+      "currentSha256": "b6e698b5be053c67e43148ea002383152d20363efe3eaa47c492f084b04dc79b",
+      "status": "matches original source"
+    },
+    {
+      "id": "E025",
+      "path": "/home/developer/Documents/Obsidian Vault Origin/5-full-notes/faculdade/tcc/template latex/chapters/cap01.tex",
+      "historicalSha256": "b61f6b9cd6be94dfed8ef31d38b839bd4b1f5d1fb9ffdba1c057869152676f84",
+      "currentSha256": "b61f6b9cd6be94dfed8ef31d38b839bd4b1f5d1fb9ffdba1c057869152676f84",
+      "status": "matches original source"
+    },
+    {
+      "id": "E026",
+      "path": "/home/developer/Documents/Obsidian Vault Origin/5-full-notes/faculdade/tcc/template latex/chapters/cap02.tex",
+      "historicalSha256": "db4f736afc5a12fc23f0eb98c0766e48ac3efbd554573f1600ff970f9205e90e",
+      "currentSha256": "db4f736afc5a12fc23f0eb98c0766e48ac3efbd554573f1600ff970f9205e90e",
+      "status": "matches original source"
+    },
+    {
+      "id": "E027",
+      "path": "/home/developer/Documents/Obsidian Vault Origin/5-full-notes/faculdade/tcc/template latex/chapters/cap03.tex",
+      "historicalSha256": "06a607678f7c9c0095594f8d8c2106e133ee7dce1429b253a2c810bc6ade86bd",
+      "currentSha256": "06a607678f7c9c0095594f8d8c2106e133ee7dce1429b253a2c810bc6ade86bd",
+      "status": "matches original source"
+    },
+    {
+      "id": "E028",
+      "path": "/home/developer/Documents/Obsidian Vault Origin/5-full-notes/faculdade/tcc/template latex/chapters/cap04.tex",
+      "historicalSha256": "7bcd90368999cbf48a404ea0493c8add2ea76e415b02da0ffec2f017fe7e559f",
+      "currentSha256": "7bcd90368999cbf48a404ea0493c8add2ea76e415b02da0ffec2f017fe7e559f",
+      "status": "matches original source"
+    },
+    {
+      "id": "E029",
+      "path": "/home/developer/Documents/Obsidian Vault Origin/5-full-notes/faculdade/tcc/template latex/chapters/cap05.tex",
+      "historicalSha256": "a77da729527da45030442c29c844d5fc8b7b4b8d022d5c96c75245dffeda7f18",
+      "currentSha256": "a77da729527da45030442c29c844d5fc8b7b4b8d022d5c96c75245dffeda7f18",
+      "status": "matches original source"
+    },
+    {
+      "id": "E030",
+      "path": "/home/developer/Documents/Obsidian Vault Origin/5-full-notes/faculdade/tcc/template latex/chapters/cap06.tex",
+      "historicalSha256": "056a2285d3b8195ee92364a022a9b15343fd57bcb0377e15359640ad3dc7c8a9",
+      "currentSha256": "056a2285d3b8195ee92364a022a9b15343fd57bcb0377e15359640ad3dc7c8a9",
+      "status": "matches original source"
+    },
+    {
+      "id": "E031",
+      "path": "/home/developer/Documents/Obsidian Vault Origin/5-full-notes/faculdade/tcc/template latex/chapters/abstract.tex",
+      "historicalSha256": "09b8ba528d00e699477483983d9bd193cfa88300758f6e6ed91e37ea6d7ee6c5",
+      "currentSha256": "09b8ba528d00e699477483983d9bd193cfa88300758f6e6ed91e37ea6d7ee6c5",
+      "status": "matches original source"
+    },
+    {
+      "id": "E032",
+      "path": "/home/developer/Documents/Obsidian Vault Origin/5-full-notes/faculdade/tcc/template latex/chapters/resumo.tex",
+      "historicalSha256": "52611484aea6d83fbac498ffc6e1eab766049eaee5c8c2cbb2b151e7c307f1ee",
+      "currentSha256": "52611484aea6d83fbac498ffc6e1eab766049eaee5c8c2cbb2b151e7c307f1ee",
+      "status": "matches original source"
+    },
+    {
+      "id": "E033",
+      "path": "/home/developer/Documents/Obsidian Vault Origin/5-full-notes/faculdade/tcc/template latex/chapters/apendice01.tex",
+      "historicalSha256": "0b066fd7ccbb23ba1b55688cf2200c4f938eade43e0d1d1e1eae5a1ba8570000",
+      "currentSha256": "0b066fd7ccbb23ba1b55688cf2200c4f938eade43e0d1d1e1eae5a1ba8570000",
+      "status": "matches original source"
+    },
+    {
+      "id": "E034",
+      "path": "/home/developer/Documents/Obsidian Vault Origin/5-full-notes/faculdade/tcc/template latex/chapters/apendice02.tex",
+      "historicalSha256": "518f6bf091ca2d7aca6afe879519133d6407255c6412914cf255b48dbe064899",
+      "currentSha256": "518f6bf091ca2d7aca6afe879519133d6407255c6412914cf255b48dbe064899",
+      "status": "matches original source"
+    },
+    {
+      "id": "E035",
+      "path": "/home/developer/Documents/Obsidian Vault Origin/5-full-notes/faculdade/tcc/.omx/artifacts/tcc-20261013-submission-20261030-monitor-ctx_37b4d0a3c14f/future-work-test-requirements.before.md",
+      "historicalSha256": "323e3926af9d0e2cb23a3bf7eb3438e292fe56c55d8fd7b45d1ef18f164e6a00",
+      "currentSha256": "323e3926af9d0e2cb23a3bf7eb3438e292fe56c55d8fd7b45d1ef18f164e6a00",
+      "status": "matches original source"
+    },
+    {
+      "id": "E036",
+      "path": "/home/developer/Documents/Obsidian Vault Origin/5-full-notes/faculdade/tcc/future-work-test-requirements.md",
+      "historicalSha256": "272c2be5123b1b6a59b18a08204a5e9a9d59f4b0c895eedd6048930dc6d95cd0",
+      "currentSha256": "a2615d9a744f4f5413ab9fee70b0a6928266d203682b8d7814eb2b5798d440d5",
+      "status": "owner-authorized full-plan update"
+    }
+  ],
+  "unchangedSources": 35,
+  "unexpectedChanges": [],
+  "plan": {
+    "path": "/home/developer/Documents/Obsidian Vault Origin/5-full-notes/faculdade/tcc/future-work-test-requirements.md",
+    "lines": 1116,
+    "sha256": "a2615d9a744f4f5413ab9fee70b0a6928266d203682b8d7814eb2b5798d440d5",
+    "beforePath": "/home/developer/projects/aurora/docs/experiments/tcc-20261013-submission-20261030/monitor/test-plan.before-execution-authorization.md",
+    "beforeSha256": "272c2be5123b1b6a59b18a08204a5e9a9d59f4b0c895eedd6048930dc6d95cd0",
+    "diffPath": "/home/developer/projects/aurora/docs/experiments/tcc-20261013-submission-20261030/monitor/test-plan.execution-authorization.diff",
+    "diffContentMatchesCurrentVersions": true
+  },
+  "review": {
+    "path": "/home/developer/projects/aurora/docs/experiments/tcc-20261013-submission-20261030/monitor/TCC-WHITE-PAPER-RE-REVIEW.md",
+    "sha256": "8b4b2b09a69edb85814ed8ff11942f1c6078f408324da16d3df5968314651fbd",
+    "uncompressedMarkdown": true,
+    "canonicalApplication": false,
+    "telegramReceipt": null
+  },
+  "aurora": {
+    "branch": "codex/aurora-native-speech-routing-20261007",
+    "head": "5782746afba213f6b36907db2f09f0017625e218",
+    "dirtyState": "?? docs/experiments/\n"
+  }
+}

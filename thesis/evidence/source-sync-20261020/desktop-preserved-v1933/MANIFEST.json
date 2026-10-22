@@ -1,0 +1,152 @@
+{
+  "at": "2026-10-20T21:35:50.897901+00:00",
+  "host": "personal.skyron-server",
+  "branch": "main",
+  "head": "2a7d0da4f6fb1054e6bdc0ad6cde83fdd954ca69",
+  "patchSha256": "fcfa4248d539844c46d0c83e2a6c61d224844ea8ee408996fceb73503e7edade",
+  "patchBytes": 490620,
+  "files": [
+    {
+      "path": ".claude/skills/gitnexus/debugging/SKILL.md",
+      "bytes": 2968,
+      "sha256": "5eaf7e24f2c337ad5341d9bff96722ee35e932764720d7162d3e30f3a45aad95",
+      "trackedDirty": true
+    },
+    {
+      "path": ".claude/skills/gitnexus/exploring/SKILL.md",
+      "bytes": 2728,
+      "sha256": "a58be2360e3090093e2e3e2d0d821048973aa95f35015427a05bbe451b6f24f5",
+      "trackedDirty": true
+    },
+    {
+      "path": ".claude/skills/gitnexus/impact-analysis/SKILL.md",
+      "bytes": 2712,
+      "sha256": "4f5a2681e595f22635ccd7daceef46f041c54b9525be1f11e6e35aa96aa64bba",
+      "trackedDirty": true
+    },
+    {
+      "path": ".claude/skills/gitnexus/refactoring/SKILL.md",
+      "bytes": 3951,
+      "sha256": "7526410e38bfb79861eca2c48b8445c1dd47a58ea5323e6ef88c9f3b7484c4a0",
+      "trackedDirty": true
+    },
+    {
+      "path": ".github/copilot-instructions.md",
+      "bytes": 2888,
+      "sha256": "197ae5354d440fa6740ef96f688114ee41a041edb625dfae3e138b2e965bac55",
+      "trackedDirty": true
+    },
+    {
+      "path": ".github/workflows/README.md",
+      "bytes": 1817,
+      "sha256": "17414787d49f593a34400c86f258d8f0e72d2764df947b8f3cd7dcb4f3cf1552",
+      "trackedDirty": true
+    },
+    {
+      "path": ".github/workflows/rust-voice.yml",
+      "bytes": 2404,
+      "sha256": "e584c67db4d63989b3294beacb75deb6f8dd060c5629711f05c8fdc9ba96fe29",
+      "trackedDirty": true
+    },
+    {
+      "path": "AGENTS.md",
+      "bytes": 33253,
+      "sha256": "42660a65112a101b1c389cd590b2d88ee9e964d9195fd2b825921b045149170b",
+      "trackedDirty": true
+    },
+    {
+      "path": "CLAUDE.md",
+      "bytes": 3095,
+      "sha256": "4b54bc9b19f6b5b10b22fac27f444f3892d19a866e096aaa4da432cd2fe57367",
+      "trackedDirty": true
+    },
+    {
+      "path": "apps/aurora-tauri/scripts/android-voice-live-smoke.mjs",
+      "bytes": 81804,
+      "sha256": "b5b0d53db1ae77692844ad5b013bc7f70803a663e7514e5db521d3a6db732103",
+      "trackedDirty": true
+    },
+    {
+      "path": "apps/aurora-tauri/src-tauri/gen/schemas/acl-manifests.json",
+      "bytes": 135507,
+      "sha256": "98a3e775d1430b1e170014c568c162d99645de49d3d89d52b935cf4c47b01a01",
+      "trackedDirty": true
+    },
+    {
+      "path": "apps/aurora-tauri/src-tauri/gen/schemas/android-schema.json",
+      "bytes": 207248,
+      "sha256": "5efcdc135016aba50cfcc5b8c6bb7e71e1187a7b8cb38c44d965a49067942d86",
+      "trackedDirty": true
+    },
+    {
+      "path": "apps/aurora-tauri/src-tauri/gen/schemas/mobile-schema.json",
+      "bytes": 207248,
+      "sha256": "5efcdc135016aba50cfcc5b8c6bb7e71e1187a7b8cb38c44d965a49067942d86",
+      "trackedDirty": true
+    },
+    {
+      "path": "apps/aurora-tauri/src-tauri/src/mesh_session.rs",
+      "bytes": 166492,
+      "sha256": "7bc785d31977482b08efc981c1285d115681ff05798b75a36025a828b1d7e4ba",
+      "trackedDirty": true
+    },
+    {
+      "path": "apps/aurora-tauri/src-tauri/src/native_mesh_assistant.rs",
+      "bytes": 80594,
+      "sha256": "4c9962d9f88a214c549fecb1846992f01724912263b63a085dd02207f8a9ab23",
+      "trackedDirty": true
+    },
+    {
+      "path": "apps/aurora-tauri/src/native-ios-voice.test.ts",
+      "bytes": 6441,
+      "sha256": "53359956c2a74ec09381d7b3a334ad1c938238d67694385909cf4b82dd2f8ed5",
+      "trackedDirty": true
+    },
+    {
+      "path": "docs/CI_CD.md",
+      "bytes": 22028,
+      "sha256": "a908f89ef44a1a475e4c78b30a654b9e56372a35ac4bc7287ac281c461411677",
+      "trackedDirty": true
+    },
+    {
+      "path": "apps/aurora-tauri/scripts/per277-assistant-stream-acceptance.mjs",
+      "bytes": 15022,
+      "sha256": "0c5031045139770b01c58b1385a74a8227856aac78ee581d67b0f118db809169",
+      "trackedDirty": false
+    },
+    {
+      "path": "apps/aurora-tauri/scripts/per277-waydroid-performance-acceptance.mjs",
+      "bytes": 17776,
+      "sha256": "f0604caa38be387b9064b31a093dff560ebc0d0ef25c54eea46708e332cc494b",
+      "trackedDirty": false
+    },
+    {
+      "path": "apps/aurora-tauri/src-tauri/src/native_mesh_speech.rs",
+      "bytes": 10028,
+      "sha256": "39bc19d005a104dd78ba04b4da305d449e2ddbfd3643ea191837d712d33a51d6",
+      "trackedDirty": false
+    },
+    {
+      "path": "packages/aurora-ui/src/use-assistant-controller-assembly.ts",
+      "bytes": 13029,
+      "sha256": "45c4ca68266541c5f4b2be3166c3448e8670dba5a34a60b92e567ddae443bf75",
+      "trackedDirty": false
+    },
+    {
+      "path": "rust/crates/aurora-voice-native/src/mesh_speech.rs",
+      "bytes": 30827,
+      "sha256": "5e86d6f140e81608ff582bcc5952c51206cc30a681fa3107e8ee52b037b22aa2",
+      "trackedDirty": false
+    },
+    {
+      "path": "rust/crates/aurora-voice-native/tests/mesh_speech_lifecycle.rs",
+      "bytes": 22977,
+      "sha256": "652bcf1469441477d28ed2b969b69848d85a0e516b48ca523d1aefcdd4f38e72",
+      "trackedDirty": false
+    }
+  ],
+  "excluded": [],
+  "allExistingWorkPreserved": true,
+  "gitMutations": 0,
+  "sutCalls": 0
+}

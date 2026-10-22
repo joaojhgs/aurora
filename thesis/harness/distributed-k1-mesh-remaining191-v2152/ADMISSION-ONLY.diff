@@ -1,0 +1,420 @@
+--- v1779/controller.py
++++ v2142/controller.py
+@@ -142,10 +142,22 @@
+     require_hash(ROOT / "resource_sample.py", cohort.get("implementation", {}).get("resourceSamplerSha256", ""), "resource_sampler_hash_mismatch")
+     sample_resources = runpy.run_path(str(ROOT / "resource_sample.py"))["sample_resources"]
+     budget = cohort.get("cumulativeConditionBudget", {})
+-    if (budget.get("conditionCapSeconds") != 72000
+-            or float(budget.get("priorUsedSeconds", 72000)) + OUTER_CAP > 72000
+-            or budget.get("epochOuterCapSeconds") != OUTER_CAP):
+-        raise ValueError("prior_and_remaining_epoch_exceed_original20h")
++    if (budget.get("historicalConditionCapSeconds") != 72000
++            or budget.get("historicalProviderExpired") is not True
++            or budget.get("separateProspectiveAllocationSeconds") != OUTER_CAP
++            or budget.get("historicalChargesPreserved") is not True
++            or budget.get("oldDeadlineRevived") is not False):
++        raise ValueError("prospective_allocation_or_historical_accounting_invalid")
++    require_hash(ROOT / "warmup_policy.py", cohort.get("implementation", {}).get("warmupPolicySha256", ""), "warmup_policy_hash_mismatch")
++    policy = runpy.run_path(str(ROOT / "warmup_policy.py"))["WARMUP_POLICY"]
++    if cohort.get("warmupReadinessPolicy") != policy:
++        raise ValueError("warmup_policy_not_frozen")
++    continuation = cohort.get("epochContinuation", {})
++    if (continuation.get("priorMeasuredAttempted") != 709 or continuation.get("plannedEpochMeasured") != 191
++            or continuation.get("globalFirst") != 710 or continuation.get("globalLast") != 900
++            or continuation.get("timeout709RetainedNotReplayed") is not True):
++        raise ValueError("remaining191_parent_mapping_invalid")
++    require_hash(pathlib.Path(cohort["priorParentSealPath"]), cohort["priorParentSealSha256"], "parent709_seal_changed")
+     receiver = cohort.get("remoteMeshTtsReceiver")
+     if (not isinstance(receiver, dict)
+             or receiver.get("peer_id_sha256") != cohort.get("meshTtsPeerIdSha256")
+--- v1779/receiver_proof.py
++++ v2142/receiver_proof.py
+@@ -10,6 +10,8 @@
+ from pathlib import Path
+ from typing import Any
+ 
++from warmup_policy import WARMUP_POLICY, qualified_warmup_records, warmup_qualification_receipt
++
+ MAX_JSONL_BYTES = 64 * 1024 * 1024
+ MAX_ID = re.compile(r"^[A-Za-z0-9._:-]{1,160}$")
+ 
+@@ -44,7 +46,7 @@
+     return None
+ 
+ 
+-def _await_route_warmups(rows_path: Path, status_path: Path) -> tuple[bytes, list[dict[str, Any]], bytes, dict[str, Any]]:
++def _await_route_warmups(rows_path: Path, status_path: Path, expected_count: int) -> tuple[bytes, list[dict[str, Any]], bytes, dict[str, Any]]:
+     deadline = time.monotonic() + 20.0
+     while time.monotonic() < deadline:
+         try:
+@@ -52,11 +54,11 @@
+             status = json.loads(status_bytes)
+             if (isinstance(status, dict) and status.get("state") == "accepting"
+                     and status.get("complete") is False
+-                    and status.get("accepted_rows") == 15
+-                    and status.get("written_rows") == 15):
++                    and status.get("accepted_rows") == expected_count
++                    and status.get("written_rows") == status.get("accepted_rows")):
+                 rows_bytes = _read_regular(rows_path, 32 * 1024 * 1024)
+                 rows = _jsonl(rows_bytes)
+-                if len(rows) == 15:
++                if len(rows) == status["written_rows"]:
+                     return rows_bytes, rows, status_bytes, status
+         except (OSError, ValueError, json.JSONDecodeError):
+             pass
+@@ -72,6 +74,11 @@
+                 identity_path: Path, candidate_sha: str, expected: dict[str, Any]) -> dict[str, Any]:
+     if not re.fullmatch(r"[0-9a-f]{64}", candidate_sha):
+         raise ValueError("candidate_manifest_pin_invalid")
++    selection = qualified_warmup_records(attempts_dir)
++    if cohort_manifest.get("warmupReadinessPolicy") != WARMUP_POLICY:
++        raise ValueError("warmup_policy_not_frozen")
++    selected_correlations = {x["row"]["correlation"]["correlation_id"] for x in selection["selected"]}
++    rejected_correlations = {x["row"]["correlation"]["correlation_id"] for x in selection["rejected"]}
+     identity = json.loads(_read_regular(identity_path, 64 * 1024))
+     provider = identity.get("provider") if isinstance(identity, dict) else None
+     actual_files = identity.get("actual_provider_files") if isinstance(identity, dict) else None
+@@ -103,7 +110,7 @@
+     bindings = _jsonl(_read_regular(bindings_path, 16 * 1024 * 1024))
+     requester_calls = _jsonl(_read_regular(requester_calls_path, 16 * 1024 * 1024))
+     route_observation_bytes, route_rows, route_sink_bytes, route_sink = _await_route_warmups(
+-        route_observations_path, route_sink_status_path)
++        route_observations_path, route_sink_status_path, selection["attempted"])
+     route_runtime_bytes = _read_regular(route_runtime_pins_path, 256 * 1024)
+     route_runtime = json.loads(route_runtime_bytes)
+     implementation = cohort_manifest.get("implementation", {})
+@@ -116,8 +123,8 @@
+             or route_sink.get("schema") != "aurora.mesh_route_observation_sink.v1"
+             or route_sink.get("state") != "accepting"
+             or route_sink.get("complete") is not False
+-            or route_sink.get("accepted_rows") != 15
+-            or route_sink.get("written_rows") != 15
++            or route_sink.get("accepted_rows") != selection["attempted"]
++            or route_sink.get("written_rows") != selection["attempted"]
+             or route_sink.get("dropped_rows") != 0
+             or route_sink.get("oversize_rows") != 0
+             or route_sink.get("quota_rows") != 0
+@@ -134,7 +141,7 @@
+             or route_runtime.get("observation_limit")
+                 != "before_after_snapshots_all_pc_transports_no_pair_id_no_continuous_stability"):
+         raise ValueError("mesh_route_runtime_source_pin_incomplete")
+-    if len(route_rows) != 15:
++    if len(route_rows) != selection["attempted"]:
+         raise ValueError("mesh_route_observation_count_mismatch")
+     span_groups: dict[str, dict[str, list[dict[str, Any]]]] = {}
+     for row in spans:
+@@ -150,8 +157,11 @@
+                    and row.get("topic") == "TTS.Synthesize"]
+     mesh_ends = [row for row in requester_calls if row.get("event") == "mesh_peer_call_end"
+                  and row.get("topic") == "TTS.Synthesize"]
+-    if len(mesh_starts) != 15 or len(mesh_ends) != 15:
++    if len(mesh_starts) != selection["attempted"] or len(mesh_ends) != selection["attempted"]:
+         raise ValueError("actual_exact_peer_mesh_call_count_mismatch")
++    for corr in rejected_correlations:
++        if span_groups.get(corr) or len([x for x in mesh_starts if x.get("correlation_id") == corr]) != 1 or len([x for x in mesh_ends if x.get("correlation_id") == corr and x.get("outcome") == "failed"]) != 1:
++            raise ValueError("structured_preaccept_rejection_native_or_route_inconsistent")
+     for row in starts:
+         args = row.get("actualArguments", {})
+         voice = args.get("voice", {}) if isinstance(args, dict) else {}
+@@ -169,7 +179,7 @@
+         if (route_row.get("schema") != "aurora.mesh_route_observation.v1"
+                 or route_row.get("topic") != "TTS.Synthesize"
+                 or not isinstance(corr, str) or corr in routes_by_correlation
+-                or route_row.get("request_outcome") != "ok"
++                or route_row.get("request_outcome") != ("failed" if corr in rejected_correlations else "ok")
+                 or type(route_row.get("requester_pid")) is not int
+                 or route_row["requester_pid"] <= 0):
+             raise ValueError("mesh_route_observation_row_invalid")
+@@ -178,11 +188,14 @@
+         if route_row["requester_pid"] != route_requester_pid:
+             raise ValueError("mesh_route_observation_process_mismatch")
+         routes_by_correlation[corr] = route_row
++    if set(routes_by_correlation) != selected_correlations | rejected_correlations:
++        raise ValueError("warmup_route_correlation_population_mismatch")
+     used_starts: set[int] = set()
+     used_ends: set[int] = set()
+     seen_server: set[str] = set()
+-    for ordinal in range(1, 16):
+-        case_id = f"audio-campaign-v1779-{ordinal:04d}"
++    for qualified in selection["selected"]:
++        ordinal = qualified["ordinal"]
++        case_id = f"audio-campaign-v2142-{ordinal:04d}"
+         attempt_path = attempts_dir / f"attempt-{ordinal:04d}-warmup.jsonl"
+         attempt_data = _read_regular(attempt_path, 2 * 1024 * 1024)
+         attempt = json.loads(attempt_data)
+@@ -307,6 +320,8 @@
+                         and start_ns <= stamp <= end_ns]
+         if len(matching_start) != 1 or len(matching_end) != 1:
+             raise ValueError("receiver_piper_call_not_uniquely_inside_native_span")
++        if matching_end[0][1].get("sampleRate") != expected["sample_rate"] or matching_end[0][1].get("audioBytes",0) <= 0:
++            raise ValueError("actual_piper_returned_audio_profile_mismatch")
+         used_starts.add(matching_start[0][0])
+         used_ends.add(matching_end[0][0])
+         start_args = matching_start[0][1].get("actualArguments", {})
+@@ -340,10 +355,12 @@
+             "config": actual_files["config"]["sha256"],
+         },
+         "calls": calls,
++        "warmup_qualification": warmup_qualification_receipt(selection),
+         "route_observation_gate": {
+             "schema": "aurora.mesh_route_warmup_gate.v1",
+             "status": "passed",
+-            "observed_calls": len(route_rows),
++            "observed_calls": len(calls),
++            "all_observed_calls": len(route_rows),
+             "joined_receiver_calls": len(calls),
+             "requester_pid": route_requester_pid,
+             "sink_written_rows": route_sink["written_rows"],
+--- v1779/route_observation_sink.py
++++ v2142/route_observation_sink.py
+@@ -11,7 +11,7 @@
+ 
+ _STOP = object()
+ _MAX_ROW_BYTES = 32 * 1024
+-_MAX_ROWS = 1_000
++_MAX_ROWS = 222
+ _MAX_TOTAL_BYTES = 32 * 1024 * 1024
+ _QUEUE_SIZE = 128
+ _SAFE_ROUTE_STATUSES = frozenset({
+--- v1779/runner.py
++++ v2142/runner.py
+@@ -21,6 +21,8 @@
+ 
+ os.umask(0o077)
+ sys.path.insert(0, str(Path(__file__).resolve().parent))
++from warmup_policy import WARMUP_POLICY, qualified_warmup_records, known_preaccept_failure, warmup_qualification_receipt
++
+ WARMUP_COUNT = 15
+ MEASURED_COUNT = 191
+ REQUEST_CAP_SECONDS = 180.0
+@@ -38,6 +40,17 @@
+ 
+ def _sha256(data: bytes) -> str:
+     return hashlib.sha256(data).hexdigest()
++
++
++def _bounded_next_phase(summary: dict[str, Any], qualified: int):
++    """One deterministic phase transition; failed requests are never retried."""
++    if summary["measured_requests"] >= MEASURED_COUNT:
++        return None, "measured_target_complete"
++    if qualified < WARMUP_COUNT:
++        if summary["warmup_requests"] >= WARMUP_POLICY["maximum_distinct_attempts"]:
++            return None, "warmup_distinct_attempt_budget_exhausted"
++        return ("warmup", summary["warmup_requests"] + 1), None
++    return ("measured", summary["measured_requests"] + 1), None
+ 
+ 
+ def _normal_words(value: str) -> str:
+@@ -150,7 +163,7 @@
+ def _cpu_warmup_gate(attempts_dir: Path, stage_output: Path, wav_hash: str,
+                      candidate_hash: str, config: dict[str, Any], *,
+                      require_local_tts: bool = True,
+-                     case_prefix: str = "audio-campaign-v1779") -> dict[str, Any]:
++                     case_prefix: str = "audio-campaign-v2142") -> dict[str, Any]:
+     """Require 15 correct local flows and actual local STT/LLM provider bindings."""
+     ended: dict[str, dict[str, list[dict[str, Any]]]] = {}
+     try:
+@@ -167,7 +180,8 @@
+ 
+     cases: list[dict[str, Any]] = []
+     seen_correlations: set[str] = set()
+-    for ordinal in range(1, WARMUP_COUNT + 1):
++    for qualified in qualified_warmup_records(attempts_dir)["selected"]:
++        ordinal = qualified["ordinal"]
+         case_id = f"{case_prefix}-{ordinal:04d}"
+         path = attempts_dir / f"attempt-{ordinal:04d}-warmup.jsonl"
+         try:
+@@ -309,7 +323,7 @@
+         raise CampaignFailure("warmup_gate", "remote_tts_proof_outside_private_output", stop=True)
+     local_gate = _cpu_warmup_gate(
+         attempts_dir, stage_output, _load_frozen_manifest()[0]["wav_sha256"],
+-        candidate_hash, config, require_local_tts=False, case_prefix="audio-campaign-v1779",
++        candidate_hash, config, require_local_tts=False, case_prefix="audio-campaign-v2142",
+     )
+     proof_deadline = min(condition_deadline, time.monotonic() + REQUEST_CAP_SECONDS)
+     while not proof_path.is_file():
+@@ -335,13 +349,15 @@
+             or proof.get("provider") != expected
+             or type(proof.get("receiver_pid")) is not int or proof["receiver_pid"] <= 0):
+         raise CampaignFailure("warmup_gate", "remote_tts_receiver_binding_mismatch", stop=True)
++    if proof.get("warmup_qualification") != warmup_qualification_receipt(qualified_warmup_records(attempts_dir)):
++        raise CampaignFailure("warmup_gate", "warmup_selection_denominator_mismatch", stop=True)
+     route_gate = proof.get("route_observation_gate")
+     if (not isinstance(route_gate, dict)
+             or route_gate.get("schema") != "aurora.mesh_route_warmup_gate.v1"
+             or route_gate.get("status") != "passed"
+             or route_gate.get("observed_calls") != WARMUP_COUNT
+             or route_gate.get("joined_receiver_calls") != WARMUP_COUNT
+-            or route_gate.get("sink_written_rows") != WARMUP_COUNT
++            or route_gate.get("sink_written_rows") != qualified_warmup_records(attempts_dir)["attempted"]
+             or route_gate.get("sink_dropped_rows") != 0
+             or route_gate.get("sink_oversize_rows") != 0
+             or route_gate.get("sink_quota_rows") != 0
+@@ -362,8 +378,9 @@
+     if not isinstance(calls, list) or len(calls) != WARMUP_COUNT:
+         raise CampaignFailure("warmup_gate", "remote_tts_receiver_warmup_count_mismatch", stop=True)
+     expected_by_case: dict[str, dict[str, Any]] = {}
+-    for ordinal in range(1, WARMUP_COUNT + 1):
+-        case_id = f"audio-campaign-v1779-{ordinal:04d}"
++    for qualified in qualified_warmup_records(attempts_dir)["selected"]:
++        ordinal = qualified["ordinal"]
++        case_id = f"audio-campaign-v2142-{ordinal:04d}"
+         try:
+             attempt = json.loads((attempts_dir / f"attempt-{ordinal:04d}-warmup.jsonl").read_text())
+         except Exception:
+@@ -750,7 +767,11 @@
+         condition_deadline = condition_started + CONDITION_CAP_SECONDS
+         summary["condition_started_monotonic_ns"] = condition_started_ns
+         status = "running"
+-        total = WARMUP_COUNT + MEASURED_COUNT
++        total = WARMUP_POLICY["maximum_distinct_attempts"] + MEASURED_COUNT
++        warmups_correct = 0
++        summary["measured_failed"] = 0
++        summary["warmup_readiness_policy"] = WARMUP_POLICY
++        summary["maximum_warmup_attempts"] = 30
+         consecutive_preaccept_rejections = 0
+ 
+         for ordinal in range(1, total + 1):
+@@ -769,18 +790,23 @@
+                 stop_reason = "runtime_config_changed"
+                 status = "stopped_system_failure"
+                 break
+-            phase = "warmup" if ordinal <= WARMUP_COUNT else "measured"
+-            attempt_index = ordinal if phase == "warmup" else ordinal - WARMUP_COUNT
++            next_phase, phase_stop = _bounded_next_phase(summary, warmups_correct)
++            if next_phase is None:
++                stop_reason = phase_stop
++                status = ("completed_all_correct" if summary["correct"] == MEASURED_COUNT and summary["measured_failed"] == 0 else "completed_with_failures_or_incorrect") if phase_stop == "measured_target_complete" else "stopped_system_failure"
++                break
++            phase, attempt_index = next_phase
+             attempt_started_ns = time.monotonic_ns()
+             attempt_deadline = min(time.monotonic() + REQUEST_CAP_SECONDS, condition_deadline)
+             correlation_id = f"audio-campaign-{uuid.uuid4().hex}"
+             session_id = f"audio-session-{uuid.uuid4().hex}"
+             request_id = f"audio-request-{uuid.uuid4().hex}"
+-            harness_case_id = f"audio-campaign-v1779-{ordinal:04d}"
++            harness_case_id = f"audio-campaign-v2142-{ordinal:04d}"
+             row: dict[str, Any] = {
+                 "schema_version": "aurora.full_audio_attempt.v1",
+                 "ordinal": ordinal, "phase": phase, "phase_index": attempt_index,
+                 "condition_measured_index": None if phase == "warmup" else 709 + attempt_index,
++                "global_measured_index": None if phase == "warmup" else 709 + attempt_index,
+                 "harness_case_id": harness_case_id,
+                 "status": "starting", "flow_started_monotonic_ns": attempt_started_ns,
+                 "correlation": {"correlation_id": correlation_id, "session_id": session_id, "request_id": request_id},
+@@ -894,9 +920,10 @@
+                         "end_monotonic_ns": time.monotonic_ns(),
+                         "duration_ms": (time.monotonic_ns() - tts_started_ns) / 1_000_000,
+                         "error_category": exc.category,
++                        "preaccept_response": exc.preaccept_response,
+                     }
+                     raise CampaignFailure("tts", f"remote_mesh_{exc.category}",
+-                        stop=phase != "measured" or exc.category != "preaccept_capability_changed") from None
++                        stop=exc.category != "preaccept_capability_changed") from None
+                 tts_ended_ns = time.monotonic_ns()
+                 if tts_ended_ns > int(attempt_deadline * 1_000_000_000):
+                     raise CampaignFailure("tts", "remote_mesh_tts_deadline_ambiguous", stop=True)
+@@ -1021,15 +1048,22 @@
+                 row["status"] = "system_failure"
+                 row["failure"] = {"stage": "provider_bindings", "code": "effective_bindings_changed"}
+                 abort_after_row = True
+-            if phase == "measured":
+-                if row.get("failure", {}).get("code") == "remote_mesh_preaccept_capability_changed":
+-                    consecutive_preaccept_rejections += 1
+-                else:
+-                    consecutive_preaccept_rejections = 0
+-                row["consecutive_preaccept_rejections"] = consecutive_preaccept_rejections
+-                if consecutive_preaccept_rejections >= 3:
++            row["partial_quality_incorrect"] = any(row.get("correctness", {}).get(key) is False for key in ["transcript_matches_reference_words", "assistant_reply_matches_expected_words"])
++            if row.get("failure", {}).get("code") == "remote_mesh_preaccept_capability_changed":
++                consecutive_preaccept_rejections += 1
++            else:
++                consecutive_preaccept_rejections = 0
++            row["consecutive_preaccept_rejections"] = consecutive_preaccept_rejections
++            if consecutive_preaccept_rejections >= 3:
++                abort_after_row = True
++                stop_reason = "three_consecutive_preaccept_capability_rejections"
++            if phase == "warmup":
++                if row["status"] == "completed_correct":
++                    warmups_correct += 1
++                elif not known_preaccept_failure(row):
+                     abort_after_row = True
+-                    stop_reason = "three_consecutive_preaccept_capability_rejections"
++                    stop_reason = row.get("failure", {}).get("code", "warmup_quality_or_system_failure")
++            summary["warmup_completed_correct"] = warmups_correct
+             row_name = f"attempt-{ordinal:04d}-{phase}.jsonl"
+             _write_once(attempts_dir / row_name, (json.dumps(row, sort_keys=True, ensure_ascii=False) + "\n").encode())
+             if row["status"] in ("completed_correct", "completed_incorrect"):
+@@ -1040,6 +1074,8 @@
+                     summary["correct"] += 1
+             else:
+                 summary["failed"] += 1
++                if phase == "measured":
++                    summary["measured_failed"] += 1
+                 failure_code = str(row.get("failure", {}).get("code", "")).lower()
+                 if "timeout" in failure_code or "deadline" in failure_code:
+                     summary["timeouts"] += 1
+@@ -1064,8 +1100,8 @@
+                 abort_after_row = True
+             _atomic_progress(progress_path, {
+                 "status": "running", "attempted": ordinal,
+-                "warmups_attempted": min(ordinal, WARMUP_COUNT),
+-                "measured_attempted": max(0, ordinal - WARMUP_COUNT),
++                "warmups_attempted": summary["warmup_requests"],
++                "measured_attempted": summary["measured_requests"],
+                 "planned_warmups": WARMUP_COUNT, "planned_measured": MEASURED_COUNT,
+                 "unattempted_measured": summary["unattempted_measured"],
+                 "last_attempt_file": f"attempts/{row_name}",
+@@ -1075,7 +1111,7 @@
+                 stop_reason = stop_reason or row.get("failure", {}).get("code", "system_failure")
+                 status = "stopped_system_failure"
+                 break
+-            if ordinal == WARMUP_COUNT:
++            if phase == "warmup" and warmups_correct == WARMUP_COUNT:
+                 try:
+                     summary["warmup_instrumentation_gate"] = await _remote_tts_warmup_gate(
+                         attempts_dir, Path(os.environ["AURORA_VOICE_STAGE_OUTPUT"]).resolve(),
+@@ -1087,7 +1123,7 @@
+                     status = "stopped_system_failure"
+                     _atomic_progress(progress_path, {
+                         "status": status, "attempted": ordinal,
+-                        "warmups_attempted": WARMUP_COUNT, "measured_attempted": 0,
++                        "warmups_attempted": summary["warmup_requests"], "measured_attempted": 0,
+                         "planned_warmups": WARMUP_COUNT, "planned_measured": MEASURED_COUNT,
+                         "unattempted_measured": MEASURED_COUNT,
+                         "last_attempt_file": f"attempts/{row_name}",
+@@ -1101,7 +1137,7 @@
+         else:
+             status = (
+                 "completed_all_correct"
+-                if summary["correct"] == MEASURED_COUNT and summary["failed"] == 0
++                if summary["correct"] == MEASURED_COUNT and summary["measured_failed"] == 0
+                 else "completed_with_failures_or_incorrect"
+             )
+         if status == "running":
+--- v1779/tts_mesh_adapter.py
++++ v2142/tts_mesh_adapter.py
+@@ -9,9 +9,10 @@
+ class RemoteMeshTtsCallError(RuntimeError):
+     """Finite failure category; never retain QueryResult error text."""
+ 
+-    def __init__(self, category: str):
++    def __init__(self, category: str, *, preaccept_response=None):
+         super().__init__(category)
+         self.category = category
++        self.preaccept_response = preaccept_response
+ 
+ 
+ async def synthesize_mesh_tts(
+@@ -79,7 +80,10 @@
+             and route_ends[0].get("peer_id_sha256") == expected_peer_hash
+             and route_starts[0].get("topic") == route_ends[0].get("topic") == TTSMethods.SYNTHESIZE
+             and route_ends[0].get("outcome") == "failed"):
+-        raise RemoteMeshTtsCallError("preaccept_capability_changed")
++        response = {key: result.data[key] for key in ("accepted", "reason_code")}
++        response.update(method_topic=TTSMethods.SYNTHESIZE, peer_id_sha256=expected_peer_hash,
++                        correlation_id=correlation_id, peer_call_pid=route_ends[0]["pid"])
++        raise RemoteMeshTtsCallError("preaccept_capability_changed", preaccept_response=response)
+     if (len(route_starts) != 1 or len(route_ends) != 1
+             or route_starts[0].get("peer_id_sha256") != expected_peer_hash
+             or route_ends[0].get("peer_id_sha256") != expected_peer_hash

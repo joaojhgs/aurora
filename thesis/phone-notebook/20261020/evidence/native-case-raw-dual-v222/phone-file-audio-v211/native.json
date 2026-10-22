@@ -1,0 +1,313 @@
+{
+  "at": "2026-10-22T07:06:38.130Z",
+  "status": "NATIVE_FILE_AUDIO_FAILED_PRESERVED",
+  "caseId": "phone-local-4557fb06-6d70-49c0-913c-316ff278ed0f",
+  "measuredCases": 0,
+  "pilotCases": 1,
+  "route": "ALL_LOCAL_PHONE",
+  "adbRole": "setup/control/custody only; full timed pipeline executes inside phone without ADB round trips",
+  "calls": [
+    {
+      "command": "aurora_thin_profile_get",
+      "at": "2026-10-22T07:06:38.204Z",
+      "elapsedMsOnPhone": 22.899999976158142,
+      "ok": true
+    }
+  ],
+  "catalog": {
+    "available": true,
+    "count": 558,
+    "selected": [
+      {
+        "packId": "standard:piper:en_us-ljspeech-medium",
+        "displayName": "ljspeech medium",
+        "task": "tts",
+        "languages": [
+          "en-us"
+        ],
+        "language": "en-us",
+        "sha256": "3dfb4b759d8be032a4903a9538d128b0fda2a06ab1de6cbc2d93a97e2dd83dba",
+        "fileSize": 67169893,
+        "installed": true,
+        "activeSlot": null,
+        "revision": "github-release-130612623-30d65b392bba8dfb",
+        "runtimeRevision": "sherpa_onnx",
+        "modelFamily": "vits_piper",
+        "requiresReferenceAudio": false,
+        "voiceId": "standard:piper:en_us-ljspeech-medium",
+        "voiceRevision": "github-release-130612623-30d65b392bba8dfb",
+        "referenceProfileId": null
+      },
+      {
+        "packId": "stt:whisper:base",
+        "displayName": "Whisper base",
+        "task": "stt",
+        "languages": [
+          "af",
+          "am",
+          "ar",
+          "as",
+          "az",
+          "ba",
+          "be",
+          "bg",
+          "bn",
+          "bo",
+          "br",
+          "bs",
+          "ca",
+          "cs",
+          "cy",
+          "da",
+          "de",
+          "el",
+          "en",
+          "es",
+          "et",
+          "eu",
+          "fa",
+          "fi",
+          "fo",
+          "fr",
+          "gl",
+          "gu",
+          "ha",
+          "haw",
+          "he",
+          "hi",
+          "hr",
+          "ht",
+          "hu",
+          "hy",
+          "id",
+          "is",
+          "it",
+          "ja",
+          "jw",
+          "ka",
+          "kk",
+          "km",
+          "kn",
+          "ko",
+          "la",
+          "lb",
+          "ln",
+          "lo",
+          "lt",
+          "lv",
+          "mg",
+          "mi",
+          "mk",
+          "ml",
+          "mn",
+          "mr",
+          "ms",
+          "mt",
+          "my",
+          "ne",
+          "nl",
+          "nn",
+          "no",
+          "oc",
+          "pa",
+          "pl",
+          "ps",
+          "pt",
+          "ro",
+          "ru",
+          "sa",
+          "sd",
+          "si",
+          "sk",
+          "sl",
+          "sn",
+          "so",
+          "sq",
+          "sr",
+          "su",
+          "sv",
+          "sw",
+          "ta",
+          "te",
+          "tg",
+          "th",
+          "tk",
+          "tl",
+          "tr",
+          "tt",
+          "uk",
+          "ur",
+          "uz",
+          "vi",
+          "yi",
+          "yo",
+          "yue",
+          "zh"
+        ],
+        "language": "af",
+        "sha256": "911b2083efd7c0dca2ac3b358b75222660dc09fb716d64fbfc417ba6c99ff3de",
+        "fileSize": 207557382,
+        "installed": true,
+        "activeSlot": null,
+        "revision": "github-releases-130628817-145831594-4e34edcb-284637b2",
+        "runtimeRevision": "sherpa_onnx",
+        "modelFamily": "whisper",
+        "requiresReferenceAudio": false,
+        "voiceId": null,
+        "voiceRevision": null,
+        "referenceProfileId": null
+      }
+    ]
+  },
+  "assetSetupReuse": {
+    "receipt": "phone-file-audio-v207/native.json",
+    "sha256": "4104573edf7fb58aeeecf7e079a368df1bc5a7d3ec457010a4f2e4cbc0951ce0",
+    "reason": "Both actual native installs passed on unchanged APK; runtime bindings still verify assets before each load; do not repeat setup"
+  },
+  "profile": {
+    "nodeMode": "mesh-node",
+    "runtimeTier": "lightweight-ts",
+    "localSpeechSelection": {
+      "stt": {
+        "packId": "stt:whisper:base",
+        "packRevision": "github-releases-130628817-145831594-4e34edcb-284637b2"
+      },
+      "tts": {
+        "packId": "en-us",
+        "packRevision": "github-release-130612623-30d65b392bba8dfb",
+        "voiceId": "standard:piper:en_us-ljspeech-medium",
+        "voiceRevision": "github-release-130612623-30d65b392bba8dfb"
+      }
+    },
+    "remoteSharingRequested": false
+  },
+  "policy": {
+    "before": {
+      "revision": 1,
+      "sharing": {
+        "stt": false,
+        "tts": false,
+        "kws": false,
+        "vad": false
+      }
+    },
+    "after": {
+      "revision": 2,
+      "sharing": {
+        "stt": false,
+        "tts": false,
+        "kws": false,
+        "vad": false
+      },
+      "stt": {
+        "routing": {
+          "prefer": "local_only",
+          "fallback": "none"
+        },
+        "experimentalRemote": false,
+        "modelId": "stt:whisper:base",
+        "language": "en"
+      },
+      "tts": {
+        "routing": {
+          "prefer": "local_only",
+          "fallback": "none"
+        },
+        "experimentalRemote": false,
+        "modelId": "vits_piper",
+        "language": "en-us"
+      }
+    }
+  },
+  "screenWake": {
+    "supported": true,
+    "held": true
+  },
+  "pipeline": {
+    "caseId": "phone-local-4557fb06-6d70-49c0-913c-316ff278ed0f",
+    "input": {
+      "sourceWavSha256": "da0ecc4ad0885746ab6e716585473917ab2b543a505bf0db09ebacfaa7943cbb",
+      "sourceSampleRateHz": 22050,
+      "sourceChannels": 1,
+      "sourceFrames": 109875,
+      "entrypointRateHz": 16000,
+      "entrypointFormat": "pcm_s16le",
+      "pcmSha256": "1d5147ec00b8582ffeeb2d6a196cfab6e713cc33c9beea9212e7bc91eeed8fbf",
+      "pcmBytes": 159456,
+      "sampleCount": 79728,
+      "normalization": "production faster_whisper.audio.decode_audio(PyAV) to16k float32 then rint*32768/clip/LEint16; setup before phone timing",
+      "fasterWhisperVersion": "1.1.1",
+      "avVersion": "16.0.1",
+      "numpyVersion": "2.2.6"
+    },
+    "route": "ALL_LOCAL_PHONE",
+    "measurementClock": "phone WebView performance.now, no ADB within pipeline",
+    "stages": [
+      {
+        "name": "stt",
+        "command": "aurora_android_voice_live_test_transcribe_file",
+        "operationId": "phone-local-4557fb06-6d70-49c0-913c-316ff278ed0f-stt",
+        "startMs": 0.09999990463256836,
+        "endMs": 133909.39999997616,
+        "elapsedMs": 133909.30000007153,
+        "ok": true
+      },
+      {
+        "name": "llm_integrity_and_load",
+        "command": "aurora_local_inference_session_create",
+        "operationId": null,
+        "startMs": 133910.09999990463,
+        "endMs": 189387.39999997616,
+        "elapsedMs": 55477.300000071526,
+        "ok": true
+      },
+      {
+        "name": "llm",
+        "command": "aurora_local_inference_complete",
+        "operationId": "phone-local-4557fb06-6d70-49c0-913c-316ff278ed0f-llm-request",
+        "startMs": 189387.69999992847,
+        "endMs": 192798.39999997616,
+        "elapsedMs": 3410.7000000476837,
+        "ok": true
+      },
+      {
+        "name": "tts",
+        "command": "aurora_android_voice_live_test_synthesize_file",
+        "operationId": "phone-local-4557fb06-6d70-49c0-913c-316ff278ed0f-tts",
+        "startMs": 192798.5,
+        "endMs": 280148.89999997616,
+        "elapsedMs": 87350.39999997616,
+        "ok": true
+      }
+    ],
+    "correctness": {
+      "transcript": true,
+      "reply": true
+    },
+    "modelCalls": 3,
+    "transcript": "What is the capital of France? Answer with only the city name.",
+    "session": {
+      "modelId": "chat-qwen3-0b8",
+      "sessionId": "phone-local-4557fb06-6d70-49c0-913c-316ff278ed0f-llm",
+      "contextBytes": null,
+      "contextTokens": 4096
+    },
+    "reply": {
+      "type": "message",
+      "content": "Paris"
+    },
+    "status": "NATIVE_FILE_AUDIO_FAILED_PRESERVED",
+    "error": "Error: Nonfinite native audio",
+    "close": {
+      "ok": true,
+      "data": null
+    },
+    "nativeSessionClosed": true,
+    "finishedPhoneMs": 280353.2999999523
+  },
+  "nativeSessionClosed": true,
+  "screenWakeRelease": {
+    "released": true
+  },
+  "finishedAt": "2026-10-22T07:11:19.017Z"
+}

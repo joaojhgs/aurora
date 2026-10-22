@@ -1,0 +1,22 @@
+{
+  "baseline_seconds": 300,
+  "cell_cap_seconds": 6000,
+  "child_exit_code": 0,
+  "elapsed_seconds": 3884.3179996180115,
+  "exit_code": 0,
+  "finished_at": "2026-10-14T14:58:49.571579+00:00",
+  "index": 7,
+  "planned_measured": 100,
+  "planned_warmups": 5,
+  "receipt_validation": {
+    "expected_provider_captures": 105,
+    "expected_requests": 105,
+    "failure_classes": [],
+    "raw_artifacts_retained": true,
+    "validated": true
+  },
+  "request_deadline_ms": 180000,
+  "route": "mesh",
+  "started_at": "2026-10-14T13:54:05.253329+00:00",
+  "status": "completed"
+}

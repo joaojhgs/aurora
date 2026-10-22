@@ -1,0 +1,26 @@
+{
+  "python_ast_pass": [
+    "scripts/experiments/assistant_local_api_pilot.py",
+    "scripts/experiments/assistant_matched_input_hook.py",
+    "/tmp/aurora-matched-readiness-v291.py"
+  ],
+  "shell_syntax_exit": 0,
+  "heredoc_blocks_pass": 12,
+  "model_requests": 0,
+  "prior_heredoc_count_assumption": {
+    "expected": 11,
+    "actual": 12,
+    "no_syntax_failure_proven": true
+  },
+  "final_python_sha256": {
+    "scripts/experiments/assistant_local_api_pilot.py": "de351707df153a38c0b8d0fb5a2df411895c5e63868b32ae1f3ab5864552c93c",
+    "scripts/experiments/assistant_matched_input_hook.py": "1e342abe17092ac6b237564f51c31344e60f84fde8c1d1636b8876bd33a1f622",
+    "/tmp/aurora-matched-readiness-v291.py": "7da1a10feb0911e8a64ec441632b44afb088b7c927a2093580fab6f60c753728"
+  },
+  "ruff_first_exit": 1,
+  "ruff_first_findings": [
+    "SIM102",
+    "SIM300"
+  ],
+  "ruff_final_exit": 0
+}

@@ -1,0 +1,38 @@
+{
+  "id": "remote-cli-1792641318395",
+  "ok": true,
+  "result": {
+    "runId": "run_e6054e76e9fc",
+    "deliveryId": "delivery_bcaba5225391",
+    "messages": [
+      {
+        "id": "msg_7c19253c36a0",
+        "run_id": "run_e6054e76e9fc",
+        "delivery_contract": "current_delivery",
+        "from_handle": "term_1f27be31-0284-4366-bb91-30fe538cd30e",
+        "to_handle": "run:run_e6054e76e9fc",
+        "subject": "Sourceoverlayv2383 actual copy sealed03:54; new isolated build queued serially",
+        "body": "One admitted existing-control source-overlay copy completed at03:54:01UTC:11119Bfile SHA48b6fc597996536ead4439bca2024a3b3a4f5c6d1ad4c64f8a5d68f84a05c522 +2141Bmanifest SHA6fb03ee20bc4bed033b3edf49ef48d952583710cebfa34cbd81ffdeb928c0f87, remote local staging0.225s, verified receipts physical onbothhosts. NEW android-build-ebde-plus-v2383 preserves bare1959snapshot and failedoldbuild; effectiveidentity explicitly ebde+overlay, reused verifiedlocalengines/dependencies without sharedbinary/modelcopy. Productionvoice workspace is compiling pinnedRust1.88/wasm-bindgen0.2.126 at2jobs; newAPKstage waits its actualcompletion before1200s/2jobs build, no overlappingcompiler jobs/RootSUT/Gitwriter or900START.",
+        "type": "status",
+        "priority": "normal",
+        "thread_id": null,
+        "payload": "{\"reportPath\":\"thesis/phone-notebook/20261020/REPORT.md\"}",
+        "created_at": "2026-10-22T03:55:09Z",
+        "delivered_at": null
+      }
+    ],
+    "count": 1,
+    "replayed": false,
+    "acknowledged": "delivery_6288f85b70da",
+    "timedOut": false,
+    "cancelled": false,
+    "connectionLost": false,
+    "mutation": {
+      "requestId": "2bff2b84-521b-4f02-afb2-10265909c1a0",
+      "replayed": false
+    }
+  },
+  "_meta": {
+    "runtimeId": "cc9e3275-28c6-4c45-85cc-bdcd2262aa7d"
+  }
+}

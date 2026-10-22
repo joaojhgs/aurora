@@ -1,0 +1,157 @@
+{
+  "llama_build_attempt": {
+    "receipt_path": ".git/aurora-handoff-import-20261006/PER284-PINNED-LLAMA-HOST-BUILD-V1-RESULT.json",
+    "receipt_sha256": "a107a010ebc8f1f586fb86819b79e3c753f11145b5206737984bcae26471bf1c",
+    "result": "failed exit 1; source HEAD and builder/lock hashes are preserved in receipt, but this attempt cannot establish installed wheel provenance."
+  },
+  "llama_cpp_python": {
+    "distribution_metadata": {
+      "attribution_caveat": "The admitted V491 interpreter was queried with PYTHONPATH unset and its sys.prefix matched the V491 venv, but importlib.metadata resolved dist-info under the repository .venv path. The retained V491 runtime receipt confirms version 0.3.19; the exact venv-local distribution file origin is therefore not separately proven by that receipt.",
+      "direct_url": "file:///home/developer/.cache/aurora-tools/per278/llama_cpp_python-0.3.19-cp311-cp311-linux_aarch64.whl",
+      "direct_url_archive_hash": "absent (archive_info is empty)",
+      "dist_info_path": "/home/developer/projects/aurora/.venv/lib/python3.11/site-packages/llama_cpp_python-0.3.19.dist-info",
+      "distribution_license": "MIT (METADATA)",
+      "wheel_bytes": 12976948,
+      "wheel_metadata": "CPython 3.11, linux_aarch64; WHEEL generator scikit-build-core 0.12.2"
+    },
+    "limits": "RECORD supplies distribution-declared file hashes, but binaries were not reread/hashed and metadata alone does not prove the runtime loaded those exact files. direct_url identifies a cached wheel, not its source commit or native build flags. A separate retained PER284 source-build attempt records source HEAD 637225f91992c86d0acdd67a1802077be36c9a2f but exited 1; it is not provenance for the installed wheel.",
+    "recorded_native_file_identity": [
+      {
+        "file": "libllama.so",
+        "record_sha256_base64": "oCwLnVAom3fnS14BKJ7ZL1nNBfQ7jHsq76R72rLxp2o",
+        "recorded_bytes": 2641256
+      },
+      {
+        "file": "libggml-cpu.so",
+        "record_sha256_base64": "zcIDTrN0mqwD8PBlAWIaHkFRlCSvpaaleBeMwsv9BmM",
+        "recorded_bytes": 858080
+      },
+      {
+        "file": "libggml-base.so",
+        "record_sha256_base64": "VObHq8s9tl8Hlv51wrgMdEvivdWU8QuDN0BXBBQBWkw",
+        "recorded_bytes": 596016
+      }
+    ],
+    "runtime_declared_version": "0.3.19 (cpu-audio-campaign-v491/runtime/runtime-versions.json)"
+  },
+  "models": [
+    {
+      "artifact": "faster-whisper-base/model.bin",
+      "bytes": 145217532,
+      "path": "/home/developer/.cache/huggingface/hub/models--Systran--faster-whisper-base/snapshots/ebe41f70d5b6dfa9166e2c581c45c9c0cfc57b66/model.bin",
+      "provenance": {
+        "evidence": "local refs/main and cache tree metadata; tree identifies model.bin LFS SHA-256 and exact size matching the expected digest",
+        "model_card_license": "README/model-card blob is listed in tree metadata but is absent from retained cache snapshot/blobs inspected; license was not established locally.",
+        "origin": "Hugging Face cache namespace Systran/faster-whisper-base",
+        "retrieval_receipt": "No dedicated download/retrieval receipt found in the inspected retained metadata. Cache revision is provenance, not a timestamped acquisition receipt.",
+        "revision": "ebe41f70d5b6dfa9166e2c581c45c9c0cfc57b66"
+      },
+      "role": "STT",
+      "sha256": "d01c3014881c9c6f3133c182f3d2887eb6ca1c789a7538c5c007196857a0a6a9"
+    },
+    {
+      "artifact": "Qwen3.5-0.8B-Q4_0.gguf",
+      "bytes": 563036064,
+      "path": "/home/developer/projects/aurora/.artifacts/local-inference/models/Qwen3.5-0.8B-Q4_0.gguf",
+      "provenance": {
+        "model_card_license": "Not found in inspected model directory/receipt.",
+        "publisher_repository": "ggml-org/Qwen3.5-0.8B-GGUF",
+        "receipt": "model-receipt.json declares exact size/SHA and says immutable artifact/header verification; receipt does not identify a model-card/license field.",
+        "receipt_url": "https://huggingface.co/ggml-org/Qwen3.5-0.8B-GGUF/resolve/9447f74101aeb4e93621884dfa36ee8effb8831b/Qwen3.5-0.8B-Q4_0.gguf",
+        "revision": "9447f74101aeb4e93621884dfa36ee8effb8831b"
+      },
+      "role": "LLM",
+      "sha256": "57d1997790d1744fba5b40a7317df71ea5e2acee28c47e78f0cce39c0703f8cf"
+    },
+    {
+      "artifact": "en_US-ljspeech-medium.onnx",
+      "bytes": 63531379,
+      "path": "/home/developer/projects/aurora/.git/aurora-handoff-import-20261006/cpu-full-audio-v483/models/en_US-ljspeech-medium.onnx",
+      "provenance": {
+        "model_card_license": "Retained MODEL_CARD describes LJSpeech dataset as public domain; it does not itself establish the ONNX model artifact license. Companion voice JSON is configuration metadata, not a license.",
+        "publisher_repository": "rhasspy/piper-voices",
+        "receipt": "asset-stage.json records HTTP download success (exitCode 0), source URL, expected/observed digest and exact bytes for model, companion JSON and MODEL_CARD.",
+        "revision": "c10ece1aade47bb51c153c893d14e5bf8e5b7117"
+      },
+      "role": "TTS",
+      "sha256": "6f52a751e2349abe7a76735eb09dc1875298c77ea2342ffd2fef79ff81b87f22"
+    }
+  ],
+  "not_performed": [
+    "weight rehashes",
+    "large binary reads",
+    "network lookups",
+    "backend/module imports",
+    "tests/builds/inference"
+  ],
+  "schema": "aurora.model_provenance_readonly.v741",
+  "scope": "metadata-only provenance lookup; weights not reread or rehashed; no network access",
+  "small_metadata_read": [
+    {
+      "bytes": 40,
+      "path": "/home/developer/.cache/huggingface/hub/models--Systran--faster-whisper-base/refs/main",
+      "sha256": "a071211ff6001a1e7b512994cb14383d454762c634b7ea03651a2c7de41b5117"
+    },
+    {
+      "bytes": 836,
+      "path": "/home/developer/.cache/huggingface/hub/models--Systran--faster-whisper-base/trees/ebe41f70d5b6dfa9166e2c581c45c9c0cfc57b66.json",
+      "sha256": "219adf3edfac3bc1ec61e231dbdc2429f248d5ce56d31f6ff22eed3b05275c34"
+    },
+    {
+      "bytes": 531,
+      "path": "/home/developer/projects/aurora/.artifacts/local-inference/models/model-receipt.json",
+      "sha256": "abaf93295d0f9ef9eda8dc485dbd5dcfdf1a2eb84bee74d32bc0a476abccd9a7"
+    },
+    {
+      "bytes": 1560,
+      "path": "/home/developer/projects/aurora/.git/aurora-handoff-import-20261006/cpu-full-audio-v483/asset-stage.json",
+      "sha256": "9b65d9cff9c1567e037410862cd3907ca7a51b7dd2138bd6ba9d51f849013d85"
+    },
+    {
+      "bytes": 517,
+      "path": "/home/developer/projects/aurora/.git/aurora-handoff-import-20261006/cpu-full-audio-v483/models/MODEL_CARD",
+      "sha256": "fbee1529c89d36b3fe76d7e9f3f832dce17f44900a52d76a9bda735654766b4d"
+    },
+    {
+      "bytes": 4972,
+      "path": "/home/developer/projects/aurora/.git/aurora-handoff-import-20261006/cpu-full-audio-v483/models/en_US-ljspeech-medium.onnx.json",
+      "sha256": "141d612cc0a95ed7efc1ca936b845c2364967f2e9217c5dbfcf69fc4d6c65860"
+    },
+    {
+      "bytes": 177,
+      "path": "/home/developer/projects/aurora/.git/aurora-handoff-import-20261006/cpu-audio-campaign-v491/runtime/runtime-versions.json",
+      "sha256": "c794d738a37423fd4a1fff787fd4d09ad05e407c5d66f6609015da0fdcf6ed47"
+    },
+    {
+      "bytes": 131,
+      "path": "/home/developer/projects/aurora/.venv/lib/python3.11/site-packages/llama_cpp_python-0.3.19.dist-info/direct_url.json",
+      "sha256": "f9b1b2bab98559aa0a1b865e51d900b82171adc24e1e4267d2f4b25c832279bc"
+    },
+    {
+      "bytes": 110,
+      "path": "/home/developer/projects/aurora/.venv/lib/python3.11/site-packages/llama_cpp_python-0.3.19.dist-info/WHEEL",
+      "sha256": "66e6c155db7c5588d59887118048004cac107aa7cdf3382e3bdaa77164720ae9"
+    },
+    {
+      "bytes": 33885,
+      "path": "/home/developer/projects/aurora/.venv/lib/python3.11/site-packages/llama_cpp_python-0.3.19.dist-info/METADATA",
+      "sha256": "d7f90e05c7fd6cb3045f46eec8454006f4538e2463e7956c9a114039f090a935"
+    },
+    {
+      "bytes": 7575,
+      "path": "/home/developer/projects/aurora/.venv/lib/python3.11/site-packages/llama_cpp_python-0.3.19.dist-info/RECORD",
+      "sha256": "d044dce7b2e7024272464edae8f7dbcbe81b5482e43ecfe14b420a0097edf223"
+    },
+    {
+      "bytes": 739,
+      "path": "/home/developer/projects/aurora/.git/aurora-handoff-import-20261006/PER284-PINNED-LLAMA-HOST-BUILD-V1-RESULT.json",
+      "sha256": "a107a010ebc8f1f586fb86819b79e3c753f11145b5206737984bcae26471bf1c"
+    }
+  ],
+  "unresolved_gaps": [
+    "Timestamped retrieval receipt/model-card license for the cached faster-whisper-base weights is absent from inspected local metadata.",
+    "Qwen receipt gives immutable source revision and checksum but no local model card/license record.",
+    "The installed llama.cpp wheel has no direct-url archive hash and no linked successful native source/build receipt; package version is established, native build/source identity is not fully proven.",
+    "To bind actual runtime binary identity, future admitted evidence would need a retained exact loaded-library path/hash and a successful wheel/build provenance receipt; this task did not read or hash binaries."
+  ]
+}

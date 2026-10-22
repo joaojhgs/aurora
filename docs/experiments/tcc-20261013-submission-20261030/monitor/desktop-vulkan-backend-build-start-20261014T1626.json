@@ -1,0 +1,29 @@
+{
+  "observed_at": "2026-10-14T16:26:11.217402+00:00",
+  "source": "supported terminal screen read22 lines",
+  "receipt_id": "5c7f14e2-f475-45c9-a131-e97ee96a9a92",
+  "terminal": "term_2e93af9c-1589-414b-8f92-17649f3c8069",
+  "known_incarnation": "9a6a4e5a-d9db-4d83-ae31-907ff2149dd1",
+  "marker": "AURORA_ROOT_GPU_BACKEND_BUILD_STARTED",
+  "actual_build_started_at": "2026-10-14T16:24:21.780433+00:00",
+  "backend_package": "llama-cpp-python==0.3.19",
+  "child_pid": 2676589,
+  "child_start_ticks": "62337023",
+  "process_group": 2676589,
+  "target": "/tmp/aurora-root-gpu-primary-v409",
+  "run_id": "v409-llamacpp019-vulkan",
+  "vulkan_build_enabled": true,
+  "caps": {
+    "wall_seconds": 900,
+    "compiler_jobs": 2,
+    "owned_directory_bytes": 4294967296,
+    "available_ram_floor_bytes": 10737418240,
+    "tmp_available_floor_bytes": 3221225472
+  },
+  "source_changes": false,
+  "system_changes": false,
+  "inference_started": false,
+  "benchmark_started": false,
+  "current_child_liveness": "not independently remotely probed; marker proves actual start only",
+  "dual_barrier_ready": false
+}

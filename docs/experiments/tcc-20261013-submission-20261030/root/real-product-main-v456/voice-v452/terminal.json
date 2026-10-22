@@ -1,0 +1,55 @@
+{
+  "startedAt": "2026-10-14T23:52:03.548315+00:00",
+  "controllerPid": 2850865,
+  "globalBuildLockHeld": true,
+  "capSeconds": 900,
+  "measurementStarted": false,
+  "phase2MeasuredAllowed": false,
+  "voiceAttemptsAddedBySetup": 0,
+  "surface": "actual production apps/aurora-web same-host loopback Gateway/main.py",
+  "physicalMic": false,
+  "physicalAudioAudibility": false,
+  "previousSixTinyFlowsPreserved": true,
+  "priorLogicalAccurateFlow7TransportNonpassPreserved": true,
+  "initialResources": {
+    "homeFree": 460632064,
+    "shmFree": 619536384,
+    "memAvailable": 3318321152
+  },
+  "gpuPreflight": [
+    {
+      "device": "/sys/devices/pci0000:00/0000:00:01.1/0000:01:00.0/0000:02:00.0/0000:03:00.0",
+      "vendor": "0x1002",
+      "product": "0x7480",
+      "vramTotal": "8573157376",
+      "vramUsed": "48050176"
+    },
+    {
+      "device": "/sys/devices/pci0000:00/0000:00:08.1/0000:0a:00.0",
+      "vendor": "0x1002",
+      "product": "0x15d8",
+      "vramTotal": "2147483648",
+      "vramUsed": "839176192"
+    }
+  ],
+  "webPid": 2850885,
+  "backendControllerPid": 2850886,
+  "webBaseUrl": "http://127.0.0.1:33625",
+  "readyAt": "2026-10-14T23:52:17.657630+00:00",
+  "backendPid": 2850887,
+  "gatewayBaseUrl": "http://127.0.0.1:50065",
+  "fixtureBootstrapCredentialsReadPrivately": true,
+  "webReady": true,
+  "modelLoadedClaim": false,
+  "conditionAdmitted": false,
+  "reason": "Root_requested_own_test_cleanup",
+  "finishedAt": "2026-10-15T00:05:26.233574+00:00",
+  "elapsedSeconds": 802.6854397599818,
+  "childrenExitCodes": [
+    130,
+    -2
+  ],
+  "finalHomeFree": 459100160,
+  "finalShmFree": 619536384,
+  "finalMemAvailable": 3298304000
+}

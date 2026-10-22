@@ -1,0 +1,49 @@
+{
+  "objective": "tcc:20261013:submission-20261030",
+  "source_head": "5782746afba213f6b36907db2f09f0017625e218",
+  "source_status": " M .omx/ultragoal/ORCA-COORDINATION.md\n M .omx/ultragoal/ledger.jsonl\n M app/services/gateway/webrtc/rpc.py\n M app/services/orchestrator/service.py\n M apps/aurora-web/next-env.d.ts\n M docker-compose.webrtc-interop.yml\n M packages/aurora-ui/src/use-assistant-foreground-turn.ts\n M scripts/hosted_peer_e2e.sh\n M tests/e2e/hosted_peer/hosted-peer-live-helpers.ts\n M tests/e2e/hosted_peer/hosted-peer-live-shell.spec.ts\n M tests/unit/gateway/test_rpc.py\n M tests/unit/orchestrator/test_session_persistence.py\n?? docs/experiments/\n?? scripts/experiments/\n?? tests/unit/tools/test_assistant_measurement_records.py\n",
+  "source_sha256": {
+    "scripts/hosted_peer_e2e.sh": "8c1d7aba3021f9c12a19ee936a0360bc206b45b29a4b446a54371d4a8e21ee0a",
+    "tests/e2e/hosted_peer/hosted-peer-live-shell.spec.ts": "55bd43c825efd2dc8c2efb8129468a77c9186ce464a69d7cb731309158364021",
+    "tests/e2e/hosted_peer/hosted-peer-live-helpers.ts": "e782858aa3bccce8c0bac0334bac30028443ca8a4651619b86463ed6337f4a75",
+    "packages/aurora-ui/src/use-assistant-foreground-turn.ts": "dae3bdf7ab9baaeffd8d9ae0339b7200e520ec5f0c64e1bdb461d967e85fdcbb",
+    "app/services/gateway/webrtc/rpc.py": "68cdd7c932c23e5054d53013a57f2c39c923d0d4fde98077953c9a665d4cb005",
+    "tests/unit/gateway/test_rpc.py": "50ed8a0e7a19b0c2344a2de6589eb7dee9c6409dfc420fb774e002811e971c29",
+    "app/services/orchestrator/service.py": "0b77092091946b94130945b3bfb670a922a209b846d5ffe30e23f75b52f982f3",
+    "docker-compose.webrtc-interop.yml": "59e78d7a3c3f75aead932006675c2ec8d1f743954ed994c19df6bb5cc36cdfe9"
+  },
+  "tracked_dirty_diff_sha256": "173b95365eda9f55f149d5d5d465e710ab49ed201511b35334d80ff4a6e52b17",
+  "model_sha256": "57d1997790d1744fba5b40a7317df71ea5e2acee28c47e78f0cce39c0703f8cf",
+  "model_bytes": 563036064,
+  "argv": [
+    "flock",
+    "--nonblock",
+    "/tmp/aurora-global-build.lock",
+    "timeout",
+    "--signal=INT",
+    "--kill-after=10s",
+    "600s",
+    "bash",
+    "scripts/hosted_peer_e2e.sh",
+    "--grep",
+    "foreground assistant turn exposes connecting state quickly and returns the live response"
+  ],
+  "started_at": "2026-10-14T01:48:59.678690+00:00",
+  "deadline_seconds": 600,
+  "serial_owner": "same original Aurora Root01a112a5",
+  "host_pseudonym": "coding-worker",
+  "architecture": "aarch64",
+  "logical_cpus": 2,
+  "load_avg": [
+    2.09765625,
+    3.4462890625,
+    3.3701171875
+  ],
+  "scope": "one real browser/Python WebRTC Assistant exactORBIT completion and client-owned saved/reopened history; no nativeRust/mobile/stabletails/CLIcomparable latency",
+  "owned_test_services": "aurora-mesh-root-v256; Root retains explicit cleanup ownership after this main",
+  "prior_startup_failure": "V255 short-image-name failure; V256 service readinessPASS; V257 Python+webhealthready but Root anchored full-title selector matched no tests/zeroAssistantrequests; V258 unanchored selection proves exactly1case and existingChromium available",
+  "warmups": 0,
+  "measured_requests_planned": 1,
+  "clean_baseline": false,
+  "loaded_host_functional_pilot": true
+}

@@ -1,0 +1,3608 @@
+{
+  "attempted": 465,
+  "attempts": [
+    {
+      "file": "attempts/attempt-0001-warmup.jsonl",
+      "ordinal": 1,
+      "phase": "warmup",
+      "status": "completed_correct",
+      "timeout": false
+    },
+    {
+      "file": "attempts/attempt-0002-warmup.jsonl",
+      "ordinal": 2,
+      "phase": "warmup",
+      "status": "completed_correct",
+      "timeout": false
+    },
+    {
+      "file": "attempts/attempt-0003-warmup.jsonl",
+      "ordinal": 3,
+      "phase": "warmup",
+      "status": "completed_correct",
+      "timeout": false
+    },
+    {
+      "file": "attempts/attempt-0004-warmup.jsonl",
+      "ordinal": 4,
+      "phase": "warmup",
+      "status": "completed_correct",
+      "timeout": false
+    },
+    {
+      "file": "attempts/attempt-0005-warmup.jsonl",
+      "ordinal": 5,
+      "phase": "warmup",
+      "status": "completed_correct",
+      "timeout": false
+    },
+    {
+      "file": "attempts/attempt-0006-warmup.jsonl",
+      "ordinal": 6,
+      "phase": "warmup",
+      "status": "completed_correct",
+      "timeout": false
+    },
+    {
+      "file": "attempts/attempt-0007-warmup.jsonl",
+      "ordinal": 7,
+      "phase": "warmup",
+      "status": "completed_correct",
+      "timeout": false
+    },
+    {
+      "file": "attempts/attempt-0008-warmup.jsonl",
+      "ordinal": 8,
+      "phase": "warmup",
+      "status": "completed_correct",
+      "timeout": false
+    },
+    {
+      "file": "attempts/attempt-0009-warmup.jsonl",
+      "ordinal": 9,
+      "phase": "warmup",
+      "status": "completed_correct",
+      "timeout": false
+    },
+    {
+      "file": "attempts/attempt-0010-warmup.jsonl",
+      "ordinal": 10,
+      "phase": "warmup",
+      "status": "completed_correct",
+      "timeout": false
+    },
+    {
+      "file": "attempts/attempt-0011-warmup.jsonl",
+      "ordinal": 11,
+      "phase": "warmup",
+      "status": "completed_correct",
+      "timeout": false
+    },
+    {
+      "file": "attempts/attempt-0012-warmup.jsonl",
+      "ordinal": 12,
+      "phase": "warmup",
+      "status": "completed_correct",
+      "timeout": false
+    },
+    {
+      "file": "attempts/attempt-0013-warmup.jsonl",
+      "ordinal": 13,
+      "phase": "warmup",
+      "status": "completed_correct",
+      "timeout": false
+    },
+    {
+      "file": "attempts/attempt-0014-warmup.jsonl",
+      "ordinal": 14,
+      "phase": "warmup",
+      "status": "completed_correct",
+      "timeout": false
+    },
+    {
+      "file": "attempts/attempt-0015-warmup.jsonl",
+      "ordinal": 15,
+      "phase": "warmup",
+      "status": "completed_correct",
+      "timeout": false
+    },
+    {
+      "file": "attempts/attempt-0016-measured.jsonl",
+      "ordinal": 16,
+      "phase": "measured",
+      "status": "completed_correct",
+      "timeout": false
+    },
+    {
+      "file": "attempts/attempt-0017-measured.jsonl",
+      "ordinal": 17,
+      "phase": "measured",
+      "status": "completed_correct",
+      "timeout": false
+    },
+    {
+      "file": "attempts/attempt-0018-measured.jsonl",
+      "ordinal": 18,
+      "phase": "measured",
+      "status": "completed_correct",
+      "timeout": false
+    },
+    {
+      "file": "attempts/attempt-0019-measured.jsonl",
+      "ordinal": 19,
+      "phase": "measured",
+      "status": "completed_correct",
+      "timeout": false
+    },
+    {
+      "file": "attempts/attempt-0020-measured.jsonl",
+      "ordinal": 20,
+      "phase": "measured",
+      "status": "completed_correct",
+      "timeout": false
+    },
+    {
+      "file": "attempts/attempt-0021-measured.jsonl",
+      "ordinal": 21,
+      "phase": "measured",
+      "status": "completed_correct",
+      "timeout": false
+    },
+    {
+      "file": "attempts/attempt-0022-measured.jsonl",
+      "ordinal": 22,
+      "phase": "measured",
+      "status": "completed_correct",
+      "timeout": false
+    },
+    {
+      "file": "attempts/attempt-0023-measured.jsonl",
+      "ordinal": 23,
+      "phase": "measured",
+      "status": "completed_correct",
+      "timeout": false
+    },
+    {
+      "file": "attempts/attempt-0024-measured.jsonl",
+      "ordinal": 24,
+      "phase": "measured",
+      "status": "completed_correct",
+      "timeout": false
+    },
+    {
+      "file": "attempts/attempt-0025-measured.jsonl",
+      "ordinal": 25,
+      "phase": "measured",
+      "status": "completed_correct",
+      "timeout": false
+    },
+    {
+      "file": "attempts/attempt-0026-measured.jsonl",
+      "ordinal": 26,
+      "phase": "measured",
+      "status": "completed_correct",
+      "timeout": false
+    },
+    {
+      "file": "attempts/attempt-0027-measured.jsonl",
+      "ordinal": 27,
+      "phase": "measured",
+      "status": "completed_correct",
+      "timeout": false
+    },
+    {
+      "file": "attempts/attempt-0028-measured.jsonl",
+      "ordinal": 28,
+      "phase": "measured",
+      "status": "completed_correct",
+      "timeout": false
+    },
+    {
+      "file": "attempts/attempt-0029-measured.jsonl",
+      "ordinal": 29,
+      "phase": "measured",
+      "status": "completed_correct",
+      "timeout": false
+    },
+    {
+      "file": "attempts/attempt-0030-measured.jsonl",
+      "ordinal": 30,
+      "phase": "measured",
+      "status": "completed_correct",
+      "timeout": false
+    },
+    {
+      "file": "attempts/attempt-0031-measured.jsonl",
+      "ordinal": 31,
+      "phase": "measured",
+      "status": "completed_correct",
+      "timeout": false
+    },
+    {
+      "file": "attempts/attempt-0032-measured.jsonl",
+      "ordinal": 32,
+      "phase": "measured",
+      "status": "completed_correct",
+      "timeout": false
+    },
+    {
+      "file": "attempts/attempt-0033-measured.jsonl",
+      "ordinal": 33,
+      "phase": "measured",
+      "status": "completed_correct",
+      "timeout": false
+    },
+    {
+      "file": "attempts/attempt-0034-measured.jsonl",
+      "ordinal": 34,
+      "phase": "measured",
+      "status": "completed_correct",
+      "timeout": false
+    },
+    {
+      "file": "attempts/attempt-0035-measured.jsonl",
+      "ordinal": 35,
+      "phase": "measured",
+      "status": "completed_correct",
+      "timeout": false
+    },
+    {
+      "file": "attempts/attempt-0036-measured.jsonl",
+      "ordinal": 36,
+      "phase": "measured",
+      "status": "completed_correct",
+      "timeout": false
+    },
+    {
+      "file": "attempts/attempt-0037-measured.jsonl",
+      "ordinal": 37,
+      "phase": "measured",
+      "status": "completed_correct",
+      "timeout": false
+    },
+    {
+      "file": "attempts/attempt-0038-measured.jsonl",
+      "ordinal": 38,
+      "phase": "measured",
+      "status": "completed_correct",
+      "timeout": false
+    },
+    {
+      "file": "attempts/attempt-0039-measured.jsonl",
+      "ordinal": 39,
+      "phase": "measured",
+      "status": "completed_correct",
+      "timeout": false
+    },
+    {
+      "file": "attempts/attempt-0040-measured.jsonl",
+      "ordinal": 40,
+      "phase": "measured",
+      "status": "completed_correct",
+      "timeout": false
+    },
+    {
+      "file": "attempts/attempt-0041-measured.jsonl",
+      "ordinal": 41,
+      "phase": "measured",
+      "status": "completed_correct",
+      "timeout": false
+    },
+    {
+      "file": "attempts/attempt-0042-measured.jsonl",
+      "ordinal": 42,
+      "phase": "measured",
+      "status": "completed_correct",
+      "timeout": false
+    },
+    {
+      "file": "attempts/attempt-0043-measured.jsonl",
+      "ordinal": 43,
+      "phase": "measured",
+      "status": "completed_correct",
+      "timeout": false
+    },
+    {
+      "file": "attempts/attempt-0044-measured.jsonl",
+      "ordinal": 44,
+      "phase": "measured",
+      "status": "completed_correct",
+      "timeout": false
+    },
+    {
+      "file": "attempts/attempt-0045-measured.jsonl",
+      "ordinal": 45,
+      "phase": "measured",
+      "status": "completed_correct",
+      "timeout": false
+    },
+    {
+      "file": "attempts/attempt-0046-measured.jsonl",
+      "ordinal": 46,
+      "phase": "measured",
+      "status": "completed_correct",
+      "timeout": false
+    },
+    {
+      "file": "attempts/attempt-0047-measured.jsonl",
+      "ordinal": 47,
+      "phase": "measured",
+      "status": "completed_correct",
+      "timeout": false
+    },
+    {
+      "file": "attempts/attempt-0048-measured.jsonl",
+      "ordinal": 48,
+      "phase": "measured",
+      "status": "completed_correct",
+      "timeout": false
+    },
+    {
+      "file": "attempts/attempt-0049-measured.jsonl",
+      "ordinal": 49,
+      "phase": "measured",
+      "status": "completed_correct",
+      "timeout": false
+    },
+    {
+      "file": "attempts/attempt-0050-measured.jsonl",
+      "ordinal": 50,
+      "phase": "measured",
+      "status": "completed_correct",
+      "timeout": false
+    },
+    {
+      "file": "attempts/attempt-0051-measured.jsonl",
+      "ordinal": 51,
+      "phase": "measured",
+      "status": "completed_correct",
+      "timeout": false
+    },
+    {
+      "file": "attempts/attempt-0052-measured.jsonl",
+      "ordinal": 52,
+      "phase": "measured",
+      "status": "completed_correct",
+      "timeout": false
+    },
+    {
+      "file": "attempts/attempt-0053-measured.jsonl",
+      "ordinal": 53,
+      "phase": "measured",
+      "status": "completed_correct",
+      "timeout": false
+    },
+    {
+      "file": "attempts/attempt-0054-measured.jsonl",
+      "ordinal": 54,
+      "phase": "measured",
+      "status": "completed_correct",
+      "timeout": false
+    },
+    {
+      "file": "attempts/attempt-0055-measured.jsonl",
+      "ordinal": 55,
+      "phase": "measured",
+      "status": "completed_correct",
+      "timeout": false
+    },
+    {
+      "file": "attempts/attempt-0056-measured.jsonl",
+      "ordinal": 56,
+      "phase": "measured",
+      "status": "completed_correct",
+      "timeout": false
+    },
+    {
+      "file": "attempts/attempt-0057-measured.jsonl",
+      "ordinal": 57,
+      "phase": "measured",
+      "status": "completed_correct",
+      "timeout": false
+    },
+    {
+      "file": "attempts/attempt-0058-measured.jsonl",
+      "ordinal": 58,
+      "phase": "measured",
+      "status": "completed_correct",
+      "timeout": false
+    },
+    {
+      "file": "attempts/attempt-0059-measured.jsonl",
+      "ordinal": 59,
+      "phase": "measured",
+      "status": "completed_correct",
+      "timeout": false
+    },
+    {
+      "file": "attempts/attempt-0060-measured.jsonl",
+      "ordinal": 60,
+      "phase": "measured",
+      "status": "completed_correct",
+      "timeout": false
+    },
+    {
+      "file": "attempts/attempt-0061-measured.jsonl",
+      "ordinal": 61,
+      "phase": "measured",
+      "status": "completed_correct",
+      "timeout": false
+    },
+    {
+      "file": "attempts/attempt-0062-measured.jsonl",
+      "ordinal": 62,
+      "phase": "measured",
+      "status": "completed_correct",
+      "timeout": false
+    },
+    {
+      "file": "attempts/attempt-0063-measured.jsonl",
+      "ordinal": 63,
+      "phase": "measured",
+      "status": "completed_correct",
+      "timeout": false
+    },
+    {
+      "file": "attempts/attempt-0064-measured.jsonl",
+      "ordinal": 64,
+      "phase": "measured",
+      "status": "completed_correct",
+      "timeout": false
+    },
+    {
+      "file": "attempts/attempt-0065-measured.jsonl",
+      "ordinal": 65,
+      "phase": "measured",
+      "status": "completed_correct",
+      "timeout": false
+    },
+    {
+      "file": "attempts/attempt-0066-measured.jsonl",
+      "ordinal": 66,
+      "phase": "measured",
+      "status": "completed_correct",
+      "timeout": false
+    },
+    {
+      "file": "attempts/attempt-0067-measured.jsonl",
+      "ordinal": 67,
+      "phase": "measured",
+      "status": "completed_correct",
+      "timeout": false
+    },
+    {
+      "file": "attempts/attempt-0068-measured.jsonl",
+      "ordinal": 68,
+      "phase": "measured",
+      "status": "completed_correct",
+      "timeout": false
+    },
+    {
+      "file": "attempts/attempt-0069-measured.jsonl",
+      "ordinal": 69,
+      "phase": "measured",
+      "status": "completed_correct",
+      "timeout": false
+    },
+    {
+      "file": "attempts/attempt-0070-measured.jsonl",
+      "ordinal": 70,
+      "phase": "measured",
+      "status": "completed_correct",
+      "timeout": false
+    },
+    {
+      "file": "attempts/attempt-0071-measured.jsonl",
+      "ordinal": 71,
+      "phase": "measured",
+      "status": "completed_correct",
+      "timeout": false
+    },
+    {
+      "file": "attempts/attempt-0072-measured.jsonl",
+      "ordinal": 72,
+      "phase": "measured",
+      "status": "completed_correct",
+      "timeout": false
+    },
+    {
+      "file": "attempts/attempt-0073-measured.jsonl",
+      "ordinal": 73,
+      "phase": "measured",
+      "status": "completed_correct",
+      "timeout": false
+    },
+    {
+      "file": "attempts/attempt-0074-measured.jsonl",
+      "ordinal": 74,
+      "phase": "measured",
+      "status": "completed_correct",
+      "timeout": false
+    },
+    {
+      "file": "attempts/attempt-0075-measured.jsonl",
+      "ordinal": 75,
+      "phase": "measured",
+      "status": "completed_correct",
+      "timeout": false
+    },
+    {
+      "file": "attempts/attempt-0076-measured.jsonl",
+      "ordinal": 76,
+      "phase": "measured",
+      "status": "completed_correct",
+      "timeout": false
+    },
+    {
+      "file": "attempts/attempt-0077-measured.jsonl",
+      "ordinal": 77,
+      "phase": "measured",
+      "status": "completed_correct",
+      "timeout": false
+    },
+    {
+      "file": "attempts/attempt-0078-measured.jsonl",
+      "ordinal": 78,
+      "phase": "measured",
+      "status": "completed_correct",
+      "timeout": false
+    },
+    {
+      "file": "attempts/attempt-0079-measured.jsonl",
+      "ordinal": 79,
+      "phase": "measured",
+      "status": "completed_correct",
+      "timeout": false
+    },
+    {
+      "file": "attempts/attempt-0080-measured.jsonl",
+      "ordinal": 80,
+      "phase": "measured",
+      "status": "completed_correct",
+      "timeout": false
+    },
+    {
+      "file": "attempts/attempt-0081-measured.jsonl",
+      "ordinal": 81,
+      "phase": "measured",
+      "status": "completed_correct",
+      "timeout": false
+    },
+    {
+      "file": "attempts/attempt-0082-measured.jsonl",
+      "ordinal": 82,
+      "phase": "measured",
+      "status": "completed_correct",
+      "timeout": false
+    },
+    {
+      "file": "attempts/attempt-0083-measured.jsonl",
+      "ordinal": 83,
+      "phase": "measured",
+      "status": "completed_correct",
+      "timeout": false
+    },
+    {
+      "file": "attempts/attempt-0084-measured.jsonl",
+      "ordinal": 84,
+      "phase": "measured",
+      "status": "completed_correct",
+      "timeout": false
+    },
+    {
+      "file": "attempts/attempt-0085-measured.jsonl",
+      "ordinal": 85,
+      "phase": "measured",
+      "status": "completed_correct",
+      "timeout": false
+    },
+    {
+      "file": "attempts/attempt-0086-measured.jsonl",
+      "ordinal": 86,
+      "phase": "measured",
+      "status": "completed_correct",
+      "timeout": false
+    },
+    {
+      "file": "attempts/attempt-0087-measured.jsonl",
+      "ordinal": 87,
+      "phase": "measured",
+      "status": "completed_correct",
+      "timeout": false
+    },
+    {
+      "file": "attempts/attempt-0088-measured.jsonl",
+      "ordinal": 88,
+      "phase": "measured",
+      "status": "completed_correct",
+      "timeout": false
+    },
+    {
+      "file": "attempts/attempt-0089-measured.jsonl",
+      "ordinal": 89,
+      "phase": "measured",
+      "status": "completed_correct",
+      "timeout": false
+    },
+    {
+      "file": "attempts/attempt-0090-measured.jsonl",
+      "ordinal": 90,
+      "phase": "measured",
+      "status": "completed_correct",
+      "timeout": false
+    },
+    {
+      "file": "attempts/attempt-0091-measured.jsonl",
+      "ordinal": 91,
+      "phase": "measured",
+      "status": "completed_correct",
+      "timeout": false
+    },
+    {
+      "file": "attempts/attempt-0092-measured.jsonl",
+      "ordinal": 92,
+      "phase": "measured",
+      "status": "completed_correct",
+      "timeout": false
+    },
+    {
+      "file": "attempts/attempt-0093-measured.jsonl",
+      "ordinal": 93,
+      "phase": "measured",
+      "status": "completed_correct",
+      "timeout": false
+    },
+    {
+      "file": "attempts/attempt-0094-measured.jsonl",
+      "ordinal": 94,
+      "phase": "measured",
+      "status": "completed_correct",
+      "timeout": false
+    },
+    {
+      "file": "attempts/attempt-0095-measured.jsonl",
+      "ordinal": 95,
+      "phase": "measured",
+      "status": "completed_correct",
+      "timeout": false
+    },
+    {
+      "file": "attempts/attempt-0096-measured.jsonl",
+      "ordinal": 96,
+      "phase": "measured",
+      "status": "completed_correct",
+      "timeout": false
+    },
+    {
+      "file": "attempts/attempt-0097-measured.jsonl",
+      "ordinal": 97,
+      "phase": "measured",
+      "status": "completed_correct",
+      "timeout": false
+    },
+    {
+      "file": "attempts/attempt-0098-measured.jsonl",
+      "ordinal": 98,
+      "phase": "measured",
+      "status": "completed_correct",
+      "timeout": false
+    },
+    {
+      "file": "attempts/attempt-0099-measured.jsonl",
+      "ordinal": 99,
+      "phase": "measured",
+      "status": "completed_correct",
+      "timeout": false
+    },
+    {
+      "file": "attempts/attempt-0100-measured.jsonl",
+      "ordinal": 100,
+      "phase": "measured",
+      "status": "completed_correct",
+      "timeout": false
+    },
+    {
+      "file": "attempts/attempt-0101-measured.jsonl",
+      "ordinal": 101,
+      "phase": "measured",
+      "status": "completed_correct",
+      "timeout": false
+    },
+    {
+      "file": "attempts/attempt-0102-measured.jsonl",
+      "ordinal": 102,
+      "phase": "measured",
+      "status": "completed_correct",
+      "timeout": false
+    },
+    {
+      "file": "attempts/attempt-0103-measured.jsonl",
+      "ordinal": 103,
+      "phase": "measured",
+      "status": "completed_correct",
+      "timeout": false
+    },
+    {
+      "file": "attempts/attempt-0104-measured.jsonl",
+      "ordinal": 104,
+      "phase": "measured",
+      "status": "completed_correct",
+      "timeout": false
+    },
+    {
+      "file": "attempts/attempt-0105-measured.jsonl",
+      "ordinal": 105,
+      "phase": "measured",
+      "status": "completed_correct",
+      "timeout": false
+    },
+    {
+      "file": "attempts/attempt-0106-measured.jsonl",
+      "ordinal": 106,
+      "phase": "measured",
+      "status": "completed_correct",
+      "timeout": false
+    },
+    {
+      "file": "attempts/attempt-0107-measured.jsonl",
+      "ordinal": 107,
+      "phase": "measured",
+      "status": "completed_correct",
+      "timeout": false
+    },
+    {
+      "file": "attempts/attempt-0108-measured.jsonl",
+      "ordinal": 108,
+      "phase": "measured",
+      "status": "completed_correct",
+      "timeout": false
+    },
+    {
+      "file": "attempts/attempt-0109-measured.jsonl",
+      "ordinal": 109,
+      "phase": "measured",
+      "status": "completed_correct",
+      "timeout": false
+    },
+    {
+      "file": "attempts/attempt-0110-measured.jsonl",
+      "ordinal": 110,
+      "phase": "measured",
+      "status": "completed_correct",
+      "timeout": false
+    },
+    {
+      "file": "attempts/attempt-0111-measured.jsonl",
+      "ordinal": 111,
+      "phase": "measured",
+      "status": "completed_correct",
+      "timeout": false
+    },
+    {
+      "file": "attempts/attempt-0112-measured.jsonl",
+      "ordinal": 112,
+      "phase": "measured",
+      "status": "completed_correct",
+      "timeout": false
+    },
+    {
+      "file": "attempts/attempt-0113-measured.jsonl",
+      "ordinal": 113,
+      "phase": "measured",
+      "status": "completed_correct",
+      "timeout": false
+    },
+    {
+      "file": "attempts/attempt-0114-measured.jsonl",
+      "ordinal": 114,
+      "phase": "measured",
+      "status": "completed_correct",
+      "timeout": false
+    },
+    {
+      "file": "attempts/attempt-0115-measured.jsonl",
+      "ordinal": 115,
+      "phase": "measured",
+      "status": "completed_correct",
+      "timeout": false
+    },
+    {
+      "file": "attempts/attempt-0116-measured.jsonl",
+      "ordinal": 116,
+      "phase": "measured",
+      "status": "completed_correct",
+      "timeout": false
+    },
+    {
+      "file": "attempts/attempt-0117-measured.jsonl",
+      "ordinal": 117,
+      "phase": "measured",
+      "status": "completed_correct",
+      "timeout": false
+    },
+    {
+      "file": "attempts/attempt-0118-measured.jsonl",
+      "ordinal": 118,
+      "phase": "measured",
+      "status": "completed_correct",
+      "timeout": false
+    },
+    {
+      "file": "attempts/attempt-0119-measured.jsonl",
+      "ordinal": 119,
+      "phase": "measured",
+      "status": "completed_correct",
+      "timeout": false
+    },
+    {
+      "file": "attempts/attempt-0120-measured.jsonl",
+      "ordinal": 120,
+      "phase": "measured",
+      "status": "completed_correct",
+      "timeout": false
+    },
+    {
+      "file": "attempts/attempt-0121-measured.jsonl",
+      "ordinal": 121,
+      "phase": "measured",
+      "status": "completed_correct",
+      "timeout": false
+    },
+    {
+      "file": "attempts/attempt-0122-measured.jsonl",
+      "ordinal": 122,
+      "phase": "measured",
+      "status": "completed_correct",
+      "timeout": false
+    },
+    {
+      "file": "attempts/attempt-0123-measured.jsonl",
+      "ordinal": 123,
+      "phase": "measured",
+      "status": "completed_correct",
+      "timeout": false
+    },
+    {
+      "file": "attempts/attempt-0124-measured.jsonl",
+      "ordinal": 124,
+      "phase": "measured",
+      "status": "completed_correct",
+      "timeout": false
+    },
+    {
+      "file": "attempts/attempt-0125-measured.jsonl",
+      "ordinal": 125,
+      "phase": "measured",
+      "status": "completed_correct",
+      "timeout": false
+    },
+    {
+      "file": "attempts/attempt-0126-measured.jsonl",
+      "ordinal": 126,
+      "phase": "measured",
+      "status": "completed_correct",
+      "timeout": false
+    },
+    {
+      "file": "attempts/attempt-0127-measured.jsonl",
+      "ordinal": 127,
+      "phase": "measured",
+      "status": "completed_correct",
+      "timeout": false
+    },
+    {
+      "file": "attempts/attempt-0128-measured.jsonl",
+      "ordinal": 128,
+      "phase": "measured",
+      "status": "completed_correct",
+      "timeout": false
+    },
+    {
+      "file": "attempts/attempt-0129-measured.jsonl",
+      "ordinal": 129,
+      "phase": "measured",
+      "status": "completed_correct",
+      "timeout": false
+    },
+    {
+      "file": "attempts/attempt-0130-measured.jsonl",
+      "ordinal": 130,
+      "phase": "measured",
+      "status": "completed_correct",
+      "timeout": false
+    },
+    {
+      "file": "attempts/attempt-0131-measured.jsonl",
+      "ordinal": 131,
+      "phase": "measured",
+      "status": "completed_correct",
+      "timeout": false
+    },
+    {
+      "file": "attempts/attempt-0132-measured.jsonl",
+      "ordinal": 132,
+      "phase": "measured",
+      "status": "completed_correct",
+      "timeout": false
+    },
+    {
+      "file": "attempts/attempt-0133-measured.jsonl",
+      "ordinal": 133,
+      "phase": "measured",
+      "status": "completed_correct",
+      "timeout": false
+    },
+    {
+      "file": "attempts/attempt-0134-measured.jsonl",
+      "ordinal": 134,
+      "phase": "measured",
+      "status": "completed_correct",
+      "timeout": false
+    },
+    {
+      "file": "attempts/attempt-0135-measured.jsonl",
+      "ordinal": 135,
+      "phase": "measured",
+      "status": "completed_correct",
+      "timeout": false
+    },
+    {
+      "file": "attempts/attempt-0136-measured.jsonl",
+      "ordinal": 136,
+      "phase": "measured",
+      "status": "completed_correct",
+      "timeout": false
+    },
+    {
+      "file": "attempts/attempt-0137-measured.jsonl",
+      "ordinal": 137,
+      "phase": "measured",
+      "status": "completed_correct",
+      "timeout": false
+    },
+    {
+      "file": "attempts/attempt-0138-measured.jsonl",
+      "ordinal": 138,
+      "phase": "measured",
+      "status": "completed_correct",
+      "timeout": false
+    },
+    {
+      "file": "attempts/attempt-0139-measured.jsonl",
+      "ordinal": 139,
+      "phase": "measured",
+      "status": "completed_correct",
+      "timeout": false
+    },
+    {
+      "file": "attempts/attempt-0140-measured.jsonl",
+      "ordinal": 140,
+      "phase": "measured",
+      "status": "completed_correct",
+      "timeout": false
+    },
+    {
+      "file": "attempts/attempt-0141-measured.jsonl",
+      "ordinal": 141,
+      "phase": "measured",
+      "status": "completed_correct",
+      "timeout": false
+    },
+    {
+      "file": "attempts/attempt-0142-measured.jsonl",
+      "ordinal": 142,
+      "phase": "measured",
+      "status": "completed_correct",
+      "timeout": false
+    },
+    {
+      "file": "attempts/attempt-0143-measured.jsonl",
+      "ordinal": 143,
+      "phase": "measured",
+      "status": "completed_correct",
+      "timeout": false
+    },
+    {
+      "file": "attempts/attempt-0144-measured.jsonl",
+      "ordinal": 144,
+      "phase": "measured",
+      "status": "completed_correct",
+      "timeout": false
+    },
+    {
+      "file": "attempts/attempt-0145-measured.jsonl",
+      "ordinal": 145,
+      "phase": "measured",
+      "status": "completed_correct",
+      "timeout": false
+    },
+    {
+      "file": "attempts/attempt-0146-measured.jsonl",
+      "ordinal": 146,
+      "phase": "measured",
+      "status": "completed_correct",
+      "timeout": false
+    },
+    {
+      "file": "attempts/attempt-0147-measured.jsonl",
+      "ordinal": 147,
+      "phase": "measured",
+      "status": "completed_correct",
+      "timeout": false
+    },
+    {
+      "file": "attempts/attempt-0148-measured.jsonl",
+      "ordinal": 148,
+      "phase": "measured",
+      "status": "completed_correct",
+      "timeout": false
+    },
+    {
+      "file": "attempts/attempt-0149-measured.jsonl",
+      "ordinal": 149,
+      "phase": "measured",
+      "status": "completed_correct",
+      "timeout": false
+    },
+    {
+      "file": "attempts/attempt-0150-measured.jsonl",
+      "ordinal": 150,
+      "phase": "measured",
+      "status": "completed_correct",
+      "timeout": false
+    },
+    {
+      "file": "attempts/attempt-0151-measured.jsonl",
+      "ordinal": 151,
+      "phase": "measured",
+      "status": "completed_correct",
+      "timeout": false
+    },
+    {
+      "file": "attempts/attempt-0152-measured.jsonl",
+      "ordinal": 152,
+      "phase": "measured",
+      "status": "completed_correct",
+      "timeout": false
+    },
+    {
+      "file": "attempts/attempt-0153-measured.jsonl",
+      "ordinal": 153,
+      "phase": "measured",
+      "status": "completed_correct",
+      "timeout": false
+    },
+    {
+      "file": "attempts/attempt-0154-measured.jsonl",
+      "ordinal": 154,
+      "phase": "measured",
+      "status": "completed_correct",
+      "timeout": false
+    },
+    {
+      "file": "attempts/attempt-0155-measured.jsonl",
+      "ordinal": 155,
+      "phase": "measured",
+      "status": "completed_correct",
+      "timeout": false
+    },
+    {
+      "file": "attempts/attempt-0156-measured.jsonl",
+      "ordinal": 156,
+      "phase": "measured",
+      "status": "completed_correct",
+      "timeout": false
+    },
+    {
+      "file": "attempts/attempt-0157-measured.jsonl",
+      "ordinal": 157,
+      "phase": "measured",
+      "status": "completed_correct",
+      "timeout": false
+    },
+    {
+      "file": "attempts/attempt-0158-measured.jsonl",
+      "ordinal": 158,
+      "phase": "measured",
+      "status": "completed_correct",
+      "timeout": false
+    },
+    {
+      "file": "attempts/attempt-0159-measured.jsonl",
+      "ordinal": 159,
+      "phase": "measured",
+      "status": "completed_correct",
+      "timeout": false
+    },
+    {
+      "file": "attempts/attempt-0160-measured.jsonl",
+      "ordinal": 160,
+      "phase": "measured",
+      "status": "completed_correct",
+      "timeout": false
+    },
+    {
+      "file": "attempts/attempt-0161-measured.jsonl",
+      "ordinal": 161,
+      "phase": "measured",
+      "status": "completed_correct",
+      "timeout": false
+    },
+    {
+      "file": "attempts/attempt-0162-measured.jsonl",
+      "ordinal": 162,
+      "phase": "measured",
+      "status": "completed_correct",
+      "timeout": false
+    },
+    {
+      "file": "attempts/attempt-0163-measured.jsonl",
+      "ordinal": 163,
+      "phase": "measured",
+      "status": "completed_correct",
+      "timeout": false
+    },
+    {
+      "file": "attempts/attempt-0164-measured.jsonl",
+      "ordinal": 164,
+      "phase": "measured",
+      "status": "completed_correct",
+      "timeout": false
+    },
+    {
+      "file": "attempts/attempt-0165-measured.jsonl",
+      "ordinal": 165,
+      "phase": "measured",
+      "status": "completed_correct",
+      "timeout": false
+    },
+    {
+      "file": "attempts/attempt-0166-measured.jsonl",
+      "ordinal": 166,
+      "phase": "measured",
+      "status": "completed_correct",
+      "timeout": false
+    },
+    {
+      "file": "attempts/attempt-0167-measured.jsonl",
+      "ordinal": 167,
+      "phase": "measured",
+      "status": "completed_correct",
+      "timeout": false
+    },
+    {
+      "file": "attempts/attempt-0168-measured.jsonl",
+      "ordinal": 168,
+      "phase": "measured",
+      "status": "completed_correct",
+      "timeout": false
+    },
+    {
+      "file": "attempts/attempt-0169-measured.jsonl",
+      "ordinal": 169,
+      "phase": "measured",
+      "status": "completed_correct",
+      "timeout": false
+    },
+    {
+      "file": "attempts/attempt-0170-measured.jsonl",
+      "ordinal": 170,
+      "phase": "measured",
+      "status": "completed_correct",
+      "timeout": false
+    },
+    {
+      "file": "attempts/attempt-0171-measured.jsonl",
+      "ordinal": 171,
+      "phase": "measured",
+      "status": "completed_correct",
+      "timeout": false
+    },
+    {
+      "file": "attempts/attempt-0172-measured.jsonl",
+      "ordinal": 172,
+      "phase": "measured",
+      "status": "completed_correct",
+      "timeout": false
+    },
+    {
+      "file": "attempts/attempt-0173-measured.jsonl",
+      "ordinal": 173,
+      "phase": "measured",
+      "status": "completed_correct",
+      "timeout": false
+    },
+    {
+      "file": "attempts/attempt-0174-measured.jsonl",
+      "ordinal": 174,
+      "phase": "measured",
+      "status": "completed_correct",
+      "timeout": false
+    },
+    {
+      "file": "attempts/attempt-0175-measured.jsonl",
+      "ordinal": 175,
+      "phase": "measured",
+      "status": "completed_correct",
+      "timeout": false
+    },
+    {
+      "file": "attempts/attempt-0176-measured.jsonl",
+      "ordinal": 176,
+      "phase": "measured",
+      "status": "completed_correct",
+      "timeout": false
+    },
+    {
+      "file": "attempts/attempt-0177-measured.jsonl",
+      "ordinal": 177,
+      "phase": "measured",
+      "status": "completed_correct",
+      "timeout": false
+    },
+    {
+      "file": "attempts/attempt-0178-measured.jsonl",
+      "ordinal": 178,
+      "phase": "measured",
+      "status": "completed_correct",
+      "timeout": false
+    },
+    {
+      "file": "attempts/attempt-0179-measured.jsonl",
+      "ordinal": 179,
+      "phase": "measured",
+      "status": "completed_correct",
+      "timeout": false
+    },
+    {
+      "file": "attempts/attempt-0180-measured.jsonl",
+      "ordinal": 180,
+      "phase": "measured",
+      "status": "completed_correct",
+      "timeout": false
+    },
+    {
+      "file": "attempts/attempt-0181-measured.jsonl",
+      "ordinal": 181,
+      "phase": "measured",
+      "status": "completed_correct",
+      "timeout": false
+    },
+    {
+      "file": "attempts/attempt-0182-measured.jsonl",
+      "ordinal": 182,
+      "phase": "measured",
+      "status": "completed_correct",
+      "timeout": false
+    },
+    {
+      "file": "attempts/attempt-0183-measured.jsonl",
+      "ordinal": 183,
+      "phase": "measured",
+      "status": "completed_correct",
+      "timeout": false
+    },
+    {
+      "file": "attempts/attempt-0184-measured.jsonl",
+      "ordinal": 184,
+      "phase": "measured",
+      "status": "completed_correct",
+      "timeout": false
+    },
+    {
+      "file": "attempts/attempt-0185-measured.jsonl",
+      "ordinal": 185,
+      "phase": "measured",
+      "status": "completed_correct",
+      "timeout": false
+    },
+    {
+      "file": "attempts/attempt-0186-measured.jsonl",
+      "ordinal": 186,
+      "phase": "measured",
+      "status": "completed_correct",
+      "timeout": false
+    },
+    {
+      "file": "attempts/attempt-0187-measured.jsonl",
+      "ordinal": 187,
+      "phase": "measured",
+      "status": "completed_correct",
+      "timeout": false
+    },
+    {
+      "file": "attempts/attempt-0188-measured.jsonl",
+      "ordinal": 188,
+      "phase": "measured",
+      "status": "completed_correct",
+      "timeout": false
+    },
+    {
+      "file": "attempts/attempt-0189-measured.jsonl",
+      "ordinal": 189,
+      "phase": "measured",
+      "status": "completed_correct",
+      "timeout": false
+    },
+    {
+      "file": "attempts/attempt-0190-measured.jsonl",
+      "ordinal": 190,
+      "phase": "measured",
+      "status": "completed_correct",
+      "timeout": false
+    },
+    {
+      "file": "attempts/attempt-0191-measured.jsonl",
+      "ordinal": 191,
+      "phase": "measured",
+      "status": "completed_correct",
+      "timeout": false
+    },
+    {
+      "file": "attempts/attempt-0192-measured.jsonl",
+      "ordinal": 192,
+      "phase": "measured",
+      "status": "completed_correct",
+      "timeout": false
+    },
+    {
+      "file": "attempts/attempt-0193-measured.jsonl",
+      "ordinal": 193,
+      "phase": "measured",
+      "status": "completed_correct",
+      "timeout": false
+    },
+    {
+      "file": "attempts/attempt-0194-measured.jsonl",
+      "ordinal": 194,
+      "phase": "measured",
+      "status": "completed_correct",
+      "timeout": false
+    },
+    {
+      "file": "attempts/attempt-0195-measured.jsonl",
+      "ordinal": 195,
+      "phase": "measured",
+      "status": "completed_correct",
+      "timeout": false
+    },
+    {
+      "file": "attempts/attempt-0196-measured.jsonl",
+      "ordinal": 196,
+      "phase": "measured",
+      "status": "completed_correct",
+      "timeout": false
+    },
+    {
+      "file": "attempts/attempt-0197-measured.jsonl",
+      "ordinal": 197,
+      "phase": "measured",
+      "status": "completed_correct",
+      "timeout": false
+    },
+    {
+      "file": "attempts/attempt-0198-measured.jsonl",
+      "ordinal": 198,
+      "phase": "measured",
+      "status": "completed_correct",
+      "timeout": false
+    },
+    {
+      "file": "attempts/attempt-0199-measured.jsonl",
+      "ordinal": 199,
+      "phase": "measured",
+      "status": "completed_correct",
+      "timeout": false
+    },
+    {
+      "file": "attempts/attempt-0200-measured.jsonl",
+      "ordinal": 200,
+      "phase": "measured",
+      "status": "completed_correct",
+      "timeout": false
+    },
+    {
+      "file": "attempts/attempt-0201-measured.jsonl",
+      "ordinal": 201,
+      "phase": "measured",
+      "status": "completed_correct",
+      "timeout": false
+    },
+    {
+      "file": "attempts/attempt-0202-measured.jsonl",
+      "ordinal": 202,
+      "phase": "measured",
+      "status": "completed_correct",
+      "timeout": false
+    },
+    {
+      "file": "attempts/attempt-0203-measured.jsonl",
+      "ordinal": 203,
+      "phase": "measured",
+      "status": "completed_correct",
+      "timeout": false
+    },
+    {
+      "file": "attempts/attempt-0204-measured.jsonl",
+      "ordinal": 204,
+      "phase": "measured",
+      "status": "completed_correct",
+      "timeout": false
+    },
+    {
+      "file": "attempts/attempt-0205-measured.jsonl",
+      "ordinal": 205,
+      "phase": "measured",
+      "status": "completed_correct",
+      "timeout": false
+    },
+    {
+      "file": "attempts/attempt-0206-measured.jsonl",
+      "ordinal": 206,
+      "phase": "measured",
+      "status": "completed_correct",
+      "timeout": false
+    },
+    {
+      "file": "attempts/attempt-0207-measured.jsonl",
+      "ordinal": 207,
+      "phase": "measured",
+      "status": "completed_correct",
+      "timeout": false
+    },
+    {
+      "file": "attempts/attempt-0208-measured.jsonl",
+      "ordinal": 208,
+      "phase": "measured",
+      "status": "completed_correct",
+      "timeout": false
+    },
+    {
+      "file": "attempts/attempt-0209-measured.jsonl",
+      "ordinal": 209,
+      "phase": "measured",
+      "status": "completed_correct",
+      "timeout": false
+    },
+    {
+      "file": "attempts/attempt-0210-measured.jsonl",
+      "ordinal": 210,
+      "phase": "measured",
+      "status": "completed_correct",
+      "timeout": false
+    },
+    {
+      "file": "attempts/attempt-0211-measured.jsonl",
+      "ordinal": 211,
+      "phase": "measured",
+      "status": "completed_correct",
+      "timeout": false
+    },
+    {
+      "file": "attempts/attempt-0212-measured.jsonl",
+      "ordinal": 212,
+      "phase": "measured",
+      "status": "completed_correct",
+      "timeout": false
+    },
+    {
+      "file": "attempts/attempt-0213-measured.jsonl",
+      "ordinal": 213,
+      "phase": "measured",
+      "status": "completed_correct",
+      "timeout": false
+    },
+    {
+      "file": "attempts/attempt-0214-measured.jsonl",
+      "ordinal": 214,
+      "phase": "measured",
+      "status": "completed_correct",
+      "timeout": false
+    },
+    {
+      "file": "attempts/attempt-0215-measured.jsonl",
+      "ordinal": 215,
+      "phase": "measured",
+      "status": "completed_correct",
+      "timeout": false
+    },
+    {
+      "file": "attempts/attempt-0216-measured.jsonl",
+      "ordinal": 216,
+      "phase": "measured",
+      "status": "completed_correct",
+      "timeout": false
+    },
+    {
+      "file": "attempts/attempt-0217-measured.jsonl",
+      "ordinal": 217,
+      "phase": "measured",
+      "status": "completed_correct",
+      "timeout": false
+    },
+    {
+      "file": "attempts/attempt-0218-measured.jsonl",
+      "ordinal": 218,
+      "phase": "measured",
+      "status": "completed_correct",
+      "timeout": false
+    },
+    {
+      "file": "attempts/attempt-0219-measured.jsonl",
+      "ordinal": 219,
+      "phase": "measured",
+      "status": "completed_correct",
+      "timeout": false
+    },
+    {
+      "file": "attempts/attempt-0220-measured.jsonl",
+      "ordinal": 220,
+      "phase": "measured",
+      "status": "completed_correct",
+      "timeout": false
+    },
+    {
+      "file": "attempts/attempt-0221-measured.jsonl",
+      "ordinal": 221,
+      "phase": "measured",
+      "status": "completed_correct",
+      "timeout": false
+    },
+    {
+      "file": "attempts/attempt-0222-measured.jsonl",
+      "ordinal": 222,
+      "phase": "measured",
+      "status": "completed_correct",
+      "timeout": false
+    },
+    {
+      "file": "attempts/attempt-0223-measured.jsonl",
+      "ordinal": 223,
+      "phase": "measured",
+      "status": "completed_correct",
+      "timeout": false
+    },
+    {
+      "file": "attempts/attempt-0224-measured.jsonl",
+      "ordinal": 224,
+      "phase": "measured",
+      "status": "completed_correct",
+      "timeout": false
+    },
+    {
+      "file": "attempts/attempt-0225-measured.jsonl",
+      "ordinal": 225,
+      "phase": "measured",
+      "status": "completed_correct",
+      "timeout": false
+    },
+    {
+      "file": "attempts/attempt-0226-measured.jsonl",
+      "ordinal": 226,
+      "phase": "measured",
+      "status": "completed_correct",
+      "timeout": false
+    },
+    {
+      "file": "attempts/attempt-0227-measured.jsonl",
+      "ordinal": 227,
+      "phase": "measured",
+      "status": "completed_correct",
+      "timeout": false
+    },
+    {
+      "file": "attempts/attempt-0228-measured.jsonl",
+      "ordinal": 228,
+      "phase": "measured",
+      "status": "completed_correct",
+      "timeout": false
+    },
+    {
+      "file": "attempts/attempt-0229-measured.jsonl",
+      "ordinal": 229,
+      "phase": "measured",
+      "status": "completed_correct",
+      "timeout": false
+    },
+    {
+      "file": "attempts/attempt-0230-measured.jsonl",
+      "ordinal": 230,
+      "phase": "measured",
+      "status": "completed_correct",
+      "timeout": false
+    },
+    {
+      "file": "attempts/attempt-0231-measured.jsonl",
+      "ordinal": 231,
+      "phase": "measured",
+      "status": "completed_correct",
+      "timeout": false
+    },
+    {
+      "file": "attempts/attempt-0232-measured.jsonl",
+      "ordinal": 232,
+      "phase": "measured",
+      "status": "completed_correct",
+      "timeout": false
+    },
+    {
+      "file": "attempts/attempt-0233-measured.jsonl",
+      "ordinal": 233,
+      "phase": "measured",
+      "status": "completed_correct",
+      "timeout": false
+    },
+    {
+      "file": "attempts/attempt-0234-measured.jsonl",
+      "ordinal": 234,
+      "phase": "measured",
+      "status": "completed_correct",
+      "timeout": false
+    },
+    {
+      "file": "attempts/attempt-0235-measured.jsonl",
+      "ordinal": 235,
+      "phase": "measured",
+      "status": "completed_correct",
+      "timeout": false
+    },
+    {
+      "file": "attempts/attempt-0236-measured.jsonl",
+      "ordinal": 236,
+      "phase": "measured",
+      "status": "completed_correct",
+      "timeout": false
+    },
+    {
+      "file": "attempts/attempt-0237-measured.jsonl",
+      "ordinal": 237,
+      "phase": "measured",
+      "status": "completed_correct",
+      "timeout": false
+    },
+    {
+      "file": "attempts/attempt-0238-measured.jsonl",
+      "ordinal": 238,
+      "phase": "measured",
+      "status": "completed_correct",
+      "timeout": false
+    },
+    {
+      "file": "attempts/attempt-0239-measured.jsonl",
+      "ordinal": 239,
+      "phase": "measured",
+      "status": "completed_correct",
+      "timeout": false
+    },
+    {
+      "file": "attempts/attempt-0240-measured.jsonl",
+      "ordinal": 240,
+      "phase": "measured",
+      "status": "completed_correct",
+      "timeout": false
+    },
+    {
+      "file": "attempts/attempt-0241-measured.jsonl",
+      "ordinal": 241,
+      "phase": "measured",
+      "status": "completed_correct",
+      "timeout": false
+    },
+    {
+      "file": "attempts/attempt-0242-measured.jsonl",
+      "ordinal": 242,
+      "phase": "measured",
+      "status": "completed_correct",
+      "timeout": false
+    },
+    {
+      "file": "attempts/attempt-0243-measured.jsonl",
+      "ordinal": 243,
+      "phase": "measured",
+      "status": "completed_correct",
+      "timeout": false
+    },
+    {
+      "file": "attempts/attempt-0244-measured.jsonl",
+      "ordinal": 244,
+      "phase": "measured",
+      "status": "completed_correct",
+      "timeout": false
+    },
+    {
+      "file": "attempts/attempt-0245-measured.jsonl",
+      "ordinal": 245,
+      "phase": "measured",
+      "status": "completed_correct",
+      "timeout": false
+    },
+    {
+      "file": "attempts/attempt-0246-measured.jsonl",
+      "ordinal": 246,
+      "phase": "measured",
+      "status": "completed_correct",
+      "timeout": false
+    },
+    {
+      "file": "attempts/attempt-0247-measured.jsonl",
+      "ordinal": 247,
+      "phase": "measured",
+      "status": "completed_correct",
+      "timeout": false
+    },
+    {
+      "file": "attempts/attempt-0248-measured.jsonl",
+      "ordinal": 248,
+      "phase": "measured",
+      "status": "completed_correct",
+      "timeout": false
+    },
+    {
+      "file": "attempts/attempt-0249-measured.jsonl",
+      "ordinal": 249,
+      "phase": "measured",
+      "status": "completed_correct",
+      "timeout": false
+    },
+    {
+      "file": "attempts/attempt-0250-measured.jsonl",
+      "ordinal": 250,
+      "phase": "measured",
+      "status": "completed_correct",
+      "timeout": false
+    },
+    {
+      "file": "attempts/attempt-0251-measured.jsonl",
+      "ordinal": 251,
+      "phase": "measured",
+      "status": "completed_correct",
+      "timeout": false
+    },
+    {
+      "file": "attempts/attempt-0252-measured.jsonl",
+      "ordinal": 252,
+      "phase": "measured",
+      "status": "completed_correct",
+      "timeout": false
+    },
+    {
+      "file": "attempts/attempt-0253-measured.jsonl",
+      "ordinal": 253,
+      "phase": "measured",
+      "status": "completed_correct",
+      "timeout": false
+    },
+    {
+      "file": "attempts/attempt-0254-measured.jsonl",
+      "ordinal": 254,
+      "phase": "measured",
+      "status": "completed_correct",
+      "timeout": false
+    },
+    {
+      "file": "attempts/attempt-0255-measured.jsonl",
+      "ordinal": 255,
+      "phase": "measured",
+      "status": "completed_correct",
+      "timeout": false
+    },
+    {
+      "file": "attempts/attempt-0256-measured.jsonl",
+      "ordinal": 256,
+      "phase": "measured",
+      "status": "completed_correct",
+      "timeout": false
+    },
+    {
+      "file": "attempts/attempt-0257-measured.jsonl",
+      "ordinal": 257,
+      "phase": "measured",
+      "status": "completed_correct",
+      "timeout": false
+    },
+    {
+      "file": "attempts/attempt-0258-measured.jsonl",
+      "ordinal": 258,
+      "phase": "measured",
+      "status": "completed_correct",
+      "timeout": false
+    },
+    {
+      "file": "attempts/attempt-0259-measured.jsonl",
+      "ordinal": 259,
+      "phase": "measured",
+      "status": "completed_correct",
+      "timeout": false
+    },
+    {
+      "file": "attempts/attempt-0260-measured.jsonl",
+      "ordinal": 260,
+      "phase": "measured",
+      "status": "completed_correct",
+      "timeout": false
+    },
+    {
+      "file": "attempts/attempt-0261-measured.jsonl",
+      "ordinal": 261,
+      "phase": "measured",
+      "status": "completed_correct",
+      "timeout": false
+    },
+    {
+      "file": "attempts/attempt-0262-measured.jsonl",
+      "ordinal": 262,
+      "phase": "measured",
+      "status": "completed_correct",
+      "timeout": false
+    },
+    {
+      "file": "attempts/attempt-0263-measured.jsonl",
+      "ordinal": 263,
+      "phase": "measured",
+      "status": "completed_correct",
+      "timeout": false
+    },
+    {
+      "file": "attempts/attempt-0264-measured.jsonl",
+      "ordinal": 264,
+      "phase": "measured",
+      "status": "completed_correct",
+      "timeout": false
+    },
+    {
+      "file": "attempts/attempt-0265-measured.jsonl",
+      "ordinal": 265,
+      "phase": "measured",
+      "status": "completed_correct",
+      "timeout": false
+    },
+    {
+      "file": "attempts/attempt-0266-measured.jsonl",
+      "ordinal": 266,
+      "phase": "measured",
+      "status": "completed_correct",
+      "timeout": false
+    },
+    {
+      "file": "attempts/attempt-0267-measured.jsonl",
+      "ordinal": 267,
+      "phase": "measured",
+      "status": "completed_correct",
+      "timeout": false
+    },
+    {
+      "file": "attempts/attempt-0268-measured.jsonl",
+      "ordinal": 268,
+      "phase": "measured",
+      "status": "completed_correct",
+      "timeout": false
+    },
+    {
+      "file": "attempts/attempt-0269-measured.jsonl",
+      "ordinal": 269,
+      "phase": "measured",
+      "status": "completed_correct",
+      "timeout": false
+    },
+    {
+      "file": "attempts/attempt-0270-measured.jsonl",
+      "ordinal": 270,
+      "phase": "measured",
+      "status": "completed_correct",
+      "timeout": false
+    },
+    {
+      "file": "attempts/attempt-0271-measured.jsonl",
+      "ordinal": 271,
+      "phase": "measured",
+      "status": "completed_correct",
+      "timeout": false
+    },
+    {
+      "file": "attempts/attempt-0272-measured.jsonl",
+      "ordinal": 272,
+      "phase": "measured",
+      "status": "completed_correct",
+      "timeout": false
+    },
+    {
+      "file": "attempts/attempt-0273-measured.jsonl",
+      "ordinal": 273,
+      "phase": "measured",
+      "status": "completed_correct",
+      "timeout": false
+    },
+    {
+      "file": "attempts/attempt-0274-measured.jsonl",
+      "ordinal": 274,
+      "phase": "measured",
+      "status": "completed_correct",
+      "timeout": false
+    },
+    {
+      "file": "attempts/attempt-0275-measured.jsonl",
+      "ordinal": 275,
+      "phase": "measured",
+      "status": "completed_correct",
+      "timeout": false
+    },
+    {
+      "file": "attempts/attempt-0276-measured.jsonl",
+      "ordinal": 276,
+      "phase": "measured",
+      "status": "completed_correct",
+      "timeout": false
+    },
+    {
+      "file": "attempts/attempt-0277-measured.jsonl",
+      "ordinal": 277,
+      "phase": "measured",
+      "status": "completed_correct",
+      "timeout": false
+    },
+    {
+      "file": "attempts/attempt-0278-measured.jsonl",
+      "ordinal": 278,
+      "phase": "measured",
+      "status": "completed_correct",
+      "timeout": false
+    },
+    {
+      "file": "attempts/attempt-0279-measured.jsonl",
+      "ordinal": 279,
+      "phase": "measured",
+      "status": "completed_correct",
+      "timeout": false
+    },
+    {
+      "file": "attempts/attempt-0280-measured.jsonl",
+      "ordinal": 280,
+      "phase": "measured",
+      "status": "completed_correct",
+      "timeout": false
+    },
+    {
+      "file": "attempts/attempt-0281-measured.jsonl",
+      "ordinal": 281,
+      "phase": "measured",
+      "status": "completed_correct",
+      "timeout": false
+    },
+    {
+      "file": "attempts/attempt-0282-measured.jsonl",
+      "ordinal": 282,
+      "phase": "measured",
+      "status": "completed_correct",
+      "timeout": false
+    },
+    {
+      "file": "attempts/attempt-0283-measured.jsonl",
+      "ordinal": 283,
+      "phase": "measured",
+      "status": "completed_correct",
+      "timeout": false
+    },
+    {
+      "file": "attempts/attempt-0284-measured.jsonl",
+      "ordinal": 284,
+      "phase": "measured",
+      "status": "completed_correct",
+      "timeout": false
+    },
+    {
+      "file": "attempts/attempt-0285-measured.jsonl",
+      "ordinal": 285,
+      "phase": "measured",
+      "status": "completed_correct",
+      "timeout": false
+    },
+    {
+      "file": "attempts/attempt-0286-measured.jsonl",
+      "ordinal": 286,
+      "phase": "measured",
+      "status": "completed_correct",
+      "timeout": false
+    },
+    {
+      "file": "attempts/attempt-0287-measured.jsonl",
+      "ordinal": 287,
+      "phase": "measured",
+      "status": "completed_correct",
+      "timeout": false
+    },
+    {
+      "file": "attempts/attempt-0288-measured.jsonl",
+      "ordinal": 288,
+      "phase": "measured",
+      "status": "completed_correct",
+      "timeout": false
+    },
+    {
+      "file": "attempts/attempt-0289-measured.jsonl",
+      "ordinal": 289,
+      "phase": "measured",
+      "status": "completed_correct",
+      "timeout": false
+    },
+    {
+      "file": "attempts/attempt-0290-measured.jsonl",
+      "ordinal": 290,
+      "phase": "measured",
+      "status": "completed_correct",
+      "timeout": false
+    },
+    {
+      "file": "attempts/attempt-0291-measured.jsonl",
+      "ordinal": 291,
+      "phase": "measured",
+      "status": "completed_correct",
+      "timeout": false
+    },
+    {
+      "file": "attempts/attempt-0292-measured.jsonl",
+      "ordinal": 292,
+      "phase": "measured",
+      "status": "completed_correct",
+      "timeout": false
+    },
+    {
+      "file": "attempts/attempt-0293-measured.jsonl",
+      "ordinal": 293,
+      "phase": "measured",
+      "status": "completed_correct",
+      "timeout": false
+    },
+    {
+      "file": "attempts/attempt-0294-measured.jsonl",
+      "ordinal": 294,
+      "phase": "measured",
+      "status": "completed_correct",
+      "timeout": false
+    },
+    {
+      "file": "attempts/attempt-0295-measured.jsonl",
+      "ordinal": 295,
+      "phase": "measured",
+      "status": "completed_correct",
+      "timeout": false
+    },
+    {
+      "file": "attempts/attempt-0296-measured.jsonl",
+      "ordinal": 296,
+      "phase": "measured",
+      "status": "completed_correct",
+      "timeout": false
+    },
+    {
+      "file": "attempts/attempt-0297-measured.jsonl",
+      "ordinal": 297,
+      "phase": "measured",
+      "status": "completed_correct",
+      "timeout": false
+    },
+    {
+      "file": "attempts/attempt-0298-measured.jsonl",
+      "ordinal": 298,
+      "phase": "measured",
+      "status": "completed_correct",
+      "timeout": false
+    },
+    {
+      "file": "attempts/attempt-0299-measured.jsonl",
+      "ordinal": 299,
+      "phase": "measured",
+      "status": "completed_correct",
+      "timeout": false
+    },
+    {
+      "file": "attempts/attempt-0300-measured.jsonl",
+      "ordinal": 300,
+      "phase": "measured",
+      "status": "completed_correct",
+      "timeout": false
+    },
+    {
+      "file": "attempts/attempt-0301-measured.jsonl",
+      "ordinal": 301,
+      "phase": "measured",
+      "status": "completed_correct",
+      "timeout": false
+    },
+    {
+      "file": "attempts/attempt-0302-measured.jsonl",
+      "ordinal": 302,
+      "phase": "measured",
+      "status": "completed_correct",
+      "timeout": false
+    },
+    {
+      "file": "attempts/attempt-0303-measured.jsonl",
+      "ordinal": 303,
+      "phase": "measured",
+      "status": "completed_correct",
+      "timeout": false
+    },
+    {
+      "file": "attempts/attempt-0304-measured.jsonl",
+      "ordinal": 304,
+      "phase": "measured",
+      "status": "completed_correct",
+      "timeout": false
+    },
+    {
+      "file": "attempts/attempt-0305-measured.jsonl",
+      "ordinal": 305,
+      "phase": "measured",
+      "status": "completed_correct",
+      "timeout": false
+    },
+    {
+      "file": "attempts/attempt-0306-measured.jsonl",
+      "ordinal": 306,
+      "phase": "measured",
+      "status": "completed_correct",
+      "timeout": false
+    },
+    {
+      "file": "attempts/attempt-0307-measured.jsonl",
+      "ordinal": 307,
+      "phase": "measured",
+      "status": "completed_correct",
+      "timeout": false
+    },
+    {
+      "file": "attempts/attempt-0308-measured.jsonl",
+      "ordinal": 308,
+      "phase": "measured",
+      "status": "completed_correct",
+      "timeout": false
+    },
+    {
+      "file": "attempts/attempt-0309-measured.jsonl",
+      "ordinal": 309,
+      "phase": "measured",
+      "status": "completed_correct",
+      "timeout": false
+    },
+    {
+      "file": "attempts/attempt-0310-measured.jsonl",
+      "ordinal": 310,
+      "phase": "measured",
+      "status": "completed_correct",
+      "timeout": false
+    },
+    {
+      "file": "attempts/attempt-0311-measured.jsonl",
+      "ordinal": 311,
+      "phase": "measured",
+      "status": "completed_correct",
+      "timeout": false
+    },
+    {
+      "file": "attempts/attempt-0312-measured.jsonl",
+      "ordinal": 312,
+      "phase": "measured",
+      "status": "completed_correct",
+      "timeout": false
+    },
+    {
+      "file": "attempts/attempt-0313-measured.jsonl",
+      "ordinal": 313,
+      "phase": "measured",
+      "status": "completed_correct",
+      "timeout": false
+    },
+    {
+      "file": "attempts/attempt-0314-measured.jsonl",
+      "ordinal": 314,
+      "phase": "measured",
+      "status": "completed_correct",
+      "timeout": false
+    },
+    {
+      "file": "attempts/attempt-0315-measured.jsonl",
+      "ordinal": 315,
+      "phase": "measured",
+      "status": "completed_correct",
+      "timeout": false
+    },
+    {
+      "file": "attempts/attempt-0316-measured.jsonl",
+      "ordinal": 316,
+      "phase": "measured",
+      "status": "completed_correct",
+      "timeout": false
+    },
+    {
+      "file": "attempts/attempt-0317-measured.jsonl",
+      "ordinal": 317,
+      "phase": "measured",
+      "status": "completed_correct",
+      "timeout": false
+    },
+    {
+      "file": "attempts/attempt-0318-measured.jsonl",
+      "ordinal": 318,
+      "phase": "measured",
+      "status": "completed_correct",
+      "timeout": false
+    },
+    {
+      "file": "attempts/attempt-0319-measured.jsonl",
+      "ordinal": 319,
+      "phase": "measured",
+      "status": "completed_correct",
+      "timeout": false
+    },
+    {
+      "file": "attempts/attempt-0320-measured.jsonl",
+      "ordinal": 320,
+      "phase": "measured",
+      "status": "completed_correct",
+      "timeout": false
+    },
+    {
+      "file": "attempts/attempt-0321-measured.jsonl",
+      "ordinal": 321,
+      "phase": "measured",
+      "status": "completed_correct",
+      "timeout": false
+    },
+    {
+      "file": "attempts/attempt-0322-measured.jsonl",
+      "ordinal": 322,
+      "phase": "measured",
+      "status": "completed_correct",
+      "timeout": false
+    },
+    {
+      "file": "attempts/attempt-0323-measured.jsonl",
+      "ordinal": 323,
+      "phase": "measured",
+      "status": "completed_correct",
+      "timeout": false
+    },
+    {
+      "file": "attempts/attempt-0324-measured.jsonl",
+      "ordinal": 324,
+      "phase": "measured",
+      "status": "completed_correct",
+      "timeout": false
+    },
+    {
+      "file": "attempts/attempt-0325-measured.jsonl",
+      "ordinal": 325,
+      "phase": "measured",
+      "status": "completed_correct",
+      "timeout": false
+    },
+    {
+      "file": "attempts/attempt-0326-measured.jsonl",
+      "ordinal": 326,
+      "phase": "measured",
+      "status": "completed_correct",
+      "timeout": false
+    },
+    {
+      "file": "attempts/attempt-0327-measured.jsonl",
+      "ordinal": 327,
+      "phase": "measured",
+      "status": "completed_correct",
+      "timeout": false
+    },
+    {
+      "file": "attempts/attempt-0328-measured.jsonl",
+      "ordinal": 328,
+      "phase": "measured",
+      "status": "completed_correct",
+      "timeout": false
+    },
+    {
+      "file": "attempts/attempt-0329-measured.jsonl",
+      "ordinal": 329,
+      "phase": "measured",
+      "status": "completed_correct",
+      "timeout": false
+    },
+    {
+      "file": "attempts/attempt-0330-measured.jsonl",
+      "ordinal": 330,
+      "phase": "measured",
+      "status": "completed_correct",
+      "timeout": false
+    },
+    {
+      "file": "attempts/attempt-0331-measured.jsonl",
+      "ordinal": 331,
+      "phase": "measured",
+      "status": "completed_correct",
+      "timeout": false
+    },
+    {
+      "file": "attempts/attempt-0332-measured.jsonl",
+      "ordinal": 332,
+      "phase": "measured",
+      "status": "completed_correct",
+      "timeout": false
+    },
+    {
+      "file": "attempts/attempt-0333-measured.jsonl",
+      "ordinal": 333,
+      "phase": "measured",
+      "status": "completed_correct",
+      "timeout": false
+    },
+    {
+      "file": "attempts/attempt-0334-measured.jsonl",
+      "ordinal": 334,
+      "phase": "measured",
+      "status": "completed_correct",
+      "timeout": false
+    },
+    {
+      "file": "attempts/attempt-0335-measured.jsonl",
+      "ordinal": 335,
+      "phase": "measured",
+      "status": "completed_correct",
+      "timeout": false
+    },
+    {
+      "file": "attempts/attempt-0336-measured.jsonl",
+      "ordinal": 336,
+      "phase": "measured",
+      "status": "completed_correct",
+      "timeout": false
+    },
+    {
+      "file": "attempts/attempt-0337-measured.jsonl",
+      "ordinal": 337,
+      "phase": "measured",
+      "status": "completed_correct",
+      "timeout": false
+    },
+    {
+      "file": "attempts/attempt-0338-measured.jsonl",
+      "ordinal": 338,
+      "phase": "measured",
+      "status": "completed_correct",
+      "timeout": false
+    },
+    {
+      "file": "attempts/attempt-0339-measured.jsonl",
+      "ordinal": 339,
+      "phase": "measured",
+      "status": "completed_correct",
+      "timeout": false
+    },
+    {
+      "file": "attempts/attempt-0340-measured.jsonl",
+      "ordinal": 340,
+      "phase": "measured",
+      "status": "completed_correct",
+      "timeout": false
+    },
+    {
+      "file": "attempts/attempt-0341-measured.jsonl",
+      "ordinal": 341,
+      "phase": "measured",
+      "status": "completed_correct",
+      "timeout": false
+    },
+    {
+      "file": "attempts/attempt-0342-measured.jsonl",
+      "ordinal": 342,
+      "phase": "measured",
+      "status": "completed_correct",
+      "timeout": false
+    },
+    {
+      "file": "attempts/attempt-0343-measured.jsonl",
+      "ordinal": 343,
+      "phase": "measured",
+      "status": "completed_correct",
+      "timeout": false
+    },
+    {
+      "file": "attempts/attempt-0344-measured.jsonl",
+      "ordinal": 344,
+      "phase": "measured",
+      "status": "completed_correct",
+      "timeout": false
+    },
+    {
+      "file": "attempts/attempt-0345-measured.jsonl",
+      "ordinal": 345,
+      "phase": "measured",
+      "status": "completed_correct",
+      "timeout": false
+    },
+    {
+      "file": "attempts/attempt-0346-measured.jsonl",
+      "ordinal": 346,
+      "phase": "measured",
+      "status": "completed_correct",
+      "timeout": false
+    },
+    {
+      "file": "attempts/attempt-0347-measured.jsonl",
+      "ordinal": 347,
+      "phase": "measured",
+      "status": "completed_correct",
+      "timeout": false
+    },
+    {
+      "file": "attempts/attempt-0348-measured.jsonl",
+      "ordinal": 348,
+      "phase": "measured",
+      "status": "completed_correct",
+      "timeout": false
+    },
+    {
+      "file": "attempts/attempt-0349-measured.jsonl",
+      "ordinal": 349,
+      "phase": "measured",
+      "status": "completed_correct",
+      "timeout": false
+    },
+    {
+      "file": "attempts/attempt-0350-measured.jsonl",
+      "ordinal": 350,
+      "phase": "measured",
+      "status": "completed_correct",
+      "timeout": false
+    },
+    {
+      "file": "attempts/attempt-0351-measured.jsonl",
+      "ordinal": 351,
+      "phase": "measured",
+      "status": "completed_correct",
+      "timeout": false
+    },
+    {
+      "file": "attempts/attempt-0352-measured.jsonl",
+      "ordinal": 352,
+      "phase": "measured",
+      "status": "completed_correct",
+      "timeout": false
+    },
+    {
+      "file": "attempts/attempt-0353-measured.jsonl",
+      "ordinal": 353,
+      "phase": "measured",
+      "status": "completed_correct",
+      "timeout": false
+    },
+    {
+      "file": "attempts/attempt-0354-measured.jsonl",
+      "ordinal": 354,
+      "phase": "measured",
+      "status": "completed_correct",
+      "timeout": false
+    },
+    {
+      "file": "attempts/attempt-0355-measured.jsonl",
+      "ordinal": 355,
+      "phase": "measured",
+      "status": "completed_correct",
+      "timeout": false
+    },
+    {
+      "file": "attempts/attempt-0356-measured.jsonl",
+      "ordinal": 356,
+      "phase": "measured",
+      "status": "completed_correct",
+      "timeout": false
+    },
+    {
+      "file": "attempts/attempt-0357-measured.jsonl",
+      "ordinal": 357,
+      "phase": "measured",
+      "status": "completed_correct",
+      "timeout": false
+    },
+    {
+      "file": "attempts/attempt-0358-measured.jsonl",
+      "ordinal": 358,
+      "phase": "measured",
+      "status": "completed_correct",
+      "timeout": false
+    },
+    {
+      "file": "attempts/attempt-0359-measured.jsonl",
+      "ordinal": 359,
+      "phase": "measured",
+      "status": "completed_correct",
+      "timeout": false
+    },
+    {
+      "file": "attempts/attempt-0360-measured.jsonl",
+      "ordinal": 360,
+      "phase": "measured",
+      "status": "completed_correct",
+      "timeout": false
+    },
+    {
+      "file": "attempts/attempt-0361-measured.jsonl",
+      "ordinal": 361,
+      "phase": "measured",
+      "status": "completed_correct",
+      "timeout": false
+    },
+    {
+      "file": "attempts/attempt-0362-measured.jsonl",
+      "ordinal": 362,
+      "phase": "measured",
+      "status": "completed_correct",
+      "timeout": false
+    },
+    {
+      "file": "attempts/attempt-0363-measured.jsonl",
+      "ordinal": 363,
+      "phase": "measured",
+      "status": "completed_correct",
+      "timeout": false
+    },
+    {
+      "file": "attempts/attempt-0364-measured.jsonl",
+      "ordinal": 364,
+      "phase": "measured",
+      "status": "completed_correct",
+      "timeout": false
+    },
+    {
+      "file": "attempts/attempt-0365-measured.jsonl",
+      "ordinal": 365,
+      "phase": "measured",
+      "status": "completed_correct",
+      "timeout": false
+    },
+    {
+      "file": "attempts/attempt-0366-measured.jsonl",
+      "ordinal": 366,
+      "phase": "measured",
+      "status": "completed_correct",
+      "timeout": false
+    },
+    {
+      "file": "attempts/attempt-0367-measured.jsonl",
+      "ordinal": 367,
+      "phase": "measured",
+      "status": "completed_correct",
+      "timeout": false
+    },
+    {
+      "file": "attempts/attempt-0368-measured.jsonl",
+      "ordinal": 368,
+      "phase": "measured",
+      "status": "completed_correct",
+      "timeout": false
+    },
+    {
+      "file": "attempts/attempt-0369-measured.jsonl",
+      "ordinal": 369,
+      "phase": "measured",
+      "status": "completed_correct",
+      "timeout": false
+    },
+    {
+      "file": "attempts/attempt-0370-measured.jsonl",
+      "ordinal": 370,
+      "phase": "measured",
+      "status": "completed_correct",
+      "timeout": false
+    },
+    {
+      "file": "attempts/attempt-0371-measured.jsonl",
+      "ordinal": 371,
+      "phase": "measured",
+      "status": "completed_correct",
+      "timeout": false
+    },
+    {
+      "file": "attempts/attempt-0372-measured.jsonl",
+      "ordinal": 372,
+      "phase": "measured",
+      "status": "completed_correct",
+      "timeout": false
+    },
+    {
+      "file": "attempts/attempt-0373-measured.jsonl",
+      "ordinal": 373,
+      "phase": "measured",
+      "status": "completed_correct",
+      "timeout": false
+    },
+    {
+      "file": "attempts/attempt-0374-measured.jsonl",
+      "ordinal": 374,
+      "phase": "measured",
+      "status": "completed_correct",
+      "timeout": false
+    },
+    {
+      "file": "attempts/attempt-0375-measured.jsonl",
+      "ordinal": 375,
+      "phase": "measured",
+      "status": "completed_correct",
+      "timeout": false
+    },
+    {
+      "file": "attempts/attempt-0376-measured.jsonl",
+      "ordinal": 376,
+      "phase": "measured",
+      "status": "completed_correct",
+      "timeout": false
+    },
+    {
+      "file": "attempts/attempt-0377-measured.jsonl",
+      "ordinal": 377,
+      "phase": "measured",
+      "status": "completed_correct",
+      "timeout": false
+    },
+    {
+      "file": "attempts/attempt-0378-measured.jsonl",
+      "ordinal": 378,
+      "phase": "measured",
+      "status": "completed_correct",
+      "timeout": false
+    },
+    {
+      "file": "attempts/attempt-0379-measured.jsonl",
+      "ordinal": 379,
+      "phase": "measured",
+      "status": "completed_correct",
+      "timeout": false
+    },
+    {
+      "file": "attempts/attempt-0380-measured.jsonl",
+      "ordinal": 380,
+      "phase": "measured",
+      "status": "completed_correct",
+      "timeout": false
+    },
+    {
+      "file": "attempts/attempt-0381-measured.jsonl",
+      "ordinal": 381,
+      "phase": "measured",
+      "status": "completed_correct",
+      "timeout": false
+    },
+    {
+      "file": "attempts/attempt-0382-measured.jsonl",
+      "ordinal": 382,
+      "phase": "measured",
+      "status": "completed_correct",
+      "timeout": false
+    },
+    {
+      "file": "attempts/attempt-0383-measured.jsonl",
+      "ordinal": 383,
+      "phase": "measured",
+      "status": "completed_correct",
+      "timeout": false
+    },
+    {
+      "file": "attempts/attempt-0384-measured.jsonl",
+      "ordinal": 384,
+      "phase": "measured",
+      "status": "completed_correct",
+      "timeout": false
+    },
+    {
+      "file": "attempts/attempt-0385-measured.jsonl",
+      "ordinal": 385,
+      "phase": "measured",
+      "status": "completed_correct",
+      "timeout": false
+    },
+    {
+      "file": "attempts/attempt-0386-measured.jsonl",
+      "ordinal": 386,
+      "phase": "measured",
+      "status": "completed_correct",
+      "timeout": false
+    },
+    {
+      "file": "attempts/attempt-0387-measured.jsonl",
+      "ordinal": 387,
+      "phase": "measured",
+      "status": "completed_correct",
+      "timeout": false
+    },
+    {
+      "file": "attempts/attempt-0388-measured.jsonl",
+      "ordinal": 388,
+      "phase": "measured",
+      "status": "completed_correct",
+      "timeout": false
+    },
+    {
+      "file": "attempts/attempt-0389-measured.jsonl",
+      "ordinal": 389,
+      "phase": "measured",
+      "status": "completed_correct",
+      "timeout": false
+    },
+    {
+      "file": "attempts/attempt-0390-measured.jsonl",
+      "ordinal": 390,
+      "phase": "measured",
+      "status": "completed_correct",
+      "timeout": false
+    },
+    {
+      "file": "attempts/attempt-0391-measured.jsonl",
+      "ordinal": 391,
+      "phase": "measured",
+      "status": "completed_correct",
+      "timeout": false
+    },
+    {
+      "file": "attempts/attempt-0392-measured.jsonl",
+      "ordinal": 392,
+      "phase": "measured",
+      "status": "completed_correct",
+      "timeout": false
+    },
+    {
+      "file": "attempts/attempt-0393-measured.jsonl",
+      "ordinal": 393,
+      "phase": "measured",
+      "status": "completed_correct",
+      "timeout": false
+    },
+    {
+      "file": "attempts/attempt-0394-measured.jsonl",
+      "ordinal": 394,
+      "phase": "measured",
+      "status": "completed_correct",
+      "timeout": false
+    },
+    {
+      "file": "attempts/attempt-0395-measured.jsonl",
+      "ordinal": 395,
+      "phase": "measured",
+      "status": "completed_correct",
+      "timeout": false
+    },
+    {
+      "file": "attempts/attempt-0396-measured.jsonl",
+      "ordinal": 396,
+      "phase": "measured",
+      "status": "completed_correct",
+      "timeout": false
+    },
+    {
+      "file": "attempts/attempt-0397-measured.jsonl",
+      "ordinal": 397,
+      "phase": "measured",
+      "status": "completed_correct",
+      "timeout": false
+    },
+    {
+      "file": "attempts/attempt-0398-measured.jsonl",
+      "ordinal": 398,
+      "phase": "measured",
+      "status": "completed_correct",
+      "timeout": false
+    },
+    {
+      "file": "attempts/attempt-0399-measured.jsonl",
+      "ordinal": 399,
+      "phase": "measured",
+      "status": "completed_correct",
+      "timeout": false
+    },
+    {
+      "file": "attempts/attempt-0400-measured.jsonl",
+      "ordinal": 400,
+      "phase": "measured",
+      "status": "completed_correct",
+      "timeout": false
+    },
+    {
+      "file": "attempts/attempt-0401-measured.jsonl",
+      "ordinal": 401,
+      "phase": "measured",
+      "status": "completed_correct",
+      "timeout": false
+    },
+    {
+      "file": "attempts/attempt-0402-measured.jsonl",
+      "ordinal": 402,
+      "phase": "measured",
+      "status": "completed_correct",
+      "timeout": false
+    },
+    {
+      "file": "attempts/attempt-0403-measured.jsonl",
+      "ordinal": 403,
+      "phase": "measured",
+      "status": "completed_correct",
+      "timeout": false
+    },
+    {
+      "file": "attempts/attempt-0404-measured.jsonl",
+      "ordinal": 404,
+      "phase": "measured",
+      "status": "completed_correct",
+      "timeout": false
+    },
+    {
+      "file": "attempts/attempt-0405-measured.jsonl",
+      "ordinal": 405,
+      "phase": "measured",
+      "status": "completed_correct",
+      "timeout": false
+    },
+    {
+      "file": "attempts/attempt-0406-measured.jsonl",
+      "ordinal": 406,
+      "phase": "measured",
+      "status": "completed_correct",
+      "timeout": false
+    },
+    {
+      "file": "attempts/attempt-0407-measured.jsonl",
+      "ordinal": 407,
+      "phase": "measured",
+      "status": "completed_correct",
+      "timeout": false
+    },
+    {
+      "file": "attempts/attempt-0408-measured.jsonl",
+      "ordinal": 408,
+      "phase": "measured",
+      "status": "completed_correct",
+      "timeout": false
+    },
+    {
+      "file": "attempts/attempt-0409-measured.jsonl",
+      "ordinal": 409,
+      "phase": "measured",
+      "status": "completed_correct",
+      "timeout": false
+    },
+    {
+      "file": "attempts/attempt-0410-measured.jsonl",
+      "ordinal": 410,
+      "phase": "measured",
+      "status": "completed_correct",
+      "timeout": false
+    },
+    {
+      "file": "attempts/attempt-0411-measured.jsonl",
+      "ordinal": 411,
+      "phase": "measured",
+      "status": "completed_correct",
+      "timeout": false
+    },
+    {
+      "file": "attempts/attempt-0412-measured.jsonl",
+      "ordinal": 412,
+      "phase": "measured",
+      "status": "completed_correct",
+      "timeout": false
+    },
+    {
+      "file": "attempts/attempt-0413-measured.jsonl",
+      "ordinal": 413,
+      "phase": "measured",
+      "status": "completed_correct",
+      "timeout": false
+    },
+    {
+      "file": "attempts/attempt-0414-measured.jsonl",
+      "ordinal": 414,
+      "phase": "measured",
+      "status": "completed_correct",
+      "timeout": false
+    },
+    {
+      "file": "attempts/attempt-0415-measured.jsonl",
+      "ordinal": 415,
+      "phase": "measured",
+      "status": "completed_correct",
+      "timeout": false
+    },
+    {
+      "file": "attempts/attempt-0416-measured.jsonl",
+      "ordinal": 416,
+      "phase": "measured",
+      "status": "completed_correct",
+      "timeout": false
+    },
+    {
+      "file": "attempts/attempt-0417-measured.jsonl",
+      "ordinal": 417,
+      "phase": "measured",
+      "status": "completed_correct",
+      "timeout": false
+    },
+    {
+      "file": "attempts/attempt-0418-measured.jsonl",
+      "ordinal": 418,
+      "phase": "measured",
+      "status": "completed_correct",
+      "timeout": false
+    },
+    {
+      "file": "attempts/attempt-0419-measured.jsonl",
+      "ordinal": 419,
+      "phase": "measured",
+      "status": "completed_correct",
+      "timeout": false
+    },
+    {
+      "file": "attempts/attempt-0420-measured.jsonl",
+      "ordinal": 420,
+      "phase": "measured",
+      "status": "completed_correct",
+      "timeout": false
+    },
+    {
+      "file": "attempts/attempt-0421-measured.jsonl",
+      "ordinal": 421,
+      "phase": "measured",
+      "status": "completed_correct",
+      "timeout": false
+    },
+    {
+      "file": "attempts/attempt-0422-measured.jsonl",
+      "ordinal": 422,
+      "phase": "measured",
+      "status": "completed_correct",
+      "timeout": false
+    },
+    {
+      "file": "attempts/attempt-0423-measured.jsonl",
+      "ordinal": 423,
+      "phase": "measured",
+      "status": "completed_correct",
+      "timeout": false
+    },
+    {
+      "file": "attempts/attempt-0424-measured.jsonl",
+      "ordinal": 424,
+      "phase": "measured",
+      "status": "completed_correct",
+      "timeout": false
+    },
+    {
+      "file": "attempts/attempt-0425-measured.jsonl",
+      "ordinal": 425,
+      "phase": "measured",
+      "status": "completed_correct",
+      "timeout": false
+    },
+    {
+      "file": "attempts/attempt-0426-measured.jsonl",
+      "ordinal": 426,
+      "phase": "measured",
+      "status": "completed_correct",
+      "timeout": false
+    },
+    {
+      "file": "attempts/attempt-0427-measured.jsonl",
+      "ordinal": 427,
+      "phase": "measured",
+      "status": "completed_correct",
+      "timeout": false
+    },
+    {
+      "file": "attempts/attempt-0428-measured.jsonl",
+      "ordinal": 428,
+      "phase": "measured",
+      "status": "completed_correct",
+      "timeout": false
+    },
+    {
+      "file": "attempts/attempt-0429-measured.jsonl",
+      "ordinal": 429,
+      "phase": "measured",
+      "status": "completed_correct",
+      "timeout": false
+    },
+    {
+      "file": "attempts/attempt-0430-measured.jsonl",
+      "ordinal": 430,
+      "phase": "measured",
+      "status": "completed_correct",
+      "timeout": false
+    },
+    {
+      "file": "attempts/attempt-0431-measured.jsonl",
+      "ordinal": 431,
+      "phase": "measured",
+      "status": "completed_correct",
+      "timeout": false
+    },
+    {
+      "file": "attempts/attempt-0432-measured.jsonl",
+      "ordinal": 432,
+      "phase": "measured",
+      "status": "completed_correct",
+      "timeout": false
+    },
+    {
+      "file": "attempts/attempt-0433-measured.jsonl",
+      "ordinal": 433,
+      "phase": "measured",
+      "status": "completed_correct",
+      "timeout": false
+    },
+    {
+      "file": "attempts/attempt-0434-measured.jsonl",
+      "ordinal": 434,
+      "phase": "measured",
+      "status": "completed_correct",
+      "timeout": false
+    },
+    {
+      "file": "attempts/attempt-0435-measured.jsonl",
+      "ordinal": 435,
+      "phase": "measured",
+      "status": "completed_correct",
+      "timeout": false
+    },
+    {
+      "file": "attempts/attempt-0436-measured.jsonl",
+      "ordinal": 436,
+      "phase": "measured",
+      "status": "completed_correct",
+      "timeout": false
+    },
+    {
+      "file": "attempts/attempt-0437-measured.jsonl",
+      "ordinal": 437,
+      "phase": "measured",
+      "status": "completed_correct",
+      "timeout": false
+    },
+    {
+      "file": "attempts/attempt-0438-measured.jsonl",
+      "ordinal": 438,
+      "phase": "measured",
+      "status": "completed_correct",
+      "timeout": false
+    },
+    {
+      "file": "attempts/attempt-0439-measured.jsonl",
+      "ordinal": 439,
+      "phase": "measured",
+      "status": "completed_correct",
+      "timeout": false
+    },
+    {
+      "file": "attempts/attempt-0440-measured.jsonl",
+      "ordinal": 440,
+      "phase": "measured",
+      "status": "completed_correct",
+      "timeout": false
+    },
+    {
+      "file": "attempts/attempt-0441-measured.jsonl",
+      "ordinal": 441,
+      "phase": "measured",
+      "status": "completed_correct",
+      "timeout": false
+    },
+    {
+      "file": "attempts/attempt-0442-measured.jsonl",
+      "ordinal": 442,
+      "phase": "measured",
+      "status": "completed_correct",
+      "timeout": false
+    },
+    {
+      "file": "attempts/attempt-0443-measured.jsonl",
+      "ordinal": 443,
+      "phase": "measured",
+      "status": "completed_correct",
+      "timeout": false
+    },
+    {
+      "file": "attempts/attempt-0444-measured.jsonl",
+      "ordinal": 444,
+      "phase": "measured",
+      "status": "completed_correct",
+      "timeout": false
+    },
+    {
+      "file": "attempts/attempt-0445-measured.jsonl",
+      "ordinal": 445,
+      "phase": "measured",
+      "status": "completed_correct",
+      "timeout": false
+    },
+    {
+      "file": "attempts/attempt-0446-measured.jsonl",
+      "ordinal": 446,
+      "phase": "measured",
+      "status": "completed_correct",
+      "timeout": false
+    },
+    {
+      "file": "attempts/attempt-0447-measured.jsonl",
+      "ordinal": 447,
+      "phase": "measured",
+      "status": "completed_correct",
+      "timeout": false
+    },
+    {
+      "file": "attempts/attempt-0448-measured.jsonl",
+      "ordinal": 448,
+      "phase": "measured",
+      "status": "completed_correct",
+      "timeout": false
+    },
+    {
+      "file": "attempts/attempt-0449-measured.jsonl",
+      "ordinal": 449,
+      "phase": "measured",
+      "status": "completed_correct",
+      "timeout": false
+    },
+    {
+      "file": "attempts/attempt-0450-measured.jsonl",
+      "ordinal": 450,
+      "phase": "measured",
+      "status": "completed_correct",
+      "timeout": false
+    },
+    {
+      "file": "attempts/attempt-0451-measured.jsonl",
+      "ordinal": 451,
+      "phase": "measured",
+      "status": "completed_correct",
+      "timeout": false
+    },
+    {
+      "file": "attempts/attempt-0452-measured.jsonl",
+      "ordinal": 452,
+      "phase": "measured",
+      "status": "completed_correct",
+      "timeout": false
+    },
+    {
+      "file": "attempts/attempt-0453-measured.jsonl",
+      "ordinal": 453,
+      "phase": "measured",
+      "status": "completed_correct",
+      "timeout": false
+    },
+    {
+      "file": "attempts/attempt-0454-measured.jsonl",
+      "ordinal": 454,
+      "phase": "measured",
+      "status": "completed_correct",
+      "timeout": false
+    },
+    {
+      "file": "attempts/attempt-0455-measured.jsonl",
+      "ordinal": 455,
+      "phase": "measured",
+      "status": "completed_correct",
+      "timeout": false
+    },
+    {
+      "file": "attempts/attempt-0456-measured.jsonl",
+      "ordinal": 456,
+      "phase": "measured",
+      "status": "completed_correct",
+      "timeout": false
+    },
+    {
+      "file": "attempts/attempt-0457-measured.jsonl",
+      "ordinal": 457,
+      "phase": "measured",
+      "status": "completed_correct",
+      "timeout": false
+    },
+    {
+      "file": "attempts/attempt-0458-measured.jsonl",
+      "ordinal": 458,
+      "phase": "measured",
+      "status": "completed_correct",
+      "timeout": false
+    },
+    {
+      "file": "attempts/attempt-0459-measured.jsonl",
+      "ordinal": 459,
+      "phase": "measured",
+      "status": "completed_correct",
+      "timeout": false
+    },
+    {
+      "file": "attempts/attempt-0460-measured.jsonl",
+      "ordinal": 460,
+      "phase": "measured",
+      "status": "completed_correct",
+      "timeout": false
+    },
+    {
+      "file": "attempts/attempt-0461-measured.jsonl",
+      "ordinal": 461,
+      "phase": "measured",
+      "status": "completed_correct",
+      "timeout": false
+    },
+    {
+      "file": "attempts/attempt-0462-measured.jsonl",
+      "ordinal": 462,
+      "phase": "measured",
+      "status": "completed_correct",
+      "timeout": false
+    },
+    {
+      "file": "attempts/attempt-0463-measured.jsonl",
+      "ordinal": 463,
+      "phase": "measured",
+      "status": "completed_correct",
+      "timeout": false
+    },
+    {
+      "file": "attempts/attempt-0464-measured.jsonl",
+      "ordinal": 464,
+      "phase": "measured",
+      "status": "completed_correct",
+      "timeout": false
+    },
+    {
+      "file": "attempts/attempt-0465-measured.jsonl",
+      "ordinal": 465,
+      "phase": "measured",
+      "status": "completed_correct",
+      "timeout": false
+    }
+  ],
+  "candidate_manifest_reference_sha256": "34b681e385feb3500c9e9849d30f5bac982716c4e4938cdb04c5fdc617cff624",
+  "candidate_manifest_role": "exact_three_key_pilot_input_manifest",
+  "candidate_manifest_sha256": "ce75b965ee5879ebece6ea7dfe133441547d20ccf89ecd5d66ea510bd9645e60",
+  "completed_flow_count_including_incorrect": 450,
+  "completed_flow_latency_ms_r7_including_incorrect": {
+    "p50": 55696.430387500004,
+    "p90": 63354.6776362,
+    "p95": 64783.7293645
+  },
+  "condition": "localbus_accurate_stt_assistant_remote_gateway_http_tts",
+  "condition_cap_seconds": 39000.0,
+  "condition_elapsed_ms_excluding_setup_and_shutdown": 25884765.565317,
+  "condition_ended_monotonic_ns": 1423322842411524,
+  "condition_started_monotonic_ns": 1397438076846207,
+  "condition_target_measured": 900,
+  "config_raw_sha256_after_startup": "9046cb05b8594333c2d45fd263569ac258747d0e785add95b129b70f902663a4",
+  "config_raw_sha256_before_startup": "2b8cc043fc75c8978e2528379badb9fff7cd2ad2bc82729e61c560d35bbd1cc1",
+  "config_sha256": "9046cb05b8594333c2d45fd263569ac258747d0e785add95b129b70f902663a4",
+  "config_startup_changed_key_paths": [
+    "services.gateway.api.token_secret"
+  ],
+  "config_startup_changed_values_redacted": true,
+  "config_startup_semantics_verified": true,
+  "correct": 450,
+  "correctness_denominator": {
+    "measured_attempted": 450,
+    "measured_correct": 450,
+    "measured_failed_or_interrupted": 0,
+    "measured_incorrect_completed": 0,
+    "measured_planned": 450,
+    "unattempted_measured": 0,
+    "warmup_attempted_excluded": 15,
+    "warmup_failed_or_interrupted_excluded": 0,
+    "warmup_planned_excluded": 15
+  },
+  "epoch_lineage": {
+    "conditionTargetMeasured": 900,
+    "eligibleIndicesSha256": "1a9c494a3f01bf4eb8ebd35bb675d03bb9a14d80fc1f8a636c96ad47651c897d",
+    "epochId": "V2296",
+    "failed180Retried": false,
+    "firstConditionMeasuredIndex": 451,
+    "lastConditionMeasuredIndex": 900,
+    "originalManifestSha256": "6bc65cf5cc3c4eddb90b80b0764a01e6a9fc4afbed66f33c731e3ab58528e101",
+    "parentManifestSha256": "11bbea3fc1e45e65da1ecb7b501aee77739870cb087d792e5bc5197f9b1027be",
+    "parentSealSha256": "736694b7b16b9ad24993e804174b59f7cba66cd57fd894a766e30f71e2ca703c",
+    "plannedEpochMeasured": 450,
+    "priorAttemptedMeasured": 450,
+    "priorCorrect": 449,
+    "priorFailed": 1
+  },
+  "expected_reply_words": [
+    "paris"
+  ],
+  "failed": 0,
+  "finished_monotonic_ns": 1423323289280828,
+  "flow_end_point": "valid_non_silent_pcm16_tts_wav_received_decoded_and_checked_before_artifact_write",
+  "frozen_cohort_manifest_name": "condition-frozen-v2296.json",
+  "frozen_cohort_manifest_sha256": "9adbf9ba3a7ec0948a087edad3655cf94ee344b3a2371a78d15f188f44150d42",
+  "input": {
+    "bytes": 219794,
+    "channels": 1,
+    "frames": 109875,
+    "sample_rate": 22050,
+    "sample_width_bytes": 2,
+    "sha256": "da0ecc4ad0885746ab6e716585473917ab2b543a505bf0db09ebacfaa7943cbb"
+  },
+  "measured_requests": 450,
+  "missing_metrics": {
+    "first_audio": "no playback path in this pilot",
+    "first_token": "not exposed by this caller boundary",
+    "playback_end": "no playback path in this pilot",
+    "playback_start": "no playback path in this pilot"
+  },
+  "observed_measured_attempt_latency_ms_r7_including_failures": {
+    "p50": 55696.430387500004,
+    "p90": 63354.6776362,
+    "p95": 64783.7293645
+  },
+  "phase_denominators": {
+    "all": {
+      "attempted": 465,
+      "completed_correct": 465,
+      "completed_incorrect": 0,
+      "failed_or_interrupted": 0,
+      "planned": 465,
+      "timeouts": 0,
+      "unattempted": 0
+    },
+    "measured": {
+      "attempted": 450,
+      "completed_correct": 450,
+      "completed_incorrect": 0,
+      "failed_or_interrupted": 0,
+      "planned": 450,
+      "timeouts": 0,
+      "unattempted": 0
+    },
+    "warmup_excluded": {
+      "attempted": 15,
+      "completed_correct": 15,
+      "completed_incorrect": 0,
+      "failed_or_interrupted": 0,
+      "planned": 15,
+      "timeouts": 0,
+      "unattempted": 0
+    }
+  },
+  "physical_microphone": false,
+  "physical_playback_or_audibility": false,
+  "planned_measured": 450,
+  "planned_warmups": 15,
+  "postwarmup_lifetime_budget": {
+    "provider_remaining_seconds": 38120.619834,
+    "required_with_20percent_margin_and_shutdown_seconds": 32118.111062694,
+    "warmup_p95_ms_type7": 59144.650116100005
+  },
+  "provider_bindings_after": {
+    "configured_llm": {
+      "model_file": "Qwen3.5-0.8B-Q4_0.gguf",
+      "provider": "llama_cpp",
+      "settings": {
+        "chat_format": "chatml-function-calling",
+        "max_tokens": 128,
+        "min_p": 0.0,
+        "n_batch": 64,
+        "n_ctx": 4096,
+        "n_gpu_layers": 0,
+        "n_threads": 2,
+        "repeat_penalty": 1.0,
+        "seed": 42,
+        "temperature": 0.0,
+        "top_k": 1,
+        "top_p": 1.0
+      }
+    },
+    "transcription": {
+      "configured_compute_type": "int8",
+      "configured_device": "cpu",
+      "configured_model": "ebe41f70d5b6dfa9166e2c581c45c9c0cfc57b66",
+      "enabled": true,
+      "model_ready": true,
+      "model_type": {
+        "class": "WhisperModel",
+        "module": "faster_whisper.transcribe"
+      },
+      "service": "TranscriptionService"
+    },
+    "tts": {
+      "executable_file": "piper",
+      "expected_sample_rate": 22050,
+      "model_config_file": "en_US-ljspeech-medium.onnx.json",
+      "model_file": "en_US-ljspeech-medium.onnx",
+      "provider_id": "piper",
+      "provider_type": {
+        "class": "PiperTTSProvider",
+        "module": "app.services.tts.providers.piper"
+      },
+      "service": "TTSService"
+    }
+  },
+  "provider_bindings_before": {
+    "configured_llm": {
+      "model_file": "Qwen3.5-0.8B-Q4_0.gguf",
+      "provider": "llama_cpp",
+      "settings": {
+        "chat_format": "chatml-function-calling",
+        "max_tokens": 128,
+        "min_p": 0.0,
+        "n_batch": 64,
+        "n_ctx": 4096,
+        "n_gpu_layers": 0,
+        "n_threads": 2,
+        "repeat_penalty": 1.0,
+        "seed": 42,
+        "temperature": 0.0,
+        "top_k": 1,
+        "top_p": 1.0
+      }
+    },
+    "transcription": {
+      "configured_compute_type": "int8",
+      "configured_device": "cpu",
+      "configured_model": "ebe41f70d5b6dfa9166e2c581c45c9c0cfc57b66",
+      "enabled": true,
+      "model_ready": true,
+      "model_type": {
+        "class": "WhisperModel",
+        "module": "faster_whisper.transcribe"
+      },
+      "service": "TranscriptionService"
+    },
+    "tts": {
+      "executable_file": "piper",
+      "expected_sample_rate": 22050,
+      "model_config_file": "en_US-ljspeech-medium.onnx.json",
+      "model_file": "en_US-ljspeech-medium.onnx",
+      "provider_id": "piper",
+      "provider_type": {
+        "class": "PiperTTSProvider",
+        "module": "app.services.tts.providers.piper"
+      },
+      "service": "TTSService"
+    }
+  },
+  "remote_tts_auth_binding": "existing_authorized_peer_bearer",
+  "remote_tts_endpoint_sha256": "f479f9eb33d508640167787da28f14067bdcf72b41d7e29f2a056cb48a1567df",
+  "request_cap_seconds": 180.0,
+  "schema_version": "aurora.full_audio_campaign.v1",
+  "setup_duration_ms": 24008.24005,
+  "shutdown_completed": true,
+  "shutdown_duration_ms": 445.601255,
+  "status": "completed_all_correct",
+  "stop_reason": null,
+  "successful_correct_count": 450,
+  "successful_correct_latency_ms_r7": {
+    "p50": 55696.430387500004,
+    "p90": 63354.6776362,
+    "p95": 64783.7293645,
+    "p99": 68435.1982192
+  },
+  "timeouts": 0,
+  "unattempted_measured": 0,
+  "warmup_instrumentation_gate": {
+    "local_stt_llm_gate": {
+      "actual_llm_cpu_binding": true,
+      "actual_piper_cpu_binding": false,
+      "actual_provider_record_sha256": "4f3244f2248bd755938ac938c9d597b90640efd1531b06da3edfe3e4340278c6",
+      "actual_stt_cpu_binding": true,
+      "all_expected_predicates": true,
+      "native_stt_llm_spans": true,
+      "planned_and_correct_warmups": 15,
+      "status": "passed",
+      "warmup_cases": [
+        {
+          "correctness_complete": true,
+          "correlation_id": "audio-campaign-411ac28b1d1a41cf846e4d28ef7e7d1e",
+          "harness_case_id": "audio-campaign-v2296-0001",
+          "local_bus_stages_complete": true,
+          "native_spans_complete": true
+        },
+        {
+          "correctness_complete": true,
+          "correlation_id": "audio-campaign-05d5e14a4f3f4b2aa2a7dc55aeece399",
+          "harness_case_id": "audio-campaign-v2296-0002",
+          "local_bus_stages_complete": true,
+          "native_spans_complete": true
+        },
+        {
+          "correctness_complete": true,
+          "correlation_id": "audio-campaign-0501f76419f340d7ac82e74082d73cfa",
+          "harness_case_id": "audio-campaign-v2296-0003",
+          "local_bus_stages_complete": true,
+          "native_spans_complete": true
+        },
+        {
+          "correctness_complete": true,
+          "correlation_id": "audio-campaign-cff5ab5918164c0999b9d24f38a347f7",
+          "harness_case_id": "audio-campaign-v2296-0004",
+          "local_bus_stages_complete": true,
+          "native_spans_complete": true
+        },
+        {
+          "correctness_complete": true,
+          "correlation_id": "audio-campaign-bd93ccaf43894bd9834c1d11d5124c64",
+          "harness_case_id": "audio-campaign-v2296-0005",
+          "local_bus_stages_complete": true,
+          "native_spans_complete": true
+        },
+        {
+          "correctness_complete": true,
+          "correlation_id": "audio-campaign-59a874a2674d4a96a378f7c4da8ac286",
+          "harness_case_id": "audio-campaign-v2296-0006",
+          "local_bus_stages_complete": true,
+          "native_spans_complete": true
+        },
+        {
+          "correctness_complete": true,
+          "correlation_id": "audio-campaign-dbf6bcfbd9584094a93cef150a939a26",
+          "harness_case_id": "audio-campaign-v2296-0007",
+          "local_bus_stages_complete": true,
+          "native_spans_complete": true
+        },
+        {
+          "correctness_complete": true,
+          "correlation_id": "audio-campaign-c90878058f5540b8942dbde9a71dfef6",
+          "harness_case_id": "audio-campaign-v2296-0008",
+          "local_bus_stages_complete": true,
+          "native_spans_complete": true
+        },
+        {
+          "correctness_complete": true,
+          "correlation_id": "audio-campaign-060348ce747443cbb8b483ef0c75dfb7",
+          "harness_case_id": "audio-campaign-v2296-0009",
+          "local_bus_stages_complete": true,
+          "native_spans_complete": true
+        },
+        {
+          "correctness_complete": true,
+          "correlation_id": "audio-campaign-0ce8a166724e493da492ae9544b5274a",
+          "harness_case_id": "audio-campaign-v2296-0010",
+          "local_bus_stages_complete": true,
+          "native_spans_complete": true
+        },
+        {
+          "correctness_complete": true,
+          "correlation_id": "audio-campaign-fe759dc110b840509cdbb649a814d595",
+          "harness_case_id": "audio-campaign-v2296-0011",
+          "local_bus_stages_complete": true,
+          "native_spans_complete": true
+        },
+        {
+          "correctness_complete": true,
+          "correlation_id": "audio-campaign-c056b75897304d29bdfa90251eff52ca",
+          "harness_case_id": "audio-campaign-v2296-0012",
+          "local_bus_stages_complete": true,
+          "native_spans_complete": true
+        },
+        {
+          "correctness_complete": true,
+          "correlation_id": "audio-campaign-a7f22f0c92dd4f888a944441a84f004e",
+          "harness_case_id": "audio-campaign-v2296-0013",
+          "local_bus_stages_complete": true,
+          "native_spans_complete": true
+        },
+        {
+          "correctness_complete": true,
+          "correlation_id": "audio-campaign-586c83763d914be89e85d155a86f8d98",
+          "harness_case_id": "audio-campaign-v2296-0014",
+          "local_bus_stages_complete": true,
+          "native_spans_complete": true
+        },
+        {
+          "correctness_complete": true,
+          "correlation_id": "audio-campaign-0656937eef5f44c39ad1dcdf1ffebc14",
+          "harness_case_id": "audio-campaign-v2296-0015",
+          "local_bus_stages_complete": true,
+          "native_spans_complete": true
+        }
+      ]
+    },
+    "planned_and_correct_warmups": 15,
+    "receiver_id": "personal-k1-http-piper-v2296",
+    "remote_server_correlations_joined": 15,
+    "remote_tts_proof_sha256": "fc33cb2f990aa3e717f832c577e5fad01c00f7904c53756f0b3d9405b845e3d6",
+    "remote_tts_receiver_gate": true,
+    "status": "passed"
+  },
+  "warmup_requests": 15
+}

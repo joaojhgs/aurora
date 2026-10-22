@@ -1,0 +1,25 @@
+{
+  "schema": "aurora.worker-cpu-v737-finalizer-default-guard.v763",
+  "at": "2026-10-16T00:18:56.198045+00:00",
+  "command": [
+    "/home/developer/projects/aurora/.venv/bin/python",
+    "thesis/harness/worker-cpu-v737/post_terminal.py"
+  ],
+  "sourceSHA256": "25bc82c55405e8564834b32c01a9aa7c2ab43ceb0907a2457f693c7fffea482f",
+  "exitCode": 2,
+  "durationSeconds": 0.24382624798454344,
+  "expectedRefusal": "usage: post_terminal.py [-h] [--execute-finalization]\npost_terminal.py: error: Finalization requires explicit --execute-finalization after owned terminal reconciliation.",
+  "scope": "ONE default opt-in refusal before terminal/filesystem/lock/model/audit work, not a rehearsal of finalization.",
+  "ownersBefore": {
+    "3038114": true,
+    "3038148": true
+  },
+  "ownersAfter": {
+    "3038114": true,
+    "3038148": true
+  },
+  "exportOrRetirementCreated": false,
+  "newMeasuredRequests": 0,
+  "modelsOrServicesLoaded": false,
+  "archiveAuditExecuted": false
+}

@@ -1,0 +1,29 @@
+{
+  "id": "ebbce7e3-d048-43f5-9006-160fef17761b",
+  "ok": true,
+  "result": {
+    "terminal": {
+      "handle": "term_00a86bfb-1ede-4fbf-8b5e-72e2a2629f62",
+      "ptyId": "ssh:ssh-1786238480967-semdev@@pty2:24bad777-48ae-41dd-ab05-031f867c22fd:1",
+      "incarnationId": "9d7a67b9-7786-4073-8c58-b9c260aa643f",
+      "orphaned": false,
+      "worktreeId": "ce8df754-5c48-4296-83bd-452a5b99942f::/home/developer/projects/aurora",
+      "worktreePath": "/home/developer/projects/aurora",
+      "branch": "",
+      "tabId": "825cd013-2214-4fe1-b2f8-4070408badb8",
+      "leafId": "7ccd6b45-b509-410f-b658-b5a7ecb7a8c7",
+      "title": "..ojects/aurora",
+      "connected": true,
+      "writable": true,
+      "lastOutputAt": 1792162174171,
+      "preview": "Y2xpZW50Q29ycmVsYXRpb25JZCI6IG51bGwsICJjbGllbnRDb3JyZWxhdGlvblJlYXNvbiI6ICJuYXRpdmUgdGVsZW1ldHJ5IGNvcnJlbGF0aW9uIHJlbWFpbnMgbnVsbDsgU0RLIHJldHVybmVkIHN0YWdlIElEcyBhcmUgc3RvcmVkIHNlcGFyYXRlbHkifSwgImF0dGVtcHRMaW5lcyI6IDI4NywgImxhdW5jaExvZ1RhaWwiOiAiIn0=\"}\n\u279c  aurora git:(main) \u2717\n\u279c  aurora git:(main) \u2717",
+      "executionHostId": "ssh:ssh-1786238480967-semdev",
+      "paneRuntimeId": -1,
+      "rendererGraphEpoch": 0,
+      "agentWait": null
+    }
+  },
+  "_meta": {
+    "runtimeId": "c056e640-4085-4377-83d5-c299190ee880"
+  }
+}

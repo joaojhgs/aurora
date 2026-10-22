@@ -1,0 +1,57 @@
+{
+  "at": "2026-10-22T11:04:53.773299+00:00",
+  "status": "INTERRUPTED_260_PER_STREAM_SEALED_RECONCILED_640_REMAINING",
+  "campaignManifestSha256": "316d4cc09adc44d0104dca8ac1f2a966347588ffef37bc2fa809ec14fd5efff8",
+  "cohortAllocationReleased": true,
+  "originalRequesterAbsent": true,
+  "originalProviderActorsAbsent": true,
+  "rawAndAudioCustodyVerified": true,
+  "physicalRequestAudioCases": 261,
+  "physicalProviderAudioCases": 261,
+  "httpMeasured": 260,
+  "localMeasured": 260,
+  "correctPerStream": 260,
+  "failedPerStream": 0,
+  "remainingGlobalIndices": [
+    261,
+    900
+  ],
+  "remainingPerStream": 640,
+  "warmupPairsInThisEpochExcluded": 1,
+  "priorWarmupPairsExcludedSeparately": 15,
+  "summary": "thesis/results/c12-mixed-local-http-260partial-v2452/SUMMARY.json",
+  "summarySha256": "ffe05ce69df3890df1f082e4b38a64648cd813d689dc3b2482a6aebb877a7469",
+  "positiveFlowEvidenceGaps": 0,
+  "rawEof": {
+    "at": "2026-10-22T11:02:48.421131+00:00",
+    "newInference": 0,
+    "prefixCapsules": 261,
+    "rawDuplicatedOnDisk": false,
+    "status": "ALL_FOUR_SAVED_RAW_PREFIXES_PLUS_EOF_MATCH_SEALED_MANIFEST",
+    "streams": {
+      "actual-provider-bindings.jsonl": {
+        "bytes": 395259,
+        "sha256": "a8fa46f4fd65d6587e4add8d8cdd938bf91577ad8e7c6ea461e42c015635ab36"
+      },
+      "bus-queue-observations.jsonl": {
+        "bytes": 616722,
+        "sha256": "f0f002b4ebeb928a60bbae576d5d1ed4625a0bac528d36d1480c69dadfd9362c"
+      },
+      "resources.jsonl": {
+        "bytes": 50616414,
+        "sha256": "f444ada6be0934617f29ec9bfb04b02f8c71831ccf3a36f4ca2d8212302bdaeb"
+      },
+      "voice-stages.jsonl": {
+        "bytes": 8688168,
+        "sha256": "f05020291b86dc2d5ca735cc38defa44a0bc5510e44f0d8ab8286b85f2b97f32"
+      }
+    }
+  },
+  "providerEofArchiveBytes": 210361,
+  "providerEofArchiveSha256": "e974b9d707d3887a258a4241d1a8927a4f502b1a2d67beb36d77366ca2b832db",
+  "sourceSettingsUnchanged": true,
+  "originalMasterClocksUnchanged": true,
+  "rootSchedulingBuildLockWaydroidOwnership": "RETAINED_ORIGINAL_ROOT",
+  "originalFailurePreserved": true,
+  "fullAggregateGoalComplete": false
+}

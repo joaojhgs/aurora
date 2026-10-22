@@ -1,0 +1,10 @@
+{
+  "at": "2026-10-16T00:56:17.573389+00:00",
+  "status": "PASS",
+  "links": 18,
+  "files": [
+    "thesis/harness/browser-ui-v704/README.md",
+    "thesis/inventory/README.md"
+  ],
+  "scope": "new browser source/manual slice local links; no globaldocscheck replay, services/models or tests"
+}

@@ -1,0 +1,8 @@
+{
+  "originalFrozenSha256": "60c71e3c9cc22c1d6cdf2c9267f5fbc9e8f38d295c289c80d9f3cea2491be62f",
+  "originalPlannedProofGenerator": "4aea2ab1d0687ca8fdae48486dad0dd532967ee1428bc624f525cb8e43344dbb",
+  "actualPostmortemAnalyzerSha256": "3bb4af79cf2579023c0f1ff2025f69367717d49db7d09831c682c1bf52fc441f",
+  "scope": "Saved-data reanalysis with exact original observer/input/capture binding; not historical admission. Old runner rejected any changed generator and is retired.",
+  "oldInputsOrManifestChanged": false,
+  "modelCalls": 0
+}

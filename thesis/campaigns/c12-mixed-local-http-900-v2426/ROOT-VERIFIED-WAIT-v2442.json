@@ -1,0 +1,88 @@
+{
+  "at": "2026-10-22T09:10:30.919865+00:00",
+  "classification": "VERIFIED_WAIT",
+  "nativeGoalId": "01a112a5-d6bb-74e2-bf7c-ace73cb513b5",
+  "nativeGoalStatus": "active",
+  "requester": {
+    "pid": 281887,
+    "startTicks": 143363140,
+    "state": "S"
+  },
+  "actualCurrent": {
+    "at": "2026-10-22T09:10:15.242748+00:00",
+    "companion": {
+      "measured": {
+        "attempted": 124,
+        "correct": 124,
+        "failed": 0,
+        "harnessErrorsIncludedInFailed": 0,
+        "incorrectIncludedInFailed": 0,
+        "offered": 124,
+        "planned": 900,
+        "timeouts": 0,
+        "unstarted": 776
+      },
+      "warmup": {
+        "attempted": 1,
+        "correct": 1,
+        "failed": 0,
+        "harnessErrorsIncludedInFailed": 0,
+        "incorrectIncludedInFailed": 0,
+        "offered": 1,
+        "planned": 1,
+        "timeouts": 0,
+        "unstarted": 0
+      }
+    },
+    "completePairedCapsules": 125,
+    "elapsedSeconds": 5037.872381909,
+    "lastIndex": 124,
+    "lastNativeParent": "10cf31e7ee1c5c5641352bb4fdd76981",
+    "lastOrdinal": 125,
+    "manifestSha256": "316d4cc09adc44d0104dca8ac1f2a966347588ffef37bc2fa809ec14fd5efff8",
+    "phase": "measured",
+    "pid": 281887,
+    "primary": {
+      "measured": {
+        "attempted": 124,
+        "correct": 124,
+        "failed": 0,
+        "harnessErrorsIncludedInFailed": 0,
+        "incorrectIncludedInFailed": 0,
+        "offered": 124,
+        "planned": 900,
+        "timeouts": 0,
+        "unstarted": 776
+      },
+      "warmup": {
+        "attempted": 1,
+        "correct": 1,
+        "failed": 0,
+        "harnessErrorsIncludedInFailed": 0,
+        "incorrectIncludedInFailed": 0,
+        "offered": 1,
+        "planned": 1,
+        "timeouts": 0,
+        "unstarted": 0
+      }
+    },
+    "status": "running"
+  },
+  "nextMaximumCheck": "2026-10-22T09:15:30.919865+00:00",
+  "earlierCheck": "Real terminal/failure/stale progress/resource alarm or owner answer",
+  "freeBytes": 2598481920,
+  "originalMonitorReadOnlyOrcaReceipt": {
+    "handle": "term_2eab47ed-ab9b-4e35-bd9b-fc068c60e3fc",
+    "incarnationId": "37e50d9c-6cf5-4e28-a63b-f2bc3eed5661",
+    "connected": true,
+    "writable": true,
+    "executionHostId": "ssh:ssh-oci-coding-worker",
+    "lastOutputAt": 1792659977087,
+    "nativeGoalStatus": "Not queried across threads; do not infer from terminal preview"
+  },
+  "sameFrozenScientificSourceSettingsFloorAndDeadlines": true,
+  "newSutCallsBuildsTestsWorkersOrTerminalSends": 0,
+  "cacheAuthorization": "Still pending exact935MB webpack-cache question; no inferred approval/deletion or repeat question",
+  "preferredEOF": "thesis/harness/c12_terminal_delta_custody_v2440.py after original requester/provider retirement; actual execution pending",
+  "phone": "Exclusively existing setup worker; no Root phone/notebook read/control"
+}

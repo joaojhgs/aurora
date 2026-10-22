@@ -1,0 +1,21 @@
+{
+  "at": "2026-10-20T21:56:53.509826+00:00",
+  "status": "PASS",
+  "sourceRegression": "Old sink rejects STT, new accepts all three required stage topics",
+  "old": {
+    "accepted": 2,
+    "invalid": 1,
+    "complete": false
+  },
+  "new": {
+    "accepted": 3,
+    "invalid": 0,
+    "complete": true
+  },
+  "initialCheckCorrection": "old close() correctly returns false when STT was rejected; negative control preserved, not treated as new-sink failure",
+  "newSourceSha256": "08e6683e1f17e9e36d19c017ae7e108934c2abd8b52d655d6acb2b443dc8341a",
+  "syntheticSchemaInputsOnly": true,
+  "scientificObservationsCreated": 0,
+  "newInference": 0,
+  "frozenOriginalsUnchanged": true
+}

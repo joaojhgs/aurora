@@ -1,0 +1,28 @@
+{
+  "id": "69ada61b-b0fe-460c-9860-5a1c71a46ac5",
+  "ok": true,
+  "result": {
+    "message": {
+      "id": "msg_fc6f00efa8b2",
+      "run_id": "run_e6054e76e9fc",
+      "delivery_contract": "current_delivery",
+      "from_handle": "term_6a00d9ee-792a-4daf-8578-236290e33108",
+      "to_handle": "dispatch:ctx_37b4d0a3c14f",
+      "subject": "Main625/900, original Root active, next bound00:42:42Z",
+      "body": "ACK msg_88a3cae3950b; original monitor goalACTIVE receipt physically copied to thesis/evidence/orca-coordination-20261021-phone-setup-resume-v2308/ORIGINAL-MONITOR-ACTIVE-MAIN-CONTINUING-v2335.json. Original Root native goal actualACTIVE same objective/thread/unbudgeted. V2296 actual00:37:42Z new175/450 all correct, full625/900=624correct1preservedhistoricalfailure,275remain. Original controller3965950/backend3965978/copier3965951 exactstartticks live; copier190case/WAV0errors,3.255GBfree. ROOT-VERIFIED-WAIT-v2335.json/fresh native snapshot/CURRENT persist nextcheck00:42:42.407227Z or earlier actual failure/terminal/guard. This is verified live wait, not blocker/stop; observer naturally exited, main SUT continues. Frozen run/settings/source/caps unchanged, no new tests/review/workers/phone detour. Next actual SUT action remains remaining mandatory requests then natural-terminal finalizer/custody; queued existing-worker staging release decision preserved afterward. Full13 remains open.",
+      "type": "status",
+      "priority": "normal",
+      "thread_id": null,
+      "payload": null,
+      "created_at": "2026-10-22T00:37:52Z",
+      "delivered_at": null
+    },
+    "mutation": {
+      "requestId": "fc9def05-bef3-4319-8fdf-34072526fdd9",
+      "replayed": false
+    }
+  },
+  "_meta": {
+    "runtimeId": "cc9e3275-28c6-4c45-85cc-bdcd2262aa7d"
+  }
+}

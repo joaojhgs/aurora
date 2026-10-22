@@ -1,0 +1,65 @@
+{
+  "at": "2026-10-18T17:22:22.891739+00:00",
+  "classification": "BOUNDED_SOURCE_FACTS_NOT_RUNTIME_OR_MEASURED_ADMISSION",
+  "approvedPhysicalInventory": {
+    "W": "code-worker actual existingrequester",
+    "D": "personal.skyron-server actual existingprovider withWhisperCPU/QwenVulkan/PiperCPU",
+    "A-D": "historicallyapprovedWaydroid onD, samephysicalresources; currentexactrelayobserverfails, notabsence",
+    "N": "existingPERSONAL ssh:ssh-sem-notebook-personal /03d8a475-d62e-43b3-8885-e382b313ab1b::/home/developer/projects/aurora registeredhistorically; currentcontrol/hardware/models/reservation/readinessUNKNOWN, no company access"
+  },
+  "staticSupport": {
+    "k3DistinctStagePeers": true,
+    "controllerEnvironmentKeys": [
+      "AURORA_K3_MESH_STT_PEER_ID",
+      "AURORA_K3_MESH_ASSISTANT_PEER_ID",
+      "AURORA_K3_MESH_TTS_PEER_ID"
+    ],
+    "sourceBinding": "controller.py:86-88 and141-161 validate eachstage ownpeerhash/receiver; runner.py:431-449 makes3AdmittedMeshPeer objects andvalidates each; k3_composition.py:80-82 accepts3peers,159/206/256 calls corresponding actualtypedproductionMeshBus stage; no observed one-peer-equalityguard in these inspected bindings",
+    "existingProductionContracts": "TranscribeAudioRequest,ExternalUserInput/OrchestratorRequest,TTSSynthesizeRequest carry mesh_selector; adapter builds exact MeshAddressSelector perstage, no local/alternate-peer fallback for explicitselector",
+    "MP2_MP3": "ExistingK3sourcecanexpressdistinctSTT/LLM/TTSremotepeers statically. No productionroutingfeature implementation is needed to merelyexpress thosemaps; runtimecatalog/edgepair/consent/model/native/span/physical admission remainsUNKNOWN. Androidspecificexecution notestablished bythisPython source.",
+    "MP1": "TypedAPIs supportlocal andexplicitremote stages. MixedlocalSTT+remoteLLMN+TTSD runtime/harness qualification remainsUNKNOWN here; no newimplementation or pass inferred.",
+    "MPS": "Selection/load scenarios retained, not measured or broadened here; exactequivalentmodel/provider/resource/selection admission remainsunknown."
+  },
+  "sourcePins": [
+    {
+      "path": "thesis/harness/distributed-k3-mesh-v911/controller.py",
+      "bytes": 19568,
+      "sha256": "e53c2bcbc208563fc4f0983f08d0c785a7178ad49940fb4b954ef314891b55eb"
+    },
+    {
+      "path": "thesis/harness/distributed-k3-mesh-v911/runner.py",
+      "bytes": 55537,
+      "sha256": "b52416c0edda26b445db1abcf0c8a1cc1c7a994e098ec12db6bcc914e3d31698"
+    },
+    {
+      "path": "thesis/harness/distributed-k3-mesh-v911/k3_composition.py",
+      "bytes": 13381,
+      "sha256": "8160f73b9cca2557f62418cbb7d6055cc12db2542b45a09cde18f90834224c05"
+    },
+    {
+      "path": "thesis/harness/distributed-k3-mesh-v911/mesh_stage_adapter.py",
+      "bytes": 9818,
+      "sha256": "89c9dabcadede2d1376434b81011527b916efb31a46e7bc5d92453832117c902"
+    },
+    {
+      "path": "app/shared/contracts/models/stt.py",
+      "bytes": 21745,
+      "sha256": "3c56b2d5a5435a971465ac5b132d8b5d78d18cfe02506813631a4b67e401c703"
+    },
+    {
+      "path": "app/shared/contracts/models/orchestrator.py",
+      "bytes": 22857,
+      "sha256": "cf7f048c0678f298141a59b031be420772b83e649ec2910053d4f372cfaf2df9"
+    },
+    {
+      "path": "app/shared/contracts/models/tts.py",
+      "bytes": 55774,
+      "sha256": "e6ca2ebe21b928506be0bf8c3bf88eb9ad3f582b0aae80bba361c326b2bde744"
+    }
+  ],
+  "transportVsCompute": "OrcaHTTP/TCPforward,browser,broker,TURN are not additionalphysicalcomputeproviders. A-DandD cannot be counted as independenthardware.",
+  "actualNativeMPRuntimeProof": null,
+  "newModelsOrWorkloadsOrTests": 0,
+  "newWorkersOrHosts": 0,
+  "remainingScope": "Full19Androidregistryrows/directedpairs/MP1MP2MP3MPS remainper30.57; no silentcoveragecut or blanketUI/mic gate"
+}

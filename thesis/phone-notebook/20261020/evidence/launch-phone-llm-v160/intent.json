@@ -1,0 +1,12 @@
+{
+  "controlDeadline": "2026-10-22T05:50:00Z",
+  "explicitNewline": true,
+  "host": "ssh:ssh-sem-notebook-personal",
+  "incarnation": "328cd72f-c7ea-49ff-a2db-b9275b085037",
+  "remoteResult": "/home/developer/projects/aurora/thesis/phone-notebook/20261020/evidence/launch-phone-llm-v160.json",
+  "rootAdmissionMessage": "owner bounded local LLM qualification recovery: previous status timeout0loads0completions; stop onlyownapp to reconcile then one direct verifiedsession240s,2completions,320stotal",
+  "script": "scripts/launch_phone_llm_v160.py",
+  "scriptSha256": "91eae58aa4bb0ed5a9e53029a54cb5e61469f2a4ab4730199c54e2dd7cf54a73",
+  "singleSend": true,
+  "terminal": "term_a2ed5feb-7c92-48e4-bd88-d1b0e6737989"
+}

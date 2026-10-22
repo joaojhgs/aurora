@@ -1,0 +1,23 @@
+{
+  "at": "2026-10-21T21:38:47.749829+00:00",
+  "host": "code-worker",
+  "memory": {
+    "MemTotalBytes": 12506693632,
+    "MemAvailableBytes": 4707143680,
+    "SwapFreeBytes": 0
+  },
+  "disk": {
+    "total": 109128826880,
+    "used": 105672867840,
+    "free": 3439181824
+  },
+  "loadAverage": [
+    2.64599609375,
+    2.6904296875,
+    2.99169921875
+  ],
+  "cpuCount": 2,
+  "globalBuildLockAvailable": true,
+  "oldRequesterAndFinalizerAbsent": true,
+  "sutCalls": 0
+}

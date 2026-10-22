@@ -1,0 +1,67 @@
+{
+  "operation": "launch-public-data-20261022T010316",
+  "job": "/home/developer/projects/aurora/thesis/phone-notebook/20261020/deployment/ebde3a8acf6315f920d03593845f17a1fc65a733/direct-public-data-20261022T010316",
+  "manifest": {
+    "schema": "aurora.phone_notebook.public_pinned_download_manifest.v11",
+    "ownerAuthority": "Owner explicit independent pinned public HF/PyPI setup NOW; file-only95C or OScritical-minus20,2affinity/nice10/1MiBps. CPU build/pilot85C unchanged.",
+    "destination": "/home/developer/projects/aurora/thesis/phone-notebook/20261020/deployment/ebde3a8acf6315f920d03593845f17a1fc65a733/models",
+    "assets": [
+      {
+        "name": "Qwen3.5-0.8B-Q4_0.gguf",
+        "bytes": 563036064,
+        "sha256": "57d1997790d1744fba5b40a7317df71ea5e2acee28c47e78f0cce39c0703f8cf",
+        "pinnedUrl": "https://huggingface.co/ggml-org/Qwen3.5-0.8B-GGUF/resolve/9447f74101aeb4e93621884dfa36ee8effb8831b/Qwen3.5-0.8B-Q4_0.gguf"
+      },
+      {
+        "name": "whisper-base/config.json",
+        "bytes": 2309,
+        "sha256": "56a6d8110d311f19c8f0471e562832c7527f146b567275bfca59fcf7c184da9a",
+        "pinnedUrl": "https://huggingface.co/Systran/faster-whisper-base/resolve/ebe41f70d5b6dfa9166e2c581c45c9c0cfc57b66/config.json"
+      },
+      {
+        "name": "whisper-base/model.bin",
+        "bytes": 145217532,
+        "sha256": "d01c3014881c9c6f3133c182f3d2887eb6ca1c789a7538c5c007196857a0a6a9",
+        "pinnedUrl": "https://huggingface.co/Systran/faster-whisper-base/resolve/ebe41f70d5b6dfa9166e2c581c45c9c0cfc57b66/model.bin"
+      },
+      {
+        "name": "whisper-base/tokenizer.json",
+        "bytes": 2203239,
+        "sha256": "fb7b63191e9bb045082c79fd742a3106a12c99513ab30df4a0d47fa6cb6fd0ab",
+        "pinnedUrl": "https://huggingface.co/Systran/faster-whisper-base/resolve/ebe41f70d5b6dfa9166e2c581c45c9c0cfc57b66/tokenizer.json"
+      },
+      {
+        "name": "whisper-base/vocabulary.txt",
+        "bytes": 459861,
+        "sha256": "34ce3fe1c5041027b3f8d42912270993f986dbc4bb34cf27f951e34a1e453913",
+        "pinnedUrl": "https://huggingface.co/Systran/faster-whisper-base/resolve/ebe41f70d5b6dfa9166e2c581c45c9c0cfc57b66/vocabulary.txt"
+      },
+      {
+        "name": "en_US-ljspeech-medium.onnx",
+        "bytes": 63531379,
+        "sha256": "6f52a751e2349abe7a76735eb09dc1875298c77ea2342ffd2fef79ff81b87f22",
+        "pinnedUrl": "https://huggingface.co/rhasspy/piper-voices/resolve/bae641dcb5a608cff81ccaf7ff018baaca1a33e1/en/en_US/ljspeech/medium/en_US-ljspeech-medium.onnx",
+        "originalPiperFileCommit": "bae641dcb5a608cff81ccaf7ff018baaca1a33e1",
+        "publicOriginalLfsShaVerified": true
+      },
+      {
+        "name": "en_US-ljspeech-medium.onnx.json",
+        "bytes": 4972,
+        "sha256": "141d612cc0a95ed7efc1ca936b845c2364967f2e9217c5dbfcf69fc4d6c65860",
+        "pinnedUrl": "https://huggingface.co/rhasspy/piper-voices/resolve/bae641dcb5a608cff81ccaf7ff018baaca1a33e1/en/en_US/ljspeech/medium/en_US-ljspeech-medium.onnx.json",
+        "originalPiperFileCommit": "bae641dcb5a608cff81ccaf7ff018baaca1a33e1",
+        "publicOriginalLfsShaVerified": false
+      },
+      {
+        "name": "runtime/llama_cpp_python-0.3.19.tar.gz",
+        "bytes": 59043951,
+        "sha256": "6816e4a0a74ae9a356e7a0546e13147543f01f695c86a28d940e4b86519acf13",
+        "pinnedUrl": "https://files.pythonhosted.org/packages/d7/0f/b26ceec20294f5d592ac137ccc2f10e91fa1f35bb8555906b5718a625ac1/llama_cpp_python-0.3.19.tar.gz",
+        "publicPackageVersion": "0.3.19"
+      }
+    ]
+  },
+  "scriptSha256": "64bb181e5d655e236b817a134577063971a792e240fc622e344aecebb9d31060",
+  "preservedFailure": "/home/developer/projects/aurora/thesis/phone-notebook/20261020/deployment/ebde3a8acf6315f920d03593845f17a1fc65a733/direct-public-all-20261022T004809",
+  "thermalPolicy": "Actual k10temp92Cpreexisting; file-only95C/OScriticalminus20,2affinity,nice10,1MiBps;build/pilot85C unchanged"
+}

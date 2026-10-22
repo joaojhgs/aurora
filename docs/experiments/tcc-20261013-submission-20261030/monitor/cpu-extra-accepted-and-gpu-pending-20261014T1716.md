@@ -1,0 +1,17 @@
+# Extra CPU cohort accepted; primary GPU/full matrix pending
+
+Root `msg_f693353d5bee` fully read and delivery `delivery_f0cf2b18328c` acknowledged. Whole existing Sol review fully read: **APPROVE**, SHA256 `1aabfab6bc7f7d4e753818f666508abf5c615c1ad72a7b9e85cc663772955ec5`. Frozen campaign `6ce98ae97d594d9fafcd1ff9ad4b9b1c` finishednaturally17:01:15Z, **945raw=900correct measured+45excluded warmups**,300perroute/3sessions. Source/driver/protected inputs preserved; final09 andwholeexport/hash/arithmetic independentlyaccepted. This closes only the owner's EXTRAloaded-host same-host typed CPU control. Do not extend/replace it or pool withGPU; newconditions require900MEASUREDindependently.
+
+| CPU control route | n_success/n_measured | p90ms | p95ms |
+|---|---:|---:|---:|
+| Local Python |300/300|35437.982592|37635.40468775|
+| HTTP same-host |300/300|35711.055822300004|37399.58333755|
+| P2P same-host typed control |300/300|40876.1|42178.65000000001|
+
+Type7 successes-only quantiles; warmups excluded, actualfailuredenominators retained. Three observedsessionclusters aredescriptive, notconfidenceintervals/causal effects. Meshpreflightreadiness isoutside replyinterval; no pureprotocol-overhead claim withoutmatched compute spans, no stable-tail/p99 claim. Allslow/raw rows andcleanup/failedpack loadcontexts retained. OSwrapperexitunknown/retiredouter143separate; internalSupervisor/containerscleanupunknown. AncillaryRuffF401unusedimport inapprovedexporter remainsrecorded, withno all-checks-passclaim orfix/revalidationloop.
+
+Actual rawsealedexport `docs/experiments/tcc-20261013-submission-20261030/root/matched-main-campaign-6ce98ae97d594d9fafcd1ff9ad4b9b1c`, manifestSHA256 `4058af37439c0a51ae39b99faf70fbeae277dec666e7ffc2efbe43d30ea60530`. Complete methodology/results `docs/experiments/tcc-20261013-submission-20261030/root/matched-main-analysis-6ce98ae97d594d9fafcd1ff9ad4b9b1c/analysis.md`, SHA256 `8b8e00082841fbbe1de72ed8a1666b0aeb9d619ec19374abe417937503c7f68c`; structuredanalysis `docs/experiments/tcc-20261013-submission-20261030/root/matched-main-analysis-6ce98ae97d594d9fafcd1ff9ad4b9b1c/analysis.json`, SHA256 `0c119998fe9c07a96dfb4d9780a769aad48c2ae8acae354ac516684431e1e360`; review/receipt adjacent. Monitor readtheseexistingartifacts anddidnot rerun exporter/analyzer/review/tests.
+
+Desktop frozen appdependencies installedexit0 at17:01:55.380446Z in8.2728seconds, numpyaligned2.2.6, withowned1.63GB/RAM20.59GBavailable/tmp13.85GBfree. ExactRX7600selection, compiledbackend, model and21frozen-source receiver areverified. Actualmodellayeroffload/processcounters, boundedfunctionalpilot/recorderfollowing actualAssistant provider, allapplicable fullstages, physicalreservation andprimary900perNEWcondition measurement/terminalseal remainpending. Missingfieldsunknown, notzero. ExistingLuna privatepreparation/essentialfixes underRoot; no newworker/sourcewriter/testmatrix bymonitor.
+
+**CPUfinishedsealedreviewed=true, GPUfinishedsealed=false: strictdual barrierFALSE. No measuredcross-device/cross-surface phase2traffic.** Later declared local+mesh provider contention remains required afterbarrier. Fullnon-iOS native/desktop/browser/mobile and realdevice cumulativeTTS→TTS+LLM→TTS+LLM+STT remain mandatory. Aggregate andnative monitorACTIVE; no early worker_done/completion. Originalauthoritative planb7efb40b… remainsunchanged; thisisa datedcurrentcoverage/result artifact, preserving earlierbarrier snapshots.

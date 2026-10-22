@@ -1,0 +1,294 @@
+{
+  "diskAfter": {
+    "free": 4500504576,
+    "total": 109128826880,
+    "used": 104611545088
+  },
+  "diskBefore": {
+    "free": 4500811776,
+    "total": 109128826880,
+    "used": 104611237888
+  },
+  "errors": [],
+  "expectedConditionSha256": "a653d60065616e34844d956d1ed47038aa94f3ff876c36bf3a98e904ca838641",
+  "finishedAt": "2026-10-20T16:04:03.556899+00:00",
+  "newFiles": [
+    {
+      "bytes": 31276,
+      "copiedAt": "2026-10-20T16:04:03.380762+00:00",
+      "destination": "thesis/campaigns/worker-desktop-k2-p2p-assistant-tts-v1826/audio/d71f0fbeed069cb78eaf8a6890777a082d5200e2531fc16a09c7bafb51f883d4.wav",
+      "sha256": "d71f0fbeed069cb78eaf8a6890777a082d5200e2531fc16a09c7bafb51f883d4",
+      "source": "/home/developer/projects/aurora/.git/aurora-handoff-import-20261006/distributed-k2-mesh-cell-v1826/campaign/audio/d71f0fbeed069cb78eaf8a6890777a082d5200e2531fc16a09c7bafb51f883d4.wav",
+      "wav": {
+        "channels": 1,
+        "frames": 15616,
+        "sampleRate": 22050,
+        "sampleWidth": 2
+      }
+    },
+    {
+      "bytes": 6125,
+      "copiedAt": "2026-10-20T16:04:03.387107+00:00",
+      "destination": "thesis/campaigns/worker-desktop-k2-p2p-assistant-tts-v1826/attempts/attempt-0007-warmup.jsonl",
+      "sha256": "2a8a1031b5bdbf693165f46bdca658410b634606795128a77f68373b7bc79f54",
+      "source": "/home/developer/projects/aurora/.git/aurora-handoff-import-20261006/distributed-k2-mesh-cell-v1826/campaign/attempts/attempt-0007-warmup.jsonl"
+    },
+    {
+      "bytes": 31276,
+      "copiedAt": "2026-10-20T16:04:03.397753+00:00",
+      "destination": "thesis/campaigns/worker-desktop-k2-p2p-assistant-tts-v1826/audio/8c8b7c2d540a839e2ba0e7d5626cd66dc8b29e29b0c4dd14dad41ad888e3a3e7.wav",
+      "sha256": "8c8b7c2d540a839e2ba0e7d5626cd66dc8b29e29b0c4dd14dad41ad888e3a3e7",
+      "source": "/home/developer/projects/aurora/.git/aurora-handoff-import-20261006/distributed-k2-mesh-cell-v1826/campaign/audio/8c8b7c2d540a839e2ba0e7d5626cd66dc8b29e29b0c4dd14dad41ad888e3a3e7.wav",
+      "wav": {
+        "channels": 1,
+        "frames": 15616,
+        "sampleRate": 22050,
+        "sampleWidth": 2
+      }
+    },
+    {
+      "bytes": 6123,
+      "copiedAt": "2026-10-20T16:04:03.408630+00:00",
+      "destination": "thesis/campaigns/worker-desktop-k2-p2p-assistant-tts-v1826/attempts/attempt-0008-warmup.jsonl",
+      "sha256": "dd4105c966a4ea68ce7d7fc5b6cfab0bcd08a4d675de231ddb50added9a3237c",
+      "source": "/home/developer/projects/aurora/.git/aurora-handoff-import-20261006/distributed-k2-mesh-cell-v1826/campaign/attempts/attempt-0008-warmup.jsonl"
+    },
+    {
+      "bytes": 31276,
+      "copiedAt": "2026-10-20T16:04:03.423662+00:00",
+      "destination": "thesis/campaigns/worker-desktop-k2-p2p-assistant-tts-v1826/audio/c1644d49a087ee0f8e248235ae066401aaf5becedde7d9e57c800232f9728e71.wav",
+      "sha256": "c1644d49a087ee0f8e248235ae066401aaf5becedde7d9e57c800232f9728e71",
+      "source": "/home/developer/projects/aurora/.git/aurora-handoff-import-20261006/distributed-k2-mesh-cell-v1826/campaign/audio/c1644d49a087ee0f8e248235ae066401aaf5becedde7d9e57c800232f9728e71.wav",
+      "wav": {
+        "channels": 1,
+        "frames": 15616,
+        "sampleRate": 22050,
+        "sampleWidth": 2
+      }
+    },
+    {
+      "bytes": 6126,
+      "copiedAt": "2026-10-20T16:04:03.438642+00:00",
+      "destination": "thesis/campaigns/worker-desktop-k2-p2p-assistant-tts-v1826/attempts/attempt-0009-warmup.jsonl",
+      "sha256": "3e0809e83005510198f46871f98c7483fdd7256acd95421f397b069d2ce6ce08",
+      "source": "/home/developer/projects/aurora/.git/aurora-handoff-import-20261006/distributed-k2-mesh-cell-v1826/campaign/attempts/attempt-0009-warmup.jsonl"
+    },
+    {
+      "bytes": 31276,
+      "copiedAt": "2026-10-20T16:04:03.448803+00:00",
+      "destination": "thesis/campaigns/worker-desktop-k2-p2p-assistant-tts-v1826/audio/377a5b851f7ab1d5d1626b0fc5877e8f75810377ae2f32add97867381f5dfdf3.wav",
+      "sha256": "377a5b851f7ab1d5d1626b0fc5877e8f75810377ae2f32add97867381f5dfdf3",
+      "source": "/home/developer/projects/aurora/.git/aurora-handoff-import-20261006/distributed-k2-mesh-cell-v1826/campaign/audio/377a5b851f7ab1d5d1626b0fc5877e8f75810377ae2f32add97867381f5dfdf3.wav",
+      "wav": {
+        "channels": 1,
+        "frames": 15616,
+        "sampleRate": 22050,
+        "sampleWidth": 2
+      }
+    },
+    {
+      "bytes": 6126,
+      "copiedAt": "2026-10-20T16:04:03.462854+00:00",
+      "destination": "thesis/campaigns/worker-desktop-k2-p2p-assistant-tts-v1826/attempts/attempt-0010-warmup.jsonl",
+      "sha256": "7391581cee349c91798b79d791b75404726b40953fd9e200baef546f5bf16f3a",
+      "source": "/home/developer/projects/aurora/.git/aurora-handoff-import-20261006/distributed-k2-mesh-cell-v1826/campaign/attempts/attempt-0010-warmup.jsonl"
+    },
+    {
+      "bytes": 269,
+      "copiedAt": "2026-10-20T16:04:03.476805+00:00",
+      "destination": "thesis/campaigns/worker-desktop-k2-p2p-assistant-tts-v1826/snapshots/progress.json/520dedbbfdbab9729e91fcefd932a585d033a00d3c4e92509361fd4fbfc89a48.json",
+      "sha256": "520dedbbfdbab9729e91fcefd932a585d033a00d3c4e92509361fd4fbfc89a48",
+      "source": "/home/developer/projects/aurora/.git/aurora-handoff-import-20261006/distributed-k2-mesh-cell-v1826/campaign/progress.json"
+    },
+    {
+      "bytes": 326,
+      "copiedAt": "2026-10-20T16:04:03.494827+00:00",
+      "destination": "thesis/campaigns/worker-desktop-k2-p2p-assistant-tts-v1826/snapshots/mesh-route-sink-status.json/43c5984b38fb9ad737854389394f33c6c09f397edcb361dcecf44f0362a3ab6a.json",
+      "sha256": "43c5984b38fb9ad737854389394f33c6c09f397edcb361dcecf44f0362a3ab6a",
+      "source": "/home/developer/projects/aurora/.git/aurora-handoff-import-20261006/distributed-k2-mesh-cell-v1826/mesh-route-sink-status.json"
+    },
+    {
+      "bytes": 27196,
+      "copiedAt": "2026-10-20T16:04:03.508666+00:00",
+      "credentialsRedacted": 0,
+      "destination": "thesis/campaigns/worker-desktop-k2-p2p-assistant-tts-v1826/prefixes/voice-stages.jsonl/000000044195-000000071391.chunk",
+      "endByte": 71391,
+      "incomplete": true,
+      "sha256": "4440f8219526e03cf69690b024e97a1b1dcc27a58ff0cc37b126ca1c5b912e0c",
+      "source": "/home/developer/projects/aurora/.git/aurora-handoff-import-20261006/distributed-k2-mesh-cell-v1826/voice-stages.jsonl",
+      "sourceInode": 2913472,
+      "sourceObservedBytes": 71391,
+      "sourceRawSha256": "4440f8219526e03cf69690b024e97a1b1dcc27a58ff0cc37b126ca1c5b912e0c",
+      "startByte": 44195
+    },
+    {
+      "bytes": 77460,
+      "copiedAt": "2026-10-20T16:04:03.522698+00:00",
+      "credentialsRedacted": 0,
+      "destination": "thesis/campaigns/worker-desktop-k2-p2p-assistant-tts-v1826/prefixes/resources.jsonl/000000180557-000000258017.chunk",
+      "endByte": 258017,
+      "incomplete": true,
+      "sha256": "4b2752378672dfe623269a55886b83d49d77bc0c20ef02a8c82a81d2912b4f75",
+      "source": "/home/developer/projects/aurora/.git/aurora-handoff-import-20261006/distributed-k2-mesh-cell-v1826/resources.jsonl",
+      "sourceInode": 2913467,
+      "sourceObservedBytes": 258017,
+      "sourceRawSha256": "4b2752378672dfe623269a55886b83d49d77bc0c20ef02a8c82a81d2912b4f75",
+      "startByte": 180557
+    },
+    {
+      "bytes": 5432,
+      "copiedAt": "2026-10-20T16:04:03.531670+00:00",
+      "credentialsRedacted": 0,
+      "destination": "thesis/campaigns/worker-desktop-k2-p2p-assistant-tts-v1826/prefixes/requester-mesh-calls.jsonl/000000008148-000000013580.chunk",
+      "endByte": 13580,
+      "incomplete": true,
+      "sha256": "c820637025f59acd452adbb23a71268a9c4217e2e9375dd70f3c1174d2f82bcf",
+      "source": "/home/developer/projects/aurora/.git/aurora-handoff-import-20261006/distributed-k2-mesh-cell-v1826/requester-mesh-calls.jsonl",
+      "sourceInode": 2913523,
+      "sourceObservedBytes": 13580,
+      "sourceRawSha256": "c820637025f59acd452adbb23a71268a9c4217e2e9375dd70f3c1174d2f82bcf",
+      "startByte": 8148
+    },
+    {
+      "bytes": 13192,
+      "copiedAt": "2026-10-20T16:04:03.543682+00:00",
+      "credentialsRedacted": 0,
+      "destination": "thesis/campaigns/worker-desktop-k2-p2p-assistant-tts-v1826/prefixes/mesh-route-observations.jsonl/000000019788-000000032980.chunk",
+      "endByte": 32980,
+      "incomplete": true,
+      "sha256": "a9d18bdd059ddd5fcf5e08bcb239fb851a30a33a1ae560805bd943ce0b30f055",
+      "source": "/home/developer/projects/aurora/.git/aurora-handoff-import-20261006/distributed-k2-mesh-cell-v1826/mesh-route-observations.jsonl",
+      "sourceInode": 2913470,
+      "sourceObservedBytes": 32980,
+      "sourceRawSha256": "a9d18bdd059ddd5fcf5e08bcb239fb851a30a33a1ae560805bd943ce0b30f055",
+      "startByte": 19788
+    },
+    {
+      "bytes": 1135,
+      "copiedAt": "2026-10-20T16:04:03.556720+00:00",
+      "credentialsRedacted": 0,
+      "destination": "thesis/campaigns/worker-desktop-k2-p2p-assistant-tts-v1826/prefixes/backend.private.log/000000048136-000000049271.chunk",
+      "endByte": 49271,
+      "incomplete": true,
+      "sha256": "ae049814ae406426515bd60dc87cb8eb72e735b7d9b5591ed24175e2cd5887ff",
+      "source": "/home/developer/projects/aurora/.git/aurora-handoff-import-20261006/distributed-k2-mesh-cell-v1826/backend.private.log",
+      "sourceInode": 2913466,
+      "sourceObservedBytes": 49271,
+      "sourceRawSha256": "ae049814ae406426515bd60dc87cb8eb72e735b7d9b5591ed24175e2cd5887ff",
+      "startByte": 48136
+    }
+  ],
+  "pendingStatic": [
+    "/home/developer/projects/aurora/.git/aurora-handoff-import-20261006/distributed-k2-mesh-launch-v1826/warmup-finalizer-result.json",
+    "/home/developer/projects/aurora/.git/aurora-handoff-import-20261006/distributed-k2-mesh-cell-v1826/campaign/remote-warmup-proof.json",
+    "/home/developer/projects/aurora/.git/aurora-handoff-import-20261006/distributed-k2-mesh-launch-v1826/operator-launch.json",
+    "/home/developer/projects/aurora/.git/aurora-handoff-import-20261006/distributed-k2-mesh-launch-v1826/requesterCopier-launch.json",
+    "/home/developer/projects/aurora/.git/aurora-handoff-import-20261006/distributed-k2-mesh-launch-v1826/warmupFinalizer-launch.json",
+    "/home/developer/projects/aurora/.git/aurora-handoff-import-20261006/distributed-k2-mesh-launch-v1826/proof-collection-request.json",
+    "/home/developer/projects/aurora/.git/aurora-handoff-import-20261006/distributed-k2-mesh-cell-v1826/voice-stages.status.json"
+  ],
+  "physicalPayloadBytes": 1436747,
+  "possibleConfound": "Concurrent custody reads/writes; keep all affected measurements.",
+  "prefixes": {
+    "actual-provider-bindings.jsonl": {
+      "chunks": [
+        "thesis/campaigns/worker-desktop-k2-p2p-assistant-tts-v1826/prefixes/actual-provider-bindings.jsonl/000000000000-000000000847.chunk"
+      ],
+      "endByte": 847,
+      "incomplete": true,
+      "inode": 2913478,
+      "observedAt": "2026-10-20T16:04:03.508769+00:00",
+      "sourceObservedBytes": 847
+    },
+    "backend.private.log": {
+      "chunks": [
+        "thesis/campaigns/worker-desktop-k2-p2p-assistant-tts-v1826/prefixes/backend.private.log/000000000000-000000036524.chunk",
+        "thesis/campaigns/worker-desktop-k2-p2p-assistant-tts-v1826/prefixes/backend.private.log/000000036524-000000047567.chunk",
+        "thesis/campaigns/worker-desktop-k2-p2p-assistant-tts-v1826/prefixes/backend.private.log/000000047567-000000048136.chunk",
+        "thesis/campaigns/worker-desktop-k2-p2p-assistant-tts-v1826/prefixes/backend.private.log/000000048136-000000049271.chunk"
+      ],
+      "endByte": 49271,
+      "incomplete": true,
+      "inode": 2913466,
+      "observedAt": "2026-10-20T16:04:03.556741+00:00",
+      "sourceObservedBytes": 49271
+    },
+    "controller.private.log": {
+      "chunks": [],
+      "endByte": 0,
+      "incomplete": true,
+      "inode": 1928587,
+      "observedAt": "2026-10-20T16:04:03.556802+00:00",
+      "sourceObservedBytes": 0
+    },
+    "mesh-route-observations.jsonl": {
+      "chunks": [
+        "thesis/campaigns/worker-desktop-k2-p2p-assistant-tts-v1826/prefixes/mesh-route-observations.jsonl/000000000000-000000006596.chunk",
+        "thesis/campaigns/worker-desktop-k2-p2p-assistant-tts-v1826/prefixes/mesh-route-observations.jsonl/000000006596-000000019788.chunk",
+        "thesis/campaigns/worker-desktop-k2-p2p-assistant-tts-v1826/prefixes/mesh-route-observations.jsonl/000000019788-000000032980.chunk"
+      ],
+      "endByte": 32980,
+      "incomplete": true,
+      "inode": 2913470,
+      "observedAt": "2026-10-20T16:04:03.543704+00:00",
+      "sourceObservedBytes": 32980
+    },
+    "requester-mesh-calls.jsonl": {
+      "chunks": [
+        "thesis/campaigns/worker-desktop-k2-p2p-assistant-tts-v1826/prefixes/requester-mesh-calls.jsonl/000000000000-000000003037.chunk",
+        "thesis/campaigns/worker-desktop-k2-p2p-assistant-tts-v1826/prefixes/requester-mesh-calls.jsonl/000000003037-000000008148.chunk",
+        "thesis/campaigns/worker-desktop-k2-p2p-assistant-tts-v1826/prefixes/requester-mesh-calls.jsonl/000000008148-000000013580.chunk"
+      ],
+      "endByte": 13580,
+      "incomplete": true,
+      "inode": 2913523,
+      "observedAt": "2026-10-20T16:04:03.531687+00:00",
+      "sourceObservedBytes": 13580
+    },
+    "resources.jsonl": {
+      "chunks": [
+        "thesis/campaigns/worker-desktop-k2-p2p-assistant-tts-v1826/prefixes/resources.jsonl/000000000000-000000025696.chunk",
+        "thesis/campaigns/worker-desktop-k2-p2p-assistant-tts-v1826/prefixes/resources.jsonl/000000025696-000000103097.chunk",
+        "thesis/campaigns/worker-desktop-k2-p2p-assistant-tts-v1826/prefixes/resources.jsonl/000000103097-000000180557.chunk",
+        "thesis/campaigns/worker-desktop-k2-p2p-assistant-tts-v1826/prefixes/resources.jsonl/000000180557-000000258017.chunk"
+      ],
+      "endByte": 258017,
+      "incomplete": true,
+      "inode": 2913467,
+      "observedAt": "2026-10-20T16:04:03.522720+00:00",
+      "sourceObservedBytes": 258017
+    },
+    "voice-stages.jsonl": {
+      "chunks": [
+        "thesis/campaigns/worker-desktop-k2-p2p-assistant-tts-v1826/prefixes/voice-stages.jsonl/000000000000-000000020397.chunk",
+        "thesis/campaigns/worker-desktop-k2-p2p-assistant-tts-v1826/prefixes/voice-stages.jsonl/000000020397-000000044195.chunk",
+        "thesis/campaigns/worker-desktop-k2-p2p-assistant-tts-v1826/prefixes/voice-stages.jsonl/000000044195-000000071391.chunk"
+      ],
+      "endByte": 71391,
+      "incomplete": true,
+      "inode": 2913472,
+      "observedAt": "2026-10-20T16:04:03.508689+00:00",
+      "sourceObservedBytes": 71391
+    }
+  },
+  "previousReceipt": "thesis/campaigns/worker-desktop-k2-p2p-assistant-tts-v1826/receipts/000003.json",
+  "progressObservation": {
+    "attempted": 10,
+    "last_attempt_file": "attempts/attempt-0010-warmup.jsonl",
+    "last_attempt_status": "completed_correct",
+    "measured_attempted": 0,
+    "planned_measured": 900,
+    "planned_warmups": 15,
+    "status": "running",
+    "unattempted_measured": 900,
+    "warmups_attempted": 10
+  },
+  "providerCoverage": "Separate P2P Assistant+TTS provider custody; actual per-host prefix coverage must be joined explicitly.",
+  "reservedFreeBytes": 2147483648,
+  "retainedAudioBlobs": 10,
+  "retainedCases": 10,
+  "schema": "aurora.physical-custody-checkpoint.v1",
+  "sequence": 4,
+  "startedAt": "2026-10-20T16:04:03.336680+00:00",
+  "sutCalls": 0
+}

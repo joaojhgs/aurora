@@ -1,0 +1,131 @@
+{
+  "at": "2026-10-15T17:52:58.524572+00:00",
+  "casePreserved": true,
+  "custodyFiles": [
+    {
+      "byteExact": true,
+      "bytes": 155436,
+      "path": "docs/experiments/tcc-20261013-submission-20261030/root/ui-full-audio-readiness-v675/raw-personal/pilot-manifest.json",
+      "sha256": "35d56a4e833d8d385b0a20252c45b983a8d03bfbe8cbafcefa854e8b5f4b226f",
+      "source": ".git/aurora-handoff-import-20261006/product-voice-runtime-v675/pilot-manifest.json"
+    },
+    {
+      "byteExact": true,
+      "bytes": 1625,
+      "path": "docs/experiments/tcc-20261013-submission-20261030/root/ui-full-audio-readiness-v675/raw-personal/terminal.json",
+      "sha256": "d4efe15c7007e1c7342dc8f014862a8e051f29f058ab918266b6db2c056e46d8",
+      "source": ".git/aurora-handoff-import-20261006/product-voice-runtime-v675/terminal.json"
+    },
+    {
+      "byteExact": true,
+      "bytes": 757,
+      "path": "docs/experiments/tcc-20261013-submission-20261030/root/ui-full-audio-readiness-v675/raw-personal/retirement.json",
+      "sha256": "f42f356c184e765d51f9062ca2939d05f4d38bbc31562e88c37cb23e5f8e61f1",
+      "source": ".git/aurora-handoff-import-20261006/product-voice-runtime-v675/retirement.json"
+    },
+    {
+      "byteExact": true,
+      "bytes": 5292,
+      "path": "docs/experiments/tcc-20261013-submission-20261030/root/ui-full-audio-readiness-v675/raw-personal/resources.jsonl",
+      "sha256": "0edceb8b7c22672a46f4eba1109882c6b5a31df92605a58778bb6fd3a02b6c68",
+      "source": ".git/aurora-handoff-import-20261006/product-voice-runtime-v675/resources.jsonl"
+    },
+    {
+      "byteExact": true,
+      "bytes": 18651,
+      "path": "docs/experiments/tcc-20261013-submission-20261030/root/ui-full-audio-readiness-v675/raw-personal/runtime/voice-stages.jsonl",
+      "sha256": "d32879097ebe3645f5f928a32901d19744ec0bafd340787e260d43c8eeeb3feb",
+      "source": ".git/aurora-handoff-import-20261006/product-voice-runtime-v675/runtime/voice-stages.jsonl"
+    },
+    {
+      "byteExact": true,
+      "bytes": 177,
+      "path": "docs/experiments/tcc-20261013-submission-20261030/root/ui-full-audio-readiness-v675/raw-personal/runtime/runtime-versions.json",
+      "sha256": "e3ea9bcf8c8fc8544b290dd0ed4e63a6633e2e9644102001a2d0004a14ad2917",
+      "source": ".git/aurora-handoff-import-20261006/product-voice-runtime-v675/runtime/runtime-versions.json"
+    },
+    {
+      "byteExact": true,
+      "bytes": 2549,
+      "path": "docs/experiments/tcc-20261013-submission-20261030/root/ui-full-audio-readiness-v675/raw-personal/runtime/actual-provider-bindings.jsonl",
+      "sha256": "aeca9007000c39830379fac4d6189b630a3508b5941c273d03d2f7dcd466c449",
+      "source": ".git/aurora-handoff-import-20261006/product-voice-runtime-v675/runtime/actual-provider-bindings.jsonl"
+    },
+    {
+      "byteExact": true,
+      "bytes": 344,
+      "path": "docs/experiments/tcc-20261013-submission-20261030/root/ui-full-audio-readiness-v675/raw-personal/runtime/source-guard.json",
+      "sha256": "e2642122241ad2e788a34f3cbac06e3492f5762c3a89faec05f55f5e200f0780",
+      "source": ".git/aurora-handoff-import-20261006/product-voice-runtime-v675/runtime/source-guard.json"
+    },
+    {
+      "byteExact": true,
+      "bytes": 6001,
+      "path": "docs/experiments/tcc-20261013-submission-20261030/root/ui-full-audio-readiness-v675/raw-personal/ui-case/voice-flow.json",
+      "sha256": "096d142e087227f4c99762466b4e6a7e2c780e94455534ce11cedfa415bc1de0",
+      "source": ".git/aurora-handoff-import-20261006/product-voice-runtime-v675/ui-case/voice-flow.json"
+    },
+    {
+      "byteExact": true,
+      "bytes": 13372,
+      "path": "docs/experiments/tcc-20261013-submission-20261030/root/ui-full-audio-readiness-v675/raw-personal/ui-case/voice-flow-checkpoints.jsonl",
+      "sha256": "7ed7df0b4353065e8f74bc8fdd18f16c7845cba1847c9426a1907e8cbbcba8f0",
+      "source": ".git/aurora-handoff-import-20261006/product-voice-runtime-v675/ui-case/voice-flow-checkpoints.jsonl"
+    },
+    {
+      "byteExact": true,
+      "bytes": 191360,
+      "path": "docs/experiments/tcc-20261013-submission-20261030/root/ui-full-audio-readiness-v675/raw-personal/ui-case/transcription-input.pcm",
+      "sha256": "73ae5df883f48c6589f3cf0cc6bf7fbd1f0af9aae8bbf7d29a498710727c45ed",
+      "source": ".git/aurora-handoff-import-20261006/product-voice-runtime-v675/ui-case/transcription-input.pcm"
+    },
+    {
+      "byteExact": true,
+      "bytes": 31788,
+      "path": "docs/experiments/tcc-20261013-submission-20261030/root/ui-full-audio-readiness-v675/raw-personal/ui-case/read-aloud.wav",
+      "sha256": "2a84df0b3e9a7d0c463789c9d2b082a46a1f6734c89f017c2065fe82b043ce5d",
+      "source": ".git/aurora-handoff-import-20261006/product-voice-runtime-v675/ui-case/read-aloud.wav"
+    },
+    {
+      "byteExact": true,
+      "bytes": 219794,
+      "path": "docs/experiments/tcc-20261013-submission-20261030/root/ui-full-audio-readiness-v675/raw-personal/candidate-input.wav",
+      "sha256": "da0ecc4ad0885746ab6e716585473917ab2b543a505bf0db09ebacfaa7943cbb",
+      "source": ".git/aurora-handoff-import-20261006/product-voice-runtime-v675/candidate-input.wav"
+    },
+    {
+      "bytes": 103590,
+      "credentialRedacted": true,
+      "path": "docs/experiments/tcc-20261013-submission-20261030/root/ui-full-audio-readiness-v675/raw-personal/backend.private.log.redacted",
+      "sha256": "b376ab8b220847a231e3c45ec704a4705822fd1cf0591ec13641980175cb9482",
+      "source": ".git/aurora-handoff-import-20261006/product-voice-runtime-v675/backend.private.log",
+      "sourceSHA256": "b376ab8b220847a231e3c45ec704a4705822fd1cf0591ec13641980175cb9482"
+    },
+    {
+      "bytes": 34,
+      "credentialRedacted": true,
+      "path": "docs/experiments/tcc-20261013-submission-20261030/root/ui-full-audio-readiness-v675/raw-personal/driver.private.log.redacted",
+      "sha256": "1fff0610fbd57faa834be6c652a73ee0e7ca5fbae78ba3b26467fc566570adb3",
+      "source": ".git/aurora-handoff-import-20261006/product-voice-runtime-v675/driver.private.log",
+      "sourceSHA256": "1fff0610fbd57faa834be6c652a73ee0e7ca5fbae78ba3b26467fc566570adb3"
+    },
+    {
+      "bytes": 0,
+      "credentialRedacted": true,
+      "path": "docs/experiments/tcc-20261013-submission-20261030/root/ui-full-audio-readiness-v675/raw-personal/controller.private.log.redacted",
+      "sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+      "source": ".git/aurora-handoff-import-20261006/product-voice-runtime-v675/controller.private.log",
+      "sourceSHA256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+    },
+    {
+      "bytes": 704,
+      "credentialRedacted": true,
+      "path": "docs/experiments/tcc-20261013-submission-20261030/root/ui-full-audio-readiness-v675/raw-personal/web.private.log.redacted",
+      "sha256": "7503d0e9b49517b06b59e4d1e7fd704d2e0a3ec6bf13ef273db795ef8c0b4dc7",
+      "source": ".git/aurora-handoff-import-20261006/product-voice-runtime-v675/web.private.log",
+      "sourceSHA256": "7503d0e9b49517b06b59e4d1e7fd704d2e0a3ec6bf13ef273db795ef8c0b4dc7"
+    }
+  ],
+  "host": "personal.skyron-server",
+  "noInferenceOrRerun": true
+}

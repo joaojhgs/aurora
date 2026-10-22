@@ -1,0 +1,27 @@
+{
+  "pid": 1305953,
+  "process_group": 1305953,
+  "start_ticks": 74126867,
+  "root_thread": "01a112a5-d6bb-74e2-bf7c-ace73cb513b5",
+  "objective": "tcc:20261013:submission-20261030",
+  "runner_sha256": "c372126ca09f5f0f184f59fc7e2874f7f009125b210b1cc7ba4b96ce9141658f",
+  "started_at": "2026-10-14T07:26:48.079900+00:00",
+  "hard_deadline_at": "2026-10-14T23:11:48.079900+00:00",
+  "outer_kill_after_seconds": 10,
+  "global_lock": "/tmp/aurora-global-build.lock",
+  "planned_cells": 9,
+  "planned_measured_total": 900,
+  "excluded_warmups_total": 45,
+  "argv": [
+    "timeout",
+    "--signal=INT",
+    "--kill-after=10s",
+    "56700s",
+    "/home/developer/projects/aurora/.venv/bin/python",
+    "-u",
+    "/home/developer/projects/aurora/.git/aurora-handoff-import-20261006/matched-main-runner-v317/campaign.py"
+  ],
+  "exec_session_id": 33217,
+  "private_campaign_output": "/home/developer/projects/aurora/.git/aurora-handoff-import-20261006/matched-main-campaign-v317-6ce98ae97d594d9fafcd1ff9ad4b9b1c",
+  "campaign_id": "6ce98ae97d594d9fafcd1ff9ad4b9b1c"
+}

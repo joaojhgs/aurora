@@ -1,0 +1,130 @@
+--- thesis/harness/custody_k1_mesh_requester_v1719.py
++++ thesis/harness/custody_k1_mesh_requester_v1779.py
+@@ -17,10 +17,10 @@
+ 
+ ROOT = Path(__file__).resolve().parents[2]
+ IMPORT = ROOT / ".git/aurora-handoff-import-20261006"
+-CELL = IMPORT / "distributed-k1-mesh-cell-v1719"
+-OP = IMPORT / "distributed-k1-mesh-launch-v1719"
+-STAGE = IMPORT / "distributed-k1-mesh-requester-v1719"
+-DEST = ROOT / "thesis/campaigns/worker-desktop-k1-p2p-tts-remaining880-v1719"
++CELL = IMPORT / "distributed-k1-mesh-cell-v1779"
++OP = IMPORT / "distributed-k1-mesh-launch-v1779"
++STAGE = IMPORT / "distributed-k1-mesh-requester-v1779"
++DEST = ROOT / "thesis/campaigns/worker-desktop-k1-p2p-tts-remaining191-v1779"
+ RESERVE = 2 * 1024**3
+ CHUNK_CAP = 4 * 1024**2
+ 
+@@ -77,7 +77,7 @@
+ 
+ 
+ def checkpoint(expected_condition_sha256):
+-    condition_path = OP / "condition-frozen-v1719.json"
++    condition_path = OP / "condition-frozen-v1779.json"
+     if not re.fullmatch(r"[0-9a-f]{64}", expected_condition_sha256):
+         raise ValueError("Root must provide the actual newly frozen K3 manifest SHA256")
+     if digest(condition_path.read_bytes()) != expected_condition_sha256:
+@@ -121,7 +121,7 @@
+         additions.append(record)
+         return record
+ 
+-    static = [(OP / "condition-frozen-v1719.json", "frozen/condition.json"),
++    static = [(OP / "condition-frozen-v1779.json", "frozen/condition.json"),
+               (OP / "warmup-finalizer-result.json", "admission/warmup-finalizer-result.json"),
+               (CELL / "campaign/receiver-warmup-proof.json", "admission/receiver-warmup-proof.json")]
+     for name in ["candidate-input.wav", "candidate-manifest.json", "source-inventory.json",
+@@ -300,13 +300,13 @@
+     parser.add_argument("--follow", action="store_true")
+     parser.add_argument("--condition-sha256", required=True)
+     args = parser.parse_args()
+-    condition_path = OP / "condition-frozen-v1719.json"
++    condition_path = OP / "condition-frozen-v1779.json"
+     if not re.fullmatch(r"[0-9a-f]{64}", args.condition_sha256) or digest(condition_path.read_bytes()) != args.condition_sha256:
+         raise RuntimeError("Future K3 manifest admission required before creating custody output")
+     DEST.mkdir(parents=True, exist_ok=True)
+     lock = (DEST / "copier.lock").open("a")
+     fcntl.flock(lock, fcntl.LOCK_EX | fcntl.LOCK_NB)
+-    end = time.monotonic() + 68600
++    end = time.monotonic() + 15600
+     while True:
+         result = checkpoint(args.condition_sha256)
+         if not args.follow or result["status"] not in {"running", "awaiting_progress"} or time.monotonic() >= end:
+--- thesis/harness/k1_mesh_warmup_finalize_v1719.py
++++ thesis/harness/k1_mesh_warmup_finalize_v1779.py
+@@ -17,11 +17,11 @@
+ 
+ R=Path(__file__).resolve().parents[2]
+ H=R/'.git/aurora-handoff-import-20261006'
+-OP=H/'distributed-k1-mesh-launch-v1719'
+-CELL=H/'distributed-k1-mesh-cell-v1719'
+-STAGE=H/'distributed-k1-mesh-requester-v1719'
+-DEST=R/'thesis/campaigns/worker-desktop-k1-p2p-tts-remaining880-v1719'
+-NAME='k1-mesh-ordinary-warmup-prefix-v1719'
++OP=H/'distributed-k1-mesh-launch-v1779'
++CELL=H/'distributed-k1-mesh-cell-v1779'
++STAGE=H/'distributed-k1-mesh-requester-v1779'
++DEST=R/'thesis/campaigns/worker-desktop-k1-p2p-tts-remaining191-v1779'
++NAME='k1-mesh-ordinary-warmup-prefix-v1779'
+ MARKER='AURORA_K1_NATIVE_WARMUPS_V1711'
+ 
+ 
+@@ -36,7 +36,7 @@
+ def main():
+     os.umask(0o077)
+     launch=json.loads((OP/'requester-launch.json').read_bytes())
+-    manifest_path=OP/'condition-frozen-v1719.json';m=json.loads(manifest_path.read_bytes())
++    manifest_path=OP/'condition-frozen-v1779.json';m=json.loads(manifest_path.read_bytes())
+     end=time.monotonic()+3600
+     while True:
+         assert time.monotonic()<end,'ordinary_warmup_observation_deadline_no_automatic_retry'
+@@ -55,9 +55,9 @@
+         time.sleep(2)
+     durations=sorted(float(r['flow_duration_ms'])for r in rows)
+     h=14*.95;p95=durations[int(h)]+(durations[int(h)+1]-durations[int(h)])*(h-int(h))
+-    forecast=880*p95/1000*1.2+300
++    forecast=191*p95/1000*1.2+300
+     provider_remaining=(datetime.fromisoformat(m['providerDeadlineUtc'])-now()).total_seconds()
+-    requester_remaining=68000-(now()-datetime.fromisoformat(launch['at'])).total_seconds()
++    requester_remaining=15000-(now()-datetime.fromisoformat(launch['at'])).total_seconds()
+     assert forecast<min(provider_remaining,requester_remaining),'fixed_frozen_lifetime_insufficient_no_measured_admission'
+     remote="""from pathlib import Path
+ import json,base64,hashlib,os,socket,datetime,time
+@@ -71,16 +71,24 @@
+  assert int(f[19])==EXPECTED_TICKS and f[0]not in ['Z','X','x']
+  for n in ['voice-stages.jsonl','actual-provider-bindings.jsonl','receiver-identity.json','STATUS.json','controller-launch.json']:
+   p=b/n
++  start=PREFIX_STARTS.get(n) if n.endswith('.jsonl') else None
+   with p.open('rb')as stream:
+-   before=os.fstat(stream.fileno());assert before.st_size<4*1024**2
+-   raw=stream.read(before.st_size)
++   before=os.fstat(stream.fileno())
++   if start is not None:
++    assert before.st_ino==start['inode'] and before.st_size>=start['sourceBytes']
++    prior=stream.read(start['sourceBytes']);assert hashlib.sha256(prior).hexdigest()==start['sha256']
++    assert before.st_size-start['sourceBytes']<=1024**2
++    raw=stream.read(before.st_size-start['sourceBytes']);start_byte=start['sourceBytes']
++   else:
++    assert before.st_size<256*1024;raw=stream.read(before.st_size);start_byte=0
+   if n.endswith('.jsonl'):raw=raw[:raw.rfind(bytes([10]))+1]
+-  j['files'][n]={'bytes':len(raw),'sha256':hashlib.sha256(raw).hexdigest(),'data':base64.b64encode(raw).decode(),'prefix':n.endswith('.jsonl'),'terminalEOF':False}
++  j['files'][n]={'bytes':len(raw),'sha256':hashlib.sha256(raw).hexdigest(),'data':base64.b64encode(raw).decode(),'prefix':n.endswith('.jsonl'),'terminalEOF':False,'sourceStartByte':start_byte,'sourceEndByte':start_byte+len(raw),'priorPrefixBinding':start}
+  j['status']='saved_provider_warmup_prefixes_read_once'
+ except Exception as e:j.update(status='failed_saved_prefix_read',errorCategory=type(e).__name__)
+ raw=base64.b64encode(json.dumps(j).encode()).decode();parts=[raw[i:i+800]for i in range(0,len(raw),800)]
+ for i,p in enumerate(parts):print('AURORA_K1_NATIVE_WARMUPS_V1711 '+json.dumps({'seq':i,'total':len(parts),'data':p}),flush=True);time.sleep(.03)
+ """
++    remote=remote.replace('PREFIX_STARTS',repr(m['providerWarmupPrefixStart']))
+     remote=remote.replace('EXPECTED_MANIFEST',repr(m['providerManifestSha256']))
+     remote=remote.replace('EXPECTED_PID',str(m['providerReceiver']['pid']))
+     remote=remote.replace('EXPECTED_TICKS',str(m['providerReceiver']['startTicks']))
+@@ -130,8 +138,8 @@
+     os.link(complete,CELL/'campaign/receiver-warmup-proof.json')
+     receipt={'at':now().isoformat(),'status':'15_ORDINARY_P2P_WARMUPS_NATIVE_RECEIVER_AND_ROUTE_PROOF_PUBLISHED',
+              'proofSha256':sha(complete.read_bytes()),'providerWarmupCalls':len(proof['calls']),
+-             'excludedWarmups':15,'warmupP95MsType7':p95,'measured880ForecastSecondsWith20PercentPlus300':forecast,
+-             'fixedConditionCapSeconds':68000,'requesterRemainingSeconds':requester_remaining,
++             'excludedWarmups':15,'warmupP95MsType7':p95,'measured191ForecastSecondsWith20PercentPlus300':forecast,
++             'fixedConditionCapSeconds':15000,'requesterRemainingSeconds':requester_remaining,
+              'providerRemainingSeconds':provider_remaining,'sutCallsByFinalizer':0,
+              'remainingAdmission':'Frozen runner independently checks localSTT/LLM native spans and this exact-peer receiver proof before measured1'}
+     write(OP/'warmup-finalizer-result.json',receipt);write(DEST/'ORDINARY-WARMUP-ADMISSION.json',receipt)

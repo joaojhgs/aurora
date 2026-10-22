@@ -1,0 +1,56 @@
+{
+  "at": "2026-10-21T02:47:07.459238+00:00",
+  "host": "code-worker",
+  "status": "ACTUAL_K1_REQUESTER_COPIER_FINALIZER_LIVE_STARTUP_OR_WARMUPS",
+  "actors": {
+    "controller": {
+      "pid": 3325230,
+      "startTicks": 132920357,
+      "state": "S"
+    },
+    "backend": {
+      "pid": 3325281,
+      "startTicks": 132920953,
+      "state": "R"
+    },
+    "copier": {
+      "pid": 3325550,
+      "startTicks": 132924274,
+      "state": "S"
+    },
+    "finalizer": {
+      "pid": 3325551,
+      "startTicks": 132924275,
+      "state": "S"
+    }
+  },
+  "manifestSha256": "f14a3c823e3de0414b9184838c78b9746a3518320a651874ad6536fdb13e0cda",
+  "plannedNewMeasured": 191,
+  "globalRange": [
+    710,
+    900
+  ],
+  "newMeasured": 0,
+  "warmups": {
+    "attempted": 0,
+    "correct": 0,
+    "failed": 0
+  },
+  "priorMeasured": {
+    "attempted": 709,
+    "correct": 697,
+    "failed": 12
+  },
+  "newProvider": false,
+  "providerPid": 251473,
+  "providerStartTicks": 29038457,
+  "controlReservation": "Original Personal control reserved for same warmup finalizer; no competing metadata sends until finalizer receipt",
+  "separateProspectiveAllocationSeconds": 15240,
+  "historical72000AndChargesPreserved": true,
+  "sourcePreparation": "thesis/harness/distributed-k1-mesh-remaining191-v2142/SOURCE-PREPARATION.json",
+  "countOnlySmoke": "thesis/harness/distributed-k1-mesh-remaining191-v2142/COUNT-ONLY-SMOKE.json",
+  "phase": "STARTUP_OR_ORDINARY_EXCLUDED_WARMUPS_NOT_MEASURED_ADMITTED",
+  "sutCallsByObservation": 0,
+  "newOrcaWorker": false,
+  "freeBytes": 3928408064
+}

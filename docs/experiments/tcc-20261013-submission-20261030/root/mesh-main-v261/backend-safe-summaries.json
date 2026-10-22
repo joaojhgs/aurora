@@ -1,0 +1,48 @@
+[
+  {
+    "condition": "browser-webrtc-mesh",
+    "workload": "orbit-exact-v1",
+    "outcome": "completed_exact",
+    "request_id": "assistant-1791943730591-72p5r",
+    "session_id": "assistant-1791943730591-72p5r",
+    "correlation_id": "assistant-1791943730591-72p5r",
+    "request_frame_id": "assistant-1791943730591-72p5r",
+    "latency_boundary": "provider_rpc_receive_to_completion_event_send",
+    "provider_processing_ms": 48665,
+    "requester_submit_to_visible_completion_ms": 49682.85000002384,
+    "requester_latency_is_cli_comparable": false,
+    "exact_prompt": true,
+    "visible_exact_response": true,
+    "completion_events": [
+      {
+        "request_id": "assistant-1791943730591-72p5r",
+        "session_id": "assistant-1791943730591-72p5r",
+        "correlation_id": "assistant-1791943730591-72p5r",
+        "message_id": "assistant-1791943730591-72p5r",
+        "sequence": 7,
+        "kind": "assistant.completed",
+        "is_final": true,
+        "provider_processing_ms": 48665,
+        "response_char_count": 5,
+        "exact_response": true,
+        "sent": true
+      }
+    ]
+  },
+  {
+    "condition": "browser-webrtc-mesh",
+    "workload": "orbit-exact-v1",
+    "outcome": "history_save_not_visible",
+    "request_id": "assistant-1791943730591-72p5r",
+    "session_id": "assistant-1791943730591-72p5r",
+    "correlation_id": "assistant-1791943730591-72p5r",
+    "request_frame_id": "assistant-1791943730591-72p5r",
+    "latency_boundary": "provider_rpc_receive_to_completion_event_send",
+    "provider_processing_ms": 48665,
+    "exact_prompt": true,
+    "exact_response": true,
+    "visible_exact_response": true,
+    "history_saved": false,
+    "history_reopened": false
+  }
+]

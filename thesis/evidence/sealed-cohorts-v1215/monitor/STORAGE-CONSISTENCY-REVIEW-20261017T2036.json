@@ -1,0 +1,195 @@
+{
+  "observedAt": "2026-10-17T20:35:31.344416+00:00",
+  "run": "run_e6054e76e9fc",
+  "task": "task_d7ea336050cf",
+  "dispatch": "ctx_37b4d0a3c14f",
+  "rootTerminal": "term_6a00d9ee-792a-4daf-8578-236290e33108",
+  "rootStatusMessage": "msg_5f132d3b0e79",
+  "nativeMonitorGoalStatus": "active",
+  "reviewScope": "One bounded consistency review of actual storage receipts and two copier sources; no SUT calls, no new tests, no Personal terminal access, no repeat large-archive/model hashing. GitNexus tool not exposed for these new thesis scripts.",
+  "providerReceiptPath": "thesis/evidence/orca-relayed-http-v1197/provider-copy-receipt-v1216.json",
+  "providerReceiptSha256": "f92fe2f0d74b561a4dbaac572855c294b922f18b56240a0294e1306ec605c3e6",
+  "providerSourceHost": "personal.skyron-server",
+  "providerCopier": {
+    "pid": 429068,
+    "startTicks": "2450245",
+    "intervalSeconds": 60,
+    "outerSeconds": 57600
+  },
+  "providerReportedPhysicalRepoCheckpoint": {
+    "path": "/home/developer/projects/aurora/thesis/evidence/orca-relayed-http-v1197/provider",
+    "bytes": 40157195,
+    "finishedAt": "2026-10-17T20:29:51.835440+00:00",
+    "errors": [],
+    "contiguousPrefixMetadataChecks": {
+      "actual-provider-bindings.jsonl": {
+        "chunks": 1,
+        "startByte": 0,
+        "endByte": 21026,
+        "sourceObservedBytes": 21026,
+        "contiguous": true
+      },
+      "resources.jsonl": {
+        "chunks": 10,
+        "startByte": 0,
+        "endByte": 39835040,
+        "sourceObservedBytes": 39835040,
+        "contiguous": true
+      },
+      "voice-stages.jsonl": {
+        "chunks": 1,
+        "startByte": 0,
+        "endByte": 126897,
+        "sourceObservedBytes": 126897,
+        "contiguous": true
+      }
+    },
+    "verificationLimit": "Root-collected actual remote receipt and internally consistent ranges; monitor did not access Personal or independently rehash remote bytes. Later raw provider transfer to worker repository still pending."
+  },
+  "copierSources": [
+    {
+      "path": "thesis/harness/custody_v1197.py",
+      "bytes": 10725,
+      "sha256": "1a72257b97be43d80361794b0d5bc23e28faef3b8e411d2fb94a176f873d93bf",
+      "matchesLaunchReceipt": true,
+      "imports": [
+        "argparse",
+        "datetime",
+        "fcntl",
+        "hashlib",
+        "io",
+        "json",
+        "os",
+        "pathlib",
+        "re",
+        "shutil",
+        "time",
+        "wave"
+      ],
+      "review": "read-only static inspection: no SUT/network/terminal-control call; exclusive flock, finite outer deadline, free-space floor, fsync+atomic target/receipt writes; incomplete contiguous raw chunks retained"
+    },
+    {
+      "path": "thesis/harness/provider_custody_v1216.py",
+      "bytes": 7520,
+      "sha256": "073a0708db0e59c8091eb8e56e012372e0fdf1e63169f5a1b2c688eefbb1b3fb",
+      "matchesLaunchReceipt": true,
+      "imports": [
+        "argparse",
+        "datetime",
+        "fcntl",
+        "hashlib",
+        "json",
+        "os",
+        "pathlib",
+        "re",
+        "shutil",
+        "time"
+      ],
+      "review": "read-only static inspection: no SUT/network/terminal-control call; exclusive flock, finite outer deadline, free-space floor, fsync+atomic target/receipt writes; incomplete contiguous raw chunks retained"
+    }
+  ],
+  "sealedPhysicalMetadata": {
+    "receipt": "thesis/evidence/sealed-cohorts-v1215/CUSTODY.json",
+    "recordsChecked": 64,
+    "totalBytes": 143571171,
+    "zipCount": 5,
+    "archiveRecords": [
+      {
+        "archive": {
+          "attemptJsonlMembers": 915,
+          "audioMembers": 916,
+          "members": 1865,
+          "method": "Verified whole ZIP bytes/checksum; central-directory count only; prior outcome audits retained; no repeated per-audio decoding"
+        },
+        "bytes": 33027484,
+        "destination": "thesis/evidence/sealed-cohorts-v1215/worker-cpu-full-audio-local900-v491/aurora-worker-cpu-full-audio-local900-v491.zip",
+        "sha256": "83b9084a09abfe641968b2958e210ed589dbcd655f0a9a26c18f2bc4dd80d897",
+        "source": "docs/experiments/tcc-20261013-submission-20261030/root/worker-cpu-full-audio-local900-v491/aurora-worker-cpu-full-audio-local900-v491.zip",
+        "state": "VERIFIED_REPO_COPY"
+      },
+      {
+        "archive": {
+          "attemptJsonlMembers": 915,
+          "audioMembers": 916,
+          "members": 1858,
+          "method": "Verified whole ZIP bytes/checksum; central-directory count only; prior outcome audits retained; no repeated per-audio decoding"
+        },
+        "bytes": 32740359,
+        "destination": "thesis/evidence/sealed-cohorts-v1215/worker-cpu-padded-local900-v737/aurora-worker-cpu-padded-local900-v737.zip",
+        "sha256": "8647715e745b7a49f8fb270730312909be3918fa7e87900b3174dbf2f8dc2f99",
+        "source": "docs/experiments/tcc-20261013-submission-20261030/root/worker-cpu-padded-local900-v737/aurora-worker-cpu-padded-local900-v737.zip",
+        "state": "VERIFIED_REPO_COPY"
+      },
+      {
+        "archive": {
+          "attemptJsonlMembers": 289,
+          "audioMembers": 289,
+          "members": 604,
+          "method": "Verified whole ZIP bytes/checksum; central-directory count only; prior outcome audits retained; no repeated per-audio decoding"
+        },
+        "bytes": 10064090,
+        "destination": "thesis/evidence/sealed-cohorts-v1215/desktop-gpu-padded-local900-v735/aurora-desktop-gpu-padded-local900-v735.zip",
+        "sha256": "1ef1dbd55dde983aea97852dadbeebd7f5540285655a0cbbd447b73b5784db33",
+        "source": "docs/experiments/tcc-20261013-submission-20261030/root/desktop-gpu-padded-local900-v735/aurora-desktop-gpu-padded-local900-v735.zip",
+        "state": "VERIFIED_REPO_COPY"
+      },
+      {
+        "archive": {
+          "attemptJsonlMembers": 641,
+          "audioMembers": 642,
+          "members": 1309,
+          "method": "Verified whole ZIP bytes/checksum; central-directory count only; prior outcome audits retained; no repeated per-audio decoding"
+        },
+        "bytes": 22099986,
+        "destination": "thesis/evidence/sealed-cohorts-v1215/desktop-gpu-padded-local900-v745/aurora-desktop-gpu-padded-local900-v745.zip",
+        "sha256": "8442f975cc23a273d10088de11357bd4eabccd15cccca11477f7c4a84c316cf2",
+        "source": "docs/experiments/tcc-20261013-submission-20261030/root/desktop-gpu-padded-local900-v745/aurora-desktop-gpu-padded-local900-v745.zip",
+        "state": "VERIFIED_REPO_COPY"
+      },
+      {
+        "archive": {
+          "attemptJsonlMembers": 915,
+          "audioMembers": 916,
+          "members": 1857,
+          "method": "Verified whole ZIP bytes/checksum; central-directory count only; prior outcome audits retained; no repeated per-audio decoding"
+        },
+        "bytes": 34691761,
+        "destination": "thesis/evidence/sealed-cohorts-v1215/desktop-gpu-padded-http900-v692/aurora-desktop-gpu-padded-http900-v692.zip",
+        "sha256": "7f1438bd700d5a794a879f5a38d7293275acf4d827289a50c6c49e01dc1a1870",
+        "source": "docs/experiments/tcc-20261013-submission-20261030/root/desktop-gpu-padded-http900-v692/aurora-desktop-gpu-padded-http900-v692.zip",
+        "state": "VERIFIED_REPO_COPY"
+      }
+    ],
+    "verificationLimit": "All64 destination containment/existence/size checks; source/receipt hashes used, no143MB redundant archive rehash during measurements."
+  },
+  "currentIndex": {
+    "path": "docs/experiments/tcc-20261013-submission-20261030/root/CURRENT.md",
+    "header": "# Aurora current evidence \u2014 2026-10-17 20:31 UTC",
+    "measuredSnapshot": "13/900 at20:31:40",
+    "storageAmendmentLinked": true,
+    "v799RawUnrecoveredExplicit": true,
+    "c06FinalUnknownExplicit": true
+  },
+  "knownGaps": {
+    "C06": {
+      "audio": "UNKNOWN/unrecovered",
+      "finalDenominator": "UNKNOWN",
+      "finalOutcome": "UNKNOWN",
+      "historicalOnly": "272completed/273attempted; not final and not lost-file count",
+      "rawBytes": "UNKNOWN",
+      "rawCaseFiles": "UNKNOWN"
+    },
+    "V799": {
+      "currentCustody": "UNKNOWN/unrecovered; metadata is not raw/audio",
+      "originalArchiveBytes": 130072923,
+      "originalArchiveSHA256": "489404814e7667b4c85d371e9e2e895372dc075d1e310669593dff47b1f56e72",
+      "rawArchiveRecovered": false
+    }
+  },
+  "materialProblems": [
+    {
+      "kind": "sealed-total"
+    }
+  ],
+  "nextRequired": "Root consolidate later Personal provider raw prefixes/audio as applicable at safe bounded checkpoints with immutable checksums; retain V799/C06 unknown custody and history, no closed900 rerun. Root copy this monitor receipt into thesis canonical custody if useful."
+}

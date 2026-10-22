@@ -1,0 +1,11 @@
+{
+  "evidenceSourceSHA256": "e3ea9bcf8c8fc8544b290dd0ed4e63a6633e2e9644102001a2d0004a14ad2917",
+  "packages": {
+    "ctranslate2": "4.7.1",
+    "faster-whisper": "1.1.1",
+    "llama-cpp-python": "0.3.19",
+    "numpy": "2.2.6",
+    "onnxruntime": "1.20.1",
+    "piper-tts": "1.2.0"
+  }
+}

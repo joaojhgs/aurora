@@ -1,0 +1,1 @@
+{"exit": 1, "appPid": "9135", "node": {"error": "<anonymous_script>:1\nundefined\n^\n\nSyntaxError: \"undefined\" is not valid JSON\n    at JSON.parse (<anonymous>)\n    at file:///home/developer/projects/aurora/thesis/phone-notebook/20261020/scripts/phone_connection_ui_v232.mjs:3:1365\n\nNode.js v22.22.0\n"}}

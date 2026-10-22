@@ -1,0 +1,159 @@
+{
+  "at": "2026-10-21T05:39:41.079935+00:00",
+  "status": "REQUESTER_TERMINAL_EOF_SEALED",
+  "conditionManifestSha256": "d753203e4a53f12ed983a98d776a811d241d0d6bc6061b28e3c1480a077a17d3",
+  "measurement": {
+    "epochPlanned": 191,
+    "attempted": 191,
+    "correct": 188,
+    "failed": 3,
+    "timeoutFlagged": 0,
+    "unattempted": 0
+  },
+  "excludedWarmups": {
+    "attempted": 15,
+    "correct": 15
+  },
+  "verifiedCases": 206,
+  "verifiedIndexedFiles": 1687,
+  "verifiedIndexedBytes": 23594945,
+  "physicalWavs": 203,
+  "audioBytes": 6245092,
+  "correctFlowLatency": {
+    "n": 188,
+    "unit": "ms",
+    "estimator": "Hyndman-Fan Type7",
+    "p50": 44781.190986,
+    "p90": 49884.9047023,
+    "p95": 51352.36127465001
+  },
+  "lastMeasuredFlowMs": 43872.151985,
+  "stageCorrectOnlyMs": {
+    "stt": {
+      "n": 188,
+      "unit": "ms",
+      "estimator": "Hyndman-Fan Type7",
+      "p50": 7933.2673644999995,
+      "p90": 10897.166004000002,
+      "p95": 12011.79730395
+    },
+    "assistant": {
+      "n": 188,
+      "unit": "ms",
+      "estimator": "Hyndman-Fan Type7",
+      "p50": 33042.341251,
+      "p90": 37095.7345326,
+      "p95": 39988.30959700001
+    },
+    "tts": {
+      "n": 188,
+      "unit": "ms",
+      "estimator": "Hyndman-Fan Type7",
+      "p50": 2930.6560085,
+      "p90": 3722.2437282,
+      "p95": 4275.11863255
+    }
+  },
+  "prefixes": {
+    "actual-provider-bindings.jsonl": {
+      "source": "/home/developer/projects/aurora/.git/aurora-handoff-import-20261006/distributed-k1-mesh-cell-v2153/actual-provider-bindings.jsonl",
+      "retainedPriorEndByte": 2143,
+      "finalSourceBytes": 2143,
+      "tailCopiedBytes": 0,
+      "terminalEOF": true,
+      "originalIncompleteFlagPreserved": true
+    },
+    "backend.private.log": {
+      "source": "/home/developer/projects/aurora/.git/aurora-handoff-import-20261006/distributed-k1-mesh-cell-v2153/backend.private.log",
+      "retainedPriorEndByte": 462406,
+      "finalSourceBytes": 462406,
+      "tailCopiedBytes": 0,
+      "terminalEOF": true,
+      "originalIncompleteFlagPreserved": true
+    },
+    "controller.private.log": {
+      "source": "/home/developer/projects/aurora/.git/aurora-handoff-import-20261006/distributed-k1-mesh-launch-v2153/requester-controller.private.log",
+      "retainedPriorEndByte": 0,
+      "finalSourceBytes": 0,
+      "tailCopiedBytes": 0,
+      "terminalEOF": true,
+      "originalIncompleteFlagPreserved": true
+    },
+    "proof-collection.private.log": {
+      "source": "/home/developer/projects/aurora/.git/aurora-handoff-import-20261006/distributed-k1-mesh-launch-v2153/proof-collection.private.log",
+      "retainedPriorEndByte": 150,
+      "finalSourceBytes": 150,
+      "tailCopiedBytes": 0,
+      "terminalEOF": true,
+      "originalIncompleteFlagPreserved": true
+    },
+    "requester-mesh-calls.jsonl": {
+      "source": "/home/developer/projects/aurora/.git/aurora-handoff-import-20261006/distributed-k1-mesh-cell-v2153/requester-mesh-calls.jsonl",
+      "retainedPriorEndByte": 136590,
+      "finalSourceBytes": 136590,
+      "tailCopiedBytes": 0,
+      "terminalEOF": true,
+      "originalIncompleteFlagPreserved": true
+    },
+    "requester-mesh-route-observations.jsonl": {
+      "source": "/home/developer/projects/aurora/.git/aurora-handoff-import-20261006/distributed-k1-mesh-cell-v2153/requester-mesh-route-observations.jsonl",
+      "retainedPriorEndByte": 338058,
+      "finalSourceBytes": 338058,
+      "tailCopiedBytes": 0,
+      "terminalEOF": true,
+      "originalIncompleteFlagPreserved": true
+    },
+    "requesterCopier.private.log": {
+      "source": "/home/developer/projects/aurora/.git/aurora-handoff-import-20261006/distributed-k1-mesh-launch-v2153/requesterCopier.private.log",
+      "retainedPriorEndByte": 76539,
+      "finalSourceBytes": 76997,
+      "tailCopiedBytes": 458,
+      "terminalEOF": true,
+      "originalIncompleteFlagPreserved": true
+    },
+    "resources.jsonl": {
+      "source": "/home/developer/projects/aurora/.git/aurora-handoff-import-20261006/distributed-k1-mesh-cell-v2153/resources.jsonl",
+      "retainedPriorEndByte": 12189306,
+      "finalSourceBytes": 12189306,
+      "tailCopiedBytes": 0,
+      "terminalEOF": true,
+      "originalIncompleteFlagPreserved": true
+    },
+    "voice-stages.jsonl": {
+      "source": "/home/developer/projects/aurora/.git/aurora-handoff-import-20261006/distributed-k1-mesh-cell-v2153/voice-stages.jsonl",
+      "retainedPriorEndByte": 2420294,
+      "finalSourceBytes": 2420294,
+      "tailCopiedBytes": 0,
+      "terminalEOF": true,
+      "originalIncompleteFlagPreserved": true
+    },
+    "warmupFinalizer.private.log": {
+      "source": "/home/developer/projects/aurora/.git/aurora-handoff-import-20261006/distributed-k1-mesh-launch-v2153/warmupFinalizer.private.log",
+      "retainedPriorEndByte": 199,
+      "finalSourceBytes": 199,
+      "tailCopiedBytes": 0,
+      "terminalEOF": true,
+      "originalIncompleteFlagPreserved": true
+    }
+  },
+  "finalTailCopies": [
+    {
+      "path": "thesis/campaigns/worker-desktop-k1-p2p-tts-remaining191-v2153/terminal-v2196/seal/final-prefix-tails/requesterCopier.private.log.chunk",
+      "bytes": 458,
+      "sha256": "4b7f292c91629dde5884759730c834eb935374c4327fb9ac98da047b0733632c",
+      "startByte": 76539,
+      "endByte": 76997,
+      "sourceRawSha256": "4b7f292c91629dde5884759730c834eb935374c4327fb9ac98da047b0733632c",
+      "credentialsRedacted": false
+    }
+  ],
+  "sourceMutation": false,
+  "originalLiveIndexModified": false,
+  "sutCalls": 0,
+  "failureCodes": {
+    "remote_mesh_preaccept_capability_changed": 3
+  },
+  "providerCustody": "Existing original D251473/start29038457 remains reserved; native/resource prefix reconciliation pending; no provider EOF claim",
+  "scientificScope": "Completed continuation191/global710-900; original20 and next689 retained separately. Whole condition900 attempted,885correct15failed including1historicaltimeout. This seal reports current-epoch correct-only/requester-stage quantiles. Source/provider-residency context differences stay explicit; no silently pooled incompatible percentiles or pure-protocol-overhead claim.",
+  "freeBytesAfter": 3838705664
+}

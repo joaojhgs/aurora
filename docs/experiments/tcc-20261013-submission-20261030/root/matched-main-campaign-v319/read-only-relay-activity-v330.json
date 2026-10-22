@@ -1,0 +1,10 @@
+{
+  "activity": "Root approved read-only Orca Waydroid screenshot",
+  "receipt_saved_at_epoch": 1791967711.2161973,
+  "host": "ssh-1786238480967-semdev / personal-distrobox",
+  "device_class": "Waydroid",
+  "outcome": "exit0/relayoktrue/validPNG",
+  "no_app_source_acceptance": true,
+  "measured_sources_changed": false,
+  "resource_attribution": "Host-total network counters include this relay activity; no API per-request network attribution"
+}

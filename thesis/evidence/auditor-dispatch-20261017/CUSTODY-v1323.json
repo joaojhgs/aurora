@@ -1,0 +1,52 @@
+{
+  "at": "2026-10-17T22:14:26.161975+00:00",
+  "files": [
+    {
+      "path": "thesis/evidence/auditor-dispatch-20261017/ADMISSION-v1320.json",
+      "bytes": 2753,
+      "sha256": "602660b1d604bad8c8cd0c099b6152ff1abdb9edcabc7d078c683017f3738f9e"
+    },
+    {
+      "path": "thesis/evidence/auditor-dispatch-20261017/LAUNCH-VERIFIED-v1323.json",
+      "bytes": 1346,
+      "sha256": "f91875327b396cb2e9f18992d552e80951a4f2f0fbfe5da609ec32a102b4356e"
+    },
+    {
+      "path": "thesis/evidence/auditor-dispatch-20261017/README-v1323.md",
+      "bytes": 870,
+      "sha256": "e4f62611cf7fae1ad11675e04a80c115c064228db4377b432510954b20a13401"
+    },
+    {
+      "path": "thesis/evidence/auditor-dispatch-20261017/WORKER-START-v1320.json",
+      "bytes": 2734,
+      "sha256": "61bd127576bd36fa6f05d2c76d6796300e51489f9dace162a364e3c36c5951b1"
+    },
+    {
+      "path": "thesis/evidence/auditor-dispatch-20261017/v1319-audit-existing-workspace.json",
+      "bytes": 1996,
+      "sha256": "0aa6fc70c71ee17801fe9573e3c5e4c561f7ced3e390572832149e8c27eabeae"
+    },
+    {
+      "path": "thesis/evidence/auditor-dispatch-20261017/v1319-reserved-audit-request-reconcile.json",
+      "bytes": 490,
+      "sha256": "9057b1fb68d2c669a6a43ec9ab62f92cfd385b42de096f858d3c1048de7fb8b4"
+    },
+    {
+      "path": "thesis/evidence/auditor-dispatch-20261017/v1322-auditor-current-input-followup.json",
+      "bytes": 2215,
+      "sha256": "58d1ef17079986b9b220baeaf51b1284c32d34a7d36e9dfc2fe0b6bbcbdf3839"
+    },
+    {
+      "path": "thesis/evidence/auditor-dispatch-20261017/v1322-auditor-launch-monitor-receipt.json",
+      "bytes": 2185,
+      "sha256": "23136c03532bc26d5e49cd070d566ae018bf937b848ce7c37bbebc350ff1a2b0"
+    },
+    {
+      "path": "thesis/evidence/auditor-dispatch-20261017/v1322-auditor-live-identity.json",
+      "bytes": 7546,
+      "sha256": "5a372db589c0fbdd56465d106068eb6425e6379074ec88b13a41e356bf3ae956"
+    }
+  ],
+  "newExperimentalTraffic": false,
+  "sourcePreserved": true
+}

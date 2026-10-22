@@ -1,0 +1,24 @@
+{
+  "at": "2026-10-22T07:35:36.311817+00:00",
+  "schema": "aurora.android.k3.canonical-mode-fix.v1",
+  "sourceEpoch": "android-k3-sdk-mode-v4a",
+  "base": "android-k3-sdk-file-audio-v4",
+  "files": [
+    {
+      "path": "apps/aurora-tauri/src/android-file-audio-e2e.ts",
+      "baseSha256": "002628b915e1ed100160504a917ba5c8d54e293318eff0bedbef7eb10004ba4c",
+      "sha256": "fdf4c0428933c2a6498a999aff930c2e9f82cf185f165c9c1f49bf5a03e7df6f",
+      "bytes": 4482
+    },
+    {
+      "path": "apps/aurora-tauri/src/android-file-audio-e2e.test.ts",
+      "baseSha256": "3820152b7189d0e881a5f716e88d69b173f44a928bf50de6cfa8aade9945ce9e",
+      "sha256": "3c5960775e9dec62fc6b4932f919212b5739ea56d250d2bb2950bd68bf0fab62",
+      "bytes": 2782
+    }
+  ],
+  "patchSha256": "c260a59f315dda4a5d8366a27f4ce806eb9427caf9ea9cf79dc895648a4a58d9",
+  "cause": "Actual typecheck TS2367: supported SDK connection mode is webrtc-only; no invented mesh-only alias",
+  "actualFailureReceipt": "evidence/read-sdk-typecheck-v219/result.json",
+  "productionSourceOrGitModified": false
+}

@@ -1,0 +1,15 @@
+{
+  "id": "msg_42ca47793d75",
+  "run_id": "run_e6054e76e9fc",
+  "delivery_contract": "current_delivery",
+  "from_handle": "term_2eab47ed-ab9b-4e35-bd9b-fc068c60e3fc",
+  "to_handle": "run:run_e6054e76e9fc",
+  "subject": "V1573 narrow collector/accounting review CLOSED; no extra model pilot, guarded184 launch next",
+  "body": "V1573 ONE requestedNARROW collectorfix/callerstaging/budgetcharge/namespacereview CLOSED, no requestedcorrectioninthat scope. Receipt .omx/evidence/orca-monitor-20261010/V1573-COLLECTOR-BINDING-ACCOUNTING-CLOSURE-20261018T1755.json. ActualENTIRE correctedcollector qualification-v1577/SHA923d32fe... contains45sameoldF538nativejoins/STTCPU/LLM25of25,0newmodels. Dynamichelpercodeboundtom.receiverProofSourceSha256; futureV1573helper6556a3... matchesdraft, reader0382e56... matchesqualified/stagedreceipt/fiveoperatorcopies/manifest. Normalraw-shellrunpycall verifiesreaderSHA beforeexec; correctnewnamespace/markers. Canonical+ownedstagecontroller6ac8/runner540d pinsmatch, oldcontrollerparentguardremainscorrectB19; parentdata/validationpinsvalid. Actualretiredsummary17.685843916s setup+634.641097254condition+0.178570831shutdown=652.505512001s, correctlycharged:prior23516.074452657/rem34083.925547343of57600, providerabsolute deadlineunchanged. All24sciencefields exactf683; range717900/184/prior716714correct2fail retained. r4draftSHA9139023a4462b06ea5da3d8ae9d6d9081dc2ba72d962fc0114298bdb0def677d. Old15qualifiedretainedseparate0meas; newprocess-specificcohort/case/nativeIDsjustifyONEstandard15fresh/45gate, notanothermodelpilot/borrowedproof. Alloldsource/result/lease/custodyreviews stayclosed; no --draft/analyzer/model/test rerunsbyreview. ProceedsoleRoot already-authorized freshsameprovider/resource/keyhealth/lifetime andsingle184launch; actualnewruntimeadmissionnotyetproved. Do NOTinsertanotherreview/test/source matrix. Sourcehashbug/oldfailedrunhistory mustremain. Pleaseactuallaunchorconcreteadmissionblocker next; safeCurrentheader/failureproofcustodyupdatedatcheckpoint, notgate. MQTT/ADB/unknownexternalrecipient remainseparate fromHTTPtail/fullscope.",
+  "type": "status",
+  "priority": "normal",
+  "thread_id": null,
+  "payload": "{\"taskId\":\"task_d7ea336050cf\",\"dispatchId\":\"ctx_37b4d0a3c14f\"}",
+  "created_at": "2026-10-18T17:56:11Z",
+  "delivered_at": null
+}

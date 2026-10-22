@@ -1,0 +1,20 @@
+{
+  "state": "CLOCK_FROZEN_BEFORE_NEW_C12_LIFECYCLE",
+  "startedAtUtc": "2026-10-22T06:17:13.434835+00:00",
+  "absoluteDeadlineUtc": "2026-10-22T06:47:13.434835+00:00",
+  "purpose": "C12 new mixed local plus existing Orca-relayed HTTP readiness, not closed baseline replay",
+  "providerLifetimeSeconds": 600,
+  "maximumFlowsPerStream": 1,
+  "requestCapSeconds": 180,
+  "measured": 0,
+  "resources": "Root W + Personal D only, no N/phone/Waydroid; existing D native GPU and CPU; no concurrent compiler or new model transfer",
+  "diskFreeFloorBytes": 2147483648,
+  "nativeGoalBudget": null,
+  "originalNativeGoal": "01a112a5-d6bb-74e2-bf7c-ace73cb513b5",
+  "stop": "Finite own provider normal stop and physical custody; no ambiguous request retry",
+  "currentCandidate": "corrective v2411 local UserInput/Response events, actual remote-STT arrival interlock",
+  "oldCandidateFlows": 2,
+  "newCandidateMaximumFlows": 2,
+  "originalClockUnchanged": true,
+  "noMeasuredAdmission": true
+}

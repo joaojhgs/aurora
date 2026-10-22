@@ -1,0 +1,12 @@
+{
+  "at": "2026-10-18T16:50:47.289925+00:00",
+  "terminal": {
+    "handle": "term_d5651d8d-58e2-4b38-85e2-51c668cc933c",
+    "incarnationId": "034ff933-61a3-4c74-b5ad-98a75e8ac21c",
+    "executionHostId": "ssh:ssh-1786238480967-semdev",
+    "connected": true,
+    "writable": true,
+    "agentIdentity": null
+  },
+  "sourceSha256": "a7b9a436852969fa30c1b6fdffd4ab22e9717e17a5b3b390c53a8183ba2545b4"
+}

@@ -1,0 +1,18 @@
+{
+  "at": "2026-10-18T14:41:16.380377+00:00",
+  "expectedFrozenInputSha256": "2b8cc043fc75c8978e2528379badb9fff7cd2ad2bc82729e61c560d35bbd1cc1",
+  "currentReferencedConfigSha256": "a7e5854794498a9fb062521dc0dd927640af92dda58d9ddd83e9f423e2f7a20b",
+  "parentSummarySha256": "e0fd80e370938dda4ff38a4d6004ac3d74d3598b930f1da381c80f987cdc455e",
+  "parentConfigFacts": {
+    "config_sha256": "a7e5854794498a9fb062521dc0dd927640af92dda58d9ddd83e9f423e2f7a20b",
+    "config_raw_sha256_before_startup": "2b8cc043fc75c8978e2528379badb9fff7cd2ad2bc82729e61c560d35bbd1cc1",
+    "config_raw_sha256_after_startup": "a7e5854794498a9fb062521dc0dd927640af92dda58d9ddd83e9f423e2f7a20b",
+    "config_startup_changed_key_paths": [
+      "services.gateway.api.token_secret"
+    ],
+    "config_startup_semantics_verified": true
+  },
+  "launchOperatorDirExists": false,
+  "newCellExists": false,
+  "newModelRequests": 0
+}

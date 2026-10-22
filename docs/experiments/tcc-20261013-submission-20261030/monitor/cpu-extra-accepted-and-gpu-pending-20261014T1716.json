@@ -1,0 +1,69 @@
+{
+  "observed_at": "2026-10-14T17:16:28.986353+00:00",
+  "run": "run_e6054e76e9fc",
+  "task": "task_d7ea336050cf",
+  "dispatch": "ctx_37b4d0a3c14f",
+  "root_notice": "msg_f693353d5bee",
+  "ack_delivery": "delivery_f0cf2b18328c",
+  "cpu_gate": "finished_sealed_independently_approved_EXTRA_typed_CPU_control",
+  "measured_total": 900,
+  "measured_each_route": 300,
+  "warmups_excluded": 45,
+  "correct": 900,
+  "export_manifest_sha256": "4058af37439c0a51ae39b99faf70fbeae277dec666e7ffc2efbe43d30ea60530",
+  "analysis_directory": "docs/experiments/tcc-20261013-submission-20261030/root/matched-main-analysis-6ce98ae97d594d9fafcd1ff9ad4b9b1c",
+  "hashes": {
+    "analysis.md": "8b8e00082841fbbe1de72ed8a1666b0aeb9d619ec19374abe417937503c7f68c",
+    "analysis.json": "0c119998fe9c07a96dfb4d9780a769aad48c2ae8acae354ac516684431e1e360",
+    "independent-sol-review.md": "1aabfab6bc7f7d4e753818f666508abf5c615c1ad72a7b9e85cc663772955ec5",
+    "independent-sol-review-receipt.json": "317c4257a9ca86cd292d38b80427bf61043b6a95776f31beefdc94096287ad89"
+  },
+  "p90_p95_ms": {
+    "local": [
+      35437.982592,
+      37635.40468775
+    ],
+    "api": [
+      35711.055822300004,
+      37399.58333755
+    ],
+    "mesh": [
+      40876.1,
+      42178.65000000001
+    ]
+  },
+  "method": "Type7 successfulmeasured rows only;3session clusters perroute; warmups excluded andall actualfailuredenominators retained",
+  "limitations": [
+    "loadedhost/noncausal",
+    "samehost typedcontrol notstagedspeech orcrossdevice",
+    "not900perNEWcondition",
+    "meshreadiness/setup excluded fromreply interval",
+    "p99descriptive notstabletail",
+    "OSwrapperexitunknown/retiredexec143separate",
+    "internalthread/containercleanupunverified",
+    "ancillaryexporterRuffF401retained; no allcheckspass",
+    "failed10spack/cachecleanup contextsretained withnofailureexclusions/replay"
+  ],
+  "desktop_dependencies": {
+    "actual_result_path": "docs/experiments/tcc-20261013-submission-20261030/root/cpu-extra-terminal-and-desktop-readiness-v409/aurora_root_gpu_app_dependencies_result-actual-v409.json",
+    "sha256": "dbe09b27f009d2de336467fcfc1c078439a384219466efd5d8946838e96f68aa",
+    "finished_at": "2026-10-14T17:01:55.380446Z",
+    "exit_code": 0,
+    "elapsed_s": 8.272825474967249,
+    "numpy_version_aligned": "2.2.6",
+    "inference_or_primary_launch_verified": false
+  },
+  "cpu_finished_sealed_reviewed": true,
+  "gpu_finished_sealed": false,
+  "dual_barrier_ready": false,
+  "cross_device_measured_allowed": false,
+  "primary_gpu_requirements_remaining": [
+    "actualAssistant provider instrumentation/fullapplicable stages",
+    "model offloaded layers andprocessGPUcounters",
+    "finite resources/acquisition+release",
+    "boundedfunctionalpilot/coldwarm/coverage",
+    "900MEASUREDperapplicableNEWcondition+excludedwarmups",
+    "fullsurface/nonIOS/voice applicableconditions terminalseal"
+  ],
+  "monitor_role": "readexistingreportsandmetadata only; no analysis/reviewrerun/source/goalledger/lockmutations"
+}

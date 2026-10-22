@@ -1,0 +1,5 @@
+# Measurement helper validation
+
+The new request-record/analysis helper passed independent Sol review after two material corrections: exported metadata is constrained and every condition has a finite, consistent planned deadline. Four focused tests verify Type7 quantiles, mixed outcome denominators, grouping and retained write-once records. The initial floating-point assertion failure is retained; its assertion correction and subsequent four passing checks are recorded. Final integrated import/format changes also passed the same four checks. These are meaningful helper fixtures, not assistant workload samples or product-route acceptance.
+
+The helper summarizes correct-success latency conditionally and reports failures, timeouts, incorrect answers, cancellation, infeasibility, warmups and exclusions separately with visible denominators. Actual predicates/routes and frozen input provenance remain caller-owned; the helper does not execute a product request or prove a boolean supplied by a caller. No production telemetry or comparative outcome is inferred. No commit/push/new PR or thesis application occurred.

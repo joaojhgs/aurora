@@ -1,0 +1,81 @@
+{
+  "at": "2026-10-22T08:59:08.078742+00:00",
+  "classification": "PROGRESS_DELTA_CUSTODY_IMPLEMENTATION_AND_CURRENT_VERIFIED_WAIT",
+  "requester": {
+    "pid": 281887,
+    "startTicks": 143363140,
+    "state": "S"
+  },
+  "actualCurrent": {
+    "at": "2026-10-22T08:58:49.528672+00:00",
+    "companion": {
+      "measured": {
+        "attempted": 107,
+        "correct": 107,
+        "failed": 0,
+        "harnessErrorsIncludedInFailed": 0,
+        "incorrectIncludedInFailed": 0,
+        "offered": 107,
+        "planned": 900,
+        "timeouts": 0,
+        "unstarted": 793
+      },
+      "warmup": {
+        "attempted": 1,
+        "correct": 1,
+        "failed": 0,
+        "harnessErrorsIncludedInFailed": 0,
+        "incorrectIncludedInFailed": 0,
+        "offered": 1,
+        "planned": 1,
+        "timeouts": 0,
+        "unstarted": 0
+      }
+    },
+    "completePairedCapsules": 108,
+    "elapsedSeconds": 4352.158237452,
+    "lastIndex": 107,
+    "lastNativeParent": "c9bcf8e685d3822222eae2fa6647139f",
+    "lastOrdinal": 108,
+    "manifestSha256": "316d4cc09adc44d0104dca8ac1f2a966347588ffef37bc2fa809ec14fd5efff8",
+    "phase": "measured",
+    "pid": 281887,
+    "primary": {
+      "measured": {
+        "attempted": 107,
+        "correct": 107,
+        "failed": 0,
+        "harnessErrorsIncludedInFailed": 0,
+        "incorrectIncludedInFailed": 0,
+        "offered": 107,
+        "planned": 900,
+        "timeouts": 0,
+        "unstarted": 793
+      },
+      "warmup": {
+        "attempted": 1,
+        "correct": 1,
+        "failed": 0,
+        "harnessErrorsIncludedInFailed": 0,
+        "incorrectIncludedInFailed": 0,
+        "offered": 1,
+        "planned": 1,
+        "timeouts": 0,
+        "unstarted": 0
+      }
+    },
+    "status": "running"
+  },
+  "preferredFinalizer": "thesis/harness/c12_terminal_delta_custody_v2440.py",
+  "preferredFinalizerSha256": "396b8b4fe74fab757753a0b0aefbf59fed1bdce265c2a79e330959a7fe852a1e",
+  "preferredFinalizerReceipt": "FINALIZER-DELTA-PREPARATION-v2440.json",
+  "oldFinalizerPreserved": true,
+  "actualFinalizerExecution": "NOT_EXECUTED; original requester live, guard returns0remote ops",
+  "sameFrozenCollectionSourceSettingsFloorCountsAndClock": true,
+  "nextMaximumCheck": "2026-10-22T09:04:08.078742+00:00",
+  "earlierCheck": "Actual terminal/failure/stale progress/storage alarm or real owner answer",
+  "storagePermission": "ONE exact935MB webpack-cache question remains PENDING; do not reask or infer approval; no deletion",
+  "freeBytes": 2616967168,
+  "sameNativeGoal": "Full13 ACTIVE/unbudgeted; supported ledger annotation accepted ULTRAGOAL-DELTA-CUSTODY-PROGRESS-v2440.json",
+  "phoneBoundary": "Sole existing delegated worker, no Root device/setup work"
+}

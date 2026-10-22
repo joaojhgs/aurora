@@ -1,0 +1,113 @@
+{
+  "at": "2026-10-20T10:08:23.225281+00:00",
+  "run": "run_e6054e76e9fc",
+  "task": "task_d7ea336050cf",
+  "dispatch": "ctx_37b4d0a3c14f",
+  "rootMessage": "msg_11419fea17a4",
+  "classification": "NEW_ISOLATED_FAILURE_WITH_DECLARED_CONTINUATION",
+  "cases": [
+    {
+      "path": "thesis/campaigns/worker-desktop-k1-p2p-tts-remaining880-v1719/attempts/attempt-0434-measured.jsonl",
+      "bytes": 3959,
+      "sha256": "259eff73328184d7bf7e788bbbe5906ce711c223cb9caffea0271c2ddc02ed21",
+      "conditionMeasuredIndex": 439,
+      "status": "failed",
+      "failure": {
+        "code": "remote_mesh_preaccept_capability_changed",
+        "stage": "tts"
+      },
+      "timeout": false,
+      "consecutivePreacceptRejections": 1,
+      "correctness": {
+        "assistant_reply_matches_expected_words": true,
+        "transcript_matches_reference_words": true
+      },
+      "outputAudio": null,
+      "stages": {
+        "assistant": {
+          "duration_ms": 33337.539564,
+          "status": "completed"
+        },
+        "stt": {
+          "duration_ms": 6101.564302,
+          "status": "completed"
+        },
+        "tts": {
+          "duration_ms": 1361.016442,
+          "error_category": "preaccept_capability_changed",
+          "status": "failed"
+        }
+      }
+    },
+    {
+      "path": "thesis/campaigns/worker-desktop-k1-p2p-tts-remaining880-v1719/attempts/attempt-0435-measured.jsonl",
+      "bytes": 4916,
+      "sha256": "834a11209ec01ff62801d9215c08f66b53b889e9a1ed8da10c6db48456feb626",
+      "conditionMeasuredIndex": 440,
+      "status": "completed_correct",
+      "failure": null,
+      "timeout": false,
+      "consecutivePreacceptRejections": 0,
+      "correctness": {
+        "all_expected": true,
+        "assistant_reply_matches_expected_words": true,
+        "transcript_matches_reference_words": true
+      },
+      "outputAudio": {
+        "file": "audio/fa97e1d4891a73e3eebe58100315bf882e5e6c1071a23a863d114b8a61a3f125.wav",
+        "sha256": "fa97e1d4891a73e3eebe58100315bf882e5e6c1071a23a863d114b8a61a3f125"
+      },
+      "stages": {
+        "assistant": {
+          "duration_ms": 35301.711207,
+          "status": "completed"
+        },
+        "stt": {
+          "duration_ms": 7189.277618,
+          "status": "completed"
+        },
+        "tts": {
+          "duration_ms": 3872.048318,
+          "status": "completed"
+        }
+      }
+    },
+    {
+      "path": "thesis/campaigns/worker-desktop-k1-p2p-tts-remaining880-v1719/attempts/attempt-0436-measured.jsonl",
+      "bytes": 4917,
+      "sha256": "a73d66e60e4577463a850670542b8164b03be1c3a2ebd877294745b8d054eada",
+      "conditionMeasuredIndex": 441,
+      "status": "completed_correct",
+      "failure": null,
+      "timeout": false,
+      "consecutivePreacceptRejections": 0,
+      "correctness": {
+        "all_expected": true,
+        "assistant_reply_matches_expected_words": true,
+        "transcript_matches_reference_words": true
+      },
+      "outputAudio": {
+        "file": "audio/29a4d6a4907e86da6c375e9077e2f08dd75a56e94bb5f37f132bb659458f5571.wav",
+        "sha256": "29a4d6a4907e86da6c375e9077e2f08dd75a56e94bb5f37f132bb659458f5571"
+      },
+      "stages": {
+        "assistant": {
+          "duration_ms": 32308.924751,
+          "status": "completed"
+        },
+        "stt": {
+          "duration_ms": 7431.419574,
+          "status": "completed"
+        },
+        "tts": {
+          "duration_ms": 2397.177527,
+          "status": "completed"
+        }
+      }
+    }
+  ],
+  "finding": "Global439 is one failed TTS preaccept capability_changed attempt with STT and assistant correctness true, timeout false and no output audio; distinct global440/441 are completed_correct with rejection streak reset to0 and output audio. Retain failure in denominator; no retry, success top-up, fallback, replay or policy/source change is indicated.",
+  "rawQueryResult": "Not retained by current old adapter; exact receiver validation branch/cause remains UNKNOWN. No raw packet or race explanation inferred.",
+  "checkpointHelperDelta": "Root reports metadata-only rebuilding continuationFailures from actual rows; not reviewed here, no measurement change or new review gate requested.",
+  "scope": "One new failed case and the two already-saved following distinct outcomes; no old classifier/source re-review, tests, SUT calls, models, devices or network probes."
+}

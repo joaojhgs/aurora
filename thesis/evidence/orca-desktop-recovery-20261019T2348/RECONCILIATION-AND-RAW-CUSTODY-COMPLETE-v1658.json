@@ -1,0 +1,101 @@
+{
+  "at": "2026-10-20T00:02:14.789695+00:00",
+  "status": "OWNER_REQUIRED_ORIGINAL_PROVIDER_RECONCILIATION_AND_PHYSICAL_RAW_CUSTODY_COMPLETE",
+  "originalGoal": "01a112a5-d6bb-74e2-bf7c-ace73cb513b5",
+  "actualNativeStatusBeforeSafeResume": "blocked",
+  "originalRun": "run_e6054e76e9fc",
+  "control": "Actual same Personal command executed, no PTY/provider/agent/Orca restart",
+  "providerRetirement": {
+    "allThreeOriginalActorsAbsent": true,
+    "kernelLocksEmpty": true,
+    "manifestB4AndConfigAaUnchanged": true,
+    "terminalRecord": "thesis/evidence/orca-desktop-recovery-20261019T2348/ORIGINAL-PROVIDER-runtime-terminal.raw.json",
+    "terminalBytes": 516,
+    "terminalSha256": "a5d0f5a127a833eae6b21f84d3a5eaa597867568b39259bcb4554e49fed4841c",
+    "stopReason": "receiver_outer_deadline",
+    "finishedAt": "2026-10-19T00:08:56.138760+00:00",
+    "exitCode": 0,
+    "receiverPresentAfterWait": false,
+    "expiredAdmissionNotRenewed": true
+  },
+  "workerCustody": {
+    "receipt": "thesis/campaigns/worker-desktop-k3-orca-relayed-http-remaining-v1620/provider-transfer-v1654/FINAL-CUSTODY-RECONCILIATION-v1655.json",
+    "receiptSha256": "6d8f414095e31cc1ccf6b7a2b0703718f870104f65680de10ae87a90e5e96c27",
+    "coverageChain": {
+      "bytes": 669839,
+      "path": "thesis/campaigns/worker-desktop-k3-orca-relayed-http-remaining-v1620/provider-transfer-v1654/COVERAGE-CHAIN.json",
+      "sha256": "876994a55e0726c74f5d81ab223d581d8d83e7ac68e0bd6be37588651e017cc9"
+    },
+    "resolvedFiles": 1794,
+    "resolvedBytes": 267408575,
+    "newRawFiles": 489,
+    "newRawBytes": 117658016,
+    "oldFilesReused": 1305,
+    "oldRawRecopiedOrRehashedBytes": 0,
+    "archiveSha256": "76b6f2b3e2fad8d2c32630e52ad17cfeafb649713a557532d0d656585e9bf67f",
+    "rawPrefixesAllContiguousToEOF": {
+      "actual-provider-bindings.jsonl": {
+        "chunks": 410,
+        "contiguousBytes": 604547,
+        "terminalEOF": true
+      },
+      "resources.jsonl": {
+        "chunks": 957,
+        "contiguousBytes": 251985391,
+        "terminalEOF": true
+      },
+      "voice-stages.jsonl": {
+        "chunks": 415,
+        "contiguousBytes": 13323436,
+        "terminalEOF": true
+      }
+    },
+    "originalCURRENT956Preserved": true,
+    "freeBytesAfter": 5420404736,
+    "reservedFreeFloorBytes": 2147483648
+  },
+  "scopedSavedHistory": {
+    "receipt": "thesis/evidence/orca-desktop-recovery-20261019T2348/SAVED-SYNTHETIC-HISTORY-AND-TERMINAL-RAW-v1657.json",
+    "sessionsQueried": 4,
+    "rowsRecovered": 6,
+    "roleColumn": "message_type",
+    "initialReadErrorPreserved": "v1656 no such column role; read-only schema correction, not model/runtime inference failure",
+    "actualRepliesRecovered": [
+      "Paris",
+      "The capital of France is Paris."
+    ],
+    "strictFormatFailuresRemainFailed": true,
+    "historicalTransportFailureCause": "UNKNOWN; do not infer from later repaired carrier/network condition"
+  },
+  "originalForward": {
+    "pid": 421717,
+    "startTicks": 104535394,
+    "sameProcessVerified": true,
+    "sameRouteMetadata": "desktop-aurora-tts to100.64.0.3:8000 reachable",
+    "applicationInferenceProvedByRouteMetadata": false
+  },
+  "globalBuildLock": {
+    "path": "/tmp/aurora-global-build.lock",
+    "inode": 3093,
+    "kernelHoldersObserved": [],
+    "modifiedOrAcquired": false
+  },
+  "newInference": 0,
+  "newWorkers": 0,
+  "providerRestarts": 0,
+  "securityOrCredentialChanges": 0,
+  "ownerResumeGateSatisfied": true,
+  "rootOrMonitorResumeAlreadyPerformedForThisRecovery": false,
+  "nextAllowedAction": "ONE supported SAME-monitor continuation after actual idle; monitor then ONE SAME-Root /goal resume after this owner turn actual idle. Reconcile saved24 native/resource results and finite versioned next admission; no closed baseline/attempt replay.",
+  "scopeNotCompletion": {
+    "full13Complete": false,
+    "k3Attempted": 740,
+    "k3Correct": 725,
+    "k3Failed": 15,
+    "k3Unattempted": 160,
+    "k1Unattempted": 720,
+    "k2Closed": true,
+    "olderV799Archive": "UNLOCATED per accepted audit; not changed/re-run",
+    "olderC06Final": "UNKNOWN per accepted audit; not a new blanket gate"
+  }
+}

@@ -1,0 +1,29 @@
+{
+  "at": "2026-10-22T11:21:11.464110+00:00",
+  "sourceEpoch": "android-sdk-speech-binding-v8",
+  "base": "v7+v7a+v7b",
+  "files": [
+    {
+      "path": "packages/aurora-sdk/src/webrtc/mesh-peer-bridge.ts",
+      "baseSha256": "3a8fc52f5ba67f19b7d83c801189652249ada7b2151ce117ea4d11cd05810be1",
+      "sha256": "8aa41863ccb1e6a908ee0c78d19dada628eb9383ae4fcf9a5012fdcda57fbe7f",
+      "bytes": 68782
+    },
+    {
+      "path": "packages/aurora-sdk/src/webrtc/speech-route-binding.ts",
+      "baseSha256": null,
+      "sha256": "dfdb66c1fa33b04ac144f0b782533e2b7d6fec5ed6976ef74c7d2c58a93784ba",
+      "bytes": 3588
+    },
+    {
+      "path": "packages/aurora-sdk/tests/speech-route-binding.test.ts",
+      "baseSha256": null,
+      "sha256": "b864a2a06bdcf31dd106b4741bea8a472ff143f41dc40225bbd4b9fbd45aa144",
+      "bytes": 2247
+    }
+  ],
+  "patchSha256": "b04bd205826e16dddca820049e2daf4071305a9b5cfd039b483231d8644997aa",
+  "actualFailure": "v312 capability_changed exact audit v316",
+  "receiverChecksChanged": false,
+  "permissionEvaluationAdded": false
+}

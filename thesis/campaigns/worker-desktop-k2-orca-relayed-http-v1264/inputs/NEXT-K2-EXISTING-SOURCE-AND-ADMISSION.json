@@ -1,0 +1,84 @@
+{
+  "observedAt": "2026-10-17T21:14:28.817550+00:00",
+  "run": "run_e6054e76e9fc",
+  "task": "task_d7ea336050cf",
+  "dispatch": "ctx_37b4d0a3c14f",
+  "RootRequest": "msg_72555041dbe0",
+  "scope": "Bounded read-only existing-artifact lookup, not a new implementation review, source gate, test, runtime or model admission. No SUT/Personal commands.",
+  "recommendedSafeWork": "Root prepare ONE inert next-condition admission/launch worksheet using already-approved canonical K2 HTTP852; fill known retained evidence and leave runtime-only inputs explicitly unadmitted. CurrentK1 source/manifest/resources unchanged; no launch until natural terminal/seal/resource release.",
+  "canonicalSourceFacts": {
+    "k2Http": "thesis/harness/distributed-k2-http-v852/",
+    "existingCustody": "thesis/harness/distributed-k2-http-v852/SOURCE-CUSTODY-v859.json",
+    "recordedReviewSHA256": "b1f4c531281240e08ff1f55541d59af3bc9d0c03299916b489875eae2f514faf",
+    "RootRecordedApproval": "Coordination V862: APPROVE856/b1f4c531; earlier850 three integration findings closed. Do not reopen850 or repeat source tests.",
+    "verifiedCoreFilePins": [
+      {
+        "path": "thesis/harness/distributed-k2-http-v852/controller.py",
+        "sha256": "809bec19682eb717f016d2b9f62453b38945201c561f7d4f4ac72e242024050e",
+        "matchesExistingCustody": true
+      },
+      {
+        "path": "thesis/harness/distributed-k2-http-v852/k2_composition.py",
+        "sha256": "08be1fa730d6e49ccf4bd491539b4b8edb5b3476eb7f8f7db9656db5e7b3a053",
+        "matchesExistingCustody": true
+      },
+      {
+        "path": "thesis/harness/distributed-k2-http-v852/runner.py",
+        "sha256": "1f869903b4a2c5167707891bd1d32294329c5673b7386c60b4f13400c4efba06",
+        "matchesExistingCustody": true
+      },
+      {
+        "path": "thesis/harness/distributed-k2-http-v852/stage_adapter.py",
+        "sha256": "204ea4d6b48571ab7ba0add0310a3dadd87b5e1e2afdc172634185755c9bb02c",
+        "matchesExistingCustody": true
+      }
+    ],
+    "k3Http": "thesis/harness/distributed-k3-http-v857/",
+    "k3HttpRecordedApproval": "APP860/48ad99a9; V855 constructor-directory finding closed by857",
+    "k2Mesh": "thesis/harness/distributed-k2-mesh-v905/",
+    "k2MeshRecordedApproval": "APP906/ea3edbf5; V902 import/60boundary findings closed",
+    "k3Mesh": "thesis/harness/distributed-k3-mesh-v911/",
+    "k3MeshRecordedApproval": "APP912; V909 proof-source hash closure completed; canonical918"
+  },
+  "fixtureMetadata": {
+    "k2CandidateManifestSha256": "ce75b965ee5879ebece6ea7dfe133441547d20ccf89ecd5d66ea510bd9645e60",
+    "currentK1CandidateManifestSha256": "ce75b965ee5879ebece6ea7dfe133441547d20ccf89ecd5d66ea510bd9645e60",
+    "sameCandidateManifest": true,
+    "limit": "Metadata identity only; no repeated audio/model hashing or decoding. Preserve actual current frozen audio/model/settings and exact Source/app bindings."
+  },
+  "worksheetFields": [
+    {
+      "field": "condition/placement",
+      "value": "Same full audio pipeline: requester LocalBus STT; Personal Gateway Orchestrator.ExternalUserInput produces real LLM response; explicit Gateway TTS.Synthesize returns valid WAV. Automatic TTS readback=false. New900measured+15excludedwarmups, failure/timeout denominators retained."
+    },
+    {
+      "field": "transport",
+      "value": "Existing approved127.0.0.1:18000 -> Orca -> Personal100.64.0.3:8000 and existing auth only, label Orca-relayed HTTP additionalhop. No new forward/health probes/credentials/grants duringK1. This never substitutes actual Mesh/ICE coverage."
+    },
+    {
+      "field": "implementation/frozen manifest",
+      "value": "Bind stage_adapter.py plus exact controller/runner/k2_composition pins; remoteReceivers exactly assistant andtts (notobsolete remoteTtsReceiver); stage_provider_map every stage; same input/model/settings; source/sourceInventory/model/effectivebackend from retained receipts. Unknown loaded/runtime states remain unknown."
+    },
+    {
+      "field": "warmup admission",
+      "value": "Future15ordinary full flows require30actual remote joins:15LLMresolved_chat_model.astream spans using real span_id with source-grounded null op/attempt semantics,15TTSmodel spans with actual operation/attempt IDs. No extra pilots or repeated warmups now. K3later requires45joins."
+    },
+    {
+      "field": "source-only admission facts",
+      "value": "Use existing in-repo requester/provider settings, source/model/constructor and scope/permission receipts. Exact current receiver identities/effective settings and actual Assistant-route authorization remain runtime-admission items; no remote requests, model loads or changes to discover them duringK1."
+    },
+    {
+      "field": "durable output",
+      "value": "Prepare unique newcohort in-repo thesis inputs/manifest/attempts/audio/stages/resources/copier paths and atomic checked custody fromstart. Do not rename/move liveK1 or reuse hardcodedV1197 copier/output paths forK2; no data overwrite."
+    },
+    {
+      "field": "finite lifecycle",
+      "value": "Current original provider expires2026-10-18T09:58:36.115743UTC. Account for remaining lifetime when scheduling future900; no silent cap extension or assumption a900K2 fits afterK1. Root handles future owned lifecycle/reservation at natural terminal/seal boundary; no current restart/stop requested."
+    },
+    {
+      "field": "actual Mesh remaining",
+      "value": "Closed source905/911 still has intentionally nonlaunchable templates. Need existing authorized exactpeer/session/grant/topic bindings, receiver model/effective settings, admitted .pth+aiortc/aioice pins, real route/native joins and actual ICE evidence. Source closure is not runtime readiness. No new peer/security/provider changes or currentK1 gate."
+    }
+  ],
+  "noBroaderGate": "UI/mic/Android/product/thesis package/auditor admission and another CPU baseline are not first-next-condition prerequisites. All applicable non-iOS surfaces/pairs and actual Mesh staged900 remain in fullscope."
+}

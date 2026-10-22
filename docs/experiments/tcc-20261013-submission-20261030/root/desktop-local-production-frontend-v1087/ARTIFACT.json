@@ -1,0 +1,14 @@
+{
+  "at": "2026-10-16T14:55:42.278357+00:00",
+  "fileAudioDevHookAbsent": true,
+  "nativePackageCapabilityStringPresentIn": [
+    "assets/index-Ca766TYC.js"
+  ],
+  "archive": ".git/aurora-handoff-import-20261006/desktop-local-frontend-v1087/frontend-production-v1087.tar.gz",
+  "archiveBytes": 2095771,
+  "archiveSha256": "c01625b72498d4f0d46b2f53845b4707e7cae99e43c739f5657f53ec0fee4498",
+  "files": 78,
+  "totalAssetBytes": 6847615,
+  "buildLeaderRetired": true,
+  "scope": "New production frontend only, no native package/runtime/deployment/performance acceptance"
+}

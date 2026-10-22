@@ -1,0 +1,22 @@
+{
+  "at": "2026-10-16T03:36:26.013198+00:00",
+  "status": "Reviewed partial adapter only, no composition/gate/runtime acceptance",
+  "review": "thesis/validation/distributed-k2k3-http-adapter-review-v827.md",
+  "files": [
+    {
+      "path": "README.md",
+      "bytes": 2399,
+      "sha256": "6ccec2034da7cf800799e6b50b4227567d9f767b85850da5875dee168c6fa547"
+    },
+    {
+      "path": "REPORT.md",
+      "bytes": 2469,
+      "sha256": "865744ca359cf3fab3add116609ba74216dba1adfde97f01836e0b6749fad783"
+    },
+    {
+      "path": "stage_adapter.py",
+      "bytes": 8801,
+      "sha256": "204ea4d6b48571ab7ba0add0310a3dadd87b5e1e2afdc172634185755c9bb02c"
+    }
+  ]
+}

@@ -1,0 +1,7 @@
+{
+  "at": "2026-10-20T21:08:57.523023+00:00",
+  "automaticRetry": false,
+  "error": "[Errno 2] No such file or directory: '/proc/3059926/stat'",
+  "errorCategory": "FileNotFoundError",
+  "sameAcceptedCommandMustBeReconciled": true
+}

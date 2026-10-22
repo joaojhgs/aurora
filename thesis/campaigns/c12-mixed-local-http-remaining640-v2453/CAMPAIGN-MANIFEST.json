@@ -1,0 +1,173 @@
+{
+  "actualEffectiveLlmSettings": {
+    "chat_format": "chatml-function-calling",
+    "max_tokens": 128,
+    "min_p": 0.0,
+    "model_path": "/home/developer/projects/aurora/.git/aurora-handoff-import-20261006/k1-provider-recovery-v1120/models/Qwen3.5-0.8B-Q4_0.gguf",
+    "n_batch": 64,
+    "n_ctx": 4096,
+    "n_gpu_layers": 100,
+    "n_threads": 2,
+    "repeat_penalty": 1.0,
+    "seed": 42,
+    "temperature": 0.0,
+    "top_k": 1,
+    "top_p": 1.0
+  },
+  "actualEffectiveSttSettings": {
+    "compute_type": "int8",
+    "device": "cpu",
+    "enabled": true,
+    "model_size": "base",
+    "model_size_or_path": "/home/developer/projects/aurora/.git/aurora-handoff-import-20261006/k1-provider-recovery-v1120/models/whisper-base"
+  },
+  "at": "2026-10-22T11:08:11.577990+00:00",
+  "audioPath": "/home/developer/projects/aurora/thesis/harness/c12-mixed-local-http-readiness-v2407/candidate.wav",
+  "audioSha256": "da0ecc4ad0885746ab6e716585473917ab2b543a505bf0db09ebacfaa7943cbb",
+  "automaticTtsReadback": false,
+  "cohortId": "aurora-c12-mixed-local-orca-http-remaining640-v2453",
+  "copies": "Provider writes raw/case/audio to its physical repository from first request; Root copies and hashes every completed pair capsule between primary flows; immutable cumulative byte offsets",
+  "endpoints": {
+    "assistant": "http://127.0.0.1:18000/api/Orchestrator/ExternalUserInput",
+    "stt": "http://127.0.0.1:18000/api/Transcription/Transcribe",
+    "tts": "http://127.0.0.1:18000/api/TTS/Synthesize"
+  },
+  "expectedReplyWords": [
+    "paris"
+  ],
+  "externalContext": "N/phone are separately owned and cannot use W-D models/GPU. Existing network/control background is observed by aggregate interface counters; no pure network/protocol-overhead or isolated network claim",
+  "failurePolicy": "Any warmup failure stops; measured definitive transcript/answer failure retained then next distinct index, all ambiguous/system/harness errors stop; never retry/top-up consumed requests",
+  "globalMeasuredIndices": [
+    261,
+    900
+  ],
+  "measuredPairs": 640,
+  "metrics": "Per-stream all outcome denominators; HF7 p50/p90/p95 milliseconds over declared populations only; actual enqueue bounds/native stages/resources/offered-completed rates and control-copy gaps",
+  "modelFiles": {
+    "llmModel": {
+      "bytes": 563036064,
+      "path": "/home/developer/projects/aurora/.git/aurora-handoff-import-20261006/k1-provider-recovery-v1120/models/Qwen3.5-0.8B-Q4_0.gguf",
+      "sha256": "57d1997790d1744fba5b40a7317df71ea5e2acee28c47e78f0cce39c0703f8cf"
+    },
+    "model": {
+      "bytes": 63531379,
+      "path": "/home/developer/projects/aurora/.git/aurora-handoff-import-20261006/piper-asset-recovery-v1109/models/en_US-ljspeech-medium.onnx",
+      "sha256": "6f52a751e2349abe7a76735eb09dc1875298c77ea2342ffd2fef79ff81b87f22"
+    },
+    "piperExecutable": {
+      "bytes": 389,
+      "path": "/home/developer/projects/aurora/.git/aurora-handoff-import-20261006/k1-provider-recovery-v1120/env/bin/piper",
+      "sha256": "182cb51358f0ff104ee258f67f06c410243b81cee056552468977d6bca4cdf46"
+    },
+    "sttModel": {
+      "bytes": 145217532,
+      "path": "/home/developer/projects/aurora/.git/aurora-handoff-import-20261006/k1-provider-recovery-v1120/models/whisper-base/model.bin",
+      "sha256": "d01c3014881c9c6f3133c182f3d2887eb6ca1c789a7538c5c007196857a0a6a9"
+    },
+    "voiceConfig": {
+      "bytes": 4972,
+      "path": "/home/developer/projects/aurora/.git/aurora-handoff-import-20261006/piper-asset-recovery-v1109/models/en_US-ljspeech-medium.onnx.json",
+      "sha256": "141d612cc0a95ed7efc1ca936b845c2364967f2e9217c5dbfcf69fc4d6c65860"
+    }
+  },
+  "modelsAudioDecodingChangedFromQualifiedPilot": false,
+  "noPairArrivalCapSeconds": 600,
+  "output": "/home/developer/projects/aurora/thesis/campaigns/c12-mixed-local-http-remaining640-v2453/provider",
+  "pairCapSeconds": 600,
+  "pairDesign": "One closed-loop HTTP primary; one local UserInput companion triggered by its actual remote STT native arrival; Root waits for both and verified physical custody before next distinct primary",
+  "parentCampaign": "thesis/campaigns/c12-mixed-local-http-900-v2426",
+  "parentCampaignManifestSha256": "316d4cc09adc44d0104dca8ac1f2a966347588ffef37bc2fa809ec14fd5efff8",
+  "physicalScope": "Worker and Personal desktop only; native/headless service boundaries; no Waydroid, phone, UI rendering or microphone claim",
+  "populations": {
+    "HTTPprimary": 640,
+    "excludedWarmupPerStream": 15,
+    "localCompanion": 640
+  },
+  "priorAcceptedWarmupPairs": 16,
+  "producerCapSeconds": 29800,
+  "providerManifestSha256": "1535884cdd504a1dd76b6df7b5e9815d5acdea4867a9fbda1cacd5cef168a15f",
+  "providerManifestSha256ExpectedConfig": "1b2e464a9dd2a191954504161862d3aa19a991126eb2b08c4de55a40778fd002",
+  "providerOutput": "/home/developer/projects/aurora/thesis/campaigns/c12-mixed-local-http-remaining640-v2453/provider",
+  "reference": "Closed W-D K3 HTTP900 and local references retained, compatible setup mapping only; source/auth/residency epoch limits persist; no rerun or pure protocol/causal claim",
+  "referenceTranscript": "What is the capital of France? Answer with only the city name.",
+  "replacementScope": "ONLY previously unstarted global261..900; old260 outcomes/raw preserved; epoch quantiles separate",
+  "requestCapSeconds": 180,
+  "requesterAudioPath": "/home/developer/projects/aurora/thesis/harness/distributed-k3-http-remaining-v1682/candidate-input.wav",
+  "requesterOutput": "/home/developer/projects/aurora/thesis/campaigns/c12-mixed-local-http-remaining640-v2453/requester",
+  "resourceAdmission": {
+    "absoluteDeadlineUtc": "2026-10-22T21:14:51.316179+00:00",
+    "additionalExcludedInstrumentationWarmupPairs": 0,
+    "budgetEvidence": "One qualified pair: HTTP34.39971633s, local15.239122246s; copy/control after every pair is separately timed. Single-pair point projection, not an ETA or tail guarantee; hard clocks retain any incomplete population honestly.",
+    "collectionDeadlineUtc": "2026-10-22T19:14:51.316179+00:00",
+    "controlIncarnation": "034ff933-61a3-4c74-b5ad-98a75e8ac21c",
+    "controlReservation": "Requester controller owns all writes to this plain terminal during collection; Root/monitor observe local durable custody/process handles instead of competing sends",
+    "controlTerminal": "term_d5651d8d-58e2-4b38-85e2-51c668cc933c",
+    "correctiveSetupCapSeconds": 300,
+    "currentEpoch": "v2453_remaining640_explicit_enter_copy_recovery",
+    "currentEpochMaximumPerStream": 655,
+    "currentEpochMeasuredPerStream": 640,
+    "currentEpochStartedAtUtc": "2026-10-22T11:08:01.630806+00:00",
+    "diskFreeFloorBytes": 2147483648,
+    "globalMeasuredIndices": [
+      261,
+      900
+    ],
+    "maximumCompanionFlowCalls": 931,
+    "maximumPrimaryFlowCalls": 931,
+    "measuredCompanionTarget": 900,
+    "measuredPrimaryTarget": 900,
+    "monitor": "dispatch:ctx_37b4d0a3c14f",
+    "nativeGoalBudget": null,
+    "newCondition": "C12 controlled mixed local user + existing Orca-relayed HTTP K3 concurrency2",
+    "notARepeatOfAnyClosedCondition": true,
+    "originalMasterTimestampsUnchanged": true,
+    "originalReadinessDeadlineHistorical": "2026-10-22T06:47:13.434835+00:00",
+    "pairCapSeconds": 600,
+    "parentCampaignManifestSha256": "316d4cc09adc44d0104dca8ac1f2a966347588ffef37bc2fa809ec14fd5efff8",
+    "parentReleaseSha256": "c5565b3e87ad940f885b65574a696cd9115f7aea68464edbafe7a6bf15b3313c",
+    "postprocessingReserveSeconds": 4200,
+    "priorCorrectWarmupPairs": 16,
+    "priorMeasuredConsumed": 260,
+    "priorRuntimeRetired": true,
+    "priorWarmupReceiptSha256": "b85f2a374ecc2fe4d810d3f18c6176bd7854bce0aed8282f5e935095933bf9d7",
+    "producerDeadlineUtc": "2026-10-22T19:24:51.316179+00:00",
+    "providerDeadlineUtc": "2026-10-22T20:04:51.316179+00:00",
+    "providerRootRawCapBytes": 536870912,
+    "requestCapSeconds": 180,
+    "resources": "Root W requester + D CPU/RAM/RX7600 GPU and existing private relay only; no N/phone/Waydroid compute or new services/forward",
+    "rootNativeGoal": "01a112a5-d6bb-74e2-bf7c-ace73cb513b5 ACTIVE",
+    "rootRun": "run_e6054e76e9fc",
+    "setupCapSeconds": 600,
+    "sourceCorrection": "Versioned requester/copy-control explicit supported Enter and lossless compact receipts; app/source/audio/models/config/settings unchanged",
+    "startedAtUtc": "2026-10-22T07:14:51.316179+00:00",
+    "state": "REMAINING_640_VERSIONED_EPOCH_ORIGINAL_MASTER_CLOCKS_UNCHANGED",
+    "stop": "Any failed warmup/ambiguous/system error stops new offers; preserve calls and exact progress, no retries or failed-success topup. Normal own SUT shutdown and EOF reconciliation only.",
+    "warmupPairsExcluded": 15,
+    "workerRawBudgetBytes": 402653184
+  },
+  "retainedWarmupReceiptSha256": "b85f2a374ecc2fe4d810d3f18c6176bd7854bce0aed8282f5e935095933bf9d7",
+  "schema": "aurora.c12.mixed_paired900.v1",
+  "sourceHashes": {
+    "campaign.py": "869090e10d905852dfbdfe626bbe2256c01f71ab5cd89148690cfecc02a4e366",
+    "collect_pair.py": "f7efcd8d6bddb41a5322c9e5039a6ef4274d4cd386354dc1545ba0320035f38d",
+    "k3_composition.py": "777bfb6abf34a1485a38c1076c86a06776de4017f1f27715b326403aba15effa",
+    "local_composition.py": "aaf9585ad24429c44ea5ed78b00a7ad49369f324528f901ac46a56eae9b22ba0",
+    "local_producer.py": "05b97cb34a0caa0695c160ef2fe954a8e2adb8f6f51e057229f8b633f5f9e762",
+    "paired_case.py": "0aa71849448d2f046a18defe59a805de6973b8df56d0fc22e3626cd5ed1d7da6",
+    "prepare_and_launch.py": "3e6ed76441ff60a8d37149e27866a1af6a4c2a9bc84df4cb7322e99529fcc0d0",
+    "provider_controller.py": "fa94acde611d40061d4aa0dcd647c5e66f1c5315ca0129d615c3ff585dee87b5",
+    "queue_observer.py": "a57ef99e9c48bd7442068d5ea8f8bee016141fbc5f4efd8f9a7e78a1a5631afb",
+    "requester_controller.py": "95f2b7f33e18d33532538cb8e7087e27809bb88cfc511ca4f2fb66f3d3e47a53",
+    "stage_adapter.py": "f678712c75a50146194ccb34331fab8d995f057461e565be99be8d69c2b364a6",
+    "warmup_gate.py": "98d8998a11ebf56f5e110c6c4185e1ec3dbe1f1b37f77b875a27d7a9ff422746"
+  },
+  "sourceInventory": {
+    "inventory_path": "/home/developer/projects/aurora/thesis/sources/k3-stt-runtime-v1907/personal/source-inventory.json",
+    "inventory_sha256": "25026c4031e07d2e7cdac2afe269f78611ed375e53d3b64cd751b31867a552cf",
+    "root": "/home/developer/projects/aurora/thesis/sources/k3-stt-runtime-v1907/personal/source"
+  },
+  "totalTargetNotWholeAggregateGoal": true,
+  "warmupInterpretation": "Prior16 excluded pairs preserved separately; this new provider process uses15 fresh excluded paired warmups with strict actual queue/native/audio/GPU admission. No old measured request replay.",
+  "warmupPairs": 15,
+  "workerDiskFreeFloorBytes": 2147483648
+}

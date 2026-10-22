@@ -1,0 +1,9 @@
+{
+  "status": "SAVED_SNAPSHOT_REPRODUCED_IDENTICAL_POPULATIONS_AND_STATS",
+  "measuredPerStream": 22,
+  "nativeQueuePositiveFlowGaps": 0,
+  "newInference": 0,
+  "liveCampaignSourceChanged": false,
+  "reproductionCommand": "nice -n 10 <pinned-python3.11> thesis/analysis/analyze_c12_saved_v2432.py --campaign thesis/campaigns/c12-mixed-local-http-900-v2426 --snapshot thesis/campaigns/c12-mixed-local-http-900-v2426/saved-analysis-v2432-partial/CURRENT.snapshot.json --output <new-empty-directory>",
+  "analyzerSha256": "ef8a12ed830f37ed51f8d5ab1bb79c596901a0ab69bed6991632fa8fc5f404dd"
+}

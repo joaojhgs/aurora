@@ -1,0 +1,97 @@
+{
+  "cohort": "V491",
+  "conclusion": "one original LocalBus CPU condition,900measured+15warmups; distinct from V317 nine-cell typed campaign",
+  "distinctV317Allocation": {
+    "cells": 9,
+    "measuredPerCell": 100,
+    "warmupsPerCell": 5
+  },
+  "distinctV317CampaignId": "6ce98ae97d594d9fafcd1ff9ad4b9b1c",
+  "frozenCondition": {
+    "explicitHardwareDifferencesFromPrimary": {
+      "absolutePaths": "host-local remapping of identicalweight/sourcehashes; host-specificCLIshebanghashrecorded",
+      "architecture": "aarch64 vs desktop x86_64",
+      "libraryBuilds": "ARM64CPU vsVulkan; exactsame sixmodelbackendversions",
+      "llmOffloadLayers": "0 vs25observed"
+    },
+    "mode": "localBus",
+    "provider": "same-coding-worker",
+    "remoteStageSet": [],
+    "requester": "coding-worker",
+    "stageProviderMap": {
+      "llm": "samehost/llama-cpp CPU/QwenQ4_0/zerooffload",
+      "stt": "samehost/faster-whisper CPU int8_float32/base",
+      "tts": "samehost/PiperCLI/useCudaFalse"
+    },
+    "surface": "headless productionPython"
+  },
+  "frozenManifest": {
+    "archive": "thesis/evidence/sealed-cohorts-v1215/worker-cpu-full-audio-local900-v491/aurora-worker-cpu-full-audio-local900-v491.zip",
+    "bytes": 22182,
+    "capturedAt": "2026-10-17T22:15:46.656826+00:00",
+    "crc32": 3161429783,
+    "destination": "thesis/audit/20261017-data-and-results/imports/objects/364832a627e2f45b4b1c2b80ca05739f809132a28ff26511f0eda5e30f89127a",
+    "duplicateContent": true,
+    "kind": "selected_saved_archive_member",
+    "member": "input/frozen-manifest-v1.json",
+    "sha256": "364832a627e2f45b4b1c2b80ca05739f809132a28ff26511f0eda5e30f89127a",
+    "source": "thesis/evidence/sealed-cohorts-v1215/worker-cpu-full-audio-local900-v491/aurora-worker-cpu-full-audio-local900-v491.zip::input/frozen-manifest-v1.json"
+  },
+  "oldIndexAuthority": "Indexes are locators only; original declarations and saved actual rows govern",
+  "originalDeclaredAllocation": {
+    "capBasis": "Observed full CPU pilot49.633587315s*915attempts*1.25=56768.41549s; rounded up to57600s(16h). Fifteen excluded warmups,900measured; perrequest180s. No in-place extension.",
+    "conditionOverallCapSeconds": 57600,
+    "currentMeasurementStarted": false,
+    "excludedWarmupsPerCondition": 15,
+    "hardwareAccelerationDifferenceMustBeExplicitSeparateCondition": true,
+    "plannedMeasuredPerApplicableNewCondition": 900,
+    "quantileMethod": "HyndmanFanType7: sorted x, index=(n-1)*p, linear interpolation; correctness-success and all-outcome timing distributions reported separately, timeout censoring/denominators explicit.",
+    "requestDeadlineSeconds": 180,
+    "sameEffectiveSemanticSetupRequiredAcrossSurfaces": true
+  },
+  "originalRunner": {
+    "bytes": 43122,
+    "capturedAt": "2026-10-17T22:15:13.810583+00:00",
+    "destination": "thesis/audit/20261017-data-and-results/imports/objects/e3348ca0c064679f1c88e7bdc8fdec0942fda24b43fe7fdba2fa9f924d7d7dd9",
+    "duplicateContent": false,
+    "kind": "copied_saved_input",
+    "sha256": "e3348ca0c064679f1c88e7bdc8fdec0942fda24b43fe7fdba2fa9f924d7d7dd9",
+    "source": ".git/aurora-handoff-import-20261006/cpu-audio-campaign-v491/runner.py",
+    "sourceMtimeNs": 1792036540331396101
+  },
+  "progress": {
+    "attempted": 915,
+    "measured_attempted": 900,
+    "planned_measured": 900,
+    "planned_warmups": 15,
+    "status": "completed_all_correct",
+    "stop_reason": null,
+    "unattempted_measured": 0,
+    "warmups_attempted": 15
+  },
+  "rawAttemptCounts": {
+    "attempted": 900,
+    "correct": 900,
+    "failedOrInterrupted": 0,
+    "incorrect": 0,
+    "outcomes": {
+      "completed_correct": 900
+    },
+    "planned": 900,
+    "retainedRows": 900,
+    "timeout": 0,
+    "timeoutIsOverlappingClassification": true,
+    "unattemptedAtSnapshot": 0,
+    "unknown": 0
+  },
+  "report": {
+    "bytes": 4387,
+    "capturedAt": "2026-10-17T22:15:27.329017+00:00",
+    "destination": "thesis/audit/20261017-data-and-results/imports/objects/d71932dbb8a6d75c23836a73ef7c235110bb107b82e35dc70a0a3369911f7300",
+    "duplicateContent": true,
+    "kind": "copied_saved_input",
+    "sha256": "d71932dbb8a6d75c23836a73ef7c235110bb107b82e35dc70a0a3369911f7300",
+    "source": "thesis/evidence/sealed-cohorts-v1215/worker-cpu-full-audio-local900-v491/REPORT.md",
+    "sourceMtimeNs": 1792268907136440871
+  }
+}

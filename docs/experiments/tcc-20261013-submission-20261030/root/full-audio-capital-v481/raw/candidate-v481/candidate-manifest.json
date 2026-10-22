@@ -1,0 +1,29 @@
+{
+  "candidateId": "audio-capital-base-qwen-piper-v481",
+  "wavSHA256": "139fa0c34b6d18600ad9608fd2d11c9389cae2f5f548ce0f4f23b735b176f0b3",
+  "wavPath": "/home/developer/projects/aurora/.git/aurora-audio-candidate-v481/fixture/capital-question-en-US.wav",
+  "wavBytes": 153644,
+  "frames": 76800,
+  "sampleRate": 22050,
+  "channels": 1,
+  "sampleWidthBytes": 2,
+  "durationSeconds": 3.4829931972789114,
+  "referenceTranscript": "What is the capital of France? Answer with only the city name.",
+  "expectedReplyWords": "paris",
+  "correctness": "Exact normalized transcript word sequence and exact single reply word paris; no injected transcript/reply/hints.",
+  "provenance": "Original agent-authored factual assistant question, synthesized once with existing pinned PiperLJSpeech; not a personal recording. No voice/model license inferred from synthetic content.",
+  "modelWeightSHA256": {
+    "sttBase": "d01c3014881c9c6f3133c182f3d2887eb6ca1c789a7538c5c007196857a0a6a9",
+    "llm": "57d1997790d1744fba5b40a7317df71ea5e2acee28c47e78f0cce39c0703f8cf",
+    "tts": "6f52a751e2349abe7a76735eb09dc1875298c77ea2342ffd2fef79ff81b87f22"
+  },
+  "modelHashProvenance": "Existing V477 pinned files preserved; next runtime must bind actual engines/settings.",
+  "baselineFrozen": false,
+  "pilotRequestsPlanned": 1,
+  "pilotFlowCapSeconds": 180,
+  "pilotControllerCapSeconds": 300,
+  "newMeasuredRequests": 0,
+  "priorFailuresPreserved": true,
+  "changedCohort": true,
+  "oldV477ComparisonStatus": "SUPERSEDED for proposed new fullaudio condition only; originalfailure remains immutable; no measured oldaudio data to pool."
+}

@@ -1,0 +1,19 @@
+{
+  "at": "2026-10-20T10:06:53.369522+00:00",
+  "scope": "Root reporting metadata only, not the frozen campaign or its source/manifest",
+  "trigger": "New isolated global439 failure is physically retained; old inherited continuationFailures field would become stale although programmatic counts were already correct.",
+  "parent": {
+    "path": "thesis/harness/checkpoint_existing_k1_wait_v1755.py",
+    "sha256": "a6a65f3e61b0a663d04e865511f343b4665b9ef595bd44b59b5a46981c9fca28"
+  },
+  "new": {
+    "path": "thesis/harness/checkpoint_existing_k1_wait_v1760.py",
+    "sha256": "318ff8aa16b6f7620a565863d9b48506a907f61cc86fd6ef0105e78d9a91e221"
+  },
+  "change": "Rebuild continuationFailures from every retained failed measured case, verify each case SHA and list/count equality. Preserve old helper and every old checkpoint unchanged.",
+  "astParse": "PASS",
+  "sutCalls": 0,
+  "newRequestsTestsOrSourceReviewGates": 0,
+  "newGlobal439CaseSha256": "259eff73328184d7bf7e788bbbe5906ce711c223cb9caffea0271c2ddc02ed21",
+  "failureInterpretation": "Recorded preaccept capability_changed at TTS, consecutive1, timeoutfalse, STT+assistant correct; following case correct. Exact receiver subcheck cause unknown and no raw response fabricated. Frozen rule continues without retry."
+}

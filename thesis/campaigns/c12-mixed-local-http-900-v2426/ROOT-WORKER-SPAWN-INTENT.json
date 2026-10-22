@@ -1,0 +1,11 @@
+{
+  "at": "2026-10-22T07:46:10.816974+00:00",
+  "maximumPopen": 1,
+  "manifestSha256": "316d4cc09adc44d0104dca8ac1f2a966347588ffef37bc2fa809ec14fd5efff8",
+  "currentMaximumPerStream": 901,
+  "priorAcceptedWarmupPairs": 15,
+  "currentInstrumentationPair": 1,
+  "measuredTargetPerStream": 900,
+  "newWorker": false,
+  "originalClockUnchanged": true
+}

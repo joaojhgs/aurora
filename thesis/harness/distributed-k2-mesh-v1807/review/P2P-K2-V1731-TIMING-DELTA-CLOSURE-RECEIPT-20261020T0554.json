@@ -1,0 +1,12 @@
+{
+  "at": "2026-10-20T05:53:05.777310+00:00",
+  "report": ".omx/evidence/orca-monitor-20261010/P2P-K2-V1731-TIMING-DELTA-CLOSURE-20261020T0554.md",
+  "bytes": 3685,
+  "sha256": "d19d059f55e9205a72e45eb76b54a21c114c59f62df3c48d891b5cbd272f2580",
+  "verdict": "PASS requested timing delta; source qualification only, runtime unlaunched",
+  "reviewScope": "9441-byte delta plus setup/finalization context",
+  "monitorModelOrTestCalls": 0,
+  "liveK1Changed": false,
+  "priorPlanMirrorVerified": true,
+  "futureRunnerSha256": "8347fc103a11ca6c9d0c3686b442bd2e4236a4122c668a42bcc10944b7408285"
+}

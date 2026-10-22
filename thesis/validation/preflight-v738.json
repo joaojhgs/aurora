@@ -1,0 +1,49 @@
+{
+  "schema": "aurora.thesis.manual-preflight.v1",
+  "startedAt": "2026-10-15T22:19:49.858189+00:00",
+  "command": [
+    "/home/developer/projects/aurora/.venv/bin/python",
+    "thesis/preflight.py",
+    "--output",
+    "thesis/validation/preflight-v738.json"
+  ],
+  "python": "3.11.17 (main, Oct  3 2026, 01:03:29) [Clang 22.1.3 ]",
+  "cwd": "/home/developer/projects/aurora",
+  "newMeasuredRequests": 0,
+  "modelsOrServicesLoaded": false,
+  "modelAvailabilityChecked": false,
+  "hardwareOrRoutesAdmitted": false,
+  "scope": "Pinned profile and fixed WAV metadata only; not full setup, launch, performance or product acceptance.",
+  "source": {
+    "path": "/home/developer/projects/aurora/thesis/preflight.py",
+    "bytes": 4537,
+    "sha256": "838bb393f19cc979c59ebd6c09e75aeb635311f6647f69d4250213fde7aa4e3d"
+  },
+  "status": "passed",
+  "profile": {
+    "path": "/home/developer/projects/aurora/thesis/profiles/padded-capital-v1.json",
+    "bytes": 2813,
+    "sha256": "ab954e3b9b8e989bc5954d62b675f60b393a6f657459e1f8e0038221c1c1d110"
+  },
+  "fixture": {
+    "path": "/home/developer/projects/aurora/thesis/fixtures/capital-padded-v1/fixture.json",
+    "bytes": 1157,
+    "sha256": "27e183777f446b7ed8f860b8f0512da97a438d489e9fb60b5c00f42e71459637"
+  },
+  "audio": {
+    "path": "/home/developer/projects/aurora/thesis/fixtures/capital-padded-v1/input.wav",
+    "bytes": 219794,
+    "sha256": "da0ecc4ad0885746ab6e716585473917ab2b543a505bf0db09ebacfaa7943cbb"
+  },
+  "wavProfile": [
+    22050,
+    1,
+    2,
+    109875,
+    "NONE"
+  ],
+  "referenceTranscriptSHA256": "34b681e385feb3500c9e9849d30f5bac982716c4e4938cdb04c5fdc617cff624",
+  "exitCode": 0,
+  "durationSeconds": 0.003714228980243206,
+  "finishedAt": "2026-10-15T22:19:49.861902+00:00"
+}

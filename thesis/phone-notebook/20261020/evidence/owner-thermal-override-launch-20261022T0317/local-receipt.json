@@ -1,0 +1,8 @@
+{
+  "bytes": 3319,
+  "copyOnly": true,
+  "custody": "Notebook result persisted and fsynced before relay; remote receipt in same output",
+  "localPath": "/home/developer/projects/aurora/thesis/phone-notebook/20261020/evidence/owner-thermal-override-launch-20261022T0317/result.json",
+  "remotePath": "/home/developer/projects/aurora/thesis/phone-notebook/20261020/evidence/owner-thermal-override-launch-20261022T0317.json",
+  "sha256": "68907016c945d03a752f71a1b62838271d7d8ad1c56a650fda4b363adc1be4a8"
+}

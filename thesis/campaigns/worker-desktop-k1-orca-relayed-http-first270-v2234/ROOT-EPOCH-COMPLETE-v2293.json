@@ -1,0 +1,152 @@
+{
+  "at": "2026-10-21T21:00:09.731144+00:00",
+  "status": "FROZEN270_REQUESTER_PROVIDER_CUSTODY_AND_SAVED_ANALYSIS_COMPLETE",
+  "sameOriginalGoal": "01a112a5-d6bb-74e2-bf7c-ace73cb513b5",
+  "nativeGoalStatus": "active",
+  "manifestSha256": "11bbea3fc1e45e65da1ecb7b501aee77739870cb087d792e5bc5197f9b1027be",
+  "epochMeasured": {
+    "attempted": 270,
+    "correct": 270,
+    "failed": 0,
+    "incorrect": 0,
+    "timeouts": 0,
+    "planned": 270,
+    "unattempted": 0
+  },
+  "conditionCountsOnly": {
+    "attempted": 450,
+    "correct": 449,
+    "failed": 1,
+    "incorrect": 0,
+    "unattempted": 450,
+    "target": 900
+  },
+  "excludedWarmups": 15,
+  "caseRecords": 285,
+  "WAV": 285,
+  "requesterVerifiedFiles": 1840,
+  "requesterVerifiedPayloadBytes": 33923202,
+  "providerArchive": {
+    "path": "thesis/campaigns/worker-desktop-k1-orca-relayed-http-first270-v2234/provider-prefix-transfer-v2253/provider-prefix-v2252.tar.gz",
+    "bytes": 4453626,
+    "sha256": "098989357310ddc2c844cfa59045395bdc841da5de8eb15b90a52bc86bd9bcd3"
+  },
+  "providerRawPayloadBytes": 75601702,
+  "providerRawFiles": 16,
+  "providerCompletedControlCursor": "159302",
+  "providerReservationPreserved": true,
+  "providerLastVerifiedAt": "2026-10-21T20:50:24.286897+00:00",
+  "providerActorsAtThatObservation": [
+    {
+      "pid": 1440195,
+      "startTicks": 35427348,
+      "state": "S"
+    },
+    {
+      "pid": 1440196,
+      "startTicks": 35427408,
+      "state": "S"
+    }
+  ],
+  "providerDeadlineUtcUnchanged": "2026-10-21T22:45:52.468654+00:00",
+  "rootDeadlineUtcUnchanged": "2026-10-21T23:36:07.231887+00:00",
+  "finalizerExitCode": 0,
+  "maximumPipelineLaunches": 1,
+  "allOriginalRequesterAndFinalizationActorsAbsent": true,
+  "nativeStageCounts": {
+    "stt": 270,
+    "assistant": 270,
+    "tts": 270
+  },
+  "allPhasesNativeStageJoins": 855,
+  "positiveNativeGaps": [],
+  "resources": {
+    "requester": {
+      "identityMatchedSamples": 14784,
+      "excludedIdentityOrPrestartup": 0,
+      "counterErrorFields": {
+        "gpu.vendor": 14784
+      }
+    },
+    "provider": {
+      "identityMatchedSamples": 16912,
+      "excludedIdentityOrPrestartup": 0,
+      "counterErrorFields": {
+        "gpu.gpu_busy_percent": 8,
+        "gpu.vendor": 118384
+      }
+    }
+  },
+  "providerResourcesPresent": true,
+  "correctOnlyLatencyMs": {
+    "denominator": 270,
+    "p50_ms": 50957.1080565,
+    "p90_ms": 58608.017694199996,
+    "p95_ms": 60103.400722399994
+  },
+  "nativeStageLatencyMs": {
+    "stt": {
+      "denominator": 270,
+      "p50_ms": 7926.228072,
+      "p90_ms": 10759.1213811,
+      "p95_ms": 11749.20194635
+    },
+    "assistant": {
+      "denominator": 270,
+      "p50_ms": 28514.326805999997,
+      "p90_ms": 36969.3496457,
+      "p95_ms": 38620.99770435
+    },
+    "tts": {
+      "denominator": 270,
+      "p50_ms": 1660.6508105,
+      "p90_ms": 1827.1452456,
+      "p95_ms": 1994.4703917499999
+    }
+  },
+  "quantileMethod": "Hyndman-Fan Type7; h=(n-1)*p with linear interpolation; ms",
+  "scope": "Current270 epoch only; original180 and current270 counts reconcile; unlike latency strata remain separate. Full13 and full remaining matrix open.",
+  "artifacts": [
+    {
+      "path": "thesis/campaigns/worker-desktop-k1-orca-relayed-http-first270-v2234/terminal-v2251/REQUESTER-SEAL.json",
+      "bytes": 1741,
+      "sha256": "736694b7b16b9ad24993e804174b59f7cba66cd57fd894a766e30f71e2ca703c"
+    },
+    {
+      "path": "thesis/campaigns/worker-desktop-k1-orca-relayed-http-first270-v2234/terminal-v2251/PHASE.json",
+      "bytes": 6333,
+      "sha256": "8a3374b6b2d8457d78cde304da0d16906f0b34c6db366fa301dde7538bd1f38c"
+    },
+    {
+      "path": "thesis/campaigns/worker-desktop-k1-orca-relayed-http-first270-v2234/provider-prefix-transfer-v2253/CUSTODY.json",
+      "bytes": 21433,
+      "sha256": "458d026dfe534aaa27d573ed5b9975601734ffbd939b53f4a3b7e2d771a70b22"
+    },
+    {
+      "path": "thesis/campaigns/worker-desktop-k1-orca-relayed-http-first270-v2234/analysis-v2254/SUMMARY.json",
+      "bytes": 4259,
+      "sha256": "c7f4e401c59be2e73e81593c0d0c989b4fa64a3103b3d6d81d505ed652916f1f"
+    },
+    {
+      "path": "thesis/campaigns/worker-desktop-k1-orca-relayed-http-first270-v2234/analysis-v2254/REPORT.md",
+      "bytes": 1927,
+      "sha256": "d0929f134e44095c4b5071b9612584374ab097effa71757615847fbda613a474"
+    },
+    {
+      "path": "thesis/campaigns/worker-desktop-k1-orca-relayed-http-first270-v2234/analysis-v2254/CASE-HISTORY.jsonl",
+      "bytes": 2008220,
+      "sha256": "e6df159c9f7c5ddc8636853f85b29ac152a779f746ef944d1a52ac086e7b0a3a"
+    },
+    {
+      "path": "thesis/campaigns/worker-desktop-k1-orca-relayed-http-first270-v2234/analysis-v2254/NATIVE-STAGES.jsonl",
+      "bytes": 1276973,
+      "sha256": "25a97b95e81d20fa4453b80268b8bed5beea26e418c93f3bac79307facb2c2fb"
+    },
+    {
+      "path": "thesis/campaigns/worker-desktop-k1-orca-relayed-http-first270-v2234/analysis-v2254/INPUTS.json",
+      "bytes": 268618,
+      "sha256": "5b951f331253fbdba2eb317b807ac7cfadc6445eceb87027692391a20ff69cd5"
+    }
+  ],
+  "nextAction": "Reconcile unattempted global451-900 and prior caps/charges; freeze a new finite prospective allocation/resource manifest under30.74.6 before any lifecycle/inference, then actual fresh15native admission and only unattempted450. No old cap extension, goal replacement, source/auth/model shrink, or failure retry."
+}

@@ -1,0 +1,25 @@
+{
+  "id": "msg_ffaa62561a95",
+  "at": "2026-10-15T02:30:07Z",
+  "observedAtDesktop": "2026-10-15T02:28:22Z",
+  "completeWAV": true,
+  "wavSHA": "2f6361506708d0a3065a339d168c9db5412e343683dd9b4080471d8948bf82ae",
+  "wavBytes": 193068,
+  "modelsPresent": {
+    "accurateBase": 145217532,
+    "piperONNX": 63531379,
+    "qwen": 563036064
+  },
+  "existingEnvironment": true,
+  "newBuildRequired": false,
+  "browserMicAndroidRequired": false,
+  "privateDriver": "existing Luna source-only finishing, existing Sol source review; Root sole executable owner",
+  "pilotCapSeconds": 180,
+  "controllerCapSeconds": 240,
+  "pilotAttempts": 1,
+  "nMeasured": 0,
+  "pilotLaunched": false,
+  "actualGPUUseVerified": false,
+  "providerBindingsVerified": false,
+  "phase2MeasuredAllowed": false
+}

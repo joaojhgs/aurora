@@ -1,0 +1,29 @@
+{
+  "observedAt": "2026-10-17T21:06:04.119951+00:00",
+  "command": "orca account usage --json (documented caller-default SSH scope; no host/all-hosts/environment switch)",
+  "exitCode": 1,
+  "ok": false,
+  "receipt": "local",
+  "error": {
+    "code": "forbidden",
+    "message": "orca account usage acts on the Orca host machine itself and cannot run from an SSH host. Run it on the Orca host."
+  },
+  "scope": null,
+  "resultKeys": [],
+  "codexRows": [],
+  "otherAccountRowsOmitted": 0,
+  "noWorkerLaunch": true,
+  "noCredentialsChanged": true,
+  "nativeOrcaToolsExposed": false,
+  "rawFailurePacket": {
+    "id": "local",
+    "ok": false,
+    "error": {
+      "code": "forbidden",
+      "message": "orca account usage acts on the Orca host machine itself and cannot run from an SSH host. Run it on the Orca host."
+    },
+    "_meta": {
+      "runtimeId": null
+    }
+  }
+}

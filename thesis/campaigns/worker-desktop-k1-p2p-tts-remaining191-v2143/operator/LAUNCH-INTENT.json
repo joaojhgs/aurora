@@ -1,0 +1,10 @@
+{
+  "admissionSha256": "5031a8ad4991e982827421060fd3f769bc7b1174668f3d05a3c5e72f15e56f30",
+  "at": "2026-10-21T02:45:42.977378+00:00",
+  "conditionCapSeconds": 72000,
+  "manifestSha256": "f14a3c823e3de0414b9184838c78b9746a3518320a651874ad6536fdb13e0cda",
+  "maximumPopenCalls": 1,
+  "preparationSha256": "b7c84796f1a31c8e7e05dd886f076369cb0ff9ad260d8532beff7246a96be149",
+  "priorElapsedIncludingRecoverySeconds": 82806.403829,
+  "separateProspectiveAllocationSeconds": 15240
+}

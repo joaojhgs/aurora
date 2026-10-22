@@ -1,0 +1,195 @@
+{
+  "at": "2026-10-21T20:54:07.155955+00:00",
+  "phase": "POSTTERMINAL_SAVED_ANALYSIS_WRITTEN",
+  "receipt": {
+    "at": "2026-10-21T20:50:17.291820+00:00",
+    "status": "REQUESTER_TERMINAL_AND_PHYSICAL_CUSTODY_SEALED",
+    "manifestSha256": "11bbea3fc1e45e65da1ecb7b501aee77739870cb087d792e5bc5197f9b1027be",
+    "requesterActorsAbsent": true,
+    "requesterActors": [
+      {
+        "pid": 3751414,
+        "expectedStartTicks": 137933512,
+        "state": "ABSENT"
+      },
+      {
+        "pid": 3751426,
+        "expectedStartTicks": 137933748,
+        "state": "ABSENT"
+      },
+      {
+        "pid": 3751415,
+        "expectedStartTicks": 137933513,
+        "state": "ABSENT"
+      }
+    ],
+    "epochMeasured": {
+      "attempted": 270,
+      "correct": 270,
+      "failed": 0,
+      "incorrect": 0,
+      "timeouts": 0,
+      "planned": 270,
+      "unattempted": 0
+    },
+    "conditionCountsOnly": {
+      "attempted": 450,
+      "correct": 449,
+      "failed": 1,
+      "incorrect": 0,
+      "unattempted": 450,
+      "target": 900
+    },
+    "failureCodes": {},
+    "excludedWarmups": 15,
+    "caseRecords": 285,
+    "actualWAV": 285,
+    "verifiedFiles": 1840,
+    "verifiedBytes": 33923202,
+    "snapshotSha256": "b71d9e43a06c5e92101df9c0685e841318b4931e95ad527b19a93fcb8c104450",
+    "sourceCheckpointSha256": "8e68aaa5fbd8689db341db57dd89f540ba98ae4bbf648fcc520f741f485a7fa5",
+    "requesterNativeResourcePrefixEOF": [
+      {
+        "name": "voice-stages.jsonl",
+        "bytes": 3348465,
+        "sourceEOFVerified": true
+      },
+      {
+        "name": "actual-provider-bindings.jsonl",
+        "bytes": 2143,
+        "sourceEOFVerified": true
+      },
+      {
+        "name": "resources.jsonl",
+        "bytes": 19137664,
+        "sourceEOFVerified": true
+      }
+    ],
+    "controllerExitCode": 0,
+    "terminalStatus": "completed_all_correct",
+    "terminalStopReason": null,
+    "newInference": 0,
+    "nativeGoalMutations": 0,
+    "noLatencyPooling": true
+  },
+  "onFailure": "Reconcile this exact accepted command/output and preserve all partial files; no blind retry",
+  "operation": "k1-http-provider-prefix-v2252",
+  "maximumSends": 1,
+  "exportSourceSha256": "f37fa0f0266767043ae0e491c4b360a3ff847c2aca36cc8b804b83cb804c50c6",
+  "export": {
+    "at": "2026-10-21T20:50:24.286897+00:00",
+    "status": "k1_http_provider_after_requester_terminal_fixed_prefix",
+    "providerManifestSha256": "950d449e3c337764a654ae4dd08c66623f50f96617615328be0cd8c54a4eaea2",
+    "epochManifestSha256": "11bbea3fc1e45e65da1ecb7b501aee77739870cb087d792e5bc5197f9b1027be",
+    "actors": [
+      {
+        "pid": 1440195,
+        "startTicks": 35427348,
+        "state": "S"
+      },
+      {
+        "pid": 1440196,
+        "startTicks": 35427408,
+        "state": "S"
+      }
+    ],
+    "providerRetired": false,
+    "reservationPreserved": true,
+    "nativeSpansAtBoundary": 600,
+    "openNativeSpansAtBoundary": 0,
+    "rawPayloadBytes": 75601702,
+    "requesterTerminal": {
+      "at": "2026-10-21T20:50:17.291820+00:00",
+      "status": "REQUESTER_TERMINAL_AND_PHYSICAL_CUSTODY_SEALED",
+      "manifestSha256": "11bbea3fc1e45e65da1ecb7b501aee77739870cb087d792e5bc5197f9b1027be",
+      "requesterActorsAbsent": true,
+      "requesterActors": [
+        {
+          "pid": 3751414,
+          "expectedStartTicks": 137933512,
+          "state": "ABSENT"
+        },
+        {
+          "pid": 3751426,
+          "expectedStartTicks": 137933748,
+          "state": "ABSENT"
+        },
+        {
+          "pid": 3751415,
+          "expectedStartTicks": 137933513,
+          "state": "ABSENT"
+        }
+      ],
+      "epochMeasured": {
+        "attempted": 270,
+        "correct": 270,
+        "failed": 0,
+        "incorrect": 0,
+        "timeouts": 0,
+        "planned": 270,
+        "unattempted": 0
+      },
+      "conditionCountsOnly": {
+        "attempted": 450,
+        "correct": 449,
+        "failed": 1,
+        "incorrect": 0,
+        "unattempted": 450,
+        "target": 900
+      },
+      "failureCodes": {},
+      "excludedWarmups": 15,
+      "caseRecords": 285,
+      "actualWAV": 285,
+      "verifiedFiles": 1840,
+      "verifiedBytes": 33923202,
+      "snapshotSha256": "b71d9e43a06c5e92101df9c0685e841318b4931e95ad527b19a93fcb8c104450",
+      "sourceCheckpointSha256": "8e68aaa5fbd8689db341db57dd89f540ba98ae4bbf648fcc520f741f485a7fa5",
+      "requesterNativeResourcePrefixEOF": [
+        {
+          "name": "voice-stages.jsonl",
+          "bytes": 3348465,
+          "sourceEOFVerified": true
+        },
+        {
+          "name": "actual-provider-bindings.jsonl",
+          "bytes": 2143,
+          "sourceEOFVerified": true
+        },
+        {
+          "name": "resources.jsonl",
+          "bytes": 19137664,
+          "sourceEOFVerified": true
+        }
+      ],
+      "controllerExitCode": 0,
+      "terminalStatus": "completed_all_correct",
+      "terminalStopReason": null,
+      "newInference": 0,
+      "nativeGoalMutations": 0,
+      "noLatencyPooling": true
+    },
+    "originalFilesPreserved": true,
+    "archiveContainsPhysicalCopies": true,
+    "sutCalls": 0,
+    "epochMeasuredAttempted": 270,
+    "conditionMeasuredAttempted": 450,
+    "conditionRemaining": 450,
+    "providerDeadlineNotExtendedUtc": "2026-10-21T22:45:52.468654+00:00",
+    "rootDeadlineNotResetUtc": "2026-10-21T23:36:07.231887+00:00",
+    "nativeCoverageScope": "Current V2234 correlations only; prefix also contains previous readiness calls. No cross-host clock subtraction.",
+    "host": "personal.skyron-server",
+    "archive": "/home/developer/projects/aurora/thesis/campaigns/worker-desktop-k1-http-provider-v2220/provider-checkpoint-v2252/provider-prefix-v2252.tar.gz",
+    "bytes": 4453626,
+    "sha256": "098989357310ddc2c844cfa59045395bdc841da5de8eb15b90a52bc86bd9bcd3",
+    "sealSha256": "fc9c3eb627f2e02a84ed993288084b0b2f89df13e7fe943b14673d2a58b4a058",
+    "files": 16,
+    "elapsedSeconds": 0.4578706109896302
+  },
+  "custody": "thesis/campaigns/worker-desktop-k1-orca-relayed-http-first270-v2234/provider-prefix-transfer-v2253/CUSTODY.json",
+  "analysis": "thesis/campaigns/worker-desktop-k1-orca-relayed-http-first270-v2234/analysis-v2254/SUMMARY.json",
+  "positiveNativeGaps": [],
+  "sourceAndAllFailuresPreserved": true,
+  "nativeGoalUnchanged": true,
+  "remainingFullGoalAndMatrixOpen": true
+}

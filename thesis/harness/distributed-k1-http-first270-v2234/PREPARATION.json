@@ -1,0 +1,124 @@
+{
+  "at": "2026-10-21T16:38:58.618345+00:00",
+  "status": "CURRENT_RECEIVER_PREFLIGHT_SOURCE_STAGED_NO_INFERENCE",
+  "sourceFiles": [
+    {
+      "path": "aurora_voice_telemetry_v430.py",
+      "bytes": 11584,
+      "sha256": "8129ffe7591a47a0107ede53b101aead9fc1f58b92f0c0c4203176cc7608325d",
+      "parentSha256": "8129ffe7591a47a0107ede53b101aead9fc1f58b92f0c0c4203176cc7608325d",
+      "changed": false
+    },
+    {
+      "path": "bindings.py",
+      "bytes": 3230,
+      "sha256": "52182f956b34788ecbfbbb241c8243ff88baebe2874e3605791793777ed0dc91",
+      "parentSha256": "52182f956b34788ecbfbbb241c8243ff88baebe2874e3605791793777ed0dc91",
+      "changed": false
+    },
+    {
+      "path": "bootstrap.py",
+      "bytes": 1950,
+      "sha256": "05303915a1617a3fbc163017902fa084e687257d7b0af9bc692877d08a6a3b7e",
+      "parentSha256": "05303915a1617a3fbc163017902fa084e687257d7b0af9bc692877d08a6a3b7e",
+      "changed": false
+    },
+    {
+      "path": "candidate-input.wav",
+      "bytes": 219794,
+      "sha256": "da0ecc4ad0885746ab6e716585473917ab2b543a505bf0db09ebacfaa7943cbb",
+      "parentSha256": "da0ecc4ad0885746ab6e716585473917ab2b543a505bf0db09ebacfaa7943cbb",
+      "changed": false
+    },
+    {
+      "path": "candidate-manifest.json",
+      "bytes": 220,
+      "sha256": "ce75b965ee5879ebece6ea7dfe133441547d20ccf89ecd5d66ea510bd9645e60",
+      "parentSha256": "ce75b965ee5879ebece6ea7dfe133441547d20ccf89ecd5d66ea510bd9645e60",
+      "changed": false
+    },
+    {
+      "path": "controller.py",
+      "bytes": 19465,
+      "sha256": "9fd74c70ec6393c084319b75e086fc39c66bf5f092161a8ba7b0e9bd59cbc11b",
+      "parentSha256": "2403ae5a81f5449461d55a8b2742d3c4639057c2fb36ffaa2dff0d1f5daa00e4",
+      "changed": true
+    },
+    {
+      "path": "observer.py",
+      "bytes": 11873,
+      "sha256": "784cc4bffc0d6824bbe378d17a7f632d587ca0a315896b048b2ebef727082df5",
+      "parentSha256": "784cc4bffc0d6824bbe378d17a7f632d587ca0a315896b048b2ebef727082df5",
+      "changed": false
+    },
+    {
+      "path": "receiver_proof.py",
+      "bytes": 11030,
+      "sha256": "1433dd8a62a55c3fc17af0cce2860dd4eb6bf5dbfd645607b6582afac000be51",
+      "parentSha256": "7a78023aac7f2012ebca1793e31303f135c5d7c518d5f65fb324692eb72d905e",
+      "changed": true
+    },
+    {
+      "path": "resource_sample.py",
+      "bytes": 7475,
+      "sha256": "8f62ec378e74036d4539d9159e3caf29b8fd7a9115de1ab0f482dfd58b6e1857",
+      "parentSha256": "8f62ec378e74036d4539d9159e3caf29b8fd7a9115de1ab0f482dfd58b6e1857",
+      "changed": false
+    },
+    {
+      "path": "runner.py",
+      "bytes": 66945,
+      "sha256": "e7af3781fd905524a463b65f680a51b6e96e4876544d04e5fabdf6d199faa247",
+      "parentSha256": "a260566d13a3a6bf80924a0c683058f98628e8b6ec4d2781165960afc6641fb3",
+      "changed": true
+    },
+    {
+      "path": "source-inventory.json",
+      "bytes": 67817,
+      "sha256": "000202cdddb9803d503fc44f8aaf58eb469475890751a310193418330aa79937",
+      "parentSha256": "000202cdddb9803d503fc44f8aaf58eb469475890751a310193418330aa79937",
+      "changed": false
+    },
+    {
+      "path": "source-inventory.legacy-http.json",
+      "bytes": 58216,
+      "sha256": "96ec8e3e14233520d4cd469c4177264a193d05cf26b4b512d91d98f16bbb7dee",
+      "parentSha256": "96ec8e3e14233520d4cd469c4177264a193d05cf26b4b512d91d98f16bbb7dee",
+      "changed": false
+    },
+    {
+      "path": "tts_http_adapter.py",
+      "bytes": 6703,
+      "sha256": "fe134e55b707908c242fdf1367366afa001efd56456c41b49fc7d80dc197bee5",
+      "parentSha256": "fe134e55b707908c242fdf1367366afa001efd56456c41b49fc7d80dc197bee5",
+      "changed": false
+    }
+  ],
+  "parentPackage": "thesis/harness/distributed-k1-http-first270-v2224",
+  "mapping": {
+    "conditionTarget": 900,
+    "priorMeasured": 180,
+    "missingBefore": 720,
+    "operationalEpochMeasured": 270,
+    "first": 181,
+    "last": 450,
+    "remainingAfterActual270": 450,
+    "excludedWarmups": 15,
+    "failed180Retried": false
+  },
+  "caps": {
+    "requestSeconds": 180,
+    "conditionSeconds": 24000,
+    "outerSeconds": 24300,
+    "sameRootSessionSeconds": 60000,
+    "rootDeadlineUnchanged": "2026-10-21T23:36:07.231887+00:00",
+    "providerMaximumDeadlineUnchanged": "2026-10-21T22:56:07.231887+00:00",
+    "newProviderNominalLifeSeconds": 24000
+  },
+  "forecastSeconds": 21104.430143129397,
+  "reason": "V2224 actual15correct native fullaudio warmups; old descriptor schema rejected only after warmups. New schema validates exact approved current receiver before any inference. Source/models/audio/settings/predicates unchanged; old data preserved. Same Dprovider retained.",
+  "appSourceInventorySha256": "000202cdddb9803d503fc44f8aaf58eb469475890751a310193418330aa79937",
+  "newWarmups": 0,
+  "newMeasured": 0,
+  "authAdmission": "thesis/evidence/k1-http-remaining720-admission-v2204/PROTECTED-HTTP-AUTH-v2223.json"
+}

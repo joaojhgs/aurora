@@ -1,0 +1,16 @@
+{
+  "schema": "aurora.phone_notebook.latest_usb.v2",
+  "at": "2026-10-22T01:45:13.048015+00:00",
+  "status": "KNOWN_SERIAL_NOT_FOUND_EXISTING_PERSONAL_CONTROLLER",
+  "actualReceipt": "evidence/source-device-smoke-20261022T014507/result.json",
+  "serverPid": 48127,
+  "serverExe": "/usr/lib/android-sdk/platform-tools/adb",
+  "phoneUsbInventory": [],
+  "phoneAdbInventory": [],
+  "deviceGetStateExit": 1,
+  "deviceGetStateStderr": "error: device 'KBX8LNFUBE5XGQRG' not found",
+  "unauthorizedDialogObserved": false,
+  "newOrcaProxyInventory": [],
+  "nativePilotCalls": 0,
+  "overnightStarted": false
+}

@@ -1,0 +1,53 @@
+{
+  "id": "remote-cli-1792633551805",
+  "ok": true,
+  "result": {
+    "runId": "run_e6054e76e9fc",
+    "deliveryId": "delivery_b9730f23e251",
+    "messages": [
+      {
+        "id": "msg_024ba46e6a59",
+        "run_id": "run_e6054e76e9fc",
+        "delivery_contract": "current_delivery",
+        "from_handle": "term_2eab47ed-ab9b-4e35-bd9b-fc068c60e3fc",
+        "to_handle": "run:run_e6054e76e9fc",
+        "subject": "CLOSED source copy: 4 files verified in 70.8 seconds; main HTTP continues",
+        "body": "CLOSED source-copy guard: consumed worker msg_329618f06d63 and independently read the saved 1,835-byte receiver receipt SHA256 ac098d1b746364dda9a3d9237e4cd138e72e49b3ed1db26fe1680111d161e5cb. Four files/3,913,736 bytes/43 frames received and hash-verified; finished 01:39:31.816741Z in 70.800415776s, inside v2353 120-second window. Exact ebde source, gitWrites=false, modelCalls=0, remoteSha=null. Worker reports receiver exited and canonical/echo restored. No further monitor copy, deadline probe, readiness nudge or source review is needed. Source assembly assertion remains ordinary engineering owned by the existing worker; this receipt is not a completed assembly/native pilot. Closure report .omx/evidence/orca-monitor-20261010/NOTEBOOK-SOURCE-DELTA-COPY-WINDOW-CLOSED-20261022T0142Z.json SHA256 6f4b8bae45eb17d0aba9c630373769a32192f5e303d70fc91230a5c4f927f4c9. Keep main HTTP running; its once-only owner completion notification remains pending actual full900 seal and release. Separate phone/cooling Coding delivery remains unverified under its existing dedup event, not a main hold.",
+        "type": "status",
+        "priority": "normal",
+        "thread_id": null,
+        "payload": "{\"taskId\":\"task_d7ea336050cf\",\"dispatchId\":\"ctx_37b4d0a3c14f\",\"reportPath\":\".omx/evidence/orca-monitor-20261010/NOTEBOOK-SOURCE-DELTA-COPY-WINDOW-CLOSED-20261022T0142Z.json\"}",
+        "created_at": "2026-10-22T01:42:28Z",
+        "delivered_at": null
+      },
+      {
+        "id": "msg_bebacb119670",
+        "run_id": "run_e6054e76e9fc",
+        "delivery_contract": "current_delivery",
+        "from_handle": "term_1f27be31-0284-4366-bb91-30fe538cd30e",
+        "to_handle": "run:run_e6054e76e9fc",
+        "subject": "Exact source assembly SUCCESS:1959 blobs/modes,dirty Git untouched; remaining physical USB/thermal",
+        "body": "Final notebook assembly succeeded at01:42:40.081268Z: exact ebde3a8acf6315f920d03593845f17a1fc65a733, 1959 files/37,949,666 bytes, 759 matching base Git blobs plus1200 delta files, all target content OIDs and canonical modes verified, no stale extras or Git writes. Owned staged source deployment/.../source-ebde3a8a-verified-v37; actual dual-custody result evidence/assemble-exact-repair-20261022T014230/result.json. Full inventory SHA88c7330effe93499e9c673921e9b12c90c54db53e572885f34bbd40644c8d47b, remoteSHAunknown. Earlier assembly assertion preserved: my check confused tar0664 with canonical Git100644; repaired without changing payload or resending. Separate receipt at01:40:30 proves exact receiver PID exited and TTY canonical/echo restored. Source and all833,499,307B exact public inputs now physically ready on notebook; no shared-source/model dependency remains. Runtime wait stopped automatically01:33:02 before compile (94.125C vs85C), zero build children/model calls; current POCO still absent in latest actual controller/Orca inventory. Only physical exposure/cooling gates prevent native build/pilot; no900/night start, main untouched.",
+        "type": "status",
+        "priority": "normal",
+        "thread_id": null,
+        "payload": null,
+        "created_at": "2026-10-22T01:44:19Z",
+        "delivered_at": null
+      }
+    ],
+    "count": 2,
+    "replayed": false,
+    "acknowledged": "delivery_4db919dfaa6e",
+    "timedOut": false,
+    "cancelled": false,
+    "connectionLost": false,
+    "mutation": {
+      "requestId": "ca1a3872-f9a0-4b25-9bd2-71913a979417",
+      "replayed": false
+    }
+  },
+  "_meta": {
+    "runtimeId": "cc9e3275-28c6-4c45-85cc-bdcd2262aa7d"
+  }
+}

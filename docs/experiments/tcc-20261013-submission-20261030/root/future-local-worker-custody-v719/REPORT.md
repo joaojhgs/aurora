@@ -1,0 +1,19 @@
+# Future LocalBus archive placement — V719
+
+This source-reviewed preparation removes an archive placement mismatch before the next LocalBus condition. It has not staged, frozen or launched a condition. The current GPU HTTP V692 run remains unchanged: its last actual checkpoint at 2026-10-15 19:54:11 UTC showed 402/900 measured attempts plus 15 excluded warmups, 498 unattempted, with both original controller/backend processes alive. The last case was correct; aggregate correctness and percentiles remain unestablished until final audit.
+
+The old prepared LocalBus controller reserved 120,000,000 bytes on the desktop project volume for an eventual archive. All runtime/raw files actually use the separately guarded desktop temporary volume, and the approved existing Orca route can copy the saved archive into the same Aurora project's docs on coding-worker. The new future-only controller preserves positive 120,000,000-byte archive admission on that actual intended worker filesystem. A fresh Root local capacity observation, pinned by the external frozen manifest hash, must be no older than 300 seconds at launch. The later archive copy independently requires the actual saved archive size plus 80,000,000 bytes free reserve and a 40,000,000-byte archive cap. An old capability snapshot is not launch admission.
+
+Actual worker capacity was 10,114,002,944 bytes at the saved preparation observation; the future generator must collect it again. Desktop project free space remains observed as source-volume context. Temporary admission remains 1,512,000,000 bytes, live temporary reserve 1,000,000,000 bytes and raw cap 512,000,000 bytes; RAM admission/floor remain 4,000,000,000/2,000,000,000 bytes. No reserve was set to zero, no files were deleted, and no security/access configuration changed.
+
+All source/model weights, decoding, effective service setup, fixed audio, strict question/Paris predicates, typed LocalBus calls, fifteen planned warmups, 900 measured cases, deadlines and provider/GPU gates remain unchanged. The old prepared V689 source is retained byte-for-byte. Its unused runner namespace and owner-label strings remain to preserve already-reviewed code; the new frozen cohort must explicitly identify the V719 custody policy and new controller/observation hashes. No old measured results are overwritten or pooled.
+
+| Prepared artifact | SHA-256 |
+| --- | --- |
+| New controller | `6174836e94884cf92423537bec3bdc7d148f118a61b715a213d7c1ad7ffea839` |
+| Finite independent source review | `f5dd29dc70380c19f78b7f9221ef568ec149f06624781c8b41a3950d44552584` |
+| Future staging generator, including current-plan hash binding | `6a01bd61828f75e04cb142a345167c53dd9f6f9f7e6963130bff70404d9c0ce8` |
+
+Sources remain private under `.git/aurora-handoff-import-20261006/qualified-local900-storage-v719/`. Controller review is source-only APPROVE; generator parsing passed without executing it. There was no additional model, browser, runtime, build, device or functional pilot. The original monitor alone appended authoritative plan sections 30.28–30.29; Root verified their exact new deltas and unchanged preceding prefixes. The latest full plan hash read was `1b627987686cf85239b3b6364dfeeb4f326f868e4cd6ba1f3c115d15efb8292a`.
+
+Launch still requires the current V692 natural terminal, exact owned-process retirement, saved-result audit/export and custody receipts, followed by a new exact manifest, fresh capacity/resources and Root reservation. The [earlier incomplete HTTP condition](../desktop-gpu-padded-http-incomplete-v684/REPORT.md) and [browser source preparation](../browser900-source-preparation-v713/REPORT.md) remain separate histories. Browser execution follows both individual headless conditions and its own admission. Full-surface, Android and measured cross-device requirements remain open. The original native full thirteen-story goal is active; no delivery status closes from this source preparation.

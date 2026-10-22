@@ -1,0 +1,1209 @@
+{
+  "startedAt": "2026-10-17T21:18:45.892841+00:00",
+  "status": "complete_checkpoint_copy",
+  "export": {
+    "startedAt": "2026-10-17T21:18:26.207457+00:00",
+    "finishedAt": "2026-10-17T21:18:28.641312+00:00",
+    "host": "personal.skyron-server",
+    "archive": "/home/developer/projects/aurora/thesis/evidence/orca-relayed-http-v1197/provider-exports/provider-checkpoint-000049-delta-v1258.tar.gz",
+    "bytes": 611064,
+    "sha256": "00932123309ae0094b4439e723f3b5996b81cfdbb52d752a997c0403c40cbc2d",
+    "checkpointSequence": 49,
+    "snapshotAt": "2026-10-17T21:18:06.289638+00:00",
+    "rawFiles": 111,
+    "rawPayloadBytes": 9820717,
+    "prefixes": {
+      "actual-provider-bindings.jsonl": {
+        "chunks": [
+          "prefixes/actual-provider-bindings.jsonl/000000000000-000000021026.chunk",
+          "prefixes/actual-provider-bindings.jsonl/000000021026-000000021775.chunk",
+          "prefixes/actual-provider-bindings.jsonl/000000021775-000000022524.chunk",
+          "prefixes/actual-provider-bindings.jsonl/000000022524-000000024022.chunk",
+          "prefixes/actual-provider-bindings.jsonl/000000024022-000000024771.chunk",
+          "prefixes/actual-provider-bindings.jsonl/000000024771-000000025520.chunk",
+          "prefixes/actual-provider-bindings.jsonl/000000025520-000000026269.chunk",
+          "prefixes/actual-provider-bindings.jsonl/000000026269-000000027018.chunk",
+          "prefixes/actual-provider-bindings.jsonl/000000027018-000000028516.chunk",
+          "prefixes/actual-provider-bindings.jsonl/000000028516-000000029265.chunk",
+          "prefixes/actual-provider-bindings.jsonl/000000029265-000000030014.chunk",
+          "prefixes/actual-provider-bindings.jsonl/000000030014-000000030763.chunk",
+          "prefixes/actual-provider-bindings.jsonl/000000030763-000000031512.chunk",
+          "prefixes/actual-provider-bindings.jsonl/000000031512-000000032261.chunk",
+          "prefixes/actual-provider-bindings.jsonl/000000032261-000000033010.chunk",
+          "prefixes/actual-provider-bindings.jsonl/000000033010-000000033759.chunk",
+          "prefixes/actual-provider-bindings.jsonl/000000033759-000000034508.chunk",
+          "prefixes/actual-provider-bindings.jsonl/000000034508-000000036006.chunk",
+          "prefixes/actual-provider-bindings.jsonl/000000036006-000000036755.chunk",
+          "prefixes/actual-provider-bindings.jsonl/000000036755-000000037504.chunk",
+          "prefixes/actual-provider-bindings.jsonl/000000037504-000000038253.chunk",
+          "prefixes/actual-provider-bindings.jsonl/000000038253-000000039628.chunk",
+          "prefixes/actual-provider-bindings.jsonl/000000039628-000000040500.chunk",
+          "prefixes/actual-provider-bindings.jsonl/000000040500-000000041249.chunk",
+          "prefixes/actual-provider-bindings.jsonl/000000041249-000000041998.chunk",
+          "prefixes/actual-provider-bindings.jsonl/000000041998-000000042747.chunk",
+          "prefixes/actual-provider-bindings.jsonl/000000042747-000000043496.chunk",
+          "prefixes/actual-provider-bindings.jsonl/000000043496-000000044871.chunk",
+          "prefixes/actual-provider-bindings.jsonl/000000044871-000000045743.chunk",
+          "prefixes/actual-provider-bindings.jsonl/000000045743-000000046492.chunk",
+          "prefixes/actual-provider-bindings.jsonl/000000046492-000000047241.chunk",
+          "prefixes/actual-provider-bindings.jsonl/000000047241-000000048739.chunk",
+          "prefixes/actual-provider-bindings.jsonl/000000048739-000000049488.chunk",
+          "prefixes/actual-provider-bindings.jsonl/000000049488-000000050237.chunk",
+          "prefixes/actual-provider-bindings.jsonl/000000050237-000000050986.chunk",
+          "prefixes/actual-provider-bindings.jsonl/000000050986-000000051735.chunk",
+          "prefixes/actual-provider-bindings.jsonl/000000051735-000000052484.chunk",
+          "prefixes/actual-provider-bindings.jsonl/000000052484-000000053233.chunk",
+          "prefixes/actual-provider-bindings.jsonl/000000053233-000000054731.chunk",
+          "prefixes/actual-provider-bindings.jsonl/000000054731-000000055480.chunk",
+          "prefixes/actual-provider-bindings.jsonl/000000055480-000000056229.chunk",
+          "prefixes/actual-provider-bindings.jsonl/000000056229-000000056978.chunk",
+          "prefixes/actual-provider-bindings.jsonl/000000056978-000000057727.chunk",
+          "prefixes/actual-provider-bindings.jsonl/000000057727-000000058476.chunk",
+          "prefixes/actual-provider-bindings.jsonl/000000058476-000000059974.chunk",
+          "prefixes/actual-provider-bindings.jsonl/000000059974-000000060723.chunk",
+          "prefixes/actual-provider-bindings.jsonl/000000060723-000000061472.chunk",
+          "prefixes/actual-provider-bindings.jsonl/000000061472-000000062221.chunk",
+          "prefixes/actual-provider-bindings.jsonl/000000062221-000000062970.chunk"
+        ],
+        "endByte": 62970,
+        "incomplete": true,
+        "inode": 7243549,
+        "observedAt": "2026-10-17T21:18:06.174885+00:00",
+        "sourceObservedBytes": 62970
+      },
+      "resources.jsonl": {
+        "chunks": [
+          "prefixes/resources.jsonl/000000000000-000004191689.chunk",
+          "prefixes/resources.jsonl/000004191689-000008384111.chunk",
+          "prefixes/resources.jsonl/000008384111-000012577265.chunk",
+          "prefixes/resources.jsonl/000012577265-000016767773.chunk",
+          "prefixes/resources.jsonl/000016767773-000020960378.chunk",
+          "prefixes/resources.jsonl/000020960378-000025153302.chunk",
+          "prefixes/resources.jsonl/000025153302-000029346224.chunk",
+          "prefixes/resources.jsonl/000029346224-000033539149.chunk",
+          "prefixes/resources.jsonl/000033539149-000037732073.chunk",
+          "prefixes/resources.jsonl/000037732073-000039835040.chunk",
+          "prefixes/resources.jsonl/000039835040-000040134225.chunk",
+          "prefixes/resources.jsonl/000040134225-000040394385.chunk",
+          "prefixes/resources.jsonl/000040394385-000040654546.chunk",
+          "prefixes/resources.jsonl/000040654546-000040910370.chunk",
+          "prefixes/resources.jsonl/000040910370-000041170531.chunk",
+          "prefixes/resources.jsonl/000041170531-000041430692.chunk",
+          "prefixes/resources.jsonl/000041430692-000041690852.chunk",
+          "prefixes/resources.jsonl/000041690852-000041946677.chunk",
+          "prefixes/resources.jsonl/000041946677-000042206837.chunk",
+          "prefixes/resources.jsonl/000042206837-000042462663.chunk",
+          "prefixes/resources.jsonl/000042462663-000042722823.chunk",
+          "prefixes/resources.jsonl/000042722823-000042982983.chunk",
+          "prefixes/resources.jsonl/000042982983-000043243158.chunk",
+          "prefixes/resources.jsonl/000043243158-000043499102.chunk",
+          "prefixes/resources.jsonl/000043499102-000043759384.chunk",
+          "prefixes/resources.jsonl/000043759384-000044015386.chunk",
+          "prefixes/resources.jsonl/000044015386-000044275727.chunk",
+          "prefixes/resources.jsonl/000044275727-000044536067.chunk",
+          "prefixes/resources.jsonl/000044536067-000044792068.chunk",
+          "prefixes/resources.jsonl/000044792068-000045052409.chunk",
+          "prefixes/resources.jsonl/000045052409-000045312751.chunk",
+          "prefixes/resources.jsonl/000045312751-000045573092.chunk",
+          "prefixes/resources.jsonl/000045573092-000045829093.chunk",
+          "prefixes/resources.jsonl/000045829093-000046089434.chunk",
+          "prefixes/resources.jsonl/000046089434-000046345436.chunk",
+          "prefixes/resources.jsonl/000046345436-000046605777.chunk",
+          "prefixes/resources.jsonl/000046605777-000046866119.chunk",
+          "prefixes/resources.jsonl/000046866119-000047126460.chunk",
+          "prefixes/resources.jsonl/000047126460-000047382461.chunk",
+          "prefixes/resources.jsonl/000047382461-000047642802.chunk",
+          "prefixes/resources.jsonl/000047642802-000047903142.chunk",
+          "prefixes/resources.jsonl/000047903142-000048159240.chunk",
+          "prefixes/resources.jsonl/000048159240-000048419700.chunk",
+          "prefixes/resources.jsonl/000048419700-000048680162.chunk",
+          "prefixes/resources.jsonl/000048680162-000048940623.chunk",
+          "prefixes/resources.jsonl/000048940623-000049196742.chunk",
+          "prefixes/resources.jsonl/000049196742-000049457203.chunk",
+          "prefixes/resources.jsonl/000049457203-000049717663.chunk",
+          "prefixes/resources.jsonl/000049717663-000049973783.chunk",
+          "prefixes/resources.jsonl/000049973783-000050234243.chunk",
+          "prefixes/resources.jsonl/000050234243-000050490363.chunk",
+          "prefixes/resources.jsonl/000050490363-000050750823.chunk",
+          "prefixes/resources.jsonl/000050750823-000051011285.chunk",
+          "prefixes/resources.jsonl/000051011285-000051267404.chunk",
+          "prefixes/resources.jsonl/000051267404-000051527865.chunk",
+          "prefixes/resources.jsonl/000051527865-000051788416.chunk",
+          "prefixes/resources.jsonl/000051788416-000052048996.chunk",
+          "prefixes/resources.jsonl/000052048996-000052305234.chunk"
+        ],
+        "endByte": 52305234,
+        "incomplete": true,
+        "inode": 7243539,
+        "observedAt": "2026-10-17T21:18:06.241745+00:00",
+        "sourceObservedBytes": 52305234
+      },
+      "voice-stages.jsonl": {
+        "chunks": [
+          "prefixes/voice-stages.jsonl/000000000000-000000126897.chunk",
+          "prefixes/voice-stages.jsonl/000000126897-000000131690.chunk",
+          "prefixes/voice-stages.jsonl/000000131690-000000136483.chunk",
+          "prefixes/voice-stages.jsonl/000000136483-000000146069.chunk",
+          "prefixes/voice-stages.jsonl/000000146069-000000150862.chunk",
+          "prefixes/voice-stages.jsonl/000000150862-000000155655.chunk",
+          "prefixes/voice-stages.jsonl/000000155655-000000160448.chunk",
+          "prefixes/voice-stages.jsonl/000000160448-000000165241.chunk",
+          "prefixes/voice-stages.jsonl/000000165241-000000174827.chunk",
+          "prefixes/voice-stages.jsonl/000000174827-000000179620.chunk",
+          "prefixes/voice-stages.jsonl/000000179620-000000184413.chunk",
+          "prefixes/voice-stages.jsonl/000000184413-000000189206.chunk",
+          "prefixes/voice-stages.jsonl/000000189206-000000193999.chunk",
+          "prefixes/voice-stages.jsonl/000000193999-000000198792.chunk",
+          "prefixes/voice-stages.jsonl/000000198792-000000203585.chunk",
+          "prefixes/voice-stages.jsonl/000000203585-000000208378.chunk",
+          "prefixes/voice-stages.jsonl/000000208378-000000213171.chunk",
+          "prefixes/voice-stages.jsonl/000000213171-000000222757.chunk",
+          "prefixes/voice-stages.jsonl/000000222757-000000227550.chunk",
+          "prefixes/voice-stages.jsonl/000000227550-000000232343.chunk",
+          "prefixes/voice-stages.jsonl/000000232343-000000237136.chunk",
+          "prefixes/voice-stages.jsonl/000000237136-000000244325.chunk",
+          "prefixes/voice-stages.jsonl/000000244325-000000251515.chunk",
+          "prefixes/voice-stages.jsonl/000000251515-000000256308.chunk",
+          "prefixes/voice-stages.jsonl/000000256308-000000261101.chunk",
+          "prefixes/voice-stages.jsonl/000000261101-000000265894.chunk",
+          "prefixes/voice-stages.jsonl/000000265894-000000270687.chunk",
+          "prefixes/voice-stages.jsonl/000000270687-000000277876.chunk",
+          "prefixes/voice-stages.jsonl/000000277876-000000285066.chunk",
+          "prefixes/voice-stages.jsonl/000000285066-000000289859.chunk",
+          "prefixes/voice-stages.jsonl/000000289859-000000294652.chunk",
+          "prefixes/voice-stages.jsonl/000000294652-000000304238.chunk",
+          "prefixes/voice-stages.jsonl/000000304238-000000309031.chunk",
+          "prefixes/voice-stages.jsonl/000000309031-000000313824.chunk",
+          "prefixes/voice-stages.jsonl/000000313824-000000318617.chunk",
+          "prefixes/voice-stages.jsonl/000000318617-000000323410.chunk",
+          "prefixes/voice-stages.jsonl/000000323410-000000328203.chunk",
+          "prefixes/voice-stages.jsonl/000000328203-000000332996.chunk",
+          "prefixes/voice-stages.jsonl/000000332996-000000342582.chunk",
+          "prefixes/voice-stages.jsonl/000000342582-000000347375.chunk",
+          "prefixes/voice-stages.jsonl/000000347375-000000352168.chunk",
+          "prefixes/voice-stages.jsonl/000000352168-000000356961.chunk",
+          "prefixes/voice-stages.jsonl/000000356961-000000361754.chunk",
+          "prefixes/voice-stages.jsonl/000000361754-000000366547.chunk",
+          "prefixes/voice-stages.jsonl/000000366547-000000376133.chunk",
+          "prefixes/voice-stages.jsonl/000000376133-000000380926.chunk",
+          "prefixes/voice-stages.jsonl/000000380926-000000385719.chunk",
+          "prefixes/voice-stages.jsonl/000000385719-000000390512.chunk",
+          "prefixes/voice-stages.jsonl/000000390512-000000395305.chunk"
+        ],
+        "endByte": 395305,
+        "incomplete": true,
+        "inode": 7243540,
+        "observedAt": "2026-10-17T21:18:06.125109+00:00",
+        "sourceObservedBytes": 395305
+      }
+    },
+    "baseline": {
+      "path": "/home/developer/projects/aurora/thesis/evidence/orca-relayed-http-v1197/provider-transfer-baselines/provider-export-v1232.json",
+      "bytes": 40659,
+      "sha256": "5f29a553048441503ba0d231ec78e857f2a9ef3355a931dcae9d0db360ee760b",
+      "files": 56,
+      "rawPayloadBytes": 43117024
+    },
+    "baselineRawRecopiedBytes": 0,
+    "diskBefore": {
+      "total": 491054088192,
+      "used": 317051785216,
+      "free": 148982915072
+    },
+    "diskAfter": {
+      "total": 491054088192,
+      "used": 317052399616,
+      "free": 148982300672
+    },
+    "sutCalls": 0,
+    "copyRateBytesPerSecond": 4194304,
+    "possibleConfound": "Bounded delta export disk IO/compression concurrent with1197; keep every measured case.",
+    "originalOwnersBefore": {
+      "261665": {
+        "state": "S",
+        "startTicks": 1519707
+      },
+      "261790": {
+        "state": "S",
+        "startTicks": 1519744
+      },
+      "429068": {
+        "state": "S",
+        "startTicks": 2450245
+      }
+    },
+    "originalOwnersAfter": {
+      "261665": {
+        "state": "S",
+        "startTicks": 1519707
+      },
+      "261790": {
+        "state": "S",
+        "startTicks": 1519744
+      },
+      "429068": {
+        "state": "S",
+        "startTicks": 2450245
+      }
+    },
+    "providerManifestSha256": "450ee5af677a229e93f75c093e4e5ee3135c25b223f0d73f713f0c31f56c4cae"
+  },
+  "copiedBytes": 611064,
+  "operation": null,
+  "pages": [
+    {
+      "offset": 0,
+      "bytes": 98304,
+      "sha256": "716c80bc4a3a10b0b36b31cba362fa75779e338cdb73f9820e9a40fb9a1aa84f",
+      "nextCursor": "6387",
+      "receipt": "v1261-provider-page-0000-RESULT.json"
+    },
+    {
+      "offset": 98304,
+      "bytes": 98304,
+      "sha256": "1ba53a23a9d4b80e6110af76258867deac98065ee8752f4d3638b35d682ab731",
+      "nextCursor": "6608",
+      "receipt": "v1261-provider-page-0001-RESULT.json"
+    },
+    {
+      "offset": 196608,
+      "bytes": 98304,
+      "sha256": "71b889686c6392fbb0e898fea35ce78bdbba10a238373c7ff4790ff4ec434ca2",
+      "nextCursor": "6829",
+      "receipt": "v1261-provider-page-0002-RESULT.json"
+    },
+    {
+      "offset": 294912,
+      "bytes": 98304,
+      "sha256": "1ab2f28d2c88cfd5def0057d95146b4d919104d170964a878e65edacf08923f7",
+      "nextCursor": "7050",
+      "receipt": "v1261-provider-page-0003-RESULT.json"
+    },
+    {
+      "offset": 393216,
+      "bytes": 98304,
+      "sha256": "30dc231f717cdd7f636a0704674d1151c59e00f512d56ffa98242bd66e028c36",
+      "nextCursor": "7271",
+      "receipt": "v1261-provider-page-0004-RESULT.json"
+    },
+    {
+      "offset": 491520,
+      "bytes": 98304,
+      "sha256": "b02653b8f1fe554748b39103561bdd17bca38291be9a1aaaae8214da7e871b5b",
+      "nextCursor": "7492",
+      "receipt": "v1261-provider-page-0005-RESULT.json"
+    },
+    {
+      "offset": 589824,
+      "bytes": 21240,
+      "sha256": "ee30ad2ed88a623d8691820eb5e0faac4a34b13b66ee79da4ef09543e9f5c426",
+      "nextCursor": "7542",
+      "receipt": "v1261-provider-page-0006-RESULT.json"
+    }
+  ],
+  "diskBefore": {
+    "total": 109128826880,
+    "used": 101915586560,
+    "free": 7196463104
+  },
+  "outerSeconds": 600,
+  "sutCalls": 0,
+  "newAgents": 0,
+  "baselineRawRecopiedBytes": 0,
+  "baseline": {
+    "path": "/home/developer/projects/aurora/thesis/evidence/orca-relayed-http-v1197/provider-transfer-baselines/provider-export-v1232.json",
+    "bytes": 40659,
+    "sha256": "5f29a553048441503ba0d231ec78e857f2a9ef3355a931dcae9d0db360ee760b",
+    "files": 56,
+    "rawPayloadBytes": 43117024
+  },
+  "possibleConfound": "Existing Orca control traffic/disk IO; retain all concurrent measured cases.",
+  "updatedAt": "2026-10-17T21:19:36.081664+00:00",
+  "archiveVerified": {
+    "path": "thesis/evidence/orca-relayed-http-v1197/provider-transfer-delta-v1261/provider-checkpoint-000049-delta-v1258.tar.gz",
+    "bytes": 611064,
+    "sha256": "00932123309ae0094b4439e723f3b5996b81cfdbb52d752a997c0403c40cbc2d"
+  },
+  "files": [
+    {
+      "member": "PROVIDER-CURRENT.snapshot.json",
+      "destination": "thesis/evidence/orca-relayed-http-v1197/provider-transfer-delta-v1261/extracted/PROVIDER-CURRENT.snapshot.json",
+      "bytes": 120978,
+      "sha256": "430b67684fa1383226530dee036539ac11f2f7e6b4414132497eec73ba8e00dc"
+    },
+    {
+      "member": "PROVIDER-RECEIPT.snapshot.json",
+      "destination": "thesis/evidence/orca-relayed-http-v1197/provider-transfer-delta-v1261/extracted/PROVIDER-RECEIPT.snapshot.json",
+      "bytes": 14492,
+      "sha256": "1c151a5e5a0e4794e5e3ee6e0b63e4ae6fa3ddd1b2f7ed9da1f557deb4171993"
+    },
+    {
+      "member": "PROVIDER-EXPORT.json",
+      "destination": "thesis/evidence/orca-relayed-http-v1197/provider-transfer-delta-v1261/extracted/PROVIDER-EXPORT.json",
+      "bytes": 89910,
+      "sha256": "ea6e6bb310494eb680a08ac9399b5b67027a1d68704d08d43149d43ae1821713"
+    },
+    {
+      "member": "provider-raw/prefixes/actual-provider-bindings.jsonl/000000030763-000000031512.chunk",
+      "destination": "thesis/evidence/orca-relayed-http-v1197/provider-transfer-delta-v1261/extracted/provider-raw/prefixes/actual-provider-bindings.jsonl/000000030763-000000031512.chunk",
+      "bytes": 749,
+      "sha256": "15f8c00414c2727fe1328a687033131306d25565541f06413d0d3c2e4d6eb53c"
+    },
+    {
+      "member": "provider-raw/prefixes/actual-provider-bindings.jsonl/000000031512-000000032261.chunk",
+      "destination": "thesis/evidence/orca-relayed-http-v1197/provider-transfer-delta-v1261/extracted/provider-raw/prefixes/actual-provider-bindings.jsonl/000000031512-000000032261.chunk",
+      "bytes": 749,
+      "sha256": "3a5a8b7747caba83949c0b699da79cc5d97077bed1d41bdf988072af1c2df6ec"
+    },
+    {
+      "member": "provider-raw/prefixes/actual-provider-bindings.jsonl/000000032261-000000033010.chunk",
+      "destination": "thesis/evidence/orca-relayed-http-v1197/provider-transfer-delta-v1261/extracted/provider-raw/prefixes/actual-provider-bindings.jsonl/000000032261-000000033010.chunk",
+      "bytes": 749,
+      "sha256": "3cce456b6aae5e43948cba4116d398d41535147dca2861ba4a78a8f97c215275"
+    },
+    {
+      "member": "provider-raw/prefixes/actual-provider-bindings.jsonl/000000033010-000000033759.chunk",
+      "destination": "thesis/evidence/orca-relayed-http-v1197/provider-transfer-delta-v1261/extracted/provider-raw/prefixes/actual-provider-bindings.jsonl/000000033010-000000033759.chunk",
+      "bytes": 749,
+      "sha256": "43bd8e0c9bd0e2a7d803caf115650b9209576faa383fcb8564554c847fc8c9df"
+    },
+    {
+      "member": "provider-raw/prefixes/actual-provider-bindings.jsonl/000000033759-000000034508.chunk",
+      "destination": "thesis/evidence/orca-relayed-http-v1197/provider-transfer-delta-v1261/extracted/provider-raw/prefixes/actual-provider-bindings.jsonl/000000033759-000000034508.chunk",
+      "bytes": 749,
+      "sha256": "383d481561c3cb84d8ee8d9d25b4fa9cbca27a67c21dd47dcd9b7c7e4c64d9aa"
+    },
+    {
+      "member": "provider-raw/prefixes/actual-provider-bindings.jsonl/000000034508-000000036006.chunk",
+      "destination": "thesis/evidence/orca-relayed-http-v1197/provider-transfer-delta-v1261/extracted/provider-raw/prefixes/actual-provider-bindings.jsonl/000000034508-000000036006.chunk",
+      "bytes": 1498,
+      "sha256": "d7d72db041e1bce11b6802924a6ced433e3b3036b922a238459d39beff0c641c"
+    },
+    {
+      "member": "provider-raw/prefixes/actual-provider-bindings.jsonl/000000036006-000000036755.chunk",
+      "destination": "thesis/evidence/orca-relayed-http-v1197/provider-transfer-delta-v1261/extracted/provider-raw/prefixes/actual-provider-bindings.jsonl/000000036006-000000036755.chunk",
+      "bytes": 749,
+      "sha256": "e18166105af7183819a97c3e80b93172392789afc4136987decb73b83c82b873"
+    },
+    {
+      "member": "provider-raw/prefixes/actual-provider-bindings.jsonl/000000036755-000000037504.chunk",
+      "destination": "thesis/evidence/orca-relayed-http-v1197/provider-transfer-delta-v1261/extracted/provider-raw/prefixes/actual-provider-bindings.jsonl/000000036755-000000037504.chunk",
+      "bytes": 749,
+      "sha256": "7411e0f1dadaa5e30d56f3749413ecdf62f8f33991b162ac2a893edadcc4f441"
+    },
+    {
+      "member": "provider-raw/prefixes/actual-provider-bindings.jsonl/000000037504-000000038253.chunk",
+      "destination": "thesis/evidence/orca-relayed-http-v1197/provider-transfer-delta-v1261/extracted/provider-raw/prefixes/actual-provider-bindings.jsonl/000000037504-000000038253.chunk",
+      "bytes": 749,
+      "sha256": "e08c2c5a13bed8cd48bec9b1c388127f0152b2109c58982be193dcea53612260"
+    },
+    {
+      "member": "provider-raw/prefixes/actual-provider-bindings.jsonl/000000038253-000000039628.chunk",
+      "destination": "thesis/evidence/orca-relayed-http-v1197/provider-transfer-delta-v1261/extracted/provider-raw/prefixes/actual-provider-bindings.jsonl/000000038253-000000039628.chunk",
+      "bytes": 1375,
+      "sha256": "8468febe8d567d2914cc0183f913138e4766f4dd9a5ba767f1de4e0c080a78e6"
+    },
+    {
+      "member": "provider-raw/prefixes/actual-provider-bindings.jsonl/000000039628-000000040500.chunk",
+      "destination": "thesis/evidence/orca-relayed-http-v1197/provider-transfer-delta-v1261/extracted/provider-raw/prefixes/actual-provider-bindings.jsonl/000000039628-000000040500.chunk",
+      "bytes": 872,
+      "sha256": "af10acd90a9153435ba5dbc43656e0f92edfd9d6643f41819ee751bdff3c255b"
+    },
+    {
+      "member": "provider-raw/prefixes/actual-provider-bindings.jsonl/000000040500-000000041249.chunk",
+      "destination": "thesis/evidence/orca-relayed-http-v1197/provider-transfer-delta-v1261/extracted/provider-raw/prefixes/actual-provider-bindings.jsonl/000000040500-000000041249.chunk",
+      "bytes": 749,
+      "sha256": "b550840eb7bd21c2195b9680f69a32782bc58e28b4cc2ad9b3f00368115c5cc3"
+    },
+    {
+      "member": "provider-raw/prefixes/actual-provider-bindings.jsonl/000000041249-000000041998.chunk",
+      "destination": "thesis/evidence/orca-relayed-http-v1197/provider-transfer-delta-v1261/extracted/provider-raw/prefixes/actual-provider-bindings.jsonl/000000041249-000000041998.chunk",
+      "bytes": 749,
+      "sha256": "6c49aef46f80b7a1af35874cc2564c5ca82098811c0f8ec4429ffbd729ce068d"
+    },
+    {
+      "member": "provider-raw/prefixes/actual-provider-bindings.jsonl/000000041998-000000042747.chunk",
+      "destination": "thesis/evidence/orca-relayed-http-v1197/provider-transfer-delta-v1261/extracted/provider-raw/prefixes/actual-provider-bindings.jsonl/000000041998-000000042747.chunk",
+      "bytes": 749,
+      "sha256": "5a7120c9348ab75402cca82d99b3ba66d1ed87ba4cc43e09c932469be09b63af"
+    },
+    {
+      "member": "provider-raw/prefixes/actual-provider-bindings.jsonl/000000042747-000000043496.chunk",
+      "destination": "thesis/evidence/orca-relayed-http-v1197/provider-transfer-delta-v1261/extracted/provider-raw/prefixes/actual-provider-bindings.jsonl/000000042747-000000043496.chunk",
+      "bytes": 749,
+      "sha256": "cf90c90c7fa0bff02a411dc2043f45ef3c07dfbba8d491f99f7649cc0ee76f66"
+    },
+    {
+      "member": "provider-raw/prefixes/actual-provider-bindings.jsonl/000000043496-000000044871.chunk",
+      "destination": "thesis/evidence/orca-relayed-http-v1197/provider-transfer-delta-v1261/extracted/provider-raw/prefixes/actual-provider-bindings.jsonl/000000043496-000000044871.chunk",
+      "bytes": 1375,
+      "sha256": "134928ee48e18e1e9224425c46aed6c820e359a6751715cb0fd6de01f57ade4f"
+    },
+    {
+      "member": "provider-raw/prefixes/actual-provider-bindings.jsonl/000000044871-000000045743.chunk",
+      "destination": "thesis/evidence/orca-relayed-http-v1197/provider-transfer-delta-v1261/extracted/provider-raw/prefixes/actual-provider-bindings.jsonl/000000044871-000000045743.chunk",
+      "bytes": 872,
+      "sha256": "2b00737d7e46d62ff3664a2a89ada6cd28f57718cc5c949231de1bf0da63d96b"
+    },
+    {
+      "member": "provider-raw/prefixes/actual-provider-bindings.jsonl/000000045743-000000046492.chunk",
+      "destination": "thesis/evidence/orca-relayed-http-v1197/provider-transfer-delta-v1261/extracted/provider-raw/prefixes/actual-provider-bindings.jsonl/000000045743-000000046492.chunk",
+      "bytes": 749,
+      "sha256": "0f4c9e97ca0a7b9b87cb14cad5084ce4b5b00adf03bb7550941065cadf5c4193"
+    },
+    {
+      "member": "provider-raw/prefixes/actual-provider-bindings.jsonl/000000046492-000000047241.chunk",
+      "destination": "thesis/evidence/orca-relayed-http-v1197/provider-transfer-delta-v1261/extracted/provider-raw/prefixes/actual-provider-bindings.jsonl/000000046492-000000047241.chunk",
+      "bytes": 749,
+      "sha256": "6277c7905a9b3762427d9ec07832c4e7ae164d6de3b7b7993b023b797582c2f8"
+    },
+    {
+      "member": "provider-raw/prefixes/actual-provider-bindings.jsonl/000000047241-000000048739.chunk",
+      "destination": "thesis/evidence/orca-relayed-http-v1197/provider-transfer-delta-v1261/extracted/provider-raw/prefixes/actual-provider-bindings.jsonl/000000047241-000000048739.chunk",
+      "bytes": 1498,
+      "sha256": "fde648a0c40dd4c5901c560970c8242b3a3e290c6d05e77c37a82eb87de9f4b6"
+    },
+    {
+      "member": "provider-raw/prefixes/actual-provider-bindings.jsonl/000000048739-000000049488.chunk",
+      "destination": "thesis/evidence/orca-relayed-http-v1197/provider-transfer-delta-v1261/extracted/provider-raw/prefixes/actual-provider-bindings.jsonl/000000048739-000000049488.chunk",
+      "bytes": 749,
+      "sha256": "b058a0135277cb12f5fe43843225941270430007b3a4adc94e9d5a3342c4b389"
+    },
+    {
+      "member": "provider-raw/prefixes/actual-provider-bindings.jsonl/000000049488-000000050237.chunk",
+      "destination": "thesis/evidence/orca-relayed-http-v1197/provider-transfer-delta-v1261/extracted/provider-raw/prefixes/actual-provider-bindings.jsonl/000000049488-000000050237.chunk",
+      "bytes": 749,
+      "sha256": "0aa0511d0d953bf7ae3c81d203b0f62572bcce6cb8e0931199226eb487060219"
+    },
+    {
+      "member": "provider-raw/prefixes/actual-provider-bindings.jsonl/000000050237-000000050986.chunk",
+      "destination": "thesis/evidence/orca-relayed-http-v1197/provider-transfer-delta-v1261/extracted/provider-raw/prefixes/actual-provider-bindings.jsonl/000000050237-000000050986.chunk",
+      "bytes": 749,
+      "sha256": "c404dc499afe94f2b59123245e1ef24cae5123dc206a99755f21e403417b8792"
+    },
+    {
+      "member": "provider-raw/prefixes/actual-provider-bindings.jsonl/000000050986-000000051735.chunk",
+      "destination": "thesis/evidence/orca-relayed-http-v1197/provider-transfer-delta-v1261/extracted/provider-raw/prefixes/actual-provider-bindings.jsonl/000000050986-000000051735.chunk",
+      "bytes": 749,
+      "sha256": "c2314425e9e0d3efeef0aa36237fa736864e3164e013f6fd9ffbcce9c6d1fc3b"
+    },
+    {
+      "member": "provider-raw/prefixes/actual-provider-bindings.jsonl/000000051735-000000052484.chunk",
+      "destination": "thesis/evidence/orca-relayed-http-v1197/provider-transfer-delta-v1261/extracted/provider-raw/prefixes/actual-provider-bindings.jsonl/000000051735-000000052484.chunk",
+      "bytes": 749,
+      "sha256": "c6d617b2b453699f3ffd4fab4ba17972024ac1db84b4970bea01ae68e473ee09"
+    },
+    {
+      "member": "provider-raw/prefixes/actual-provider-bindings.jsonl/000000052484-000000053233.chunk",
+      "destination": "thesis/evidence/orca-relayed-http-v1197/provider-transfer-delta-v1261/extracted/provider-raw/prefixes/actual-provider-bindings.jsonl/000000052484-000000053233.chunk",
+      "bytes": 749,
+      "sha256": "d795dbb4384c286d3973303c92aa667d3084805e7e6aa6cfb43de73f0bcf357a"
+    },
+    {
+      "member": "provider-raw/prefixes/actual-provider-bindings.jsonl/000000053233-000000054731.chunk",
+      "destination": "thesis/evidence/orca-relayed-http-v1197/provider-transfer-delta-v1261/extracted/provider-raw/prefixes/actual-provider-bindings.jsonl/000000053233-000000054731.chunk",
+      "bytes": 1498,
+      "sha256": "e1bf38aef1f7b7d90b3f70bdba90c6362669f7bac3f015baa2c6168f7cf8c35c"
+    },
+    {
+      "member": "provider-raw/prefixes/actual-provider-bindings.jsonl/000000054731-000000055480.chunk",
+      "destination": "thesis/evidence/orca-relayed-http-v1197/provider-transfer-delta-v1261/extracted/provider-raw/prefixes/actual-provider-bindings.jsonl/000000054731-000000055480.chunk",
+      "bytes": 749,
+      "sha256": "4d6fab781bb7f1de597c84f215eb3360c0ccc96c0ab728d28823335fc5eb6b27"
+    },
+    {
+      "member": "provider-raw/prefixes/actual-provider-bindings.jsonl/000000055480-000000056229.chunk",
+      "destination": "thesis/evidence/orca-relayed-http-v1197/provider-transfer-delta-v1261/extracted/provider-raw/prefixes/actual-provider-bindings.jsonl/000000055480-000000056229.chunk",
+      "bytes": 749,
+      "sha256": "b23f5471fee31bf65284c4fdd48872284933befd067a186131e864704b1f69ae"
+    },
+    {
+      "member": "provider-raw/prefixes/actual-provider-bindings.jsonl/000000056229-000000056978.chunk",
+      "destination": "thesis/evidence/orca-relayed-http-v1197/provider-transfer-delta-v1261/extracted/provider-raw/prefixes/actual-provider-bindings.jsonl/000000056229-000000056978.chunk",
+      "bytes": 749,
+      "sha256": "53ee194730f345ffb486a520219373f50731a43016e294a353a88d08b4a5383f"
+    },
+    {
+      "member": "provider-raw/prefixes/actual-provider-bindings.jsonl/000000056978-000000057727.chunk",
+      "destination": "thesis/evidence/orca-relayed-http-v1197/provider-transfer-delta-v1261/extracted/provider-raw/prefixes/actual-provider-bindings.jsonl/000000056978-000000057727.chunk",
+      "bytes": 749,
+      "sha256": "d78916a941db17be2bacc38596b1bf818e242e88c48f76cfcd5caa796d419246"
+    },
+    {
+      "member": "provider-raw/prefixes/actual-provider-bindings.jsonl/000000057727-000000058476.chunk",
+      "destination": "thesis/evidence/orca-relayed-http-v1197/provider-transfer-delta-v1261/extracted/provider-raw/prefixes/actual-provider-bindings.jsonl/000000057727-000000058476.chunk",
+      "bytes": 749,
+      "sha256": "91d362cdec7c55fe7016ae1702e3dea448f420b3965ea82ae39b67f0ef72a2d5"
+    },
+    {
+      "member": "provider-raw/prefixes/actual-provider-bindings.jsonl/000000058476-000000059974.chunk",
+      "destination": "thesis/evidence/orca-relayed-http-v1197/provider-transfer-delta-v1261/extracted/provider-raw/prefixes/actual-provider-bindings.jsonl/000000058476-000000059974.chunk",
+      "bytes": 1498,
+      "sha256": "e1031f1595feb000cb47f1ecf948f7ce67f6e9e9303f461715c7fcc6536149f8"
+    },
+    {
+      "member": "provider-raw/prefixes/actual-provider-bindings.jsonl/000000059974-000000060723.chunk",
+      "destination": "thesis/evidence/orca-relayed-http-v1197/provider-transfer-delta-v1261/extracted/provider-raw/prefixes/actual-provider-bindings.jsonl/000000059974-000000060723.chunk",
+      "bytes": 749,
+      "sha256": "e795ea5cdffe2daa6fe92e7c8c14f23f4721365d0fa0c028548e009d03074078"
+    },
+    {
+      "member": "provider-raw/prefixes/actual-provider-bindings.jsonl/000000060723-000000061472.chunk",
+      "destination": "thesis/evidence/orca-relayed-http-v1197/provider-transfer-delta-v1261/extracted/provider-raw/prefixes/actual-provider-bindings.jsonl/000000060723-000000061472.chunk",
+      "bytes": 749,
+      "sha256": "47b7ca9deeb83eae28093253e531207684f2c0726bfc8d015d4734cb96fcd0e2"
+    },
+    {
+      "member": "provider-raw/prefixes/actual-provider-bindings.jsonl/000000061472-000000062221.chunk",
+      "destination": "thesis/evidence/orca-relayed-http-v1197/provider-transfer-delta-v1261/extracted/provider-raw/prefixes/actual-provider-bindings.jsonl/000000061472-000000062221.chunk",
+      "bytes": 749,
+      "sha256": "3765642be578cda514fc4b7ed1ccfbf7f8f78475009ef96a9991c904846982bb"
+    },
+    {
+      "member": "provider-raw/prefixes/actual-provider-bindings.jsonl/000000062221-000000062970.chunk",
+      "destination": "thesis/evidence/orca-relayed-http-v1197/provider-transfer-delta-v1261/extracted/provider-raw/prefixes/actual-provider-bindings.jsonl/000000062221-000000062970.chunk",
+      "bytes": 749,
+      "sha256": "00b198e12c98afca202924348086064fe31ddbc78961791eb4983db0ea762b97"
+    },
+    {
+      "member": "provider-raw/prefixes/resources.jsonl/000042722823-000042982983.chunk",
+      "destination": "thesis/evidence/orca-relayed-http-v1197/provider-transfer-delta-v1261/extracted/provider-raw/prefixes/resources.jsonl/000042722823-000042982983.chunk",
+      "bytes": 260160,
+      "sha256": "b73a02700d5ebc9116a81018d0cbb6559c8f81c2f41d8a0e750d7fabef0f28a8"
+    },
+    {
+      "member": "provider-raw/prefixes/resources.jsonl/000042982983-000043243158.chunk",
+      "destination": "thesis/evidence/orca-relayed-http-v1197/provider-transfer-delta-v1261/extracted/provider-raw/prefixes/resources.jsonl/000042982983-000043243158.chunk",
+      "bytes": 260175,
+      "sha256": "fb81969c690cc4e097b28fa250b3f3c09869d0f90e1578c5802edc89db75cbfb"
+    },
+    {
+      "member": "provider-raw/prefixes/resources.jsonl/000043243158-000043499102.chunk",
+      "destination": "thesis/evidence/orca-relayed-http-v1197/provider-transfer-delta-v1261/extracted/provider-raw/prefixes/resources.jsonl/000043243158-000043499102.chunk",
+      "bytes": 255944,
+      "sha256": "4ff386eacb9b914344e162ced9606321f448428652e9fa69ef13008aa79a4d5c"
+    },
+    {
+      "member": "provider-raw/prefixes/resources.jsonl/000043499102-000043759384.chunk",
+      "destination": "thesis/evidence/orca-relayed-http-v1197/provider-transfer-delta-v1261/extracted/provider-raw/prefixes/resources.jsonl/000043499102-000043759384.chunk",
+      "bytes": 260282,
+      "sha256": "582174e314456ce9a9d72764ba792855409ef052b05f17f9f4042140bda529d8"
+    },
+    {
+      "member": "provider-raw/prefixes/resources.jsonl/000043759384-000044015386.chunk",
+      "destination": "thesis/evidence/orca-relayed-http-v1197/provider-transfer-delta-v1261/extracted/provider-raw/prefixes/resources.jsonl/000043759384-000044015386.chunk",
+      "bytes": 256002,
+      "sha256": "105f16205c23f52ccc7f3212ba0689ad38727718acc9e3ba06b5e9e2e68eb46a"
+    },
+    {
+      "member": "provider-raw/prefixes/resources.jsonl/000044015386-000044275727.chunk",
+      "destination": "thesis/evidence/orca-relayed-http-v1197/provider-transfer-delta-v1261/extracted/provider-raw/prefixes/resources.jsonl/000044015386-000044275727.chunk",
+      "bytes": 260341,
+      "sha256": "e4b12f754b80c84c72b12e6355108e0d28a852941d09138c35aa5f435a73fc88"
+    },
+    {
+      "member": "provider-raw/prefixes/resources.jsonl/000044275727-000044536067.chunk",
+      "destination": "thesis/evidence/orca-relayed-http-v1197/provider-transfer-delta-v1261/extracted/provider-raw/prefixes/resources.jsonl/000044275727-000044536067.chunk",
+      "bytes": 260340,
+      "sha256": "64ac38495808863c3f5f31b80b884e8b7b3fdd58b1af07f0803092061db51ef5"
+    },
+    {
+      "member": "provider-raw/prefixes/resources.jsonl/000044536067-000044792068.chunk",
+      "destination": "thesis/evidence/orca-relayed-http-v1197/provider-transfer-delta-v1261/extracted/provider-raw/prefixes/resources.jsonl/000044536067-000044792068.chunk",
+      "bytes": 256001,
+      "sha256": "4814bdcd4d32b6110dac2365761e7ae8cf2a58a46afa9bb296022effbfd085f9"
+    },
+    {
+      "member": "provider-raw/prefixes/resources.jsonl/000044792068-000045052409.chunk",
+      "destination": "thesis/evidence/orca-relayed-http-v1197/provider-transfer-delta-v1261/extracted/provider-raw/prefixes/resources.jsonl/000044792068-000045052409.chunk",
+      "bytes": 260341,
+      "sha256": "c9ddddc53e9c1b0d0001108b9e562437e137918d46c8781c8d09dc1cb6c8519c"
+    },
+    {
+      "member": "provider-raw/prefixes/resources.jsonl/000045052409-000045312751.chunk",
+      "destination": "thesis/evidence/orca-relayed-http-v1197/provider-transfer-delta-v1261/extracted/provider-raw/prefixes/resources.jsonl/000045052409-000045312751.chunk",
+      "bytes": 260342,
+      "sha256": "e7de7f8bb754400fff32184b2c5bf58d4ef28fec6c5c65a3bfb483e65c73d045"
+    },
+    {
+      "member": "provider-raw/prefixes/resources.jsonl/000045312751-000045573092.chunk",
+      "destination": "thesis/evidence/orca-relayed-http-v1197/provider-transfer-delta-v1261/extracted/provider-raw/prefixes/resources.jsonl/000045312751-000045573092.chunk",
+      "bytes": 260341,
+      "sha256": "0b90735e0f5d6bf4a54d0fcca1313a9248b45aa0610c636c3fc9fcc471e5ff8b"
+    },
+    {
+      "member": "provider-raw/prefixes/resources.jsonl/000045573092-000045829093.chunk",
+      "destination": "thesis/evidence/orca-relayed-http-v1197/provider-transfer-delta-v1261/extracted/provider-raw/prefixes/resources.jsonl/000045573092-000045829093.chunk",
+      "bytes": 256001,
+      "sha256": "3ce0037dc8e7db624e95d6fe41fe02b8c9d54d251f24c61d0d5ce6a9d95fb2ad"
+    },
+    {
+      "member": "provider-raw/prefixes/resources.jsonl/000045829093-000046089434.chunk",
+      "destination": "thesis/evidence/orca-relayed-http-v1197/provider-transfer-delta-v1261/extracted/provider-raw/prefixes/resources.jsonl/000045829093-000046089434.chunk",
+      "bytes": 260341,
+      "sha256": "a9c5aa9093aa8465cf3c20fca47f332b5049bbbddb8ff280d13ff7ee7980d5c6"
+    },
+    {
+      "member": "provider-raw/prefixes/resources.jsonl/000046089434-000046345436.chunk",
+      "destination": "thesis/evidence/orca-relayed-http-v1197/provider-transfer-delta-v1261/extracted/provider-raw/prefixes/resources.jsonl/000046089434-000046345436.chunk",
+      "bytes": 256002,
+      "sha256": "5ea3da0fbe39d1ca107f6d8d23d4ac50c790e7e7be93c66c2b20f801aa1efaee"
+    },
+    {
+      "member": "provider-raw/prefixes/resources.jsonl/000046345436-000046605777.chunk",
+      "destination": "thesis/evidence/orca-relayed-http-v1197/provider-transfer-delta-v1261/extracted/provider-raw/prefixes/resources.jsonl/000046345436-000046605777.chunk",
+      "bytes": 260341,
+      "sha256": "e35edef2cc561beae6079c271497079518d1e0ed7456d702fda2722789e4982d"
+    },
+    {
+      "member": "provider-raw/prefixes/resources.jsonl/000046605777-000046866119.chunk",
+      "destination": "thesis/evidence/orca-relayed-http-v1197/provider-transfer-delta-v1261/extracted/provider-raw/prefixes/resources.jsonl/000046605777-000046866119.chunk",
+      "bytes": 260342,
+      "sha256": "151a5d08941e74db696d3f82383c47ab3a1c9a85c408ba503fa3dee594e4c754"
+    },
+    {
+      "member": "provider-raw/prefixes/resources.jsonl/000046866119-000047126460.chunk",
+      "destination": "thesis/evidence/orca-relayed-http-v1197/provider-transfer-delta-v1261/extracted/provider-raw/prefixes/resources.jsonl/000046866119-000047126460.chunk",
+      "bytes": 260341,
+      "sha256": "49277a97cf24628ac725db635ae36fa42db800998d73c997c292250bdf3170c9"
+    },
+    {
+      "member": "provider-raw/prefixes/resources.jsonl/000047126460-000047382461.chunk",
+      "destination": "thesis/evidence/orca-relayed-http-v1197/provider-transfer-delta-v1261/extracted/provider-raw/prefixes/resources.jsonl/000047126460-000047382461.chunk",
+      "bytes": 256001,
+      "sha256": "a0b0ad3ea3c5f422522fe295bc5f8fd0e0bc4c7291a7a782bcfc7c1eb440e594"
+    },
+    {
+      "member": "provider-raw/prefixes/resources.jsonl/000047382461-000047642802.chunk",
+      "destination": "thesis/evidence/orca-relayed-http-v1197/provider-transfer-delta-v1261/extracted/provider-raw/prefixes/resources.jsonl/000047382461-000047642802.chunk",
+      "bytes": 260341,
+      "sha256": "ba93f6236394e5e25e0d1737976ccf8bf4f42b881efbb38221109d2a3e63b11a"
+    },
+    {
+      "member": "provider-raw/prefixes/resources.jsonl/000047642802-000047903142.chunk",
+      "destination": "thesis/evidence/orca-relayed-http-v1197/provider-transfer-delta-v1261/extracted/provider-raw/prefixes/resources.jsonl/000047642802-000047903142.chunk",
+      "bytes": 260340,
+      "sha256": "4711c9fe12e444c78b5b3a660b47b1f6076108bbc52c0b5ee4e8463d7394df23"
+    },
+    {
+      "member": "provider-raw/prefixes/resources.jsonl/000047903142-000048159240.chunk",
+      "destination": "thesis/evidence/orca-relayed-http-v1197/provider-transfer-delta-v1261/extracted/provider-raw/prefixes/resources.jsonl/000047903142-000048159240.chunk",
+      "bytes": 256098,
+      "sha256": "91601ec279965157c1c807daee699ad5577256bfacdde659bd26b601c7869cee"
+    },
+    {
+      "member": "provider-raw/prefixes/resources.jsonl/000048159240-000048419700.chunk",
+      "destination": "thesis/evidence/orca-relayed-http-v1197/provider-transfer-delta-v1261/extracted/provider-raw/prefixes/resources.jsonl/000048159240-000048419700.chunk",
+      "bytes": 260460,
+      "sha256": "559a4cd1994cf656e79e8bc9495ecbef73c52246f617897b17a5b540ee931f8c"
+    },
+    {
+      "member": "provider-raw/prefixes/resources.jsonl/000048419700-000048680162.chunk",
+      "destination": "thesis/evidence/orca-relayed-http-v1197/provider-transfer-delta-v1261/extracted/provider-raw/prefixes/resources.jsonl/000048419700-000048680162.chunk",
+      "bytes": 260462,
+      "sha256": "c1f0005f9799c1bbf27cb55b806a3a0956f80f49339204e27ae2a8bbb0d358d3"
+    },
+    {
+      "member": "provider-raw/prefixes/resources.jsonl/000048680162-000048940623.chunk",
+      "destination": "thesis/evidence/orca-relayed-http-v1197/provider-transfer-delta-v1261/extracted/provider-raw/prefixes/resources.jsonl/000048680162-000048940623.chunk",
+      "bytes": 260461,
+      "sha256": "6b0374f12048df63f5733802501a37281ef81ed965fa6a0b539348e1ba79c67c"
+    },
+    {
+      "member": "provider-raw/prefixes/resources.jsonl/000048940623-000049196742.chunk",
+      "destination": "thesis/evidence/orca-relayed-http-v1197/provider-transfer-delta-v1261/extracted/provider-raw/prefixes/resources.jsonl/000048940623-000049196742.chunk",
+      "bytes": 256119,
+      "sha256": "bef5e97fce7bb74421d60323e5172ed562a7944fa6330cb7fc3350bb5002653f"
+    },
+    {
+      "member": "provider-raw/prefixes/resources.jsonl/000049196742-000049457203.chunk",
+      "destination": "thesis/evidence/orca-relayed-http-v1197/provider-transfer-delta-v1261/extracted/provider-raw/prefixes/resources.jsonl/000049196742-000049457203.chunk",
+      "bytes": 260461,
+      "sha256": "f159178b268d8528bc2da5a36011e2ebb4797ba467f70b0aaeb6f1c952843988"
+    },
+    {
+      "member": "provider-raw/prefixes/resources.jsonl/000049457203-000049717663.chunk",
+      "destination": "thesis/evidence/orca-relayed-http-v1197/provider-transfer-delta-v1261/extracted/provider-raw/prefixes/resources.jsonl/000049457203-000049717663.chunk",
+      "bytes": 260460,
+      "sha256": "01d4fce6a45722ab58db907b9db1c366f661d13c78943450d9fa2edf9c7b5300"
+    },
+    {
+      "member": "provider-raw/prefixes/resources.jsonl/000049717663-000049973783.chunk",
+      "destination": "thesis/evidence/orca-relayed-http-v1197/provider-transfer-delta-v1261/extracted/provider-raw/prefixes/resources.jsonl/000049717663-000049973783.chunk",
+      "bytes": 256120,
+      "sha256": "cef3d415ca1e1953842bc60acbee414d5127fc46e6d177956f5888532ae06c1d"
+    },
+    {
+      "member": "provider-raw/prefixes/resources.jsonl/000049973783-000050234243.chunk",
+      "destination": "thesis/evidence/orca-relayed-http-v1197/provider-transfer-delta-v1261/extracted/provider-raw/prefixes/resources.jsonl/000049973783-000050234243.chunk",
+      "bytes": 260460,
+      "sha256": "d71c626670ba936176d96c8480806c084e3a421458761c591f04c3b96550be77"
+    },
+    {
+      "member": "provider-raw/prefixes/resources.jsonl/000050234243-000050490363.chunk",
+      "destination": "thesis/evidence/orca-relayed-http-v1197/provider-transfer-delta-v1261/extracted/provider-raw/prefixes/resources.jsonl/000050234243-000050490363.chunk",
+      "bytes": 256120,
+      "sha256": "5c92791fe123322d0b39b166858e0aad9062088a9f9115ca7a3a2dc7d62d79be"
+    },
+    {
+      "member": "provider-raw/prefixes/resources.jsonl/000050490363-000050750823.chunk",
+      "destination": "thesis/evidence/orca-relayed-http-v1197/provider-transfer-delta-v1261/extracted/provider-raw/prefixes/resources.jsonl/000050490363-000050750823.chunk",
+      "bytes": 260460,
+      "sha256": "78edd3a01a14a4befdc1a550ede191968a886554b41d448f662e1d7713cb78f3"
+    },
+    {
+      "member": "provider-raw/prefixes/resources.jsonl/000050750823-000051011285.chunk",
+      "destination": "thesis/evidence/orca-relayed-http-v1197/provider-transfer-delta-v1261/extracted/provider-raw/prefixes/resources.jsonl/000050750823-000051011285.chunk",
+      "bytes": 260462,
+      "sha256": "10cf98f3a24c9101140465fea6b0d699c588cbee187ab732c5be01e0bc39d8b1"
+    },
+    {
+      "member": "provider-raw/prefixes/resources.jsonl/000051011285-000051267404.chunk",
+      "destination": "thesis/evidence/orca-relayed-http-v1197/provider-transfer-delta-v1261/extracted/provider-raw/prefixes/resources.jsonl/000051011285-000051267404.chunk",
+      "bytes": 256119,
+      "sha256": "f9a02c57c578da1d9b251d915087b965869baf8e9364de62f56da246f373e969"
+    },
+    {
+      "member": "provider-raw/prefixes/resources.jsonl/000051267404-000051527865.chunk",
+      "destination": "thesis/evidence/orca-relayed-http-v1197/provider-transfer-delta-v1261/extracted/provider-raw/prefixes/resources.jsonl/000051267404-000051527865.chunk",
+      "bytes": 260461,
+      "sha256": "b309764f0d10b5779db27532c052db70c0edc8659bb541b8b347167ef92857fd"
+    },
+    {
+      "member": "provider-raw/prefixes/resources.jsonl/000051527865-000051788416.chunk",
+      "destination": "thesis/evidence/orca-relayed-http-v1197/provider-transfer-delta-v1261/extracted/provider-raw/prefixes/resources.jsonl/000051527865-000051788416.chunk",
+      "bytes": 260551,
+      "sha256": "add8a554ac41dac08d602013287983d466ca55f0e1903c394f76abeecf2464ea"
+    },
+    {
+      "member": "provider-raw/prefixes/resources.jsonl/000051788416-000052048996.chunk",
+      "destination": "thesis/evidence/orca-relayed-http-v1197/provider-transfer-delta-v1261/extracted/provider-raw/prefixes/resources.jsonl/000051788416-000052048996.chunk",
+      "bytes": 260580,
+      "sha256": "ca5430bd307f1acb28aeb37c518682aa278625c6b8cda2128084dbdfa648485d"
+    },
+    {
+      "member": "provider-raw/prefixes/resources.jsonl/000052048996-000052305234.chunk",
+      "destination": "thesis/evidence/orca-relayed-http-v1197/provider-transfer-delta-v1261/extracted/provider-raw/prefixes/resources.jsonl/000052048996-000052305234.chunk",
+      "bytes": 256238,
+      "sha256": "a0ae35bb504ea1510911c5ef7a1d062b4d988acc4c5f00bf006688a739a33004"
+    },
+    {
+      "member": "provider-raw/prefixes/voice-stages.jsonl/000000189206-000000193999.chunk",
+      "destination": "thesis/evidence/orca-relayed-http-v1197/provider-transfer-delta-v1261/extracted/provider-raw/prefixes/voice-stages.jsonl/000000189206-000000193999.chunk",
+      "bytes": 4793,
+      "sha256": "425e338b633aff73f4f519d46810b0317307d5aefba50cfa0fecced07350944f"
+    },
+    {
+      "member": "provider-raw/prefixes/voice-stages.jsonl/000000193999-000000198792.chunk",
+      "destination": "thesis/evidence/orca-relayed-http-v1197/provider-transfer-delta-v1261/extracted/provider-raw/prefixes/voice-stages.jsonl/000000193999-000000198792.chunk",
+      "bytes": 4793,
+      "sha256": "db877d23c7bbbad671ed485461c9ca2fd94e720c116147119ae81af83302cfe5"
+    },
+    {
+      "member": "provider-raw/prefixes/voice-stages.jsonl/000000198792-000000203585.chunk",
+      "destination": "thesis/evidence/orca-relayed-http-v1197/provider-transfer-delta-v1261/extracted/provider-raw/prefixes/voice-stages.jsonl/000000198792-000000203585.chunk",
+      "bytes": 4793,
+      "sha256": "b620cfa481ef937816e1fe3e137a9ee99a242e4180375a58efc542534de35370"
+    },
+    {
+      "member": "provider-raw/prefixes/voice-stages.jsonl/000000203585-000000208378.chunk",
+      "destination": "thesis/evidence/orca-relayed-http-v1197/provider-transfer-delta-v1261/extracted/provider-raw/prefixes/voice-stages.jsonl/000000203585-000000208378.chunk",
+      "bytes": 4793,
+      "sha256": "184910d3efac375dfb7f1f419904ba2503976c845bc5f6e96caafc3af4a4ed73"
+    },
+    {
+      "member": "provider-raw/prefixes/voice-stages.jsonl/000000208378-000000213171.chunk",
+      "destination": "thesis/evidence/orca-relayed-http-v1197/provider-transfer-delta-v1261/extracted/provider-raw/prefixes/voice-stages.jsonl/000000208378-000000213171.chunk",
+      "bytes": 4793,
+      "sha256": "b0ce4f0cbf2b59c7bc4b176ec8320d19629f5d803c886a1e8e4e9ca101eb1c19"
+    },
+    {
+      "member": "provider-raw/prefixes/voice-stages.jsonl/000000213171-000000222757.chunk",
+      "destination": "thesis/evidence/orca-relayed-http-v1197/provider-transfer-delta-v1261/extracted/provider-raw/prefixes/voice-stages.jsonl/000000213171-000000222757.chunk",
+      "bytes": 9586,
+      "sha256": "c1a73fa4d24b446be667d68355b24149d11e9e7a043e271bc25b9110e0c10371"
+    },
+    {
+      "member": "provider-raw/prefixes/voice-stages.jsonl/000000222757-000000227550.chunk",
+      "destination": "thesis/evidence/orca-relayed-http-v1197/provider-transfer-delta-v1261/extracted/provider-raw/prefixes/voice-stages.jsonl/000000222757-000000227550.chunk",
+      "bytes": 4793,
+      "sha256": "0e4278beef2275f8745ab9d4c6431c35150081aa291c462bd388389ffba3d721"
+    },
+    {
+      "member": "provider-raw/prefixes/voice-stages.jsonl/000000227550-000000232343.chunk",
+      "destination": "thesis/evidence/orca-relayed-http-v1197/provider-transfer-delta-v1261/extracted/provider-raw/prefixes/voice-stages.jsonl/000000227550-000000232343.chunk",
+      "bytes": 4793,
+      "sha256": "c899e0d6bd7982e957d5226e1f38dcf04248eb582acb37fb05863f709d5a696d"
+    },
+    {
+      "member": "provider-raw/prefixes/voice-stages.jsonl/000000232343-000000237136.chunk",
+      "destination": "thesis/evidence/orca-relayed-http-v1197/provider-transfer-delta-v1261/extracted/provider-raw/prefixes/voice-stages.jsonl/000000232343-000000237136.chunk",
+      "bytes": 4793,
+      "sha256": "f4a54cd4c2ae50d3a7a7e51329b54aba6727412cc4890dabf67e300dedfbd06e"
+    },
+    {
+      "member": "provider-raw/prefixes/voice-stages.jsonl/000000237136-000000244325.chunk",
+      "destination": "thesis/evidence/orca-relayed-http-v1197/provider-transfer-delta-v1261/extracted/provider-raw/prefixes/voice-stages.jsonl/000000237136-000000244325.chunk",
+      "bytes": 7189,
+      "sha256": "62ee484c7bcc70a30bb154f1365acb7f172d88f4c48c7d317c001032d4ef2ec8"
+    },
+    {
+      "member": "provider-raw/prefixes/voice-stages.jsonl/000000244325-000000251515.chunk",
+      "destination": "thesis/evidence/orca-relayed-http-v1197/provider-transfer-delta-v1261/extracted/provider-raw/prefixes/voice-stages.jsonl/000000244325-000000251515.chunk",
+      "bytes": 7190,
+      "sha256": "4ab3b172389ca34bd50d851a3e6ee616a77299d89ff42d4e40747d1622ef1442"
+    },
+    {
+      "member": "provider-raw/prefixes/voice-stages.jsonl/000000251515-000000256308.chunk",
+      "destination": "thesis/evidence/orca-relayed-http-v1197/provider-transfer-delta-v1261/extracted/provider-raw/prefixes/voice-stages.jsonl/000000251515-000000256308.chunk",
+      "bytes": 4793,
+      "sha256": "f9af927d924f6527fdf2a1e3ec1a32674533f4e2d0950cb2e587aed9c5e93fba"
+    },
+    {
+      "member": "provider-raw/prefixes/voice-stages.jsonl/000000256308-000000261101.chunk",
+      "destination": "thesis/evidence/orca-relayed-http-v1197/provider-transfer-delta-v1261/extracted/provider-raw/prefixes/voice-stages.jsonl/000000256308-000000261101.chunk",
+      "bytes": 4793,
+      "sha256": "26a1583749b4849c1ca15e2172e918e3ab4496879c5f73d99b7c0238b2a178aa"
+    },
+    {
+      "member": "provider-raw/prefixes/voice-stages.jsonl/000000261101-000000265894.chunk",
+      "destination": "thesis/evidence/orca-relayed-http-v1197/provider-transfer-delta-v1261/extracted/provider-raw/prefixes/voice-stages.jsonl/000000261101-000000265894.chunk",
+      "bytes": 4793,
+      "sha256": "d088f274a89f5108cc00b7ac73475f8645b707a7dbd74e999ceca31627c240de"
+    },
+    {
+      "member": "provider-raw/prefixes/voice-stages.jsonl/000000265894-000000270687.chunk",
+      "destination": "thesis/evidence/orca-relayed-http-v1197/provider-transfer-delta-v1261/extracted/provider-raw/prefixes/voice-stages.jsonl/000000265894-000000270687.chunk",
+      "bytes": 4793,
+      "sha256": "611944dc935c21fdea0537f2915c0048704a030ca4c6900a443b7a4655e640ab"
+    },
+    {
+      "member": "provider-raw/prefixes/voice-stages.jsonl/000000270687-000000277876.chunk",
+      "destination": "thesis/evidence/orca-relayed-http-v1197/provider-transfer-delta-v1261/extracted/provider-raw/prefixes/voice-stages.jsonl/000000270687-000000277876.chunk",
+      "bytes": 7189,
+      "sha256": "4135cf1c50e01a352eadd24c41bf7dd45644a5660431879bc6b1e0496d778026"
+    },
+    {
+      "member": "provider-raw/prefixes/voice-stages.jsonl/000000277876-000000285066.chunk",
+      "destination": "thesis/evidence/orca-relayed-http-v1197/provider-transfer-delta-v1261/extracted/provider-raw/prefixes/voice-stages.jsonl/000000277876-000000285066.chunk",
+      "bytes": 7190,
+      "sha256": "b05c9bbdf9648ca60df2ed57eb3fa3263b2567ca6007bba9e6e10da736da52f6"
+    },
+    {
+      "member": "provider-raw/prefixes/voice-stages.jsonl/000000285066-000000289859.chunk",
+      "destination": "thesis/evidence/orca-relayed-http-v1197/provider-transfer-delta-v1261/extracted/provider-raw/prefixes/voice-stages.jsonl/000000285066-000000289859.chunk",
+      "bytes": 4793,
+      "sha256": "8fbe6155c5097f63579f397cf41237ef001c4cde819237d6188f3142b9eb6a23"
+    },
+    {
+      "member": "provider-raw/prefixes/voice-stages.jsonl/000000289859-000000294652.chunk",
+      "destination": "thesis/evidence/orca-relayed-http-v1197/provider-transfer-delta-v1261/extracted/provider-raw/prefixes/voice-stages.jsonl/000000289859-000000294652.chunk",
+      "bytes": 4793,
+      "sha256": "6c7e38389b5dca58ae7ba671554e3b1f2bbda9d68d11ac7487c0c2c0f1badc08"
+    },
+    {
+      "member": "provider-raw/prefixes/voice-stages.jsonl/000000294652-000000304238.chunk",
+      "destination": "thesis/evidence/orca-relayed-http-v1197/provider-transfer-delta-v1261/extracted/provider-raw/prefixes/voice-stages.jsonl/000000294652-000000304238.chunk",
+      "bytes": 9586,
+      "sha256": "9f1a9e0e3c378afe0fbd531ed6f82aefdc8ca1d65dc49c7c22982c4b270724c9"
+    },
+    {
+      "member": "provider-raw/prefixes/voice-stages.jsonl/000000304238-000000309031.chunk",
+      "destination": "thesis/evidence/orca-relayed-http-v1197/provider-transfer-delta-v1261/extracted/provider-raw/prefixes/voice-stages.jsonl/000000304238-000000309031.chunk",
+      "bytes": 4793,
+      "sha256": "f0187246fa8eecbc4c65bb6e8a694bc1a76ff15b98f05980f76cfb4969d27c47"
+    },
+    {
+      "member": "provider-raw/prefixes/voice-stages.jsonl/000000309031-000000313824.chunk",
+      "destination": "thesis/evidence/orca-relayed-http-v1197/provider-transfer-delta-v1261/extracted/provider-raw/prefixes/voice-stages.jsonl/000000309031-000000313824.chunk",
+      "bytes": 4793,
+      "sha256": "2bdbe17d8d74140990daac1cf2949a5a1dc626585f6012a3134514ced513d26c"
+    },
+    {
+      "member": "provider-raw/prefixes/voice-stages.jsonl/000000313824-000000318617.chunk",
+      "destination": "thesis/evidence/orca-relayed-http-v1197/provider-transfer-delta-v1261/extracted/provider-raw/prefixes/voice-stages.jsonl/000000313824-000000318617.chunk",
+      "bytes": 4793,
+      "sha256": "34d0a5dea13b670db9e92af59702c210dcbf1d10dd37c4dc517a979f9f41a919"
+    },
+    {
+      "member": "provider-raw/prefixes/voice-stages.jsonl/000000318617-000000323410.chunk",
+      "destination": "thesis/evidence/orca-relayed-http-v1197/provider-transfer-delta-v1261/extracted/provider-raw/prefixes/voice-stages.jsonl/000000318617-000000323410.chunk",
+      "bytes": 4793,
+      "sha256": "dafe05386edeaac70243cf4517ee0a021a39575c45036d4a9cab64fa4f7d1ddd"
+    },
+    {
+      "member": "provider-raw/prefixes/voice-stages.jsonl/000000323410-000000328203.chunk",
+      "destination": "thesis/evidence/orca-relayed-http-v1197/provider-transfer-delta-v1261/extracted/provider-raw/prefixes/voice-stages.jsonl/000000323410-000000328203.chunk",
+      "bytes": 4793,
+      "sha256": "50dce3508b038322cd67c44d98419ea853adb3050317a8d0d10eafc0253e25c4"
+    },
+    {
+      "member": "provider-raw/prefixes/voice-stages.jsonl/000000328203-000000332996.chunk",
+      "destination": "thesis/evidence/orca-relayed-http-v1197/provider-transfer-delta-v1261/extracted/provider-raw/prefixes/voice-stages.jsonl/000000328203-000000332996.chunk",
+      "bytes": 4793,
+      "sha256": "4a70b7e3c8bfc9bb1c9bc4e63da15f693a76d15e6a1be64352aa5730b3c614b6"
+    },
+    {
+      "member": "provider-raw/prefixes/voice-stages.jsonl/000000332996-000000342582.chunk",
+      "destination": "thesis/evidence/orca-relayed-http-v1197/provider-transfer-delta-v1261/extracted/provider-raw/prefixes/voice-stages.jsonl/000000332996-000000342582.chunk",
+      "bytes": 9586,
+      "sha256": "c1d62a643bbbc543cbec92a57edf1d54946e312fb6e9da5863cb92b57b396fb2"
+    },
+    {
+      "member": "provider-raw/prefixes/voice-stages.jsonl/000000342582-000000347375.chunk",
+      "destination": "thesis/evidence/orca-relayed-http-v1197/provider-transfer-delta-v1261/extracted/provider-raw/prefixes/voice-stages.jsonl/000000342582-000000347375.chunk",
+      "bytes": 4793,
+      "sha256": "77d38bc0d6cd1da4e5eecf51c367a69ef6702dd80efa9308962c002efa30ac8a"
+    },
+    {
+      "member": "provider-raw/prefixes/voice-stages.jsonl/000000347375-000000352168.chunk",
+      "destination": "thesis/evidence/orca-relayed-http-v1197/provider-transfer-delta-v1261/extracted/provider-raw/prefixes/voice-stages.jsonl/000000347375-000000352168.chunk",
+      "bytes": 4793,
+      "sha256": "43af582a1b0313d9f2390fd6ab9fb1d3c9b896e8b9055b1de929d2b291bb52aa"
+    },
+    {
+      "member": "provider-raw/prefixes/voice-stages.jsonl/000000352168-000000356961.chunk",
+      "destination": "thesis/evidence/orca-relayed-http-v1197/provider-transfer-delta-v1261/extracted/provider-raw/prefixes/voice-stages.jsonl/000000352168-000000356961.chunk",
+      "bytes": 4793,
+      "sha256": "cbe1b715c842a8286b17e0d8644f30155544e24b0eea8ed5cc929de4eb3ddfb6"
+    },
+    {
+      "member": "provider-raw/prefixes/voice-stages.jsonl/000000356961-000000361754.chunk",
+      "destination": "thesis/evidence/orca-relayed-http-v1197/provider-transfer-delta-v1261/extracted/provider-raw/prefixes/voice-stages.jsonl/000000356961-000000361754.chunk",
+      "bytes": 4793,
+      "sha256": "98a9143bf7d7a087c658262f5a7d97c4bf011f92e1a41d9d5cefeceeba1a8938"
+    },
+    {
+      "member": "provider-raw/prefixes/voice-stages.jsonl/000000361754-000000366547.chunk",
+      "destination": "thesis/evidence/orca-relayed-http-v1197/provider-transfer-delta-v1261/extracted/provider-raw/prefixes/voice-stages.jsonl/000000361754-000000366547.chunk",
+      "bytes": 4793,
+      "sha256": "2f63ad10d9ed9ca24f1a83d7335c4b2bd52cb5f9ea0826ca561393c9c0d0e373"
+    },
+    {
+      "member": "provider-raw/prefixes/voice-stages.jsonl/000000366547-000000376133.chunk",
+      "destination": "thesis/evidence/orca-relayed-http-v1197/provider-transfer-delta-v1261/extracted/provider-raw/prefixes/voice-stages.jsonl/000000366547-000000376133.chunk",
+      "bytes": 9586,
+      "sha256": "3cbdece40f7d93b17907814ede66735009a9649e233e07a7b8cce595b071bf1f"
+    },
+    {
+      "member": "provider-raw/prefixes/voice-stages.jsonl/000000376133-000000380926.chunk",
+      "destination": "thesis/evidence/orca-relayed-http-v1197/provider-transfer-delta-v1261/extracted/provider-raw/prefixes/voice-stages.jsonl/000000376133-000000380926.chunk",
+      "bytes": 4793,
+      "sha256": "2f2eac263f25d3b82a6fe93ea3e66d050f949c2ed4f6e9aa63f0660e1e6e08be"
+    },
+    {
+      "member": "provider-raw/prefixes/voice-stages.jsonl/000000380926-000000385719.chunk",
+      "destination": "thesis/evidence/orca-relayed-http-v1197/provider-transfer-delta-v1261/extracted/provider-raw/prefixes/voice-stages.jsonl/000000380926-000000385719.chunk",
+      "bytes": 4793,
+      "sha256": "5651e9e9e723f643458b59b478523c3271d36032c3116a2caa08a67d8291a7be"
+    },
+    {
+      "member": "provider-raw/prefixes/voice-stages.jsonl/000000385719-000000390512.chunk",
+      "destination": "thesis/evidence/orca-relayed-http-v1197/provider-transfer-delta-v1261/extracted/provider-raw/prefixes/voice-stages.jsonl/000000385719-000000390512.chunk",
+      "bytes": 4793,
+      "sha256": "c2c4eec4c0bd42c4898d5a07d879121902d26ace3532eff916d19d1e6b19cd8d"
+    },
+    {
+      "member": "provider-raw/prefixes/voice-stages.jsonl/000000390512-000000395305.chunk",
+      "destination": "thesis/evidence/orca-relayed-http-v1197/provider-transfer-delta-v1261/extracted/provider-raw/prefixes/voice-stages.jsonl/000000390512-000000395305.chunk",
+      "bytes": 4793,
+      "sha256": "abc255e455aca24bf44ccc4056f2a472b1a0320baff22b1cbc5b3ef2baa1571d"
+    }
+  ],
+  "finishedAt": "2026-10-17T21:19:36.081605+00:00",
+  "rawFiles": 111,
+  "rawPayloadBytes": 9820717,
+  "prefixes": {
+    "actual-provider-bindings.jsonl": {
+      "chunks": [
+        "prefixes/actual-provider-bindings.jsonl/000000000000-000000021026.chunk",
+        "prefixes/actual-provider-bindings.jsonl/000000021026-000000021775.chunk",
+        "prefixes/actual-provider-bindings.jsonl/000000021775-000000022524.chunk",
+        "prefixes/actual-provider-bindings.jsonl/000000022524-000000024022.chunk",
+        "prefixes/actual-provider-bindings.jsonl/000000024022-000000024771.chunk",
+        "prefixes/actual-provider-bindings.jsonl/000000024771-000000025520.chunk",
+        "prefixes/actual-provider-bindings.jsonl/000000025520-000000026269.chunk",
+        "prefixes/actual-provider-bindings.jsonl/000000026269-000000027018.chunk",
+        "prefixes/actual-provider-bindings.jsonl/000000027018-000000028516.chunk",
+        "prefixes/actual-provider-bindings.jsonl/000000028516-000000029265.chunk",
+        "prefixes/actual-provider-bindings.jsonl/000000029265-000000030014.chunk",
+        "prefixes/actual-provider-bindings.jsonl/000000030014-000000030763.chunk",
+        "prefixes/actual-provider-bindings.jsonl/000000030763-000000031512.chunk",
+        "prefixes/actual-provider-bindings.jsonl/000000031512-000000032261.chunk",
+        "prefixes/actual-provider-bindings.jsonl/000000032261-000000033010.chunk",
+        "prefixes/actual-provider-bindings.jsonl/000000033010-000000033759.chunk",
+        "prefixes/actual-provider-bindings.jsonl/000000033759-000000034508.chunk",
+        "prefixes/actual-provider-bindings.jsonl/000000034508-000000036006.chunk",
+        "prefixes/actual-provider-bindings.jsonl/000000036006-000000036755.chunk",
+        "prefixes/actual-provider-bindings.jsonl/000000036755-000000037504.chunk",
+        "prefixes/actual-provider-bindings.jsonl/000000037504-000000038253.chunk",
+        "prefixes/actual-provider-bindings.jsonl/000000038253-000000039628.chunk",
+        "prefixes/actual-provider-bindings.jsonl/000000039628-000000040500.chunk",
+        "prefixes/actual-provider-bindings.jsonl/000000040500-000000041249.chunk",
+        "prefixes/actual-provider-bindings.jsonl/000000041249-000000041998.chunk",
+        "prefixes/actual-provider-bindings.jsonl/000000041998-000000042747.chunk",
+        "prefixes/actual-provider-bindings.jsonl/000000042747-000000043496.chunk",
+        "prefixes/actual-provider-bindings.jsonl/000000043496-000000044871.chunk",
+        "prefixes/actual-provider-bindings.jsonl/000000044871-000000045743.chunk",
+        "prefixes/actual-provider-bindings.jsonl/000000045743-000000046492.chunk",
+        "prefixes/actual-provider-bindings.jsonl/000000046492-000000047241.chunk",
+        "prefixes/actual-provider-bindings.jsonl/000000047241-000000048739.chunk",
+        "prefixes/actual-provider-bindings.jsonl/000000048739-000000049488.chunk",
+        "prefixes/actual-provider-bindings.jsonl/000000049488-000000050237.chunk",
+        "prefixes/actual-provider-bindings.jsonl/000000050237-000000050986.chunk",
+        "prefixes/actual-provider-bindings.jsonl/000000050986-000000051735.chunk",
+        "prefixes/actual-provider-bindings.jsonl/000000051735-000000052484.chunk",
+        "prefixes/actual-provider-bindings.jsonl/000000052484-000000053233.chunk",
+        "prefixes/actual-provider-bindings.jsonl/000000053233-000000054731.chunk",
+        "prefixes/actual-provider-bindings.jsonl/000000054731-000000055480.chunk",
+        "prefixes/actual-provider-bindings.jsonl/000000055480-000000056229.chunk",
+        "prefixes/actual-provider-bindings.jsonl/000000056229-000000056978.chunk",
+        "prefixes/actual-provider-bindings.jsonl/000000056978-000000057727.chunk",
+        "prefixes/actual-provider-bindings.jsonl/000000057727-000000058476.chunk",
+        "prefixes/actual-provider-bindings.jsonl/000000058476-000000059974.chunk",
+        "prefixes/actual-provider-bindings.jsonl/000000059974-000000060723.chunk",
+        "prefixes/actual-provider-bindings.jsonl/000000060723-000000061472.chunk",
+        "prefixes/actual-provider-bindings.jsonl/000000061472-000000062221.chunk",
+        "prefixes/actual-provider-bindings.jsonl/000000062221-000000062970.chunk"
+      ],
+      "endByte": 62970,
+      "incomplete": true,
+      "inode": 7243549,
+      "observedAt": "2026-10-17T21:18:06.174885+00:00",
+      "sourceObservedBytes": 62970
+    },
+    "resources.jsonl": {
+      "chunks": [
+        "prefixes/resources.jsonl/000000000000-000004191689.chunk",
+        "prefixes/resources.jsonl/000004191689-000008384111.chunk",
+        "prefixes/resources.jsonl/000008384111-000012577265.chunk",
+        "prefixes/resources.jsonl/000012577265-000016767773.chunk",
+        "prefixes/resources.jsonl/000016767773-000020960378.chunk",
+        "prefixes/resources.jsonl/000020960378-000025153302.chunk",
+        "prefixes/resources.jsonl/000025153302-000029346224.chunk",
+        "prefixes/resources.jsonl/000029346224-000033539149.chunk",
+        "prefixes/resources.jsonl/000033539149-000037732073.chunk",
+        "prefixes/resources.jsonl/000037732073-000039835040.chunk",
+        "prefixes/resources.jsonl/000039835040-000040134225.chunk",
+        "prefixes/resources.jsonl/000040134225-000040394385.chunk",
+        "prefixes/resources.jsonl/000040394385-000040654546.chunk",
+        "prefixes/resources.jsonl/000040654546-000040910370.chunk",
+        "prefixes/resources.jsonl/000040910370-000041170531.chunk",
+        "prefixes/resources.jsonl/000041170531-000041430692.chunk",
+        "prefixes/resources.jsonl/000041430692-000041690852.chunk",
+        "prefixes/resources.jsonl/000041690852-000041946677.chunk",
+        "prefixes/resources.jsonl/000041946677-000042206837.chunk",
+        "prefixes/resources.jsonl/000042206837-000042462663.chunk",
+        "prefixes/resources.jsonl/000042462663-000042722823.chunk",
+        "prefixes/resources.jsonl/000042722823-000042982983.chunk",
+        "prefixes/resources.jsonl/000042982983-000043243158.chunk",
+        "prefixes/resources.jsonl/000043243158-000043499102.chunk",
+        "prefixes/resources.jsonl/000043499102-000043759384.chunk",
+        "prefixes/resources.jsonl/000043759384-000044015386.chunk",
+        "prefixes/resources.jsonl/000044015386-000044275727.chunk",
+        "prefixes/resources.jsonl/000044275727-000044536067.chunk",
+        "prefixes/resources.jsonl/000044536067-000044792068.chunk",
+        "prefixes/resources.jsonl/000044792068-000045052409.chunk",
+        "prefixes/resources.jsonl/000045052409-000045312751.chunk",
+        "prefixes/resources.jsonl/000045312751-000045573092.chunk",
+        "prefixes/resources.jsonl/000045573092-000045829093.chunk",
+        "prefixes/resources.jsonl/000045829093-000046089434.chunk",
+        "prefixes/resources.jsonl/000046089434-000046345436.chunk",
+        "prefixes/resources.jsonl/000046345436-000046605777.chunk",
+        "prefixes/resources.jsonl/000046605777-000046866119.chunk",
+        "prefixes/resources.jsonl/000046866119-000047126460.chunk",
+        "prefixes/resources.jsonl/000047126460-000047382461.chunk",
+        "prefixes/resources.jsonl/000047382461-000047642802.chunk",
+        "prefixes/resources.jsonl/000047642802-000047903142.chunk",
+        "prefixes/resources.jsonl/000047903142-000048159240.chunk",
+        "prefixes/resources.jsonl/000048159240-000048419700.chunk",
+        "prefixes/resources.jsonl/000048419700-000048680162.chunk",
+        "prefixes/resources.jsonl/000048680162-000048940623.chunk",
+        "prefixes/resources.jsonl/000048940623-000049196742.chunk",
+        "prefixes/resources.jsonl/000049196742-000049457203.chunk",
+        "prefixes/resources.jsonl/000049457203-000049717663.chunk",
+        "prefixes/resources.jsonl/000049717663-000049973783.chunk",
+        "prefixes/resources.jsonl/000049973783-000050234243.chunk",
+        "prefixes/resources.jsonl/000050234243-000050490363.chunk",
+        "prefixes/resources.jsonl/000050490363-000050750823.chunk",
+        "prefixes/resources.jsonl/000050750823-000051011285.chunk",
+        "prefixes/resources.jsonl/000051011285-000051267404.chunk",
+        "prefixes/resources.jsonl/000051267404-000051527865.chunk",
+        "prefixes/resources.jsonl/000051527865-000051788416.chunk",
+        "prefixes/resources.jsonl/000051788416-000052048996.chunk",
+        "prefixes/resources.jsonl/000052048996-000052305234.chunk"
+      ],
+      "endByte": 52305234,
+      "incomplete": true,
+      "inode": 7243539,
+      "observedAt": "2026-10-17T21:18:06.241745+00:00",
+      "sourceObservedBytes": 52305234
+    },
+    "voice-stages.jsonl": {
+      "chunks": [
+        "prefixes/voice-stages.jsonl/000000000000-000000126897.chunk",
+        "prefixes/voice-stages.jsonl/000000126897-000000131690.chunk",
+        "prefixes/voice-stages.jsonl/000000131690-000000136483.chunk",
+        "prefixes/voice-stages.jsonl/000000136483-000000146069.chunk",
+        "prefixes/voice-stages.jsonl/000000146069-000000150862.chunk",
+        "prefixes/voice-stages.jsonl/000000150862-000000155655.chunk",
+        "prefixes/voice-stages.jsonl/000000155655-000000160448.chunk",
+        "prefixes/voice-stages.jsonl/000000160448-000000165241.chunk",
+        "prefixes/voice-stages.jsonl/000000165241-000000174827.chunk",
+        "prefixes/voice-stages.jsonl/000000174827-000000179620.chunk",
+        "prefixes/voice-stages.jsonl/000000179620-000000184413.chunk",
+        "prefixes/voice-stages.jsonl/000000184413-000000189206.chunk",
+        "prefixes/voice-stages.jsonl/000000189206-000000193999.chunk",
+        "prefixes/voice-stages.jsonl/000000193999-000000198792.chunk",
+        "prefixes/voice-stages.jsonl/000000198792-000000203585.chunk",
+        "prefixes/voice-stages.jsonl/000000203585-000000208378.chunk",
+        "prefixes/voice-stages.jsonl/000000208378-000000213171.chunk",
+        "prefixes/voice-stages.jsonl/000000213171-000000222757.chunk",
+        "prefixes/voice-stages.jsonl/000000222757-000000227550.chunk",
+        "prefixes/voice-stages.jsonl/000000227550-000000232343.chunk",
+        "prefixes/voice-stages.jsonl/000000232343-000000237136.chunk",
+        "prefixes/voice-stages.jsonl/000000237136-000000244325.chunk",
+        "prefixes/voice-stages.jsonl/000000244325-000000251515.chunk",
+        "prefixes/voice-stages.jsonl/000000251515-000000256308.chunk",
+        "prefixes/voice-stages.jsonl/000000256308-000000261101.chunk",
+        "prefixes/voice-stages.jsonl/000000261101-000000265894.chunk",
+        "prefixes/voice-stages.jsonl/000000265894-000000270687.chunk",
+        "prefixes/voice-stages.jsonl/000000270687-000000277876.chunk",
+        "prefixes/voice-stages.jsonl/000000277876-000000285066.chunk",
+        "prefixes/voice-stages.jsonl/000000285066-000000289859.chunk",
+        "prefixes/voice-stages.jsonl/000000289859-000000294652.chunk",
+        "prefixes/voice-stages.jsonl/000000294652-000000304238.chunk",
+        "prefixes/voice-stages.jsonl/000000304238-000000309031.chunk",
+        "prefixes/voice-stages.jsonl/000000309031-000000313824.chunk",
+        "prefixes/voice-stages.jsonl/000000313824-000000318617.chunk",
+        "prefixes/voice-stages.jsonl/000000318617-000000323410.chunk",
+        "prefixes/voice-stages.jsonl/000000323410-000000328203.chunk",
+        "prefixes/voice-stages.jsonl/000000328203-000000332996.chunk",
+        "prefixes/voice-stages.jsonl/000000332996-000000342582.chunk",
+        "prefixes/voice-stages.jsonl/000000342582-000000347375.chunk",
+        "prefixes/voice-stages.jsonl/000000347375-000000352168.chunk",
+        "prefixes/voice-stages.jsonl/000000352168-000000356961.chunk",
+        "prefixes/voice-stages.jsonl/000000356961-000000361754.chunk",
+        "prefixes/voice-stages.jsonl/000000361754-000000366547.chunk",
+        "prefixes/voice-stages.jsonl/000000366547-000000376133.chunk",
+        "prefixes/voice-stages.jsonl/000000376133-000000380926.chunk",
+        "prefixes/voice-stages.jsonl/000000380926-000000385719.chunk",
+        "prefixes/voice-stages.jsonl/000000385719-000000390512.chunk",
+        "prefixes/voice-stages.jsonl/000000390512-000000395305.chunk"
+      ],
+      "endByte": 395305,
+      "incomplete": true,
+      "inode": 7243540,
+      "observedAt": "2026-10-17T21:18:06.125109+00:00",
+      "sourceObservedBytes": 395305
+    }
+  },
+  "checkpointSequence": 49,
+  "snapshotAt": "2026-10-17T21:18:06.289638+00:00",
+  "incompleteCohort": true,
+  "diskAfter": {
+    "total": 109128826880,
+    "used": 101931040768,
+    "free": 7181008896
+  }
+}

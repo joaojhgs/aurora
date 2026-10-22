@@ -1,0 +1,5 @@
+PER-282's maintainability implementation remains delivered and independently reviewed: the shared feature manifest drives host projections, the large views are decomposed, common UX states are enforced, and dependency/export decisions are recorded. Existing accepted validation keeps its original tested-head attribution; no unchanged tests were repeated for this closeout.
+
+The original frontend PR https://github.com/joaojhgs/aurora/pull/174 was closed without merge on 2026-10-11. The current consolidated delivery is https://github.com/joaojhgs/aurora/pull/177, open as a draft against main at c0f4c0013cea5bb11ef81297194d0dc142a47bc4. The original frontend head d0cfe1bc668df95bab81cf04e2577742833477d2 is an ancestor of that head; the frontend work remains included. No PR was reopened or replaced.
+
+The shared product draft's remaining native acceptance and Source Astra aesthetic approval remain visible in its description. This linkage update does not declare the entire product merge-ready, merge anything, start CI, or authorize additional tests. New worker-local setup repairs and artifacts remain separate, unpublished work.

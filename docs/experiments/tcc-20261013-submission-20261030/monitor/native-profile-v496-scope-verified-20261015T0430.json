@@ -1,0 +1,28 @@
+{
+  "messageId": "msg_5b81dc223833",
+  "at": "2026-10-15T04:27:33Z",
+  "path": "docs/experiments/tcc-20261013-submission-20261030/root/native-profile-isolation-v496",
+  "manifestSHA256": "9f5b2335da9546e53542eb3d723c0523acade372c3ab0b4229e06a7cf9d5e010",
+  "solReviewSHA256": "00f77a672cbe75d46ec33e8923c92ceedc14d20ce759b51527ddadbed13b0999",
+  "status": "source slice closed",
+  "candidateAdmissibleScope": "after artifact/resource admission one-process visible UI/onboarding or independently observed typed/readaloud only",
+  "notAdmitted": [
+    "real microphone",
+    "frozen fixedWAV/native speech",
+    "persistent keyring",
+    "fresh process reopen"
+  ],
+  "existingFlagAlsoSelects": "squarewave native capture; no fixed WAV input",
+  "noNewFlagsProbesRuntimeBuildModels": true,
+  "verifiedAt": "2026-10-15T04:30:21Z",
+  "actualManifestFile": "MANIFEST.json",
+  "listedMembers": 3,
+  "actualFiles": 4,
+  "allListedHashesMatched": true,
+  "fullREADMEReviewRootDecisionRead": true,
+  "noMonitorExecutableTests": true,
+  "realNativeAudioStillOpen": true,
+  "crossDeviceMeasuredAllowed": false,
+  "visualRouteReport": "docs/experiments/tcc-20261013-submission-20261030/monitor/astra-existing-review-route-20261015T0428/REPORT.md",
+  "visualRouteMessageId": "msg_5d69e9da994c"
+}

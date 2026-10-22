@@ -1,0 +1,19 @@
+{
+  "command": [
+    "pnpm",
+    "--filter",
+    "@aurora/tauri-ui",
+    "exec",
+    "vitest",
+    "run",
+    "--environment",
+    "jsdom",
+    "--no-file-parallelism",
+    "src/offline-profile-main.test.ts"
+  ],
+  "startedAt": "2026-10-16T14:34:09.866536+00:00",
+  "endedAt": "2026-10-16T14:34:28.940221+00:00",
+  "exitCode": 0,
+  "error": null,
+  "log": ".git/aurora-handoff-import-20261006/desktop-local-profile-integration-v1082/tauri-profile-test.log"
+}

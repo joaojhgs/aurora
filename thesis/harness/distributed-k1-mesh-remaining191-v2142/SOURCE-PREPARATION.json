@@ -1,0 +1,127 @@
+{
+  "status": "NEW_SOURCE_ONLY_NOT_FROZEN_NOT_LAUNCHED",
+  "records": [
+    {
+      "name": "aurora_voice_telemetry_v430.py",
+      "bytes": 11584,
+      "sha256": "8129ffe7591a47a0107ede53b101aead9fc1f58b92f0c0c4203176cc7608325d",
+      "changedVsOriginalV1779": false
+    },
+    {
+      "name": "bindings.py",
+      "bytes": 5492,
+      "sha256": "79558452e6f61268ad246476ca848e060b8ea808e15091bc53a3c4e0e28b1647",
+      "changedVsOriginalV1779": false
+    },
+    {
+      "name": "bootstrap.py",
+      "bytes": 12833,
+      "sha256": "cb40f036566274ae4eff290a78a6124e4d9270189a0d31d3cce06fe9092e2537",
+      "changedVsOriginalV1779": false
+    },
+    {
+      "name": "candidate-input.wav",
+      "bytes": 219794,
+      "sha256": "da0ecc4ad0885746ab6e716585473917ab2b543a505bf0db09ebacfaa7943cbb",
+      "changedVsOriginalV1779": false
+    },
+    {
+      "name": "candidate-manifest.json",
+      "bytes": 220,
+      "sha256": "ce75b965ee5879ebece6ea7dfe133441547d20ccf89ecd5d66ea510bd9645e60",
+      "changedVsOriginalV1779": false
+    },
+    {
+      "name": "controller.py",
+      "bytes": 20651,
+      "sha256": "27a9c978ab1625b63b51eeb5166fca1fba7e6f9360bed61d726ca918cd8f3427",
+      "changedVsOriginalV1779": true
+    },
+    {
+      "name": "freeze-template.json",
+      "bytes": 2437,
+      "sha256": "e836beddf93c066101c39bc9abfdfaad4989093d818be8c2ba4f90a1933e4cad",
+      "changedVsOriginalV1779": false
+    },
+    {
+      "name": "mesh_route_observer.py",
+      "bytes": 9275,
+      "sha256": "2c23fd2bc69b00b746c2c5dc28c1d2b77428016314045363dceea5fe9ee5cdbb",
+      "changedVsOriginalV1779": false
+    },
+    {
+      "name": "observer.py",
+      "bytes": 11873,
+      "sha256": "784cc4bffc0d6824bbe378d17a7f632d587ca0a315896b048b2ebef727082df5",
+      "changedVsOriginalV1779": false
+    },
+    {
+      "name": "receiver_proof.py",
+      "bytes": 26315,
+      "sha256": "2a02a24014f1f3249fd9b36fcdfecd82a16a81d4788adfd37eacba1013e4cead",
+      "changedVsOriginalV1779": true
+    },
+    {
+      "name": "resource_sample.py",
+      "bytes": 7475,
+      "sha256": "8f62ec378e74036d4539d9159e3caf29b8fd7a9115de1ab0f482dfd58b6e1857",
+      "changedVsOriginalV1779": false
+    },
+    {
+      "name": "route_observation_sink.py",
+      "bytes": 11534,
+      "sha256": "886c150ff7b1a5205d2c2dd7843bc1031fabc1cf4cdd018d548db26ccdbe0597",
+      "changedVsOriginalV1779": true
+    },
+    {
+      "name": "route_runtime_pins.json",
+      "bytes": 2350,
+      "sha256": "db270c9c6373b24e669bdf2b002da5fadb3e3841ee1ecc6ad8dec5a7ad26daf8",
+      "changedVsOriginalV1779": false
+    },
+    {
+      "name": "runner.py",
+      "bytes": 75181,
+      "sha256": "eb6ff805e926c0f8fb66013063e99b173c1bfe6d91062cf6e59f976acc1cef66",
+      "changedVsOriginalV1779": true
+    },
+    {
+      "name": "tts_mesh_adapter.py",
+      "bytes": 5354,
+      "sha256": "7406c1815b4364413aaf3d550ebac11a0e968a0fab29c56b6a640150cf8936ca",
+      "changedVsOriginalV1779": true
+    },
+    {
+      "name": "warmup_policy.py",
+      "bytes": 4720,
+      "sha256": "bace9139f26c358b6e423ed45b9e0a29af409ac4303fd3fc5efcad531f0f715e",
+      "changedVsOriginalV1779": true
+    }
+  ],
+  "noModelsAudioPredicatesSettingsAuthorityChanged": true,
+  "warmupPolicy": "first15strictcorrect/max30distinct/knownstructuredpreacceptonly/3consecutivehardstop/no retry",
+  "measured": "ONLY191/global710\u2013900;709prior outcomes untouched",
+  "newProspectiveSessionAllocationSeconds": 15240,
+  "old72000AndChargesPreserved": true,
+  "sutCalls": 0,
+  "countOnlySmoke": {
+    "status": "PASS_COUNT_ONLY_NO_SUT",
+    "excludedSyntheticWarmupCount": 17,
+    "qualifiedSyntheticWarmups": 15,
+    "measuredCount": 191,
+    "globalFirst": 710,
+    "globalLast": 900,
+    "extraMeasuredCalls": 0,
+    "noFailedIndexRetry": true,
+    "fixtureScope": "Phase accounting only, not real STT/LLM/TTS correctness/native/readiness or latency evidence",
+    "sutCalls": 0,
+    "sourceSha256": "eb6ff805e926c0f8fb66013063e99b173c1bfe6d91062cf6e59f976acc1cef66"
+  },
+  "sinkCaps": {
+    "maximumRows": 222,
+    "maximumPossibleRequests": 221,
+    "queue": 128,
+    "rowBytes": 32768,
+    "rawBytes": 33554432
+  }
+}

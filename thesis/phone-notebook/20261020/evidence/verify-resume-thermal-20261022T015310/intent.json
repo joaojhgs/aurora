@@ -1,0 +1,12 @@
+{
+  "controlDeadline": "2026-10-22T02:03:10.413995+00:00",
+  "explicitNewline": true,
+  "host": "ssh:ssh-sem-notebook-personal",
+  "incarnation": "328cd72f-c7ea-49ff-a2db-b9275b085037",
+  "remoteResult": "/home/developer/projects/aurora/thesis/phone-notebook/20261020/evidence/verify-resume-thermal-20261022T015310.json",
+  "rootAdmissionMessage": "owner-actual-thermal-guard-verification-no-build-or-pilot",
+  "script": "scripts/check_resume_thermal_guard_v41.py",
+  "scriptSha256": "bec6e10f5f6857aae2ff8b6bc4e2f89dc81cd052ae619fecc736a1aeb5a8d111",
+  "singleSend": true,
+  "terminal": "term_a2ed5feb-7c92-48e4-bd88-d1b0e6737989"
+}

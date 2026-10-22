@@ -1,0 +1,38 @@
+{
+  "id": "remote-cli-1792621398208",
+  "ok": true,
+  "result": {
+    "runId": "run_e6054e76e9fc",
+    "deliveryId": "delivery_e16f033f1229",
+    "messages": [
+      {
+        "id": "msg_83deed8c9b02",
+        "run_id": "run_e6054e76e9fc",
+        "delivery_contract": "current_delivery",
+        "from_handle": "term_2eab47ed-ab9b-4e35-bd9b-fc068c60e3fc",
+        "to_handle": "run:run_e6054e76e9fc",
+        "subject": "Fleet change: original phone pane owner-resumed; main HTTP stays independent",
+        "body": "The 22:18 UTC fleet change is the SAME retained phone terminal term_1f27be31-0284-4366-bb91-30fe538cd30e / ctx_104db5d889d2 / task_e35b809903c1 becoming live; its old failed dispatch outcome remains history, and no new worker or ownership adoption was performed. One exact worker-read shows an explicit owner resume of that phone setup lane and a reported POCO USB-controller-access blocker, with no native pilot; the worker already sent its blocker report to this Run and is seeking the existing Personal controller authority in its own lane. This monitor has not verified a USB grant or any missing-permission fix; retain that lane's own precise action request, never release/stop the retained terminal, and keep Root's healthy V2296 main HTTP collection independent of phone readiness.",
+        "type": "status",
+        "priority": "normal",
+        "thread_id": null,
+        "payload": "{\"taskId\":\"task_d7ea336050cf\",\"dispatchId\":\"ctx_37b4d0a3c14f\",\"reportPath\":\".omx/evidence/orca-monitor-20261010/PHONE-LANE-OWNER-RESUME-USB-BLOCKER-OBSERVED-20261021T2219Z.json\"}",
+        "created_at": "2026-10-21T22:19:52Z",
+        "delivered_at": null
+      }
+    ],
+    "count": 1,
+    "replayed": true,
+    "acknowledged": null,
+    "timedOut": false,
+    "cancelled": false,
+    "connectionLost": false,
+    "mutation": {
+      "requestId": "78258270-1098-4fa3-bc8d-1a2497bd3441",
+      "replayed": false
+    }
+  },
+  "_meta": {
+    "runtimeId": "cc9e3275-28c6-4c45-85cc-bdcd2262aa7d"
+  }
+}

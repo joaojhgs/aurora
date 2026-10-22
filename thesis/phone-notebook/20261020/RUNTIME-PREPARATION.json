@@ -1,0 +1,9 @@
+{
+  "operation": "launch-runtime-prepare-20261022T011254",
+  "job": "/home/developer/projects/aurora/thesis/phone-notebook/20261020/deployment/ebde3a8acf6315f920d03593845f17a1fc65a733/runtime-prepare-20261022T011254",
+  "maxSeconds": 1200,
+  "sourceSha256": "55912b80de5c5f7299848a6d6836dd98c2332441b7e6608af17e1ce6abd0c20d",
+  "buildThermalStopC": 85,
+  "dataThermalStopC": 95,
+  "noModelCalls": true
+}

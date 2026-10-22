@@ -1,0 +1,1047 @@
+{
+  "at": "2026-10-17T21:20:01Z",
+  "baseline": {
+    "bytes": 43117024,
+    "inventory": "thesis/evidence/orca-relayed-http-v1197/provider-transfer-v1232/extracted/PROVIDER-EXPORT.json",
+    "rawFiles": 56,
+    "sha256": "5f29a553048441503ba0d231ec78e857f2a9ef3355a931dcae9d0db360ee760b"
+  },
+  "baselineRawRecopiedBytes": 0,
+  "checkpointSequence": 49,
+  "delta": {
+    "bytes": 9820717,
+    "inventory": "thesis/evidence/orca-relayed-http-v1197/provider-transfer-delta-v1261/extracted/PROVIDER-EXPORT.json",
+    "rawFiles": 111,
+    "sha256": "ea6e6bb310494eb680a08ac9399b5b67027a1d68704d08d43149d43ae1821713"
+  },
+  "newInferenceCalls": 0,
+  "prefixes": {
+    "actual-provider-bindings.jsonl": {
+      "chunks": 49,
+      "endByte": 62970,
+      "incomplete": true
+    },
+    "resources.jsonl": {
+      "chunks": 58,
+      "endByte": 52305234,
+      "incomplete": true
+    },
+    "voice-stages.jsonl": {
+      "chunks": 49,
+      "endByte": 395305,
+      "incomplete": true
+    }
+  },
+  "rawFiles": 167,
+  "rawPayloadBytes": 52937741,
+  "resolvePolicy": "Resolve every snapshot key from this index; baseline and delta immutable locations together cover the snapshot. Do not interpret absent baseline chunks in delta directory as data loss.",
+  "resolvedFiles": {
+    "bootstrap.py": {
+      "bytes": 1673,
+      "checksumVerificationReceipt": "thesis/evidence/orca-relayed-http-v1197/provider-transfer-v1232/CUSTODY.json",
+      "path": "thesis/evidence/orca-relayed-http-v1197/provider-transfer-v1232/extracted/provider-raw/bootstrap.py",
+      "sha256": "bf0da2f51e174193ceca7636ddfa1d602e56027afca339d23cb9366f96916926"
+    },
+    "controller.py": {
+      "bytes": 24773,
+      "checksumVerificationReceipt": "thesis/evidence/orca-relayed-http-v1197/provider-transfer-v1232/CUSTODY.json",
+      "path": "thesis/evidence/orca-relayed-http-v1197/provider-transfer-v1232/extracted/provider-raw/controller.py",
+      "sha256": "27a09e195d1a82f6dde770f60b15bcdcbf93f3743bf661c012405ae22eece5de"
+    },
+    "input/actual-provider-files-v1126.json": {
+      "bytes": 1611,
+      "checksumVerificationReceipt": "thesis/evidence/orca-relayed-http-v1197/provider-transfer-v1232/CUSTODY.json",
+      "path": "thesis/evidence/orca-relayed-http-v1197/provider-transfer-v1232/extracted/provider-raw/input/actual-provider-files-v1126.json",
+      "sha256": "799e2098820d5dd287afc443121edd73455ad30ab5a7163f3099874f5a95b7cf"
+    },
+    "input/admission-v1126.json": {
+      "bytes": 1217,
+      "checksumVerificationReceipt": "thesis/evidence/orca-relayed-http-v1197/provider-transfer-v1232/CUSTODY.json",
+      "path": "thesis/evidence/orca-relayed-http-v1197/provider-transfer-v1232/extracted/provider-raw/input/admission-v1126.json",
+      "sha256": "005e1b9e8a04d98e0e7bb9d8f69a244806657583e44cf9b35f6bfa78a8267a3e"
+    },
+    "input/provider-manifest.json": {
+      "bytes": 11597,
+      "checksumVerificationReceipt": "thesis/evidence/orca-relayed-http-v1197/provider-transfer-v1232/CUSTODY.json",
+      "path": "thesis/evidence/orca-relayed-http-v1197/provider-transfer-v1232/extracted/provider-raw/input/provider-manifest.json",
+      "sha256": "450ee5af677a229e93f75c093e4e5ee3135c25b223f0d73f713f0c31f56c4cae"
+    },
+    "input/runtime-full-package-inventory-v1126.json": {
+      "bytes": 38813,
+      "checksumVerificationReceipt": "thesis/evidence/orca-relayed-http-v1197/provider-transfer-v1232/CUSTODY.json",
+      "path": "thesis/evidence/orca-relayed-http-v1197/provider-transfer-v1232/extracted/provider-raw/input/runtime-full-package-inventory-v1126.json",
+      "sha256": "fa0472307e4f039d8a96c9adaec3af2334bb4bd5feaffea45e8fb1c8c9e17614"
+    },
+    "input/source-inventory.json": {
+      "bytes": 68239,
+      "checksumVerificationReceipt": "thesis/evidence/orca-relayed-http-v1197/provider-transfer-v1232/CUSTODY.json",
+      "path": "thesis/evidence/orca-relayed-http-v1197/provider-transfer-v1232/extracted/provider-raw/input/source-inventory.json",
+      "sha256": "bcc9ec8765616093b0b0b4dd2bf35847a6653f242e09f809e93ee5199f409848"
+    },
+    "prefixes/actual-provider-bindings.jsonl/000000000000-000000021026.chunk": {
+      "bytes": 21026,
+      "checksumVerificationReceipt": "thesis/evidence/orca-relayed-http-v1197/provider-transfer-v1232/CUSTODY.json",
+      "path": "thesis/evidence/orca-relayed-http-v1197/provider-transfer-v1232/extracted/provider-raw/prefixes/actual-provider-bindings.jsonl/000000000000-000000021026.chunk",
+      "sha256": "b4e55f4e8dedff085684bc999689e0bb29b54151d4405b927555b5ec464e3373"
+    },
+    "prefixes/actual-provider-bindings.jsonl/000000021026-000000021775.chunk": {
+      "bytes": 749,
+      "checksumVerificationReceipt": "thesis/evidence/orca-relayed-http-v1197/provider-transfer-v1232/CUSTODY.json",
+      "path": "thesis/evidence/orca-relayed-http-v1197/provider-transfer-v1232/extracted/provider-raw/prefixes/actual-provider-bindings.jsonl/000000021026-000000021775.chunk",
+      "sha256": "2a6164ffe1a691312d15a6911eef1cf1db6f3f98c2a37ce713ef4f312b3fb8df"
+    },
+    "prefixes/actual-provider-bindings.jsonl/000000021775-000000022524.chunk": {
+      "bytes": 749,
+      "checksumVerificationReceipt": "thesis/evidence/orca-relayed-http-v1197/provider-transfer-v1232/CUSTODY.json",
+      "path": "thesis/evidence/orca-relayed-http-v1197/provider-transfer-v1232/extracted/provider-raw/prefixes/actual-provider-bindings.jsonl/000000021775-000000022524.chunk",
+      "sha256": "0c28dbb4b2ecc2126dc803c3ad2013fd87317b515e8df2a8ee04e70de778503f"
+    },
+    "prefixes/actual-provider-bindings.jsonl/000000022524-000000024022.chunk": {
+      "bytes": 1498,
+      "checksumVerificationReceipt": "thesis/evidence/orca-relayed-http-v1197/provider-transfer-v1232/CUSTODY.json",
+      "path": "thesis/evidence/orca-relayed-http-v1197/provider-transfer-v1232/extracted/provider-raw/prefixes/actual-provider-bindings.jsonl/000000022524-000000024022.chunk",
+      "sha256": "5711169ce5e4ba366c0e3c70290edb24ed7c27af03fb5520c753bdfd115d63af"
+    },
+    "prefixes/actual-provider-bindings.jsonl/000000024022-000000024771.chunk": {
+      "bytes": 749,
+      "checksumVerificationReceipt": "thesis/evidence/orca-relayed-http-v1197/provider-transfer-v1232/CUSTODY.json",
+      "path": "thesis/evidence/orca-relayed-http-v1197/provider-transfer-v1232/extracted/provider-raw/prefixes/actual-provider-bindings.jsonl/000000024022-000000024771.chunk",
+      "sha256": "0ee11975be4f517325a755fd3b3a7b7958217cdd713e3c83a9b5760b455a4085"
+    },
+    "prefixes/actual-provider-bindings.jsonl/000000024771-000000025520.chunk": {
+      "bytes": 749,
+      "checksumVerificationReceipt": "thesis/evidence/orca-relayed-http-v1197/provider-transfer-v1232/CUSTODY.json",
+      "path": "thesis/evidence/orca-relayed-http-v1197/provider-transfer-v1232/extracted/provider-raw/prefixes/actual-provider-bindings.jsonl/000000024771-000000025520.chunk",
+      "sha256": "71b9ed1bb37b4e6f3033d74d45ab53a1f0156d7de7c38c71a82d2966aabbf147"
+    },
+    "prefixes/actual-provider-bindings.jsonl/000000025520-000000026269.chunk": {
+      "bytes": 749,
+      "checksumVerificationReceipt": "thesis/evidence/orca-relayed-http-v1197/provider-transfer-v1232/CUSTODY.json",
+      "path": "thesis/evidence/orca-relayed-http-v1197/provider-transfer-v1232/extracted/provider-raw/prefixes/actual-provider-bindings.jsonl/000000025520-000000026269.chunk",
+      "sha256": "384e94622c455b1f3f3a2c847bdd3a0c62349ea4d885a2198768e7b36764ff3b"
+    },
+    "prefixes/actual-provider-bindings.jsonl/000000026269-000000027018.chunk": {
+      "bytes": 749,
+      "checksumVerificationReceipt": "thesis/evidence/orca-relayed-http-v1197/provider-transfer-v1232/CUSTODY.json",
+      "path": "thesis/evidence/orca-relayed-http-v1197/provider-transfer-v1232/extracted/provider-raw/prefixes/actual-provider-bindings.jsonl/000000026269-000000027018.chunk",
+      "sha256": "3ee118299fd80c2aa67bd77a3c1d5ac7ae716f44a869c8f2da332b43f4da5251"
+    },
+    "prefixes/actual-provider-bindings.jsonl/000000027018-000000028516.chunk": {
+      "bytes": 1498,
+      "checksumVerificationReceipt": "thesis/evidence/orca-relayed-http-v1197/provider-transfer-v1232/CUSTODY.json",
+      "path": "thesis/evidence/orca-relayed-http-v1197/provider-transfer-v1232/extracted/provider-raw/prefixes/actual-provider-bindings.jsonl/000000027018-000000028516.chunk",
+      "sha256": "43691f593ec9d35e561e908dfd4f3121e50e77293f27604ddc3f5d8cd65383b4"
+    },
+    "prefixes/actual-provider-bindings.jsonl/000000028516-000000029265.chunk": {
+      "bytes": 749,
+      "checksumVerificationReceipt": "thesis/evidence/orca-relayed-http-v1197/provider-transfer-v1232/CUSTODY.json",
+      "path": "thesis/evidence/orca-relayed-http-v1197/provider-transfer-v1232/extracted/provider-raw/prefixes/actual-provider-bindings.jsonl/000000028516-000000029265.chunk",
+      "sha256": "91d4331b4b12fb2bff0cf491d87129519f96f572b135128fa31d3c6e37bfe0c2"
+    },
+    "prefixes/actual-provider-bindings.jsonl/000000029265-000000030014.chunk": {
+      "bytes": 749,
+      "checksumVerificationReceipt": "thesis/evidence/orca-relayed-http-v1197/provider-transfer-v1232/CUSTODY.json",
+      "path": "thesis/evidence/orca-relayed-http-v1197/provider-transfer-v1232/extracted/provider-raw/prefixes/actual-provider-bindings.jsonl/000000029265-000000030014.chunk",
+      "sha256": "5d244dc1b60d02434991f2eae6ffa63a0a8466e36d37e487988bc06f5be5fc74"
+    },
+    "prefixes/actual-provider-bindings.jsonl/000000030014-000000030763.chunk": {
+      "bytes": 749,
+      "checksumVerificationReceipt": "thesis/evidence/orca-relayed-http-v1197/provider-transfer-v1232/CUSTODY.json",
+      "path": "thesis/evidence/orca-relayed-http-v1197/provider-transfer-v1232/extracted/provider-raw/prefixes/actual-provider-bindings.jsonl/000000030014-000000030763.chunk",
+      "sha256": "b23f7bdfbf535ec7529878f564aa55f3f3d30e3f067fc0fb3a6d75a77c9d34f6"
+    },
+    "prefixes/actual-provider-bindings.jsonl/000000030763-000000031512.chunk": {
+      "bytes": 749,
+      "checksumVerificationReceipt": "thesis/evidence/orca-relayed-http-v1197/provider-transfer-delta-v1261/CUSTODY.json",
+      "path": "thesis/evidence/orca-relayed-http-v1197/provider-transfer-delta-v1261/extracted/provider-raw/prefixes/actual-provider-bindings.jsonl/000000030763-000000031512.chunk",
+      "sha256": "15f8c00414c2727fe1328a687033131306d25565541f06413d0d3c2e4d6eb53c"
+    },
+    "prefixes/actual-provider-bindings.jsonl/000000031512-000000032261.chunk": {
+      "bytes": 749,
+      "checksumVerificationReceipt": "thesis/evidence/orca-relayed-http-v1197/provider-transfer-delta-v1261/CUSTODY.json",
+      "path": "thesis/evidence/orca-relayed-http-v1197/provider-transfer-delta-v1261/extracted/provider-raw/prefixes/actual-provider-bindings.jsonl/000000031512-000000032261.chunk",
+      "sha256": "3a5a8b7747caba83949c0b699da79cc5d97077bed1d41bdf988072af1c2df6ec"
+    },
+    "prefixes/actual-provider-bindings.jsonl/000000032261-000000033010.chunk": {
+      "bytes": 749,
+      "checksumVerificationReceipt": "thesis/evidence/orca-relayed-http-v1197/provider-transfer-delta-v1261/CUSTODY.json",
+      "path": "thesis/evidence/orca-relayed-http-v1197/provider-transfer-delta-v1261/extracted/provider-raw/prefixes/actual-provider-bindings.jsonl/000000032261-000000033010.chunk",
+      "sha256": "3cce456b6aae5e43948cba4116d398d41535147dca2861ba4a78a8f97c215275"
+    },
+    "prefixes/actual-provider-bindings.jsonl/000000033010-000000033759.chunk": {
+      "bytes": 749,
+      "checksumVerificationReceipt": "thesis/evidence/orca-relayed-http-v1197/provider-transfer-delta-v1261/CUSTODY.json",
+      "path": "thesis/evidence/orca-relayed-http-v1197/provider-transfer-delta-v1261/extracted/provider-raw/prefixes/actual-provider-bindings.jsonl/000000033010-000000033759.chunk",
+      "sha256": "43bd8e0c9bd0e2a7d803caf115650b9209576faa383fcb8564554c847fc8c9df"
+    },
+    "prefixes/actual-provider-bindings.jsonl/000000033759-000000034508.chunk": {
+      "bytes": 749,
+      "checksumVerificationReceipt": "thesis/evidence/orca-relayed-http-v1197/provider-transfer-delta-v1261/CUSTODY.json",
+      "path": "thesis/evidence/orca-relayed-http-v1197/provider-transfer-delta-v1261/extracted/provider-raw/prefixes/actual-provider-bindings.jsonl/000000033759-000000034508.chunk",
+      "sha256": "383d481561c3cb84d8ee8d9d25b4fa9cbca27a67c21dd47dcd9b7c7e4c64d9aa"
+    },
+    "prefixes/actual-provider-bindings.jsonl/000000034508-000000036006.chunk": {
+      "bytes": 1498,
+      "checksumVerificationReceipt": "thesis/evidence/orca-relayed-http-v1197/provider-transfer-delta-v1261/CUSTODY.json",
+      "path": "thesis/evidence/orca-relayed-http-v1197/provider-transfer-delta-v1261/extracted/provider-raw/prefixes/actual-provider-bindings.jsonl/000000034508-000000036006.chunk",
+      "sha256": "d7d72db041e1bce11b6802924a6ced433e3b3036b922a238459d39beff0c641c"
+    },
+    "prefixes/actual-provider-bindings.jsonl/000000036006-000000036755.chunk": {
+      "bytes": 749,
+      "checksumVerificationReceipt": "thesis/evidence/orca-relayed-http-v1197/provider-transfer-delta-v1261/CUSTODY.json",
+      "path": "thesis/evidence/orca-relayed-http-v1197/provider-transfer-delta-v1261/extracted/provider-raw/prefixes/actual-provider-bindings.jsonl/000000036006-000000036755.chunk",
+      "sha256": "e18166105af7183819a97c3e80b93172392789afc4136987decb73b83c82b873"
+    },
+    "prefixes/actual-provider-bindings.jsonl/000000036755-000000037504.chunk": {
+      "bytes": 749,
+      "checksumVerificationReceipt": "thesis/evidence/orca-relayed-http-v1197/provider-transfer-delta-v1261/CUSTODY.json",
+      "path": "thesis/evidence/orca-relayed-http-v1197/provider-transfer-delta-v1261/extracted/provider-raw/prefixes/actual-provider-bindings.jsonl/000000036755-000000037504.chunk",
+      "sha256": "7411e0f1dadaa5e30d56f3749413ecdf62f8f33991b162ac2a893edadcc4f441"
+    },
+    "prefixes/actual-provider-bindings.jsonl/000000037504-000000038253.chunk": {
+      "bytes": 749,
+      "checksumVerificationReceipt": "thesis/evidence/orca-relayed-http-v1197/provider-transfer-delta-v1261/CUSTODY.json",
+      "path": "thesis/evidence/orca-relayed-http-v1197/provider-transfer-delta-v1261/extracted/provider-raw/prefixes/actual-provider-bindings.jsonl/000000037504-000000038253.chunk",
+      "sha256": "e08c2c5a13bed8cd48bec9b1c388127f0152b2109c58982be193dcea53612260"
+    },
+    "prefixes/actual-provider-bindings.jsonl/000000038253-000000039628.chunk": {
+      "bytes": 1375,
+      "checksumVerificationReceipt": "thesis/evidence/orca-relayed-http-v1197/provider-transfer-delta-v1261/CUSTODY.json",
+      "path": "thesis/evidence/orca-relayed-http-v1197/provider-transfer-delta-v1261/extracted/provider-raw/prefixes/actual-provider-bindings.jsonl/000000038253-000000039628.chunk",
+      "sha256": "8468febe8d567d2914cc0183f913138e4766f4dd9a5ba767f1de4e0c080a78e6"
+    },
+    "prefixes/actual-provider-bindings.jsonl/000000039628-000000040500.chunk": {
+      "bytes": 872,
+      "checksumVerificationReceipt": "thesis/evidence/orca-relayed-http-v1197/provider-transfer-delta-v1261/CUSTODY.json",
+      "path": "thesis/evidence/orca-relayed-http-v1197/provider-transfer-delta-v1261/extracted/provider-raw/prefixes/actual-provider-bindings.jsonl/000000039628-000000040500.chunk",
+      "sha256": "af10acd90a9153435ba5dbc43656e0f92edfd9d6643f41819ee751bdff3c255b"
+    },
+    "prefixes/actual-provider-bindings.jsonl/000000040500-000000041249.chunk": {
+      "bytes": 749,
+      "checksumVerificationReceipt": "thesis/evidence/orca-relayed-http-v1197/provider-transfer-delta-v1261/CUSTODY.json",
+      "path": "thesis/evidence/orca-relayed-http-v1197/provider-transfer-delta-v1261/extracted/provider-raw/prefixes/actual-provider-bindings.jsonl/000000040500-000000041249.chunk",
+      "sha256": "b550840eb7bd21c2195b9680f69a32782bc58e28b4cc2ad9b3f00368115c5cc3"
+    },
+    "prefixes/actual-provider-bindings.jsonl/000000041249-000000041998.chunk": {
+      "bytes": 749,
+      "checksumVerificationReceipt": "thesis/evidence/orca-relayed-http-v1197/provider-transfer-delta-v1261/CUSTODY.json",
+      "path": "thesis/evidence/orca-relayed-http-v1197/provider-transfer-delta-v1261/extracted/provider-raw/prefixes/actual-provider-bindings.jsonl/000000041249-000000041998.chunk",
+      "sha256": "6c49aef46f80b7a1af35874cc2564c5ca82098811c0f8ec4429ffbd729ce068d"
+    },
+    "prefixes/actual-provider-bindings.jsonl/000000041998-000000042747.chunk": {
+      "bytes": 749,
+      "checksumVerificationReceipt": "thesis/evidence/orca-relayed-http-v1197/provider-transfer-delta-v1261/CUSTODY.json",
+      "path": "thesis/evidence/orca-relayed-http-v1197/provider-transfer-delta-v1261/extracted/provider-raw/prefixes/actual-provider-bindings.jsonl/000000041998-000000042747.chunk",
+      "sha256": "5a7120c9348ab75402cca82d99b3ba66d1ed87ba4cc43e09c932469be09b63af"
+    },
+    "prefixes/actual-provider-bindings.jsonl/000000042747-000000043496.chunk": {
+      "bytes": 749,
+      "checksumVerificationReceipt": "thesis/evidence/orca-relayed-http-v1197/provider-transfer-delta-v1261/CUSTODY.json",
+      "path": "thesis/evidence/orca-relayed-http-v1197/provider-transfer-delta-v1261/extracted/provider-raw/prefixes/actual-provider-bindings.jsonl/000000042747-000000043496.chunk",
+      "sha256": "cf90c90c7fa0bff02a411dc2043f45ef3c07dfbba8d491f99f7649cc0ee76f66"
+    },
+    "prefixes/actual-provider-bindings.jsonl/000000043496-000000044871.chunk": {
+      "bytes": 1375,
+      "checksumVerificationReceipt": "thesis/evidence/orca-relayed-http-v1197/provider-transfer-delta-v1261/CUSTODY.json",
+      "path": "thesis/evidence/orca-relayed-http-v1197/provider-transfer-delta-v1261/extracted/provider-raw/prefixes/actual-provider-bindings.jsonl/000000043496-000000044871.chunk",
+      "sha256": "134928ee48e18e1e9224425c46aed6c820e359a6751715cb0fd6de01f57ade4f"
+    },
+    "prefixes/actual-provider-bindings.jsonl/000000044871-000000045743.chunk": {
+      "bytes": 872,
+      "checksumVerificationReceipt": "thesis/evidence/orca-relayed-http-v1197/provider-transfer-delta-v1261/CUSTODY.json",
+      "path": "thesis/evidence/orca-relayed-http-v1197/provider-transfer-delta-v1261/extracted/provider-raw/prefixes/actual-provider-bindings.jsonl/000000044871-000000045743.chunk",
+      "sha256": "2b00737d7e46d62ff3664a2a89ada6cd28f57718cc5c949231de1bf0da63d96b"
+    },
+    "prefixes/actual-provider-bindings.jsonl/000000045743-000000046492.chunk": {
+      "bytes": 749,
+      "checksumVerificationReceipt": "thesis/evidence/orca-relayed-http-v1197/provider-transfer-delta-v1261/CUSTODY.json",
+      "path": "thesis/evidence/orca-relayed-http-v1197/provider-transfer-delta-v1261/extracted/provider-raw/prefixes/actual-provider-bindings.jsonl/000000045743-000000046492.chunk",
+      "sha256": "0f4c9e97ca0a7b9b87cb14cad5084ce4b5b00adf03bb7550941065cadf5c4193"
+    },
+    "prefixes/actual-provider-bindings.jsonl/000000046492-000000047241.chunk": {
+      "bytes": 749,
+      "checksumVerificationReceipt": "thesis/evidence/orca-relayed-http-v1197/provider-transfer-delta-v1261/CUSTODY.json",
+      "path": "thesis/evidence/orca-relayed-http-v1197/provider-transfer-delta-v1261/extracted/provider-raw/prefixes/actual-provider-bindings.jsonl/000000046492-000000047241.chunk",
+      "sha256": "6277c7905a9b3762427d9ec07832c4e7ae164d6de3b7b7993b023b797582c2f8"
+    },
+    "prefixes/actual-provider-bindings.jsonl/000000047241-000000048739.chunk": {
+      "bytes": 1498,
+      "checksumVerificationReceipt": "thesis/evidence/orca-relayed-http-v1197/provider-transfer-delta-v1261/CUSTODY.json",
+      "path": "thesis/evidence/orca-relayed-http-v1197/provider-transfer-delta-v1261/extracted/provider-raw/prefixes/actual-provider-bindings.jsonl/000000047241-000000048739.chunk",
+      "sha256": "fde648a0c40dd4c5901c560970c8242b3a3e290c6d05e77c37a82eb87de9f4b6"
+    },
+    "prefixes/actual-provider-bindings.jsonl/000000048739-000000049488.chunk": {
+      "bytes": 749,
+      "checksumVerificationReceipt": "thesis/evidence/orca-relayed-http-v1197/provider-transfer-delta-v1261/CUSTODY.json",
+      "path": "thesis/evidence/orca-relayed-http-v1197/provider-transfer-delta-v1261/extracted/provider-raw/prefixes/actual-provider-bindings.jsonl/000000048739-000000049488.chunk",
+      "sha256": "b058a0135277cb12f5fe43843225941270430007b3a4adc94e9d5a3342c4b389"
+    },
+    "prefixes/actual-provider-bindings.jsonl/000000049488-000000050237.chunk": {
+      "bytes": 749,
+      "checksumVerificationReceipt": "thesis/evidence/orca-relayed-http-v1197/provider-transfer-delta-v1261/CUSTODY.json",
+      "path": "thesis/evidence/orca-relayed-http-v1197/provider-transfer-delta-v1261/extracted/provider-raw/prefixes/actual-provider-bindings.jsonl/000000049488-000000050237.chunk",
+      "sha256": "0aa0511d0d953bf7ae3c81d203b0f62572bcce6cb8e0931199226eb487060219"
+    },
+    "prefixes/actual-provider-bindings.jsonl/000000050237-000000050986.chunk": {
+      "bytes": 749,
+      "checksumVerificationReceipt": "thesis/evidence/orca-relayed-http-v1197/provider-transfer-delta-v1261/CUSTODY.json",
+      "path": "thesis/evidence/orca-relayed-http-v1197/provider-transfer-delta-v1261/extracted/provider-raw/prefixes/actual-provider-bindings.jsonl/000000050237-000000050986.chunk",
+      "sha256": "c404dc499afe94f2b59123245e1ef24cae5123dc206a99755f21e403417b8792"
+    },
+    "prefixes/actual-provider-bindings.jsonl/000000050986-000000051735.chunk": {
+      "bytes": 749,
+      "checksumVerificationReceipt": "thesis/evidence/orca-relayed-http-v1197/provider-transfer-delta-v1261/CUSTODY.json",
+      "path": "thesis/evidence/orca-relayed-http-v1197/provider-transfer-delta-v1261/extracted/provider-raw/prefixes/actual-provider-bindings.jsonl/000000050986-000000051735.chunk",
+      "sha256": "c2314425e9e0d3efeef0aa36237fa736864e3164e013f6fd9ffbcce9c6d1fc3b"
+    },
+    "prefixes/actual-provider-bindings.jsonl/000000051735-000000052484.chunk": {
+      "bytes": 749,
+      "checksumVerificationReceipt": "thesis/evidence/orca-relayed-http-v1197/provider-transfer-delta-v1261/CUSTODY.json",
+      "path": "thesis/evidence/orca-relayed-http-v1197/provider-transfer-delta-v1261/extracted/provider-raw/prefixes/actual-provider-bindings.jsonl/000000051735-000000052484.chunk",
+      "sha256": "c6d617b2b453699f3ffd4fab4ba17972024ac1db84b4970bea01ae68e473ee09"
+    },
+    "prefixes/actual-provider-bindings.jsonl/000000052484-000000053233.chunk": {
+      "bytes": 749,
+      "checksumVerificationReceipt": "thesis/evidence/orca-relayed-http-v1197/provider-transfer-delta-v1261/CUSTODY.json",
+      "path": "thesis/evidence/orca-relayed-http-v1197/provider-transfer-delta-v1261/extracted/provider-raw/prefixes/actual-provider-bindings.jsonl/000000052484-000000053233.chunk",
+      "sha256": "d795dbb4384c286d3973303c92aa667d3084805e7e6aa6cfb43de73f0bcf357a"
+    },
+    "prefixes/actual-provider-bindings.jsonl/000000053233-000000054731.chunk": {
+      "bytes": 1498,
+      "checksumVerificationReceipt": "thesis/evidence/orca-relayed-http-v1197/provider-transfer-delta-v1261/CUSTODY.json",
+      "path": "thesis/evidence/orca-relayed-http-v1197/provider-transfer-delta-v1261/extracted/provider-raw/prefixes/actual-provider-bindings.jsonl/000000053233-000000054731.chunk",
+      "sha256": "e1bf38aef1f7b7d90b3f70bdba90c6362669f7bac3f015baa2c6168f7cf8c35c"
+    },
+    "prefixes/actual-provider-bindings.jsonl/000000054731-000000055480.chunk": {
+      "bytes": 749,
+      "checksumVerificationReceipt": "thesis/evidence/orca-relayed-http-v1197/provider-transfer-delta-v1261/CUSTODY.json",
+      "path": "thesis/evidence/orca-relayed-http-v1197/provider-transfer-delta-v1261/extracted/provider-raw/prefixes/actual-provider-bindings.jsonl/000000054731-000000055480.chunk",
+      "sha256": "4d6fab781bb7f1de597c84f215eb3360c0ccc96c0ab728d28823335fc5eb6b27"
+    },
+    "prefixes/actual-provider-bindings.jsonl/000000055480-000000056229.chunk": {
+      "bytes": 749,
+      "checksumVerificationReceipt": "thesis/evidence/orca-relayed-http-v1197/provider-transfer-delta-v1261/CUSTODY.json",
+      "path": "thesis/evidence/orca-relayed-http-v1197/provider-transfer-delta-v1261/extracted/provider-raw/prefixes/actual-provider-bindings.jsonl/000000055480-000000056229.chunk",
+      "sha256": "b23f5471fee31bf65284c4fdd48872284933befd067a186131e864704b1f69ae"
+    },
+    "prefixes/actual-provider-bindings.jsonl/000000056229-000000056978.chunk": {
+      "bytes": 749,
+      "checksumVerificationReceipt": "thesis/evidence/orca-relayed-http-v1197/provider-transfer-delta-v1261/CUSTODY.json",
+      "path": "thesis/evidence/orca-relayed-http-v1197/provider-transfer-delta-v1261/extracted/provider-raw/prefixes/actual-provider-bindings.jsonl/000000056229-000000056978.chunk",
+      "sha256": "53ee194730f345ffb486a520219373f50731a43016e294a353a88d08b4a5383f"
+    },
+    "prefixes/actual-provider-bindings.jsonl/000000056978-000000057727.chunk": {
+      "bytes": 749,
+      "checksumVerificationReceipt": "thesis/evidence/orca-relayed-http-v1197/provider-transfer-delta-v1261/CUSTODY.json",
+      "path": "thesis/evidence/orca-relayed-http-v1197/provider-transfer-delta-v1261/extracted/provider-raw/prefixes/actual-provider-bindings.jsonl/000000056978-000000057727.chunk",
+      "sha256": "d78916a941db17be2bacc38596b1bf818e242e88c48f76cfcd5caa796d419246"
+    },
+    "prefixes/actual-provider-bindings.jsonl/000000057727-000000058476.chunk": {
+      "bytes": 749,
+      "checksumVerificationReceipt": "thesis/evidence/orca-relayed-http-v1197/provider-transfer-delta-v1261/CUSTODY.json",
+      "path": "thesis/evidence/orca-relayed-http-v1197/provider-transfer-delta-v1261/extracted/provider-raw/prefixes/actual-provider-bindings.jsonl/000000057727-000000058476.chunk",
+      "sha256": "91d362cdec7c55fe7016ae1702e3dea448f420b3965ea82ae39b67f0ef72a2d5"
+    },
+    "prefixes/actual-provider-bindings.jsonl/000000058476-000000059974.chunk": {
+      "bytes": 1498,
+      "checksumVerificationReceipt": "thesis/evidence/orca-relayed-http-v1197/provider-transfer-delta-v1261/CUSTODY.json",
+      "path": "thesis/evidence/orca-relayed-http-v1197/provider-transfer-delta-v1261/extracted/provider-raw/prefixes/actual-provider-bindings.jsonl/000000058476-000000059974.chunk",
+      "sha256": "e1031f1595feb000cb47f1ecf948f7ce67f6e9e9303f461715c7fcc6536149f8"
+    },
+    "prefixes/actual-provider-bindings.jsonl/000000059974-000000060723.chunk": {
+      "bytes": 749,
+      "checksumVerificationReceipt": "thesis/evidence/orca-relayed-http-v1197/provider-transfer-delta-v1261/CUSTODY.json",
+      "path": "thesis/evidence/orca-relayed-http-v1197/provider-transfer-delta-v1261/extracted/provider-raw/prefixes/actual-provider-bindings.jsonl/000000059974-000000060723.chunk",
+      "sha256": "e795ea5cdffe2daa6fe92e7c8c14f23f4721365d0fa0c028548e009d03074078"
+    },
+    "prefixes/actual-provider-bindings.jsonl/000000060723-000000061472.chunk": {
+      "bytes": 749,
+      "checksumVerificationReceipt": "thesis/evidence/orca-relayed-http-v1197/provider-transfer-delta-v1261/CUSTODY.json",
+      "path": "thesis/evidence/orca-relayed-http-v1197/provider-transfer-delta-v1261/extracted/provider-raw/prefixes/actual-provider-bindings.jsonl/000000060723-000000061472.chunk",
+      "sha256": "47b7ca9deeb83eae28093253e531207684f2c0726bfc8d015d4734cb96fcd0e2"
+    },
+    "prefixes/actual-provider-bindings.jsonl/000000061472-000000062221.chunk": {
+      "bytes": 749,
+      "checksumVerificationReceipt": "thesis/evidence/orca-relayed-http-v1197/provider-transfer-delta-v1261/CUSTODY.json",
+      "path": "thesis/evidence/orca-relayed-http-v1197/provider-transfer-delta-v1261/extracted/provider-raw/prefixes/actual-provider-bindings.jsonl/000000061472-000000062221.chunk",
+      "sha256": "3765642be578cda514fc4b7ed1ccfbf7f8f78475009ef96a9991c904846982bb"
+    },
+    "prefixes/actual-provider-bindings.jsonl/000000062221-000000062970.chunk": {
+      "bytes": 749,
+      "checksumVerificationReceipt": "thesis/evidence/orca-relayed-http-v1197/provider-transfer-delta-v1261/CUSTODY.json",
+      "path": "thesis/evidence/orca-relayed-http-v1197/provider-transfer-delta-v1261/extracted/provider-raw/prefixes/actual-provider-bindings.jsonl/000000062221-000000062970.chunk",
+      "sha256": "00b198e12c98afca202924348086064fe31ddbc78961791eb4983db0ea762b97"
+    },
+    "prefixes/resources.jsonl/000000000000-000004191689.chunk": {
+      "bytes": 4191689,
+      "checksumVerificationReceipt": "thesis/evidence/orca-relayed-http-v1197/provider-transfer-v1232/CUSTODY.json",
+      "path": "thesis/evidence/orca-relayed-http-v1197/provider-transfer-v1232/extracted/provider-raw/prefixes/resources.jsonl/000000000000-000004191689.chunk",
+      "sha256": "e11bc3e0df0473a5ff3ae62c5a5a7dca0575858b25967e32af4bc86dada718f4"
+    },
+    "prefixes/resources.jsonl/000004191689-000008384111.chunk": {
+      "bytes": 4192422,
+      "checksumVerificationReceipt": "thesis/evidence/orca-relayed-http-v1197/provider-transfer-v1232/CUSTODY.json",
+      "path": "thesis/evidence/orca-relayed-http-v1197/provider-transfer-v1232/extracted/provider-raw/prefixes/resources.jsonl/000004191689-000008384111.chunk",
+      "sha256": "8d39bb44ff0d3e464b0d00bd1d76ff1334ffbd25510d68e0b25bb3986750b647"
+    },
+    "prefixes/resources.jsonl/000008384111-000012577265.chunk": {
+      "bytes": 4193154,
+      "checksumVerificationReceipt": "thesis/evidence/orca-relayed-http-v1197/provider-transfer-v1232/CUSTODY.json",
+      "path": "thesis/evidence/orca-relayed-http-v1197/provider-transfer-v1232/extracted/provider-raw/prefixes/resources.jsonl/000008384111-000012577265.chunk",
+      "sha256": "70548f6e9bc78a1b68b4858ca98c81b257ac399b48188a3cac181e717dd696c1"
+    },
+    "prefixes/resources.jsonl/000012577265-000016767773.chunk": {
+      "bytes": 4190508,
+      "checksumVerificationReceipt": "thesis/evidence/orca-relayed-http-v1197/provider-transfer-v1232/CUSTODY.json",
+      "path": "thesis/evidence/orca-relayed-http-v1197/provider-transfer-v1232/extracted/provider-raw/prefixes/resources.jsonl/000012577265-000016767773.chunk",
+      "sha256": "b02e51b2d6036595cadc2a1bd4daa25913e54af61e3c46c99a0dfa00c2bee8be"
+    },
+    "prefixes/resources.jsonl/000016767773-000020960378.chunk": {
+      "bytes": 4192605,
+      "checksumVerificationReceipt": "thesis/evidence/orca-relayed-http-v1197/provider-transfer-v1232/CUSTODY.json",
+      "path": "thesis/evidence/orca-relayed-http-v1197/provider-transfer-v1232/extracted/provider-raw/prefixes/resources.jsonl/000016767773-000020960378.chunk",
+      "sha256": "30bb8789b466bf8d2cb3b88011f5e57ac3d927d2f880f0acca360b293ee86da4"
+    },
+    "prefixes/resources.jsonl/000020960378-000025153302.chunk": {
+      "bytes": 4192924,
+      "checksumVerificationReceipt": "thesis/evidence/orca-relayed-http-v1197/provider-transfer-v1232/CUSTODY.json",
+      "path": "thesis/evidence/orca-relayed-http-v1197/provider-transfer-v1232/extracted/provider-raw/prefixes/resources.jsonl/000020960378-000025153302.chunk",
+      "sha256": "34ecc483accbd5713d9669e4b6ba2b4e909e32a1968f2b2fcdd6e86d6982007e"
+    },
+    "prefixes/resources.jsonl/000025153302-000029346224.chunk": {
+      "bytes": 4192922,
+      "checksumVerificationReceipt": "thesis/evidence/orca-relayed-http-v1197/provider-transfer-v1232/CUSTODY.json",
+      "path": "thesis/evidence/orca-relayed-http-v1197/provider-transfer-v1232/extracted/provider-raw/prefixes/resources.jsonl/000025153302-000029346224.chunk",
+      "sha256": "4d09170962ebb13fd1e7f486d9fcb93369bf8881c432c07492cd0ca1c82ffc00"
+    },
+    "prefixes/resources.jsonl/000029346224-000033539149.chunk": {
+      "bytes": 4192925,
+      "checksumVerificationReceipt": "thesis/evidence/orca-relayed-http-v1197/provider-transfer-v1232/CUSTODY.json",
+      "path": "thesis/evidence/orca-relayed-http-v1197/provider-transfer-v1232/extracted/provider-raw/prefixes/resources.jsonl/000029346224-000033539149.chunk",
+      "sha256": "588b474d0cbb138a00cdc16e0f7cfe084950a85aee373a5dcda027f484f219ca"
+    },
+    "prefixes/resources.jsonl/000033539149-000037732073.chunk": {
+      "bytes": 4192924,
+      "checksumVerificationReceipt": "thesis/evidence/orca-relayed-http-v1197/provider-transfer-v1232/CUSTODY.json",
+      "path": "thesis/evidence/orca-relayed-http-v1197/provider-transfer-v1232/extracted/provider-raw/prefixes/resources.jsonl/000033539149-000037732073.chunk",
+      "sha256": "70deaf3352a6adb06a22a551fe485ed4952ca14facc0e63b83ca604323030af4"
+    },
+    "prefixes/resources.jsonl/000037732073-000039835040.chunk": {
+      "bytes": 2102967,
+      "checksumVerificationReceipt": "thesis/evidence/orca-relayed-http-v1197/provider-transfer-v1232/CUSTODY.json",
+      "path": "thesis/evidence/orca-relayed-http-v1197/provider-transfer-v1232/extracted/provider-raw/prefixes/resources.jsonl/000037732073-000039835040.chunk",
+      "sha256": "574ef9d9081a82d6b0381dc198e676c78edb8def13b8b6d40a959c3c457e764b"
+    },
+    "prefixes/resources.jsonl/000039835040-000040134225.chunk": {
+      "bytes": 299185,
+      "checksumVerificationReceipt": "thesis/evidence/orca-relayed-http-v1197/provider-transfer-v1232/CUSTODY.json",
+      "path": "thesis/evidence/orca-relayed-http-v1197/provider-transfer-v1232/extracted/provider-raw/prefixes/resources.jsonl/000039835040-000040134225.chunk",
+      "sha256": "3335ec26900b57d8e81221ef86925a681d690650f1e914117b8f1e0a1703bcfa"
+    },
+    "prefixes/resources.jsonl/000040134225-000040394385.chunk": {
+      "bytes": 260160,
+      "checksumVerificationReceipt": "thesis/evidence/orca-relayed-http-v1197/provider-transfer-v1232/CUSTODY.json",
+      "path": "thesis/evidence/orca-relayed-http-v1197/provider-transfer-v1232/extracted/provider-raw/prefixes/resources.jsonl/000040134225-000040394385.chunk",
+      "sha256": "da93c39ef417b1fd6cf1bfedef2632d1a51290fa4aba9b6b78f284b723906309"
+    },
+    "prefixes/resources.jsonl/000040394385-000040654546.chunk": {
+      "bytes": 260161,
+      "checksumVerificationReceipt": "thesis/evidence/orca-relayed-http-v1197/provider-transfer-v1232/CUSTODY.json",
+      "path": "thesis/evidence/orca-relayed-http-v1197/provider-transfer-v1232/extracted/provider-raw/prefixes/resources.jsonl/000040394385-000040654546.chunk",
+      "sha256": "b262e6667f5d93a6ca192c1a3db37ef44ce90e8d1c25b614c21eccbc08c81095"
+    },
+    "prefixes/resources.jsonl/000040654546-000040910370.chunk": {
+      "bytes": 255824,
+      "checksumVerificationReceipt": "thesis/evidence/orca-relayed-http-v1197/provider-transfer-v1232/CUSTODY.json",
+      "path": "thesis/evidence/orca-relayed-http-v1197/provider-transfer-v1232/extracted/provider-raw/prefixes/resources.jsonl/000040654546-000040910370.chunk",
+      "sha256": "9b42f389dfb87244ed3cc965be8598f97cc6c457cb33c84fb2b95f5e3c61379a"
+    },
+    "prefixes/resources.jsonl/000040910370-000041170531.chunk": {
+      "bytes": 260161,
+      "checksumVerificationReceipt": "thesis/evidence/orca-relayed-http-v1197/provider-transfer-v1232/CUSTODY.json",
+      "path": "thesis/evidence/orca-relayed-http-v1197/provider-transfer-v1232/extracted/provider-raw/prefixes/resources.jsonl/000040910370-000041170531.chunk",
+      "sha256": "ee862f21e9d39325e612387165fba5d2a361a81b65eb362dd85a65c8336283d3"
+    },
+    "prefixes/resources.jsonl/000041170531-000041430692.chunk": {
+      "bytes": 260161,
+      "checksumVerificationReceipt": "thesis/evidence/orca-relayed-http-v1197/provider-transfer-v1232/CUSTODY.json",
+      "path": "thesis/evidence/orca-relayed-http-v1197/provider-transfer-v1232/extracted/provider-raw/prefixes/resources.jsonl/000041170531-000041430692.chunk",
+      "sha256": "2c350cbb9e06bbac2dfbe8b56ca61ab39e40214c2cb13d7734de2fab36a6f29a"
+    },
+    "prefixes/resources.jsonl/000041430692-000041690852.chunk": {
+      "bytes": 260160,
+      "checksumVerificationReceipt": "thesis/evidence/orca-relayed-http-v1197/provider-transfer-v1232/CUSTODY.json",
+      "path": "thesis/evidence/orca-relayed-http-v1197/provider-transfer-v1232/extracted/provider-raw/prefixes/resources.jsonl/000041430692-000041690852.chunk",
+      "sha256": "e86041f8e3e6b0707c8ebe44f82478a9f2a790859f2b43b12d57c54914fa52f2"
+    },
+    "prefixes/resources.jsonl/000041690852-000041946677.chunk": {
+      "bytes": 255825,
+      "checksumVerificationReceipt": "thesis/evidence/orca-relayed-http-v1197/provider-transfer-v1232/CUSTODY.json",
+      "path": "thesis/evidence/orca-relayed-http-v1197/provider-transfer-v1232/extracted/provider-raw/prefixes/resources.jsonl/000041690852-000041946677.chunk",
+      "sha256": "c901acf1a63d9296942f7bfc112e9435def886ba3e2368dc28582322ab95847c"
+    },
+    "prefixes/resources.jsonl/000041946677-000042206837.chunk": {
+      "bytes": 260160,
+      "checksumVerificationReceipt": "thesis/evidence/orca-relayed-http-v1197/provider-transfer-v1232/CUSTODY.json",
+      "path": "thesis/evidence/orca-relayed-http-v1197/provider-transfer-v1232/extracted/provider-raw/prefixes/resources.jsonl/000041946677-000042206837.chunk",
+      "sha256": "4c015314aa71026e51e79932022fdb7fc07aa707e994fc78d93c1b43dd5e2f43"
+    },
+    "prefixes/resources.jsonl/000042206837-000042462663.chunk": {
+      "bytes": 255826,
+      "checksumVerificationReceipt": "thesis/evidence/orca-relayed-http-v1197/provider-transfer-v1232/CUSTODY.json",
+      "path": "thesis/evidence/orca-relayed-http-v1197/provider-transfer-v1232/extracted/provider-raw/prefixes/resources.jsonl/000042206837-000042462663.chunk",
+      "sha256": "909c86c18c0ee225a72ef939ea3afaebcb99a9e638a6c1027a97199599e874ff"
+    },
+    "prefixes/resources.jsonl/000042462663-000042722823.chunk": {
+      "bytes": 260160,
+      "checksumVerificationReceipt": "thesis/evidence/orca-relayed-http-v1197/provider-transfer-v1232/CUSTODY.json",
+      "path": "thesis/evidence/orca-relayed-http-v1197/provider-transfer-v1232/extracted/provider-raw/prefixes/resources.jsonl/000042462663-000042722823.chunk",
+      "sha256": "61dcaf03ff755c511dd2b012540e25d2917c1968e883c81166de97c339ca7667"
+    },
+    "prefixes/resources.jsonl/000042722823-000042982983.chunk": {
+      "bytes": 260160,
+      "checksumVerificationReceipt": "thesis/evidence/orca-relayed-http-v1197/provider-transfer-delta-v1261/CUSTODY.json",
+      "path": "thesis/evidence/orca-relayed-http-v1197/provider-transfer-delta-v1261/extracted/provider-raw/prefixes/resources.jsonl/000042722823-000042982983.chunk",
+      "sha256": "b73a02700d5ebc9116a81018d0cbb6559c8f81c2f41d8a0e750d7fabef0f28a8"
+    },
+    "prefixes/resources.jsonl/000042982983-000043243158.chunk": {
+      "bytes": 260175,
+      "checksumVerificationReceipt": "thesis/evidence/orca-relayed-http-v1197/provider-transfer-delta-v1261/CUSTODY.json",
+      "path": "thesis/evidence/orca-relayed-http-v1197/provider-transfer-delta-v1261/extracted/provider-raw/prefixes/resources.jsonl/000042982983-000043243158.chunk",
+      "sha256": "fb81969c690cc4e097b28fa250b3f3c09869d0f90e1578c5802edc89db75cbfb"
+    },
+    "prefixes/resources.jsonl/000043243158-000043499102.chunk": {
+      "bytes": 255944,
+      "checksumVerificationReceipt": "thesis/evidence/orca-relayed-http-v1197/provider-transfer-delta-v1261/CUSTODY.json",
+      "path": "thesis/evidence/orca-relayed-http-v1197/provider-transfer-delta-v1261/extracted/provider-raw/prefixes/resources.jsonl/000043243158-000043499102.chunk",
+      "sha256": "4ff386eacb9b914344e162ced9606321f448428652e9fa69ef13008aa79a4d5c"
+    },
+    "prefixes/resources.jsonl/000043499102-000043759384.chunk": {
+      "bytes": 260282,
+      "checksumVerificationReceipt": "thesis/evidence/orca-relayed-http-v1197/provider-transfer-delta-v1261/CUSTODY.json",
+      "path": "thesis/evidence/orca-relayed-http-v1197/provider-transfer-delta-v1261/extracted/provider-raw/prefixes/resources.jsonl/000043499102-000043759384.chunk",
+      "sha256": "582174e314456ce9a9d72764ba792855409ef052b05f17f9f4042140bda529d8"
+    },
+    "prefixes/resources.jsonl/000043759384-000044015386.chunk": {
+      "bytes": 256002,
+      "checksumVerificationReceipt": "thesis/evidence/orca-relayed-http-v1197/provider-transfer-delta-v1261/CUSTODY.json",
+      "path": "thesis/evidence/orca-relayed-http-v1197/provider-transfer-delta-v1261/extracted/provider-raw/prefixes/resources.jsonl/000043759384-000044015386.chunk",
+      "sha256": "105f16205c23f52ccc7f3212ba0689ad38727718acc9e3ba06b5e9e2e68eb46a"
+    },
+    "prefixes/resources.jsonl/000044015386-000044275727.chunk": {
+      "bytes": 260341,
+      "checksumVerificationReceipt": "thesis/evidence/orca-relayed-http-v1197/provider-transfer-delta-v1261/CUSTODY.json",
+      "path": "thesis/evidence/orca-relayed-http-v1197/provider-transfer-delta-v1261/extracted/provider-raw/prefixes/resources.jsonl/000044015386-000044275727.chunk",
+      "sha256": "e4b12f754b80c84c72b12e6355108e0d28a852941d09138c35aa5f435a73fc88"
+    },
+    "prefixes/resources.jsonl/000044275727-000044536067.chunk": {
+      "bytes": 260340,
+      "checksumVerificationReceipt": "thesis/evidence/orca-relayed-http-v1197/provider-transfer-delta-v1261/CUSTODY.json",
+      "path": "thesis/evidence/orca-relayed-http-v1197/provider-transfer-delta-v1261/extracted/provider-raw/prefixes/resources.jsonl/000044275727-000044536067.chunk",
+      "sha256": "64ac38495808863c3f5f31b80b884e8b7b3fdd58b1af07f0803092061db51ef5"
+    },
+    "prefixes/resources.jsonl/000044536067-000044792068.chunk": {
+      "bytes": 256001,
+      "checksumVerificationReceipt": "thesis/evidence/orca-relayed-http-v1197/provider-transfer-delta-v1261/CUSTODY.json",
+      "path": "thesis/evidence/orca-relayed-http-v1197/provider-transfer-delta-v1261/extracted/provider-raw/prefixes/resources.jsonl/000044536067-000044792068.chunk",
+      "sha256": "4814bdcd4d32b6110dac2365761e7ae8cf2a58a46afa9bb296022effbfd085f9"
+    },
+    "prefixes/resources.jsonl/000044792068-000045052409.chunk": {
+      "bytes": 260341,
+      "checksumVerificationReceipt": "thesis/evidence/orca-relayed-http-v1197/provider-transfer-delta-v1261/CUSTODY.json",
+      "path": "thesis/evidence/orca-relayed-http-v1197/provider-transfer-delta-v1261/extracted/provider-raw/prefixes/resources.jsonl/000044792068-000045052409.chunk",
+      "sha256": "c9ddddc53e9c1b0d0001108b9e562437e137918d46c8781c8d09dc1cb6c8519c"
+    },
+    "prefixes/resources.jsonl/000045052409-000045312751.chunk": {
+      "bytes": 260342,
+      "checksumVerificationReceipt": "thesis/evidence/orca-relayed-http-v1197/provider-transfer-delta-v1261/CUSTODY.json",
+      "path": "thesis/evidence/orca-relayed-http-v1197/provider-transfer-delta-v1261/extracted/provider-raw/prefixes/resources.jsonl/000045052409-000045312751.chunk",
+      "sha256": "e7de7f8bb754400fff32184b2c5bf58d4ef28fec6c5c65a3bfb483e65c73d045"
+    },
+    "prefixes/resources.jsonl/000045312751-000045573092.chunk": {
+      "bytes": 260341,
+      "checksumVerificationReceipt": "thesis/evidence/orca-relayed-http-v1197/provider-transfer-delta-v1261/CUSTODY.json",
+      "path": "thesis/evidence/orca-relayed-http-v1197/provider-transfer-delta-v1261/extracted/provider-raw/prefixes/resources.jsonl/000045312751-000045573092.chunk",
+      "sha256": "0b90735e0f5d6bf4a54d0fcca1313a9248b45aa0610c636c3fc9fcc471e5ff8b"
+    },
+    "prefixes/resources.jsonl/000045573092-000045829093.chunk": {
+      "bytes": 256001,
+      "checksumVerificationReceipt": "thesis/evidence/orca-relayed-http-v1197/provider-transfer-delta-v1261/CUSTODY.json",
+      "path": "thesis/evidence/orca-relayed-http-v1197/provider-transfer-delta-v1261/extracted/provider-raw/prefixes/resources.jsonl/000045573092-000045829093.chunk",
+      "sha256": "3ce0037dc8e7db624e95d6fe41fe02b8c9d54d251f24c61d0d5ce6a9d95fb2ad"
+    },
+    "prefixes/resources.jsonl/000045829093-000046089434.chunk": {
+      "bytes": 260341,
+      "checksumVerificationReceipt": "thesis/evidence/orca-relayed-http-v1197/provider-transfer-delta-v1261/CUSTODY.json",
+      "path": "thesis/evidence/orca-relayed-http-v1197/provider-transfer-delta-v1261/extracted/provider-raw/prefixes/resources.jsonl/000045829093-000046089434.chunk",
+      "sha256": "a9c5aa9093aa8465cf3c20fca47f332b5049bbbddb8ff280d13ff7ee7980d5c6"
+    },
+    "prefixes/resources.jsonl/000046089434-000046345436.chunk": {
+      "bytes": 256002,
+      "checksumVerificationReceipt": "thesis/evidence/orca-relayed-http-v1197/provider-transfer-delta-v1261/CUSTODY.json",
+      "path": "thesis/evidence/orca-relayed-http-v1197/provider-transfer-delta-v1261/extracted/provider-raw/prefixes/resources.jsonl/000046089434-000046345436.chunk",
+      "sha256": "5ea3da0fbe39d1ca107f6d8d23d4ac50c790e7e7be93c66c2b20f801aa1efaee"
+    },
+    "prefixes/resources.jsonl/000046345436-000046605777.chunk": {
+      "bytes": 260341,
+      "checksumVerificationReceipt": "thesis/evidence/orca-relayed-http-v1197/provider-transfer-delta-v1261/CUSTODY.json",
+      "path": "thesis/evidence/orca-relayed-http-v1197/provider-transfer-delta-v1261/extracted/provider-raw/prefixes/resources.jsonl/000046345436-000046605777.chunk",
+      "sha256": "e35edef2cc561beae6079c271497079518d1e0ed7456d702fda2722789e4982d"
+    },
+    "prefixes/resources.jsonl/000046605777-000046866119.chunk": {
+      "bytes": 260342,
+      "checksumVerificationReceipt": "thesis/evidence/orca-relayed-http-v1197/provider-transfer-delta-v1261/CUSTODY.json",
+      "path": "thesis/evidence/orca-relayed-http-v1197/provider-transfer-delta-v1261/extracted/provider-raw/prefixes/resources.jsonl/000046605777-000046866119.chunk",
+      "sha256": "151a5d08941e74db696d3f82383c47ab3a1c9a85c408ba503fa3dee594e4c754"
+    },
+    "prefixes/resources.jsonl/000046866119-000047126460.chunk": {
+      "bytes": 260341,
+      "checksumVerificationReceipt": "thesis/evidence/orca-relayed-http-v1197/provider-transfer-delta-v1261/CUSTODY.json",
+      "path": "thesis/evidence/orca-relayed-http-v1197/provider-transfer-delta-v1261/extracted/provider-raw/prefixes/resources.jsonl/000046866119-000047126460.chunk",
+      "sha256": "49277a97cf24628ac725db635ae36fa42db800998d73c997c292250bdf3170c9"
+    },
+    "prefixes/resources.jsonl/000047126460-000047382461.chunk": {
+      "bytes": 256001,
+      "checksumVerificationReceipt": "thesis/evidence/orca-relayed-http-v1197/provider-transfer-delta-v1261/CUSTODY.json",
+      "path": "thesis/evidence/orca-relayed-http-v1197/provider-transfer-delta-v1261/extracted/provider-raw/prefixes/resources.jsonl/000047126460-000047382461.chunk",
+      "sha256": "a0b0ad3ea3c5f422522fe295bc5f8fd0e0bc4c7291a7a782bcfc7c1eb440e594"
+    },
+    "prefixes/resources.jsonl/000047382461-000047642802.chunk": {
+      "bytes": 260341,
+      "checksumVerificationReceipt": "thesis/evidence/orca-relayed-http-v1197/provider-transfer-delta-v1261/CUSTODY.json",
+      "path": "thesis/evidence/orca-relayed-http-v1197/provider-transfer-delta-v1261/extracted/provider-raw/prefixes/resources.jsonl/000047382461-000047642802.chunk",
+      "sha256": "ba93f6236394e5e25e0d1737976ccf8bf4f42b881efbb38221109d2a3e63b11a"
+    },
+    "prefixes/resources.jsonl/000047642802-000047903142.chunk": {
+      "bytes": 260340,
+      "checksumVerificationReceipt": "thesis/evidence/orca-relayed-http-v1197/provider-transfer-delta-v1261/CUSTODY.json",
+      "path": "thesis/evidence/orca-relayed-http-v1197/provider-transfer-delta-v1261/extracted/provider-raw/prefixes/resources.jsonl/000047642802-000047903142.chunk",
+      "sha256": "4711c9fe12e444c78b5b3a660b47b1f6076108bbc52c0b5ee4e8463d7394df23"
+    },
+    "prefixes/resources.jsonl/000047903142-000048159240.chunk": {
+      "bytes": 256098,
+      "checksumVerificationReceipt": "thesis/evidence/orca-relayed-http-v1197/provider-transfer-delta-v1261/CUSTODY.json",
+      "path": "thesis/evidence/orca-relayed-http-v1197/provider-transfer-delta-v1261/extracted/provider-raw/prefixes/resources.jsonl/000047903142-000048159240.chunk",
+      "sha256": "91601ec279965157c1c807daee699ad5577256bfacdde659bd26b601c7869cee"
+    },
+    "prefixes/resources.jsonl/000048159240-000048419700.chunk": {
+      "bytes": 260460,
+      "checksumVerificationReceipt": "thesis/evidence/orca-relayed-http-v1197/provider-transfer-delta-v1261/CUSTODY.json",
+      "path": "thesis/evidence/orca-relayed-http-v1197/provider-transfer-delta-v1261/extracted/provider-raw/prefixes/resources.jsonl/000048159240-000048419700.chunk",
+      "sha256": "559a4cd1994cf656e79e8bc9495ecbef73c52246f617897b17a5b540ee931f8c"
+    },
+    "prefixes/resources.jsonl/000048419700-000048680162.chunk": {
+      "bytes": 260462,
+      "checksumVerificationReceipt": "thesis/evidence/orca-relayed-http-v1197/provider-transfer-delta-v1261/CUSTODY.json",
+      "path": "thesis/evidence/orca-relayed-http-v1197/provider-transfer-delta-v1261/extracted/provider-raw/prefixes/resources.jsonl/000048419700-000048680162.chunk",
+      "sha256": "c1f0005f9799c1bbf27cb55b806a3a0956f80f49339204e27ae2a8bbb0d358d3"
+    },
+    "prefixes/resources.jsonl/000048680162-000048940623.chunk": {
+      "bytes": 260461,
+      "checksumVerificationReceipt": "thesis/evidence/orca-relayed-http-v1197/provider-transfer-delta-v1261/CUSTODY.json",
+      "path": "thesis/evidence/orca-relayed-http-v1197/provider-transfer-delta-v1261/extracted/provider-raw/prefixes/resources.jsonl/000048680162-000048940623.chunk",
+      "sha256": "6b0374f12048df63f5733802501a37281ef81ed965fa6a0b539348e1ba79c67c"
+    },
+    "prefixes/resources.jsonl/000048940623-000049196742.chunk": {
+      "bytes": 256119,
+      "checksumVerificationReceipt": "thesis/evidence/orca-relayed-http-v1197/provider-transfer-delta-v1261/CUSTODY.json",
+      "path": "thesis/evidence/orca-relayed-http-v1197/provider-transfer-delta-v1261/extracted/provider-raw/prefixes/resources.jsonl/000048940623-000049196742.chunk",
+      "sha256": "bef5e97fce7bb74421d60323e5172ed562a7944fa6330cb7fc3350bb5002653f"
+    },
+    "prefixes/resources.jsonl/000049196742-000049457203.chunk": {
+      "bytes": 260461,
+      "checksumVerificationReceipt": "thesis/evidence/orca-relayed-http-v1197/provider-transfer-delta-v1261/CUSTODY.json",
+      "path": "thesis/evidence/orca-relayed-http-v1197/provider-transfer-delta-v1261/extracted/provider-raw/prefixes/resources.jsonl/000049196742-000049457203.chunk",
+      "sha256": "f159178b268d8528bc2da5a36011e2ebb4797ba467f70b0aaeb6f1c952843988"
+    },
+    "prefixes/resources.jsonl/000049457203-000049717663.chunk": {
+      "bytes": 260460,
+      "checksumVerificationReceipt": "thesis/evidence/orca-relayed-http-v1197/provider-transfer-delta-v1261/CUSTODY.json",
+      "path": "thesis/evidence/orca-relayed-http-v1197/provider-transfer-delta-v1261/extracted/provider-raw/prefixes/resources.jsonl/000049457203-000049717663.chunk",
+      "sha256": "01d4fce6a45722ab58db907b9db1c366f661d13c78943450d9fa2edf9c7b5300"
+    },
+    "prefixes/resources.jsonl/000049717663-000049973783.chunk": {
+      "bytes": 256120,
+      "checksumVerificationReceipt": "thesis/evidence/orca-relayed-http-v1197/provider-transfer-delta-v1261/CUSTODY.json",
+      "path": "thesis/evidence/orca-relayed-http-v1197/provider-transfer-delta-v1261/extracted/provider-raw/prefixes/resources.jsonl/000049717663-000049973783.chunk",
+      "sha256": "cef3d415ca1e1953842bc60acbee414d5127fc46e6d177956f5888532ae06c1d"
+    },
+    "prefixes/resources.jsonl/000049973783-000050234243.chunk": {
+      "bytes": 260460,
+      "checksumVerificationReceipt": "thesis/evidence/orca-relayed-http-v1197/provider-transfer-delta-v1261/CUSTODY.json",
+      "path": "thesis/evidence/orca-relayed-http-v1197/provider-transfer-delta-v1261/extracted/provider-raw/prefixes/resources.jsonl/000049973783-000050234243.chunk",
+      "sha256": "d71c626670ba936176d96c8480806c084e3a421458761c591f04c3b96550be77"
+    },
+    "prefixes/resources.jsonl/000050234243-000050490363.chunk": {
+      "bytes": 256120,
+      "checksumVerificationReceipt": "thesis/evidence/orca-relayed-http-v1197/provider-transfer-delta-v1261/CUSTODY.json",
+      "path": "thesis/evidence/orca-relayed-http-v1197/provider-transfer-delta-v1261/extracted/provider-raw/prefixes/resources.jsonl/000050234243-000050490363.chunk",
+      "sha256": "5c92791fe123322d0b39b166858e0aad9062088a9f9115ca7a3a2dc7d62d79be"
+    },
+    "prefixes/resources.jsonl/000050490363-000050750823.chunk": {
+      "bytes": 260460,
+      "checksumVerificationReceipt": "thesis/evidence/orca-relayed-http-v1197/provider-transfer-delta-v1261/CUSTODY.json",
+      "path": "thesis/evidence/orca-relayed-http-v1197/provider-transfer-delta-v1261/extracted/provider-raw/prefixes/resources.jsonl/000050490363-000050750823.chunk",
+      "sha256": "78edd3a01a14a4befdc1a550ede191968a886554b41d448f662e1d7713cb78f3"
+    },
+    "prefixes/resources.jsonl/000050750823-000051011285.chunk": {
+      "bytes": 260462,
+      "checksumVerificationReceipt": "thesis/evidence/orca-relayed-http-v1197/provider-transfer-delta-v1261/CUSTODY.json",
+      "path": "thesis/evidence/orca-relayed-http-v1197/provider-transfer-delta-v1261/extracted/provider-raw/prefixes/resources.jsonl/000050750823-000051011285.chunk",
+      "sha256": "10cf98f3a24c9101140465fea6b0d699c588cbee187ab732c5be01e0bc39d8b1"
+    },
+    "prefixes/resources.jsonl/000051011285-000051267404.chunk": {
+      "bytes": 256119,
+      "checksumVerificationReceipt": "thesis/evidence/orca-relayed-http-v1197/provider-transfer-delta-v1261/CUSTODY.json",
+      "path": "thesis/evidence/orca-relayed-http-v1197/provider-transfer-delta-v1261/extracted/provider-raw/prefixes/resources.jsonl/000051011285-000051267404.chunk",
+      "sha256": "f9a02c57c578da1d9b251d915087b965869baf8e9364de62f56da246f373e969"
+    },
+    "prefixes/resources.jsonl/000051267404-000051527865.chunk": {
+      "bytes": 260461,
+      "checksumVerificationReceipt": "thesis/evidence/orca-relayed-http-v1197/provider-transfer-delta-v1261/CUSTODY.json",
+      "path": "thesis/evidence/orca-relayed-http-v1197/provider-transfer-delta-v1261/extracted/provider-raw/prefixes/resources.jsonl/000051267404-000051527865.chunk",
+      "sha256": "b309764f0d10b5779db27532c052db70c0edc8659bb541b8b347167ef92857fd"
+    },
+    "prefixes/resources.jsonl/000051527865-000051788416.chunk": {
+      "bytes": 260551,
+      "checksumVerificationReceipt": "thesis/evidence/orca-relayed-http-v1197/provider-transfer-delta-v1261/CUSTODY.json",
+      "path": "thesis/evidence/orca-relayed-http-v1197/provider-transfer-delta-v1261/extracted/provider-raw/prefixes/resources.jsonl/000051527865-000051788416.chunk",
+      "sha256": "add8a554ac41dac08d602013287983d466ca55f0e1903c394f76abeecf2464ea"
+    },
+    "prefixes/resources.jsonl/000051788416-000052048996.chunk": {
+      "bytes": 260580,
+      "checksumVerificationReceipt": "thesis/evidence/orca-relayed-http-v1197/provider-transfer-delta-v1261/CUSTODY.json",
+      "path": "thesis/evidence/orca-relayed-http-v1197/provider-transfer-delta-v1261/extracted/provider-raw/prefixes/resources.jsonl/000051788416-000052048996.chunk",
+      "sha256": "ca5430bd307f1acb28aeb37c518682aa278625c6b8cda2128084dbdfa648485d"
+    },
+    "prefixes/resources.jsonl/000052048996-000052305234.chunk": {
+      "bytes": 256238,
+      "checksumVerificationReceipt": "thesis/evidence/orca-relayed-http-v1197/provider-transfer-delta-v1261/CUSTODY.json",
+      "path": "thesis/evidence/orca-relayed-http-v1197/provider-transfer-delta-v1261/extracted/provider-raw/prefixes/resources.jsonl/000052048996-000052305234.chunk",
+      "sha256": "a0ae35bb504ea1510911c5ef7a1d062b4d988acc4c5f00bf006688a739a33004"
+    },
+    "prefixes/voice-stages.jsonl/000000000000-000000126897.chunk": {
+      "bytes": 126897,
+      "checksumVerificationReceipt": "thesis/evidence/orca-relayed-http-v1197/provider-transfer-v1232/CUSTODY.json",
+      "path": "thesis/evidence/orca-relayed-http-v1197/provider-transfer-v1232/extracted/provider-raw/prefixes/voice-stages.jsonl/000000000000-000000126897.chunk",
+      "sha256": "d306d856f9ad4e53142e704280f67a0a60a1bd5727b9af21307c168d77fdfeae"
+    },
+    "prefixes/voice-stages.jsonl/000000126897-000000131690.chunk": {
+      "bytes": 4793,
+      "checksumVerificationReceipt": "thesis/evidence/orca-relayed-http-v1197/provider-transfer-v1232/CUSTODY.json",
+      "path": "thesis/evidence/orca-relayed-http-v1197/provider-transfer-v1232/extracted/provider-raw/prefixes/voice-stages.jsonl/000000126897-000000131690.chunk",
+      "sha256": "3f33d6beaf5c41d239b3c7a9b9e0f355b79f122ebd406996c0e1876cae345b20"
+    },
+    "prefixes/voice-stages.jsonl/000000131690-000000136483.chunk": {
+      "bytes": 4793,
+      "checksumVerificationReceipt": "thesis/evidence/orca-relayed-http-v1197/provider-transfer-v1232/CUSTODY.json",
+      "path": "thesis/evidence/orca-relayed-http-v1197/provider-transfer-v1232/extracted/provider-raw/prefixes/voice-stages.jsonl/000000131690-000000136483.chunk",
+      "sha256": "3f74c8af80ecbca3b3003d0428e06e9624d03cb03a1a14f102477407953e6667"
+    },
+    "prefixes/voice-stages.jsonl/000000136483-000000146069.chunk": {
+      "bytes": 9586,
+      "checksumVerificationReceipt": "thesis/evidence/orca-relayed-http-v1197/provider-transfer-v1232/CUSTODY.json",
+      "path": "thesis/evidence/orca-relayed-http-v1197/provider-transfer-v1232/extracted/provider-raw/prefixes/voice-stages.jsonl/000000136483-000000146069.chunk",
+      "sha256": "6fd40d3eae24cb13561586d6fc3e13f20d9c81ee01451826f02eb445b69b1359"
+    },
+    "prefixes/voice-stages.jsonl/000000146069-000000150862.chunk": {
+      "bytes": 4793,
+      "checksumVerificationReceipt": "thesis/evidence/orca-relayed-http-v1197/provider-transfer-v1232/CUSTODY.json",
+      "path": "thesis/evidence/orca-relayed-http-v1197/provider-transfer-v1232/extracted/provider-raw/prefixes/voice-stages.jsonl/000000146069-000000150862.chunk",
+      "sha256": "07013b5e94b7ba3866fa7bf4d2c4fc2d2ce15d0ac155f5f5940a413a7e93f746"
+    },
+    "prefixes/voice-stages.jsonl/000000150862-000000155655.chunk": {
+      "bytes": 4793,
+      "checksumVerificationReceipt": "thesis/evidence/orca-relayed-http-v1197/provider-transfer-v1232/CUSTODY.json",
+      "path": "thesis/evidence/orca-relayed-http-v1197/provider-transfer-v1232/extracted/provider-raw/prefixes/voice-stages.jsonl/000000150862-000000155655.chunk",
+      "sha256": "b9c20d330e3a12f9ea0acd4741a2f749953d313ecc349d852d9a00e7476c5cbc"
+    },
+    "prefixes/voice-stages.jsonl/000000155655-000000160448.chunk": {
+      "bytes": 4793,
+      "checksumVerificationReceipt": "thesis/evidence/orca-relayed-http-v1197/provider-transfer-v1232/CUSTODY.json",
+      "path": "thesis/evidence/orca-relayed-http-v1197/provider-transfer-v1232/extracted/provider-raw/prefixes/voice-stages.jsonl/000000155655-000000160448.chunk",
+      "sha256": "ade2f8d8469da3eb87a1000e1006002b4ce3414b23ba93c777bc2c3e3dd4d3be"
+    },
+    "prefixes/voice-stages.jsonl/000000160448-000000165241.chunk": {
+      "bytes": 4793,
+      "checksumVerificationReceipt": "thesis/evidence/orca-relayed-http-v1197/provider-transfer-v1232/CUSTODY.json",
+      "path": "thesis/evidence/orca-relayed-http-v1197/provider-transfer-v1232/extracted/provider-raw/prefixes/voice-stages.jsonl/000000160448-000000165241.chunk",
+      "sha256": "f1f13f5acc382f12e20f90e883ad6694410ebf1eae87573ccc1e80d96f287dc3"
+    },
+    "prefixes/voice-stages.jsonl/000000165241-000000174827.chunk": {
+      "bytes": 9586,
+      "checksumVerificationReceipt": "thesis/evidence/orca-relayed-http-v1197/provider-transfer-v1232/CUSTODY.json",
+      "path": "thesis/evidence/orca-relayed-http-v1197/provider-transfer-v1232/extracted/provider-raw/prefixes/voice-stages.jsonl/000000165241-000000174827.chunk",
+      "sha256": "9c7cc758a92ee4de014c35b4488ab7e806a35ff40d9efd41978690aac1c086b6"
+    },
+    "prefixes/voice-stages.jsonl/000000174827-000000179620.chunk": {
+      "bytes": 4793,
+      "checksumVerificationReceipt": "thesis/evidence/orca-relayed-http-v1197/provider-transfer-v1232/CUSTODY.json",
+      "path": "thesis/evidence/orca-relayed-http-v1197/provider-transfer-v1232/extracted/provider-raw/prefixes/voice-stages.jsonl/000000174827-000000179620.chunk",
+      "sha256": "b700a61e8d69dcff7a8ccdc06acccccdaf97ec37ef2fe6922d94a49d444beb83"
+    },
+    "prefixes/voice-stages.jsonl/000000179620-000000184413.chunk": {
+      "bytes": 4793,
+      "checksumVerificationReceipt": "thesis/evidence/orca-relayed-http-v1197/provider-transfer-v1232/CUSTODY.json",
+      "path": "thesis/evidence/orca-relayed-http-v1197/provider-transfer-v1232/extracted/provider-raw/prefixes/voice-stages.jsonl/000000179620-000000184413.chunk",
+      "sha256": "92c08d39666fed336ca719dd95b50a93c47837ac025cc5c957ccfeb4d7570ae1"
+    },
+    "prefixes/voice-stages.jsonl/000000184413-000000189206.chunk": {
+      "bytes": 4793,
+      "checksumVerificationReceipt": "thesis/evidence/orca-relayed-http-v1197/provider-transfer-v1232/CUSTODY.json",
+      "path": "thesis/evidence/orca-relayed-http-v1197/provider-transfer-v1232/extracted/provider-raw/prefixes/voice-stages.jsonl/000000184413-000000189206.chunk",
+      "sha256": "de2f9a8adae3459da10d8be44369ab24ba39c52c1234623dc06bb569febe5d5b"
+    },
+    "prefixes/voice-stages.jsonl/000000189206-000000193999.chunk": {
+      "bytes": 4793,
+      "checksumVerificationReceipt": "thesis/evidence/orca-relayed-http-v1197/provider-transfer-delta-v1261/CUSTODY.json",
+      "path": "thesis/evidence/orca-relayed-http-v1197/provider-transfer-delta-v1261/extracted/provider-raw/prefixes/voice-stages.jsonl/000000189206-000000193999.chunk",
+      "sha256": "425e338b633aff73f4f519d46810b0317307d5aefba50cfa0fecced07350944f"
+    },
+    "prefixes/voice-stages.jsonl/000000193999-000000198792.chunk": {
+      "bytes": 4793,
+      "checksumVerificationReceipt": "thesis/evidence/orca-relayed-http-v1197/provider-transfer-delta-v1261/CUSTODY.json",
+      "path": "thesis/evidence/orca-relayed-http-v1197/provider-transfer-delta-v1261/extracted/provider-raw/prefixes/voice-stages.jsonl/000000193999-000000198792.chunk",
+      "sha256": "db877d23c7bbbad671ed485461c9ca2fd94e720c116147119ae81af83302cfe5"
+    },
+    "prefixes/voice-stages.jsonl/000000198792-000000203585.chunk": {
+      "bytes": 4793,
+      "checksumVerificationReceipt": "thesis/evidence/orca-relayed-http-v1197/provider-transfer-delta-v1261/CUSTODY.json",
+      "path": "thesis/evidence/orca-relayed-http-v1197/provider-transfer-delta-v1261/extracted/provider-raw/prefixes/voice-stages.jsonl/000000198792-000000203585.chunk",
+      "sha256": "b620cfa481ef937816e1fe3e137a9ee99a242e4180375a58efc542534de35370"
+    },
+    "prefixes/voice-stages.jsonl/000000203585-000000208378.chunk": {
+      "bytes": 4793,
+      "checksumVerificationReceipt": "thesis/evidence/orca-relayed-http-v1197/provider-transfer-delta-v1261/CUSTODY.json",
+      "path": "thesis/evidence/orca-relayed-http-v1197/provider-transfer-delta-v1261/extracted/provider-raw/prefixes/voice-stages.jsonl/000000203585-000000208378.chunk",
+      "sha256": "184910d3efac375dfb7f1f419904ba2503976c845bc5f6e96caafc3af4a4ed73"
+    },
+    "prefixes/voice-stages.jsonl/000000208378-000000213171.chunk": {
+      "bytes": 4793,
+      "checksumVerificationReceipt": "thesis/evidence/orca-relayed-http-v1197/provider-transfer-delta-v1261/CUSTODY.json",
+      "path": "thesis/evidence/orca-relayed-http-v1197/provider-transfer-delta-v1261/extracted/provider-raw/prefixes/voice-stages.jsonl/000000208378-000000213171.chunk",
+      "sha256": "b0ce4f0cbf2b59c7bc4b176ec8320d19629f5d803c886a1e8e4e9ca101eb1c19"
+    },
+    "prefixes/voice-stages.jsonl/000000213171-000000222757.chunk": {
+      "bytes": 9586,
+      "checksumVerificationReceipt": "thesis/evidence/orca-relayed-http-v1197/provider-transfer-delta-v1261/CUSTODY.json",
+      "path": "thesis/evidence/orca-relayed-http-v1197/provider-transfer-delta-v1261/extracted/provider-raw/prefixes/voice-stages.jsonl/000000213171-000000222757.chunk",
+      "sha256": "c1a73fa4d24b446be667d68355b24149d11e9e7a043e271bc25b9110e0c10371"
+    },
+    "prefixes/voice-stages.jsonl/000000222757-000000227550.chunk": {
+      "bytes": 4793,
+      "checksumVerificationReceipt": "thesis/evidence/orca-relayed-http-v1197/provider-transfer-delta-v1261/CUSTODY.json",
+      "path": "thesis/evidence/orca-relayed-http-v1197/provider-transfer-delta-v1261/extracted/provider-raw/prefixes/voice-stages.jsonl/000000222757-000000227550.chunk",
+      "sha256": "0e4278beef2275f8745ab9d4c6431c35150081aa291c462bd388389ffba3d721"
+    },
+    "prefixes/voice-stages.jsonl/000000227550-000000232343.chunk": {
+      "bytes": 4793,
+      "checksumVerificationReceipt": "thesis/evidence/orca-relayed-http-v1197/provider-transfer-delta-v1261/CUSTODY.json",
+      "path": "thesis/evidence/orca-relayed-http-v1197/provider-transfer-delta-v1261/extracted/provider-raw/prefixes/voice-stages.jsonl/000000227550-000000232343.chunk",
+      "sha256": "c899e0d6bd7982e957d5226e1f38dcf04248eb582acb37fb05863f709d5a696d"
+    },
+    "prefixes/voice-stages.jsonl/000000232343-000000237136.chunk": {
+      "bytes": 4793,
+      "checksumVerificationReceipt": "thesis/evidence/orca-relayed-http-v1197/provider-transfer-delta-v1261/CUSTODY.json",
+      "path": "thesis/evidence/orca-relayed-http-v1197/provider-transfer-delta-v1261/extracted/provider-raw/prefixes/voice-stages.jsonl/000000232343-000000237136.chunk",
+      "sha256": "f4a54cd4c2ae50d3a7a7e51329b54aba6727412cc4890dabf67e300dedfbd06e"
+    },
+    "prefixes/voice-stages.jsonl/000000237136-000000244325.chunk": {
+      "bytes": 7189,
+      "checksumVerificationReceipt": "thesis/evidence/orca-relayed-http-v1197/provider-transfer-delta-v1261/CUSTODY.json",
+      "path": "thesis/evidence/orca-relayed-http-v1197/provider-transfer-delta-v1261/extracted/provider-raw/prefixes/voice-stages.jsonl/000000237136-000000244325.chunk",
+      "sha256": "62ee484c7bcc70a30bb154f1365acb7f172d88f4c48c7d317c001032d4ef2ec8"
+    },
+    "prefixes/voice-stages.jsonl/000000244325-000000251515.chunk": {
+      "bytes": 7190,
+      "checksumVerificationReceipt": "thesis/evidence/orca-relayed-http-v1197/provider-transfer-delta-v1261/CUSTODY.json",
+      "path": "thesis/evidence/orca-relayed-http-v1197/provider-transfer-delta-v1261/extracted/provider-raw/prefixes/voice-stages.jsonl/000000244325-000000251515.chunk",
+      "sha256": "4ab3b172389ca34bd50d851a3e6ee616a77299d89ff42d4e40747d1622ef1442"
+    },
+    "prefixes/voice-stages.jsonl/000000251515-000000256308.chunk": {
+      "bytes": 4793,
+      "checksumVerificationReceipt": "thesis/evidence/orca-relayed-http-v1197/provider-transfer-delta-v1261/CUSTODY.json",
+      "path": "thesis/evidence/orca-relayed-http-v1197/provider-transfer-delta-v1261/extracted/provider-raw/prefixes/voice-stages.jsonl/000000251515-000000256308.chunk",
+      "sha256": "f9af927d924f6527fdf2a1e3ec1a32674533f4e2d0950cb2e587aed9c5e93fba"
+    },
+    "prefixes/voice-stages.jsonl/000000256308-000000261101.chunk": {
+      "bytes": 4793,
+      "checksumVerificationReceipt": "thesis/evidence/orca-relayed-http-v1197/provider-transfer-delta-v1261/CUSTODY.json",
+      "path": "thesis/evidence/orca-relayed-http-v1197/provider-transfer-delta-v1261/extracted/provider-raw/prefixes/voice-stages.jsonl/000000256308-000000261101.chunk",
+      "sha256": "26a1583749b4849c1ca15e2172e918e3ab4496879c5f73d99b7c0238b2a178aa"
+    },
+    "prefixes/voice-stages.jsonl/000000261101-000000265894.chunk": {
+      "bytes": 4793,
+      "checksumVerificationReceipt": "thesis/evidence/orca-relayed-http-v1197/provider-transfer-delta-v1261/CUSTODY.json",
+      "path": "thesis/evidence/orca-relayed-http-v1197/provider-transfer-delta-v1261/extracted/provider-raw/prefixes/voice-stages.jsonl/000000261101-000000265894.chunk",
+      "sha256": "d088f274a89f5108cc00b7ac73475f8645b707a7dbd74e999ceca31627c240de"
+    },
+    "prefixes/voice-stages.jsonl/000000265894-000000270687.chunk": {
+      "bytes": 4793,
+      "checksumVerificationReceipt": "thesis/evidence/orca-relayed-http-v1197/provider-transfer-delta-v1261/CUSTODY.json",
+      "path": "thesis/evidence/orca-relayed-http-v1197/provider-transfer-delta-v1261/extracted/provider-raw/prefixes/voice-stages.jsonl/000000265894-000000270687.chunk",
+      "sha256": "611944dc935c21fdea0537f2915c0048704a030ca4c6900a443b7a4655e640ab"
+    },
+    "prefixes/voice-stages.jsonl/000000270687-000000277876.chunk": {
+      "bytes": 7189,
+      "checksumVerificationReceipt": "thesis/evidence/orca-relayed-http-v1197/provider-transfer-delta-v1261/CUSTODY.json",
+      "path": "thesis/evidence/orca-relayed-http-v1197/provider-transfer-delta-v1261/extracted/provider-raw/prefixes/voice-stages.jsonl/000000270687-000000277876.chunk",
+      "sha256": "4135cf1c50e01a352eadd24c41bf7dd45644a5660431879bc6b1e0496d778026"
+    },
+    "prefixes/voice-stages.jsonl/000000277876-000000285066.chunk": {
+      "bytes": 7190,
+      "checksumVerificationReceipt": "thesis/evidence/orca-relayed-http-v1197/provider-transfer-delta-v1261/CUSTODY.json",
+      "path": "thesis/evidence/orca-relayed-http-v1197/provider-transfer-delta-v1261/extracted/provider-raw/prefixes/voice-stages.jsonl/000000277876-000000285066.chunk",
+      "sha256": "b05c9bbdf9648ca60df2ed57eb3fa3263b2567ca6007bba9e6e10da736da52f6"
+    },
+    "prefixes/voice-stages.jsonl/000000285066-000000289859.chunk": {
+      "bytes": 4793,
+      "checksumVerificationReceipt": "thesis/evidence/orca-relayed-http-v1197/provider-transfer-delta-v1261/CUSTODY.json",
+      "path": "thesis/evidence/orca-relayed-http-v1197/provider-transfer-delta-v1261/extracted/provider-raw/prefixes/voice-stages.jsonl/000000285066-000000289859.chunk",
+      "sha256": "8fbe6155c5097f63579f397cf41237ef001c4cde819237d6188f3142b9eb6a23"
+    },
+    "prefixes/voice-stages.jsonl/000000289859-000000294652.chunk": {
+      "bytes": 4793,
+      "checksumVerificationReceipt": "thesis/evidence/orca-relayed-http-v1197/provider-transfer-delta-v1261/CUSTODY.json",
+      "path": "thesis/evidence/orca-relayed-http-v1197/provider-transfer-delta-v1261/extracted/provider-raw/prefixes/voice-stages.jsonl/000000289859-000000294652.chunk",
+      "sha256": "6c7e38389b5dca58ae7ba671554e3b1f2bbda9d68d11ac7487c0c2c0f1badc08"
+    },
+    "prefixes/voice-stages.jsonl/000000294652-000000304238.chunk": {
+      "bytes": 9586,
+      "checksumVerificationReceipt": "thesis/evidence/orca-relayed-http-v1197/provider-transfer-delta-v1261/CUSTODY.json",
+      "path": "thesis/evidence/orca-relayed-http-v1197/provider-transfer-delta-v1261/extracted/provider-raw/prefixes/voice-stages.jsonl/000000294652-000000304238.chunk",
+      "sha256": "9f1a9e0e3c378afe0fbd531ed6f82aefdc8ca1d65dc49c7c22982c4b270724c9"
+    },
+    "prefixes/voice-stages.jsonl/000000304238-000000309031.chunk": {
+      "bytes": 4793,
+      "checksumVerificationReceipt": "thesis/evidence/orca-relayed-http-v1197/provider-transfer-delta-v1261/CUSTODY.json",
+      "path": "thesis/evidence/orca-relayed-http-v1197/provider-transfer-delta-v1261/extracted/provider-raw/prefixes/voice-stages.jsonl/000000304238-000000309031.chunk",
+      "sha256": "f0187246fa8eecbc4c65bb6e8a694bc1a76ff15b98f05980f76cfb4969d27c47"
+    },
+    "prefixes/voice-stages.jsonl/000000309031-000000313824.chunk": {
+      "bytes": 4793,
+      "checksumVerificationReceipt": "thesis/evidence/orca-relayed-http-v1197/provider-transfer-delta-v1261/CUSTODY.json",
+      "path": "thesis/evidence/orca-relayed-http-v1197/provider-transfer-delta-v1261/extracted/provider-raw/prefixes/voice-stages.jsonl/000000309031-000000313824.chunk",
+      "sha256": "2bdbe17d8d74140990daac1cf2949a5a1dc626585f6012a3134514ced513d26c"
+    },
+    "prefixes/voice-stages.jsonl/000000313824-000000318617.chunk": {
+      "bytes": 4793,
+      "checksumVerificationReceipt": "thesis/evidence/orca-relayed-http-v1197/provider-transfer-delta-v1261/CUSTODY.json",
+      "path": "thesis/evidence/orca-relayed-http-v1197/provider-transfer-delta-v1261/extracted/provider-raw/prefixes/voice-stages.jsonl/000000313824-000000318617.chunk",
+      "sha256": "34d0a5dea13b670db9e92af59702c210dcbf1d10dd37c4dc517a979f9f41a919"
+    },
+    "prefixes/voice-stages.jsonl/000000318617-000000323410.chunk": {
+      "bytes": 4793,
+      "checksumVerificationReceipt": "thesis/evidence/orca-relayed-http-v1197/provider-transfer-delta-v1261/CUSTODY.json",
+      "path": "thesis/evidence/orca-relayed-http-v1197/provider-transfer-delta-v1261/extracted/provider-raw/prefixes/voice-stages.jsonl/000000318617-000000323410.chunk",
+      "sha256": "dafe05386edeaac70243cf4517ee0a021a39575c45036d4a9cab64fa4f7d1ddd"
+    },
+    "prefixes/voice-stages.jsonl/000000323410-000000328203.chunk": {
+      "bytes": 4793,
+      "checksumVerificationReceipt": "thesis/evidence/orca-relayed-http-v1197/provider-transfer-delta-v1261/CUSTODY.json",
+      "path": "thesis/evidence/orca-relayed-http-v1197/provider-transfer-delta-v1261/extracted/provider-raw/prefixes/voice-stages.jsonl/000000323410-000000328203.chunk",
+      "sha256": "50dce3508b038322cd67c44d98419ea853adb3050317a8d0d10eafc0253e25c4"
+    },
+    "prefixes/voice-stages.jsonl/000000328203-000000332996.chunk": {
+      "bytes": 4793,
+      "checksumVerificationReceipt": "thesis/evidence/orca-relayed-http-v1197/provider-transfer-delta-v1261/CUSTODY.json",
+      "path": "thesis/evidence/orca-relayed-http-v1197/provider-transfer-delta-v1261/extracted/provider-raw/prefixes/voice-stages.jsonl/000000328203-000000332996.chunk",
+      "sha256": "4a70b7e3c8bfc9bb1c9bc4e63da15f693a76d15e6a1be64352aa5730b3c614b6"
+    },
+    "prefixes/voice-stages.jsonl/000000332996-000000342582.chunk": {
+      "bytes": 9586,
+      "checksumVerificationReceipt": "thesis/evidence/orca-relayed-http-v1197/provider-transfer-delta-v1261/CUSTODY.json",
+      "path": "thesis/evidence/orca-relayed-http-v1197/provider-transfer-delta-v1261/extracted/provider-raw/prefixes/voice-stages.jsonl/000000332996-000000342582.chunk",
+      "sha256": "c1d62a643bbbc543cbec92a57edf1d54946e312fb6e9da5863cb92b57b396fb2"
+    },
+    "prefixes/voice-stages.jsonl/000000342582-000000347375.chunk": {
+      "bytes": 4793,
+      "checksumVerificationReceipt": "thesis/evidence/orca-relayed-http-v1197/provider-transfer-delta-v1261/CUSTODY.json",
+      "path": "thesis/evidence/orca-relayed-http-v1197/provider-transfer-delta-v1261/extracted/provider-raw/prefixes/voice-stages.jsonl/000000342582-000000347375.chunk",
+      "sha256": "77d38bc0d6cd1da4e5eecf51c367a69ef6702dd80efa9308962c002efa30ac8a"
+    },
+    "prefixes/voice-stages.jsonl/000000347375-000000352168.chunk": {
+      "bytes": 4793,
+      "checksumVerificationReceipt": "thesis/evidence/orca-relayed-http-v1197/provider-transfer-delta-v1261/CUSTODY.json",
+      "path": "thesis/evidence/orca-relayed-http-v1197/provider-transfer-delta-v1261/extracted/provider-raw/prefixes/voice-stages.jsonl/000000347375-000000352168.chunk",
+      "sha256": "43af582a1b0313d9f2390fd6ab9fb1d3c9b896e8b9055b1de929d2b291bb52aa"
+    },
+    "prefixes/voice-stages.jsonl/000000352168-000000356961.chunk": {
+      "bytes": 4793,
+      "checksumVerificationReceipt": "thesis/evidence/orca-relayed-http-v1197/provider-transfer-delta-v1261/CUSTODY.json",
+      "path": "thesis/evidence/orca-relayed-http-v1197/provider-transfer-delta-v1261/extracted/provider-raw/prefixes/voice-stages.jsonl/000000352168-000000356961.chunk",
+      "sha256": "cbe1b715c842a8286b17e0d8644f30155544e24b0eea8ed5cc929de4eb3ddfb6"
+    },
+    "prefixes/voice-stages.jsonl/000000356961-000000361754.chunk": {
+      "bytes": 4793,
+      "checksumVerificationReceipt": "thesis/evidence/orca-relayed-http-v1197/provider-transfer-delta-v1261/CUSTODY.json",
+      "path": "thesis/evidence/orca-relayed-http-v1197/provider-transfer-delta-v1261/extracted/provider-raw/prefixes/voice-stages.jsonl/000000356961-000000361754.chunk",
+      "sha256": "98a9143bf7d7a087c658262f5a7d97c4bf011f92e1a41d9d5cefeceeba1a8938"
+    },
+    "prefixes/voice-stages.jsonl/000000361754-000000366547.chunk": {
+      "bytes": 4793,
+      "checksumVerificationReceipt": "thesis/evidence/orca-relayed-http-v1197/provider-transfer-delta-v1261/CUSTODY.json",
+      "path": "thesis/evidence/orca-relayed-http-v1197/provider-transfer-delta-v1261/extracted/provider-raw/prefixes/voice-stages.jsonl/000000361754-000000366547.chunk",
+      "sha256": "2f63ad10d9ed9ca24f1a83d7335c4b2bd52cb5f9ea0826ca561393c9c0d0e373"
+    },
+    "prefixes/voice-stages.jsonl/000000366547-000000376133.chunk": {
+      "bytes": 9586,
+      "checksumVerificationReceipt": "thesis/evidence/orca-relayed-http-v1197/provider-transfer-delta-v1261/CUSTODY.json",
+      "path": "thesis/evidence/orca-relayed-http-v1197/provider-transfer-delta-v1261/extracted/provider-raw/prefixes/voice-stages.jsonl/000000366547-000000376133.chunk",
+      "sha256": "3cbdece40f7d93b17907814ede66735009a9649e233e07a7b8cce595b071bf1f"
+    },
+    "prefixes/voice-stages.jsonl/000000376133-000000380926.chunk": {
+      "bytes": 4793,
+      "checksumVerificationReceipt": "thesis/evidence/orca-relayed-http-v1197/provider-transfer-delta-v1261/CUSTODY.json",
+      "path": "thesis/evidence/orca-relayed-http-v1197/provider-transfer-delta-v1261/extracted/provider-raw/prefixes/voice-stages.jsonl/000000376133-000000380926.chunk",
+      "sha256": "2f2eac263f25d3b82a6fe93ea3e66d050f949c2ed4f6e9aa63f0660e1e6e08be"
+    },
+    "prefixes/voice-stages.jsonl/000000380926-000000385719.chunk": {
+      "bytes": 4793,
+      "checksumVerificationReceipt": "thesis/evidence/orca-relayed-http-v1197/provider-transfer-delta-v1261/CUSTODY.json",
+      "path": "thesis/evidence/orca-relayed-http-v1197/provider-transfer-delta-v1261/extracted/provider-raw/prefixes/voice-stages.jsonl/000000380926-000000385719.chunk",
+      "sha256": "5651e9e9e723f643458b59b478523c3271d36032c3116a2caa08a67d8291a7be"
+    },
+    "prefixes/voice-stages.jsonl/000000385719-000000390512.chunk": {
+      "bytes": 4793,
+      "checksumVerificationReceipt": "thesis/evidence/orca-relayed-http-v1197/provider-transfer-delta-v1261/CUSTODY.json",
+      "path": "thesis/evidence/orca-relayed-http-v1197/provider-transfer-delta-v1261/extracted/provider-raw/prefixes/voice-stages.jsonl/000000385719-000000390512.chunk",
+      "sha256": "c2c4eec4c0bd42c4898d5a07d879121902d26ace3532eff916d19d1e6b19cd8d"
+    },
+    "prefixes/voice-stages.jsonl/000000390512-000000395305.chunk": {
+      "bytes": 4793,
+      "checksumVerificationReceipt": "thesis/evidence/orca-relayed-http-v1197/provider-transfer-delta-v1261/CUSTODY.json",
+      "path": "thesis/evidence/orca-relayed-http-v1197/provider-transfer-delta-v1261/extracted/provider-raw/prefixes/voice-stages.jsonl/000000390512-000000395305.chunk",
+      "sha256": "abc255e455aca24bf44ccc4056f2a472b1a0320baff22b1cbc5b3ef2baa1571d"
+    },
+    "resource_sample.py": {
+      "bytes": 7475,
+      "checksumVerificationReceipt": "thesis/evidence/orca-relayed-http-v1197/provider-transfer-v1232/CUSTODY.json",
+      "path": "thesis/evidence/orca-relayed-http-v1197/provider-transfer-v1232/extracted/provider-raw/resource_sample.py",
+      "sha256": "8f62ec378e74036d4539d9159e3caf29b8fd7a9115de1ab0f482dfd58b6e1857"
+    },
+    "runtime/receiver-identity.json": {
+      "bytes": 1434,
+      "checksumVerificationReceipt": "thesis/evidence/orca-relayed-http-v1197/provider-transfer-v1232/CUSTODY.json",
+      "path": "thesis/evidence/orca-relayed-http-v1197/provider-transfer-v1232/extracted/provider-raw/runtime/receiver-identity.json",
+      "sha256": "bf934ac3e83f57e5732c631c5c106496ed8a7359aef1b4b2b5442cae586a7300"
+    },
+    "runtime/runtime-versions.json": {
+      "bytes": 176,
+      "checksumVerificationReceipt": "thesis/evidence/orca-relayed-http-v1197/provider-transfer-v1232/CUSTODY.json",
+      "path": "thesis/evidence/orca-relayed-http-v1197/provider-transfer-v1232/extracted/provider-raw/runtime/runtime-versions.json",
+      "sha256": "f6a8b5119acf5b7b80a1ab54c13ddd975636c37d83653c4b5fcff7229fc7cb6b"
+    },
+    "settings.redacted.json": {
+      "bytes": 17224,
+      "checksumVerificationReceipt": "thesis/evidence/orca-relayed-http-v1197/provider-transfer-v1232/CUSTODY.json",
+      "path": "thesis/evidence/orca-relayed-http-v1197/provider-transfer-v1232/extracted/provider-raw/settings.redacted.json",
+      "sha256": "74ba2da7c692d031172fc653ed5bdd090b630360f69fe18d307c23711224ad5f"
+    }
+  },
+  "schema": "aurora.provider_custody_coverage_chain.v1",
+  "snapshotAt": "2026-10-17T21:18:06.289638+00:00",
+  "standaloneDeltaIsFullRoot": false,
+  "status": "COMPLETE_PHYSICAL_COVERAGE_THROUGH_NONTERMINAL_CHECKPOINT",
+  "terminalCohortSeal": false
+}

@@ -1,0 +1,99 @@
+{
+  "at": "2026-10-17T18:23:53.065005+00:00",
+  "ownerRoutingCorrectionMessages": [
+    "msg_3157ffac685f",
+    "msg_67c8fd6c44e7"
+  ],
+  "nativeGoalStatusAtStart": "blocked",
+  "resumeCommandsIssued": 0,
+  "scope": "finite installed networking relay discovery; no direct refusal/hostlist retry",
+  "runtime": {
+    "runtimeId": "c056e640-4085-4377-83d5-c299190ee880",
+    "appVersion": "1.4.214",
+    "state": "ready",
+    "reachable": true,
+    "advertisedNetworkingCapabilities": [
+      "network.browserTunnel.v1",
+      "network.browserTunnel.executionHosts.v1",
+      "workspace-ports.v1",
+      "workspace-ports.host-scoped.v1"
+    ]
+  },
+  "cli": {
+    "path": "/home/developer/.orca-relay/bin/orca",
+    "version": "0.1.0+5cdca4731a41",
+    "commandCount": 296,
+    "catalogSha256": "7a2e2b912e8402fbe1252ed91d1bfa3886cc728a3cf0b6f74e0f21dca382caba",
+    "networkPortForwardOrProxyInvocationExposed": false,
+    "browserHistoryForwardExcluded": true
+  },
+  "primaryDocumentationRead": [
+    "orca skills get orca-cli --json",
+    "orca skills get orca-cli --references --json",
+    "orca skills get orca-cli --reference browser --json"
+  ],
+  "supportedDiscoveryOperationsActuallyExecuted": [
+    "orca agent-context --json",
+    "orca status --json",
+    "orca worktree show --worktree id:ce8df754-5c48-4296-83bd-452a5b99942f::/home/developer/projects/aurora --json",
+    "orca terminal show --terminal term_6a00d9ee-792a-4daf-8578-236290e33108 --json"
+  ],
+  "bridgeStaticInspection": {
+    "path": "/home/developer/.orca-remote/relay-0.1.0+5cdca4731a41/relay.js",
+    "bytes": 1879437,
+    "sha256": "9c7ff1af8e545ae3a2e6e0b50f4e38c3378f1e19746c6544115df6a578568f41",
+    "result": "No documented application networking invocation was found in the installed CLI/guide/relay bridge. Static inspection is not proof of owning-host implementation absence. No raw IPC, credential file or guessed RPC invoked."
+  },
+  "selectedPair": {
+    "sourceExecutionHost": "ssh:ssh-oci-coding-worker",
+    "destinationExecutionHost": "ssh:ssh-1786238480967-semdev",
+    "destinationAddress": "100.64.0.3",
+    "destinationPort": 8000,
+    "method": "POST",
+    "path": "/api/TTS/Synthesize",
+    "applicationAuth": "existing X-API-Key binding unchanged",
+    "providerManifestSha256": "450ee5af677a229e93f75c093e4e5ee3135c25b223f0d73f713f0c31f56c4cae"
+  },
+  "oneBindingRead": {
+    "at": "2026-10-17T18:17:14.266077+00:00",
+    "sourceReceipt": "v1178-personal-listener-binding-RESULT.json",
+    "listener": "100.64.0.3:8000",
+    "ownerPid": 261790,
+    "ownerStartTicks": 1519744,
+    "controllerPid": 261665,
+    "controllerStartTicks": 1519707,
+    "interface": "tailscale0",
+    "controlNetNamespace": "net:[4026531833]",
+    "receiverNetNamespace": "net:[4026531833]",
+    "terminalPresent": false
+  },
+  "operationInvoked": false,
+  "proxyMappingObtained": false,
+  "applicationRouteAdmitted": false,
+  "missingCapability": "Supported callable operation/input schema and approved invocation path for the owning-runtime host-scoped workspace-ports or network.browserTunnel service to deliver authenticated HTTP from worker loopback/private ingress to existing Personal100.64.0.3:8000 over the approved existing managed connections. Advertised capability is not an admitted application route.",
+  "owningHostActionForCoding": {
+    "location": "Owning Orca runtime c056e640-4085-4377-83d5-c299190ee880 app 1.4.214 controlling both named existing SSH targets; worker CLI cannot establish operation signature from exposed surfaces",
+    "requiredRead": "Locate/read the installed supported operation implementing network.browserTunnel.executionHosts.v1 and/or workspace-ports.host-scoped.v1, including exact operation/CLI or API input schema and its existing-private-mapping inventory",
+    "requiredReturn": [
+      "exact supported command or API signature and permissioned invocation location",
+      "existing mapping id or supported owner-authorized private application relay operation",
+      "worker-reachable loopback/private application ingress URL/address/port and same-workspace scope",
+      "destination binding explicitly100.64.0.3:8000 on Personal, not an assumed127.0.0.1 listener",
+      "relay route/hop identity and timing/observation surface without credential values"
+    ],
+    "notAvailableHere": "No callable application proxy/forward operation or mapping URI is exposed by current296-command SSH CLI, bundled guides, native tools or worktree-show output; exact operation name remains UNKNOWN, so no command is invented"
+  },
+  "routeCohortLabel": "ORCA-RELAYED HTTP; extra intermediary hop; distinct from directLAN/WAN and Mesh/ICE",
+  "nextAfterRealMapping": "one health/transport admission on newly supplied relay, then existing application auth and correlated actual remoteTTS/native proof in the ordinary15excluded warmups before900 measured; no separate model pilot",
+  "requesterLaunched": false,
+  "excludedWarmups": 0,
+  "measuredAttempts": 0,
+  "noProviderRestartOrSourceManifestEdit": true,
+  "noNewBaselineWorkerCredentialOrSecurityAccessChanges": true,
+  "noTerminalPerRequestProxyOrUnsupportedMinifiedBypass": true,
+  "c06FinalOutcomeDenominatorRawCustody": "UNKNOWN_UNRECOVERED",
+  "currentIndexUpdated": "docs/experiments/tcc-20261013-submission-20261030/root/CURRENT.md",
+  "oldCurrentBodyPreservedVerbatim": "HISTORY-v1176-before-relay-correction.md",
+  "originalMonitor": "term_2eab47ed-ab9b-4e35-bd9b-fc068c60e3fc",
+  "run": "run_e6054e76e9fc"
+}

@@ -1,0 +1,10 @@
+{
+  "at": "2026-10-18T16:40:07.020900+00:00",
+  "source": ".omx/evidence/orca-monitor-20261010/authoritative-plan-30.57-20261018T163103354506Z-after.md",
+  "destination": "thesis/methodology/owner-requirements-20261018-cff17279.md",
+  "bytes": 609706,
+  "sha256": "cff1727938cd30e143359935568871b3298df56569962e05ce7111b775b3c9fd",
+  "priorPrefixBytes": 591168,
+  "priorPrefixByteIdentical": true,
+  "vaultWritten": false
+}

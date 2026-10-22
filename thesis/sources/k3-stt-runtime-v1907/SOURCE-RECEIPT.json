@@ -1,0 +1,27 @@
+{
+  "at": "2026-10-20T20:48:12.013304+00:00",
+  "status": "WORKER_SOURCE_FROZEN_REMOTE_DELTA_PREPARED_NO_RUNTIME_LAUNCH",
+  "baseSourceInventorySha256": "a38421a03ffafb73a4c469aa7c82fb299210eedd6fe97809beb3c508782883d4",
+  "workerSourceRoot": "/home/developer/projects/aurora/thesis/sources/k3-stt-runtime-v1907/worker/source",
+  "workerSourceInventorySha256": "8b29dc63d9f1f2b4fb15cfc2bd62959c6efb411c7faab1b5f5de2c47f2393fe0",
+  "workerFiles": 400,
+  "workerSourceBytes": 6719649,
+  "delta": [
+    {
+      "path": "app/services/stt_transcription/service.py",
+      "beforeSha256": "4723b798b2643cee262e3d1d0ad28114305c3e83c8ef5bae5becd790aac5f888",
+      "afterSha256": "becf4222d99b02dbc4cac03ad098f275ccb288ceb35f44e945a521701ecaaf49"
+    },
+    {
+      "path": "app/shared/contracts/models/speech_runtime.py",
+      "beforeSha256": "1f7ea66c9a4619439130a6a200647b49a1df5b5b8cd17490c5aab0a371e88d94",
+      "afterSha256": "60113749d6cb874a478cd0551b4d39c7a024b02a3e99c0f0af4a2d2e095db9c7"
+    }
+  ],
+  "archiveSha256": "b9e270b99545ed630cddcbea337acecca2c29dc5bd5410ddd0faad1e510da79c",
+  "archiveBytes": 26486,
+  "validation": "thesis/evidence/k3-stt-runtime-validation-v1905/RECEIPT.json",
+  "k2SourceRetainedUnchanged": true,
+  "settingsModelsFixturesAndCredentialsChanged": false,
+  "newInference": false
+}

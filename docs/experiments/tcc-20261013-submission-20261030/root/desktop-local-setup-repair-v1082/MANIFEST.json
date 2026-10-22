@@ -1,0 +1,166 @@
+{
+  "at": "2026-10-16T14:36:46.599557+00:00",
+  "scope": "Worker product source only; native live deployment/acceptance pending; Personal frozen performance source unchanged",
+  "sourceFiles": [
+    {
+      "path": "apps/aurora-tauri/src/aurora-client.ts",
+      "bytes": 119639,
+      "sha256": "9d87cab15f19343b6e0174cb835ed28d99d8ed6d8f7ca1483f7191af73fbb076"
+    },
+    {
+      "path": "apps/aurora-tauri/src/tauri-app.tsx",
+      "bytes": 113845,
+      "sha256": "1b7637e5359e4c02cf1df52f968b799f50947ad0c9607d1fdf84e3252824db65"
+    },
+    {
+      "path": "apps/aurora-tauri/src/offline-profile-main.test.ts",
+      "bytes": 12718,
+      "sha256": "9d3f724b36217b920b8dd321ab08e000d0549eb70591e5c4392164c5240785f3"
+    },
+    {
+      "path": "apps/aurora-tauri/src-tauri/src/lib.rs",
+      "bytes": 523880,
+      "sha256": "16a837eb74ced7ddcea59337cdade5c543709fe0412b843c0543a76e7d0e2107"
+    },
+    {
+      "path": "packages/aurora-ui/src/onboarding-view.tsx",
+      "bytes": 52274,
+      "sha256": "a46a71c92ef44a259931bc04336436ff585f7654e023e595a41feb80f194b33e"
+    },
+    {
+      "path": "packages/aurora-ui/src/runtime-profile.ts",
+      "bytes": 31555,
+      "sha256": "c55a893eb1541714d001af27c3ec23e809e612201e2fdafe0444ccd15036a944"
+    },
+    {
+      "path": "packages/aurora-ui/tests/runtime-profile.test.ts",
+      "bytes": 22130,
+      "sha256": "c0d77039cbd772f16d9a6c9f35762ca747964033bc8f4551fa50b9548ae440fa"
+    },
+    {
+      "path": "packages/aurora-ui/tests/onboarding-and-mesh-baseline.test.tsx",
+      "bytes": 57510,
+      "sha256": "705220a9debc4743828b0cfcd55211b482c37dfbac8eb92bc59d34fd6c85bae5"
+    },
+    {
+      "path": "rust/crates/aurora-voice-native/src/runtime_profile.rs",
+      "bytes": 50477,
+      "sha256": "40c25d866e95cdfe2cd9d22fcbcb6dfde8e8be2d6f8364d5e9eabc575c61a29e"
+    }
+  ],
+  "sourceReview": {
+    "path": "SOURCE-REVIEW.md",
+    "sha256": "da71c6cfe91c158567e52b40020e88cf5619607643cc608b6f5d857234a3fd9e"
+  },
+  "copiedRecords": [
+    {
+      "source": ".git/aurora-handoff-import-20261006/desktop-local-profile-integration-v1082/tauri-profile-test-RESULT.json",
+      "destination": "docs/experiments/tcc-20261013-submission-20261030/root/desktop-local-setup-repair-v1082/tauri-profile-test-RESULT.json",
+      "bytes": 459,
+      "sha256": "c59e959ecb366baab028ec5d8c3cba083698bbca6949647d60348e72c76b958e"
+    },
+    {
+      "source": ".git/aurora-handoff-import-20261006/desktop-local-profile-integration-v1082/tauri-profile-test.log",
+      "destination": "docs/experiments/tcc-20261013-submission-20261030/root/desktop-local-setup-repair-v1082/tauri-profile-test.log",
+      "bytes": 240,
+      "sha256": "780283fd0c9725420b73683dc7fa4c206500ef4e47ccf0d4728d9f12a0bcb654"
+    },
+    {
+      "source": ".git/aurora-handoff-import-20261006/desktop-local-profile-integration-v1081/shared-ui-test-RESULT.json",
+      "destination": "docs/experiments/tcc-20261013-submission-20261030/root/desktop-local-setup-repair-v1082/shared-ui-test-RESULT.json",
+      "bytes": 496,
+      "sha256": "c2e8ffe96392781aed47039390ec01a770ee22422e1fb35f42503a8357c42de2"
+    },
+    {
+      "source": ".git/aurora-handoff-import-20261006/desktop-local-profile-integration-v1081/shared-ui-test.log",
+      "destination": "docs/experiments/tcc-20261013-submission-20261030/root/desktop-local-setup-repair-v1082/shared-ui-test.log",
+      "bytes": 240,
+      "sha256": "89e716c2ae564dca15f552a204cd234c5f26b9b37c27a8357736ef68d19e9f73"
+    },
+    {
+      "source": ".git/aurora-handoff-import-20261006/desktop-local-profile-integration-v1082/tauri-typecheck-RESULT.json",
+      "destination": "docs/experiments/tcc-20261013-submission-20261030/root/desktop-local-setup-repair-v1082/tauri-typecheck-RESULT.json",
+      "bytes": 333,
+      "sha256": "dc59909dcd9bd2c92114e5002fe8aa07dd316136f7045a51f582e23287b55fcf"
+    },
+    {
+      "source": ".git/aurora-handoff-import-20261006/desktop-local-profile-integration-v1082/tauri-typecheck.log",
+      "destination": "docs/experiments/tcc-20261013-submission-20261030/root/desktop-local-setup-repair-v1082/tauri-typecheck.log",
+      "bytes": 122,
+      "sha256": "9683f4cdbe6cec2d2b71269aadb5346f654cf985149a2848ba82c7e1c89edbef"
+    },
+    {
+      "source": ".git/aurora-handoff-import-20261006/desktop-local-profile-integration-v1082/shared-ui-typecheck-RESULT.json",
+      "destination": "docs/experiments/tcc-20261013-submission-20261030/root/desktop-local-setup-repair-v1082/shared-ui-typecheck-RESULT.json",
+      "bytes": 331,
+      "sha256": "ce2d552490f4f36d1418c6869aa69134549a6e79224df34759da631a24b75a6c"
+    },
+    {
+      "source": ".git/aurora-handoff-import-20261006/desktop-local-profile-integration-v1082/shared-ui-typecheck.log",
+      "destination": "docs/experiments/tcc-20261013-submission-20261030/root/desktop-local-setup-repair-v1082/shared-ui-typecheck.log",
+      "bytes": 1348,
+      "sha256": "87a28a8a8bdb82896b9c62896401474446751095a805c22aa5a3093b16454803"
+    },
+    {
+      "source": ".git/aurora-handoff-import-20261006/desktop-local-profile-integration-v1082/native-profile-tests-RESULT.json",
+      "destination": "docs/experiments/tcc-20261013-submission-20261030/root/desktop-local-setup-repair-v1082/native-profile-tests-RESULT.json",
+      "bytes": 467,
+      "sha256": "995151311db0e3514a9ba879e8565d804b5435c3d58ab8246161cb59873c4916"
+    },
+    {
+      "source": ".git/aurora-handoff-import-20261006/desktop-local-profile-integration-v1082/native-profile-tests.log",
+      "destination": "docs/experiments/tcc-20261013-submission-20261030/root/desktop-local-setup-repair-v1082/native-profile-tests.log",
+      "bytes": 3134,
+      "sha256": "c0ce82d297bc9872f4c1e14807a5711c222959c007caa3673379c69c1e1a182a"
+    },
+    {
+      "source": "/home/developer/projects/aurora/.git/aurora-handoff-import-20261006/native-profile-module-check-v1084/Cargo.toml",
+      "destination": "/home/developer/projects/aurora/docs/experiments/tcc-20261013-submission-20261030/root/desktop-local-setup-repair-v1082/native-module-Cargo.toml",
+      "bytes": 559,
+      "sha256": "b06bc434728371ee711ea28ef8fed1f9a163f77b9c8de8ba76b64fdfe7a6994a"
+    },
+    {
+      "source": "/home/developer/projects/aurora/.git/aurora-handoff-import-20261006/native-profile-module-check-v1084/Cargo.lock",
+      "destination": "/home/developer/projects/aurora/docs/experiments/tcc-20261013-submission-20261030/root/desktop-local-setup-repair-v1082/native-module-Cargo.lock",
+      "bytes": 33633,
+      "sha256": "83ae7a2f2663da5c558f9fd900f9fa96489c07e14eac85307c7e8226759152e3"
+    },
+    {
+      "source": "/home/developer/projects/aurora/.git/aurora-handoff-import-20261006/native-profile-module-check-v1084/RESULT.json",
+      "destination": "/home/developer/projects/aurora/docs/experiments/tcc-20261013-submission-20261030/root/desktop-local-setup-repair-v1082/native-module-RESULT.json",
+      "bytes": 860,
+      "sha256": "f13b1a08a9ceebd339e2e02b939293b4d857424a655ac02ba8450fa0f06aba19"
+    },
+    {
+      "source": "/home/developer/projects/aurora/.git/aurora-handoff-import-20261006/native-profile-module-check-v1084/check.log",
+      "destination": "/home/developer/projects/aurora/docs/experiments/tcc-20261013-submission-20261030/root/desktop-local-setup-repair-v1082/native-module-check.log",
+      "bytes": 2626,
+      "sha256": "be0551aed9a763b607d9a244af53defb42e32fd904e99daddc3247760c9934b5"
+    }
+  ],
+  "generatedStyleFromRequiredTypecheck": {
+    "path": "packages/aurora-ui/src/styles.css",
+    "initialStatusClean": true,
+    "beforeSha256": "7136a273ad91a0f4f5b94de6fddc3955fe67131ea037588757f70a78420fca47",
+    "afterSha256": "970640f74b8483effe558b527ac384ad2ae7ce6eacdb931bc271b4e4c121346f",
+    "disposition": "Retained required build output; no manual CSS edit. No previous dirty path disappeared."
+  },
+  "validation": {
+    "tauriProfileTests": "4 passed",
+    "sharedUITests": "45 passed",
+    "tauriTypecheck": "passed",
+    "sharedUITypecheck": "passed",
+    "nativeProfileTests": "cargo exit101 before tests: pkg-config missing in coding-worker ALSA build",
+    "nativeRuntimeAcceptance": "pending coherent artifact after resource admission",
+    "stagedPaths": [],
+    "nativeModuleTests": "19 passed via exact production module, existing production contracts/voice-engine and offline original-lock dependency versions; full crate/app not covered"
+  },
+  "postReviewCopyOnlyChange": {
+    "path": "apps/aurora-tauri/src/tauri-app.tsx",
+    "beforeSha256": "b17a9881eccb54d24bc20fd62ffcab2b43f69dbce14a9a1ca6c6f6d1be542db0",
+    "afterSha256": "1b7637e5359e4c02cf1df52f968b799f50947ad0c9607d1fdf84e3252824db65",
+    "change": "Fresh setup nodeName \"Aurora thin client\" -> \"Aurora\" to preserve production UI copy contract; no behavior/types/classes changed. No redundant test rerun."
+  },
+  "nativeModuleDependencyPairsAllMatchOriginalLock": true,
+  "closedAt": "2026-10-16T14:47:17.594384+00:00"
+}

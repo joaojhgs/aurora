@@ -1,0 +1,60 @@
+{
+  "at": "2026-10-18T14:48:28.035638+00:00",
+  "status": "V1513_ACTUALLY_LAUNCHED_ORDINARY_WARMUP_NATIVE_GATE_PENDING",
+  "controllerPid": 1231594,
+  "controllerStartTicks": 111317576,
+  "requesterChildPid": 1231687,
+  "requesterChildStartTicks": 111318838,
+  "operators": {
+    "requesterCopier": {
+      "at": "2026-10-18T14:45:15.183653+00:00",
+      "modelCalls": 0,
+      "pid": 1231601,
+      "role": "Original Root collection utility; not an agent",
+      "sourceSha256": "c11a7c4d0d8133603e52a0658eba797747cbb5ac99b87dd9f7248cf57ea0279a",
+      "startTicks": 111317577
+    },
+    "warmupFinalizer": {
+      "at": "2026-10-18T14:45:15.196727+00:00",
+      "modelCalls": 0,
+      "pid": 1231602,
+      "role": "Original Root collection utility; not an agent",
+      "sourceSha256": "1b4116ea46226bfc96cf5c56190662caf3070fc93c05f59465d332e5843a9488",
+      "startTicks": 111317578
+    }
+  },
+  "progress": {
+    "attempted": 5,
+    "last_attempt_file": "attempts/attempt-0005-warmup.jsonl",
+    "last_attempt_status": "completed_correct",
+    "measured_attempted": 0,
+    "planned_measured": 387,
+    "planned_warmups": 15,
+    "status": "running",
+    "unattempted_measured": 387,
+    "warmups_attempted": 5
+  },
+  "measuredAttempted": 0,
+  "plannedEpochMeasured": 387,
+  "conditionTargetMeasured": 900,
+  "preservedParentMeasured": 513,
+  "preservedParentOutcomes": {
+    "completed_correct": 512,
+    "failed": 1
+  },
+  "frozenManifestSha256": "b19c10d9aad4f9a2261d7eac5b52c258315eea94db256a411e66981e6a45d4a4",
+  "providerManifestSha256": "b4b95d579c29695832c05d96692f2f15fd51cf3258333b9175091ab357280887",
+  "providerReceiverPid": 1227894,
+  "providerRestarted": false,
+  "lastCopier": {
+    "sequence": 4,
+    "cases": 4,
+    "audio": 4,
+    "bytes": 862650,
+    "errors": []
+  },
+  "nextFiniteGate": "15correct excludedwarmups then45strictnativejoins/actualconstructor/backend and actualremainingproviderbudget; unchanged runner admits measured only after proof",
+  "oldAgentPrompt": "cdac7533 runtimePENDING/outcomeUNKNOWN preserved; distinct raw control channel and fresh provider snapshot verified, no oldpromptresend",
+  "controlReservation": "Root warmupFinalizer1231602 owns next same-terminal raw proof command; no competing control sends",
+  "newWorkers": 0
+}

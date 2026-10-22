@@ -1,0 +1,44 @@
+{
+  "allPayloadFilesRehashed": 102,
+  "at": "2026-10-17T20:33:48.438096+00:00",
+  "audioBlobs": 30,
+  "completedCases": 30,
+  "disk": {
+    "free": 7303630848,
+    "total": 109128826880,
+    "used": 101808418816
+  },
+  "exactSourcePrefixComparisons": 3,
+  "frozenManifestUnchanged": true,
+  "ownedMarkdownLinksChecked": 70,
+  "physicalPayloadBytes": 4008138,
+  "pidStartTickChecks": [
+    {
+      "actualStartTicks": "104608580",
+      "expectedStartTicks": "104608580",
+      "matches": true,
+      "pid": 430655
+    },
+    {
+      "actualStartTicks": "104608648",
+      "expectedStartTicks": "104608648",
+      "matches": true,
+      "pid": 430656
+    },
+    {
+      "actualStartTicks": "104723117",
+      "expectedStartTicks": "104723117",
+      "matches": true,
+      "pid": 442775
+    },
+    {
+      "actualStartTicks": "104535394",
+      "expectedStartTicks": "104535394",
+      "matches": true,
+      "pid": 421717
+    }
+  ],
+  "problems": [],
+  "stateReceipt": "thesis/evidence/orca-relayed-http-v1197/receipts/000009.json",
+  "sutCalls": 0
+}

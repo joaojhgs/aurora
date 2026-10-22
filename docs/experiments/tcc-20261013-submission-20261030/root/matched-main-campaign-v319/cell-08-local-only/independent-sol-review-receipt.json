@@ -1,0 +1,13 @@
+{
+  "recordedAt": "2026-10-14T16:16:08.338279+00:00",
+  "verdict": "APPROVE",
+  "reviewSha256": "e4f7525af23349930bc5c2276a2407a872bf55876935d50a97b740b20b70196c",
+  "sealedManifestSha256": "1b21ee7000975ea6dfca23c7580a9e24d0ae7ddc79037235ac7f1e49865d5098",
+  "sealedManifestRewritten": false,
+  "reviewLane": "/root/sol_ios_offline_helper_v113",
+  "measured": 100,
+  "correctMeasured": 100,
+  "warmupsExcluded": 5,
+  "wholeCampaignAccepted": false,
+  "cleanup": "supervisor_returned_unverified"
+}

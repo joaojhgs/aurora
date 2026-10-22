@@ -1,0 +1,373 @@
+{
+  "at": "2026-10-22T12:01:24.386513+00:00",
+  "appendPrefixesExplicit": true,
+  "publicRawOnlyNoConfigEnvironmentApkModels": true,
+  "files": [
+    {
+      "path": "android-apk-build-v277/pair-session-tests.log",
+      "prefixBytes": 828,
+      "sha256": "1cd5033a0812fd06cb2a4f5dfadf92007b769e39ec78541ccd94ad968358155d",
+      "sourceRetained": true
+    },
+    {
+      "path": "android-apk-build-v277/typecheck.log",
+      "prefixBytes": 670,
+      "sha256": "94a3b354e86d215697fbf258ba413e7667ed6e6579ed77699e9821cead9aeb3f",
+      "sourceRetained": true
+    },
+    {
+      "path": "android-apk-build-v277/native-adapter-tests.log",
+      "prefixBytes": 729,
+      "sha256": "9bd852f73bb5f02285327d2f2adfb4c7c3e7dcc2849b9fc0b0d38e55ca127f53",
+      "sourceRetained": true
+    },
+    {
+      "path": "android-apk-build-v277/sdk-build.log",
+      "prefixBytes": 237,
+      "sha256": "2c93570a40c43dc9aa2b2b98345e989abe1acaa35c8ec93cd6b16f5fabf23386",
+      "sourceRetained": true
+    },
+    {
+      "path": "android-apk-build-v277/status.json",
+      "prefixBytes": 1561,
+      "sha256": "660c7782d90d2217b5b946571a148bd31d7b5ca7d37289538b9d761b6e3d48f1",
+      "sourceRetained": true
+    },
+    {
+      "path": "android-apk-build-v284/typecheck.log",
+      "prefixBytes": 4752,
+      "sha256": "8d115d9b1f6fd2e604ab7d7a0364c5bcd131daa53b26472fae3a37b0c3993b1c",
+      "sourceRetained": true
+    },
+    {
+      "path": "android-apk-build-v284/native-adapter-tests.log",
+      "prefixBytes": 728,
+      "sha256": "eba87762b71f8e3bbc0edd65a9376a43558e8cf0748f4fc33106fbf967938cb6",
+      "sourceRetained": true
+    },
+    {
+      "path": "android-apk-build-v284/status.json",
+      "prefixBytes": 1237,
+      "sha256": "42f2f1e6ca64cfb9b462cf1aefbbaad16d0b390dceedb0a39111e7d5d5a9526e",
+      "sourceRetained": true
+    },
+    {
+      "path": "android-apk-build-v288/typecheck.log",
+      "prefixBytes": 247,
+      "sha256": "3c615fd113d63190ea2a093347d4584036f30da3fc24dcbb470721c9e7506033",
+      "sourceRetained": true
+    },
+    {
+      "path": "android-apk-build-v288/build.log",
+      "prefixBytes": 131858,
+      "sha256": "917648e0e7c834287c1528226eaae2118bf83cffe571355e95a1a9373ebeac10",
+      "sourceRetained": true
+    },
+    {
+      "path": "android-apk-build-v288/status.json",
+      "prefixBytes": 2212,
+      "sha256": "97c6301981b27be749c4a56ccf7f1f547d0fc9f39d2ad1b27ec9159df6b08357",
+      "sourceRetained": true
+    },
+    {
+      "path": "android-apk-build-v318/typecheck.log",
+      "prefixBytes": 247,
+      "sha256": "3c615fd113d63190ea2a093347d4584036f30da3fc24dcbb470721c9e7506033",
+      "sourceRetained": true
+    },
+    {
+      "path": "android-apk-build-v318/sdk-build.log",
+      "prefixBytes": 237,
+      "sha256": "2c93570a40c43dc9aa2b2b98345e989abe1acaa35c8ec93cd6b16f5fabf23386",
+      "sourceRetained": true
+    },
+    {
+      "path": "android-apk-build-v318/build.log",
+      "prefixBytes": 131858,
+      "sha256": "1e0764a8fdfa983a5b8e8ed18abd4070aa3f326322afe295d2daf1e554e610c9",
+      "sourceRetained": true
+    },
+    {
+      "path": "android-apk-build-v318/status.json",
+      "prefixBytes": 2572,
+      "sha256": "ea10c2ad24cff378957af048c3c7f80c3b5a5a394dae01c44aebd7293277dc3b",
+      "sourceRetained": true
+    },
+    {
+      "path": "android-apk-build-v318/speech-binding-tests.log",
+      "prefixBytes": 620,
+      "sha256": "1d2e98c11d2a481d796038c697444f0bd6bf553253ed78d73edd64508df3ef49",
+      "sourceRetained": true
+    },
+    {
+      "path": "android-apk-build-v337/sdk-build.log",
+      "prefixBytes": 237,
+      "sha256": "2c93570a40c43dc9aa2b2b98345e989abe1acaa35c8ec93cd6b16f5fabf23386",
+      "sourceRetained": true
+    },
+    {
+      "path": "android-apk-build-v337/consumer-lease-tests.log",
+      "prefixBytes": 682,
+      "sha256": "440cde00850cd48f8d0f00c25fd688cae6faaffd47735083b2874dfae3deb77b",
+      "sourceRetained": true
+    },
+    {
+      "path": "android-apk-build-v337/build.log",
+      "prefixBytes": 131858,
+      "sha256": "74c34fda210c25a2742b6596fcaea43ee66a9e78bbf3a3a1fabee3798525cc8a",
+      "sourceRetained": true
+    },
+    {
+      "path": "android-apk-build-v337/status.json",
+      "prefixBytes": 2442,
+      "sha256": "1a324796cbba5744705f5ec211b1c73c5717516e9631d0f0e3cd4014e1b666fd",
+      "sourceRetained": true
+    },
+    {
+      "path": "sdk-update-v290/status.json",
+      "prefixBytes": 3193,
+      "sha256": "cf683b41396df2ca4f9dc6217324aada1b74b2c76db841b8e80b091b201f3e05",
+      "sourceRetained": true
+    },
+    {
+      "path": "sdk-update-v320/status.json",
+      "prefixBytes": 3165,
+      "sha256": "cd8b225215a939d7198556a334907c3bc6a98184a48799b55cd00ca42545b790",
+      "sourceRetained": true
+    },
+    {
+      "path": "sdk-update-v339/status.json",
+      "prefixBytes": 3258,
+      "sha256": "acfb1eb4a476eaf492e03b5b749a8cb0fad57a7fc6dd6dd02fcc938b39c0d5d9",
+      "sourceRetained": true
+    },
+    {
+      "path": "phone-notebook-p2p-pilot-v306/case.json",
+      "prefixBytes": 2667,
+      "sha256": "ccf28ec65d383df0b6d63a3189a0572f7f9a355bf6e29a674fa8e2ee1d8c474f",
+      "sourceRetained": true
+    },
+    {
+      "path": "phone-notebook-p2p-pilot-v306/node.log",
+      "prefixBytes": 683,
+      "sha256": "49db8040b960a9619462acc7f65ae2c0e7a3156b095897e9e63d0018c54fc6da",
+      "sourceRetained": true
+    },
+    {
+      "path": "phone-notebook-p2p-pilot-v306/MANIFEST.json",
+      "prefixBytes": 1990,
+      "sha256": "c5119a410bd50abe92c50de6be54eb70ce2f20a61b32fb4c7e2b8422967fcabf",
+      "sourceRetained": true
+    },
+    {
+      "path": "phone-notebook-p2p-pilot-v306/status.json",
+      "prefixBytes": 2330,
+      "sha256": "cfac61dcc7d83db57db9ff73e362ad7df520d0666b1832a03a42169edd89ecc1",
+      "sourceRetained": true
+    },
+    {
+      "path": "phone-notebook-p2p-pilot-v306/native-status.json",
+      "prefixBytes": 783,
+      "sha256": "975eb63747d2b82627da732b63c217d18b370af8a6ab7191469654277fa98964",
+      "sourceRetained": true
+    },
+    {
+      "path": "phone-notebook-p2p-pilot-v312/case.json",
+      "prefixBytes": 2665,
+      "sha256": "f125e3a5e0f2a8772a40d8c716d366cbada8c7c62ef4f2f3add72a88f3f0a4aa",
+      "sourceRetained": true
+    },
+    {
+      "path": "phone-notebook-p2p-pilot-v312/node.log",
+      "prefixBytes": 682,
+      "sha256": "c597ed735f36c7759e25767822d07bec9d5fc3288f5e9b8e811b70c3e869fe45",
+      "sourceRetained": true
+    },
+    {
+      "path": "phone-notebook-p2p-pilot-v312/MANIFEST.json",
+      "prefixBytes": 2233,
+      "sha256": "5d5459cf88bcadd0cf95912a94ae814e5e19f4e988e72d783b75998f02e0b202",
+      "sourceRetained": true
+    },
+    {
+      "path": "phone-notebook-p2p-pilot-v312/status.json",
+      "prefixBytes": 2332,
+      "sha256": "cbc65f42198cdc4cb56ee7a3b2676ce3239a0127ff57f0d60ccc06a85db118e9",
+      "sourceRetained": true
+    },
+    {
+      "path": "phone-notebook-p2p-pilot-v312/native-status.json",
+      "prefixBytes": 782,
+      "sha256": "b041bc66e7ffea4dd1974acc7214512bc808ade1fd255544790dc2d031cd359c",
+      "sourceRetained": true
+    },
+    {
+      "path": "phone-notebook-p2p-pilot-v324/node.log",
+      "prefixBytes": 322,
+      "sha256": "25474c4def372d8140db667d92f5733547de70812bd85e1b8ed10966bee83ed7",
+      "sourceRetained": true
+    },
+    {
+      "path": "phone-notebook-p2p-pilot-v324/MANIFEST.json",
+      "prefixBytes": 2431,
+      "sha256": "4e487f0481a97e5d0a304690b0700018a96ba202c9a5bb92dbf1095c81fee245",
+      "sourceRetained": true
+    },
+    {
+      "path": "phone-notebook-p2p-pilot-v324/status.json",
+      "prefixBytes": 1894,
+      "sha256": "b82f99f27f2364143d1998b886bfbc5dd8854a9b82eaf34af539d22141ab7890",
+      "sourceRetained": true
+    },
+    {
+      "path": "phone-notebook-p2p-pilot-v324/native-status.json",
+      "prefixBytes": 368,
+      "sha256": "a64452f222676a15234691add6f1c998ed4a4c2746924f1191fe7e83c16f4c4c",
+      "sourceRetained": true
+    },
+    {
+      "path": "phone-notebook-p2p-pilot-v328/case.json",
+      "prefixBytes": 283,
+      "sha256": "2b1ebc1dc1d27ae0a57e0582140f99aff86d55bf05ac4c406595f35b711f354c",
+      "sourceRetained": true
+    },
+    {
+      "path": "phone-notebook-p2p-pilot-v328/node.log",
+      "prefixBytes": 691,
+      "sha256": "95c60420930678fe83f76f1e388725020083c4b5b29565ed7feeea87977c7de9",
+      "sourceRetained": true
+    },
+    {
+      "path": "phone-notebook-p2p-pilot-v328/MANIFEST.json",
+      "prefixBytes": 2431,
+      "sha256": "f1af3799af4c8ceedb4bdd140a28221567a884620fac9eb8b68b13adc5e1663b",
+      "sourceRetained": true
+    },
+    {
+      "path": "phone-notebook-p2p-pilot-v328/status.json",
+      "prefixBytes": 2316,
+      "sha256": "f904542c3915d8e9b17409edf32e2915936153df0eac806e6d807645770ed1d3",
+      "sourceRetained": true
+    },
+    {
+      "path": "phone-notebook-p2p-pilot-v328/native-status.json",
+      "prefixBytes": 769,
+      "sha256": "7199a0f8a02579026b51ce676e0e654111967d5d8802d59865d588238b013487",
+      "sourceRetained": true
+    },
+    {
+      "path": "phone-notebook-p2p-pilot-v334/case.json",
+      "prefixBytes": 2596,
+      "sha256": "bf6df7ced37987046066a689ecd6c77fd57e6bd13a65450edf1a0dc876902d36",
+      "sourceRetained": true
+    },
+    {
+      "path": "phone-notebook-p2p-pilot-v334/node.log",
+      "prefixBytes": 834,
+      "sha256": "150fb7a400e762383ad2313f38448bb2a574474afefde667fdd6e531e6272d25",
+      "sourceRetained": true
+    },
+    {
+      "path": "phone-notebook-p2p-pilot-v334/MANIFEST.json",
+      "prefixBytes": 2431,
+      "sha256": "a4fd6a0e8f6427a51a7081aafdf6ffb4d22aa5a254f2eccae7331cfc8eee5090",
+      "sourceRetained": true
+    },
+    {
+      "path": "phone-notebook-p2p-pilot-v334/status.json",
+      "prefixBytes": 2546,
+      "sha256": "f4d5fdf915d9b481b8eedcf2f18a9d44d5b16c11d5f118fe01476a7b821fc07d",
+      "sourceRetained": true
+    },
+    {
+      "path": "phone-notebook-p2p-pilot-v334/native-status.json",
+      "prefixBytes": 983,
+      "sha256": "a61b5409248448708de98fd4d5fc190cf3d0ce2491499cba1a8c798f06679bce",
+      "sourceRetained": true
+    },
+    {
+      "path": "phone-notebook-p2p-pilot-v341/case.json",
+      "prefixBytes": 283,
+      "sha256": "64d08b47c17dd4e0609cce0700f3e38e35e4aff71cb475e114cd63534358e055",
+      "sourceRetained": true
+    },
+    {
+      "path": "phone-notebook-p2p-pilot-v341/node.log",
+      "prefixBytes": 691,
+      "sha256": "1aafb22f81801f09397d4e2e65989bb971a119331594392872ceaec6046932eb",
+      "sourceRetained": true
+    },
+    {
+      "path": "phone-notebook-p2p-pilot-v341/MANIFEST.json",
+      "prefixBytes": 2464,
+      "sha256": "8a0f23e8f9e370245f8b48511eda2575b6335b277778f4dfd580159f697a4df8",
+      "sourceRetained": true
+    },
+    {
+      "path": "phone-notebook-p2p-pilot-v341/status.json",
+      "prefixBytes": 2318,
+      "sha256": "9629f8c90a72e9cdc3ce4aa70dc7ca12893f323dc97697713accd1e6a1987257",
+      "sourceRetained": true
+    },
+    {
+      "path": "phone-notebook-p2p-pilot-v341/native-status.json",
+      "prefixBytes": 769,
+      "sha256": "4a1df0509f10523f6f232b2a43c1430a168b2e5937f5b4342b87602148d8aeab",
+      "sourceRetained": true
+    },
+    {
+      "path": "notebook-owner-service-v225/actual-provider-bindings.jsonl",
+      "prefixBytes": 857,
+      "sha256": "84b3456044e53893e4b90bda7efef569c7bc01e8ff15388110b81dee38eac095",
+      "sourceRetained": true
+    },
+    {
+      "path": "notebook-owner-service-v225/native-stage.jsonl",
+      "prefixBytes": 2302,
+      "sha256": "b8bc1f89ab16f1b7758b49ecefceda2b38ded4e7a9f7decb0e4e671660509f50",
+      "sourceRetained": true
+    },
+    {
+      "path": "notebook-owner-service-v225/status.json",
+      "prefixBytes": 2362,
+      "sha256": "c2af31594c9f652f5c578c0900581db4b7e7dc0c915f50b707c6c374db1e6d5b",
+      "sourceRetained": true
+    },
+    {
+      "path": "notebook-owner-service-v225/resources.jsonl",
+      "prefixBytes": 470964,
+      "sha256": "c0198faff6984c70b6f46ee5bc9c4e83236c4dc38de5b243ed69b68da3fa7436",
+      "sourceRetained": true
+    },
+    {
+      "path": "notebook-owner-service-v286/actual-provider-bindings.jsonl",
+      "prefixBytes": 857,
+      "sha256": "61d7d58cda21ebcea99dea9e551d03d9c948cdace7eeda38e298e8b13f17cf38",
+      "sourceRetained": true
+    },
+    {
+      "path": "notebook-owner-service-v286/native-stage.jsonl",
+      "prefixBytes": 2302,
+      "sha256": "3881d594869e4a6b21080fe7cdebe9d882258041cf5694bb97e58baa2d92e990",
+      "sourceRetained": true
+    },
+    {
+      "path": "notebook-owner-service-v286/TASK-VOICE-EXPORT-RECEIPT-v311.json",
+      "prefixBytes": 5412,
+      "sha256": "71526fe0a219774a2c83e944542aeb9dcd2abfc264e8f20a0c1acf1ab4e8c548",
+      "sourceRetained": true
+    },
+    {
+      "path": "notebook-owner-service-v286/status.json",
+      "prefixBytes": 2466,
+      "sha256": "dee480142e1e7b78823c6c39f4fde2d20a4606ec162a09f3607520dc13cf5c4f",
+      "sourceRetained": true
+    },
+    {
+      "path": "notebook-owner-service-v286/resources.jsonl",
+      "prefixBytes": 255181,
+      "sha256": "aeb9e44ce8e23ae9f67366f95444df96adf52170a9a75b75fe68e7c77b8f913a",
+      "sourceRetained": true
+    }
+  ]
+}

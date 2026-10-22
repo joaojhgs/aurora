@@ -1,0 +1,119 @@
+{
+  "at": "2026-10-21T21:38:36.401889+00:00",
+  "state": "SOURCE_PREPARED_NOT_ALLOCATION_FROZEN_NOT_LAUNCHED",
+  "files": [
+    {
+      "path": "thesis/harness/distributed-k1-http-remaining450-v2296/source-inventory.json",
+      "bytes": 67817,
+      "sha256": "000202cdddb9803d503fc44f8aaf58eb469475890751a310193418330aa79937"
+    },
+    {
+      "path": "thesis/harness/distributed-k1-http-remaining450-v2296/source-inventory.legacy-http.json",
+      "bytes": 58216,
+      "sha256": "96ec8e3e14233520d4cd469c4177264a193d05cf26b4b512d91d98f16bbb7dee"
+    },
+    {
+      "path": "thesis/harness/distributed-k1-http-remaining450-v2296/controller.py",
+      "bytes": 20722,
+      "sha256": "c45963b66c92e71c2d6a92727c796ce2a2accdda66dbd469456ae504e1727031"
+    },
+    {
+      "path": "thesis/harness/distributed-k1-http-remaining450-v2296/eligible-indices.json",
+      "bytes": 3153,
+      "sha256": "1a9c494a3f01bf4eb8ebd35bb675d03bb9a14d80fc1f8a636c96ad47651c897d"
+    },
+    {
+      "path": "thesis/harness/distributed-k1-http-remaining450-v2296/bindings.py",
+      "bytes": 4145,
+      "sha256": "0b15c2c9c02cd3e1e96cb52e44a4ed458c3a790c35aa612d020e54ead351537e"
+    },
+    {
+      "path": "thesis/harness/distributed-k1-http-remaining450-v2296/candidate-manifest.json",
+      "bytes": 220,
+      "sha256": "ce75b965ee5879ebece6ea7dfe133441547d20ccf89ecd5d66ea510bd9645e60"
+    },
+    {
+      "path": "thesis/harness/distributed-k1-http-remaining450-v2296/receiver_proof.py",
+      "bytes": 11450,
+      "sha256": "a565c1486d087fe7fca8ba2437a8cec3f2e89e95af982ac87105719bcdff11bb"
+    },
+    {
+      "path": "thesis/harness/distributed-k1-http-remaining450-v2296/bootstrap.py",
+      "bytes": 2028,
+      "sha256": "506639751e8cd9a5ce403e87cfe7ee6ebb26840853a0508dec131fe6b65a6fad"
+    },
+    {
+      "path": "thesis/harness/distributed-k1-http-remaining450-v2296/resource_sample.py",
+      "bytes": 7777,
+      "sha256": "c82ac9af1a86198d0fc5396e86a6593bc6e91a220019cda838eea8c378819986"
+    },
+    {
+      "path": "thesis/harness/distributed-k1-http-remaining450-v2296/observer.py",
+      "bytes": 11803,
+      "sha256": "7e045d5c343942c96a293ecaf6459727067096aca421f8b6bffee2af9946b5ea"
+    },
+    {
+      "path": "thesis/harness/distributed-k1-http-remaining450-v2296/PREPARATION.json",
+      "bytes": 4401,
+      "sha256": "94cca64df0c3ca92df4cac2e601b4a3bb10af3f78b9cd594601b20ecc2725dd0"
+    },
+    {
+      "path": "thesis/harness/distributed-k1-http-remaining450-v2296/aurora_voice_telemetry_v430.py",
+      "bytes": 11547,
+      "sha256": "fb4f912e1b70989a1fa96e021c274514047a0f10e0e7682b5c73f18bc673286f"
+    },
+    {
+      "path": "thesis/harness/distributed-k1-http-remaining450-v2296/runner.py",
+      "bytes": 72599,
+      "sha256": "34d5742fcfada0a7c33dce6f035611c426b6fad8cf99c95a1ad70c0f9fa1d5d5"
+    },
+    {
+      "path": "thesis/harness/distributed-k1-http-remaining450-v2296/tts_http_adapter.py",
+      "bytes": 6956,
+      "sha256": "476255813dc77db12c77fa14f4ea858811ea89fe61f5198a7f1a5388defe7124"
+    },
+    {
+      "path": "thesis/harness/distributed-k1-http-remaining450-v2296/candidate-input.wav",
+      "bytes": 219794,
+      "sha256": "da0ecc4ad0885746ab6e716585473917ab2b543a505bf0db09ebacfaa7943cbb"
+    },
+    {
+      "path": "thesis/harness/custody_k1_http_requester_v2296.py",
+      "bytes": 19433,
+      "sha256": "64dae3684c7a9901c930eca105f3b3e54f23e4e01618a20bdbde616c2126b5b5"
+    },
+    {
+      "path": "thesis/harness/k1_http_warmup_finalize_v2296.py",
+      "bytes": 9672,
+      "sha256": "23cce68547299b432fa823bc9c518d9775a56a60ec9d2a6524f016f6b50c9f05"
+    },
+    {
+      "path": "thesis/harness/retire_idle_http_provider_and_export_v2296.py",
+      "bytes": 9827,
+      "sha256": "44717e3bec0251e60ac0cad2623c7803876b663fdfb468a27f2322c275d9817a"
+    },
+    {
+      "path": "thesis/harness/prepare_k1_http_provider_v2296.py",
+      "bytes": 6284,
+      "sha256": "7b1e9d1a64f4052c83743e33d30dd507455c7c97ff0668922d328f5177aabe82"
+    },
+    {
+      "path": "thesis/harness/launch_k1_http_provider_v2296.py",
+      "bytes": 4519,
+      "sha256": "f222c22b43799d90df873f12fc44f0fdca76fec11b98bb752850667df77821b0"
+    },
+    {
+      "path": "thesis/harness/k1_http_remaining450_root_v2296.py",
+      "bytes": 14610,
+      "sha256": "670690bf5ca60f0659f684a0cbefe6fb9c7f4044654758f2ca3d34d52961e0b9"
+    },
+    {
+      "path": "thesis/harness/transfer_k1_http_provider_eof_delta_v2296.py",
+      "bytes": 10163,
+      "sha256": "47333e8adecce773339c3459bdc45bb4631f907159cec7dc2f7686982b9dfd0f"
+    }
+  ],
+  "stagePreparationSha256": "94cca64df0c3ca92df4cac2e601b4a3bb10af3f78b9cd594601b20ecc2725dd0",
+  "scientificAppInventorySha256": "000202cdddb9803d503fc44f8aaf58eb469475890751a310193418330aa79937",
+  "noCredentialOrModelCopies": true
+}

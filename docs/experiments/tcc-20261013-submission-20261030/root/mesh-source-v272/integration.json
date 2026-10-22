@@ -1,0 +1,10 @@
+{
+  "owned_sha256": {
+    "scripts/hosted_peer_e2e.sh": "36d9e2907d9f19590f3552d2ea2aefad27cdb6f2c09d8e2cdfac748dccf0a267",
+    "tests/e2e/hosted_peer/hosted-peer-live-shell.spec.ts": "a257aa79f03423fa412ffa53099f124910c248a3c3591924e9e3688de0891b2b",
+    "tests/e2e/hosted_peer/hosted-peer-live-helpers.ts": "fc1a89f4925ea419f3eb14b68568a95b04d5a8375fbf1ff512f81e199a35b6cd"
+  },
+  "exact_bases_checked": true,
+  "review_sha256": "52780fdde5109a424ce3822b6163a45245a63d3f624ab0ffd6ee9f6b50853365",
+  "history_scope": "explicit actual mesh-node onboarding; V261 remote-console gap remains"
+}

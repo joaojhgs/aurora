@@ -1,0 +1,77 @@
+{
+  "at": "2026-10-20T15:50:58.416272+00:00",
+  "phase": "K2_V1818_RETIRED_AFTER15_CORRECT_WARMUPS0MEASURED_NATIVE_COLLECTOR_DOUBLE_WRAPPER_FIXED_ON_SAVED_DATA",
+  "nativeGoalStatus": "active",
+  "warmups": 15,
+  "warmupsCorrect": 15,
+  "measured": 0,
+  "targetMeasured": 900,
+  "actorsRetired": [
+    2810817,
+    2811255,
+    2811256
+  ],
+  "custody": {
+    "cases": 15,
+    "audio": 15,
+    "files": 107,
+    "physicalBytes": 2069490,
+    "lastReceipt": "thesis/campaigns/worker-desktop-k2-p2p-assistant-tts-v1818/receipts/000010.json",
+    "errors": []
+  },
+  "actualDefect": "Receiver proof grouped outer TTS.Synthesize and actual tts.model_invoke in one bucket; exact one real model invocation remains required.",
+  "savedQualification": {
+    "path": "thesis/evidence/k2-native-proof-handler-qualification-v1823/QUALIFICATION-RECEIPT.json",
+    "nativeModelJoins": 30,
+    "newModelCalls": 0,
+    "sourceProofSha256": "3bb4af79cf2579023c0f1ff2025f69367717d49db7d09831c682c1bf52fc441f",
+    "notOriginalAdmission": true
+  },
+  "nativeGpu": {
+    "pid": 3938202,
+    "configuredLayers": 100,
+    "actualOffloadedLayers": 25,
+    "actualTotalLayers": 25,
+    "backend": "Vulkan RX7600",
+    "physicalProof": "thesis/evidence/k2-native-proof-handler-qualification-v1823/actual-new-process-gpu.json"
+  },
+  "next": "Prepared1826 corrected proof/collectorhash plumbing, stricter52200outer charging original14:46/57600. One requested actualsourceclosure then freshstandard15newrequester warmups+900; sameDproviderunchanged. No baseline/modelquality rerun.",
+  "K1": {
+    "attempted": 709,
+    "correct": 697,
+    "failed": 12,
+    "unattempted": 191
+  },
+  "copies": [
+    {
+      "path": "thesis/campaigns/worker-desktop-k2-p2p-assistant-tts-v1818/terminal-v1825/control-launch.json",
+      "bytes": 1190,
+      "sha256": "fe45a6d445c5333d79872666069d6f7963c80c843d443a3327ef11ee62981aee"
+    },
+    {
+      "path": "thesis/campaigns/worker-desktop-k2-p2p-assistant-tts-v1818/terminal-v1825/summary.json",
+      "bytes": 11016,
+      "sha256": "df02587358247a0cff15a1605cce1036a868d63d554ac708d4e21d816f7e8a15"
+    },
+    {
+      "path": "thesis/campaigns/worker-desktop-k2-p2p-assistant-tts-v1818/terminal-v1825/progress.json",
+      "bytes": 227,
+      "sha256": "b8818a4014021b048933f04e3113315083f606df865b1c9ae5258e914b793a93"
+    },
+    {
+      "path": "thesis/campaigns/worker-desktop-k2-p2p-assistant-tts-v1818/terminal-v1825/warmup-finalizer-failure.json",
+      "bytes": 220,
+      "sha256": "27b22adf9195cce25439ea7127b52baaffa7874d435032900dda2772dbc44aba"
+    },
+    {
+      "path": "thesis/campaigns/worker-desktop-k2-p2p-assistant-tts-v1818/terminal-v1825/proof-collection-request.json",
+      "bytes": 3303,
+      "sha256": "d844c7d1c14a3a95ff71e01670a0f33efe2d75f411e20fd25c8087bea69f6e9e"
+    },
+    {
+      "path": "thesis/campaigns/worker-desktop-k2-p2p-assistant-tts-v1818/terminal-v1825/k2-saved-native-counts-v1821-RESULT.json",
+      "bytes": 6514,
+      "sha256": "399ea145be2caff188e02adc44296026ea2467877421fcb6d0c98941d854781d"
+    }
+  ]
+}

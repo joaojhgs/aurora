@@ -1,0 +1,122 @@
+{
+  "at": "2026-10-20T05:39:56.866880+00:00",
+  "scope": "Six selected W\u2192D reference performance conditions only; additional mandatory surface/pair/load coverage remains open",
+  "cells": [
+    {
+      "cell": "W\u2192D HTTP K1: TTS",
+      "target": 900,
+      "attempted": 180,
+      "correct": 179,
+      "incorrect": 0,
+      "failed": 1,
+      "unattempted": 720,
+      "status": "partial; remainder still open",
+      "source": "thesis/evidence/orca-relayed-http-v1197/terminal-v1377/summary.json"
+    },
+    {
+      "cell": "W\u2192D HTTP K2: TTS+LLM",
+      "target": 900,
+      "attempted": 900,
+      "correct": 797,
+      "incorrect": 0,
+      "failed": 103,
+      "unattempted": 0,
+      "status": "collection/native/resource/review closed; format failures retained",
+      "source": "thesis/campaigns/worker-desktop-k2-orca-relayed-http-v1264/CURRENT.json"
+    },
+    {
+      "cell": "W\u2192D HTTP K3: TTS+LLM+STT",
+      "target": 900,
+      "attempted": 900,
+      "correct": 885,
+      "incorrect": 0,
+      "failed": 15,
+      "unattempted": 0,
+      "status": "collection/native/resource/review closed;12format+3transport failures retained",
+      "source": "thesis/campaigns/worker-desktop-k3-orca-relayed-http-remaining-v1682/condition-900-analysis/SUMMARY.json"
+    },
+    {
+      "cell": "W\u2192D P2P K1: TTS",
+      "target": 900,
+      "attempted": 88,
+      "correct": 86,
+      "incorrect": 0,
+      "failed": 2,
+      "unattempted": 812,
+      "status": "actual running; original20 and new880 epochs, all failures counted",
+      "source": "thesis/campaigns/worker-desktop-k1-p2p-tts-remaining880-v1719/ROOT-MEASUREMENT-RESUMED-v1725.json"
+    },
+    {
+      "cell": "W\u2192D P2P K2: TTS+LLM",
+      "target": 900,
+      "attempted": 0,
+      "correct": 0,
+      "incorrect": 0,
+      "failed": 0,
+      "unattempted": 900,
+      "status": "future source prepared; bounded Sol review/live admission pending",
+      "source": "thesis/harness/distributed-k2-mesh-v1731/SOURCE-QUALIFICATION-RECEIPT.json"
+    },
+    {
+      "cell": "W\u2192D P2P K3: TTS+LLM+STT",
+      "target": 900,
+      "attempted": 0,
+      "correct": 0,
+      "incorrect": 0,
+      "failed": 0,
+      "unattempted": 900,
+      "status": "future condition; source/live admission pending",
+      "source": "thesis/harness/distributed-k3-mesh-v911/REPORT.md"
+    }
+  ],
+  "selectedSixTotals": {
+    "target": 5400,
+    "attempted": 2068,
+    "correct": 1947,
+    "incorrect": 0,
+    "failed": 121,
+    "unattempted": 3332
+  },
+  "fullMatrixDenominator": "Not inferred from these six cells; authoritative finite coverage registry/methodology governs applicability and admission.",
+  "nativeAggregateGoal": "01a112a5-d6bb-74e2-bf7c-ace73cb513b5 ACTIVE; full13 product acceptance remains open",
+  "currentK1Progress": {
+    "attempted": 83,
+    "last_attempt_file": "attempts/attempt-0083-measured.jsonl",
+    "last_attempt_status": "completed_correct",
+    "measured_attempted": 68,
+    "planned_measured": 880,
+    "planned_warmups": 15,
+    "status": "running",
+    "unattempted_measured": 812,
+    "warmups_attempted": 15
+  },
+  "sources": [
+    {
+      "path": "thesis/evidence/orca-relayed-http-v1197/terminal-v1377/summary.json",
+      "sha256": "641c6fc03929cd7c455d4b9f6460dd9923925069e99da69023079ae88b37563b"
+    },
+    {
+      "path": "thesis/campaigns/worker-desktop-k2-orca-relayed-http-v1264/CURRENT.json",
+      "sha256": "71ec3b1ac69c01d7c097772f2e54088b513f728cb1be97bec050e85964287ac2"
+    },
+    {
+      "path": "thesis/campaigns/worker-desktop-k3-orca-relayed-http-remaining-v1682/condition-900-analysis/SUMMARY.json",
+      "sha256": "d0442026536ce0582e1b7ff87307e05ff125be3b6f468848e7867fc6ab67886b"
+    }
+  ],
+  "closedK3CorrectOnlyLatencyMs": {
+    "denominator": 885,
+    "p50_ms": 30277.170251,
+    "p90_ms": 31243.1636454,
+    "p95_ms": 31787.947598400002
+  },
+  "quantileMethod": "Hyndman-Fan Type7 h=(n-1)*p, linear interpolation; milliseconds; raw rows pooled, never percentile summaries averaged",
+  "latencyScope": "K3 correct completed flows n885; no CPU/GPU, transport, fixture/model or surface pooling. Current P2P unfinished, no final900 percentile claim.",
+  "nativeWarmupK1": "15newcorrect warmups,45actual native stagejoins,15exact-peer/direct beforeafter joins; excluded from measured denominator",
+  "sourceEpochLimits": "CurrentP2P has reviewed3-file route-readiness source fix and versioned failure-policy boundary; source/placement contexts remain visible, no pureprotocol-overhead claim.",
+  "android": "UNKNOWN/0newmeasured. Exact one host-status read127/empty; established owning-host read capability requested, no absence inferred.",
+  "historicalDataLimits": "V799130072923B archive remains UNLOCATED; retained measurements/aggregates/procedures assessed with explicit limits. C06fourrawrows recovered/final UNKNOWN. No900rerun is called recovery.",
+  "noNewExperimentsForReport": true,
+  "newSutCalls": 0,
+  "methodologyMirror": "thesis/methodology/owner-requirements-20261020-6b40c597.md"
+}

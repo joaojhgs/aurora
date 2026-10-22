@@ -1,0 +1,47 @@
+{
+  "private_capture_not_exported": true,
+  "files": [
+    {
+      "path": "root-manifest.json",
+      "original_sha256": "b6d91ce626b366a861375c67e66b10885ba99ff43d6834377d14dfd2545f9da6",
+      "export_sha256": "53694afabc8d558229558b68ea3ea65e4971e500460ba18b35db2d45565f262f",
+      "transform": "Private config/env hashes withheld; unchanged boolean retained"
+    },
+    {
+      "path": "root-result.json",
+      "original_sha256": "471dd31ef12ccdc4a3cb8f4b4905411c92d45c0d028349bcf113da6c7dbf6aab",
+      "export_sha256": "0f6aab7ae3e28372a029db74d3a5c7fdabbfbd307384a70117f7fe04f9514427",
+      "transform": "Private config/env hashes withheld; unchanged boolean retained"
+    },
+    {
+      "path": "requests.jsonl",
+      "original_sha256": "052bcdd2ed24c5636a3886772902a70be77777366ac5b21110bc6ca17805c57e",
+      "export_sha256": "052bcdd2ed24c5636a3886772902a70be77777366ac5b21110bc6ca17805c57e",
+      "transform": "none"
+    },
+    {
+      "path": "requests.jsonl.manifest.json",
+      "original_sha256": "bce2fa849f84ac46908edbb121e0a2bb927f8205bf769fd38da2a826b0cf75a3",
+      "export_sha256": "bce2fa849f84ac46908edbb121e0a2bb927f8205bf769fd38da2a826b0cf75a3",
+      "transform": "none"
+    },
+    {
+      "path": "requests.jsonl.cleanup.json",
+      "original_sha256": "b520a0441c3f52026bcd3f44fdcd6bc0f737d8f220ed62460b82564c81af2c63",
+      "export_sha256": "b520a0441c3f52026bcd3f44fdcd6bc0f737d8f220ed62460b82564c81af2c63",
+      "transform": "none"
+    },
+    {
+      "path": "stdout.log",
+      "original_sha256": "d33d7db386961577b9d7fc1ddb6d5f33fe15afe13aa3078a24fbcb8c6d595c86",
+      "export_sha256": "e0c5c6f6b14253fff05a4ad3d89f8596f75d190313c9e2b9f470d77a85fc1515",
+      "transform": "Generated temporary test-bootstrap Password value only redacted"
+    },
+    {
+      "path": "stderr.log",
+      "original_sha256": "5687ce50927c49b585bb4cec5ecbb429ac4feb68f7cea5ac871e6280485b38f4",
+      "export_sha256": "5687ce50927c49b585bb4cec5ecbb429ac4feb68f7cea5ac871e6280485b38f4",
+      "transform": "none"
+    }
+  ]
+}

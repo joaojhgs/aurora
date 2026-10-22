@@ -1,0 +1,201 @@
+{
+  "ok": true,
+  "accepted": true,
+  "rejectedReasons": [],
+  "deduped": false,
+  "audit": {
+    "kind": "annotate_ledger",
+    "source": "cli",
+    "targetGoalIds": [],
+    "evidence": "thesis/campaigns/worker-desktop-k1-p2p-tts-remaining880-v1719/ROOT-RUNNING-CHECKPOINT-v1761.json",
+    "rationale": "Verified wait:12 actual original K1 PID/start observations across606seconds confirm live actors, retained cases453→466 and unchanged8failures; fresh466/900=458correct8failed, copier0errors and case/progress equality. Global439 remains failed without retry, later cases correct. Original monitor mailbox consumed at five-minute boundary, only heartbeats. Same full native Root goal ACTIVE, future K2 scopes closed; no new tests/reviews/source edits/model traffic/resume/workers or baseline repeat.",
+    "accepted": true,
+    "rejectedReasons": [],
+    "deduped": false
+  },
+  "summary": {
+    "total": 13,
+    "pending": 11,
+    "inProgress": 1,
+    "complete": 1,
+    "failed": 0,
+    "reviewBlocked": 0,
+    "historicalReviewBlocked": 0,
+    "needsUserDecision": 0,
+    "superseded": 0,
+    "steeringBlocked": 0,
+    "aggregateComplete": false,
+    "artifactComplete": false,
+    "activeGoalId": "G001-per-278-ui-state-real-time-plan-p1-t"
+  },
+  "planSummary": {
+    "total": 13,
+    "pending": 11,
+    "inProgress": 1,
+    "complete": 1,
+    "failed": 0,
+    "reviewBlocked": 0,
+    "historicalReviewBlocked": 0,
+    "needsUserDecision": 0,
+    "superseded": 0,
+    "steeringBlocked": 0,
+    "aggregateComplete": false,
+    "artifactComplete": false,
+    "activeGoalId": "G001-per-278-ui-state-real-time-plan-p1-t"
+  },
+  "plan": {
+    "version": 1,
+    "createdAt": "2026-09-16T02:52:55.585Z",
+    "updatedAt": "2026-10-11T00:41:57.848Z",
+    "briefPath": ".omx/ultragoal/brief.md",
+    "goalsPath": ".omx/ultragoal/goals.json",
+    "ledgerPath": ".omx/ultragoal/ledger.jsonl",
+    "codexGoalMode": "aggregate",
+    "goals": [
+      {
+        "id": "G001-per-278-ui-state-real-time-plan-p1-t",
+        "title": "PER-278: UI State & Real-Time Plan (P1) — TanStack Query, zustand, live shell",
+        "objective": "Complete PER-278: UI State & Real-Time Plan (P1) — TanStack Query, zustand, live shell. Follow the fetched task and authoritative attachments in .omx/task-intake/PER-278.md, preserving scope and prerequisites; recover relevant existing work, implement required deliverables, root-run sequential verification on consolidated changes including appropriate live gates, independent review, and update Multica to accurately reflect merge-readiness and linked stacked PR.",
+        "status": "in_progress",
+        "attempt": 1,
+        "createdAt": "2026-09-16T02:52:55.585Z",
+        "updatedAt": "2026-10-10T00:25:40.685Z",
+        "startedAt": "2026-09-16T02:52:56.667Z"
+      },
+      {
+        "id": "G002-per-279-ui-visual-cleanup-plan-desig",
+        "title": "PER-279: UI Visual Cleanup Plan — design-system consolidation, pixel-neutral",
+        "objective": "Complete PER-279: UI Visual Cleanup Plan — design-system consolidation, pixel-neutral. Follow the fetched task and authoritative attachments in .omx/task-intake/PER-279.md, preserving scope and prerequisites; recover relevant existing work, implement required deliverables, root-run sequential verification on consolidated changes including appropriate live gates, independent review, and update Multica to accurately reflect merge-readiness and linked stacked PR. On every resume, read .omx/ultragoal/ORCA-COORDINATION.md and orchestrate through the existing Orca run_e6054e76e9fc with original Sol monitor ctx_37b4d0a3c14f and its native goal. Preserve gpt-6.1-sol/xhigh leader, bounded Luna private implementation, independent Sol source review, and Root as the single serial executable/build/device validation owner. Apply the user-approved important main-flow validation scope on all supported platforms; retain closed results and avoid expanding edge-case matrices or repeating unchanged passing checks. Coordinate resource sharing, builds, Android access and exhaustion through that same Orca monitor. Continue the same native Codex aggregate with supported Ultragoal evidence checkpoints.",
+        "status": "pending",
+        "attempt": 0,
+        "createdAt": "2026-09-16T02:52:55.585Z",
+        "updatedAt": "2026-10-11T00:41:52.769Z",
+        "steeringEvidence": "User explicitly requested same durable native goal, original Orca run/monitor on every resume, parallel Luna implementation/Sol review and one serial owner, plus bounded important main flows rather than expanding edge-case checks. Actual matching native snapshotV51 remains ACTIVE/unbudgeted; original Orca run/monitor and reviewed V50/V51 source evidence are retained.",
+        "steeringRationale": "Make user-authorized orchestration and resume constraints explicit in the existing pending objective while retaining all original deliverables, acceptance requirements, status and aggregate identity."
+      },
+      {
+        "id": "G003-per-281-native-event-bridge-plan-gen",
+        "title": "PER-281: Native Event Bridge Plan — general Rust→UI event streaming",
+        "objective": "Complete PER-281: Native Event Bridge Plan — general Rust→UI event streaming. Follow the fetched task and authoritative attachments in .omx/task-intake/PER-281.md, preserving scope and prerequisites; recover relevant existing work, implement required deliverables, root-run sequential verification on consolidated changes including appropriate live gates, independent review, and update Multica to accurately reflect merge-readiness and linked stacked PR. On every resume, read .omx/ultragoal/ORCA-COORDINATION.md and orchestrate through the existing Orca run_e6054e76e9fc with original Sol monitor ctx_37b4d0a3c14f and its native goal. Preserve gpt-6.1-sol/xhigh leader, bounded Luna private implementation, independent Sol source review, and Root as the single serial executable/build/device validation owner. Apply the user-approved important main-flow validation scope on all supported platforms; retain closed results and avoid expanding edge-case matrices or repeating unchanged passing checks. Coordinate resource sharing, builds, Android access and exhaustion through that same Orca monitor. Continue the same native Codex aggregate with supported Ultragoal evidence checkpoints.",
+        "status": "pending",
+        "attempt": 0,
+        "createdAt": "2026-09-16T02:52:55.585Z",
+        "updatedAt": "2026-10-11T00:41:53.401Z",
+        "steeringEvidence": "User explicitly requested same durable native goal, original Orca run/monitor on every resume, parallel Luna implementation/Sol review and one serial owner, plus bounded important main flows rather than expanding edge-case checks. Actual matching native snapshotV51 remains ACTIVE/unbudgeted; original Orca run/monitor and reviewed V50/V51 source evidence are retained.",
+        "steeringRationale": "Make user-authorized orchestration and resume constraints explicit in the existing pending objective while retaining all original deliverables, acceptance requirements, status and aggregate identity."
+      },
+      {
+        "id": "G004-per-282-ui-maintainability-plan-feat",
+        "title": "PER-282: UI Maintainability Plan — feature manifest, view decomposition, UX state standard",
+        "objective": "Complete PER-282: UI Maintainability Plan — feature manifest, view decomposition, UX state standard. Follow the fetched task and authoritative attachments in .omx/task-intake/PER-282.md, preserving scope and prerequisites; recover relevant existing work, implement required deliverables, root-run sequential verification on consolidated changes including appropriate live gates, independent review, and update Multica to accurately reflect merge-readiness and linked stacked PR. On every resume, read .omx/ultragoal/ORCA-COORDINATION.md and orchestrate through the existing Orca run_e6054e76e9fc with original Sol monitor ctx_37b4d0a3c14f and its native goal. Preserve gpt-6.1-sol/xhigh leader, bounded Luna private implementation, independent Sol source review, and Root as the single serial executable/build/device validation owner. Apply the user-approved important main-flow validation scope on all supported platforms; retain closed results and avoid expanding edge-case matrices or repeating unchanged passing checks. Coordinate resource sharing, builds, Android access and exhaustion through that same Orca monitor. Continue the same native Codex aggregate with supported Ultragoal evidence checkpoints.",
+        "status": "pending",
+        "attempt": 0,
+        "createdAt": "2026-09-16T02:52:55.585Z",
+        "updatedAt": "2026-10-11T00:41:54.040Z",
+        "steeringEvidence": "User explicitly requested same durable native goal, original Orca run/monitor on every resume, parallel Luna implementation/Sol review and one serial owner, plus bounded important main flows rather than expanding edge-case checks. Actual matching native snapshotV51 remains ACTIVE/unbudgeted; original Orca run/monitor and reviewed V50/V51 source evidence are retained.",
+        "steeringRationale": "Make user-authorized orchestration and resume constraints explicit in the existing pending objective while retaining all original deliverables, acceptance requirements, status and aggregate identity."
+      },
+      {
+        "id": "G005-per-283-ui-architecture-review-refer",
+        "title": "PER-283: UI Architecture Review — reference report (evidence base for the 6 UI plans)",
+        "objective": "Complete PER-283: UI Architecture Review — reference report (evidence base for the 6 UI plans). Follow the fetched task and authoritative attachments in .omx/task-intake/PER-283.md, preserving scope and prerequisites; recover relevant existing work, implement required deliverables, root-run sequential verification on consolidated changes including appropriate live gates, independent review, and update Multica to accurately reflect merge-readiness and linked stacked PR. Reference report only: reconcile each finding against implemented UI plan evidence, do not invent new implementation scope.",
+        "status": "complete",
+        "attempt": 0,
+        "createdAt": "2026-09-16T02:52:55.585Z",
+        "updatedAt": "2026-09-17T02:35:59.991Z",
+        "completedAt": "2026-09-17T02:35:59.991Z",
+        "evidence": ".omx/evidence/ui-original-task-closure-map-20260917.md: full reference finding disposition authored by Luna and independently accepted by root Astra; original hosted health/config claim corrected; implementation and runtime gates explicitly remain pending. PER-283 is reference-only; no code or runtime acceptance claimed."
+      },
+      {
+        "id": "G006-per-277-ui-performance-plan-p0-andro",
+        "title": "PER-277: UI Performance Plan (P0) — Android navigation & streaming performance",
+        "objective": "Complete PER-277: UI Performance Plan (P0) — Android navigation & streaming performance. Follow the fetched task and authoritative attachments in .omx/task-intake/PER-277.md, preserving scope and prerequisites; recover relevant existing work, implement required deliverables, root-run sequential verification on consolidated changes including appropriate live gates, independent review, and update Multica to accurately reflect merge-readiness and linked stacked PR. User reports Stage 1 complete: reconcile merged work/status and validate regressions; do not restart its implementation. On every resume, read .omx/ultragoal/ORCA-COORDINATION.md and orchestrate through the existing Orca run_e6054e76e9fc with original Sol monitor ctx_37b4d0a3c14f and its native goal. Preserve gpt-6.1-sol/xhigh leader, bounded Luna private implementation, independent Sol source review, and Root as the single serial executable/build/device validation owner. Apply the user-approved important main-flow validation scope on all supported platforms; retain closed results and avoid expanding edge-case matrices or repeating unchanged passing checks. Coordinate resource sharing, builds, Android access and exhaustion through that same Orca monitor. Continue the same native Codex aggregate with supported Ultragoal evidence checkpoints.",
+        "status": "pending",
+        "attempt": 0,
+        "createdAt": "2026-09-16T02:52:55.585Z",
+        "updatedAt": "2026-10-11T00:41:54.630Z",
+        "steeringEvidence": "User explicitly requested same durable native goal, original Orca run/monitor on every resume, parallel Luna implementation/Sol review and one serial owner, plus bounded important main flows rather than expanding edge-case checks. Actual matching native snapshotV51 remains ACTIVE/unbudgeted; original Orca run/monitor and reviewed V50/V51 source evidence are retained.",
+        "steeringRationale": "Make user-authorized orchestration and resume constraints explicit in the existing pending objective while retaining all original deliverables, acceptance requirements, status and aggregate identity."
+      },
+      {
+        "id": "G007-per-286-fix-native-speech-stage-rout",
+        "title": "PER-286: Fix native speech stage routing, mesh offload and fallback across platforms and UI",
+        "objective": "Complete PER-286: Fix native speech stage routing, mesh offload and fallback across platforms and UI. Follow the fetched task and authoritative attachments in .omx/task-intake/PER-286.md, preserving scope and prerequisites; recover relevant existing work, implement required deliverables, root-run sequential verification on consolidated changes including appropriate live gates, independent review, and update Multica to accurately reflect merge-readiness and linked stacked PR. On every resume, read .omx/ultragoal/ORCA-COORDINATION.md and orchestrate through the existing Orca run_e6054e76e9fc with original Sol monitor ctx_37b4d0a3c14f and its native goal. Preserve gpt-6.1-sol/xhigh leader, bounded Luna private implementation, independent Sol source review, and Root as the single serial executable/build/device validation owner. Apply the user-approved important main-flow validation scope on all supported platforms; retain closed results and avoid expanding edge-case matrices or repeating unchanged passing checks. Coordinate resource sharing, builds, Android access and exhaustion through that same Orca monitor. Continue the same native Codex aggregate with supported Ultragoal evidence checkpoints.",
+        "status": "pending",
+        "attempt": 0,
+        "createdAt": "2026-09-16T02:52:55.585Z",
+        "updatedAt": "2026-10-11T00:41:55.128Z",
+        "steeringEvidence": "User explicitly requested same durable native goal, original Orca run/monitor on every resume, parallel Luna implementation/Sol review and one serial owner, plus bounded important main flows rather than expanding edge-case checks. Actual matching native snapshotV51 remains ACTIVE/unbudgeted; original Orca run/monitor and reviewed V50/V51 source evidence are retained.",
+        "steeringRationale": "Make user-authorized orchestration and resume constraints explicit in the existing pending objective while retaining all original deliverables, acceptance requirements, status and aggregate identity."
+      },
+      {
+        "id": "G008-per-285-implement-aurora-end-to-end",
+        "title": "PER-285: Implement Aurora end-to-end telemetry across voice, text, tools, native and mesh",
+        "objective": "Complete PER-285: Implement Aurora end-to-end telemetry across voice, text, tools, native and mesh. Follow the fetched task and authoritative attachments in .omx/task-intake/PER-285.md, preserving scope and prerequisites; recover relevant existing work, implement required deliverables, root-run sequential verification on consolidated changes including appropriate live gates, independent review, and update Multica to accurately reflect merge-readiness and linked stacked PR. On every resume, read .omx/ultragoal/ORCA-COORDINATION.md and orchestrate through the existing Orca run_e6054e76e9fc with original Sol monitor ctx_37b4d0a3c14f and its native goal. Preserve gpt-6.1-sol/xhigh leader, bounded Luna private implementation, independent Sol source review, and Root as the single serial executable/build/device validation owner. Apply the user-approved important main-flow validation scope on all supported platforms; retain closed results and avoid expanding edge-case matrices or repeating unchanged passing checks. Coordinate resource sharing, builds, Android access and exhaustion through that same Orca monitor. Continue the same native Codex aggregate with supported Ultragoal evidence checkpoints.",
+        "status": "pending",
+        "attempt": 0,
+        "createdAt": "2026-09-16T02:52:55.585Z",
+        "updatedAt": "2026-10-11T00:41:55.586Z",
+        "steeringEvidence": "User explicitly requested same durable native goal, original Orca run/monitor on every resume, parallel Luna implementation/Sol review and one serial owner, plus bounded important main flows rather than expanding edge-case checks. Actual matching native snapshotV51 remains ACTIVE/unbudgeted; original Orca run/monitor and reviewed V50/V51 source evidence are retained.",
+        "steeringRationale": "Make user-authorized orchestration and resume constraints explicit in the existing pending objective while retaining all original deliverables, acceptance requirements, status and aggregate identity."
+      },
+      {
+        "id": "G009-per-284-on-device-inference-engines",
+        "title": "PER-284: On-device inference engines (Cactus / LiteRT-LM / llama.cpp) — offline mobile orchestration",
+        "objective": "Complete PER-284: On-device inference engines (Cactus / LiteRT-LM / llama.cpp) — offline mobile orchestration. Follow the fetched task and authoritative attachments in .omx/task-intake/PER-284.md, preserving scope and prerequisites; recover relevant existing work, implement required deliverables, root-run sequential verification on consolidated changes including appropriate live gates, independent review, and update Multica to accurately reflect merge-readiness and linked stacked PR. On every resume, read .omx/ultragoal/ORCA-COORDINATION.md and orchestrate through the existing Orca run_e6054e76e9fc with original Sol monitor ctx_37b4d0a3c14f and its native goal. Preserve gpt-6.1-sol/xhigh leader, bounded Luna private implementation, independent Sol source review, and Root as the single serial executable/build/device validation owner. Apply the user-approved important main-flow validation scope on all supported platforms; retain closed results and avoid expanding edge-case matrices or repeating unchanged passing checks. Coordinate resource sharing, builds, Android access and exhaustion through that same Orca monitor. Continue the same native Codex aggregate with supported Ultragoal evidence checkpoints.",
+        "status": "pending",
+        "attempt": 0,
+        "createdAt": "2026-09-16T02:52:55.585Z",
+        "updatedAt": "2026-10-11T00:41:56.035Z",
+        "steeringEvidence": "User explicitly requested same durable native goal, original Orca run/monitor on every resume, parallel Luna implementation/Sol review and one serial owner, plus bounded important main flows rather than expanding edge-case checks. Actual matching native snapshotV51 remains ACTIVE/unbudgeted; original Orca run/monitor and reviewed V50/V51 source evidence are retained.",
+        "steeringRationale": "Make user-authorized orchestration and resume constraints explicit in the existing pending objective while retaining all original deliverables, acceptance requirements, status and aggregate identity."
+      },
+      {
+        "id": "G010-per-289-per-288-add-lightweight-tran",
+        "title": "PER-289: [PER-288] Add lightweight transcript archive and background-transcription config contracts",
+        "objective": "Complete PER-289: [PER-288] Add lightweight transcript archive and background-transcription config contracts. Follow the fetched task and authoritative attachments in .omx/task-intake/PER-289.md, preserving scope and prerequisites; recover relevant existing work, implement required deliverables, root-run sequential verification on consolidated changes including appropriate live gates, independent review, and update Multica to accurately reflect merge-readiness and linked stacked PR. On every resume, read .omx/ultragoal/ORCA-COORDINATION.md and orchestrate through the existing Orca run_e6054e76e9fc with original Sol monitor ctx_37b4d0a3c14f and its native goal. Preserve gpt-6.1-sol/xhigh leader, bounded Luna private implementation, independent Sol source review, and Root as the single serial executable/build/device validation owner. Apply the user-approved important main-flow validation scope on all supported platforms; retain closed results and avoid expanding edge-case matrices or repeating unchanged passing checks. Coordinate resource sharing, builds, Android access and exhaustion through that same Orca monitor. Continue the same native Codex aggregate with supported Ultragoal evidence checkpoints.",
+        "status": "pending",
+        "attempt": 0,
+        "createdAt": "2026-09-16T02:52:55.585Z",
+        "updatedAt": "2026-10-11T00:41:56.492Z",
+        "steeringEvidence": "User explicitly requested same durable native goal, original Orca run/monitor on every resume, parallel Luna implementation/Sol review and one serial owner, plus bounded important main flows rather than expanding edge-case checks. Actual matching native snapshotV51 remains ACTIVE/unbudgeted; original Orca run/monitor and reviewed V50/V51 source evidence are retained.",
+        "steeringRationale": "Make user-authorized orchestration and resume constraints explicit in the existing pending objective while retaining all original deliverables, acceptance requirements, status and aggregate identity."
+      },
+      {
+        "id": "G011-per-290-per-288-add-lightweight-node",
+        "title": "PER-290: [PER-288] Add lightweight-node settings and Android notification transcription controls",
+        "objective": "Complete PER-290: [PER-288] Add lightweight-node settings and Android notification transcription controls. Follow the fetched task and authoritative attachments in .omx/task-intake/PER-290.md, preserving scope and prerequisites; recover relevant existing work, implement required deliverables, root-run sequential verification on consolidated changes including appropriate live gates, independent review, and update Multica to accurately reflect merge-readiness and linked stacked PR. On every resume, read .omx/ultragoal/ORCA-COORDINATION.md and orchestrate through the existing Orca run_e6054e76e9fc with original Sol monitor ctx_37b4d0a3c14f and its native goal. Preserve gpt-6.1-sol/xhigh leader, bounded Luna private implementation, independent Sol source review, and Root as the single serial executable/build/device validation owner. Apply the user-approved important main-flow validation scope on all supported platforms; retain closed results and avoid expanding edge-case matrices or repeating unchanged passing checks. Coordinate resource sharing, builds, Android access and exhaustion through that same Orca monitor. Continue the same native Codex aggregate with supported Ultragoal evidence checkpoints.",
+        "status": "pending",
+        "attempt": 0,
+        "createdAt": "2026-09-16T02:52:55.585Z",
+        "updatedAt": "2026-10-11T00:41:56.947Z",
+        "steeringEvidence": "User explicitly requested same durable native goal, original Orca run/monitor on every resume, parallel Luna implementation/Sol review and one serial owner, plus bounded important main flows rather than expanding edge-case checks. Actual matching native snapshotV51 remains ACTIVE/unbudgeted; original Orca run/monitor and reviewed V50/V51 source evidence are retained.",
+        "steeringRationale": "Make user-authorized orchestration and resume constraints explicit in the existing pending objective while retaining all original deliverables, acceptance requirements, status and aggregate identity."
+      },
+      {
+        "id": "G012-per-291-per-288-plan-the-transcript",
+        "title": "PER-291: [PER-288] Plan the transcript library UX against accepted capture contracts",
+        "objective": "Complete PER-291: [PER-288] Plan the transcript library UX against accepted capture contracts. Follow the fetched task and authoritative attachments in .omx/task-intake/PER-291.md, preserving scope and prerequisites; recover relevant existing work, implement required deliverables, root-run sequential verification on consolidated changes including appropriate live gates, independent review, and update Multica to accurately reflect merge-readiness and linked stacked PR. Plan/spec only; do not implement the transcript-library screen. On every resume, read .omx/ultragoal/ORCA-COORDINATION.md and orchestrate through the existing Orca run_e6054e76e9fc with original Sol monitor ctx_37b4d0a3c14f and its native goal. Preserve gpt-6.1-sol/xhigh leader, bounded Luna private implementation, independent Sol source review, and Root as the single serial executable/build/device validation owner. Apply the user-approved important main-flow validation scope on all supported platforms; retain closed results and avoid expanding edge-case matrices or repeating unchanged passing checks. Coordinate resource sharing, builds, Android access and exhaustion through that same Orca monitor. Continue the same native Codex aggregate with supported Ultragoal evidence checkpoints.",
+        "status": "pending",
+        "attempt": 0,
+        "createdAt": "2026-09-16T02:52:55.585Z",
+        "updatedAt": "2026-10-11T00:41:57.399Z",
+        "steeringEvidence": "User explicitly requested same durable native goal, original Orca run/monitor on every resume, parallel Luna implementation/Sol review and one serial owner, plus bounded important main flows rather than expanding edge-case checks. Actual matching native snapshotV51 remains ACTIVE/unbudgeted; original Orca run/monitor and reviewed V50/V51 source evidence are retained.",
+        "steeringRationale": "Make user-authorized orchestration and resume constraints explicit in the existing pending objective while retaining all original deliverables, acceptance requirements, status and aggregate identity."
+      },
+      {
+        "id": "G013-per-288-add-database-and-configurati",
+        "title": "PER-288: Add database and configuration support for lightweight-node background transcription",
+        "objective": "Complete PER-288: Add database and configuration support for lightweight-node background transcription. Follow the fetched task and authoritative attachments in .omx/task-intake/PER-288.md, preserving scope and prerequisites; recover relevant existing work, implement required deliverables, root-run sequential verification on consolidated changes including appropriate live gates, independent review, and update Multica to accurately reflect merge-readiness and linked stacked PR. On every resume, read .omx/ultragoal/ORCA-COORDINATION.md and orchestrate through the existing Orca run_e6054e76e9fc with original Sol monitor ctx_37b4d0a3c14f and its native goal. Preserve gpt-6.1-sol/xhigh leader, bounded Luna private implementation, independent Sol source review, and Root as the single serial executable/build/device validation owner. Apply the user-approved important main-flow validation scope on all supported platforms; retain closed results and avoid expanding edge-case matrices or repeating unchanged passing checks. Coordinate resource sharing, builds, Android access and exhaustion through that same Orca monitor. Continue the same native Codex aggregate with supported Ultragoal evidence checkpoints.",
+        "status": "pending",
+        "attempt": 0,
+        "createdAt": "2026-09-16T02:52:55.585Z",
+        "updatedAt": "2026-10-11T00:41:57.848Z",
+        "steeringEvidence": "User explicitly requested same durable native goal, original Orca run/monitor on every resume, parallel Luna implementation/Sol review and one serial owner, plus bounded important main flows rather than expanding edge-case checks. Actual matching native snapshotV51 remains ACTIVE/unbudgeted; original Orca run/monitor and reviewed V50/V51 source evidence are retained.",
+        "steeringRationale": "Make user-authorized orchestration and resume constraints explicit in the existing pending objective while retaining all original deliverables, acceptance requirements, status and aggregate identity."
+      }
+    ],
+    "codexObjective": "Complete the durable ultragoal plan in .omx/ultragoal/goals.json, including later accepted/appended stories, under the original brief constraints; use .omx/ultragoal/ledger.jsonl as the audit trail.",
+    "activeGoalId": "G001-per-278-ui-state-real-time-plan-p1-t"
+  }
+}

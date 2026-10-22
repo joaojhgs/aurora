@@ -1,0 +1,9 @@
+{
+  "recordedAt": "2026-10-18T06:18:03.670578+00:00",
+  "scope": "Root metadata reporter only; not the experiment harness",
+  "toolChunk": "4eb3ff",
+  "exitCode": 1,
+  "stderr": "File \"<stdin>\", line 40\n    if re.search(r'^Attempted measured outcomes: .*\n                 ^\nSyntaxError: unterminated string literal (detected at line 40)",
+  "effect": "Python compile failed before executing any statements. No campaign, source, settings, input, goal or process mutation.",
+  "recovery": "Corrected JavaScript replacement-string expansion using literal concatenation; same Root checkpoint executed successfully. No SUT rerun."
+}

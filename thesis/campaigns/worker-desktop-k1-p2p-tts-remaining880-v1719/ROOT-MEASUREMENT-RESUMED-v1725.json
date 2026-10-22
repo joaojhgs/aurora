@@ -1,0 +1,132 @@
+{
+  "at": "2026-10-20T04:52:15.600261+00:00",
+  "status": "ACTUAL_REMAINING880_MEASUREMENT_RESUMED",
+  "nativeGoal": "01a112a5-d6bb-74e2-bf7c-ace73cb513b5",
+  "nativeGoalStatus": "active",
+  "run": "run_e6054e76e9fc",
+  "originalMonitor": "ctx_37b4d0a3c14f",
+  "conditionManifestSha256": "120dd99a4de0a242c30ebe4bb46d854ca77313c482a0c74f024edb624829a6e8",
+  "actors": [
+    {
+      "pid": 2360747,
+      "present": true,
+      "startTicks": 124937766,
+      "state": "S"
+    },
+    {
+      "pid": 2360768,
+      "present": true,
+      "startTicks": 124937952,
+      "state": "R"
+    },
+    {
+      "pid": 2361201,
+      "present": true,
+      "startTicks": 124942780,
+      "state": "S"
+    },
+    {
+      "pid": 2361202,
+      "present": false,
+      "startTicks": null,
+      "state": null
+    }
+  ],
+  "providerReceiver": {
+    "pid": 3194394,
+    "startTicks": 22320527
+  },
+  "providerManifestSha256": "245d1739111a7162287fcece91dc005958722e062a1e028613c3f85e21e3d339",
+  "warmups": {
+    "planned": 15,
+    "correct": 15,
+    "localSttNativeJoins": 15,
+    "localLlmNativeJoins": 15,
+    "remotePiperNativeJoins": 15,
+    "strictProofSha256": "9b1034c63ded434536a8957574825b789062a8cde15e2ffa65dcecaf9b152fe8",
+    "route": {
+      "continuous_route_stability_claimed": false,
+      "frozen_manifest_sha256": "120dd99a4de0a242c30ebe4bb46d854ca77313c482a0c74f024edb624829a6e8",
+      "joined_receiver_calls": 15,
+      "observed_calls": 15,
+      "observed_path_class_rows": {
+        "after": {
+          "direct": 15,
+          "relay": 0
+        },
+        "before": {
+          "direct": 15,
+          "relay": 0
+        }
+      },
+      "requester_pid": 2360768,
+      "route_observer_sha256": "2c23fd2bc69b00b746c2c5dc28c1d2b77428016314045363dceea5fe9ee5cdbb",
+      "route_runtime_pins_sha256": "db270c9c6373b24e669bdf2b002da5fadb3e3841ee1ecc6ad8dec5a7ad26daf8",
+      "route_sink_sha256": "2b235781c15410e6dbfc8829971a34e8334714cdf015053edfd127756325cfb8",
+      "runtime_source_pin_status": "verified_before_observer_install",
+      "schema": "aurora.mesh_route_warmup_gate.v1",
+      "sink_dropped_rows": 0,
+      "sink_invalid_rows": 0,
+      "sink_oversize_rows": 0,
+      "sink_quota_rows": 0,
+      "sink_written_rows": 15,
+      "snapshot_scope": "before_after_snapshots_all_pc_transports_no_pair_id_no_continuous_stability",
+      "status": "passed"
+    },
+    "localProof": "thesis/campaigns/worker-desktop-k1-p2p-tts-remaining880-v1719/LOCAL-STT-LLM-WARMUP-PROOF.json"
+  },
+  "firstNewMeasured": {
+    "globalIndex": 21,
+    "flowDurationMs": 41084.13314,
+    "requestId": "audio-request-24624010cb454e14895193ff54fe5ebc",
+    "correlationId": "audio-campaign-2763b617c83c43029a515073bdb2917c",
+    "case": {
+      "path": "thesis/campaigns/worker-desktop-k1-p2p-tts-remaining880-v1719/attempts/attempt-0016-measured.jsonl",
+      "bytes": 4912,
+      "sha256": "3949f973d777868014b4d19c0e982bddcf56c8b96d756011bd0dc4e0ec001ad2"
+    },
+    "audio": {
+      "path": "thesis/campaigns/worker-desktop-k1-p2p-tts-remaining880-v1719/audio/977b1154a103cfd3a61dd708e685fb44545ad5654f3abc436fa428833b142403.wav",
+      "sha256": "977b1154a103cfd3a61dd708e685fb44545ad5654f3abc436fa428833b142403",
+      "bytes": 31788,
+      "sampleRate": 22050,
+      "channels": 1,
+      "sampleWidth": 2,
+      "frames": 15872
+    }
+  },
+  "newEpoch": {
+    "attempted": 3,
+    "correct": 3,
+    "failed": 0,
+    "planned": 880,
+    "unattempted": 877
+  },
+  "conditionCounts": {
+    "attempted": 23,
+    "correct": 22,
+    "failed": 1,
+    "unattempted": 877,
+    "planned": 900,
+    "excludedWarmupsAcrossEpochs": 30
+  },
+  "currentCustody": {
+    "at": "2026-10-20T04:52:09.408964+00:00",
+    "sequence": 17,
+    "cases": 18,
+    "files": 189,
+    "bytes": 2896563
+  },
+  "sourceReviewAndSmoke": "Sol PASS;4 classifier checks PASS CLOSED",
+  "collectorCorrection": "Same retained full98Piper binding rows scoped by actual current15native span clockrange to30raw rows; unchanged strict proof generator passed. Original prior34calls/error/fullraw preserved; no newSUT/control send/frozen edit.",
+  "forecast": {
+    "warmupP95MsType7": 56310.43659869999,
+    "measured880ForecastSecondsWith20PercentPlus300": 59763.82104822719,
+    "requesterRemainingSeconds": 67142.27794,
+    "providerRemainingSeconds": 68749.294512
+  },
+  "personalControl": "Finalizer provider read COMPLETE; finalizer2361202 retired. Root only; no uncertain/pending command.",
+  "methodology": "thesis/methodology/owner-requirements-20261020-d91ff7ee.md",
+  "nextGate": "Let SAMEremaining880 run; observe5minutes or failure/terminal; no extra unchanged tests/reviews/old900replay/newworkers/resume.",
+  "nextObservationUtc": "2026-10-20T04:57:15.603824+00:00"
+}

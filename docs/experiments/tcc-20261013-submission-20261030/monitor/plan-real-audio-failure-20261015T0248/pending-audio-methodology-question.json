@@ -1,0 +1,10 @@
+{
+  "questionThread": "msg_601c032ace2a",
+  "status": "Root answered routing via actual status msg_cd32103140d5; native OWNER answer remains pending",
+  "question": "Existing owner-authorized matched calibration condition or Root-routed owner decision for fixed-audio/model correction; no blind identical repeat/known-wrong900",
+  "firstTimeoutMs": 50000,
+  "resumedSameThread": true,
+  "phase2MeasuredAllowed": false,
+  "rootResponseMessage": "msg_cd32103140d5",
+  "ownerApprovalEstablished": false
+}

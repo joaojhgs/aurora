@@ -1,0 +1,21 @@
+{
+  "id": "remote-cli-1792640793727",
+  "ok": true,
+  "result": {
+    "runId": "run_e6054e76e9fc",
+    "deliveryId": null,
+    "messages": [],
+    "count": 0,
+    "acknowledged": "delivery_ead8919142a4",
+    "timedOut": false,
+    "cancelled": false,
+    "connectionLost": false,
+    "mutation": {
+      "requestId": "964d4a2b-f739-4d58-a1bb-5830d82ab219",
+      "replayed": false
+    }
+  },
+  "_meta": {
+    "runtimeId": "cc9e3275-28c6-4c45-85cc-bdcd2262aa7d"
+  }
+}

@@ -1,0 +1,92 @@
+[
+  {
+    "path": "root-manifest.json",
+    "original_sha256": "22324eff5a04d8143dfee7a2504008ece20960ea6b6bcad1a8726fc14b76a6a1",
+    "export_sha256": "2497457c46637d3dea83e29c7c9d25ac3e405f4fc89c5ed104bc87ef831c7f4e",
+    "transformation": "omit private config/env hashes"
+  },
+  {
+    "path": "root-result.json",
+    "original_sha256": "ced591783f43c08791ea5c8e4813d05683654e9cb0cb7dbf8b9acf5717970afc",
+    "export_sha256": "ff0d4feca0672aeeeb1d99f7e62c2187449bda409b8cc2861ae048e61d01a99e",
+    "transformation": "omit private config/env hashes"
+  },
+  {
+    "path": "requests.jsonl",
+    "original_sha256": "b61b03fb9020de09b5535dca709fcaafcbc24e515b11c9caa656c1aeb732debd",
+    "export_sha256": "b61b03fb9020de09b5535dca709fcaafcbc24e515b11c9caa656c1aeb732debd",
+    "transformation": "byte-identical"
+  },
+  {
+    "path": "requests.jsonl.manifest.json",
+    "original_sha256": "90da52d6aff3993eaa0fd666a684694449a8176027a48c5c8a3c0ca52a7f62ce",
+    "export_sha256": "90da52d6aff3993eaa0fd666a684694449a8176027a48c5c8a3c0ca52a7f62ce",
+    "transformation": "byte-identical"
+  },
+  {
+    "path": "requests.jsonl.cleanup.json",
+    "original_sha256": "f793a0e000b816c5cca3f846d7dcbeeb6e2e5e2644a6d1ff002b2869afd60521",
+    "export_sha256": "f793a0e000b816c5cca3f846d7dcbeeb6e2e5e2644a6d1ff002b2869afd60521",
+    "transformation": "byte-identical"
+  },
+  {
+    "path": "assistant-stdout.log",
+    "original_sha256": "5ec1a8e6cd7bb3bde739adb73c95ca7c404894452ea886f2c0d3bddb60111baa",
+    "export_sha256": "cacf1d9f321a37fe3420f16e0436ab7f08b3d629c0849264af37d7d37292b502",
+    "transformation": "conservative entire credential-field line redaction: 1 lines"
+  },
+  {
+    "path": "assistant-stderr.log",
+    "original_sha256": "692c199167c0fbe47833b0d9cfb60bd5c4f7a9d3046e571cf6d788100d0d678e",
+    "export_sha256": "692c199167c0fbe47833b0d9cfb60bd5c4f7a9d3046e571cf6d788100d0d678e",
+    "transformation": "byte-identical"
+  },
+  {
+    "path": "assistant-result.json",
+    "original_sha256": "6565c91b21d7e6ee7dff647f8388a562c272940080deb9d78b9a68c33d4c1b5b",
+    "export_sha256": "6565c91b21d7e6ee7dff647f8388a562c272940080deb9d78b9a68c33d4c1b5b",
+    "transformation": "byte-identical"
+  },
+  {
+    "path": "redis-start-stdout.log",
+    "original_sha256": "090b5b3af0d4fc0d3707b8f78c0ffecdbb9ac8f1af0d649ba1b337d8fd7cc662",
+    "export_sha256": "090b5b3af0d4fc0d3707b8f78c0ffecdbb9ac8f1af0d649ba1b337d8fd7cc662",
+    "transformation": "byte-identical"
+  },
+  {
+    "path": "redis-start-stderr.log",
+    "original_sha256": "1a8f0d8a3e235967735f654604da2de493248c356bb3c7e4b17f9e93fe08c746",
+    "export_sha256": "1a8f0d8a3e235967735f654604da2de493248c356bb3c7e4b17f9e93fe08c746",
+    "transformation": "byte-identical"
+  },
+  {
+    "path": "redis-start-result.json",
+    "original_sha256": "8f00392fd444b44660349330c5414d16c87da59f1134861db63b8c06a9e84272",
+    "export_sha256": "8f00392fd444b44660349330c5414d16c87da59f1134861db63b8c06a9e84272",
+    "transformation": "byte-identical"
+  },
+  {
+    "path": "redis-stop-stdout.log",
+    "original_sha256": "8df25bd9b06f19d8de094d458a969532506be254acf8dd277d98f00c489cecd6",
+    "export_sha256": "8df25bd9b06f19d8de094d458a969532506be254acf8dd277d98f00c489cecd6",
+    "transformation": "byte-identical"
+  },
+  {
+    "path": "redis-stop-stderr.log",
+    "original_sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+    "export_sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+    "transformation": "byte-identical"
+  },
+  {
+    "path": "redis-stop-result.json",
+    "original_sha256": "339c813beb8989ef7668a0a96be615255b128b884c33b65d182369163b7cbe8e",
+    "export_sha256": "339c813beb8989ef7668a0a96be615255b128b884c33b65d182369163b7cbe8e",
+    "transformation": "byte-identical"
+  },
+  {
+    "path": "redis-readiness.json",
+    "original_sha256": "9ffc854f3cba338590a841fa6b4d197fec249f84e3519f739fab391955918340",
+    "export_sha256": "9ffc854f3cba338590a841fa6b4d197fec249f84e3519f739fab391955918340",
+    "transformation": "byte-identical"
+  }
+]

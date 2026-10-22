@@ -1,0 +1,63 @@
+{
+  "status": "EXACT_REVIEWED_K3_STT_CANDIDATE_APPLIED_FOUR_MAIN_CHECKS_AND_SDK_TYPECHECK_PASS",
+  "at": "2026-10-20T20:46:42.565230+00:00",
+  "apply": {
+    "path": "thesis/evidence/k3-stt-runtime-validation-v1905/APPLY.json",
+    "bytes": 2045,
+    "sha256": "f7610fbf4d82d72e58350d12eb5786ddef1f597b1449976d1c4d1d7fec07b8fd"
+  },
+  "validation": {
+    "path": "thesis/evidence/k3-stt-runtime-validation-v1905/VALIDATION.json",
+    "bytes": 1624,
+    "sha256": "cfdaa2dad76aa96d6ab1014ee24e8ad986b8b6a8f4b8f9b7243e694e129acf3c"
+  },
+  "files": [
+    {
+      "path": "app/services/stt_transcription/service.py",
+      "bytes": 120508,
+      "sha256": "becf4222d99b02dbc4cac03ad098f275ccb288ceb35f44e945a521701ecaaf49"
+    },
+    {
+      "path": "app/shared/contracts/models/speech_runtime.py",
+      "bytes": 23082,
+      "sha256": "60113749d6cb874a478cd0551b4d39c7a024b02a3e99c0f0af4a2d2e095db9c7"
+    },
+    {
+      "path": "packages/aurora-sdk/src/webrtc/manifest.ts",
+      "bytes": 35101,
+      "sha256": "88d99c863d8bb218edd9afcd422de9a0206424efc81af344c91e94b2bd8eda6d"
+    },
+    {
+      "path": "packages/aurora-sdk/tests/webrtc-manifest.test.ts",
+      "bytes": 25274,
+      "sha256": "bae42355504d7f936c0c1843fdc7b71ea3927e81b6ab3a6ca63bfc64b467cafa"
+    },
+    {
+      "path": "tests/unit/stt_transcription/test_runtime_speech_announcement.py",
+      "bytes": 6246,
+      "sha256": "b0e6cf72ce657afcb29feb1404ef96fdde879e6a146cdf352f065a7294cc1098"
+    }
+  ],
+  "logs": [
+    {
+      "path": "thesis/evidence/k3-stt-runtime-validation-v1905/python-main-flows.log",
+      "bytes": 2268,
+      "sha256": "51bb4a7b3f2538be6a83a219ed5f13f22d6585448bef1887944c0b22b3dbc8c9"
+    },
+    {
+      "path": "thesis/evidence/k3-stt-runtime-validation-v1905/sdk-main-flow.log",
+      "bytes": 256,
+      "sha256": "84955f86e3d585cddf2524a0c47f65937ccebd8d38cd66b0d91a52ee87e72b94"
+    },
+    {
+      "path": "thesis/evidence/k3-stt-runtime-validation-v1905/sdk-typecheck.log",
+      "bytes": 130,
+      "sha256": "9acc90c34ce6843465963572ec08591d6cefd9d5c1fb0bbb59a122ffd8e3b936"
+    }
+  ],
+  "threePythonPlusOneSdkMainFlows": true,
+  "ordinaryRuntimeWarmups": "PENDING; unit evidence does not admit measured traffic",
+  "newInference": false,
+  "priorDirtySourcePreserved": true,
+  "oldK2FrozenSourcesUnchanged": true
+}

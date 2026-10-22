@@ -1,0 +1,354 @@
+{
+  "schema": "aurora.loaded-native-libraries-observation.v747",
+  "at": "2026-10-15T23:09:02.376999+00:00",
+  "pid": 3038148,
+  "pidStartTicks": "88098925",
+  "scope": "Read only maps for known active CPU owner; native libraries not read/hashed; source/build flags not inferred.",
+  "mappings": [
+    {
+      "path": "/home/developer/projects/aurora/.venv/lib/python3.11/site-packages/llama_cpp/lib/libggml-base.so.0",
+      "mappingPermissions": "r-xp",
+      "offset": "00000000",
+      "device": "08:01",
+      "inode": "2097355"
+    },
+    {
+      "path": "/home/developer/projects/aurora/.venv/lib/python3.11/site-packages/llama_cpp/lib/libggml-base.so.0",
+      "mappingPermissions": "---p",
+      "offset": "0008e000",
+      "device": "08:01",
+      "inode": "2097355"
+    },
+    {
+      "path": "/home/developer/projects/aurora/.venv/lib/python3.11/site-packages/llama_cpp/lib/libggml-base.so.0",
+      "mappingPermissions": "r--p",
+      "offset": "0008e000",
+      "device": "08:01",
+      "inode": "2097355"
+    },
+    {
+      "path": "/home/developer/projects/aurora/.venv/lib/python3.11/site-packages/llama_cpp/lib/libggml-base.so.0",
+      "mappingPermissions": "rw-p",
+      "offset": "00090000",
+      "device": "08:01",
+      "inode": "2097355"
+    },
+    {
+      "path": "/home/developer/projects/aurora/.venv/lib/python3.11/site-packages/llama_cpp/lib/libggml-cpu.so.0",
+      "mappingPermissions": "r-xp",
+      "offset": "00000000",
+      "device": "08:01",
+      "inode": "2097363"
+    },
+    {
+      "path": "/home/developer/projects/aurora/.venv/lib/python3.11/site-packages/llama_cpp/lib/libggml-cpu.so.0",
+      "mappingPermissions": "---p",
+      "offset": "000c6000",
+      "device": "08:01",
+      "inode": "2097363"
+    },
+    {
+      "path": "/home/developer/projects/aurora/.venv/lib/python3.11/site-packages/llama_cpp/lib/libggml-cpu.so.0",
+      "mappingPermissions": "r--p",
+      "offset": "000cf000",
+      "device": "08:01",
+      "inode": "2097363"
+    },
+    {
+      "path": "/home/developer/projects/aurora/.venv/lib/python3.11/site-packages/llama_cpp/lib/libggml-cpu.so.0",
+      "mappingPermissions": "rw-p",
+      "offset": "000d0000",
+      "device": "08:01",
+      "inode": "2097363"
+    },
+    {
+      "path": "/home/developer/projects/aurora/.venv/lib/python3.11/site-packages/llama_cpp/lib/libggml.so.0",
+      "mappingPermissions": "r-xp",
+      "offset": "00000000",
+      "device": "08:01",
+      "inode": "2097370"
+    },
+    {
+      "path": "/home/developer/projects/aurora/.venv/lib/python3.11/site-packages/llama_cpp/lib/libggml.so.0",
+      "mappingPermissions": "---p",
+      "offset": "00064000",
+      "device": "08:01",
+      "inode": "2097370"
+    },
+    {
+      "path": "/home/developer/projects/aurora/.venv/lib/python3.11/site-packages/llama_cpp/lib/libggml.so.0",
+      "mappingPermissions": "r--p",
+      "offset": "0006f000",
+      "device": "08:01",
+      "inode": "2097370"
+    },
+    {
+      "path": "/home/developer/projects/aurora/.venv/lib/python3.11/site-packages/llama_cpp/lib/libggml.so.0",
+      "mappingPermissions": "rw-p",
+      "offset": "00070000",
+      "device": "08:01",
+      "inode": "2097370"
+    },
+    {
+      "path": "/home/developer/projects/aurora/.venv/lib/python3.11/site-packages/llama_cpp/lib/libllama.so",
+      "mappingPermissions": "r-xp",
+      "offset": "00000000",
+      "device": "08:01",
+      "inode": "2097373"
+    },
+    {
+      "path": "/home/developer/projects/aurora/.venv/lib/python3.11/site-packages/llama_cpp/lib/libllama.so",
+      "mappingPermissions": "---p",
+      "offset": "00278000",
+      "device": "08:01",
+      "inode": "2097373"
+    },
+    {
+      "path": "/home/developer/projects/aurora/.venv/lib/python3.11/site-packages/llama_cpp/lib/libllama.so",
+      "mappingPermissions": "r--p",
+      "offset": "0027b000",
+      "device": "08:01",
+      "inode": "2097373"
+    },
+    {
+      "path": "/home/developer/projects/aurora/.venv/lib/python3.11/site-packages/llama_cpp/lib/libllama.so",
+      "mappingPermissions": "rw-p",
+      "offset": "00280000",
+      "device": "08:01",
+      "inode": "2097373"
+    },
+    {
+      "path": "/home/developer/projects/aurora/.git/aurora-handoff-import-20261006/cpu-full-audio-v483/env/lib/python3.11/site-packages/onnxruntime/capi/libonnxruntime_providers_shared.so",
+      "mappingPermissions": "r-xp",
+      "offset": "00000000",
+      "device": "08:01",
+      "inode": "4284530"
+    },
+    {
+      "path": "/home/developer/projects/aurora/.git/aurora-handoff-import-20261006/cpu-full-audio-v483/env/lib/python3.11/site-packages/onnxruntime/capi/libonnxruntime_providers_shared.so",
+      "mappingPermissions": "---p",
+      "offset": "00001000",
+      "device": "08:01",
+      "inode": "4284530"
+    },
+    {
+      "path": "/home/developer/projects/aurora/.git/aurora-handoff-import-20261006/cpu-full-audio-v483/env/lib/python3.11/site-packages/onnxruntime/capi/libonnxruntime_providers_shared.so",
+      "mappingPermissions": "r--p",
+      "offset": "0000f000",
+      "device": "08:01",
+      "inode": "4284530"
+    },
+    {
+      "path": "/home/developer/projects/aurora/.git/aurora-handoff-import-20261006/cpu-full-audio-v483/env/lib/python3.11/site-packages/ctranslate2.libs/libgomp-a49a47f9.so.1.0.0",
+      "mappingPermissions": "r-xp",
+      "offset": "00000000",
+      "device": "08:01",
+      "inode": "4284736"
+    },
+    {
+      "path": "/home/developer/projects/aurora/.git/aurora-handoff-import-20261006/cpu-full-audio-v483/env/lib/python3.11/site-packages/ctranslate2.libs/libgomp-a49a47f9.so.1.0.0",
+      "mappingPermissions": "---p",
+      "offset": "00033000",
+      "device": "08:01",
+      "inode": "4284736"
+    },
+    {
+      "path": "/home/developer/projects/aurora/.git/aurora-handoff-import-20261006/cpu-full-audio-v483/env/lib/python3.11/site-packages/ctranslate2.libs/libgomp-a49a47f9.so.1.0.0",
+      "mappingPermissions": "r--p",
+      "offset": "0003f000",
+      "device": "08:01",
+      "inode": "4284736"
+    },
+    {
+      "path": "/home/developer/projects/aurora/.git/aurora-handoff-import-20261006/cpu-full-audio-v483/env/lib/python3.11/site-packages/ctranslate2.libs/libgomp-a49a47f9.so.1.0.0",
+      "mappingPermissions": "rw-p",
+      "offset": "00040000",
+      "device": "08:01",
+      "inode": "4284736"
+    },
+    {
+      "path": "/home/developer/projects/aurora/.git/aurora-handoff-import-20261006/cpu-full-audio-v483/env/lib/python3.11/site-packages/ctranslate2.libs/libgomp-a49a47f9.so.1.0.0",
+      "mappingPermissions": "---p",
+      "offset": "00051000",
+      "device": "08:01",
+      "inode": "4284736"
+    },
+    {
+      "path": "/home/developer/projects/aurora/.git/aurora-handoff-import-20261006/cpu-full-audio-v483/env/lib/python3.11/site-packages/ctranslate2.libs/libgomp-a49a47f9.so.1.0.0",
+      "mappingPermissions": "rw-p",
+      "offset": "00050000",
+      "device": "08:01",
+      "inode": "4284736"
+    },
+    {
+      "path": "/home/developer/projects/aurora/.git/aurora-handoff-import-20261006/cpu-full-audio-v483/env/lib/python3.11/site-packages/ctranslate2.libs/libctranslate2-ac01f8af.so.4.7.1",
+      "mappingPermissions": "r--p",
+      "offset": "00000000",
+      "device": "08:01",
+      "inode": "4284715"
+    },
+    {
+      "path": "/home/developer/projects/aurora/.git/aurora-handoff-import-20261006/cpu-full-audio-v483/env/lib/python3.11/site-packages/ctranslate2.libs/libctranslate2-ac01f8af.so.4.7.1",
+      "mappingPermissions": "---p",
+      "offset": "0008f000",
+      "device": "08:01",
+      "inode": "4284715"
+    },
+    {
+      "path": "/home/developer/projects/aurora/.git/aurora-handoff-import-20261006/cpu-full-audio-v483/env/lib/python3.11/site-packages/ctranslate2.libs/libctranslate2-ac01f8af.so.4.7.1",
+      "mappingPermissions": "r-xp",
+      "offset": "00090000",
+      "device": "08:01",
+      "inode": "4284715"
+    },
+    {
+      "path": "/home/developer/projects/aurora/.git/aurora-handoff-import-20261006/cpu-full-audio-v483/env/lib/python3.11/site-packages/ctranslate2.libs/libctranslate2-ac01f8af.so.4.7.1",
+      "mappingPermissions": "---p",
+      "offset": "0021c000",
+      "device": "08:01",
+      "inode": "4284715"
+    },
+    {
+      "path": "/home/developer/projects/aurora/.git/aurora-handoff-import-20261006/cpu-full-audio-v483/env/lib/python3.11/site-packages/ctranslate2.libs/libctranslate2-ac01f8af.so.4.7.1",
+      "mappingPermissions": "r--p",
+      "offset": "00220000",
+      "device": "08:01",
+      "inode": "4284715"
+    },
+    {
+      "path": "/home/developer/projects/aurora/.git/aurora-handoff-import-20261006/cpu-full-audio-v483/env/lib/python3.11/site-packages/ctranslate2.libs/libctranslate2-ac01f8af.so.4.7.1",
+      "mappingPermissions": "---p",
+      "offset": "00277000",
+      "device": "08:01",
+      "inode": "4284715"
+    },
+    {
+      "path": "/home/developer/projects/aurora/.git/aurora-handoff-import-20261006/cpu-full-audio-v483/env/lib/python3.11/site-packages/ctranslate2.libs/libctranslate2-ac01f8af.so.4.7.1",
+      "mappingPermissions": "r--p",
+      "offset": "00278000",
+      "device": "08:01",
+      "inode": "4284715"
+    },
+    {
+      "path": "/home/developer/projects/aurora/.git/aurora-handoff-import-20261006/cpu-full-audio-v483/env/lib/python3.11/site-packages/ctranslate2.libs/libctranslate2-ac01f8af.so.4.7.1",
+      "mappingPermissions": "rw-p",
+      "offset": "00280000",
+      "device": "08:01",
+      "inode": "4284715"
+    },
+    {
+      "path": "/home/developer/projects/aurora/.git/aurora-handoff-import-20261006/cpu-full-audio-v483/env/lib/python3.11/site-packages/ctranslate2.libs/libctranslate2-ac01f8af.so.4.7.1",
+      "mappingPermissions": "---p",
+      "offset": "00296000",
+      "device": "08:01",
+      "inode": "4284715"
+    },
+    {
+      "path": "/home/developer/projects/aurora/.git/aurora-handoff-import-20261006/cpu-full-audio-v483/env/lib/python3.11/site-packages/ctranslate2.libs/libctranslate2-ac01f8af.so.4.7.1",
+      "mappingPermissions": "rw-p",
+      "offset": "00330000",
+      "device": "08:01",
+      "inode": "4284715"
+    },
+    {
+      "path": "/home/developer/projects/aurora/.git/aurora-handoff-import-20261006/cpu-full-audio-v483/env/lib/python3.11/site-packages/ctranslate2.libs/libctranslate2-ac01f8af.so.4.7.1",
+      "mappingPermissions": "---p",
+      "offset": "002f6000",
+      "device": "08:01",
+      "inode": "4284715"
+    },
+    {
+      "path": "/home/developer/projects/aurora/.git/aurora-handoff-import-20261006/cpu-full-audio-v483/env/lib/python3.11/site-packages/ctranslate2.libs/libctranslate2-ac01f8af.so.4.7.1",
+      "mappingPermissions": "rw-p",
+      "offset": "00390000",
+      "device": "08:01",
+      "inode": "4284715"
+    },
+    {
+      "path": "/home/developer/projects/aurora/.git/aurora-handoff-import-20261006/cpu-full-audio-v483/env/lib/python3.11/site-packages/ctranslate2/_ext.cpython-311-aarch64-linux-gnu.so",
+      "mappingPermissions": "r--p",
+      "offset": "00000000",
+      "device": "08:01",
+      "inode": "4284278"
+    },
+    {
+      "path": "/home/developer/projects/aurora/.git/aurora-handoff-import-20261006/cpu-full-audio-v483/env/lib/python3.11/site-packages/ctranslate2/_ext.cpython-311-aarch64-linux-gnu.so",
+      "mappingPermissions": "---p",
+      "offset": "00012000",
+      "device": "08:01",
+      "inode": "4284278"
+    },
+    {
+      "path": "/home/developer/projects/aurora/.git/aurora-handoff-import-20261006/cpu-full-audio-v483/env/lib/python3.11/site-packages/ctranslate2/_ext.cpython-311-aarch64-linux-gnu.so",
+      "mappingPermissions": "r-xp",
+      "offset": "00020000",
+      "device": "08:01",
+      "inode": "4284278"
+    },
+    {
+      "path": "/home/developer/projects/aurora/.git/aurora-handoff-import-20261006/cpu-full-audio-v483/env/lib/python3.11/site-packages/ctranslate2/_ext.cpython-311-aarch64-linux-gnu.so",
+      "mappingPermissions": "---p",
+      "offset": "000c7000",
+      "device": "08:01",
+      "inode": "4284278"
+    },
+    {
+      "path": "/home/developer/projects/aurora/.git/aurora-handoff-import-20261006/cpu-full-audio-v483/env/lib/python3.11/site-packages/ctranslate2/_ext.cpython-311-aarch64-linux-gnu.so",
+      "mappingPermissions": "r--p",
+      "offset": "000d0000",
+      "device": "08:01",
+      "inode": "4284278"
+    },
+    {
+      "path": "/home/developer/projects/aurora/.git/aurora-handoff-import-20261006/cpu-full-audio-v483/env/lib/python3.11/site-packages/ctranslate2/_ext.cpython-311-aarch64-linux-gnu.so",
+      "mappingPermissions": "---p",
+      "offset": "00110000",
+      "device": "08:01",
+      "inode": "4284278"
+    },
+    {
+      "path": "/home/developer/projects/aurora/.git/aurora-handoff-import-20261006/cpu-full-audio-v483/env/lib/python3.11/site-packages/ctranslate2/_ext.cpython-311-aarch64-linux-gnu.so",
+      "mappingPermissions": "r--p",
+      "offset": "0011d000",
+      "device": "08:01",
+      "inode": "4284278"
+    },
+    {
+      "path": "/home/developer/projects/aurora/.git/aurora-handoff-import-20261006/cpu-full-audio-v483/env/lib/python3.11/site-packages/ctranslate2/_ext.cpython-311-aarch64-linux-gnu.so",
+      "mappingPermissions": "rw-p",
+      "offset": "00120000",
+      "device": "08:01",
+      "inode": "4284278"
+    },
+    {
+      "path": "/home/developer/projects/aurora/.git/aurora-handoff-import-20261006/cpu-full-audio-v483/env/lib/python3.11/site-packages/ctranslate2/_ext.cpython-311-aarch64-linux-gnu.so",
+      "mappingPermissions": "---p",
+      "offset": "00121000",
+      "device": "08:01",
+      "inode": "4284278"
+    },
+    {
+      "path": "/home/developer/projects/aurora/.git/aurora-handoff-import-20261006/cpu-full-audio-v483/env/lib/python3.11/site-packages/ctranslate2/_ext.cpython-311-aarch64-linux-gnu.so",
+      "mappingPermissions": "rw-p",
+      "offset": "03940000",
+      "device": "08:01",
+      "inode": "4284278"
+    },
+    {
+      "path": "/home/developer/projects/aurora/.git/aurora-handoff-import-20261006/cpu-full-audio-v483/env/lib/python3.11/site-packages/ctranslate2/_ext.cpython-311-aarch64-linux-gnu.so",
+      "mappingPermissions": "---p",
+      "offset": "00138000",
+      "device": "08:01",
+      "inode": "4284278"
+    },
+    {
+      "path": "/home/developer/projects/aurora/.git/aurora-handoff-import-20261006/cpu-full-audio-v483/env/lib/python3.11/site-packages/ctranslate2/_ext.cpython-311-aarch64-linux-gnu.so",
+      "mappingPermissions": "rw-p",
+      "offset": "03950000",
+      "device": "08:01",
+      "inode": "4284278"
+    }
+  ],
+  "newMeasuredRequests": 0,
+  "runtimeChanged": false
+}

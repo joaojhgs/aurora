@@ -1,0 +1,56 @@
+{
+  "startedAt": "2026-10-15T01:08:58.804729+00:00",
+  "controllerPid": 2874520,
+  "globalBuildLockHeld": true,
+  "capSeconds": 300,
+  "measurementStarted": false,
+  "phase2MeasuredAllowed": false,
+  "voiceAttemptsAddedBySetup": 0,
+  "surface": "actual production apps/aurora-web same-host loopback Gateway/main.py",
+  "physicalMic": false,
+  "physicalAudioAudibility": false,
+  "previousSixTinyFlowsPreserved": true,
+  "priorLogicalAccurateFlow7TransportNonpassPreserved": true,
+  "initialResources": {
+    "homeFree": 391913472,
+    "shmFree": 589979648,
+    "memAvailable": 3317145600
+  },
+  "gpuPreflight": [
+    {
+      "device": "/sys/devices/pci0000:00/0000:00:01.1/0000:01:00.0/0000:02:00.0/0000:03:00.0",
+      "vendor": "0x1002",
+      "product": "0x7480",
+      "vramTotal": "8573157376",
+      "vramUsed": "27262976"
+    },
+    {
+      "device": "/sys/devices/pci0000:00/0000:00:08.1/0000:0a:00.0",
+      "vendor": "0x1002",
+      "product": "0x15d8",
+      "vramTotal": "2147483648",
+      "vramUsed": "838782976"
+    }
+  ],
+  "webPid": 2874540,
+  "backendControllerPid": 2874541,
+  "webBaseUrl": "http://127.0.0.1:43463",
+  "actualImportedSourceGuard": {
+    "pid": 2874552,
+    "at": "2026-10-15T01:09:09.351376+00:00",
+    "monotonic_ns": 654857805809746,
+    "actualImportedModuleFile": "/home/developer/projects/aurora/.git/aurora-real-ui-voice-v452/source/app/services/gateway/fastapi_app.py",
+    "actualImportedModuleSHA256": "c90ade3dc52f1dfdf3840225894d24cefa530b063b2b32e1b289139772e65273",
+    "factoryCalledAndReturned": true,
+    "wrapperVersion": "v455",
+    "originalBehaviorDelegatedOnce": true,
+    "measurementStarted": false
+  },
+  "readyAt": "2026-10-15T01:09:11.344969+00:00",
+  "backendPid": 2874548,
+  "gatewayBaseUrl": "http://127.0.0.1:45779",
+  "fixtureBootstrapCredentialsReadPrivately": true,
+  "webReady": true,
+  "modelLoadedClaim": false,
+  "conditionAdmitted": false
+}

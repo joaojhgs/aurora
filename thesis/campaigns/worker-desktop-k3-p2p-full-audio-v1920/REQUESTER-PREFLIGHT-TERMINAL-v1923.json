@@ -1,0 +1,13 @@
+{
+  "status": "ZERO_REQUEST_PREFLIGHT_TERMINAL_MISSING_TTS_CONFIG_DECLARATION",
+  "controllerAbsent": 3059926,
+  "finalizerAbsent": 3059929,
+  "ownZeroCaseCopierRetired": 3059928,
+  "cellCreated": false,
+  "warmupCases": 0,
+  "measuredCases": 0,
+  "cause": "New freeze template inherited3 model hashes; controller requires4 including TTS config. Actual approved file is unchanged; missing declared ttsConfig SHA, not model drift.",
+  "correction": "Fill ttsConfig from retained prior frozen cohort and validate all4 actual declarations before one Popen. Preserve this frozen attempt/logs.",
+  "replacementLink": "thesis/campaigns/worker-desktop-k3-p2p-full-audio-v1924",
+  "providerRestarted": false
+}

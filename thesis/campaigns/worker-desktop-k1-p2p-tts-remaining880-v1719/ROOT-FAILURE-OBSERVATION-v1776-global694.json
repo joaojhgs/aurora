@@ -1,0 +1,50 @@
+{
+  "at": "2026-10-20T13:27:15.215483+00:00",
+  "classification": "SAVED_DATA_ONLY_NEW_ISOLATED_FAILURE_WITH_FOLLOWING_CORRECT_DISTINCT_CASE",
+  "cases": [
+    {
+      "case": "thesis/campaigns/worker-desktop-k1-p2p-tts-remaining880-v1719/attempts/attempt-0689-measured.jsonl",
+      "sha256": "fad8d7425868e01ed441987b516e49ea306a9f0b9ed87610553590427b7b786e",
+      "bytes": 3960,
+      "globalIndex": 694,
+      "status": "failed",
+      "failure": {
+        "code": "remote_mesh_preaccept_capability_changed",
+        "stage": "tts"
+      },
+      "consecutivePreacceptRejections": 1,
+      "timeout": false,
+      "flowDurationMs": 49602.678464,
+      "correctness": {
+        "assistant_reply_matches_expected_words": true,
+        "transcript_matches_reference_words": true
+      },
+      "audio": null,
+      "audioSha256": null
+    },
+    {
+      "case": "thesis/campaigns/worker-desktop-k1-p2p-tts-remaining880-v1719/attempts/attempt-0690-measured.jsonl",
+      "sha256": "70f18eaba14b9d0536e931001a6dea803b26eb8749c076c539390a9cb5c4595f",
+      "bytes": 4918,
+      "globalIndex": 695,
+      "status": "completed_correct",
+      "failure": null,
+      "consecutivePreacceptRejections": 0,
+      "timeout": false,
+      "flowDurationMs": 48710.052146,
+      "correctness": {
+        "all_expected": true,
+        "assistant_reply_matches_expected_words": true,
+        "transcript_matches_reference_words": true
+      },
+      "audio": "thesis/campaigns/worker-desktop-k1-p2p-tts-remaining880-v1719/audio/790785359a7b2d1debdba7f0299b4368209e39939f7cf42ee398e02ed56f180e.wav",
+      "audioSha256": "790785359a7b2d1debdba7f0299b4368209e39939f7cf42ee398e02ed56f180e",
+      "audioBytes": 32300
+    }
+  ],
+  "policy": "Existing classified measured pre-accept rejection advances next distinct index, no retry; three consecutive qualifying rejections hard-stop. No policy/source change.",
+  "exactRemoteRejectionCause": "UNKNOWN",
+  "rawQueryResultRetainedByK1Adapter": false,
+  "newRequestsOrTests": 0,
+  "newReviewGate": false
+}

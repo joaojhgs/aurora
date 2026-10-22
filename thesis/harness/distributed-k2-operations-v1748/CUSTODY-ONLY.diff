@@ -1,0 +1,108 @@
+--- thesis/harness/custody_k1_mesh_requester_v1719.py
++++ thesis/harness/custody_k2_mesh_requester_v1748.py
+@@ -1,4 +1,4 @@
+-"""Copy only a future admitted K3 cohort; never call the system under test."""
++"""Copy only a future admitted K2 P2P cohort; never call the system under test."""
+ 
+ import argparse
+ import fcntl
+@@ -17,10 +17,10 @@
+ 
+ ROOT = Path(__file__).resolve().parents[2]
+ IMPORT = ROOT / ".git/aurora-handoff-import-20261006"
+-CELL = IMPORT / "distributed-k1-mesh-cell-v1719"
+-OP = IMPORT / "distributed-k1-mesh-launch-v1719"
+-STAGE = IMPORT / "distributed-k1-mesh-requester-v1719"
+-DEST = ROOT / "thesis/campaigns/worker-desktop-k1-p2p-tts-remaining880-v1719"
++CELL = IMPORT / "distributed-k2-mesh-cell-v1748"
++OP = IMPORT / "distributed-k2-mesh-launch-v1748"
++STAGE = IMPORT / "distributed-k2-mesh-requester-v1748"
++DEST = ROOT / "thesis/campaigns/worker-desktop-k2-p2p-assistant-tts-v1748"
+ RESERVE = 2 * 1024**3
+ CHUNK_CAP = 4 * 1024**2
+ 
+@@ -77,11 +77,11 @@
+ 
+ 
+ def checkpoint(expected_condition_sha256):
+-    condition_path = OP / "condition-frozen-v1719.json"
++    condition_path = OP / "condition-frozen-v1748.json"
+     if not re.fullmatch(r"[0-9a-f]{64}", expected_condition_sha256):
+-        raise ValueError("Root must provide the actual newly frozen K3 manifest SHA256")
++        raise ValueError("Root must provide the actual newly frozen K2 manifest SHA256")
+     if digest(condition_path.read_bytes()) != expected_condition_sha256:
+-        raise RuntimeError("K3 condition manifest differs; no data copied")
++        raise RuntimeError("K2 condition manifest differs; no data copied")
+     started = now()
+     before = shutil.disk_usage(ROOT)._asdict()
+     state_path = DEST / "CURRENT.json"
+@@ -121,12 +121,12 @@
+         additions.append(record)
+         return record
+ 
+-    static = [(OP / "condition-frozen-v1719.json", "frozen/condition.json"),
++    static = [(OP / "condition-frozen-v1748.json", "frozen/condition.json"),
+               (OP / "warmup-finalizer-result.json", "admission/warmup-finalizer-result.json"),
+-              (CELL / "campaign/receiver-warmup-proof.json", "admission/receiver-warmup-proof.json")]
++              (CELL / "campaign/remote-warmup-proof.json", "admission/remote-warmup-proof.json")]
+     for name in ["candidate-input.wav", "candidate-manifest.json", "source-inventory.json",
+                  "controller.py", "runner.py", "bootstrap.py", "bindings.py", "observer.py",
+-                 "resource_sample.py", "aurora_voice_telemetry_v430.py", "tts_mesh_adapter.py", "mesh_route_observer.py", "route_observation_sink.py", "route_runtime_pins.json",
++                 "resource_sample.py", "aurora_voice_telemetry_v430.py", "mesh_stage_adapter.py", "k2_composition.py", "mesh_route_observer.py", "route_observation_sink.py", "route_runtime_pins.json",
+                  "receiver_proof.py"]:
+         static.append((STAGE / name, "harness/" + name))
+     for source in sorted((OP / "receiver-warmup-custody").glob("*.json*")):
+@@ -134,7 +134,7 @@
+     for name in ["requester-launch.json", "operator-launch.json", "requesterCopier-launch.json",
+                  "warmupFinalizer-launch.json", "LAUNCH-INTENT.json", "proof-collection-request.json"]:
+         static.append((OP / name, "operator/" + name))
+-    for name in ["runtime-versions.json", "voice-stages.installed.json", "voice-stages.status.json", "requester-mesh-route-runtime-pins.json"]:
++    for name in ["runtime-versions.json", "voice-stages.installed.json", "voice-stages.status.json", "mesh-route-runtime-pins.json"]:
+         static.append((CELL / name, "runtime/" + name))
+     for source, relative in static:
+         if not source.exists():
+@@ -191,7 +191,8 @@
+                          (CELL / "campaign/summary.json", "summary.json"),
+                          (CELL / "campaign/progress.json", "progress.json"),
+                          (CELL / "campaign/mesh-route-admission.json", "mesh-route-admission.json"),
+-                         (CELL / "requester-mesh-route-sink-status.json", "mesh-route-sink-status.json")]:
++                         (CELL / "campaign/mesh-route-admission-timing.json", "mesh-route-admission-timing.json"),
++                         (CELL / "mesh-route-sink-status.json", "mesh-route-sink-status.json")]:
+         if not source.exists():
+             continue
+         try:
+@@ -211,7 +212,7 @@
+             errors.append({"source": str(source), "error": str(exc)})
+ 
+     # Immutable contiguous chunks retain the raw prefix without quadratic full-log copies.
+-    sources = [(name, CELL / name) for name in ["voice-stages.jsonl", "actual-provider-bindings.jsonl", "resources.jsonl", "requester-mesh-calls.jsonl", "requester-mesh-route-observations.jsonl"]]
++    sources = [(name, CELL / name) for name in ["voice-stages.jsonl", "actual-provider-bindings.jsonl", "resources.jsonl", "requester-mesh-calls.jsonl", "mesh-route-observations.jsonl"]]
+     sources.extend((name, source) for name, source in [
+         ("backend.private.log", CELL / "backend.private.log"),
+         ("controller.private.log", OP / "requester-controller.private.log"),
+@@ -282,7 +283,7 @@
+                "physicalPayloadBytes": sum(item["bytes"] for item in state["files"].values()),
+                "previousReceipt": state.get("lastReceipt"), "sutCalls": 0,
+                "possibleConfound": "Concurrent custody reads/writes; keep all affected measurements.",
+-               "providerCoverage": "Separate P2P TTS provider custody; actual per-host prefix coverage must be joined explicitly.",
++               "providerCoverage": "Separate P2P Assistant+TTS provider custody; actual per-host prefix coverage must be joined explicitly.",
+                "expectedConditionSha256": expected_condition_sha256,
+                "prefixes": state["prefixes"]}
+     receipt_path = DEST / f"receipts/{state['sequence']:06d}.json"
+@@ -300,13 +301,13 @@
+     parser.add_argument("--follow", action="store_true")
+     parser.add_argument("--condition-sha256", required=True)
+     args = parser.parse_args()
+-    condition_path = OP / "condition-frozen-v1719.json"
++    condition_path = OP / "condition-frozen-v1748.json"
+     if not re.fullmatch(r"[0-9a-f]{64}", args.condition_sha256) or digest(condition_path.read_bytes()) != args.condition_sha256:
+-        raise RuntimeError("Future K3 manifest admission required before creating custody output")
++        raise RuntimeError("Future K2 manifest admission required before creating custody output")
+     DEST.mkdir(parents=True, exist_ok=True)
+     lock = (DEST / "copier.lock").open("a")
+     fcntl.flock(lock, fcntl.LOCK_EX | fcntl.LOCK_NB)
+-    end = time.monotonic() + 68600
++    end = time.monotonic() + 58200
+     while True:
+         result = checkpoint(args.condition_sha256)
+         if not args.follow or result["status"] not in {"running", "awaiting_progress"} or time.monotonic() >= end:

@@ -1,0 +1,165 @@
+{
+  "at": "2026-10-15T02:44:52.928264+00:00",
+  "status": "completed_correctness_failed",
+  "nAttempted": 1,
+  "nCorrect": 0,
+  "nMeasured": 0,
+  "phase2MeasuredAllowed": false,
+  "files": [
+    {
+      "path": "DECODE-BOUNDARY.md",
+      "bytes": 2338,
+      "sha256": "b6de9346c0d58ab4062a302d2890f72321454cd29c1845a9908571e8b2d3bc6e"
+    },
+    {
+      "path": "DELTA.md",
+      "bytes": 580,
+      "sha256": "e0cfb44e05dd8addb3a0194d5e7e338a25c600ebfea18c78e19fd94953e29b38"
+    },
+    {
+      "path": "RAW-VERIFICATION.json",
+      "bytes": 265,
+      "sha256": "31c2669887505c7d2e98922b1431c285711d07a3a97b59bea6685e2779eea0cd"
+    },
+    {
+      "path": "README.md",
+      "bytes": 4128,
+      "sha256": "bde7191e099cb95ea8b0c304f06bbdc77c4cced4c547e41c14e6b53e8e88762b"
+    },
+    {
+      "path": "REVIEW.md",
+      "bytes": 1865,
+      "sha256": "7743bc0193f4af1fbf25692f05ef99f83559f095f41fb5f2933dda53c1340e1b"
+    },
+    {
+      "path": "bindings.py",
+      "bytes": 3032,
+      "sha256": "4a5e406a1a801b84615a695ae03ecd5a13a81db4eb055946524ce0b350d706f3"
+    },
+    {
+      "path": "bootstrap.py",
+      "bytes": 477,
+      "sha256": "2a9533857a76349d9f7566373ba870fd5f448a92a0d31ff44a9fb1b46fec8e44"
+    },
+    {
+      "path": "controller.py",
+      "bytes": 8901,
+      "sha256": "01ee1d68d535b0b1606897e0df4184dd6e11833aeaaf167236fb56551dbc5c08"
+    },
+    {
+      "path": "frozen-sources.json",
+      "bytes": 343,
+      "sha256": "fb6ce2d6752de48a15a4a87d88f81fadde2d401a8edfb36bf954f58a4a6a314b"
+    },
+    {
+      "path": "pilot.py",
+      "bytes": 19494,
+      "sha256": "8a2c2d1d709c252e29c2f53781e2873bccc0b981526aed2e620ac5458f0efc24"
+    },
+    {
+      "path": "raw/audio-v477/admission-manifest.json",
+      "bytes": 2332,
+      "sha256": "70e87284abc4317ff19d53b927ad7ab3ac18f2ce5a3e0ea278cff37380b3cda9"
+    },
+    {
+      "path": "raw/audio-v477/controller-launch.json",
+      "bytes": 1127,
+      "sha256": "b6eb92386ac4ff887fd17b10acc4982071314f74a108479641572ec1fb7bbb89"
+    },
+    {
+      "path": "raw/audio-v477/runtime/actual-provider-bindings.jsonl",
+      "bytes": 2308,
+      "sha256": "68187d3099beec09f38acf851fe4f90322ea03f6ff6932becd5719dc20e8ce00"
+    },
+    {
+      "path": "raw/audio-v477/runtime/launch.json",
+      "bytes": 1518,
+      "sha256": "7540ec7ce64bafd24a9096018b548dcaa9741387a731151b14672e69a59f7394"
+    },
+    {
+      "path": "raw/audio-v477/runtime/pilot/pilot-result.json",
+      "bytes": 4266,
+      "sha256": "84e190641df57649cdb1f50842208ed62991a952ad362d31373992c188653626"
+    },
+    {
+      "path": "raw/audio-v477/runtime/pilot/tts-output.wav",
+      "bytes": 246316,
+      "sha256": "7557b916c4bd4087f10f06cb41a156cada24f43c9e80deb71624cc4088cff63e"
+    },
+    {
+      "path": "raw/audio-v477/runtime/resources.jsonl",
+      "bytes": 15680,
+      "sha256": "d99a800f5b6e54a4ac69105ec289652f78712b4472be0e7bb2f3a58f4e868c0b"
+    },
+    {
+      "path": "raw/audio-v477/runtime/retirement.json",
+      "bytes": 491,
+      "sha256": "8a56e115627f9dfe64c0254bf2443e77a5fcc436e2ae6c3a37789a203256ac32"
+    },
+    {
+      "path": "raw/audio-v477/runtime/terminal.json",
+      "bytes": 1844,
+      "sha256": "25e4dd0e22af96bd8f21517f13672f5493cc16248ebd0f8c9466aefd4b4acf84"
+    },
+    {
+      "path": "raw/audio-v477/runtime/voice-stages.installed.json",
+      "bytes": 109,
+      "sha256": "3733fd6bfb6fefdb6500d2969becc12ea9fb7e81fb0558494e137ac0b1d808f7"
+    },
+    {
+      "path": "raw/audio-v477/runtime/voice-stages.jsonl",
+      "bytes": 16641,
+      "sha256": "7d5f7fb2ae045e1eb2f99d426a6de0e50068abc3018f03360a82b65712c883a0"
+    },
+    {
+      "path": "raw/audio-v477/runtime/voice-stages.status.json",
+      "bytes": 134,
+      "sha256": "388b9e49129d93a82d40bb24b08b713e8d420c0ba05bc80a08f50216f9ce4a63"
+    },
+    {
+      "path": "raw/failed-setup-v476/admission-manifest.json",
+      "bytes": 2332,
+      "sha256": "7b98fc80d16370f9e74f7aea42923dd8e8355e07439a1bc0ca8c7a868efbeab1"
+    },
+    {
+      "path": "raw/failed-setup-v476/controller-launch.json",
+      "bytes": 1127,
+      "sha256": "fc6848455e7a736518e486b8250b1c3e2d1d79f29318dd0e3dbd9e631f76c977"
+    },
+    {
+      "path": "raw/failed-setup-v476/runtime/launch.json",
+      "bytes": 1518,
+      "sha256": "3e6c7ba0f13c024476d8ca9d0e7a4fbce329d9f34815da6ab318f4931e109ca0"
+    },
+    {
+      "path": "raw/failed-setup-v476/runtime/terminal.json",
+      "bytes": 1754,
+      "sha256": "7a5d2c0e8dd93efe51ed274efe6e42cc74e995e9f5dc7b343565e507c055a1ed"
+    },
+    {
+      "path": "raw/input/short-command-en-US.wav",
+      "bytes": 193068,
+      "sha256": "2f6361506708d0a3065a339d168c9db5412e343683dd9b4080471d8948bf82ae"
+    },
+    {
+      "path": "span-analysis.json",
+      "bytes": 3591,
+      "sha256": "b55ea82eb80404d0008c98f209d98c08d4cf09ce88d49ed5c5100f32d3d053a2"
+    },
+    {
+      "path": "v476-REVIEW.md",
+      "bytes": 6285,
+      "sha256": "15244fd461b923409a4fc40d57cea18100467b069fa189169bb1b2a7b674bb84"
+    },
+    {
+      "path": "v476-bootstrap.py",
+      "bytes": 477,
+      "sha256": "782091f55804e6002f5422b07dca661ea43dc41e7f79b1c6c9bbe6f822965f31"
+    },
+    {
+      "path": "v476-controller.py",
+      "bytes": 8576,
+      "sha256": "85e9a4d299c455fb0e534c25378c998f15d040f00f6d1a6176977f6ec4a823fb"
+    }
+  ]
+}

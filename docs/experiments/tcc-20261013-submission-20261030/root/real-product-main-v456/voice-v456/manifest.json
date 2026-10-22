@@ -1,0 +1,29 @@
+{
+  "files": {
+    "supervisor.py": {
+      "sha256": "a302e28238e435f56d0c604f091da5e90f6bfab0a4662e43b15617c153577321",
+      "bytes": 8054
+    },
+    "backend-controller.py": {
+      "sha256": "51756434a6fdf09df08259929383d3847dc7b0fe497e820d4ebb1330305395f1",
+      "bytes": 7165
+    },
+    "source_guard_v455.py": {
+      "sha256": "ee5cfa3a85660f15dc5e98154d3f4eb7af4b96e40a936042f6196de258c394ce",
+      "bytes": 1588
+    },
+    "driver.py": {
+      "sha256": "5a972c610663168be107cc2cbf9c3f2dcd6cca33c9df8611a7a591818ed81d05",
+      "bytes": 35710
+    },
+    "driver-controller.py": {
+      "sha256": "e2a907dfa9e2f0b7f2a0b67648c9868fc2860b2cb57f2e1faea5fc03d1853915",
+      "bytes": 2760
+    }
+  },
+  "onlyV455SetupRepair": "actual observer filename ends .installed.json",
+  "V455ClosedBeforeAnyUI": true,
+  "nextActualTranscriptionOrdinal": 8,
+  "measurementStarted": false,
+  "phase2Allowed": false
+}

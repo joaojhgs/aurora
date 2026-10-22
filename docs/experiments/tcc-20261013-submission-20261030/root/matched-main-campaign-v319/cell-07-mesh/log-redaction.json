@@ -1,0 +1,55 @@
+{
+  "logs": [
+    {
+      "export": "stdout.redacted.log",
+      "export_bytes": 1699,
+      "export_sha256": "1efe7154136d97794b38cdfcf8c17a08fd6580742230231281f415380b06c161",
+      "original_bytes": 1699,
+      "original_retained_private": true,
+      "original_sha256": "1efe7154136d97794b38cdfcf8c17a08fd6580742230231281f415380b06c161",
+      "source": "stdout.log",
+      "withheld_lines": 0
+    },
+    {
+      "export": "stderr.redacted.log",
+      "export_bytes": 3936,
+      "export_sha256": "ee95d2c55e050a4332c06a22aeea6b8852767df19c441fb68c2d3600d12c922b",
+      "original_bytes": 3926,
+      "original_retained_private": true,
+      "original_sha256": "a2309e3ee31fc163db11e6f6a4f4d5179fe5f6234f1f70fc006aa1fc303953a8",
+      "source": "stderr.log",
+      "withheld_lines": 1
+    },
+    {
+      "export": "compose-down.redacted.log",
+      "export_bytes": 1689,
+      "export_sha256": "ef39fe8385d3d22c27703e627bde45dc0bda5203f0ca617941cb2863be261622",
+      "original_bytes": 1689,
+      "original_retained_private": true,
+      "original_sha256": "ef39fe8385d3d22c27703e627bde45dc0bda5203f0ca617941cb2863be261622",
+      "source": "compose-down.log",
+      "withheld_lines": 0
+    },
+    {
+      "export": "python-service.redacted.log",
+      "export_bytes": 110084,
+      "export_sha256": "d0449b0df40ce17a9a7a70346a135ad7d10684fca157d87a4c3559e024884f78",
+      "original_bytes": 112588,
+      "original_retained_private": true,
+      "original_sha256": "c95e0f40dab8bfd9943edb6adf57b02a70dfc68b88a0e82ed61ab361bf924a42",
+      "source": "artifacts/python-service.log",
+      "withheld_lines": 48
+    },
+    {
+      "export": "web-ui.redacted.log",
+      "export_bytes": 116,
+      "export_sha256": "5b8125337eca4f7954c9d8a093951e59c0b2528526b936fb4b979d3d92a8df7f",
+      "original_bytes": 116,
+      "original_retained_private": true,
+      "original_sha256": "5b8125337eca4f7954c9d8a093951e59c0b2528526b936fb4b979d3d92a8df7f",
+      "source": "artifacts/web-ui.log",
+      "withheld_lines": 0
+    }
+  ],
+  "method": "Withhold complete credential-pattern-matching lines; bounded redaction, originals private with hashes."
+}

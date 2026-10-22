@@ -1,0 +1,376 @@
+{
+  "at": "2026-10-15T04:02:34.710818+00:00",
+  "files": [
+    {
+      "path": "README.md",
+      "bytes": 2784,
+      "sha256": "8bc0756c9bc088ab009d3d43efb02c34c6c28164721669094104810cea062d80"
+    },
+    {
+      "path": "cohort-replacements-v1.json",
+      "bytes": 1172,
+      "sha256": "2d1610a0bc2794ba26acd8aa3e21e130a4b6a8202b946408008b2761ba6c345e"
+    },
+    {
+      "path": "freeze-source.py",
+      "bytes": 9810,
+      "sha256": "a2f964b158fa7d3b4e5fd1215821ee157e17e99fba6919b1909d0ea1febb3387"
+    },
+    {
+      "path": "frozen-manifest-v1.json",
+      "bytes": 22182,
+      "sha256": "364832a627e2f45b4b1c2b80ca05739f809132a28ff26511f0eda5e30f89127a"
+    },
+    {
+      "path": "input.wav",
+      "bytes": 153644,
+      "sha256": "139fa0c34b6d18600ad9608fd2d11c9389cae2f5f548ce0f4f23b735b176f0b3"
+    },
+    {
+      "path": "measurement-admission/IMPLEMENTATION.md",
+      "bytes": 1270,
+      "sha256": "fb1b27311426fc71ccb55627c0f3f685163438c35d61208a541a16803a25cae4"
+    },
+    {
+      "path": "measurement-admission/REVIEW.md",
+      "bytes": 3630,
+      "sha256": "c9815f930167bb214ef90696a6cd2310c6698d277f0afee821c1ed02a1f8f159"
+    },
+    {
+      "path": "measurement-admission/controller-launch.json",
+      "bytes": 926,
+      "sha256": "2a6370e25a8dc5e220b450569a25e13b6c1847c6e177f4fb9652baa8fc63550a"
+    },
+    {
+      "path": "measurement-admission/runner.py",
+      "bytes": 43122,
+      "sha256": "e3348ca0c064679f1c88e7bdc8fdec0942fda24b43fe7fdba2fa9f924d7d7dd9"
+    },
+    {
+      "path": "preparation/v483/asset-stage.json",
+      "bytes": 1560,
+      "sha256": "9b65d9cff9c1567e037410862cd3907ca7a51b7dd2138bd6ba9d51f849013d85"
+    },
+    {
+      "path": "preparation/v483/dependency-align.json",
+      "bytes": 265,
+      "sha256": "1080988b87c280bfdeb25684c7ce2b3d1537f4d0a579f6ff0165092e2bac3ae0"
+    },
+    {
+      "path": "preparation/v483/dependency-align.log",
+      "bytes": 558,
+      "sha256": "ca958c53b0515d615b7902b1aea7f20663fad47a0676b4d0863f03ddc1a703a1"
+    },
+    {
+      "path": "preparation/v483/dependency-stage.log",
+      "bytes": 1129,
+      "sha256": "916a891c09bfb298f017960824f196537cc39ad7ef4db0ec5255ca50e1514f0e"
+    },
+    {
+      "path": "preparation/v483/playback-dependency-stage.log",
+      "bytes": 550,
+      "sha256": "29edbb05a830790ab51ac3b4da837fe99f50e89bf7b1960da7188696d1c8c634"
+    },
+    {
+      "path": "preparation/v483/provision-start.json",
+      "bytes": 217,
+      "sha256": "0dd057359e41c565ac34792661176b5b28514398d06944a04f0df1d1dc5a4b7e"
+    },
+    {
+      "path": "preparation/v483/provision-terminal.json",
+      "bytes": 286,
+      "sha256": "7447aa56e3a766bf4723562d6673719a3e21ebd0e3d38a24b2f0a33ddb9204c3"
+    },
+    {
+      "path": "preparation/v483/source-manifest.json",
+      "bytes": 71855,
+      "sha256": "e80adfe7a4f0a51172286878faf3afe783038ffe1f0e7dcdaf8d0460f7bf4bd1"
+    },
+    {
+      "path": "preparation/v487/module-admission.json",
+      "bytes": 162,
+      "sha256": "59dad4e915021483b777cdcba8fac5a1847ca1b2837d3a66c399a7c205ffbe94"
+    },
+    {
+      "path": "preparation/v487/module-admission.log",
+      "bytes": 1817,
+      "sha256": "e47053fc74891f4456a41f7fcaf84ff38f0c8cd4d862e9218b89ce22ec6be3ee"
+    },
+    {
+      "path": "preparation/v487/playback-dependency-stage.json",
+      "bytes": 400,
+      "sha256": "a12821c157ccea2b1b44a7aa5026a284cf0d5e7c962d2ede1eeddf18233c11a9"
+    },
+    {
+      "path": "preparation/v487/playback-dependency-stage.log",
+      "bytes": 1864,
+      "sha256": "a11498a5a27e5d69b8e093444ba4ee69f9e68fa8346839af2aac09278f0ace5c"
+    },
+    {
+      "path": "preparation/v487/portable-libs-receipt.json",
+      "bytes": 871,
+      "sha256": "86c5e226e28886b676c176ba347d7b942e7ece68ef12ed0594aa2d1796e629b3"
+    },
+    {
+      "path": "preparation/v487/selected-model-versions.txt",
+      "bytes": 224,
+      "sha256": "5f5b9327afb775082819bda7bae12ed55e820362c5ac8282c34c435731d721b0"
+    },
+    {
+      "path": "preparation/v490/candidate-manifest.json",
+      "bytes": 300,
+      "sha256": "294bfe92e6abbde070f58c1ae57243b171f5be7ba73b1116e5d893a7e9432f7b"
+    },
+    {
+      "path": "preparation/v490/environment-package-inventory.json",
+      "bytes": 7465,
+      "sha256": "a90e6177b3a08d649aaa1b95fd68e952ca0336c0b475cf8dd9cc43051cfc253c"
+    },
+    {
+      "path": "preparation/v490/pilot-input.json",
+      "bytes": 220,
+      "sha256": "33faee1514e84dd414e58ed02828c51b3e20596574fa58f989e5f62f50a83f2a"
+    },
+    {
+      "path": "raw/v483/controller-launch.json",
+      "bytes": 393,
+      "sha256": "4136abf4798e7840e738836f683f70533351366c3f0e4e2e04200b0b198c570c"
+    },
+    {
+      "path": "raw/v483/runtime/actual-provider-bindings.jsonl",
+      "bytes": 845,
+      "sha256": "6abdb07e5f78a0e4dd38639c42f827d9fbaadff1ace5dc31e4dfebb816e6d2d2"
+    },
+    {
+      "path": "raw/v483/runtime/launch.json",
+      "bytes": 1368,
+      "sha256": "b324a16d24482798a93b2eb645adaffb0f66e1f8dad7b796512065e488dc941e"
+    },
+    {
+      "path": "raw/v483/runtime/pilot/pilot-result.json",
+      "bytes": 5255,
+      "sha256": "aa0efc0c6a4bbc90065e410f8ef91a4f2dad6f8d4f65786dbc48a8d517547512"
+    },
+    {
+      "path": "raw/v483/runtime/resources.jsonl",
+      "bytes": 43720,
+      "sha256": "f90d965159547b1cf1f20050eb3de569330b1846d3622fec4d229b63e829995f"
+    },
+    {
+      "path": "raw/v483/runtime/retirement.json",
+      "bytes": 355,
+      "sha256": "cc63ecfef943aa200a6efd6e3e66af75b2982cceb0f6724e914ef64ebe148701"
+    },
+    {
+      "path": "raw/v483/runtime/runtime-versions.json",
+      "bytes": 177,
+      "sha256": "ec1b559c7b64b9d9b2f189f77f6dd90d11350beb3486826c9c81a4c3c1edff0e"
+    },
+    {
+      "path": "raw/v483/runtime/terminal.json",
+      "bytes": 1569,
+      "sha256": "535d651a6c590d6006902a4f8c637c0a4acd2de53bb9524c03b07c81362a6074"
+    },
+    {
+      "path": "raw/v483/runtime/voice-stages.installed.json",
+      "bytes": 113,
+      "sha256": "72ff3e925f3cab2e28f6851323db033041777fd722ac90860aac4afe52b6e9a1"
+    },
+    {
+      "path": "raw/v483/runtime/voice-stages.jsonl",
+      "bytes": 9828,
+      "sha256": "f783d6cf96872caebfbc8fc560c51045a0b32b3fd9588dab6a2961ebb8d2463b"
+    },
+    {
+      "path": "raw/v483/runtime/voice-stages.status.json",
+      "bytes": 133,
+      "sha256": "1a279dff27297d455ed905bfeff3d285ea6872035a147383bff43c07fe4a250f"
+    },
+    {
+      "path": "raw/v486/admission.json",
+      "bytes": 823,
+      "sha256": "6f3f76e6dfa75a1db4a4fb30072c8073ffdfde640f05a161fc5cfc43a0b080f4"
+    },
+    {
+      "path": "raw/v486/controller-launch.json",
+      "bytes": 214,
+      "sha256": "e1e0b56222f679e81b208082e97963c0e0acb97da3bce421d5482baa669f3d0d"
+    },
+    {
+      "path": "raw/v486/runtime/actual-provider-bindings.jsonl",
+      "bytes": 2139,
+      "sha256": "fdca38ef90a3c2586e4743cfc9b2fb19f712832f62711cb155a3f024779b80c0"
+    },
+    {
+      "path": "raw/v486/runtime/launch.json",
+      "bytes": 1368,
+      "sha256": "44b0ce3b07ac7f12e0b45ba5e1987320e69b50d8f03c0897d09915b0e4472f57"
+    },
+    {
+      "path": "raw/v486/runtime/pilot/pilot-result.json",
+      "bytes": 5213,
+      "sha256": "70da512d80986fe481120c1266071ed0612334f65c04ac830883e337727b6dab"
+    },
+    {
+      "path": "raw/v486/runtime/resources.jsonl",
+      "bytes": 73850,
+      "sha256": "0c2a39924802ad30d88d31d5e90133d9e4d3c065897f0814f827212e6c23436f"
+    },
+    {
+      "path": "raw/v486/runtime/retirement.json",
+      "bytes": 325,
+      "sha256": "b271af1f41af0a4c8e59988bceb70e1ff08de5b38c7cf6f6fb614ef869d1d497"
+    },
+    {
+      "path": "raw/v486/runtime/runtime-versions.json",
+      "bytes": 177,
+      "sha256": "5813678fb210e76ca0281c2e5d178aa7db666eb602fb1ab0dc2214f1576dc75a"
+    },
+    {
+      "path": "raw/v486/runtime/terminal.json",
+      "bytes": 1569,
+      "sha256": "5f0f50b78d44f581addc8999fc6c453cf0b994dbd541367dab41a8d639871104"
+    },
+    {
+      "path": "raw/v486/runtime/voice-stages.installed.json",
+      "bytes": 113,
+      "sha256": "b9aed982d6219dabc13d7991929d91fc798e8ca00491ffe4749b8d5475fc28b4"
+    },
+    {
+      "path": "raw/v486/runtime/voice-stages.jsonl",
+      "bytes": 13130,
+      "sha256": "48e59687debbb8d3f061073a5a5bd36b5595f109d394346420ff964e96f82bd6"
+    },
+    {
+      "path": "raw/v486/runtime/voice-stages.status.json",
+      "bytes": 134,
+      "sha256": "af23de9f5a76ce5f89ffabe92c1d0a653a0f126f54adae363e1145130ae881a6"
+    },
+    {
+      "path": "raw/v488/admission.json",
+      "bytes": 856,
+      "sha256": "2fc0a4f445530b8d7f9c11c710a86bce863eaa910b426f721e1d91f4100af01b"
+    },
+    {
+      "path": "raw/v488/controller-launch.json",
+      "bytes": 168,
+      "sha256": "efb8adff6421b3c29df6c73f5f119eff4cd54bda534c93f082c459065152613d"
+    },
+    {
+      "path": "raw/v488/runtime/actual-provider-bindings.jsonl",
+      "bytes": 2746,
+      "sha256": "5d5a4529307ec6667e942f2febf5defc7651c3290ecb4e6387a01bb57cf9ef95"
+    },
+    {
+      "path": "raw/v488/runtime/launch.json",
+      "bytes": 1368,
+      "sha256": "d13733bfc77db876aed2e2418fbbb33f533d42b2e69e157bbf72651410adff4a"
+    },
+    {
+      "path": "raw/v488/runtime/pilot/pilot-result.json",
+      "bytes": 5525,
+      "sha256": "f7d7f02f9ba350dd92a1df281001e1e1e61c2f3033ea9cfb868fffe72f922a3e"
+    },
+    {
+      "path": "raw/v488/runtime/resources.jsonl",
+      "bytes": 96396,
+      "sha256": "8edd4915668d6a67907644702f2c258a7963249124a3191d89062d815d270133"
+    },
+    {
+      "path": "raw/v488/runtime/retirement.json",
+      "bytes": 233,
+      "sha256": "98f6445eac864db8c1cde3830c366958cab7552f8c298c560fc9be2ab81ee77c"
+    },
+    {
+      "path": "raw/v488/runtime/runtime-versions.json",
+      "bytes": 177,
+      "sha256": "0f0853adf5a0e6fef9731807112331bea8fab7c4fda5acc0463db0447da48334"
+    },
+    {
+      "path": "raw/v488/runtime/terminal.json",
+      "bytes": 1569,
+      "sha256": "83b79b13423fee09fcd769bbb403c4f1af9a6d864cae23ca207a9f3e406f8540"
+    },
+    {
+      "path": "raw/v488/runtime/voice-stages.installed.json",
+      "bytes": 113,
+      "sha256": "32a754572ec72910355d8d3490e7d998b0b51cb38a2786607bc45b3c03b9c2b9"
+    },
+    {
+      "path": "raw/v488/runtime/voice-stages.jsonl",
+      "bytes": 16612,
+      "sha256": "504ca5afdcec753d5e33bac4afbddd753721fc3104226e525221688f5475ef2e"
+    },
+    {
+      "path": "raw/v488/runtime/voice-stages.status.json",
+      "bytes": 134,
+      "sha256": "764f4492e9932bd8b6ee2dcc48c31833d9d33eb793b7cc9c67dbd445f060d5ae"
+    },
+    {
+      "path": "raw/v490/admission.json",
+      "bytes": 737,
+      "sha256": "a73d5e74b0f038aa4d04054e57a5e7b410980497fc791ca9c7e5c01e5df4d67c"
+    },
+    {
+      "path": "raw/v490/controller-launch.json",
+      "bytes": 822,
+      "sha256": "4a924dbf326edcfd1e2fada48ab0aab527b2e98bf8e89e7e9d3c8661b4efb74d"
+    },
+    {
+      "path": "raw/v490/runtime/actual-provider-bindings.jsonl",
+      "bytes": 2871,
+      "sha256": "c6456a51c5d2c4e9f1bc70ff3685949bc1155f2e56e092ff79a7fcfe227a7246"
+    },
+    {
+      "path": "raw/v490/runtime/launch.json",
+      "bytes": 1368,
+      "sha256": "e5cb851f086e4cc3f418f3d4e5a2463214f86c5442950694a72fffc35b94d9e4"
+    },
+    {
+      "path": "raw/v490/runtime/pilot/pilot-result.json",
+      "bytes": 5792,
+      "sha256": "2ecf698aa507b79924062fb53ecf7dc0beef3c8eed1b012b9714fd7fb5ced88e"
+    },
+    {
+      "path": "raw/v490/runtime/pilot/tts-output.wav",
+      "bytes": 31276,
+      "sha256": "45d5e347c90051de387ce874cdfac50e12980b7d3d8d2f602225b42b0f713f05"
+    },
+    {
+      "path": "raw/v490/runtime/resources.jsonl",
+      "bytes": 93402,
+      "sha256": "000ce77b153f5bab656fcde7e7089adb506fe0374e2a202b80395cde8a4fef30"
+    },
+    {
+      "path": "raw/v490/runtime/retirement.json",
+      "bytes": 170,
+      "sha256": "bf6f0eb22a07b5840ca003ef0d31cf390cc055ef9c237ac319c89d94236abc6a"
+    },
+    {
+      "path": "raw/v490/runtime/runtime-versions.json",
+      "bytes": 177,
+      "sha256": "b181adb060fd5b98f272a530758774a9454ef4da051ac5c3db624ff0b43ef124"
+    },
+    {
+      "path": "raw/v490/runtime/terminal.json",
+      "bytes": 1569,
+      "sha256": "b64446d474b4871dcc4b4193647c31b0a4d6c8751ba3a930c2cee397b0626ed5"
+    },
+    {
+      "path": "raw/v490/runtime/voice-stages.installed.json",
+      "bytes": 113,
+      "sha256": "4d534fe3fb4c92f693f890acbd2b98ef6fe2fa3aaac1558577b5410c403e9b62"
+    },
+    {
+      "path": "raw/v490/runtime/voice-stages.jsonl",
+      "bytes": 16580,
+      "sha256": "21c2b0cac275b9cf5746471619c9ed081cded70278a58d0ed230b11a1d07d19e"
+    },
+    {
+      "path": "raw/v490/runtime/voice-stages.status.json",
+      "bytes": 134,
+      "sha256": "347c254042013f120f22a825e9617de582666ad5434b6b0b0745964a5f1bacfc"
+    }
+  ],
+  "claims": "readiness pass plus subsequent measurement admission, not completed900"
+}

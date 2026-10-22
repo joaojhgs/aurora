@@ -1,0 +1,51 @@
+{
+  "objective": "tcc:20261013:submission-20261030",
+  "serial_owner": "same original Aurora Root01a112a5",
+  "files": {
+    "integration.json": {
+      "private_original_sha256": "1da14e4d05bc1479d9e6f39ad2f9ec3ffe698067b64caa4103e1e8e8970d02dc",
+      "export_sha256": "1da14e4d05bc1479d9e6f39ad2f9ec3ffe698067b64caa4103e1e8e8970d02dc",
+      "credential_lines_withheld": 0,
+      "byte_identical": true
+    },
+    "sol-review.md": {
+      "private_original_sha256": "073d7d82288aa1e316b51d6e7eaf097bbf35f340bd3a6979fe92d24550d77bc9",
+      "export_sha256": "073d7d82288aa1e316b51d6e7eaf097bbf35f340bd3a6979fe92d24550d77bc9",
+      "credential_lines_withheld": 0,
+      "byte_identical": true
+    },
+    "providerless-history-load.log": {
+      "private_original_sha256": "5492175fbed9a3e84f4a2551875f110b5f0af0a2b0d3af5009b6e7e03c8a412c",
+      "export_sha256": "5492175fbed9a3e84f4a2551875f110b5f0af0a2b0d3af5009b6e7e03c8a412c",
+      "credential_lines_withheld": 0,
+      "byte_identical": true
+    },
+    "ui-types.log": {
+      "private_original_sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+      "export_sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+      "credential_lines_withheld": 0,
+      "byte_identical": true
+    },
+    "vitest.json": {
+      "private_original_sha256": "95330ea4d667d6709fbe294f58c8d8c85ca18626618a54f23341611a2a323d9e",
+      "export_sha256": "95330ea4d667d6709fbe294f58c8d8c85ca18626618a54f23341611a2a323d9e",
+      "credential_lines_withheld": 0,
+      "byte_identical": true
+    },
+    "checks.json": {
+      "private_original_sha256": "f866de88b22ec7abb624bfc0b58ea175c5c6f428cf4fa5e0329a70a78818ba93",
+      "export_sha256": "f866de88b22ec7abb624bfc0b58ea175c5c6f428cf4fa5e0329a70a78818ba93",
+      "credential_lines_withheld": 0,
+      "byte_identical": true
+    },
+    "before-typing.ts": {
+      "private_original_sha256": "4d45d97df625cbac62fdc6c774144f98bcf86e7c8b1341a26d5efd019a077f75",
+      "export_sha256": "4d45d97df625cbac62fdc6c774144f98bcf86e7c8b1341a26d5efd019a077f75",
+      "credential_lines_withheld": 0,
+      "byte_identical": true
+    }
+  },
+  "private_browser_bodies_exported": false,
+  "full_playwright_report_exported": false,
+  "readme_sha256": "de81a081d421bf7322f572797b033c339aa8ea98c2e49593a7deb25db337f5cc"
+}

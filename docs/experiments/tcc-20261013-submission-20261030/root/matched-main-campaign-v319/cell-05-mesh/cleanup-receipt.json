@@ -1,0 +1,37 @@
+{
+  "detached_group_cleanup": [
+    {
+      "group_owned": true,
+      "leader_verified": true,
+      "reaped": true
+    },
+    {
+      "group_owned": true,
+      "leader_verified": true,
+      "reaped": true
+    },
+    {
+      "group_owned": true,
+      "leader_verified": true,
+      "reaped": true
+    },
+    {
+      "group_owned": true,
+      "leader_verified": true,
+      "reaped": true
+    },
+    {
+      "group_owned": true,
+      "leader_verified": true,
+      "reaped": true
+    }
+  ],
+  "mesh_project_cleanup": {
+    "attempted": true,
+    "exit_code": 0,
+    "reaped": null,
+    "reaping_status": "unverified_without_container_inspection",
+    "status": "command_succeeded"
+  },
+  "scope": "Five reported-owned detached groups reaped; compose-down command succeeded, final container reaping unverified without inspection. Not an all-host/process/thread cleanup claim."
+}

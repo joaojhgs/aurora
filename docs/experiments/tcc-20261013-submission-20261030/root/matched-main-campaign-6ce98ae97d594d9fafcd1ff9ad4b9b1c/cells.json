@@ -1,0 +1,257 @@
+[
+  {
+    "baseline_seconds": 300,
+    "cell_cap_seconds": 6000,
+    "child_exit_code": 0,
+    "elapsed_seconds": 3301.3687037839554,
+    "exit_code": 0,
+    "exported_raw_files_sha256": {
+      "requests.jsonl": "b1bfa008775013ef1fd3d178a033289066d3f359daa15ff17e6bba8aedd2bbc2",
+      "requests.jsonl.provider-inputs.jsonl": "fadc779e24b0adc04de7db6bc23581a321c8d7ee7636e6318ccb2adb1e5301af",
+      "resources.jsonl": "725407c6e9a92d017b304cd8e5d705478d697e912e63af1d9d428224285b9f6e"
+    },
+    "finished_at": "2026-10-14T08:26:50.206878+00:00",
+    "index": 1,
+    "planned_measured": 100,
+    "planned_warmups": 5,
+    "receipt_validation": {
+      "expected_provider_captures": 105,
+      "expected_requests": 105,
+      "failure_classes": [],
+      "raw_artifacts_retained": true,
+      "validated": true
+    },
+    "request_deadline_ms": 180000,
+    "route": "local-only",
+    "started_at": "2026-10-14T07:31:48.837938+00:00",
+    "status": "completed",
+    "summary_status": "available"
+  },
+  {
+    "baseline_seconds": 300,
+    "cell_cap_seconds": 6000,
+    "child_exit_code": 0,
+    "elapsed_seconds": 3420.9904636449646,
+    "exit_code": 0,
+    "exported_raw_files_sha256": {
+      "requests.jsonl": "4550463315d2a34e2d95f3dfb555c4d75f7a540ca192640d6a02de0fe0776b39",
+      "requests.jsonl.provider-inputs.jsonl": "fadc779e24b0adc04de7db6bc23581a321c8d7ee7636e6318ccb2adb1e5301af",
+      "resources.jsonl": "03fdaaf4d57f719c82a42d5afcea30d026704a20033bfb22ec6c9e1022300eb7"
+    },
+    "finished_at": "2026-10-14T09:28:51.397408+00:00",
+    "index": 2,
+    "planned_measured": 100,
+    "planned_warmups": 5,
+    "receipt_validation": {
+      "expected_provider_captures": 105,
+      "expected_requests": 105,
+      "failure_classes": [],
+      "raw_artifacts_retained": true,
+      "validated": true
+    },
+    "request_deadline_ms": 180000,
+    "route": "api",
+    "started_at": "2026-10-14T08:31:50.406722+00:00",
+    "status": "completed",
+    "summary_status": "available"
+  },
+  {
+    "baseline_seconds": 300,
+    "cell_cap_seconds": 6000,
+    "child_exit_code": 0,
+    "elapsed_seconds": 3781.1296130020637,
+    "exit_code": 0,
+    "exported_raw_files_sha256": {
+      "finalization.json": "67f5a21d3ff4142be21023a887352709532ccbf83d4c9ee303f97f985b7f35b6",
+      "next-autogen-cleanup.json": "7e2d397a283a748e6d74179933d619c34eb377d2e3ce2fde5816f54e1c3f268b",
+      "provider-inputs.jsonl": "94826b93435f5c1fa5866d1496481e8036e941c3cab98c0e940ccae7defc0c3e",
+      "resources.jsonl": "4562748b6a854ef53b39088b0c2630c45d9f4c22307687c9fa2d1c0a2ef81c59"
+    },
+    "finished_at": "2026-10-14T10:36:52.948081+00:00",
+    "index": 3,
+    "planned_measured": 100,
+    "planned_warmups": 5,
+    "receipt_validation": {
+      "expected_provider_captures": 105,
+      "expected_requests": 105,
+      "failure_classes": [],
+      "raw_artifacts_retained": true,
+      "validated": true
+    },
+    "request_deadline_ms": 180000,
+    "route": "mesh",
+    "started_at": "2026-10-14T09:33:51.818243+00:00",
+    "status": "completed",
+    "summary_status": "available"
+  },
+  {
+    "baseline_seconds": 300,
+    "cell_cap_seconds": 6000,
+    "child_exit_code": 0,
+    "elapsed_seconds": 3441.906089172,
+    "exit_code": 0,
+    "exported_raw_files_sha256": {
+      "requests.jsonl": "a581da30801319172e040fbcc521c2f9dda737a6e7dc408c6cb63439b7d5a678",
+      "requests.jsonl.provider-inputs.jsonl": "fadc779e24b0adc04de7db6bc23581a321c8d7ee7636e6318ccb2adb1e5301af",
+      "resources.jsonl": "1a448e6d43d432e01bfc01927e3994433baa76d27a3ba3a32a9dc61be6eb6163"
+    },
+    "finished_at": "2026-10-14T11:39:15.053469+00:00",
+    "index": 4,
+    "planned_measured": 100,
+    "planned_warmups": 5,
+    "receipt_validation": {
+      "expected_provider_captures": 105,
+      "expected_requests": 105,
+      "failure_classes": [],
+      "raw_artifacts_retained": true,
+      "validated": true
+    },
+    "request_deadline_ms": 180000,
+    "route": "api",
+    "started_at": "2026-10-14T10:41:53.147158+00:00",
+    "status": "completed",
+    "summary_status": "available"
+  },
+  {
+    "baseline_seconds": 300,
+    "cell_cap_seconds": 6000,
+    "child_exit_code": 0,
+    "elapsed_seconds": 3858.0613120039925,
+    "exit_code": 0,
+    "exported_raw_files_sha256": {
+      "finalization.json": "67f5a21d3ff4142be21023a887352709532ccbf83d4c9ee303f97f985b7f35b6",
+      "next-autogen-cleanup.json": "7e2d397a283a748e6d74179933d619c34eb377d2e3ce2fde5816f54e1c3f268b",
+      "provider-inputs.jsonl": "94826b93435f5c1fa5866d1496481e8036e941c3cab98c0e940ccae7defc0c3e",
+      "resources.jsonl": "893af0f7be9c4e7353434728a35f9183e92e2c6f9ae3fe91a72e5ed2e5841e33"
+    },
+    "finished_at": "2026-10-14T12:48:33.381881+00:00",
+    "index": 5,
+    "planned_measured": 100,
+    "planned_warmups": 5,
+    "receipt_validation": {
+      "expected_provider_captures": 105,
+      "expected_requests": 105,
+      "failure_classes": [],
+      "raw_artifacts_retained": true,
+      "validated": true
+    },
+    "request_deadline_ms": 180000,
+    "route": "mesh",
+    "started_at": "2026-10-14T11:44:15.320345+00:00",
+    "status": "completed",
+    "summary_status": "available"
+  },
+  {
+    "baseline_seconds": 300,
+    "cell_cap_seconds": 6000,
+    "child_exit_code": 0,
+    "elapsed_seconds": 3331.3531272929395,
+    "exit_code": 0,
+    "exported_raw_files_sha256": {
+      "requests.jsonl": "83781442ec38f7da50ae732f21decc5fa9cb5a2a7d688e173d9ef39dd7a984c0",
+      "requests.jsonl.provider-inputs.jsonl": "fadc779e24b0adc04de7db6bc23581a321c8d7ee7636e6318ccb2adb1e5301af",
+      "resources.jsonl": "ffe10051fd20e24377805987c3dc0728dd590592c60a10be51ae2c7d1a29907f"
+    },
+    "finished_at": "2026-10-14T13:49:04.951833+00:00",
+    "index": 6,
+    "planned_measured": 100,
+    "planned_warmups": 5,
+    "receipt_validation": {
+      "expected_provider_captures": 105,
+      "expected_requests": 105,
+      "failure_classes": [],
+      "raw_artifacts_retained": true,
+      "validated": true
+    },
+    "request_deadline_ms": 180000,
+    "route": "local-only",
+    "started_at": "2026-10-14T12:53:33.598436+00:00",
+    "status": "completed",
+    "summary_status": "available"
+  },
+  {
+    "baseline_seconds": 300,
+    "cell_cap_seconds": 6000,
+    "child_exit_code": 0,
+    "elapsed_seconds": 3884.3179996180115,
+    "exit_code": 0,
+    "exported_raw_files_sha256": {
+      "finalization.json": "67f5a21d3ff4142be21023a887352709532ccbf83d4c9ee303f97f985b7f35b6",
+      "next-autogen-cleanup.json": "7e2d397a283a748e6d74179933d619c34eb377d2e3ce2fde5816f54e1c3f268b",
+      "provider-inputs.jsonl": "94826b93435f5c1fa5866d1496481e8036e941c3cab98c0e940ccae7defc0c3e",
+      "resources.jsonl": "1ec2e610d59e252002dec4961a970efaad4a5075186c3b3355191b2f59bd335d"
+    },
+    "finished_at": "2026-10-14T14:58:49.571579+00:00",
+    "index": 7,
+    "planned_measured": 100,
+    "planned_warmups": 5,
+    "receipt_validation": {
+      "expected_provider_captures": 105,
+      "expected_requests": 105,
+      "failure_classes": [],
+      "raw_artifacts_retained": true,
+      "validated": true
+    },
+    "request_deadline_ms": 180000,
+    "route": "mesh",
+    "started_at": "2026-10-14T13:54:05.253329+00:00",
+    "status": "completed",
+    "summary_status": "available"
+  },
+  {
+    "baseline_seconds": 300,
+    "cell_cap_seconds": 6000,
+    "child_exit_code": 0,
+    "elapsed_seconds": 3374.5153014989337,
+    "exit_code": 0,
+    "exported_raw_files_sha256": {
+      "requests.jsonl": "814346201324340f42485c623823276a24403ddc9c3886df6271a2068301aba2",
+      "requests.jsonl.provider-inputs.jsonl": "fadc779e24b0adc04de7db6bc23581a321c8d7ee7636e6318ccb2adb1e5301af",
+      "resources.jsonl": "2dca145eb72168df76671bea364c98d9560fafe3139ed3529ffffcad0472ca15"
+    },
+    "finished_at": "2026-10-14T16:00:04.338141+00:00",
+    "index": 8,
+    "planned_measured": 100,
+    "planned_warmups": 5,
+    "receipt_validation": {
+      "expected_provider_captures": 105,
+      "expected_requests": 105,
+      "failure_classes": [],
+      "raw_artifacts_retained": true,
+      "validated": true
+    },
+    "request_deadline_ms": 180000,
+    "route": "local-only",
+    "started_at": "2026-10-14T15:03:49.822615+00:00",
+    "status": "completed",
+    "summary_status": "available"
+  },
+  {
+    "baseline_seconds": 300,
+    "cell_cap_seconds": 6000,
+    "child_exit_code": 0,
+    "elapsed_seconds": 3371.053035762976,
+    "exit_code": 0,
+    "exported_raw_files_sha256": {
+      "requests.jsonl": "a12550cadac115b1110e0ca0239bfb54ebdf8f7dcc4b8eaa2af1b876bfd5cf68",
+      "requests.jsonl.provider-inputs.jsonl": "fadc779e24b0adc04de7db6bc23581a321c8d7ee7636e6318ccb2adb1e5301af",
+      "resources.jsonl": "cf20ccfd4f521cb648150d498d3666c178ee57410916d2de159f7e1afd060cc0"
+    },
+    "finished_at": "2026-10-14T17:01:15.591014+00:00",
+    "index": 9,
+    "planned_measured": 100,
+    "planned_warmups": 5,
+    "receipt_validation": {
+      "expected_provider_captures": 105,
+      "expected_requests": 105,
+      "failure_classes": [],
+      "raw_artifacts_retained": true,
+      "validated": true
+    },
+    "request_deadline_ms": 180000,
+    "route": "api",
+    "started_at": "2026-10-14T16:05:04.537766+00:00",
+    "status": "completed",
+    "summary_status": "available"
+  }
+]

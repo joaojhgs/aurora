@@ -1,0 +1,14 @@
+{
+  "at": "2026-10-20T04:30:27.815163+00:00",
+  "source": ".omx/evidence/orca-monitor-20261010/PLAN-AFTER-P2P-REMAINING880-20261020T0423.md",
+  "destination": "thesis/methodology/owner-requirements-20261020-d91ff7ee.md",
+  "bytes": 656364,
+  "sha256": "d91ff7ee1b725df3ca7e3e58abb2bbb6652c884cca9f0d4ca15dcbfe9485b4f5",
+  "priorBytes": 644874,
+  "exactPriorPrefix": true,
+  "appendBytes": 11490,
+  "completeCanonicalMirror": true,
+  "methodologyWriter": "Original monitor only",
+  "rootCopyOnly": true,
+  "sutCalls": 0
+}

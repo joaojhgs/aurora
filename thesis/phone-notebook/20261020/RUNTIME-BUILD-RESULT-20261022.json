@@ -1,0 +1,29 @@
+{
+  "at": "2026-10-22T03:30:41.333457+00:00",
+  "sourceSha": "ebde3a8acf6315f920d03593845f17a1fc65a733",
+  "remoteSha": null,
+  "version": "0.3.19",
+  "runtimeBuildPassed": true,
+  "runtimeImportPassed": true,
+  "gpuOffloadBuildSupport": false,
+  "actualVulkanMessage": "ggml_vulkan: No devices found.",
+  "modelCalls": 0,
+  "cpuFallbackUsed": false,
+  "buildCommandSeconds": 499.1430092979972,
+  "resources": {
+    "at": "2026-10-22T03:21:24.001580+00:00",
+    "diskFreeBytes": 99342790656,
+    "load": [
+      3.72119140625,
+      4.9892578125,
+      4.861328125
+    ],
+    "maxSensorC": 82.0,
+    "memAvailableBytes": 21000192000,
+    "temperaturePolicy": "observe_only_owner_correction"
+  },
+  "rssObservationCaveat": "Original build monitor counted main-thread descendants only; its43MB number excludes UV worker-thread spawned compiler children and is not a full-build peak. Independent all-thread process-tree sample observed577130496B and two cc1plus at03:20:28UTC.",
+  "receiptDirectory": "evidence/owner-temperature-correction-20261022/notebook-raw",
+  "nativePilotPassed": false,
+  "customNotebookTemperatureGateRemoved": true
+}

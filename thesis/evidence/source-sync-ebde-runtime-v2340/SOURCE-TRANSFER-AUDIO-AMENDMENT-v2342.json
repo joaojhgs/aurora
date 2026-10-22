@@ -1,0 +1,19 @@
+{
+  "at": "2026-10-22T00:54:24.271477+00:00",
+  "state": "SAME_SOURCE_HANDOFF_FIXED_AUDIO_ADDITION_NOT_NEW_JOB",
+  "originalAdmission": "thesis/evidence/source-sync-ebde-runtime-v2340/SOURCE-TRANSFER-ADMISSION-v2341.json",
+  "sourceWav": "thesis/harness/distributed-k1-http-remaining450-v2296/candidate-input.wav",
+  "additionalFile": {
+    "path": "thesis/evidence/source-sync-ebde-runtime-v2340/ORIGINAL-FIXED-INPUT.wav",
+    "bytes": 219794,
+    "sha256": "da0ecc4ad0885746ab6e716585473917ab2b543a505bf0db09ebacfaa7943cbb"
+  },
+  "newCombinedBytes": 12355726,
+  "sameAbsoluteEndUtc": "2026-10-22T01:01:07.881437+00:00",
+  "sameMaximumActiveSeconds": 120,
+  "sameSourceAndWireCaps": true,
+  "sameOneTransferOnly": true,
+  "frozenAudioUnmodified": true,
+  "newSutCalls": 0,
+  "noPhone900Start": true
+}

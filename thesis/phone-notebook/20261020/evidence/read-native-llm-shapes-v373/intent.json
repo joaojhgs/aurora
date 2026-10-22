@@ -1,0 +1,13 @@
+{
+  "controlDeadline": "2026-10-22T12:47:54.239314+00:00",
+  "host": "ssh:ssh-sem-notebook-personal",
+  "incarnation": "328cd72f-c7ea-49ff-a2db-b9275b085037",
+  "remoteResult": "/home/developer/projects/aurora/thesis/phone-notebook/20261020/evidence/read-native-llm-shapes-v373.json",
+  "rootAdmissionMessage": "Read existing corrected native SDK LLM component result and passive output shapes; no inference replay",
+  "script": "scripts/read_native_llm_shapes_v373.py",
+  "scriptSha256": "66337191cc0aaeac9d06236571ac5b5678e4567de637a59cca17c8016c787362",
+  "singleSend": true,
+  "supportedEnter": true,
+  "terminal": "term_a2ed5feb-7c92-48e4-bd88-d1b0e6737989",
+  "textTrailingNewline": false
+}

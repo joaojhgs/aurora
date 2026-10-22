@@ -1,0 +1,100 @@
+{
+  "at": "2026-10-19T23:22:55.748375+00:00",
+  "lineage": {
+    "run": "run_e6054e76e9fc",
+    "task": "task_d7ea336050cf",
+    "dispatch": "ctx_37b4d0a3c14f",
+    "root": "term_6a00d9ee-792a-4daf-8578-236290e33108",
+    "rootIncarnation": "fe7e63c7-d260-465f-b37e-f6fc78f8a1af",
+    "monitor": "term_2eab47ed-ab9b-4e35-bd9b-fc068c60e3fc",
+    "monitorNativeGoal": "01a123ff-19ba-7332-a2f7-346a722af79f"
+  },
+  "ownerChangedEvidence": "19Oct owner asks should be unblocked now check again; fresh connected/writable metadata, actual one safe read-only command authorized",
+  "rootResume": {
+    "issuedOnce": true,
+    "request": "2dd47a5a-13d1-44b1-b811-f0c915f4c107",
+    "receipt": "4c9dd097-671e-41d7-892f-9b35b487af06",
+    "accepted": true,
+    "stages": [
+      "input_accepted",
+      "turn_started"
+    ],
+    "sameIncarnation": true,
+    "rootActualNativeGet": "Root msg_33c31ad42da2 confirms ACTIVE same01a112a5 updated1792452042"
+  },
+  "pendingReconciliation": {
+    "oldRejectedRequest": "f2f7472f-e005-46ec-9eb9-715187e69291 explicit NOTaccepted, not replayed",
+    "legacyCdac": "UNKNOWN/unresent preserved",
+    "oldOutputCursor": "57008 unchanged"
+  },
+  "actualPersonalCheck": {
+    "operator": "Original Root only",
+    "terminal": "term_d5651d8d-58e2-4b38-85e2-51c668cc933c",
+    "incarnation": "034ff933-61a3-4c74-b5ad-98a75e8ac21c",
+    "target": "ssh:ssh-1786238480967-semdev",
+    "freshFence": "same host/workspace/inc, connected=true,writable=true,agentIdentity=null",
+    "command": "501-byte safe read-only unique Python time/hostname/pwd marker",
+    "newSendRequest": "d390101e-3f12-4e05-9427-58ab54839a6e",
+    "ok": false,
+    "error": {
+      "code": "terminal_not_writable",
+      "message": "terminal_not_writable"
+    },
+    "executed": false,
+    "helperExitCode": 1,
+    "resendCount": 0,
+    "sourceReceipt": ".git/aurora-handoff-import-20261006/v1646-personal-actual-once-SEND.json",
+    "receiptBytes": 234,
+    "receiptSha256": "ea1a509fcf8232659cebab41c0ba9fd2c9436f758038089104e33bff353d7f42",
+    "rawReceipt": {
+      "id": "d390101e-3f12-4e05-9427-58ab54839a6e",
+      "ok": false,
+      "error": {
+        "code": "terminal_not_writable",
+        "message": "terminal_not_writable"
+      },
+      "_meta": {
+        "runtimeId": "cc9e3275-28c6-4c45-85cc-bdcd2262aa7d"
+      }
+    }
+  },
+  "rootAcknowledgement": {
+    "message": "msg_33c31ad42da2",
+    "createdAt": "2026-10-19T23:21:53Z",
+    "delivery": "delivery_fb369a91b16e",
+    "acknowledged": true,
+    "canonicalPacketBeingWritten": "thesis/evidence/orca-desktop-recovery-20261019T2321/"
+  },
+  "execution": "No resumed test, MQTT pairing, provider restart or reservation renewal. Existing provider state UNKNOWN; prior deadline2026-10-19T00:08:53.328388Z expired. Actual forward/process/raw delta reconciliation still requires working control. No silent deadline extension.",
+  "countsPreserved": {
+    "K3": {
+      "attempted": 740,
+      "correct": 725,
+      "failed": 15,
+      "remaining": 160
+    },
+    "K1Remaining": 720,
+    "K2": "900 complete, closed; no replay"
+  },
+  "fleet": {
+    "path": ".omx/evidence/orca-monitor-20261010/fleet-20261019T2322.json",
+    "observedAt": "2026-10-19T23:21:56.194644Z",
+    "total": 130,
+    "live": 1,
+    "unverifiable": 76,
+    "exited": 53,
+    "sameDispatchSetAndOwnershipStates": true,
+    "unknownNotExit": true
+  },
+  "nextRequiredCapability": "Owning Orca must repair normal terminal.send routing on exact same Personal handle/incarnation; metadata alone remains false-positive. No supported repair operation was established; no extra changed-input probes authorized by this single recheck.",
+  "monitorNativeStatus": "Still BLOCKED on actualget at start of this owner turn. Root requested to issue ONE same-monitor /goal resume only AFTER actual monitor TUI idle; not yet claimed ACTIVE. Fresh blocked audit resets only after actual resume.",
+  "safety": {
+    "newAgents": 0,
+    "newGoals": 0,
+    "monitorPersonalWrites": 0,
+    "newModelCalls": 0,
+    "closed900Replays": 0,
+    "securityOrCredentialChanges": 0,
+    "workerDoneSent": false
+  }
+}

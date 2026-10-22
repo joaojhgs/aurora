@@ -1,0 +1,31 @@
+{
+  "stage": "T0-real-python-provider-readiness",
+  "sourceCommit": "5782746afba213f6b36907db2f09f0017625e218",
+  "command": [
+    "flock",
+    "--nonblock",
+    "/tmp/aurora-global-build.lock",
+    "timeout",
+    "--signal=TERM",
+    "--kill-after=10s",
+    "180s",
+    "/home/developer/projects/aurora/.venv/bin/python",
+    "/home/developer/projects/aurora/.git/aurora-handoff-import-20261006/python-model-readiness-v242/readiness.py",
+    "/home/developer/projects/aurora/.git/aurora-handoff-import-20261006/python-model-readiness-v242"
+  ],
+  "startedAt": "2026-10-14T00:26:56.118682+00:00",
+  "deadlineSeconds": 180,
+  "serialOwner": "existing Root",
+  "hostPseudonym": "coding-worker",
+  "hostArchitecture": "aarch64",
+  "logicalCpus": 2,
+  "loadAvg": [
+    3.1083984375,
+    4.154296875,
+    4.16015625
+  ],
+  "llamaCppPythonVersion": "0.3.19",
+  "settingsSha256": "623aa15894690793f6d02da8c50a76977d963aea13fb5bfe9e90843abede0857",
+  "workloadSha256": "03e8139177bd21521c59b5c112f0fb677b79e5d1c988ee22b17c9b66f82b8586",
+  "scope": "provider readiness; not three-route comparison or clean performance sampling"
+}

@@ -1,0 +1,12 @@
+{
+  "controlDeadline": "2026-10-22T05:50:00Z",
+  "explicitNewline": true,
+  "host": "ssh:ssh-sem-notebook-personal",
+  "incarnation": "328cd72f-c7ea-49ff-a2db-b9275b085037",
+  "remoteResult": "/home/developer/projects/aurora/thesis/phone-notebook/20261020/evidence/actual-voice-catalog-v162.json",
+  "rootAdmissionMessage": "actual relevantSTT/TTS catalog metadata only during bounded phone hash/load; no modelcall or download",
+  "script": "scripts/actual_voice_catalog_v162.py",
+  "scriptSha256": "28add15aa2ae804e57366d43651b2cf42ae7f4a2ec28f5df5dbaaca2c643b52e",
+  "singleSend": true,
+  "terminal": "term_a2ed5feb-7c92-48e4-bd88-d1b0e6737989"
+}

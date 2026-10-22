@@ -1,0 +1,34 @@
+{
+  "schema": "aurora.synthetic-segmented-join-main-check.v761",
+  "at": "2026-10-16T00:07:41.883549+00:00",
+  "source": "/home/developer/projects/aurora/thesis/analysis/join_local_segments.py",
+  "sourceSHA256": "6d5304090d091467f409ee0b1ab51e3baac53e8df0fbbe2ef452b4897d780272",
+  "checkSourceSHA256": "e5166dfa2bee0af1225f0cef1aff551d49d6effa518f0de28c22990c4a6c3444",
+  "command": [
+    "/home/developer/projects/aurora/.venv/bin/python",
+    "/home/developer/projects/aurora/.git/aurora-handoff-import-20261006/segmented-analysis-check-v761/check_main.py"
+  ],
+  "durationSeconds": 0.8589084200793877,
+  "exitCode": 0,
+  "scope": "ONE synthetic saved-data main-flow fixture, not a benchmark or actual cohort join.",
+  "reviewCorrection": "STT/TTS native request/session IDs are nullable in actual retained V735 metadata; this main-flow fixture now uses that actual shape. Earlier V760 fixture/receipt retained separately.",
+  "syntheticRows": {
+    "measured": 900,
+    "excludedWarmups": 30,
+    "pairedSpans": 4500
+  },
+  "assertions": [
+    "all900 unique measured rows preserved",
+    "original interrupted row remains failed",
+    "incorrect/completed/observed populations have distinct Type7 denominators",
+    "15 warmups per segment excluded",
+    "five exact handlers remain separate",
+    "own receiver/correlation IDs matched; present native request/session IDs matched, absent STT/TTS IDs counted; LLM IDs strict",
+    "missing native operation IDs and null unknown metrics remain visible"
+  ],
+  "syntheticAdmission": "Only fixture module namespace replaced immutable manifest digest constants; real canonical source/admission pins untouched.",
+  "actualSegmentDataJoinExecuted": false,
+  "archiveAuditReplayed": false,
+  "newMeasuredRequests": 0,
+  "modelsOrServicesLoaded": false
+}

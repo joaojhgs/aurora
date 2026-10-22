@@ -1,0 +1,42 @@
+{
+  "at": "2026-10-21T03:44:07.980942+00:00",
+  "classification": "verified_wait",
+  "phase": "K1_P2P_MEASURED_RUNNING",
+  "newMeasured": 42,
+  "newCorrect": 42,
+  "newIncorrect": 0,
+  "newFailed": 0,
+  "remaining": 149,
+  "globalIndices": [
+    710,
+    751
+  ],
+  "actors": {
+    "3332811": {
+      "state": "S",
+      "startTicks": 132995693
+    },
+    "3332919": {
+      "state": "S",
+      "startTicks": 132996503
+    },
+    "3333678": {
+      "state": "S",
+      "startTicks": 133003703
+    }
+  },
+  "manifestSha256": "d753203e4a53f12ed983a98d776a811d241d0d6bc6061b28e3c1480a077a17d3",
+  "nativeAdmissionPassed": true,
+  "custody": {
+    "sequence": 45,
+    "cases": 57,
+    "wavFiles": 57,
+    "errors": []
+  },
+  "nextOfflineHandoff": "thesis/evidence/k1-http-remaining720-offline-prep-v2173/HANDOFF.json",
+  "nextState": "HTTP720parentandfirst360sourceindexed, NOT_ADMITTED, no newSUT/source/model/device/network/build/test/worker/review",
+  "nextRoutineCheckUtc": "2026-10-21T03:49:07.980942+00:00",
+  "sameHardDeadlineUtc": "2026-10-21T06:59:42.981693+00:00",
+  "phoneSeparate": true,
+  "sutCallsByObserver": 0
+}

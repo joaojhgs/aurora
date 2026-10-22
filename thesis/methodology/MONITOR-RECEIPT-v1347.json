@@ -1,0 +1,20 @@
+{
+  "at": "2026-10-17T22:26:58.714549+00:00",
+  "section": "30.52",
+  "plan": "/home/developer/Documents/Obsidian Vault Origin/5-full-notes/faculdade/tcc/future-work-test-requirements.md",
+  "previousBytes": 514993,
+  "previousSHA256": "9b03f764bf88ca6fec2ff16585c102d456746b33e082790374a2effd3539d42d",
+  "bytes": 521342,
+  "sha256": "7fac1bc3ef131352662abf2da3f17b761fe9236033b36b05ed954bc596984157",
+  "appendedBytes": 6349,
+  "priorPrefixByteIdentical": true,
+  "backup": ".omx/evidence/orca-monitor-20261010/authoritative-plan-before-30.52-20261017T222658.md",
+  "patch": ".omx/evidence/orca-monitor-20261010/authoritative-plan-30.52-20261017T222658.patch",
+  "rootSourceReceipt": "thesis/evidence/auditor-dispatch-20261017/ROOT-RECOVERY-REVIEW-v1344.json",
+  "rootSourceReceiptSHA256": "5970155a5339ad145a559c76c55cb26fd6f53945257cf5a92d7505941a1e00f7",
+  "rootMessage": "msg_eb6c93c766ef",
+  "run": "run_e6054e76e9fc",
+  "task": "task_d7ea336050cf",
+  "dispatch": "ctx_37b4d0a3c14f",
+  "scope": "Existing authoritative plan append only; Root must mirror entire exact file to canonical thesis/methodology. No new experiment or acceptance gate."
+}

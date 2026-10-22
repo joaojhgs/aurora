@@ -1,0 +1,8 @@
+{
+  "bytes": 858,
+  "copyOnly": true,
+  "custody": "Notebook result persisted and fsynced before relay; remote receipt in same output",
+  "localPath": "/home/developer/projects/aurora/thesis/phone-notebook/20261020/evidence/launch-side-by-side-apk-v96/result.json",
+  "remotePath": "/home/developer/projects/aurora/thesis/phone-notebook/20261020/evidence/launch-side-by-side-apk-v96.json",
+  "sha256": "e6eb5959e55f79e8e5099f918cbd07cad4fd29e9d2a5052c15f6cca6154be17e"
+}

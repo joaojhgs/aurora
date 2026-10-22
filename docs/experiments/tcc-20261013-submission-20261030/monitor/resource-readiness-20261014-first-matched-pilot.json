@@ -1,0 +1,29 @@
+{
+  "observedAtUTC": "2026-10-14T04:38:21.828676+00:00",
+  "kind": "read_only_same_host_resource_readiness_snapshot",
+  "scope": "single approximately1second observation, not5minute baseline or reservation",
+  "logicalCPUs": 2,
+  "loadAvg": [
+    4.37841796875,
+    2.9375,
+    2.716796875
+  ],
+  "cpuBusyPercent1s": 91.04477611940298,
+  "memory": {
+    "MemTotal_bytes": 12506693632,
+    "MemAvailable_bytes": 6187806720,
+    "SwapTotal_bytes": 0,
+    "SwapFree_bytes": 0
+  },
+  "filesystemTotalBytes": 109128826880,
+  "filesystemAvailableBytes": 3201675264,
+  "existingGlobalBuildKernelLockFacts": [],
+  "selectedProcessNameCounts": {
+    "python3": 4,
+    "python": 6
+  },
+  "argvOrSecretValuesNotRead": true,
+  "noProcessesStopped": true,
+  "noReservationOrLockAcquired": true,
+  "cleanExclusiveSlotNotProven": true
+}

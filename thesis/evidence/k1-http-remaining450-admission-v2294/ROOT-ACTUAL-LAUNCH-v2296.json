@@ -1,0 +1,73 @@
+{
+  "at": "2026-10-21T21:42:59.253962+00:00",
+  "version": "V2296",
+  "status": "SAME_ROUTE_PROVIDER_LIVE_REQUESTER_CONTROLLER_STARTED_FRESH15_NATIVE_ADMISSION_PENDING",
+  "nativeGoalStatus": "active",
+  "nativeGoalBudget": null,
+  "conditionMeasuredAttempted": 450,
+  "conditionCorrect": 449,
+  "conditionFailed": 1,
+  "remainingMeasured": 450,
+  "nextIndices": [
+    451,
+    900
+  ],
+  "newEpochMeasuredObserved": 0,
+  "freshExcludedWarmupsObserved": 0,
+  "provider": {
+    "controller": {
+      "pid": 1820862,
+      "state": "S",
+      "startTicks": 37439756
+    },
+    "receiver": {
+      "pid": 1820863,
+      "state": "S",
+      "startTicks": 37439818
+    },
+    "manifestSha256": "0f4a4bf0e7638b63b8d046331e1e7393e4f108f406802f0e4f0d543feca5ffa2",
+    "providerDeadlineUtc": "2026-10-22T08:31:16.563152+00:00"
+  },
+  "launch": {
+    "auxiliary": {
+      "requesterCopier": {
+        "pid": 3965951,
+        "startTicks": 139740363,
+        "state": "R"
+      },
+      "warmupFinalizer": {
+        "pid": 3965952,
+        "startTicks": 139740363,
+        "state": "R"
+      }
+    },
+    "requester": {
+      "at": "2026-10-21T21:42:23.035583+00:00",
+      "controllerPid": 3965950,
+      "controllerStartTicks": 139740362,
+      "excludedWarmups": 15,
+      "firstGlobalIndex": 451,
+      "frozenManifestSha256": "9adbf9ba3a7ec0948a087edad3655cf94ee344b3a2371a78d15f188f44150d42",
+      "lastGlobalIndex": 900,
+      "measuredObserved": 0,
+      "newWorker": false,
+      "plannedMeasured": 450,
+      "providerReceiver": {
+        "pid": 1820863,
+        "startTicks": 37439818,
+        "state": "S"
+      },
+      "sourceInventorySha256": "000202cdddb9803d503fc44f8aaf58eb469475890751a310193418330aa79937",
+      "sourceReadyIsNotMeasurement": true,
+      "status": "HTTP_REMAINING450_REQUESTER_CONTROLLER_STARTED_NATIVE_ADMISSION_PENDING",
+      "warmupsObserved": 0
+    }
+  },
+  "frozenManifestSha256": "9adbf9ba3a7ec0948a087edad3655cf94ee344b3a2371a78d15f188f44150d42",
+  "allocationReceipt": "thesis/evidence/k1-http-remaining450-admission-v2294/SESSION-ALLOCATION-v2296.json",
+  "oldProviderEofCustody": "thesis/campaigns/worker-desktop-k1-orca-relayed-http-first270-v2234/provider-eof-delta-v2296/CUSTODY.json",
+  "copierFromStart": true,
+  "nextSutAction": "Observe exact existing15warmups/native45joins/capacity, then only451-900; never relaunch an uncertain controller",
+  "phoneDelegated": true,
+  "newOrcaWorkers": 0
+}

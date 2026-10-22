@@ -1,0 +1,19 @@
+{
+  "at": "2026-10-20T08:01:56.134818+00:00",
+  "verdict": "PASS_CLOSED_BOUNDED_MECHANICAL_ARTIFACT_MAP",
+  "source": ".omx/evidence/orca-monitor-20261010/P2P-K2-V1748-COPIER-ARTIFACT-MAP-REVIEW-20261020T0802.md",
+  "physicalCopy": "thesis/harness/distributed-k2-operations-v1748/review/P2P-K2-V1748-COPIER-ARTIFACT-MAP-REVIEW-20261020T0802.md",
+  "bytes": 5217,
+  "sha256": "db8f8887b83dbb8aff4bef88b04294a64f55f4e5002c0e326aca5952d4ef6d5c",
+  "reviewer": {
+    "run": "run_e6054e76e9fc",
+    "task": "task_d7ea336050cf",
+    "dispatch": "ctx_37b4d0a3c14f",
+    "terminal": "term_2eab47ed-ab9b-4e35-bd9b-fc068c60e3fc",
+    "model": "gpt-6.1-sol",
+    "effort": "xhigh"
+  },
+  "sourceSha256": "648c97916910c6152a0b07ef7a4a30d73163f470b9238147dff1f2b78c3da164",
+  "noRuntimeAdmissionClaim": true,
+  "noFurtherReviewGate": true
+}

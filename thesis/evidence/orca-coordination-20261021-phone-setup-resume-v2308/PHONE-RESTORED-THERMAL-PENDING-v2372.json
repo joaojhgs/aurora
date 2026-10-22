@@ -1,0 +1,38 @@
+{
+  "id": "remote-cli-1792637764929",
+  "ok": true,
+  "result": {
+    "runId": "run_e6054e76e9fc",
+    "deliveryId": "delivery_80368897cac3",
+    "messages": [
+      {
+        "id": "msg_895b0d7b06eb",
+        "run_id": "run_e6054e76e9fc",
+        "delivery_contract": "current_delivery",
+        "from_handle": "term_1f27be31-0284-4366-bb91-30fe538cd30e",
+        "to_handle": "run:run_e6054e76e9fc",
+        "subject": "Fresh02:53 owner update: POCO USB restored, notebook90.75C still blocks build/pilot",
+        "body": "Executei a \u00fanica checagem fresca solicitada \u00e0s02:53:35UTC pelo controlador Personal existente: POCO KBX8LNFUBE5XGQRG agora device/get-state exit0, n\u00f3003/015 leg\u00edvel/grav\u00e1vel, modelo2412DPC0AG/API36/arm64 confirmados. O notebook ainda est\u00e1 acima do guard real: k10temp/Tctl90.75C, ACPI90C, carga4.15/6.48/7.80, RAM dispon\u00edvel20.80GB e disco100.11GB; por limite85C n\u00e3o iniciei build, infer\u00eancia, app ou novo download, preservando fonte1959arquivos e833499307B j\u00e1 verificados. Setup nativo segue NOT_READY por temperatura e ainda exige build/app/piloto quando resfriar, sem promessa de conclus\u00e3o desacompanhada; favor apresentar este evento ao Coding/owner e manter notifica\u00e7\u00f5es finais de setup e K1 pendentes, coleta900 sem START e main HTTP intocado.",
+        "type": "status",
+        "priority": "high",
+        "thread_id": null,
+        "payload": "{\"reportPath\":\"thesis/phone-notebook/20261020/REPORT.md\"}",
+        "created_at": "2026-10-22T02:54:46Z",
+        "delivered_at": null
+      }
+    ],
+    "count": 1,
+    "replayed": false,
+    "acknowledged": null,
+    "timedOut": false,
+    "cancelled": false,
+    "connectionLost": false,
+    "mutation": {
+      "requestId": "393449d5-0d9e-4150-9b99-ba2ab7911ffd",
+      "replayed": false
+    }
+  },
+  "_meta": {
+    "runtimeId": "cc9e3275-28c6-4c45-85cc-bdcd2262aa7d"
+  }
+}

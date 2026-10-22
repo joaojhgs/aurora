@@ -1,0 +1,26 @@
+{
+  "observedAt": "2026-10-17T21:20:52.087773+00:00",
+  "run": "run_e6054e76e9fc",
+  "task": "task_d7ea336050cf",
+  "dispatch": "ctx_37b4d0a3c14f",
+  "sourceArtifact": "thesis/campaigns/worker-desktop-k2-orca-relayed-http-v1264/ADMISSION-PREPARED.json",
+  "sourceSHA256": "d89717d31e32d70eecbacceef0af67108cb800b8595ae5e9067a3aad60b561d9",
+  "readOnlyMetadataChecks": {
+    "inert": true,
+    "notLaunched": true,
+    "noNewSamples": true,
+    "receiversUnadmitted": true,
+    "900plus15": true,
+    "30RemoteJoins": true,
+    "noK1Mutation": true,
+    "providerLifetimeExplicit": true,
+    "noMeshClaim": true,
+    "actualGpuUnverified": true,
+    "distinctOutputPaths": true
+  },
+  "inputCopiesChecked": 4,
+  "physicalInputIdentityProblems": [],
+  "scope": "Bounded existing-artifact/source-receipt consistency only; no new implementation review/compile/test/SUT/probe/Personal commands or added admission gate.",
+  "result": "PREPARATION_RECEIPT_VERIFIED;runtimeStillUnadmitted",
+  "currentK1": "Preserved, not migrated/repeated/extended. Next measured launch waits natural terminal/seal/release and ordinary approved admission."
+}

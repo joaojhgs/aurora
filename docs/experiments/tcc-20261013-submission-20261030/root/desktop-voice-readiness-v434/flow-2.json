@@ -1,0 +1,53 @@
+{
+  "at": "2026-10-14T21:43:09.109642+00:00",
+  "host": "personal.skyron-server",
+  "pilotPid": 2786932,
+  "pilotPidPresent": false,
+  "backendPid": 2786324,
+  "backendPidPresent": true,
+  "expectedWorkloadSHA256": "0335716ce5d0bb172a4cbe675b4752f0ab1fd661db179a1793b2c3a1a6f30dfe",
+  "resultBytes": 1455,
+  "result": {
+    "backend_config_sha256": "3a5a17bf1ffb310146131400ea7fce9f9d6a0fc049405c8252391a37d8baaad4",
+    "clock_domain": "browser.performance",
+    "elapsed_ms": 935.6,
+    "failure_code": "full_voice_stage_failed",
+    "input_audio_sha256": "2f6361506708d0a3065a339d168c9db5412e343683dd9b4080471d8948bf82ae",
+    "outcome": "failed",
+    "schema_version": "aurora.production_full_voice_pilot_result.v1",
+    "session_id": "2aa8229b-9f55-4edf-a1e8-4553e46454a3",
+    "stages": [
+      {
+        "clock_domain": "browser.performance",
+        "duration_ms": 16,
+        "ended_ms": 271.3,
+        "outcome": "completed",
+        "session_id_present": true,
+        "stage": "session_create",
+        "stage_attempt_id": "21690521-b9ab-4c9a-baf9-30ebcfb0d353",
+        "started_ms": 255.3
+      },
+      {
+        "channels": 1,
+        "clock_domain": "browser.performance",
+        "duration_ms": 916.3,
+        "ended_ms": 1187.7,
+        "expected_normalized_transcript_sha256": "0678fa1c7a18a8cfaa248f06053bffdb2057516958fe3a6c86e2c625c457c973",
+        "input_audio_sha256": "2f6361506708d0a3065a339d168c9db5412e343683dd9b4080471d8948bf82ae",
+        "model_used": "realtime",
+        "normalized_transcript_match": false,
+        "normalized_transcript_sha256": "c695272c62ef09ddecac511dfe33a2713bdcf0d57608517906a5e088064ec139",
+        "outcome": "predicate_failed",
+        "parent_session_id_present": true,
+        "sample_rate": 22050,
+        "stage": "stt_transcribe",
+        "stage_attempt_id": "2ad77906-1c9f-494f-8446-41866089c74c",
+        "started_ms": 271.4,
+        "transcript_sha256": "92e847fc22f5457e712e0e0fd816b0bef2d77b70a364aad23824f5e0c374b872"
+      }
+    ],
+    "workload_manifest_sha256": "0335716ce5d0bb172a4cbe675b4752f0ab1fd661db179a1793b2c3a1a6f30dfe"
+  },
+  "resultSHA256": "fbd95eddf551f4f79052ef75608f09ead965e88af3063787f75ba750c56ca6a8",
+  "privateLogBytes": 0
+}

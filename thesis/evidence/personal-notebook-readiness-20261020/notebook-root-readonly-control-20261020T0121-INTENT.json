@@ -1,0 +1,10 @@
+{
+  "at": "2026-10-20T01:19:51.973910+00:00",
+  "intentId": "09ab3ea7-dc76-4c4b-b7b1-3bdaa98eace2",
+  "scope": "Approved existing PERSONAL notebook Aurora workspace ONLY",
+  "worktree": "id:03d8a475-d62e-43b3-8885-e382b313ab1b::/home/developer/projects/aurora",
+  "maximumCreates": 1,
+  "terminalKind": "Plain shell, not a Codex/Orca worker, no agent/Task/Run/leader creation",
+  "purpose": "Owner-authorized bounded hardware/control readiness; no builds/benchmarks/inference",
+  "automaticRetry": false
+}

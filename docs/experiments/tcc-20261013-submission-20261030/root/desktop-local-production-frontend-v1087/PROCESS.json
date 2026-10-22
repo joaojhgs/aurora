@@ -1,0 +1,18 @@
+{
+  "pid": 3821790,
+  "startTicks": "94093676",
+  "command": [
+    "pnpm",
+    "--filter",
+    "@aurora/tauri-ui",
+    "exec",
+    "vite",
+    "build",
+    "--mode",
+    "production",
+    "--outDir",
+    "/home/developer/projects/aurora/.git/aurora-handoff-import-20261006/desktop-local-frontend-v1087/dist",
+    "--manifest"
+  ],
+  "startedAt": "2026-10-16T14:54:36.170798+00:00"
+}

@@ -1,0 +1,21 @@
+{
+  "at": "2026-10-19T23:24:51.596086+00:00",
+  "sameGoal": "01a123ff-19ba-7332-a2f7-346a722af79f",
+  "sameTerminal": "term_2eab47ed-ab9b-4e35-bd9b-fc068c60e3fc",
+  "sameIncarnation": "37e50d9c-6cf5-4e28-a63b-f2bc3eed5661",
+  "supportedCommand": "/goal resume",
+  "sendCount": 1,
+  "requestId": "175e4a6b-5e1f-408f-bc88-6f2f3f30c9da",
+  "stages": [
+    "input_accepted",
+    "turn_started"
+  ],
+  "nativeGoalStatus": "active",
+  "source": "thesis/evidence/orca-desktop-recovery-20261019T2321/MONITOR-SINGLE-RESUME-ACCEPTED-v1648.json",
+  "sourceSha256": "431362f33dcb7351de7a60dc168cb4d7fc41a1a1cf186fbe2fd7eda508a6bf89",
+  "personalControlRecovery": "FAILED d390101e terminal_not_writable, not retried",
+  "newTestsOrModels": 0,
+  "actualNativeGetReceipt": "thesis/evidence/orca-desktop-recovery-20261019T2321/ORIGINAL-MONITOR-NATIVE-ACTIVE-v1648.json",
+  "pendingResume": false,
+  "nativeStatusConfirmedAt": "2026-10-19T23:24:19Z"
+}

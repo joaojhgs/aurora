@@ -1,0 +1,46 @@
+{
+  "at": "2026-10-22T12:41:45.520332+00:00",
+  "files": [
+    {
+      "path": "thesis/goal-evidence/PER291-plan-adoption-20261022/ADOPTION-RECEIPT.json",
+      "bytes": 1469,
+      "sha256": "b4e0a603b8662ca37fccaebe66b81b7f56a24cc2baf5c1dd2e6a04dd5dba3e2d"
+    },
+    {
+      "path": "thesis/goal-evidence/PER291-plan-adoption-20261022/CANONICAL-CORRECTION.diff",
+      "bytes": 11595,
+      "sha256": "2884ca5c2828a394a61b2d9ddc267aa4f77d7cf9e3c1814c5c8aad2c61ac1afe"
+    },
+    {
+      "path": "thesis/goal-evidence/PER291-plan-adoption-20261022/PR-176-READ.json",
+      "bytes": 304,
+      "sha256": "af65b8bf8d807b1fe4b26124e28d8252aeb26583d51d648f73477514bcce7640"
+    },
+    {
+      "path": "thesis/goal-evidence/PER291-plan-adoption-20261022/PR-176-READ.stderr.txt",
+      "bytes": 0,
+      "sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+    },
+    {
+      "path": "thesis/goal-evidence/PER291-plan-adoption-20261022/REVIEWED-TO-ADOPTED.diff",
+      "bytes": 1916,
+      "sha256": "e231f443407b477c4e5d3109bb031e500f3e2c08f96e746b57c592b933fe21d8"
+    },
+    {
+      "path": "thesis/goal-evidence/PER291-plan-adoption-20261022/implementation-plan.adopted.md",
+      "bytes": 22638,
+      "sha256": "9eb02adcf71417ec7532a50d972a717bb4d35b03325a4ea8ae40fd48c27dbf32"
+    },
+    {
+      "path": "thesis/goal-evidence/PER291-plan-adoption-20261022/implementation-plan.before.md",
+      "bytes": 20195,
+      "sha256": "7eaf5ef7568684d104fafe4a34b0b05894abb65e0af7feade288c6e58678355a"
+    },
+    {
+      "path": "thesis/goal-evidence/PER291-plan-adoption-20261022/implementation-plan.reviewed-proposal.md",
+      "bytes": 22559,
+      "sha256": "f13a55481818ebcb4900d3676164f2562f6c5a9fbcbcf947cddc4375dcd8c9c8"
+    }
+  ],
+  "productionSourceOrCurrentSutChanged": false
+}

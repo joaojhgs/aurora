@@ -1,0 +1,10 @@
+{
+  "files": {
+    "packages/aurora-ui/src/use-assistant-tts.ts": {
+      "preimageSHA256": "a584ad56d7df8148471cb409fc04ca267bd6cf090222578eb9f1ac3ed8ff8cbb",
+      "sha256": "e5caa61b1158946b4e9f0d274a898c3e2c6b538cff5b4aef941d474ee3a08745"
+    }
+  },
+  "scope": "Deploy only final reviewed V469 TTS source; all V463 capture/worklet source/dist/builds preserved. Build only production web.",
+  "phase2MeasuredAllowed": false
+}

@@ -1,0 +1,8 @@
+{
+  "at": "2026-10-20T08:15:45.670895+00:00",
+  "source": ".omx/evidence/orca-monitor-20261010/NATIVE-RECOVERY-RECEIPT-AND-COUNT-CORRECTION-20261020T0808.json",
+  "physicalCopy": "thesis/evidence/original-monitor-capacity-20261020/NATIVE-RECOVERY-RECEIPT-AND-COUNT-CORRECTION-20261020T0808.json",
+  "bytes": 1489,
+  "sha256": "b105892c630e2cb67f12f4efdec5b652e0393bca4c8343d88140a1593018bbe5",
+  "sourceScope": "Original monitor-owned recovery and historical reporting arithmetic correction. No raw case/cohort/settings change or measurement replay."
+}

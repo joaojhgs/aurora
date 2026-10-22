@@ -1,0 +1,129 @@
+{
+  "K2Correct": 774,
+  "K2Failed": 126,
+  "K2MeasuredAttempted": 900,
+  "K2Unattempted": 0,
+  "actors": [
+    {
+      "absent": true,
+      "expectedStartTicks": 26503295,
+      "pid": 3938174
+    },
+    {
+      "absent": true,
+      "expectedStartTicks": 26503353,
+      "pid": 3938202
+    }
+  ],
+  "archiveContainsPhysicalCopies": true,
+  "at": "2026-10-20T20:31:55.507482+00:00",
+  "comparisonStatus": "K2 measured collection complete; provider native/resource join remains pending; no pooled unlike-cohort percentiles",
+  "excludedWarmups": 15,
+  "files": [
+    {
+      "bytes": 6055,
+      "name": "raw/provider-manifest.json",
+      "sha256": "d133ecead33bca857e64a5bee381b030f297155ab4e0e723eeb64fc16f4ce667",
+      "source": "/home/developer/projects/aurora/thesis/campaigns/worker-desktop-k2-p2p-assistant-tts-v1813/provider/provider-manifest.json",
+      "sourceInode": 4620360,
+      "terminalEOF": true
+    },
+    {
+      "bytes": 302,
+      "name": "raw/controller-launch.json",
+      "sha256": "d412d52b1d7cc367121a114fc365dd115875637b8a9f6de2dbcb31c67772c2a8",
+      "source": "/home/developer/projects/aurora/thesis/campaigns/worker-desktop-k2-p2p-assistant-tts-v1813/provider/controller-launch.json",
+      "sourceInode": 4620364,
+      "terminalEOF": true
+    },
+    {
+      "bytes": 1373,
+      "name": "raw/receiver-identity.json",
+      "sha256": "93c8563732a075358a87104f155a20a7a6dd2ad4e729d53e5e3ada817d2b898d",
+      "source": "/home/developer/projects/aurora/thesis/campaigns/worker-desktop-k2-p2p-assistant-tts-v1813/provider/receiver-identity.json",
+      "sourceInode": 4620365,
+      "terminalEOF": true
+    },
+    {
+      "bytes": 211,
+      "name": "raw/runtime-versions.json",
+      "sha256": "47cf28ef11dc4ee028a835ed397a98b4215fa24e48c9eacdd485e2cc46d52904",
+      "source": "/home/developer/projects/aurora/thesis/campaigns/worker-desktop-k2-p2p-assistant-tts-v1813/provider/runtime-versions.json",
+      "sourceInode": 4620362,
+      "terminalEOF": true
+    },
+    {
+      "bytes": 1418,
+      "name": "raw/assistant-identity.json",
+      "sha256": "9d0e33780a49774676dca63464f0e98d9fb2f193d16800c0ec6b63a4abf292f0",
+      "source": "/home/developer/projects/aurora/thesis/campaigns/worker-desktop-k2-p2p-assistant-tts-v1813/provider/assistant-identity.json",
+      "sourceInode": 4620366,
+      "terminalEOF": true
+    },
+    {
+      "bytes": 1763,
+      "name": "raw/ACTUAL-FILES-v1812.json",
+      "sha256": "dd01ccfd94666caec109bb6283e09ffb70c312d13d867c06d820f60ed14d5ac6",
+      "source": "/home/developer/projects/aurora/thesis/campaigns/worker-desktop-k2-p2p-assistant-tts-v1813/provider/ACTUAL-FILES-v1812.json",
+      "sourceInode": 4620359,
+      "terminalEOF": true
+    },
+    {
+      "bytes": 629,
+      "name": "raw/ROOT-LAUNCH-v1812.json",
+      "sha256": "55ceef4e784e4c573438c32086c7f86aa8b05acd9adfea49d08cf04d1316ad05",
+      "source": "/home/developer/projects/aurora/thesis/campaigns/worker-desktop-k2-p2p-assistant-tts-v1813/provider/ROOT-LAUNCH-v1812.json",
+      "sourceInode": 4620361,
+      "terminalEOF": true
+    },
+    {
+      "bytes": 436,
+      "name": "raw/terminal.json",
+      "sha256": "0d8d62fcc267ff97bdbbdbaf6501b3edabd1f7174e90b42e172c6cd50a279780",
+      "source": "/home/developer/projects/aurora/thesis/campaigns/worker-desktop-k2-p2p-assistant-tts-v1813/provider/terminal.json",
+      "sourceInode": 4620503,
+      "terminalEOF": true
+    },
+    {
+      "bytes": 131608,
+      "name": "raw/STATUS.json",
+      "sha256": "79a305c671c7e23c159cc4befd23e08fa35c51bebaa867278923b6393c9d4cf6",
+      "source": "/home/developer/projects/aurora/thesis/campaigns/worker-desktop-k2-p2p-assistant-tts-v1813/provider/STATUS.json",
+      "sourceInode": 4620502,
+      "terminalEOF": true
+    },
+    {
+      "bytes": 5549400,
+      "name": "raw/voice-stages.jsonl",
+      "sha256": "4848f1e34b3914005e878db8d895e050e3961a488e1191217f62f19f5428b048",
+      "source": "/home/developer/projects/aurora/thesis/campaigns/worker-desktop-k2-p2p-assistant-tts-v1813/provider/voice-stages.jsonl",
+      "sourceInode": 4620367,
+      "terminalEOF": true
+    },
+    {
+      "bytes": 606784,
+      "name": "raw/actual-provider-bindings.jsonl",
+      "sha256": "de77f3d88413cffd31e4150195801d9dd8f06cc5c2d9612a3255008a82ddc12f",
+      "source": "/home/developer/projects/aurora/thesis/campaigns/worker-desktop-k2-p2p-assistant-tts-v1813/provider/actual-provider-bindings.jsonl",
+      "sourceInode": 4620370,
+      "terminalEOF": true
+    },
+    {
+      "bytes": 80966114,
+      "name": "raw/resources.jsonl",
+      "sha256": "0a316002312e46851c8d7a6ef68f4fca7b01b473e5c8b8ae9c07dafd6697db8c",
+      "source": "/home/developer/projects/aurora/thesis/campaigns/worker-desktop-k2-p2p-assistant-tts-v1813/provider/resources.jsonl",
+      "sourceInode": 4620363,
+      "terminalEOF": true
+    }
+  ],
+  "host": "personal.skyron-server",
+  "originalFilesPreserved": true,
+  "postStartupConfigSha256": "efed0546bf49f4e99cc977c643fa80e2f611fa99ab7fbcd5d9c9fb31d078beef",
+  "providerManifestSha256": "d133ecead33bca857e64a5bee381b030f297155ab4e0e723eeb64fc16f4ce667",
+  "rawPayloadBytes": 87266093,
+  "receiverPredicateCause": "UNKNOWN",
+  "status": "original_provider_retired_raw_eof_sealed",
+  "sutCalls": 0,
+  "uncompressedDuplicateCreated": false
+}

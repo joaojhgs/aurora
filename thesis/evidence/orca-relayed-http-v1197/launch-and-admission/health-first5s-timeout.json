@@ -1,0 +1,16 @@
+{
+  "at": "2026-10-17T20:02:29.164346+00:00",
+  "host": "code-worker",
+  "method": "GET",
+  "endpoint": "http://127.0.0.1:18000/api/health",
+  "providerManifestSha256": "450ee5af677a229e93f75c093e4e5ee3135c25b223f0d73f713f0c31f56c4cae",
+  "credentialValueLogged": false,
+  "modelCalls": 0,
+  "readinessOnlyNotTtsAuthOrStageProof": true,
+  "status": "APPROVED_PRODUCT_ROUTE_TRANSPORT_ERROR",
+  "errorClass": "TimeoutError",
+  "reasonClass": "TimeoutError",
+  "errno": null,
+  "error": "timed out",
+  "elapsedSeconds": 5.011290263035335
+}

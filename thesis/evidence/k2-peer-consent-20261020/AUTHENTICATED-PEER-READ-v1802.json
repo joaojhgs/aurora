@@ -1,0 +1,9 @@
+{
+  "at": "2026-10-20T14:59:01.560222+00:00",
+  "route": "existing approved Orca forward W127.0.0.1:18000 -> Personal application8000",
+  "operation": "authenticated normal Auth.MeshListPeers read only",
+  "sutInferenceCalls": 0,
+  "permissionChanges": 0,
+  "credentialLogged": false,
+  "httpStatus": 401
+}

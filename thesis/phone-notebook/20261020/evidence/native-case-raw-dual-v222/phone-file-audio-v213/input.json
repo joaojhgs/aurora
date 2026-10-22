@@ -1,0 +1,15 @@
+{
+  "sourceWavSha256": "da0ecc4ad0885746ab6e716585473917ab2b543a505bf0db09ebacfaa7943cbb",
+  "sourceSampleRateHz": 22050,
+  "sourceChannels": 1,
+  "sourceFrames": 109875,
+  "entrypointRateHz": 16000,
+  "entrypointFormat": "pcm_s16le",
+  "pcmSha256": "1d5147ec00b8582ffeeb2d6a196cfab6e713cc33c9beea9212e7bc91eeed8fbf",
+  "pcmBytes": 159456,
+  "sampleCount": 79728,
+  "normalization": "production faster_whisper.audio.decode_audio(PyAV) to16k float32 then rint*32768/clip/LEint16; setup before phone timing",
+  "fasterWhisperVersion": "1.1.1",
+  "avVersion": "16.0.1",
+  "numpyVersion": "2.2.6"
+}

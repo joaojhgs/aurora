@@ -1,0 +1,41 @@
+{
+  "run": "run_e6054e76e9fc",
+  "task": "task_d7ea336050cf",
+  "dispatch": "ctx_37b4d0a3c14f",
+  "inventory_nudge": "msg_3d13bb190f10",
+  "freshness_nudge": "msg_f25e7c086783",
+  "root_result": [
+    "msg_e42e16fe73a9",
+    "msg_bc70df60bcca"
+  ],
+  "monitor_ack": "delivery_e22ca1420c79",
+  "desktop_terminal_read": "54b7ff36-85e4-4371-9b6b-2d28b4144bfb",
+  "desktop_read_cursor": {
+    "after": 1042,
+    "next": 1140,
+    "limited": false,
+    "truncated": false
+  },
+  "files": [
+    {
+      "source": ".git/aurora-handoff-import-20261006/desktop-speech-metadata-receipt-v422.json",
+      "copy": "docs/experiments/tcc-20261013-submission-20261030/monitor/voice-readiness-metadata-20261014T2010/desktop-speech-metadata-receipt-v422.json",
+      "sha256": "1728858f4304cbd6a7060e2ce35535d969107b4194390eb13d90d1dba5d8cc38",
+      "byte_identical": true
+    },
+    {
+      "source": ".git/aurora-handoff-import-20261006/desktop-speech-metadata-addendum-receipt-v422.json",
+      "copy": "docs/experiments/tcc-20261013-submission-20261030/monitor/voice-readiness-metadata-20261014T2010/desktop-speech-metadata-addendum-receipt-v422.json",
+      "sha256": "0c7957241d94c9dd8db0e286574f46b647ffded243cdbc835ef0523525ea446a",
+      "byte_identical": true
+    },
+    {
+      "source": ".git/aurora-handoff-import-20261006/desktop-actual-api2-progress-v422.json",
+      "copy": "docs/experiments/tcc-20261013-submission-20261030/monitor/voice-readiness-metadata-20261014T2010/desktop-actual-api2-progress-v422.json",
+      "sha256": "3e0b36ba7f2ae8e98f53a97d533febb9fd58aa4a986b27fcc717f39466f0c7fd",
+      "byte_identical": true
+    }
+  ],
+  "scope": "allowlisted selected config and known-path metadata only; no model/audio calls or binary reads",
+  "limitations": "candidate assets and selected config only; no model hashes/terms/admission/corpus/runtime readiness; original ns integers preserved by exact byte copy; no locale-to-country inference"
+}

@@ -1,0 +1,264 @@
+{
+  "schema": "aurora.phone_notebook.setup_dependency_plan.v2",
+  "at": "2026-10-22T04:21:31.211168+00:00",
+  "status": "PINNED_APK_BUILT_CANONICAL_UPDATE_SIGNATURE_MISMATCH_SIDE_BY_SIDE_PACKAGING",
+  "authority": "Owner finalizes setup/pilot now; bulk900 remains gated on explicit sleep start",
+  "steps": [
+    {
+      "id": "restore-existing-usb-access",
+      "status": "AUTHORIZED_DEVICE_20261022T031304",
+      "actualReceipt": "evidence/owner-thermal-override-launch-20261022T0317/result.json",
+      "observed": "node003/015R/W; get-state device; API36arm64",
+      "minimalOwnerAction": null
+    },
+    {
+      "id": "enable-saved-home-wifi",
+      "status": "ACTUAL_ENABLED_AND_SAVED_HOME_CONNECTED",
+      "script": "scripts/enable_saved_phone_wifi_v7.py",
+      "networksOrCredentialsRead": false,
+      "dependsOn": [
+        "restore-existing-usb-access"
+      ],
+      "actualReceipt": "evidence/saved-wifi-after-fix-20261022T001345/result.json",
+      "addresses": "192.168.1.94/24",
+      "routeToNotebook": "wlan0src192.168.1.94"
+    },
+    {
+      "id": "isolated-project-python",
+      "status": "CREATED_ACTUAL_PYTHON_3_11_14",
+      "actualReceipt": "evidence/notebook-offline-setup-20261021T235617/result.json",
+      "path": "deployment/ebde3a8acf6315f920d03593845f17a1fc65a733/.venv"
+    },
+    {
+      "id": "source-assets-runtime-staging",
+      "status": "COMPLETED_ACTUAL_SOURCE_ASSETS_RUNTIME_BUILD",
+      "resourceDecisionMessage": "msg_ada0dc77fde8",
+      "sharedResourceScope": [
+        "workerCPU/RAM/disk",
+        "Orca controller transport",
+        "Personaldesktop uplink/provider"
+      ],
+      "exactCommitAlreadyInNotebook": true,
+      "networkProbeAttempted": false,
+      "finiteRequestedWindow": {
+        "sourceMaxBytes": 12582912,
+        "sourceMaxSeconds": 120,
+        "assetMaxBytes": 774675150,
+        "assetRateMaxBytesPerSecond": 2097152,
+        "assetMaxSeconds": 600,
+        "notebookOnlyJobs": 2,
+        "notebookMaxBuildSeconds": 1200,
+        "requiresNewActualRootAdmission": true
+      },
+      "queue": null,
+      "sourceReceipt": "evidence/assemble-exact-repair-20261022T014230/result.json",
+      "runtimeResult": "RUNTIME-BUILD-RESULT-20261022.json"
+    },
+    {
+      "id": "pinned-debug-apk-native-adapter",
+      "status": "BUILT_CANONICAL_SIGNATURE_MISMATCH_SIDE_BY_SIDE_PACKAGING",
+      "dependsOn": [
+        "source-assets-runtime-staging",
+        "restore-existing-usb-access"
+      ],
+      "nativeEntryPoint": "aurora_android_voice_live_test_inject_pcm -> AuroraNativePlugin.injectVoicePcmForLiveTest -> AuroraRuntimeForegroundService.injectPcmForTest",
+      "sourceReference": "ebde3a8acf6315f920d03593845f17a1fc65a733",
+      "normalProductUiAndNativeAuthorityRequired": true,
+      "fixtureOpenAiAcceptanceHarnessPermitted": false,
+      "actualReceipt": "evidence/install-pinned-apk-v95/result.json",
+      "missingSourceFile": null,
+      "rootSourceClosureRequest": "msg_82362f7b2ad0",
+      "sourceOverlayReceipt": "evidence/root-approved-source-closure-copy-v81/result.json"
+    },
+    {
+      "id": "bounded-real-pilot",
+      "status": "NOT_STARTED",
+      "dependsOn": [
+        "enable-saved-home-wifi",
+        "source-assets-runtime-staging",
+        "pinned-debug-apk-native-adapter"
+      ],
+      "routes": [
+        "authenticated phone->notebook LAN HTTP",
+        "same-pair MQTT/ICE P2P"
+      ],
+      "caseTarget": "one correct actual file-audio STT+LLM+TTS -> valid WAV per applicable route before capacity forecast",
+      "bulk900Allowed": false
+    },
+    {
+      "id": "exact-vulkan-backend",
+      "status": "GPU_DEVICES_VISIBLE_NO_MODEL_CALL_YET",
+      "actualReceipts": [
+        "evidence/actual-vulkan-exposure-20261022T0327/result.json",
+        "evidence/existing-nvidia-icd-20261022T0329/result.json"
+      ],
+      "cpuSubstitutionUsed": false,
+      "ownerActionEvent": "msg_ce699bffa93a",
+      "actualReceipt": "evidence/owner-fixed-fresh-check-v90/result.json",
+      "minimalOwnerAction": null
+    }
+  ],
+  "assets": [
+    {
+      "name": "Qwen3.5-0.8B-Q4_0.gguf",
+      "sourceHost": "ssh:ssh-oci-coding-worker",
+      "existingSourcePath": "/home/developer/projects/aurora/.artifacts/local-inference/models/Qwen3.5-0.8B-Q4_0.gguf",
+      "expectedBytes": 563036064,
+      "sha256": "57d1997790d1744fba5b40a7317df71ea5e2acee28c47e78f0cce39c0703f8cf",
+      "actualStatBytes": 563036064,
+      "notebookDestination": "thesis/phone-notebook/20261020/deployment/ebde3a8acf6315f920d03593845f17a1fc65a733/models/Qwen3.5-0.8B-Q4_0.gguf",
+      "sourceBytesRehashedThisTurn": false
+    },
+    {
+      "name": "whisper-base/config.json",
+      "sourceHost": "ssh:ssh-oci-coding-worker",
+      "existingSourcePath": "/home/developer/.cache/huggingface/hub/models--Systran--faster-whisper-base/blobs/867cf1a0fece1394e01d55e287ba2f09a577c046",
+      "expectedBytes": 2309,
+      "sha256": "56a6d8110d311f19c8f0471e562832c7527f146b567275bfca59fcf7c184da9a",
+      "actualStatBytes": 2309,
+      "notebookDestination": "thesis/phone-notebook/20261020/deployment/ebde3a8acf6315f920d03593845f17a1fc65a733/models/whisper-base/config.json",
+      "sourceBytesRehashedThisTurn": false
+    },
+    {
+      "name": "whisper-base/model.bin",
+      "sourceHost": "ssh:ssh-oci-coding-worker",
+      "existingSourcePath": "/home/developer/.cache/huggingface/hub/models--Systran--faster-whisper-base/blobs/d01c3014881c9c6f3133c182f3d2887eb6ca1c789a7538c5c007196857a0a6a9",
+      "expectedBytes": 145217532,
+      "sha256": "d01c3014881c9c6f3133c182f3d2887eb6ca1c789a7538c5c007196857a0a6a9",
+      "actualStatBytes": 145217532,
+      "notebookDestination": "thesis/phone-notebook/20261020/deployment/ebde3a8acf6315f920d03593845f17a1fc65a733/models/whisper-base/model.bin",
+      "sourceBytesRehashedThisTurn": false
+    },
+    {
+      "name": "whisper-base/tokenizer.json",
+      "sourceHost": "ssh:ssh-oci-coding-worker",
+      "existingSourcePath": "/home/developer/.cache/huggingface/hub/models--Systran--faster-whisper-base/blobs/7818adb6de9fa3064d3ff81226fdd675be1f6344",
+      "expectedBytes": 2203239,
+      "sha256": "fb7b63191e9bb045082c79fd742a3106a12c99513ab30df4a0d47fa6cb6fd0ab",
+      "actualStatBytes": 2203239,
+      "notebookDestination": "thesis/phone-notebook/20261020/deployment/ebde3a8acf6315f920d03593845f17a1fc65a733/models/whisper-base/tokenizer.json",
+      "sourceBytesRehashedThisTurn": false
+    },
+    {
+      "name": "whisper-base/vocabulary.txt",
+      "sourceHost": "ssh:ssh-oci-coding-worker",
+      "existingSourcePath": "/home/developer/.cache/huggingface/hub/models--Systran--faster-whisper-base/blobs/c9074644d9d1205686f16d411564729461324b75",
+      "expectedBytes": 459861,
+      "sha256": "34ce3fe1c5041027b3f8d42912270993f986dbc4bb34cf27f951e34a1e453913",
+      "actualStatBytes": 459861,
+      "notebookDestination": "thesis/phone-notebook/20261020/deployment/ebde3a8acf6315f920d03593845f17a1fc65a733/models/whisper-base/vocabulary.txt",
+      "sourceBytesRehashedThisTurn": false
+    },
+    {
+      "name": "en_US-ljspeech-medium.onnx",
+      "sourceHost": "ssh:ssh-oci-coding-worker",
+      "existingSourcePath": "/home/developer/projects/aurora/.git/aurora-handoff-import-20261006/cpu-full-audio-v483/models/en_US-ljspeech-medium.onnx",
+      "expectedBytes": 63531379,
+      "sha256": "6f52a751e2349abe7a76735eb09dc1875298c77ea2342ffd2fef79ff81b87f22",
+      "actualStatBytes": 63531379,
+      "notebookDestination": "thesis/phone-notebook/20261020/deployment/ebde3a8acf6315f920d03593845f17a1fc65a733/models/en_US-ljspeech-medium.onnx",
+      "sourceBytesRehashedThisTurn": false
+    },
+    {
+      "name": "en_US-ljspeech-medium.onnx.json",
+      "sourceHost": "ssh:ssh-oci-coding-worker",
+      "existingSourcePath": "/home/developer/projects/aurora/.git/aurora-handoff-import-20261006/cpu-full-audio-v483/models/en_US-ljspeech-medium.onnx.json",
+      "expectedBytes": 4972,
+      "sha256": "141d612cc0a95ed7efc1ca936b845c2364967f2e9217c5dbfcf69fc4d6c65860",
+      "actualStatBytes": 4972,
+      "notebookDestination": "thesis/phone-notebook/20261020/deployment/ebde3a8acf6315f920d03593845f17a1fc65a733/models/en_US-ljspeech-medium.onnx.json",
+      "sourceBytesRehashedThisTurn": false
+    },
+    {
+      "name": "candidate-input.wav",
+      "sourceHost": "ssh:ssh-oci-coding-worker",
+      "existingSourcePath": "/home/developer/projects/aurora/thesis/harness/distributed-k2-mesh-v1731/candidate-input.wav",
+      "expectedBytes": 219794,
+      "sha256": "da0ecc4ad0885746ab6e716585473917ab2b543a505bf0db09ebacfaa7943cbb",
+      "actualStatBytes": 219794,
+      "notebookDestination": "thesis/phone-notebook/20261020/deployment/ebde3a8acf6315f920d03593845f17a1fc65a733/models/candidate-input.wav",
+      "sourceBytesRehashedThisTurn": false
+    }
+  ],
+  "totalAssetAndAudioBytes": 774675150,
+  "source": {
+    "approvedLocalCommit": "ebde3a8acf6315f920d03593845f17a1fc65a733",
+    "remoteSha": null,
+    "serverManifest": "SOURCE-PIN.json",
+    "gitWritten": false
+  },
+  "noSharedResourceProbesOrTransfer": true,
+  "overnightWindow": {
+    "plannedHours": [
+      7,
+      8
+    ],
+    "actualStart": null,
+    "actualEnd": null,
+    "mustRefuseWithoutOwnerSleepSignal": true
+  },
+  "temperaturePolicy": "observe_only_owner_correction",
+  "ownerSleepStartSignal": null,
+  "historicalResourceHandoff": {
+    "schema": "aurora.phone_notebook.resource_handoff_queue.v1",
+    "status": "ENQUEUED_PENDING_ACTUAL_RESOURCE_RELEASE",
+    "ownerRequest": "continue now should be fix, finish setup; no900untilsleepstart",
+    "rootRequestMessage": "msg_bffcad56b7d4",
+    "createdAtUtc": "2026-10-22T00:13:03Z",
+    "monitorNotificationMessage": "msg_30f288b3477a",
+    "monitorNotificationAtUtc": "2026-10-22T00:17:05Z",
+    "usbRecoveryMessage": "msg_7114f34553d8",
+    "savedWifiSuccessMessage": "msg_2b55c7cce4ff",
+    "source": {
+      "exactLocalCommit": "ebde3a8acf6315f920d03593845f17a1fc65a733",
+      "remoteSha": null,
+      "maxBytes": 12582912,
+      "maxSeconds": 120
+    },
+    "assets": {
+      "exactBytesIncludingAudio": 774675150,
+      "maxBytesPerSecond": 2097152,
+      "maxSeconds": 600,
+      "manifest": "SETUP-DEPENDENCIES.json"
+    },
+    "notebookWork": {
+      "maxJobs": 2,
+      "maxSeconds": 1200,
+      "noModelRuntimeSubstitution": true
+    },
+    "releaseTrigger": "Root actual natural currentHTTP terminal+sealed state and explicit relevant resource release",
+    "actualUtcTransferWindow": null,
+    "currentActualReply": null,
+    "sourceOrModelTransferStarted": false,
+    "pilotStarted": false,
+    "ownerSleepStartSignal": null,
+    "noMainInterruption": true,
+    "settledDispatchReused": false
+  },
+  "historicalOfflineLease": {
+    "receipt": "evidence/NOTEBOOK-OFFLINE-RESOURCE-LEASE-v2328.json",
+    "message": "msg_fb6e25f5d33a",
+    "actualResult": "evidence/admitted-offline-runtime-20261022T000353/result.json",
+    "classification": {
+      "expectedLlamaVersion": "0.3.19",
+      "foundLocalCachedVersions": [
+        "0.3.34"
+      ],
+      "exactVersionFoundInBoundedCatalog": false,
+      "substitutionInstalled": false,
+      "requiredSourceCommitAlreadyLocal": false,
+      "readOnlyReusedMatchingPackageCount": 5,
+      "newModelCalls": 0,
+      "newDownloads": 0,
+      "ownBuildProcessesActive": 0
+    }
+  },
+  "currentSourceFilesVerified": 1959,
+  "sourceStagingComplete": true,
+  "publicAssetsVerified": true,
+  "runtimeBuildResult": "RUNTIME-BUILD-RESULT-20261022.json",
+  "currentSetupResourceAcknowledgement": "msg_25376e75fa33",
+  "sourceClosureResolved": true,
+  "applicationSourceIdentity": "ebde3a8acf6315f920d03593845f17a1fc65a733 + source-closure-overlay-v2383",
+  "sourceOverlayReceipt": "evidence/root-approved-source-closure-copy-v81/result.json"
+}

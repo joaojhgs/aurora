@@ -1,0 +1,8 @@
+{
+  "bytes": 291,
+  "copyOnly": true,
+  "custody": "Notebook result persisted and fsynced before relay; remote receipt in same output",
+  "localPath": "/home/developer/projects/aurora/thesis/phone-notebook/20261020/evidence/launch-canonical-native-pilot-v329/result.json",
+  "remotePath": "/home/developer/projects/aurora/thesis/phone-notebook/20261020/evidence/launch-canonical-native-pilot-v329.json",
+  "sha256": "72625feb27ffb12f6448cbef72143bf0518bb2302838f0009f32f0a5f635b94f"
+}

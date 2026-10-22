@@ -1,0 +1,17 @@
+{
+  "at": "2026-10-17T20:07:02.876367+00:00",
+  "status": "PRESTART_ADMISSION_FAILED_CONFIG_DRIFT",
+  "requesterLaunched": false,
+  "modelCalls": 0,
+  "warmups": 0,
+  "measured": 0,
+  "expectedConfigSha256": "2b8cc043fc75c8978e2528379badb9fff7cd2ad2bc82729e61c560d35bbd1cc1",
+  "driftedStageConfigSha256": "a06d885aa4da7f79c689ac732a6fcb1fb48ec8dc72921dd5e5b145cca63de73f",
+  "changedKeyPathsOnly": [
+    "services.gateway.api.token_secret"
+  ],
+  "exactOriginalRecoveredFrom": "/home/developer/projects/aurora/.git/aurora-handoff-import-20261006/worker-padded900-prep-v737/runtime/config.json",
+  "originalProtectedByExactExpectedHash": true,
+  "noSettingsOrCredentialsChanged": true,
+  "stagedPriorBytesNotOverwritten": true
+}

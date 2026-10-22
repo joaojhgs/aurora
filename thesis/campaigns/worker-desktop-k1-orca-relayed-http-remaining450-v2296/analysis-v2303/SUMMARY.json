@@ -1,0 +1,150 @@
+{
+  "at": "2026-10-22T05:31:50.345361+00:00",
+  "analysisPythonVersion": "3.11.17 (main, Oct  3 2026, 01:03:29) [Clang 22.1.3 ]",
+  "analysisExecutable": "/home/developer/projects/aurora/.git/aurora-handoff-import-20261006/cpu-audio-campaign-v491/env/bin/python",
+  "scope": "One saved K1HTTP epoch, no cross-epoch pooling",
+  "status": "SAVED_EPOCH_ANALYSIS_COMPLETE",
+  "terminalStatus": "completed_all_correct",
+  "terminalStopReason": null,
+  "cohort": "aurora-worker-desktop-k1-orca-relayed-http-remaining450-v2296",
+  "manifestSha256": "9adbf9ba3a7ec0948a087edad3655cf94ee344b3a2371a78d15f188f44150d42",
+  "epochLineage": {
+    "conditionTargetMeasured": 900,
+    "eligibleIndicesSha256": "1a9c494a3f01bf4eb8ebd35bb675d03bb9a14d80fc1f8a636c96ad47651c897d",
+    "epochId": "V2296",
+    "failed180Retried": false,
+    "firstConditionMeasuredIndex": 451,
+    "lastConditionMeasuredIndex": 900,
+    "originalManifestSha256": "6bc65cf5cc3c4eddb90b80b0764a01e6a9fc4afbed66f33c731e3ab58528e101",
+    "parentManifestSha256": "11bbea3fc1e45e65da1ecb7b501aee77739870cb087d792e5bc5197f9b1027be",
+    "parentSealSha256": "736694b7b16b9ad24993e804174b59f7cba66cd57fd894a766e30f71e2ca703c",
+    "plannedEpochMeasured": 450,
+    "priorAttemptedMeasured": 450,
+    "priorCorrect": 449,
+    "priorFailed": 1
+  },
+  "measured": {
+    "attempted": 450,
+    "outcomes": {
+      "completed_correct": 450
+    },
+    "correct": 450,
+    "incorrect": 0,
+    "failedOrInterrupted": 0,
+    "timeouts": 0
+  },
+  "timeoutFieldAbsent": 0,
+  "warmupsExcluded": {
+    "attempted": 15,
+    "outcomes": {
+      "completed_correct": 15
+    },
+    "correct": 15,
+    "incorrect": 0,
+    "failedOrInterrupted": 0,
+    "timeouts": 0
+  },
+  "plannedEpochMeasured": 450,
+  "unattemptedEpoch": 0,
+  "correctOnlyLatencyMs": {
+    "denominator": 450,
+    "p50_ms": 55696.430387500004,
+    "p90_ms": 63354.6776362,
+    "p95_ms": 64783.729364499995
+  },
+  "allAttemptsTimeToOutcomeMs": {
+    "denominator": 450,
+    "p50_ms": 55696.430387500004,
+    "p90_ms": 63354.6776362,
+    "p95_ms": 64783.729364499995
+  },
+  "failedTimeToOutcomeMs": {
+    "denominator": 0,
+    "p50_ms": null,
+    "p90_ms": null,
+    "p95_ms": null
+  },
+  "nativeAllInvokedMeasuredMs": {
+    "stt": {
+      "denominator": 450,
+      "p50_ms": 8610.3320365,
+      "p90_ms": 11310.6639567,
+      "p95_ms": 12609.900460049985
+    },
+    "assistant": {
+      "denominator": 450,
+      "p50_ms": 32115.559166,
+      "p90_ms": 40252.2355933,
+      "p95_ms": 41718.31005649999
+    },
+    "tts": {
+      "denominator": 450,
+      "p50_ms": 1677.5962220000001,
+      "p90_ms": 1903.7987256000004,
+      "p95_ms": 2133.979736699999
+    }
+  },
+  "nativeCorrectFullAudioOnlyMs": {
+    "stt": {
+      "denominator": 450,
+      "p50_ms": 8610.3320365,
+      "p90_ms": 11310.6639567,
+      "p95_ms": 12609.900460049985
+    },
+    "assistant": {
+      "denominator": 450,
+      "p50_ms": 32115.559166,
+      "p90_ms": 40252.2355933,
+      "p95_ms": 41718.31005649999
+    },
+    "tts": {
+      "denominator": 450,
+      "p50_ms": 1677.5962220000001,
+      "p90_ms": 1903.7987256000004,
+      "p95_ms": 2133.979736699999
+    }
+  },
+  "nativeObservedStageCounts": {
+    "stt": 450,
+    "assistant": 450,
+    "tts": 450
+  },
+  "allPhasesNativeStageJoins": 1395,
+  "positiveFlowNativeGaps": [],
+  "pairingCounters": {
+    "requester": {
+      "unmatchedStartsInSavedPrefix": 0
+    },
+    "provider": {
+      "unmatchedStartsInSavedPrefix": 0
+    }
+  },
+  "resources": {
+    "requester": {
+      "identityMatchedSamples": 25788,
+      "excludedIdentityOrPrestartup": 0,
+      "counterErrorFields": {
+        "gpu.vendor": 25788,
+        "childNetwork": 1,
+        "childStatus.VmHWM": 1,
+        "childStatus.VmSize": 1,
+        "childStatus.VmRSS": 1
+      }
+    },
+    "provider": {
+      "identityMatchedSamples": 25972,
+      "excludedIdentityOrPrestartup": 0,
+      "counterErrorFields": {
+        "gpu.gpu_busy_percent": 43,
+        "gpu.vendor": 181804
+      }
+    }
+  },
+  "providerResourceDataPresent": true,
+  "quantileMethod": "Hyndman-Fan Type7; h=(n-1)*p with linear interpolation; ms",
+  "resourcePolicy": "Same-host sample brackets with explicit slack; RSS uses actual-window samples. Missing observations stay unknown. Parent CPU excludes Piper child; host GPU/network counters are contextual, not exclusive request attribution.",
+  "clockPolicy": "No cross-host timestamp subtraction; no sum or subtraction of independently computed percentiles",
+  "routePolicy": "ORCA_RELAYED_HTTP_EXISTING_INTERMEDIARY_NOT_DIRECT_HTTP_OR_MESH",
+  "newInference": 0,
+  "newNetworkTraffic": 0
+}

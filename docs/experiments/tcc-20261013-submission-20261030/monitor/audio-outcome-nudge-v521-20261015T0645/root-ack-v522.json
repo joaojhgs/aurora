@@ -1,0 +1,56 @@
+{
+  "messageId": "msg_d21068752df1",
+  "at": "2026-10-15T06:49:14Z",
+  "fullReadAcknowledged": [
+    "msg_3f16b23e499e",
+    "msg_b97fcb563eca"
+  ],
+  "desktopSeal": {
+    "observedAt": "2026-10-15T06:44:20.822009Z",
+    "host": "personal.skyron-server",
+    "execHost": "ssh:ssh-1786238480967-semdev",
+    "existingTerminal": "term_2e93af9c-1589-414b-8f92-17649f3c8069",
+    "relativePath": "docs/experiments/tcc-20261013-submission-20261030/root/desktop-gpu-full-audio-local900-v485/aurora-desktop-gpu-full-audio-local900-v485.zip",
+    "bytes": 32688561,
+    "sha256": "93c3afe2161b031d00b0be53ee9a76c8267369e9fa89d9cbe98cad67eee7d6dc",
+    "members": 1870,
+    "manifestSHA256": "692c497da33ffa4e329cbddc1cd6116bc9aaebcd54ce071c0bf0ad1038bc56be",
+    "fixtureScanner": "PASS",
+    "codingWorkerCopyPresent": false,
+    "monitorIndependentZIPInspection": false,
+    "rootFullyReadActualMarker520": true,
+    "noPendingCollection": true,
+    "noRerun": true,
+    "failed498RawPreserved": true,
+    "sevenFrozenAliasesVerifiedUnchanged": true
+  },
+  "dataAnalysis": {
+    "existingLane": "Luna",
+    "maxSeconds": 420,
+    "deadlineApprox": "2026-10-15T06:53:00Z",
+    "purpose": "standalone savedZIP counts/Type7/stage/all22classification verifier sourceprep; Root ONE data-only pass on SAMEdesktop",
+    "newModelRequests": 0,
+    "noSourceReviewMatrix": true
+  },
+  "cpu": {
+    "observedAt": "2026-10-15T06:49:13Z",
+    "pids": [
+      2232517,
+      2232566
+    ],
+    "bothLive": true,
+    "nMeasured": 205,
+    "nPlanned": 900,
+    "nUnattempted": 695,
+    "nExcludedWarmup": 15,
+    "latestOutcomeOnly": "completed_correct",
+    "RAMavailableBytes": 4519976960,
+    "volumeFreeBytes": 10520571904,
+    "parentRSSkB": 1729588,
+    "parentHWMkB": 1931880,
+    "counterErrors": []
+  },
+  "rootGoalActive": true,
+  "crossDeviceMeasuredAllowed": false,
+  "noPredicateModelSTTChange": true
+}

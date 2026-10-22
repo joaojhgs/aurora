@@ -1,0 +1,135 @@
+{
+  "at": "2026-10-20T00:15:47.470184+00:00",
+  "host": "code-worker",
+  "pid": 2180819,
+  "role": "worker",
+  "phase": "control_plane_live",
+  "newModelRequests": 0,
+  "modelServicesStarted": [],
+  "httpListenerStarted": false,
+  "normalProductionContracts": true,
+  "sourceRoot": "/home/developer/projects/aurora/.git/aurora-handoff-import-20261006/cpu-full-audio-v490/source",
+  "diagnostic": {
+    "enabled": true,
+    "started": true,
+    "mesh_enabled": true,
+    "local_signaling_peer_id": "0b63ced4-d2f5-41c4-8ccd-2af3a89428f9",
+    "local_mesh_peer_id": "aurora-03a910366bf721d72a9ef481d2e08fbd",
+    "local_node_name": "aurora-tcc-pair-v1535-worker",
+    "require_auth": true,
+    "auth_timeout_seconds": 10.0,
+    "pairing_timeout_seconds": 300.0,
+    "app_layer_e2ee_enabled": true,
+    "signaling": {
+      "strategy": "mqtt",
+      "connected": true,
+      "encrypted_presence": true,
+      "app_id_configured": true,
+      "room_configured": true,
+      "broker_count": 1,
+      "public_broker_warning": true
+    },
+    "peers": [
+      {
+        "signaling_peer_id": "37370b5d-afcc-4038-80d1-facc39ddce78",
+        "stable_peer_id": "aurora-276bb04e1276201922851f6a222110de",
+        "node_name": "aurora-tcc-pair-v1535-personal",
+        "connection_state": "connected",
+        "ice_connection_state": "completed",
+        "ice_gathering_state": "complete",
+        "signaling_state": "stable",
+        "data_channel_state": "open",
+        "data_channel_label": "aurora-rpc",
+        "has_send_channel": true,
+        "rtt_ms": null,
+        "auth_state": "anonymous",
+        "identity_source": "",
+        "is_admin": false,
+        "effective_permission_count": 0,
+        "pairing_active": true,
+        "auth_timeout_pending": true,
+        "pending_pairing_task": true,
+        "verification_code_sha256": "49fb3ef2de2b133f8d0b46ce7614196867a005cda798727f2a7e7d667e4de953",
+        "pairing_session_id_sha256": "f82f7d323c21d029df46e03d377464b33124720f3d557fc9e412ac8cf83c0556"
+      }
+    ],
+    "connected_peer_count": 1,
+    "authenticated_peer_count": 0,
+    "pairing_peer_count": 1,
+    "pending_rpc_count": 0,
+    "recent_errors": [],
+    "secrets_redacted": true
+  },
+  "pending": [
+    {
+      "remotePeerId": "aurora-276bb04e1276201922851f6a222110de",
+      "pairingSessionSha256": "f82f7d323c21d029df46e03d377464b33124720f3d557fc9e412ac8cf83c0556",
+      "verificationCodeSha256": "49fb3ef2de2b133f8d0b46ce7614196867a005cda798727f2a7e7d667e4de953",
+      "sessionPresent": true,
+      "verificationPresent": true,
+      "status": "pending"
+    }
+  ],
+  "trust": [
+    {
+      "peerId": "aurora-276bb04e1276201922851f6a222110de",
+      "outboundStatus": "pending",
+      "inboundStatus": "unknown",
+      "outboundPermissions": [],
+      "inboundPermissions": []
+    }
+  ],
+  "normalApprovalCount": 0,
+  "allowedPeerPermissions": [
+    "Gateway.GetRegistry",
+    "Gateway.GetMeshStatus",
+    "TTS.Synthesize"
+  ],
+  "startupErrors": [
+    {
+      "message": "Auth is enabled but using PUBLIC MQTT brokers. Anyone can see signaling traffic. Use a private MQTT broker for production deployments.",
+      "exceptionCategory": null
+    },
+    {
+      "message": "Topic 'Tooling.GetMeshProjectionReadiness' is not registered in the contract registry.\n  Available topics: Config.CommitChangeSet, Config.Get, Config.GetPlugin, Config.GetSchemaMetadata, Config.GetVersionHistory, Config.PreviewDiff, Config.PreviewReloadImpact, Config.ReloadService, Config.Rollback, Config.Set",
+      "exceptionCategory": null
+    },
+    {
+      "message": "Tooling mesh activation remains fail-closed: Topic 'Tooling.GetMeshProjectionReadiness' is not registered in the contract registry.\n  Available topics: Config.CommitChangeSet, Config.Get, Config.GetPlugin, Config.GetSchemaMetadata, Config.GetVersionHistory, Config.PreviewDiff, Config.PreviewReloadImpact, Config.ReloadService, Config.Rollback, Config.Set",
+      "exceptionCategory": null
+    },
+    {
+      "message": "Topic 'Tooling.GetMeshProjectionReadiness' is not registered in the contract registry.\n  Available topics: Config.CommitChangeSet, Config.Get, Config.GetPlugin, Config.GetSchemaMetadata, Config.GetVersionHistory, Config.PreviewDiff, Config.PreviewReloadImpact, Config.ReloadService, Config.Rollback, Config.Set",
+      "exceptionCategory": null
+    },
+    {
+      "message": "Tooling mesh activation remains fail-closed: Topic 'Tooling.GetMeshProjectionReadiness' is not registered in the contract registry.\n  Available topics: Config.CommitChangeSet, Config.Get, Config.GetPlugin, Config.GetSchemaMetadata, Config.GetVersionHistory, Config.PreviewDiff, Config.PreviewReloadImpact, Config.ReloadService, Config.Rollback, Config.Set",
+      "exceptionCategory": null
+    },
+    {
+      "message": "Topic 'Tooling.GetMeshProjectionReadiness' is not registered in the contract registry.\n  Available topics: Config.CommitChangeSet, Config.Get, Config.GetPlugin, Config.GetSchemaMetadata, Config.GetVersionHistory, Config.PreviewDiff, Config.PreviewReloadImpact, Config.ReloadService, Config.Rollback, Config.Set",
+      "exceptionCategory": null
+    },
+    {
+      "message": "Tooling mesh activation remains fail-closed: Topic 'Tooling.GetMeshProjectionReadiness' is not registered in the contract registry.\n  Available topics: Config.CommitChangeSet, Config.Get, Config.GetPlugin, Config.GetSchemaMetadata, Config.GetVersionHistory, Config.PreviewDiff, Config.PreviewReloadImpact, Config.ReloadService, Config.Rollback, Config.Set",
+      "exceptionCategory": null
+    },
+    {
+      "message": "Topic 'Tooling.GetMeshProjectionReadiness' is not registered in the contract registry.\n  Available topics: Config.CommitChangeSet, Config.Get, Config.GetPlugin, Config.GetSchemaMetadata, Config.GetVersionHistory, Config.PreviewDiff, Config.PreviewReloadImpact, Config.ReloadService, Config.Rollback, Config.Set",
+      "exceptionCategory": null
+    },
+    {
+      "message": "Tooling mesh activation remains fail-closed: Topic 'Tooling.GetMeshProjectionReadiness' is not registered in the contract registry.\n  Available topics: Config.CommitChangeSet, Config.Get, Config.GetPlugin, Config.GetSchemaMetadata, Config.GetVersionHistory, Config.PreviewDiff, Config.PreviewReloadImpact, Config.ReloadService, Config.Rollback, Config.Set",
+      "exceptionCategory": null
+    },
+    {
+      "message": "Topic 'Tooling.GetMeshProjectionReadiness' is not registered in the contract registry.\n  Available topics: Config.CommitChangeSet, Config.Get, Config.GetPlugin, Config.GetSchemaMetadata, Config.GetVersionHistory, Config.PreviewDiff, Config.PreviewReloadImpact, Config.ReloadService, Config.Rollback, Config.Set",
+      "exceptionCategory": null
+    },
+    {
+      "message": "Tooling mesh activation remains fail-closed: Topic 'Tooling.GetMeshProjectionReadiness' is not registered in the contract registry.\n  Available topics: Config.CommitChangeSet, Config.Get, Config.GetPlugin, Config.GetSchemaMetadata, Config.GetVersionHistory, Config.PreviewDiff, Config.PreviewReloadImpact, Config.ReloadService, Config.Rollback, Config.Set",
+      "exceptionCategory": null
+    }
+  ],
+  "observedRoutes": []
+}

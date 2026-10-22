@@ -1,0 +1,50 @@
+{
+  "at": "2026-10-17T20:35:15.859449+00:00",
+  "bytes": 1439668,
+  "countsUnchanged": true,
+  "files": [
+    {
+      "bytes": 592093,
+      "destination": "thesis/evidence/sealed-cohorts-v1215/desktop-gpu-padded-local900-joined-v779/ANALYSIS-RECEIPT.json",
+      "sha256": "0e384cfb178501db701e98bbb67d1cefa5a4c52a794e98de90114e980cb9b6eb",
+      "source": "docs/experiments/tcc-20261013-submission-20261030/root/desktop-gpu-padded-local900-joined-v779/ANALYSIS-RECEIPT.json"
+    },
+    {
+      "bytes": 2052,
+      "destination": "thesis/evidence/sealed-cohorts-v1215/desktop-gpu-padded-local900-joined-v779/DERIVED-OUTPUT-CUSTODY.json",
+      "sha256": "d47c79fb4632c371b25ccd334f6d339dec39d2940dce3088e88ec79cf8d9c143",
+      "source": "docs/experiments/tcc-20261013-submission-20261030/root/desktop-gpu-padded-local900-joined-v779/DERIVED-OUTPUT-CUSTODY.json"
+    },
+    {
+      "bytes": 3856,
+      "destination": "thesis/evidence/sealed-cohorts-v1215/desktop-gpu-padded-local900-joined-v779/REPORT.md",
+      "sha256": "09d1dc94fbb9371fd77fad89d7cd59c7413f888b90820622fcc21a58197854fd",
+      "source": "docs/experiments/tcc-20261013-submission-20261030/root/desktop-gpu-padded-local900-joined-v779/REPORT.md"
+    },
+    {
+      "bytes": 1055,
+      "destination": "thesis/evidence/sealed-cohorts-v1215/desktop-gpu-padded-local900-joined-v779/WORKER-CUSTODY-RECEIPT.json",
+      "sha256": "a98b809f89737376d0b31898c5ca61bf9ec0bfcf02f31386563c0fd08dd9bf2d",
+      "source": "docs/experiments/tcc-20261013-submission-20261030/root/desktop-gpu-padded-local900-joined-v779/WORKER-CUSTODY-RECEIPT.json"
+    },
+    {
+      "bytes": 816890,
+      "destination": "thesis/evidence/sealed-cohorts-v1215/desktop-gpu-padded-local900-joined-v779/analysis-derived-results-v783.zip",
+      "sha256": "72412ba0364154ffc2c12a385019ee9cf0b915004421b85b837ad42a1beb909a",
+      "source": "docs/experiments/tcc-20261013-submission-20261030/root/desktop-gpu-padded-local900-joined-v779/analysis-derived-results-v783.zip"
+    },
+    {
+      "bytes": 18828,
+      "destination": "thesis/evidence/sealed-cohorts-v1215/monitor/CANONICAL-CUSTODY-CHECKPOINT-VERIFIED-20261017T2028.json",
+      "sha256": "907b85c6ea7a294e66aa8507d1d9b3fb2d860a18d82a7446f1b300ea8a0412d9",
+      "source": ".omx/evidence/orca-monitor-20261010/CANONICAL-CUSTODY-CHECKPOINT-VERIFIED-20261017T2028.json"
+    },
+    {
+      "bytes": 4894,
+      "destination": "thesis/evidence/sealed-cohorts-v1215/browser-normal-ui-padded900-v799/REPORT-CUSTODY-CORRECTION-v1218.md",
+      "sha256": "d97b480bdc4f0658bf5f096909993e293eb2697e9edd608342d4a1bf14b9acf1",
+      "source": "docs/experiments/tcc-20261013-submission-20261030/root/browser-normal-ui-padded900-v799/REPORT.md"
+    }
+  ],
+  "sutCalls": 0
+}

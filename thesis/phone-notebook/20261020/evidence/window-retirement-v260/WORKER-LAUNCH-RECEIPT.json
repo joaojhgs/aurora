@@ -1,0 +1,13 @@
+{
+  "at": "2026-10-22T09:16:30.474303+00:00",
+  "executionHost": "coding-worker",
+  "hostName": "code-worker",
+  "terminal": "term_1f27be31-0284-4366-bb91-30fe538cd30e",
+  "pid": 354471,
+  "startTicks": "143854244",
+  "processPresent": true,
+  "noNotebookAgentOrCollectorSpawned": true,
+  "source": "scripts/collect_window_retirement_v260.py",
+  "fixedReadAtUtc": "2026-10-22T11:57:03Z",
+  "ownerHardStopUtc": "2026-10-22T11:57:25.269652Z"
+}

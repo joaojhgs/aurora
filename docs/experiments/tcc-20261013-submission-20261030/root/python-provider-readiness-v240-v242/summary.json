@@ -1,0 +1,24 @@
+{
+  "source_commit": "5782746afba213f6b36907db2f09f0017625e218",
+  "model_sha256": "57d1997790d1744fba5b40a7317df71ea5e2acee28c47e78f0cce39c0703f8cf",
+  "scope": "Python production-provider readiness diagnostic only",
+  "recovered_observed_requests": 1,
+  "correct_success": 0,
+  "incorrect_answer": 1,
+  "provider_observation_missing_runs": 1,
+  "initialization_failed_before_model_runs": 1,
+  "latency_ms_conditional_on_success": {
+    "p50": null,
+    "p90": null,
+    "p95": null
+  },
+  "quantile_method_prespecified": "Type7, no correct-success sample to summarize",
+  "observed_incorrect_request_latency_ns": 8794431270,
+  "deadline_ms": 180000,
+  "maximum_output_tokens": 16,
+  "timeout_count": 0,
+  "compared_routes": [],
+  "clean_benchmark_condition": false,
+  "cleanup_evidence": "v241 direct-close harness misuse prevented saving outcome; v242 persisted request outcome but cleanup reporting uses invalid RetirementResult.reason field. Actual cleanup success not asserted.",
+  "next_gate": "Full real Orchestrator Assistant pilot with declared adequate frozen output budget, same local/API task and model; no unchanged provider probe rerun."
+}

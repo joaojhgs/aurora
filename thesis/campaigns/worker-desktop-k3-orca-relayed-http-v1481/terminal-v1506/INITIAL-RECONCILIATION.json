@@ -1,0 +1,72 @@
+{
+  "at": "2026-10-18T12:57:15.615799+00:00",
+  "status": "TERMINAL_PARTIAL_RECONCILIATION_IN_PROGRESS_NOT_SEALED",
+  "progress": {
+    "attempted": 528,
+    "measured_attempted": 513,
+    "planned_measured": 900,
+    "planned_warmups": 15,
+    "status": "stopped_system_failure",
+    "stop_reason": "transport_ambiguous",
+    "unattempted_measured": 387,
+    "warmups_attempted": 15
+  },
+  "measuredOutcomes": {
+    "completed_correct": 512,
+    "failed": 1
+  },
+  "warmupOutcomes": {
+    "completed_correct": 15
+  },
+  "measuredTimeouts": 0,
+  "actualLocalProcesses": {
+    "968671": {
+      "state": "absent",
+      "expectedStartTicks": 109024884
+    },
+    "968825": {
+      "state": "absent",
+      "expectedStartTicks": 109025741
+    },
+    "968673": {
+      "state": "absent",
+      "expectedStartTicks": 109024895
+    },
+    "421717": {
+      "state": "S",
+      "startTicks": 104535394,
+      "same": true
+    }
+  },
+  "retainedCases": 528,
+  "retainedUniqueWavs": 527,
+  "missingCopiedPayloads": [],
+  "copierErrors": [],
+  "latestCopierReceipt": "thesis/campaigns/worker-desktop-k3-orca-relayed-http-v1481/receipts/000271.json",
+  "failureCasePath": "thesis/campaigns/worker-desktop-k3-orca-relayed-http-v1481/attempts/attempt-0528-measured.jsonl",
+  "failureCaseSha256": "b213178845a882468505f4846590744fc55cc9aab693c19e7cb15c4b37855923",
+  "failure": {
+    "ordinal": 528,
+    "phaseIndex": 513,
+    "status": "failed",
+    "stage": "tts",
+    "code": "transport_ambiguous",
+    "flowDurationMs": 49164.00898,
+    "timeout": false,
+    "correctness": {
+      "assistant_reply_matches_expected_words": true,
+      "transcript_matches_reference_words": true
+    },
+    "correlation": {
+      "correlation_id": "audio-campaign-8d3ed6a35aa44d6cb75c527e6940d517",
+      "request_id": "audio-request-1a9213b60cb6458a9ce50fe4ba549746",
+      "session_id": "audio-session-979d734efed4439e8c95951102b50aa7"
+    },
+    "outputAudio": null
+  },
+  "providerState": "not refreshed after failure yet; existing reservation preserved; no absence inferred",
+  "requesterBindingNote": "Configured requester n_gpu_layers=0 is not the invoked remote provider backend. Effective remote backend must use provider-native evidence.",
+  "frozenManifestSha256": "54d51acdf8219b4e69f21cabb9d9fb1b402acf9826196dbdcea4fcfd15bddb25",
+  "newAppRequestsRestartsRerunsOrLifecycleChanges": 0,
+  "full13Complete": false
+}

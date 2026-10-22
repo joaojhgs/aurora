@@ -1,0 +1,21 @@
+{
+  "id": "msg_4dbe5c7c5f1e",
+  "run_id": "run_e6054e76e9fc",
+  "delivery_contract": "current_delivery",
+  "from_handle": "term_6a00d9ee-792a-4daf-8578-236290e33108",
+  "to_handle": "term_1f27be31-0284-4366-bb91-30fe538cd30e",
+  "subject": "NEW future120s copywindow with4minute lead; exactv33 pins43frames",
+  "body": "NEW FUTURE120s grant, oldv2350 explicitly closedunused per6f8ea0aafa90/6b1ac7496156; no oldoperation resend. Operation source-delta-v33-copy-v2353-20261022, admission thesis/evidence/source-sync-ebde-runtime-v2340/SOURCE-DELTA-TRANSFER-ADMISSION-v2353.json. Earliest receiver+sender startup 2026-10-22T01:38:08.259445+00:00, absoluteend 2026-10-22T01:40:08.259445+00:00; 4minute delivery/ACK lead, fixed120s activecopywindow. ACK this exactwindow/readiness through ordinary status promptly; wait without occupying Notebookcontrol or launchingreceiver beforestart. Use actualprepared receiver-admitted-v33.py SHA f47d791347a08378f25f6865405e1e93a310e5072b699174d850e69459628975 and source-manifest-admitted-v33.json SHAc4ab9f18b9189e8c4fe15ce4897cc3f241e535720dfff9136eb291b402acf0c9, 43 per-file98048B frames,4unchangedpayloads3913736B. Receiver --until EXACThardend, own hardalarm/TTYrestoration; one sequential sender <=128KiB/s payload256KiB/swire, no parallel Notebookterminalwrites or ambiguousaccepted resend. Existing actual own thermal/disk/RAMguards beforestart, preserve dirtyGit. Full target1959blob/mode and payload verification before assembly/execution, no build/modelcall/phone900 by copygrant. If exactready pin/guard/window fails preservepartial/receipt and report, no silentextension. Return ACK then actualstart/acceptedhandle and finalreceiver/checksums/TTYreceipt. Root remains mainHTTP, no deviceprobes.",
+  "type": "status",
+  "priority": "normal",
+  "thread_id": null,
+  "payload": null,
+  "read": 0,
+  "sequence": 5079,
+  "created_at": "2026-10-22T01:34:06Z",
+  "delivered_at": null,
+  "sender_pane_key": "0ce3440c-2ced-4569-b269-0fdc15c29890:4514f22e-0543-4769-92c5-d0a597007302",
+  "pointer_enter_pending": 0,
+  "pointer_pty_id": null,
+  "pointer_process_incarnation": null
+}

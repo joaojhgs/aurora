@@ -1,0 +1,74 @@
+[
+  {
+    "path": "root-manifest.json",
+    "original_sha256": "f235bc3dca16425ba0628f72e27870134624faeb8aee9c09231d78cc7d1c6ead",
+    "export_sha256": "224a242a018ea59523a13d606737a47b6d317e6344e78314207ce44d09add114",
+    "transformation": "omit private config/env hashes"
+  },
+  {
+    "path": "root-result.json",
+    "original_sha256": "9864304c7f035fa4a8479a06a1d8531e1c6bdd13ef384b63cd2eead1d92bad9e",
+    "export_sha256": "fe9c8f82e3551505303e0c2b3320aeb580c596baee34141b95c0ffbfc2f12de5",
+    "transformation": "omit private config/env hashes"
+  },
+  {
+    "path": "stdout.log",
+    "original_sha256": "51a199f16e5f16ad249c019f4544daa491fccb31a70a26c97da2009df9115e74",
+    "export_sha256": "186074e323ccf774b6967026ffec316b32918eb21a3b1f822659cabd86b33383",
+    "transformation": "conservative entire credential-field line redaction: 1 lines"
+  },
+  {
+    "path": "stderr.log",
+    "original_sha256": "4858b261a747595d75b46638a5d5bd1c77207bdcf35999736a55ecd30e15d5d4",
+    "export_sha256": "4858b261a747595d75b46638a5d5bd1c77207bdcf35999736a55ecd30e15d5d4",
+    "transformation": "byte-identical"
+  },
+  {
+    "path": "backend-safe-summaries.json",
+    "original_sha256": "b8f5423e0e2173029bd10d6b00f4b0bf35bf15354bf1a68d0c1e622120b80843",
+    "export_sha256": "b8f5423e0e2173029bd10d6b00f4b0bf35bf15354bf1a68d0c1e622120b80843",
+    "transformation": "byte-identical"
+  },
+  {
+    "path": "tsconfig-cleanup.json",
+    "original_sha256": "b4ca3a4e317f95d55199010ff29b834b50450508e61cc4632d9d52aa6b3371c5",
+    "export_sha256": "b4ca3a4e317f95d55199010ff29b834b50450508e61cc4632d9d52aa6b3371c5",
+    "transformation": "byte-identical"
+  },
+  {
+    "path": "artifacts/python-service.log",
+    "original_sha256": "f45f8ea631d106072f0686f03318ca4768e35c9bb8350c9697e45a429b20ef79",
+    "export_sha256": "58b90304f14e79463359c9ba1def69403525fef85575a73ce29ea7076271ccd6",
+    "transformation": "conservative entire credential-field line redaction: 47 lines"
+  },
+  {
+    "path": "artifacts/web-ui.log",
+    "original_sha256": "96e380eeca03d39fd42da4caa09532c842845dbabcebc7bbddbe4fe6857d8e49",
+    "export_sha256": "96e380eeca03d39fd42da4caa09532c842845dbabcebc7bbddbe4fe6857d8e49",
+    "transformation": "byte-identical"
+  },
+  {
+    "path": "artifacts/playwright-results/.last-run.json",
+    "original_sha256": "5aa6c79dcaceaf888db9df791ea90702dde157913cc79d6ff92688a5b7115a55",
+    "export_sha256": "5aa6c79dcaceaf888db9df791ea90702dde157913cc79d6ff92688a5b7115a55",
+    "transformation": "byte-identical"
+  },
+  {
+    "private_artifact_kind": "test-failed-1.png",
+    "original_sha256": "9802db33babde27cc1f14035d12448c57cbb8ef25339bf92b198b22de4063dab",
+    "exported": false,
+    "reason": "pairing/auth/private DOM risk; fixed-task safe summary only"
+  },
+  {
+    "private_artifact_kind": "trace.zip",
+    "original_sha256": "d56a7c0475206ffca40ada3b214da4c2edf3f74c76bc9ce5107b0b6f1e75769e",
+    "exported": false,
+    "reason": "pairing/auth/private DOM risk; fixed-task safe summary only"
+  },
+  {
+    "private_artifact_kind": "error-context.md",
+    "original_sha256": "53af2bc25d9c60211c1e404a0f9ba7d5a7efaf16802dc7598e829657b9dfb403",
+    "exported": false,
+    "reason": "pairing/auth/private DOM risk; fixed-task safe summary only"
+  }
+]

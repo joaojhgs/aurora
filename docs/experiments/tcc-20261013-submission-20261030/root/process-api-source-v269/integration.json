@@ -1,0 +1,31 @@
+{
+  "owned_only": [
+    {
+      "path": "scripts/experiments/assistant_local_api_pilot.py",
+      "before_sha256": "121bd252920a6eea3ff5f33fa7dcdcc96c005ca3d0d98ffc7559f24d430ac37b",
+      "after_sha256": "857730e1aee69c854718e5302da3bf010a9aa10ed9befd139437605b25356c3e"
+    },
+    {
+      "path": "app/services/supervisor.py",
+      "before_sha256": "8592367bda069135033675eee15952f61252b90ff07c0b7b1c8c6733fc69d54c",
+      "after_sha256": "4ac2b5578fa8b3759bf30e7dfe8c68364e3453eba5020663dc3be670b838a7d8"
+    },
+    {
+      "path": "app/shared/services/process_launcher.py",
+      "before_sha256": "8faeee1673a29a696999bc5bc2459c5db77cbe2a00dc63fe25fa822465bd9ed9",
+      "after_sha256": "c6e102416d03b092d5ac33ef50caa5dc4f5448daf480606a0026f72e16a4eef3"
+    },
+    {
+      "path": "tests/unit/services/test_supervisor.py",
+      "before_sha256": "ffe52e766cc5bd095ee68f1bfe42bbacc48b66c42dd45b21eaf373ff9ec28733",
+      "after_sha256": "b9138279d6d98e53a8ada9f2c53bddc36cf5cb806fe69a453608a8e935061813"
+    },
+    {
+      "path": "tests/unit/app/services/test_process_launcher_signal_lifecycle.py",
+      "before_sha256": "a451f5add85e4b970aecdbfbb30b6313862dd119f2f4c72316f9c75c19a3732d",
+      "after_sha256": "22972439f515a1d1288233b745e1ed38a789e961c9be86a76b005d0905245f79"
+    }
+  ],
+  "review_sha256": "dcf27e79564b9b60c94516076e10273477721cd85b8d89c5bbf17493adf9d5f9",
+  "base_and_candidate_verified": true
+}

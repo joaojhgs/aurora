@@ -1,0 +1,17 @@
+{
+  "at": "2026-10-15T00:26:18.354275+00:00",
+  "controllerPid": 2862376,
+  "driverSHA256": "7c0bb75af8e59c87ce94ab7d838dd85d2de39fdac0fe6c62b3a04940b6ab6a6a",
+  "controllerSHA256": "3edf7588f44ca4c6a986441ae3644f2e6fa259c57b16f4598fd948cc1aef2bfe",
+  "capSeconds": 420,
+  "sampleClass": "typedUI readiness2 with passivecatalog+registry+samecontextprimary",
+  "measurementStarted": false,
+  "globalVoiceFlowsRemain": 8,
+  "phase2Allowed": false,
+  "runtimeController": 2861817,
+  "webPID": 2861837,
+  "observedPythonPID": 2861849,
+  "readyAt": "2026-10-15T00:26:12.910898+00:00",
+  "guardActualPath": "/home/developer/projects/aurora/.git/aurora-real-ui-voice-v452/source/app/services/gateway/fastapi_app.py",
+  "guardActualSHA256": "c90ade3dc52f1dfdf3840225894d24cefa530b063b2b32e1b289139772e65273"
+}

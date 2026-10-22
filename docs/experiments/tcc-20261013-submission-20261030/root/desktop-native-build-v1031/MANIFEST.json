@@ -1,0 +1,38 @@
+{
+  "at": "2026-10-16T12:20:23.403355+00:00",
+  "scope": "Saved source/frontend verification and first active native build status; no native execution or model/performance acceptance",
+  "files": [
+    {
+      "path": "source-receiver-v1020.json",
+      "bytes": 6152,
+      "sha256": "46698978147c9ec17251103dec42c43216b46cbb263cb7c2b7877f9da9108a11"
+    },
+    {
+      "path": "source-transfer-v1019.json",
+      "bytes": 24394,
+      "sha256": "fd5bc27a1096cc5c6dced5b7998d46ee0ba1aef86f3bf34762333473c43fe421"
+    },
+    {
+      "path": "frontend-transfer-v1028.json",
+      "bytes": 1564,
+      "sha256": "5125cc32e7b5e774d861ea5d96363eea2d2d89055e90252e0976ad9890acae28"
+    },
+    {
+      "path": "native-build-launch-v1031.json",
+      "bytes": 624,
+      "sha256": "24733f3057945bf14d3ebce48d0df52b727a9338f3b9265b3eb62ebc64bf6c25"
+    },
+    {
+      "path": "native-build-status-v1032.json",
+      "bytes": 6880,
+      "sha256": "34a25194b74e979d310f6153fb42ec57eef62cc284f214de2179bc73714fe8df"
+    }
+  ],
+  "fullSourceBindingRemoteCustody": {
+    "path": "/tmp/aurora-root-c06-current-source-v1019/SOURCE-MATERIALIZATION-v1020.json",
+    "bytes": 929646,
+    "sha256": "272ceffeef6db7cbb158ce79261e879b461edfff5f6d1c00beeb5b4eace2439c",
+    "copiedToWorker": false
+  },
+  "runtimeOrPerformanceAccepted": false
+}

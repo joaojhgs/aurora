@@ -1,0 +1,143 @@
+{
+  "observedAt": "2026-10-15T04:29:06.017054+00:00",
+  "requestedByRoot": "msg_ed96299b26e9",
+  "galleryReceipt": {
+    "index": "reports/aurora-frontend-20261007T025732Z/ASTRA-VISUAL-REVIEW-INDEX.json",
+    "index_sha256": "80ec251df15fcaba47710b2acda46b34f227654633b7c938e5b6df215ff77d0b",
+    "html": "reports/aurora-frontend-20261007T025732Z/ASTRA-VISUAL-REVIEW.html",
+    "html_sha256": "9f4905123add027f7dec2510563c9bbdb657cdc423f4f56346325a688fa1a8c2",
+    "entry_count": 322,
+    "screenshot_count": 324,
+    "fresh_case_count": 15,
+    "aesthetic_approval": "pending source Astra"
+  },
+  "captureSourceCommit": "bf80408e9566a52a775a95327621f2494e0647bd",
+  "sourcePins": [
+    {
+      "path": "packages/aurora-ui/src/shell.tsx",
+      "capturedSHA256": "d24f4e40b0df277ff9595051b48686dff56c3ec5ff1fa79275cbf15d86aa7564",
+      "currentSHA256": "d24f4e40b0df277ff9595051b48686dff56c3ec5ff1fa79275cbf15d86aa7564",
+      "matches": true
+    },
+    {
+      "path": "packages/aurora-ui/src/assistant-view-shell.tsx",
+      "capturedSHA256": "4235226d75203e94218713bf2f530f12a8b05ed22319cd2db36996012d5d4569",
+      "currentSHA256": "4235226d75203e94218713bf2f530f12a8b05ed22319cd2db36996012d5d4569",
+      "matches": true
+    },
+    {
+      "path": "packages/aurora-ui/src/assistant-composer.tsx",
+      "capturedSHA256": "b0671465a423d4607e10a5419bc7a79dd16233b93e5c2d7aae53c71ef26c13aa",
+      "currentSHA256": "b0671465a423d4607e10a5419bc7a79dd16233b93e5c2d7aae53c71ef26c13aa",
+      "matches": true
+    },
+    {
+      "path": "packages/aurora-ui/src/styles.css",
+      "capturedSHA256": "7136a273ad91a0f4f5b94de6fddc3955fe67131ea037588757f70a78420fca47",
+      "currentSHA256": "7136a273ad91a0f4f5b94de6fddc3955fe67131ea037588757f70a78420fca47",
+      "matches": true
+    },
+    {
+      "path": "apps/aurora-web/app/debug-ui-picker.tsx",
+      "capturedSHA256": "53b1e4ee36ca52a7dbb1536b46556694c072279bdf99cabeab37d8e11a1a615f",
+      "currentSHA256": "53b1e4ee36ca52a7dbb1536b46556694c072279bdf99cabeab37d8e11a1a615f",
+      "matches": true
+    },
+    {
+      "path": "packages/aurora-ui/src/nav.tsx",
+      "capturedSHA256": "3f0a3bf78f531768237031f29adaaeef053715f88eef82a215c261f4f0dc44c2",
+      "currentSHA256": "3f0a3bf78f531768237031f29adaaeef053715f88eef82a215c261f4f0dc44c2",
+      "matches": true
+    },
+    {
+      "path": "packages/aurora-ui/src/shell-data.ts",
+      "capturedSHA256": "4e803eba851ed3fd455ceac17f19087aa9a84db707d809207d0a2ebe66877f06",
+      "currentSHA256": "4e803eba851ed3fd455ceac17f19087aa9a84db707d809207d0a2ebe66877f06",
+      "matches": true
+    },
+    {
+      "path": "packages/aurora-ui/src/use-assistant-foreground-turn.ts",
+      "capturedSHA256": "2eae0ba4df1eb474b58db4eda1efd2dfa52d3fd6f0925234fac4a3a0d9c4b2d5",
+      "currentSHA256": "dae3bdf7ab9baaeffd8d9ae0339b7200e520ec5f0c64e1bdb461d967e85fdcbb",
+      "matches": false
+    },
+    {
+      "path": "packages/aurora-ui/src/use-assistant-turns.ts",
+      "capturedSHA256": "fc2e30f2ce4964639fcccbc49883d0af00f1163c418bf0daac4d72b4896a64a5",
+      "currentSHA256": "419ebf28382fc2f005e1bfb897782bf0203b0bce6e21fe9578358b1fa7e7a8c5",
+      "matches": false
+    },
+    {
+      "path": "packages/aurora-ui/src/assistant-view.tsx",
+      "capturedSHA256": "73e12f6aa68c6a84064fccf06f21043c86e02318c8d1c2df140d0807d7f687bd",
+      "currentSHA256": "d244100fdd1db1a996f304b2555821807f6c1aa973d6660ef27ff762780033bb",
+      "matches": false
+    }
+  ],
+  "scopedInventory": {
+    "receipt": "e8c1872b-0e6e-47a9-8e87-5bf0e92d89b7",
+    "scope": {
+      "hostIds": [
+        "ssh:ssh-oci-coding-worker"
+      ],
+      "omittedHostIds": [
+        "local",
+        "ssh:ssh-1786238480967-semdev",
+        "ssh:ssh-sem-notebook-personal",
+        "ssh:ssh-sem-notebook-university",
+        "ssh:ssh-sem-notebook-work"
+      ],
+      "omittedHostSelectors": [
+        {
+          "hostId": "local",
+          "selector": "--host local"
+        },
+        {
+          "hostId": "ssh:ssh-1786238480967-semdev",
+          "selector": "--host ssh:ssh-1786238480967-semdev"
+        },
+        {
+          "hostId": "ssh:ssh-sem-notebook-personal",
+          "selector": "--host ssh:ssh-sem-notebook-personal"
+        },
+        {
+          "hostId": "ssh:ssh-sem-notebook-university",
+          "selector": "--host ssh:ssh-sem-notebook-university"
+        },
+        {
+          "hostId": "ssh:ssh-sem-notebook-work",
+          "selector": "--host ssh:ssh-sem-notebook-work"
+        }
+      ]
+    },
+    "terminals": [
+      {
+        "handle": "term_6a00d9ee-792a-4daf-8578-236290e33108",
+        "incarnation": "fe7e63c7-d260-465f-b37e-f6fc78f8a1af",
+        "host": "ssh:ssh-oci-coding-worker",
+        "worktree": "314e7b89-8f19-4535-9443-22b342aedff7::/home/developer/projects/aurora",
+        "agentIdentity": "codex"
+      },
+      {
+        "handle": "term_6a5d698f-67e5-4efb-8371-917017fd85e6",
+        "incarnation": "bba0c602-6d1d-4253-b599-6e2b5b8c9118",
+        "host": "ssh:ssh-oci-coding-worker",
+        "worktree": "314e7b89-8f19-4535-9443-22b342aedff7::/home/developer/projects/aurora",
+        "agentIdentity": null
+      },
+      {
+        "handle": "term_2eab47ed-ab9b-4e35-bd9b-fc068c60e3fc",
+        "incarnation": "37e50d9c-6cf5-4e28-a63b-f2bc3eed5661",
+        "host": "ssh:ssh-oci-coding-worker",
+        "worktree": "314e7b89-8f19-4535-9443-22b342aedff7::/home/developer/projects/aurora",
+        "agentIdentity": "codex"
+      }
+    ],
+    "totalCount": 3,
+    "truncated": false
+  },
+  "finalApprovalVerified": false,
+  "reviewerIdentityVerified": false,
+  "absenceOrExitClaim": false,
+  "newCapturesRuntimeOrReviewers": false
+}

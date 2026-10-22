@@ -1,0 +1,12 @@
+{
+  "controlDeadline": "2026-10-22T11:53:00Z",
+  "explicitNewline": true,
+  "host": "ssh:ssh-sem-notebook-personal",
+  "incarnation": "328cd72f-c7ea-49ff-a2db-b9275b085037",
+  "remoteResult": "/home/developer/projects/aurora/thesis/phone-notebook/20261020/evidence/stage-launch-consumer-lease-v338.json",
+  "rootAdmissionMessage": "existing v2398 exact observed consumer lease negotiation bug; one capability added, consumer role/services0 unchanged, no validation weakened",
+  "script": "scripts/stage_launch_consumer_lease_v338.py",
+  "scriptSha256": "4787b6983a1ed07e8f28ae0b35d910a4960371353ff0ac304a3334bd0b5df0d7",
+  "singleSend": true,
+  "terminal": "term_a2ed5feb-7c92-48e4-bd88-d1b0e6737989"
+}

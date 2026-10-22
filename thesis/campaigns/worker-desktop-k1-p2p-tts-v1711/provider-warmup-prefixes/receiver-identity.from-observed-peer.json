@@ -1,0 +1,29 @@
+{
+  "actual_provider_files": {
+    "config": {
+      "canonical_path": "/home/developer/projects/aurora/.git/aurora-handoff-import-20261006/piper-asset-recovery-v1109/models/en_US-ljspeech-medium.onnx.json",
+      "sha256": "141d612cc0a95ed7efc1ca936b845c2364967f2e9217c5dbfcf69fc4d6c65860"
+    },
+    "model": {
+      "canonical_path": "/home/developer/projects/aurora/.git/aurora-handoff-import-20261006/piper-asset-recovery-v1109/models/en_US-ljspeech-medium.onnx",
+      "sha256": "6f52a751e2349abe7a76735eb09dc1875298c77ea2342ffd2fef79ff81b87f22"
+    },
+    "source_receipt_sha256": "71d85fb0e08bd918f51f7a67a97353d82665a31df56632ab96e3fcf50e0f5760"
+  },
+  "credential_value_logged": false,
+  "manifest_sha256": "245d1739111a7162287fcece91dc005958722e062a1e028613c3f85e21e3d339",
+  "peer_id_sha256": "77421aa81ce7ae2e865455348e9aa5ae17013d8f5e1f72d38d71d09f110ef868",
+  "provider": {
+    "config_sha256": "141d612cc0a95ed7efc1ca936b845c2364967f2e9217c5dbfcf69fc4d6c65860",
+    "hardware_fingerprint_sha256": "d5e5c8c5f35f4b5e98fce3fe328dd006aae23ebebe99e822a703b2a7cd38d957",
+    "model_sha256": "6f52a751e2349abe7a76735eb09dc1875298c77ea2342ffd2fef79ff81b87f22",
+    "peer_id_sha256": "77421aa81ce7ae2e865455348e9aa5ae17013d8f5e1f72d38d71d09f110ef868",
+    "provider_class": "app.services.tts.providers.piper.PiperTTSProvider",
+    "receiver_id": "personal-k1-mesh-tts-v1710",
+    "sample_rate": 22050,
+    "source_sha256": "6fe434a7d3f07350ba7e8c9fce00414bb5cff8a1ee69b33eafbace73c5473b82",
+    "use_cuda": false
+  },
+  "receiver_pid": 3194394,
+  "schema": "aurora.distributed_k1_receiver_identity.v1"
+}

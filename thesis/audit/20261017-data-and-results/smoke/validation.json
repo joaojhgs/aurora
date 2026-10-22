@@ -1,0 +1,56 @@
+{
+  "applicationImports": 0,
+  "at": "2026-10-17T22:23:27.735568+00:00",
+  "c06UniqueEmbeddedCases": 4,
+  "checks": [
+    {
+      "cohort": "V491",
+      "measuredRows": 900,
+      "rawOutcomeAndAuthorCorrectQuantilesAgree": true,
+      "warmupRows": 15
+    },
+    {
+      "cohort": "V737",
+      "measuredRows": 900,
+      "rawOutcomeAndAuthorCorrectQuantilesAgree": true,
+      "warmupRows": 15
+    },
+    {
+      "cohort": "V735",
+      "measuredRows": 274,
+      "rawOutcomeAndAuthorCorrectQuantilesAgree": true,
+      "warmupRows": 15
+    },
+    {
+      "cohort": "V745",
+      "measuredRows": 626,
+      "rawOutcomeAndAuthorCorrectQuantilesAgree": true,
+      "warmupRows": 15
+    },
+    {
+      "cohort": "V692",
+      "measuredRows": 900,
+      "rawOutcomeAndAuthorCorrectQuantilesAgree": true,
+      "warmupRows": 15
+    },
+    {
+      "cohort": "V485",
+      "measuredRows": 900,
+      "rawProjectionAndAuthorCorrectQuantilesAgree": true,
+      "warmupRows": 15
+    },
+    {
+      "cohort": "V497",
+      "measuredRows": 900,
+      "rawProjectionAndAuthorCorrectQuantilesAgree": true,
+      "warmupRows": 15
+    }
+  ],
+  "deviceTests": 0,
+  "duplicates": [],
+  "modelLoads": 0,
+  "newMeasurements": 0,
+  "scope": "one finite saved-data analysis smoke; no edge-case test expansion",
+  "sourceHashesVerified": true,
+  "usedInputSources": 3930
+}

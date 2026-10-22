@@ -1,0 +1,22 @@
+{
+  "index": 1,
+  "route": "local-only",
+  "status": "completed",
+  "planned_warmups": 5,
+  "planned_measured": 100,
+  "request_deadline_ms": 180000,
+  "baseline_seconds": 300,
+  "cell_cap_seconds": 6000,
+  "child_exit_code": 0,
+  "exit_code": 0,
+  "elapsed_seconds": 3301.3687037839554,
+  "started_at": "2026-10-14T07:31:48.837938+00:00",
+  "finished_at": "2026-10-14T08:26:50.206878+00:00",
+  "receipt_validation": {
+    "validated": true,
+    "failure_classes": [],
+    "expected_requests": 105,
+    "expected_provider_captures": 105,
+    "raw_artifacts_retained": true
+  }
+}

@@ -1,0 +1,35 @@
+{
+  "epochId": "V1562",
+  "parentCohortId": "aurora-worker-desktop-k3-orca-relayed-http-stt-llm-tts-remaining-v1513",
+  "parentManifestSha256": "b19c10d9aad4f9a2261d7eac5b52c258315eea94db256a411e66981e6a45d4a4",
+  "parentValidationPath": "thesis/campaigns/worker-desktop-k3-orca-relayed-http-remaining-v1513/terminal-v1549/REVIEWED-PARTIAL-VALIDATION-v1565.json",
+  "parentValidationSha256": "9c23920d7b3395c742013ed89ea8921a91a0ead0326f88baef52fbd17185faf6",
+  "parentMeasuredRowsPath": "thesis/campaigns/worker-desktop-k3-orca-relayed-http-remaining-v1513/terminal-v1549/requester-analysis-v1549/MEASURED-REQUESTS.jsonl",
+  "parentMeasuredRowsSha256": "e3c1afc987f586500208ac08c15c7b7a9aeb4e7ffe6089d706c23d6ac8992497",
+  "parentSummaryPath": "thesis/campaigns/worker-desktop-k3-orca-relayed-http-remaining-v1513/terminal-v1549/final-artifacts/summary.json",
+  "parentSummarySha256": "5c87fe077e1f54375e122da07de885786c77911fcbfd78eb2d8dfd83b7e3d415",
+  "priorAttemptedMeasured": 716,
+  "priorCorrect": 714,
+  "priorFailed": 2,
+  "plannedEpochMeasured": 184,
+  "plannedFreshExcludedWarmups": 15,
+  "conditionTargetMeasured": 900,
+  "firstConditionMeasuredIndex": 717,
+  "lastConditionMeasuredIndex": 900,
+  "preserveParentFailure": true,
+  "sameProcessResume": false,
+  "poolEpochPercentilesAutomatically": false,
+  "analysisPolicy": "Keep all epochs/failures/clock/load/path context separate. Eligible raw-row union requires an explicit comparison review; never average percentile summaries.",
+  "reason": "Natural assistant transport termination of V1513 left184unattempted. Samecontrol/provider proof and existing-keyHTTPhealth recovered; actualcause unknown. This is only prospective bounded readmission of global717\u2013900; no measuredindex retry.",
+  "originalV1481": {
+    "manifestSha256": "54d51acdf8219b4e69f21cabb9d9fb1b402acf9826196dbdcea4fcfd15bddb25",
+    "attempted": 513,
+    "correct": 512,
+    "failed": 1
+  },
+  "immediateParentV1513": {
+    "attempted": 203,
+    "correct": 202,
+    "failed": 1
+  }
+}

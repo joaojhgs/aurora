@@ -1,0 +1,50 @@
+{
+  "at": "2026-10-18T15:30:53.008228+00:00",
+  "classification": "VERIFIED_WAIT_SAME_LIVE_FROZEN_RUN",
+  "progress": {
+    "attempted": 88,
+    "last_attempt_file": "attempts/attempt-0088-measured.jsonl",
+    "last_attempt_status": "completed_correct",
+    "measured_attempted": 73,
+    "planned_measured": 387,
+    "planned_warmups": 15,
+    "status": "running",
+    "unattempted_measured": 314,
+    "warmups_attempted": 15
+  },
+  "measuredOutcomes": {
+    "completed_correct": 73
+  },
+  "pids": [
+    {
+      "role": "controller",
+      "pid": 1231594,
+      "startTicks": 111317576,
+      "sameLiveProcess": true
+    },
+    {
+      "role": "backend",
+      "pid": 1231687,
+      "startTicks": 111318838,
+      "sameLiveProcess": true
+    },
+    {
+      "role": "copier",
+      "pid": 1231601,
+      "startTicks": 111317577,
+      "sameLiveProcess": true
+    }
+  ],
+  "custody": {
+    "sequence": 46,
+    "cases": 87,
+    "wavs": 87,
+    "bytes": 7322520,
+    "errors": []
+  },
+  "newSutRequestsFromCheckpoint": 0,
+  "sourceSettingsOrFrozenManifestChanged": false,
+  "parentOriginalAttempts": 513,
+  "parentOriginalFailureRetained": true,
+  "full13Complete": false
+}

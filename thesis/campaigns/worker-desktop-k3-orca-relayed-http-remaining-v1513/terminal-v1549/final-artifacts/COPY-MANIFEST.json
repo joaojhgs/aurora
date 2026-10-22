@@ -1,0 +1,49 @@
+{
+  "summary.json": {
+    "bytes": 56326,
+    "sha256": "5c87fe077e1f54375e122da07de885786c77911fcbfd78eb2d8dfd83b7e3d415",
+    "source": ".git/aurora-handoff-import-20261006/distributed-k3-orca-relayed-http-cell-v1513/campaign/summary.json"
+  },
+  "progress.json": {
+    "bytes": 222,
+    "sha256": "9fdab8cbb3dd6f5c58e240406a127f3a06415a5045ae1bde1fa4cb32a01798d5",
+    "source": ".git/aurora-handoff-import-20261006/distributed-k3-orca-relayed-http-cell-v1513/campaign/progress.json"
+  },
+  "control-launch.json": {
+    "bytes": 2894,
+    "sha256": "1ee5a583046af0f21e2e7e6a74d8068d9e0bb013772a7001e861f6c22e702457",
+    "source": ".git/aurora-handoff-import-20261006/distributed-k3-orca-relayed-http-cell-v1513/control-launch.json"
+  },
+  "condition-frozen-v1513.json": {
+    "bytes": 17691,
+    "sha256": "b19c10d9aad4f9a2261d7eac5b52c258315eea94db256a411e66981e6a45d4a4",
+    "source": ".git/aurora-handoff-import-20261006/distributed-k3-orca-relayed-launch-v1513/condition-frozen-v1513.json"
+  },
+  "config-reference.json": {
+    "bytes": 284,
+    "sha256": "ada2afa9d7ef2f1d888946f4bcdf51a56c24d83076f684da650a717740abdc02",
+    "source": ".git/aurora-handoff-import-20261006/distributed-k3-orca-relayed-launch-v1513/config-reference.json"
+  },
+  "CURRENT-at-terminal.json": {
+    "bytes": 709023,
+    "sha256": "378420b4a5c0edf2a41fb670687233af6463064138f8f090c3d37f0ab9460895",
+    "source": "thesis/campaigns/worker-desktop-k3-orca-relayed-http-remaining-v1513/CURRENT.json"
+  },
+  "COPIER-RECEIPT-at-terminal.json": {
+    "bytes": 37202,
+    "sha256": "b17f6c9452a5379876d28677778024c7e0ece1833f7fd9ff13e3f9af67cd6514",
+    "source": "thesis/campaigns/worker-desktop-k3-orca-relayed-http-remaining-v1513/receipts/000114.json"
+  },
+  "requesterCopier-final-tail.log": {
+    "bytes": 441,
+    "sha256": "83d21bbe78bfab0285b8f9dbd26f4190b6897ec28ece82b958fbebbff9b78af7",
+    "source": ".git/aurora-handoff-import-20261006/distributed-k3-orca-relayed-launch-v1513/requesterCopier.private.log",
+    "sourceByteStart": 55875,
+    "sourceByteEnd": 56316
+  },
+  "LOCAL-SOURCE-PREFIX-METADATA.json": {
+    "bytes": 898,
+    "sha256": "3d8c6ceebbbef9412704707850c1bbcfa3dea2ca6a938ff0c629fb369688f0f2",
+    "source": "metadata-only observation after exact requester/copier processes exited"
+  }
+}

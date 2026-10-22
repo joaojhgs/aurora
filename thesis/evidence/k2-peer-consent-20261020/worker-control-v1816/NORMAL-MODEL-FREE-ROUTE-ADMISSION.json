@@ -1,0 +1,163 @@
+{
+  "admitted": true,
+  "at": "2026-10-20T15:28:18.174560+00:00",
+  "modelRequests": 0,
+  "modelServicesStarted": [],
+  "normalGatewayControlPlane": true,
+  "providers": [
+    {
+      "eligible": true,
+      "module": "Orchestrator",
+      "peer_id": "aurora-276bb04e1276201922851f6a222110de",
+      "provider_id": "remote:aurora-276bb04e1276201922851f6a222110de:Orchestrator",
+      "status": "negotiated"
+    },
+    {
+      "eligible": true,
+      "module": "TTS",
+      "peer_id": "aurora-276bb04e1276201922851f6a222110de",
+      "provider_id": "remote:aurora-276bb04e1276201922851f6a222110de:TTS",
+      "status": "negotiated"
+    }
+  ],
+  "routes": {
+    "assistant": {
+      "blockers": [],
+      "candidates": [
+        {
+          "active_calls": 0,
+          "auth_rbac_state": "permission_required",
+          "available_capacity": 10,
+          "blockers": [],
+          "freshness": {
+            "last_probe_age_s": null,
+            "manifest_time": "2026-10-20T15:28:17.028450+00:00",
+            "registry_digest": "1d586149b2863dd57e88d482500a6760cf9f88928b064fbb963792d0db0c2b8e",
+            "source": "remote_manifest",
+            "stale": false,
+            "ttl_s": null
+          },
+          "included": true,
+          "latency_ms": 202.4322550278157,
+          "max_concurrent": 10,
+          "module": "Orchestrator",
+          "peer_id": "aurora-276bb04e1276201922851f6a222110de",
+          "policy": {
+            "allowed_provider_peer_ids": null,
+            "approval_required": false,
+            "bandwidth_check_required": false,
+            "consent_required": false,
+            "denial_reasons": [],
+            "explicit_selector_required": false,
+            "local_only": false,
+            "mesh_visible": false,
+            "operation_class": null,
+            "privacy_indicator_required": false,
+            "required_callable_feature_ids": [
+              "assistant_conversation"
+            ],
+            "required_permissions": [
+              "Orchestrator.use"
+            ],
+            "resource_scope": null,
+            "safety_class": "standard",
+            "selector_required": false,
+            "trust_tier": "mesh_peer"
+          },
+          "privacy_class": "public",
+          "projection_digest": "7f57fa50ae087a702e685c4d06cc31422faa2cb658f59322a4d29ef286bb1b12",
+          "projection_revision": "1",
+          "provider_id": "remote:aurora-276bb04e1276201922851f6a222110de:Orchestrator",
+          "provider_kind": "remote",
+          "reason": "eligible provider",
+          "reason_code": "eligible",
+          "selected": true,
+          "service_instance_id": "remote:aurora-276bb04e1276201922851f6a222110de:Orchestrator",
+          "transport": "mesh_webrtc",
+          "version": "0.0.0"
+        }
+      ],
+      "fallback_behavior": "remote_selected; fallback=local",
+      "module": "Orchestrator",
+      "secrets_redacted": true,
+      "security_privacy_blockers": [],
+      "selected_peer_id": "aurora-276bb04e1276201922851f6a222110de",
+      "selected_provider_id": "remote:aurora-276bb04e1276201922851f6a222110de:Orchestrator",
+      "selected_service_instance_id": "remote:aurora-276bb04e1276201922851f6a222110de:Orchestrator",
+      "selected_target": "remote",
+      "selector_valid": true,
+      "selector_validation_code": "",
+      "selector_validation_message": "",
+      "topic": "Orchestrator.ExternalUserInput"
+    },
+    "tts": {
+      "blockers": [],
+      "candidates": [
+        {
+          "active_calls": 0,
+          "auth_rbac_state": "permission_required",
+          "available_capacity": 10,
+          "blockers": [],
+          "freshness": {
+            "last_probe_age_s": null,
+            "manifest_time": "2026-10-20T15:28:17.028450+00:00",
+            "registry_digest": "d98caf81f2c6e4b3ac3316adaab84b922bd077b13318a880f51aad9d70885e74",
+            "source": "remote_manifest",
+            "stale": false,
+            "ttl_s": null
+          },
+          "included": true,
+          "latency_ms": 202.4322550278157,
+          "max_concurrent": 10,
+          "module": "TTS",
+          "peer_id": "aurora-276bb04e1276201922851f6a222110de",
+          "policy": {
+            "allowed_provider_peer_ids": null,
+            "approval_required": false,
+            "bandwidth_check_required": false,
+            "consent_required": false,
+            "denial_reasons": [],
+            "explicit_selector_required": false,
+            "local_only": false,
+            "mesh_visible": false,
+            "operation_class": "batch_synthesize",
+            "privacy_indicator_required": false,
+            "required_callable_feature_ids": [
+              "speech_synthesis"
+            ],
+            "required_permissions": [
+              "TTS.Synthesize"
+            ],
+            "resource_scope": "generated_audio",
+            "safety_class": "standard",
+            "selector_required": false,
+            "trust_tier": "mesh_peer"
+          },
+          "privacy_class": "public",
+          "projection_digest": "7f57fa50ae087a702e685c4d06cc31422faa2cb658f59322a4d29ef286bb1b12",
+          "projection_revision": "1",
+          "provider_id": "remote:aurora-276bb04e1276201922851f6a222110de:TTS",
+          "provider_kind": "remote",
+          "reason": "eligible provider",
+          "reason_code": "eligible",
+          "selected": true,
+          "service_instance_id": "remote:aurora-276bb04e1276201922851f6a222110de:TTS",
+          "transport": "mesh_webrtc",
+          "version": "0.0.0"
+        }
+      ],
+      "fallback_behavior": "remote_selected; fallback=local",
+      "module": "TTS",
+      "secrets_redacted": true,
+      "security_privacy_blockers": [],
+      "selected_peer_id": "aurora-276bb04e1276201922851f6a222110de",
+      "selected_provider_id": "remote:aurora-276bb04e1276201922851f6a222110de:TTS",
+      "selected_service_instance_id": "remote:aurora-276bb04e1276201922851f6a222110de:TTS",
+      "selected_target": "remote",
+      "selector_valid": true,
+      "selector_validation_code": "",
+      "selector_validation_message": "",
+      "topic": "TTS.Synthesize"
+    }
+  }
+}

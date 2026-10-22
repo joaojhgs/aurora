@@ -1,0 +1,18 @@
+{
+  "scope": "two_owner_named_incremental_directories_contents_only",
+  "files": {
+    "README.md": {
+      "bytes": 1883,
+      "sha256": "32fd47e8f178bed9c60007fb263d804c766cd7c22d5d5ff74c94fb3b43a80e0b"
+    },
+    "deletion-manifest.json": {
+      "bytes": 78667,
+      "sha256": "da85b6b3fecd22b2bf77fc90e3bfb4f244dd65e18862cb9da0863959c69ea22b"
+    },
+    "preflight.json": {
+      "bytes": 77778,
+      "sha256": "953015ade1a5cf4f86cee44f53f59832cd50f1b61b51d96e53be83a9ce80b83e"
+    }
+  },
+  "no_source_or_test_replay": true
+}

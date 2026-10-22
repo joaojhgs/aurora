@@ -1,0 +1,22 @@
+{
+  "quantile_method": "Type7 h=(n-1)p linear interpolation on correct_success only",
+  "n_total": 2,
+  "n_correct_success": 1,
+  "n_failure": 1,
+  "n_explicit_timeout": 0,
+  "n_warmup": 0,
+  "n_provider_invocations": 1,
+  "successful_reply_ms": [
+    49846
+  ],
+  "failed_terminal_observation_ms": [
+    214
+  ],
+  "p50_ms": 49846,
+  "p90_ms": 49846,
+  "p95_ms": 49846,
+  "stable_tail_claim": false,
+  "all_condition_input_join_complete": false,
+  "first_input_matches_local_api": true,
+  "second_provider_input": "not_observed"
+}

@@ -1,0 +1,22 @@
+{
+  "at": "2026-10-15T03:25:54.598820+00:00",
+  "receipt": "d83fe553-d48b-4881-a55e-9213e49ef540",
+  "terminal": "term_8109a3ac-570e-4c3f-a7ac-e68e36764b2b",
+  "status": "running",
+  "matchingDeliveryLines": [
+    "      \"7f7250593e686c7836feb332ebdd928eb71a9ef0089fbeb1cd1c4dae9cb6ec9e\",                   │",
+    "         \"delivery_id\":                                                                     │",
+    "      +    \"platform\": \"telegram\",                                                          │",
+    "      +    \"message_document_id\": 120,                                                      │",
+    "      261015-evidence-addendum-delivery-receipt.json\",                                      │",
+    "         \"prior_document79\": \"Different artifact; not resent or reused as proof\",           │",
+    "         \"scope\": \"Delivery only; actual uncompressed Markdown, reconcile prior             │",
+    " ┊  Personal reports Telegram provider success for the new uncompressed evidence addendum,  │",
+    "    • Document/message ID: 120                                                              │",
+    "    7f7250593e686c7836feb332ebdd928eb71a9ef0089fbeb1cd1c4dae9cb6ec9e                        │",
+    "    ce-addendum-delivery-receipt.json                                                       │",
+    "    Document 79 was not resent or reused.                                                   │"
+  ],
+  "scope": "Second bounded delivery observation after meaningful elapsed time; original request retained, no resend",
+  "providerDeliveryVerifiedByThisRead": false
+}

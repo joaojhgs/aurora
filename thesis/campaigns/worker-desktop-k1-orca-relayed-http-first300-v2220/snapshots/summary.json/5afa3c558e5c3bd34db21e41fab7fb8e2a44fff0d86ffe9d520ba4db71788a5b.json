@@ -1,0 +1,228 @@
+{
+  "attempted": 1,
+  "attempts": [
+    {
+      "file": "attempts/attempt-0001-warmup.jsonl",
+      "ordinal": 1,
+      "phase": "warmup",
+      "status": "failed",
+      "timeout": false
+    }
+  ],
+  "candidate_manifest_reference_sha256": "34b681e385feb3500c9e9849d30f5bac982716c4e4938cdb04c5fdc617cff624",
+  "candidate_manifest_role": "exact_three_key_pilot_input_manifest",
+  "candidate_manifest_sha256": "ce75b965ee5879ebece6ea7dfe133441547d20ccf89ecd5d66ea510bd9645e60",
+  "completed_flow_count_including_incorrect": 0,
+  "completed_flow_latency_ms_r7_including_incorrect": {
+    "p50": null,
+    "p90": null,
+    "p95": null
+  },
+  "condition": "localbus_accurate_stt_assistant_remote_gateway_http_tts",
+  "condition_cap_seconds": 24000.0,
+  "condition_elapsed_ms_excluding_setup_and_shutdown": 49871.547114,
+  "condition_ended_monotonic_ns": 1377360873628828,
+  "condition_started_monotonic_ns": 1377311002081714,
+  "condition_target_measured": 900,
+  "config_raw_sha256_after_startup": "2b8cc043fc75c8978e2528379badb9fff7cd2ad2bc82729e61c560d35bbd1cc1",
+  "config_raw_sha256_before_startup": "211f086c3df1cddb2eaf41412ab0942b559b5a03ea472fa926508e5e0530c52e",
+  "config_sha256": "2b8cc043fc75c8978e2528379badb9fff7cd2ad2bc82729e61c560d35bbd1cc1",
+  "config_startup_changed_key_paths": [
+    "services.gateway.api.token_secret"
+  ],
+  "config_startup_changed_values_redacted": true,
+  "config_startup_semantics_verified": true,
+  "correct": 0,
+  "correctness_denominator": {
+    "measured_attempted": 0,
+    "measured_correct": 0,
+    "measured_failed_or_interrupted": 0,
+    "measured_incorrect_completed": 0,
+    "measured_planned": 300,
+    "unattempted_measured": 300,
+    "warmup_attempted_excluded": 1,
+    "warmup_failed_or_interrupted_excluded": 1,
+    "warmup_planned_excluded": 15
+  },
+  "epoch_lineage": {
+    "conditionTargetMeasured": 900,
+    "epochId": "V2220",
+    "failed180Retried": false,
+    "firstConditionMeasuredIndex": 181,
+    "lastConditionMeasuredIndex": 480,
+    "parentManifestSha256": "6bc65cf5cc3c4eddb90b80b0764a01e6a9fc4afbed66f33c731e3ab58528e101",
+    "parentSealSha256": "613158562e914f5d952f009b87c3d6438b350d4809d6a97f9bf82ed301918829",
+    "plannedEpochMeasured": 300,
+    "priorAttemptedMeasured": 180,
+    "priorCorrect": 179,
+    "priorFailed": 1
+  },
+  "expected_reply_words": [
+    "paris"
+  ],
+  "failed": 1,
+  "finished_monotonic_ns": 1377361400622711,
+  "flow_end_point": "valid_non_silent_pcm16_tts_wav_received_decoded_and_checked_before_artifact_write",
+  "frozen_cohort_manifest_name": "condition-frozen-v2220.json",
+  "frozen_cohort_manifest_sha256": "620533a4cd2c5301f348fb1c72e961ba751e6465153e54d32d3c47990451c21d",
+  "input": {
+    "bytes": 219794,
+    "channels": 1,
+    "frames": 109875,
+    "sample_rate": 22050,
+    "sample_width_bytes": 2,
+    "sha256": "da0ecc4ad0885746ab6e716585473917ab2b543a505bf0db09ebacfaa7943cbb"
+  },
+  "measured_requests": 0,
+  "missing_metrics": {
+    "first_audio": "no playback path in this pilot",
+    "first_token": "not exposed by this caller boundary",
+    "playback_end": "no playback path in this pilot",
+    "playback_start": "no playback path in this pilot"
+  },
+  "observed_measured_attempt_latency_ms_r7_including_failures": {
+    "p50": null,
+    "p90": null,
+    "p95": null
+  },
+  "phase_denominators": {
+    "all": {
+      "attempted": 1,
+      "completed_correct": 0,
+      "completed_incorrect": 0,
+      "failed_or_interrupted": 1,
+      "planned": 315,
+      "timeouts": 0,
+      "unattempted": 314
+    },
+    "measured": {
+      "attempted": 0,
+      "completed_correct": 0,
+      "completed_incorrect": 0,
+      "failed_or_interrupted": 0,
+      "planned": 300,
+      "timeouts": 0,
+      "unattempted": 300
+    },
+    "warmup_excluded": {
+      "attempted": 1,
+      "completed_correct": 0,
+      "completed_incorrect": 0,
+      "failed_or_interrupted": 1,
+      "planned": 15,
+      "timeouts": 0,
+      "unattempted": 14
+    }
+  },
+  "physical_microphone": false,
+  "physical_playback_or_audibility": false,
+  "planned_measured": 300,
+  "planned_warmups": 15,
+  "provider_bindings_after": {
+    "configured_llm": {
+      "model_file": "Qwen3.5-0.8B-Q4_0.gguf",
+      "provider": "llama_cpp",
+      "settings": {
+        "chat_format": "chatml-function-calling",
+        "max_tokens": 128,
+        "min_p": 0.0,
+        "n_batch": 64,
+        "n_ctx": 4096,
+        "n_gpu_layers": 0,
+        "n_threads": 2,
+        "repeat_penalty": 1.0,
+        "seed": 42,
+        "temperature": 0.0,
+        "top_k": 1,
+        "top_p": 1.0
+      }
+    },
+    "transcription": {
+      "configured_compute_type": "int8",
+      "configured_device": "cpu",
+      "configured_model": "ebe41f70d5b6dfa9166e2c581c45c9c0cfc57b66",
+      "enabled": true,
+      "model_ready": true,
+      "model_type": {
+        "class": "WhisperModel",
+        "module": "faster_whisper.transcribe"
+      },
+      "service": "TranscriptionService"
+    },
+    "tts": {
+      "executable_file": "piper",
+      "expected_sample_rate": 22050,
+      "model_config_file": "en_US-ljspeech-medium.onnx.json",
+      "model_file": "en_US-ljspeech-medium.onnx",
+      "provider_id": "piper",
+      "provider_type": {
+        "class": "PiperTTSProvider",
+        "module": "app.services.tts.providers.piper"
+      },
+      "service": "TTSService"
+    }
+  },
+  "provider_bindings_before": {
+    "configured_llm": {
+      "model_file": "Qwen3.5-0.8B-Q4_0.gguf",
+      "provider": "llama_cpp",
+      "settings": {
+        "chat_format": "chatml-function-calling",
+        "max_tokens": 128,
+        "min_p": 0.0,
+        "n_batch": 64,
+        "n_ctx": 4096,
+        "n_gpu_layers": 0,
+        "n_threads": 2,
+        "repeat_penalty": 1.0,
+        "seed": 42,
+        "temperature": 0.0,
+        "top_k": 1,
+        "top_p": 1.0
+      }
+    },
+    "transcription": {
+      "configured_compute_type": "int8",
+      "configured_device": "cpu",
+      "configured_model": "ebe41f70d5b6dfa9166e2c581c45c9c0cfc57b66",
+      "enabled": true,
+      "model_ready": true,
+      "model_type": {
+        "class": "WhisperModel",
+        "module": "faster_whisper.transcribe"
+      },
+      "service": "TranscriptionService"
+    },
+    "tts": {
+      "executable_file": "piper",
+      "expected_sample_rate": 22050,
+      "model_config_file": "en_US-ljspeech-medium.onnx.json",
+      "model_file": "en_US-ljspeech-medium.onnx",
+      "provider_id": "piper",
+      "provider_type": {
+        "class": "PiperTTSProvider",
+        "module": "app.services.tts.providers.piper"
+      },
+      "service": "TTSService"
+    }
+  },
+  "remote_tts_auth_binding": "existing_gateway_api_key",
+  "remote_tts_endpoint_sha256": "f479f9eb33d508640167787da28f14067bdcf72b41d7e29f2a056cb48a1567df",
+  "request_cap_seconds": 180.0,
+  "schema_version": "aurora.full_audio_campaign.v1",
+  "setup_duration_ms": 28408.193104,
+  "shutdown_completed": true,
+  "shutdown_duration_ms": 526.944723,
+  "status": "stopped_system_failure",
+  "stop_reason": "remote_http_status",
+  "successful_correct_count": 0,
+  "successful_correct_latency_ms_r7": {
+    "p50": null,
+    "p90": null,
+    "p95": null,
+    "p99": null
+  },
+  "timeouts": 0,
+  "unattempted_measured": 300,
+  "warmup_requests": 1
+}

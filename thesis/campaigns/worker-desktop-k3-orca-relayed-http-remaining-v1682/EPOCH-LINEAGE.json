@@ -1,0 +1,74 @@
+{
+  "epochId": "V1682",
+  "parentCohortId": "aurora-worker-desktop-k3-orca-relayed-http-stt-llm-tts-remaining-v1513",
+  "parentManifestSha256": "b19c10d9aad4f9a2261d7eac5b52c258315eea94db256a411e66981e6a45d4a4",
+  "parentValidationPath": "thesis/campaigns/worker-desktop-k3-orca-relayed-http-remaining-v1513/terminal-v1549/REVIEWED-PARTIAL-VALIDATION-v1565.json",
+  "parentValidationSha256": "9c23920d7b3395c742013ed89ea8921a91a0ead0326f88baef52fbd17185faf6",
+  "parentMeasuredRowsPath": "thesis/campaigns/worker-desktop-k3-orca-relayed-http-remaining-v1513/terminal-v1549/requester-analysis-v1549/MEASURED-REQUESTS.jsonl",
+  "parentMeasuredRowsSha256": "e3c1afc987f586500208ac08c15c7b7a9aeb4e7ffe6089d706c23d6ac8992497",
+  "parentSummaryPath": "thesis/campaigns/worker-desktop-k3-orca-relayed-http-remaining-v1513/terminal-v1549/final-artifacts/summary.json",
+  "parentSummarySha256": "5c87fe077e1f54375e122da07de885786c77911fcbfd78eb2d8dfd83b7e3d415",
+  "priorAttemptedMeasured": 740,
+  "priorCorrect": 725,
+  "priorFailed": 15,
+  "plannedEpochMeasured": 160,
+  "plannedFreshExcludedWarmups": 15,
+  "conditionTargetMeasured": 900,
+  "firstConditionMeasuredIndex": 741,
+  "lastConditionMeasuredIndex": 900,
+  "preserveParentFailure": true,
+  "sameProcessResume": false,
+  "poolEpochPercentilesAutomatically": false,
+  "analysisPolicy": "Keep all epochs/failures/clock/load/path context separate. Eligible raw-row union requires an explicit comparison review; never average percentile summaries.",
+  "reason": "Only remaining160 after naturally stopped V1620; original740 attempts and all15 failures preserved. Fresh condition-sized provider, identical science, no replay.",
+  "originalV1481": {
+    "manifestSha256": "54d51acdf8219b4e69f21cabb9d9fb1b402acf9826196dbdcea4fcfd15bddb25",
+    "attempted": 513,
+    "correct": 512,
+    "failed": 1
+  },
+  "immediateParentV1513": {
+    "attempted": 203,
+    "correct": 202,
+    "failed": 1
+  },
+  "unadmittedPredecessor": {
+    "cohort": "V1562",
+    "manifestSha256": "f5381b6f24422bd61a4a41b3a561c7be8bd7f20bd05dcf7bff6caf67cf1a5426",
+    "correctExcludedWarmups": 15,
+    "actualNativeJoinsRecoveredFromSavedData": 45,
+    "measured": 0,
+    "reason": "Stale collector helper-source pin; native proof deadline, no model quality failure",
+    "sourceData": "thesis/campaigns/worker-desktop-k3-orca-relayed-http-remaining-v1562/saved-proof-recovery-v1572/UNADMITTED-SETUP-RECONCILIATION.json"
+  },
+  "unadmittedPredecessorV1573": {
+    "manifestSha256": "05b724ff24977f570fa728381f750eb675d192fc9f7f766a5123c03262ceccb8",
+    "excludedWarmupAttempts": 1,
+    "excludedWarmupFailed": 1,
+    "measured": 0,
+    "failureStage": "stt",
+    "failureCategory": "transport_ambiguous",
+    "historicalUnderlyingException": "unretained by original adapter",
+    "actualEvidence": "thesis/campaigns/worker-desktop-k3-orca-relayed-http-remaining-v1573/terminal-v1588/RETIRED-FAILED-SETUP.json",
+    "setupChargeSeconds": 62.831509675999996
+  },
+  "diagnosticAdmissionReason": "Exactly one necessary first ordinary excluded STT request will gain previously missing safe low-level exception metadata; not a causal remedy inferred from GET200. No extra model pilot or automatic request retries. Any repeated transport failure stops the run for exact error-based remedy; measured indices never replayed.",
+  "unadmittedPredecessorV1610": {
+    "manifestSha256": "369f518fb7a67f3e5df44a6bd5039ef5fc3f64efddb91946f1c0623f11e3bc2b",
+    "measured": 0,
+    "warmups": 0,
+    "failure": "remaining_epoch_lineage_invalid: inherited full-tail-only two predicates",
+    "chargeSeconds": 15.223255,
+    "raw": "thesis/campaigns/worker-desktop-k3-orca-relayed-http-remaining-v1610/terminal-v1618/PREFLIGHT-FAILURE-AND-CHARGE.json"
+  },
+  "immediatePredecessorV1620": {
+    "manifestSha256": "4f1a09e7ac7dedeaeae6c1bef5a364d4a007e9249aec74f20a0b63b6375a6279",
+    "attempted": 24,
+    "correct": 11,
+    "failed": 13,
+    "summaryPath": "thesis/campaigns/worker-desktop-k3-orca-relayed-http-remaining-v1620/terminal-v1637/requester-analysis-v1642/SUMMARY.json",
+    "summarySha256": "ffbd431f7e8754e540ed3b61c429fbb26d6b024b3c1b907e627f2a9f872c4ba8",
+    "caseHistoryPath": "thesis/campaigns/worker-desktop-k3-orca-relayed-http-remaining-v1620/terminal-v1637/requester-analysis-v1642/CASE-HISTORY.json",
+    "caseHistorySha256": "768007319b4386f44b6379e50bdc41fba4d80d81125e37dc1f58a1c5651bcaa2"
+  }
+}

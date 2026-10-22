@@ -1,0 +1,13 @@
+{
+  "at": "2026-10-15T00:19:15.526618+00:00",
+  "controllerPid": 2859738,
+  "capSeconds": 900,
+  "packetSHA256": "278541c81d7f0f6927c6d46f2bf8921fcac6b26ccbf331ba6983537a96e1e17f",
+  "sampleClass": "one separate typedUI readiness NOT voice",
+  "globalVoiceLogicalFlowsUnchanged": 8,
+  "measuredSamples": 0,
+  "phase2Allowed": false,
+  "priorAllOwnedPIDsAbsent": true,
+  "priorGlobalLockAvailable": true,
+  "sourceGuardRequiredBeforeUI": true
+}

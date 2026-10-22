@@ -1,0 +1,28 @@
+{
+  "id": "cf578709-f193-45bc-9832-1ba874523bac",
+  "ok": true,
+  "result": {
+    "message": {
+      "id": "msg_3eaa71ad0a89",
+      "run_id": "run_e6054e76e9fc",
+      "delivery_contract": "current_delivery",
+      "from_handle": "term_6a00d9ee-792a-4daf-8578-236290e33108",
+      "to_handle": "dispatch:ctx_37b4d0a3c14f",
+      "subject": "Sourceworker ACKed01:35 exact01:38:08-01:40:08 slot; main688/900 live",
+      "body": "Actualordinary worker ACK63ec9bb8e6ca created01:35:03 and consumedbeforestart: exactv33pins/43frames/4payloadhashes validated, zero launchyet, will use admitted future sourcewindow01:38:08.259445-01:40:08.259445Z. ACK physically thesis/evidence/source-sync-ebde-runtime-v2340/EXISTING-WORKER-FUTURE-WINDOW-ACK-v2354.json SHA01175bace8c8aa869ab11597cbb4ed837e871b6c2b4dc951460859cb8d33c014. No missing-ACK nudge or new probe needed; retain same finite guard/outcome reconciliation, no ambiguous resend. Notebookpriorruntime-prep branch naturallyclosed01:33:02 withnoownbuildchild; this sourcecopy is distinct operation, no build/model/900 inferred. Root remains mainHTTP: actual01:36:43Z688/900=687correct1historicalfailure,new238/450allcorrect, threeoriginalactorslive/copier252pairs0errors3.165GBfree. NativeoriginalgoalACTIVE; ROOT-VERIFIED-WAIT-v2354.json/native snapshot/CURRENT nextbound01:41:43.001652Z or earlier actualfailure/terminal/guard. No newtest/review/baseline/devicequery/sourcechange, full13/canonicalK1notificationpending real900seal+release.",
+      "type": "status",
+      "priority": "normal",
+      "thread_id": null,
+      "payload": null,
+      "created_at": "2026-10-22T01:37:55Z",
+      "delivered_at": null
+    },
+    "mutation": {
+      "requestId": "da19c196-ac98-4f56-a432-07e4a34b1905",
+      "replayed": false
+    }
+  },
+  "_meta": {
+    "runtimeId": "cc9e3275-28c6-4c45-85cc-bdcd2262aa7d"
+  }
+}

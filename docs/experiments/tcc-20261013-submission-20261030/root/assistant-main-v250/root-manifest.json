@@ -1,0 +1,40 @@
+{
+  "stage": "real-Assistant-local-bus-authenticated-API-pilot",
+  "objective": "tcc:20261013:submission-20261030",
+  "sourceCommit": "5782746afba213f6b36907db2f09f0017625e218",
+  "sourceStatusBefore": " M .omx/ultragoal/ORCA-COORDINATION.md\n M .omx/ultragoal/ledger.jsonl\n M app/services/orchestrator/service.py\n M tests/unit/orchestrator/test_session_persistence.py\n?? docs/experiments/\n?? scripts/experiments/\n?? tests/unit/tools/test_assistant_measurement_records.py\n",
+  "sourceHashes": {
+    "scripts/experiments/assistant_local_api_pilot.py": "8d9e92ad5ec7023ef1df71beebd1d3e86bdb1fabd06a580d16153c8bb20fe7c6",
+    "scripts/experiments/assistant_measurement_records.py": "2648b5579c487e15936bf2eafd70ae8b63db5567915ff4c1c1b318989da2a646",
+    "app/services/orchestrator/service.py": "0b77092091946b94130945b3bfb670a922a209b846d5ffe30e23f75b52f982f3",
+    "tests/unit/orchestrator/test_session_persistence.py": "3e171573ddac0d2eaed0f244207bd4934fcd6efb74fbca1997c409f058624390"
+  },
+  "dirtyTrackedDiffSha256": "ac2731eb67764a4ad6f0e472d7513ff077941feed34c900e5242c9717cc040ff",
+  "command": [
+    "flock",
+    "--nonblock",
+    "/tmp/aurora-global-build.lock",
+    "timeout",
+    "--signal=INT",
+    "--kill-after=10s",
+    "600s",
+    "/home/developer/projects/aurora/.venv/bin/python",
+    "scripts/experiments/assistant_local_api_pilot.py",
+    "--model-path",
+    "/home/developer/projects/aurora/.artifacts/local-inference/models/Qwen3.5-0.8B-Q4_0.gguf",
+    "--output",
+    "/home/developer/projects/aurora/.git/aurora-handoff-import-20261006/assistant-main-v250/requests.jsonl"
+  ],
+  "startedAt": "2026-10-14T00:59:33.975944+00:00",
+  "deadlineSeconds": 600,
+  "serialOwner": "existing Aurora Root",
+  "hostPseudonym": "coding-worker",
+  "hostArchitecture": "aarch64",
+  "logicalCpus": 2,
+  "loadAvg": [
+    2.46142578125,
+    2.1650390625,
+    2.98388671875
+  ],
+  "scope": "same-host real production Assistant LocalBus and authenticated localhost API pilot; no mesh/UI/mobile/voice or clean-condition stable tails"
+}

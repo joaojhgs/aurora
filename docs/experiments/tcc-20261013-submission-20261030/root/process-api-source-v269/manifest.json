@@ -1,0 +1,19 @@
+{
+  "gate": "two changed lifecycle assertions and static source checks only",
+  "objective": "tcc:20261013:submission-20261030",
+  "serial_owner": "same original Aurora Root01a112a5",
+  "files_sha256": {
+    "checks.json": "8e1b4718804331a7304cf6552440cdfe26ba0ca59d2c0c2258f5d8fb2dbd01e9",
+    "integration.json": "f7fa5eedcd400dbcdd2b0a836a3707dacc77d128118282f13e7d3be7e90c0f70",
+    "junit.xml": "20e12fac42341d9d12aa23f84f1384181a009e45d99a2fb80a553a3910290185",
+    "sol-review.md": "dcf27e79564b9b60c94516076e10273477721cd85b8d89c5bbf17493adf9d5f9",
+    "ruff.log": "82b3e6a6c090a57601d22943bd23fca9218d1031dbe5a7b754092f9a156b4f18",
+    "two-main-lifecycle-checks.log": "40f4f5ec9af8da4608c7586e2af2ad511062aa569581f637a361a3657b105cca",
+    "source/scripts/experiments/assistant_local_api_pilot.py": "857730e1aee69c854718e5302da3bf010a9aa10ed9befd139437605b25356c3e",
+    "source/app/services/supervisor.py": "4ac2b5578fa8b3759bf30e7dfe8c68364e3453eba5020663dc3be670b838a7d8",
+    "source/app/shared/services/process_launcher.py": "c6e102416d03b092d5ac33ef50caa5dc4f5448daf480606a0026f72e16a4eef3",
+    "source/tests/unit/services/test_supervisor.py": "b9138279d6d98e53a8ada9f2c53bddc36cf5cb806fe69a453608a8e935061813",
+    "source/tests/unit/app/services/test_process_launcher_signal_lifecycle.py": "22972439f515a1d1288233b745e1ed38a789e961c9be86a76b005d0905245f79"
+  },
+  "repeated_closed_checks": false
+}

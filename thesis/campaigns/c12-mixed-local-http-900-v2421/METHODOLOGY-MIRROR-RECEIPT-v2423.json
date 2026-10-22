@@ -1,0 +1,11 @@
+{
+  "at": "2026-10-22T07:23:20.319068+00:00",
+  "status": "EXACT_COMPLETE_FULL_PLAN_COPY_VERIFIED",
+  "destination": "thesis/methodology/owner-requirements-20261022-517f961d.md",
+  "bytes": 871182,
+  "sha256": "517f961dfaedfcb98556875eae8b5759a07d5e2aee30eb242868edfd2c7cd5c1",
+  "prior862521BytePrefixPreserved": true,
+  "sourceModified": false,
+  "methodologyWriter": "Original monitor only",
+  "executionGate": false
+}

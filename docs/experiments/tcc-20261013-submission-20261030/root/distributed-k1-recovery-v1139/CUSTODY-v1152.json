@@ -1,0 +1,33 @@
+{
+  "at": "2026-10-17T17:52:07.695858+00:00",
+  "records": [
+    {
+      "path": "OFFLINE-LAUNCH-v1148.json",
+      "bytes": 522,
+      "sha256": "0cc093f4ac72c60834bd316d350abd27d2dea04959a46b7f278993154f4593c5"
+    },
+    {
+      "path": "OFFLINE-ENVIRONMENT-v1149.json",
+      "bytes": 2837,
+      "sha256": "3f56529aaf13fc29361c043603d5452987e9e2fd42e8e78da140c711abf6f1de"
+    },
+    {
+      "path": "MODEL-PROGRESS-v1154.json",
+      "bytes": 2838,
+      "sha256": "be610673904801a63aeaf0e4f06c0aa85d4c5a566e43f6819f57001019b61ecf"
+    },
+    {
+      "path": "HELPER-SOURCE-v1141.json",
+      "bytes": 528,
+      "sha256": "b5b3fcd2467b3128ee77280b1baaf55c30adb2dc465a505fa584bc214835fd85"
+    },
+    {
+      "path": "UPDATE-v1152.md",
+      "bytes": 2906,
+      "sha256": "a31dea556889c534d00f24a104ef929df84582073ccfb2e12098073abb9c6276"
+    }
+  ],
+  "credentialValuesExported": false,
+  "measuredAttempts": 0,
+  "olderCheckpointsUnchanged": true
+}

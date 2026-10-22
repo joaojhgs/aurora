@@ -1,0 +1,29 @@
+{
+  "_meta": {
+    "runtimeId": "cc9e3275-28c6-4c45-85cc-bdcd2262aa7d"
+  },
+  "id": "54ff912d-1841-4f13-978e-fbeb6ffc21a2",
+  "ok": true,
+  "result": {
+    "terminal": {
+      "agentWait": null,
+      "branch": "refs/heads/feat/ui-multi-platform-integration",
+      "connected": true,
+      "executionHostId": "ssh:ssh-sem-notebook-personal",
+      "handle": "term_f40f2bd6-0f71-4484-8347-ac221cf6ce9b",
+      "incarnationId": "633939eb-60f4-4bc0-9a0c-5941dc6db36a",
+      "lastOutputAt": 1792532984983,
+      "leafId": "c17246d3-4a6b-4c65-b221-ba95d14240aa",
+      "orphaned": false,
+      "paneRuntimeId": -1,
+      "preview": "veW1lbnQiOiBmYWxzZX0K\nAURORA_COPY_RECEIPT={\"path\": \"/home/developer/projects/aurora/thesis/phone-notebook/20261020/evidence/preparation-copy-05-2151.json\", \"bytes\": 495, \"sha256\": \"6ca8cc674d560cb7ce878e2cdee072647bd749a1b9f9c9dcd5663549ced2f12b\"}\n\u279c  aurora git:(feat/ui-multi-platform-integration) \u2717",
+      "ptyId": "ssh:ssh-sem-notebook-personal@@pty2:922594b2-6958-4b97-b1b9-f337a2304f64:1",
+      "rendererGraphEpoch": 0,
+      "tabId": "27c1f189-f3bc-467f-a639-73475e9428a3",
+      "title": "..ojects/aurora",
+      "worktreeId": "03d8a475-d62e-43b3-8885-e382b313ab1b::/home/developer/projects/aurora",
+      "worktreePath": "/home/developer/projects/aurora",
+      "writable": true
+    }
+  }
+}

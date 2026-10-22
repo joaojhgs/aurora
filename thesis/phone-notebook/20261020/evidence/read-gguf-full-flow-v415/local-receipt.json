@@ -1,0 +1,8 @@
+{
+  "bytes": 8424,
+  "copyOnly": true,
+  "custody": "Notebook result persisted and fsynced before relay; remote receipt in same output",
+  "localPath": "/home/developer/projects/aurora/thesis/phone-notebook/20261020/evidence/read-gguf-full-flow-v415/result.json",
+  "remotePath": "/home/developer/projects/aurora/thesis/phone-notebook/20261020/evidence/read-gguf-full-flow-v415.json",
+  "sha256": "543c67250d49cc0640797ce9f1bb689b3761f0aa0ae0e49587ee5f7344b32283"
+}

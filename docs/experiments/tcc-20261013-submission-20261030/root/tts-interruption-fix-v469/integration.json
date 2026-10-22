@@ -1,0 +1,17 @@
+{
+  "at": "2026-10-15T01:27:51.824821+00:00",
+  "files": [
+    {
+      "path": "packages/aurora-ui/src/use-assistant-tts.ts",
+      "preimageSHA256": "a584ad56d7df8148471cb409fc04ca267bd6cf090222578eb9f1ac3ed8ff8cbb",
+      "sha256": "e5caa61b1158946b4e9f0d274a898c3e2c6b538cff5b4aef941d474ee3a08745"
+    },
+    {
+      "path": "packages/aurora-ui/src/use-assistant-tts.test.ts",
+      "preimageSHA256": "33710059b74f4b92a162b7d410b7ae28983959d1b10008f7da9a021b7c8bb9fa",
+      "sha256": "a176e81d7a45ae511bb36183d19620d9ece8598fabd9b8c3680da39f5268635f"
+    }
+  ],
+  "correction": "Do not cancel shared browser capture runtime in fire-and-forget capture interrupt; invalidate speech and stop owned audio only. Existing explicit stopReadAloud cancellation unchanged.",
+  "noRuntimeAcceptanceClaim": true
+}

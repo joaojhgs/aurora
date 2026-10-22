@@ -1,0 +1,25 @@
+{
+  "complete": true,
+  "llm": {
+    "chat_format": "chatml-function-calling",
+    "client_class": "llama_cpp.llama.AuroraOwnedLlama",
+    "effective_wrapper_settings": {
+      "n_batch": 64,
+      "n_ctx": 4096,
+      "n_gpu_layers": 100,
+      "n_threads": 2,
+      "seed": 42,
+      "verbose": true
+    },
+    "loaded_class": "app.services.orchestrator.chat_llama_cpp.ChatLlamaCpp",
+    "model_name": "Qwen3.5-0.8B-Q4_0.gguf"
+  },
+  "sha256": "bbfe63686818717d1ecf709b49603590679a2a1e5e179d2aaa33ba14c12a1aed",
+  "stt": {
+    "compute_type": "int8_float32",
+    "configured_model_name": "model",
+    "device": "cpu",
+    "engine_class": "ctranslate2._ext.Whisper",
+    "loaded_class": "faster_whisper.transcribe.WhisperModel"
+  }
+}

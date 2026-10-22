@@ -1,0 +1,8 @@
+{
+  "at": "2026-10-16T01:50:05.041429+00:00",
+  "scope": "updated result/current/harness documentation local links only",
+  "checked": 37,
+  "missing": [],
+  "pass": true,
+  "fullDocsCheck": "known existing global failure retained; not rerun as filler"
+}

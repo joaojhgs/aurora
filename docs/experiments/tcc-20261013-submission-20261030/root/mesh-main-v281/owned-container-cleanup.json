@@ -1,0 +1,15 @@
+{
+  "argv": [
+    "podman",
+    "ps",
+    "-a",
+    "--filter",
+    "name=aurora-mesh-root-v281-",
+    "--format",
+    "{{.Names}} {{.State}}"
+  ],
+  "exit_code": 0,
+  "owned_containers": [],
+  "stderr": "",
+  "only_owned_prefix": true
+}

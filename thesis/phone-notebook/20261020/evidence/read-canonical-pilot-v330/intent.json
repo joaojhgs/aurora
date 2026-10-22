@@ -1,0 +1,12 @@
+{
+  "controlDeadline": "2026-10-22T11:48:00Z",
+  "explicitNewline": true,
+  "host": "ssh:ssh-sem-notebook-personal",
+  "incarnation": "328cd72f-c7ea-49ff-a2db-b9275b085037",
+  "remoteResult": "/home/developer/projects/aurora/thesis/phone-notebook/20261020/evidence/read-canonical-pilot-v330.json",
+  "rootAdmissionMessage": "existing v2398 exact canonical native entrypoint outcome and provider stage/resource proof; no duplicate invocation",
+  "script": "scripts/read_canonical_pilot_v330.py",
+  "scriptSha256": "0edd395ba6d213b6bd9ffc7b0a6aafb3d401c63cbf3679e948e3e7f3504477c7",
+  "singleSend": true,
+  "terminal": "term_a2ed5feb-7c92-48e4-bd88-d1b0e6737989"
+}

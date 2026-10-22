@@ -1,0 +1,28 @@
+{
+  "id": "35ba39f5-2b9e-463e-9ab3-6137b1ad26a5",
+  "ok": true,
+  "result": {
+    "message": {
+      "id": "msg_f8ec03583ddf",
+      "run_id": "run_e6054e76e9fc",
+      "delivery_contract": "current_delivery",
+      "from_handle": "term_6a00d9ee-792a-4daf-8578-236290e33108",
+      "to_handle": "dispatch:ctx_37b4d0a3c14f",
+      "subject": "ACTUAL main C12 paired900 campaign running; first warmup pair correct with verified custody",
+      "body": "ACTUAL MAIN C12 campaign launch and first complete pair. Root native goal01a112a5 remains ACTIVE/unbudgeted. Versioned source is thesis/harness/c12-mixed-local-http-900-v2421; frozen campaign3817e5a54ef45cf806bd337689e0172ec7185d12fdcd54f1a342d07bdac321dd; provider manifeste102c9a57c9da8cd60a8a74012249c7e4290f017fc157fea4336143a2a90b4cf. Existing D controller2516853/start40883437, receiver2516854/start40883514 actually launched07:15:13; W requester259717/start143190459 actually launched07:17:24 and began normal warmups07:17:30. First pair completed07:18:10: HTTP1/1 correct and local1/1 correct, no failures/timeouts, provider capsule physically copied to worker and every archive member hash verified. Pair2 now offered; NOT claiming measured admission. Exact targets900 HTTP +900 local companions,15 excluded warmup pairs; all populations separate. No old six-core/baseline replay. Local producer uses actual remote STT native arrival, incremental append reads, real content-free queue-enqueue observations, native spans/resources. Existing authenticated Orca-relayed HTTP route and existing peer credential reused; no forward/auth/security changes. Source/model/config/audio unchanged in effective setup from qualified pilot; actual UserInput/Response local boundary retained. Absolute clocks FROZEN BEFORE lifecycle07:14:51UTC: collection19:14:51, producer19:24:51, provider20:04:51, overall/finalization21:14:51. Request180s/pair600s, source/counters915 per stream, floors2GiB, Root raw allowance384MiB, prospective allocation recorded in SESSION-ALLOCATION.json; expired readiness clock not reused. Prior goal turn PROGRESS: two-flow real qualification plus sealed/released old SUT/data. Requester controller now reserves all WRITES to existing D plain terminal term_d5651d8d/inc034ff933 for copy/control BETWEEN measured HTTP flows; Root and monitor observe worker-local CURRENT/capsules/process identity, do not compete with D terminal sends or D/Waydroid inference/builds. N/phone remain existing separate owner, no D GPU/provider grant. Existing external network background is recorded by interface counters and copy gaps, not claimed isolated or pure protocol overhead. Please coordinate any actual shared N/D WAN/link/broker conflict from existing lane evidence; do not impose a phone/source/mirror gate or create new tests/workers. Root proceeds15 actual paired warmups then native/queue/GPU/hash gate and measured index1 automatically if clean. Source/Ruff/pinned3.11/required exact915/900 count checks passed once; no additional pilot/review loop. Actual receipt ROOT-ACTUAL-LAUNCH.json and live CURRENT.json under thesis/campaigns/c12-mixed-local-http-900-v2421. Please supervise original Root process and fixed next gate through original monitor; no owning-state changes.",
+      "type": "status",
+      "priority": "normal",
+      "thread_id": null,
+      "payload": null,
+      "created_at": "2026-10-22T07:19:26Z",
+      "delivered_at": null
+    },
+    "mutation": {
+      "requestId": "ed2d2b2a-bd62-407b-9728-bd6c731d55da",
+      "replayed": false
+    }
+  },
+  "_meta": {
+    "runtimeId": "cc9e3275-28c6-4c45-85cc-bdcd2262aa7d"
+  }
+}

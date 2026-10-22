@@ -1,0 +1,28 @@
+{
+  "schema": "aurora.publisher-metadata-custody.v778",
+  "at": "2026-10-16T01:06:21.448413+00:00",
+  "files": [
+    {
+      "source": ".git/aurora-handoff-import-20261006/model-license-metadata-v778/REPORT.md",
+      "canonicalCopy": "thesis/models/publisher-v778/REPORT.md",
+      "bytes": 3794,
+      "sha256": "da54de19ca1ae5d6b9a68bd854462897f9fd19dcb266bd6b0580e5c4e9e70c75"
+    },
+    {
+      "source": ".git/aurora-handoff-import-20261006/model-license-metadata-v778/publisher-findings.json",
+      "canonicalCopy": "thesis/models/publisher-v778/publisher-findings.json",
+      "bytes": 4730,
+      "sha256": "1eda215c840214f8d4fc479357472be842a8a2d2b7cc8940ab53bf7ce638eb3c"
+    }
+  ],
+  "scope": "Rendered official publisher metadata and small retained local provenance records; no upstream raw HTML byte hash or model-weight license opinion",
+  "modelWeightsReadOrDownloaded": false,
+  "runtimeSettingsChanged": false,
+  "testsOrMeasurementsRun": false,
+  "prior404Preserved": "publisher-metadata-v747.json unchanged",
+  "remainingGaps": [
+    "Qwen converter exact base-weight revision",
+    "Piper distinct ONNX-weight license scope/attribution",
+    "Installed native-build source/flags/wheel archive identity"
+  ]
+}

@@ -1,0 +1,12 @@
+{
+  "controlDeadline": "2026-10-22T11:15:00Z",
+  "explicitNewline": true,
+  "host": "ssh:ssh-sem-notebook-personal",
+  "incarnation": "328cd72f-c7ea-49ff-a2db-b9275b085037",
+  "remoteResult": "/home/developer/projects/aurora/thesis/phone-notebook/20261020/evidence/finish-visible-pairing-dialog-v304.json",
+  "rootAdmissionMessage": "existing authorized normal secure UI flow: maintained selector targets actual verification dialog; v303 made no grant/draft",
+  "script": "scripts/finish_visible_pairing_dialog_v304.py",
+  "scriptSha256": "7e207f4efd674a920083d5a77605924e2057bd49e832d6d2bb92ef559718b066",
+  "singleSend": true,
+  "terminal": "term_a2ed5feb-7c92-48e4-bd88-d1b0e6737989"
+}

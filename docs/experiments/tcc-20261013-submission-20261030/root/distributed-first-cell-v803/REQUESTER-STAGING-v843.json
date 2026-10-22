@@ -1,0 +1,80 @@
+{
+  "at": "2026-10-16T03:52:38.391295+00:00",
+  "host": "code-worker",
+  "status": "REQUESTER_SOURCE_AND_INPUT_METADATA_STAGED_NOT_FROZEN_OR_LAUNCHED",
+  "root": "/home/developer/projects/aurora/.git/aurora-handoff-import-20261006/distributed-k1-requester-prep-v843",
+  "sources": [
+    {
+      "path": "aurora_voice_telemetry_v430.py",
+      "bytes": 11584,
+      "sha256": "8129ffe7591a47a0107ede53b101aead9fc1f58b92f0c0c4203176cc7608325d"
+    },
+    {
+      "path": "bindings.py",
+      "bytes": 3230,
+      "sha256": "52182f956b34788ecbfbbb241c8243ff88baebe2874e3605791793777ed0dc91"
+    },
+    {
+      "path": "bootstrap.py",
+      "bytes": 1950,
+      "sha256": "05303915a1617a3fbc163017902fa084e687257d7b0af9bc692877d08a6a3b7e"
+    },
+    {
+      "path": "candidate-input.wav",
+      "bytes": 219794,
+      "sha256": "da0ecc4ad0885746ab6e716585473917ab2b543a505bf0db09ebacfaa7943cbb"
+    },
+    {
+      "path": "candidate-manifest.json",
+      "bytes": 220,
+      "sha256": "ce75b965ee5879ebece6ea7dfe133441547d20ccf89ecd5d66ea510bd9645e60"
+    },
+    {
+      "path": "controller.py",
+      "bytes": 15673,
+      "sha256": "ada49340e64d3f9069c88b4329389d907c6a484291451297ff67658726a2ffc8"
+    },
+    {
+      "path": "freeze-template.json",
+      "bytes": 1737,
+      "sha256": "5e7e3498a4f4da22356e3e9772a9855879f011991cf2a8baa50e6c5aef599c79"
+    },
+    {
+      "path": "observer.py",
+      "bytes": 11873,
+      "sha256": "784cc4bffc0d6824bbe378d17a7f632d587ca0a315896b048b2ebef727082df5"
+    },
+    {
+      "path": "receiver_proof.py",
+      "bytes": 11029,
+      "sha256": "aed9bd0f6109f8ab97c8b4eba8c3809bf1d865c9cba05999b52769f2862d857d"
+    },
+    {
+      "path": "resource_sample.py",
+      "bytes": 7475,
+      "sha256": "8f62ec378e74036d4539d9159e3caf29b8fd7a9115de1ab0f482dfd58b6e1857"
+    },
+    {
+      "path": "runner.py",
+      "bytes": 64870,
+      "sha256": "45d2c3f4df7353c2fc162c6986d125096b64216a76575a8a1d5bae4e5c154b0f"
+    },
+    {
+      "path": "tts_http_adapter.py",
+      "bytes": 4870,
+      "sha256": "29ad1e394257720eb1cad16f67a20f7e637f3fe354bbe16c462723853e5ee9a5"
+    }
+  ],
+  "sourceInventorySHA256": "96ec8e3e14233520d4cd469c4177264a193d05cf26b4b512d91d98f16bbb7dee",
+  "sourceInventoryCount": 400,
+  "baselineConfigSource": "/home/developer/projects/aurora/.git/aurora-handoff-import-20261006/worker-padded900-prep-v737/runtime/config.json",
+  "baselineConfigSnapshotSHA256": "2b8cc043fc75c8978e2528379badb9fff7cd2ad2bc82729e61c560d35bbd1cc1",
+  "configCopyOnlyNoSemanticChanges": true,
+  "baselineConfigUnchangedByAction": true,
+  "baselineLiveRunModified": false,
+  "modelContentsRead": false,
+  "modelsImportedOrLaunched": false,
+  "runtimeCreated": false,
+  "newConditionManifestFrozen": false,
+  "remaining": "After natural resource release, fresh exact source/model/runtime/environment/config/receiver binding and physical admission, new manifest and ordinary15 warmups; no extra baseline required."
+}

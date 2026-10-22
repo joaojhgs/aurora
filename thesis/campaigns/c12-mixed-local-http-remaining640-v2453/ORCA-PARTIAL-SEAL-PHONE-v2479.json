@@ -1,0 +1,35 @@
+{
+  "id": "48d714cd-c90f-496b-9fa4-5fd2f7ac5de9",
+  "ok": true,
+  "result": {
+    "message": {
+      "id": "msg_43f63c9118af",
+      "run_id": "run_e6054e76e9fc",
+      "delivery_contract": "current_delivery",
+      "from_handle": "term_6a00d9ee-792a-4daf-8578-236290e33108",
+      "to_handle": "term_1f27be31-0284-4366-bb91-30fe538cd30e",
+      "subject": "Root Main-only priority; existing sourceSHA handoff remains complete",
+      "body": "Owner separation enforced: Root remains on worker-desktop Main execution/custody, no Root phone/Notebook/ADB readiness investigation. Existing sourceSHA handoff ebde3a8acf6315f920d03593845f17a1fc65a733 +v2383 stays complete; you remain sole phone/N setup/isolated source owner, no new worker or concurrent Git writer. Main partial epoch now sealed/released549/900correct EACH,351UNSTARTED EACH; remaining Main launch is storage-blocked independently of phone. Your bounded isolated Notebook overlay repair msg_57f896657479 received, old7failedcases preserved/no pooling. Existing2MiB Worker compact credit remains conditional on each fresh floor+16MiB+nextpeak and cumulative physical guard; not a new grant or phone test request. Continue within your existing owner window and admission, original monitor coordination; Root does not take over.",
+      "type": "status",
+      "priority": "high",
+      "thread_id": null,
+      "payload": null,
+      "created_at": "2026-10-22T15:36:23Z",
+      "delivered_at": null
+    },
+    "warnings": [
+      {
+        "code": "legacy_terminal_recipient",
+        "recipient": "term_1f27be31-0284-4366-bb91-30fe538cd30e",
+        "message": "term_1f27be31-0284-4366-bb91-30fe538cd30e is a live terminal-only mailbox. Delivery is not durable after that terminal closes; prefer run:<id> or dispatch:<id>."
+      }
+    ],
+    "mutation": {
+      "requestId": "00a823c0-2f1f-4fcc-ad9a-eb7c8cf86f37",
+      "replayed": false
+    }
+  },
+  "_meta": {
+    "runtimeId": "cc9e3275-28c6-4c45-85cc-bdcd2262aa7d"
+  }
+}

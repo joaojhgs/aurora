@@ -1,0 +1,15 @@
+{
+  "at": "2026-10-22T08:57:42.914911+00:00",
+  "status": "PUBLIC_RAW_DUAL_CUSTODY_VERIFIED",
+  "sourceHost": "ssh:ssh-sem-notebook-personal",
+  "sourceRelative": "evidence/current-setup-raw-v254.zip",
+  "terminalIncarnation": "328cd72f-c7ea-49ff-a2db-b9275b085037",
+  "bytes": 105807,
+  "sha256": "a2a7814f8d6b9de26881db2f297074e7e6aa7559dcb08ad7fcb2fa112e1b80ed",
+  "framedChunks": 26,
+  "copyOnly": true,
+  "atomicPublication": true,
+  "sourceDeleted": false,
+  "prefixRecoverySupported": true,
+  "decompressedBytes": 650254
+}

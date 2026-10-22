@@ -1,0 +1,24 @@
+{
+  "at": "2026-10-21T22:58:29.640754+00:00",
+  "status": "BOUNDED_EXISTING_GOAL_REQUIREMENTS_READ_ONLY_NOT_A_COMPLETION_AUDIT",
+  "source": ".omx/ultragoal/goals.json",
+  "sourceSha256": "7c5333454d3175758d9daa8b898ff865a6059f1cfc4cec4481160315526b60f1",
+  "goal": {
+    "id": "G006-per-277-ui-performance-plan-p0-andro",
+    "title": "PER-277: UI Performance Plan (P0) \u2014 Android navigation & streaming performance",
+    "objective": "Complete PER-277: UI Performance Plan (P0) \u2014 Android navigation & streaming performance. Follow the fetched task and authoritative attachments in .omx/task-intake/PER-277.md, preserving scope and prerequisites; recover relevant existing work, implement required deliverables, root-run sequential verification on consolidated changes including appropriate live gates, independent review, and update Multica to accurately reflect merge-readiness and linked stacked PR. User reports Stage 1 complete: reconcile merged work/status and validate regressions; do not restart its implementation. On every resume, read .omx/ultragoal/ORCA-COORDINATION.md and orchestrate through the existing Orca run_e6054e76e9fc with original Sol monitor ctx_37b4d0a3c14f and its native goal. Preserve gpt-6.1-sol/xhigh leader, bounded Luna private implementation, independent Sol source review, and Root as the single serial executable/build/device validation owner. Apply the user-approved important main-flow validation scope on all supported platforms; retain closed results and avoid expanding edge-case matrices or repeating unchanged passing checks. Coordinate resource sharing, builds, Android access and exhaustion through that same Orca monitor. Continue the same native Codex aggregate with supported Ultragoal evidence checkpoints.",
+    "status": "pending",
+    "attempt": 0,
+    "createdAt": "2026-09-16T02:52:55.585Z",
+    "updatedAt": "2026-10-11T00:41:54.630Z",
+    "steeringEvidence": "User explicitly requested same durable native goal, original Orca run/monitor on every resume, parallel Luna implementation/Sol review and one serial owner, plus bounded important main flows rather than expanding edge-case checks. Actual matching native snapshotV51 remains ACTIVE/unbudgeted; original Orca run/monitor and reviewed V50/V51 source evidence are retained.",
+    "steeringRationale": "Make user-authorized orchestration and resume constraints explicit in the existing pending objective while retaining all original deliverables, acceptance requirements, status and aggregate identity."
+  },
+  "ownerReportedStage1Complete": true,
+  "interpretation": "Do not restart Stage1 implementation. Its recorded objective also requires reconciliation of existing source/status, retained consolidated regression/live-gate and independent-review evidence, and accurate Multica merge-readiness/stacked-PR links. Those existing artifacts were not audited by this narrow read, so completion remains unproven here; do not fabricate a complete checkpoint.",
+  "currentAction": "Continue frozen mainV2296 measurements; reuse retained passes at the later appropriate reconciliation checkpoint rather than launch extra tests or review loops now.",
+  "newMainMatrixGate": false,
+  "newTests": 0,
+  "sourceOrGoalPlanMutations": 0,
+  "newWorkers": 0
+}

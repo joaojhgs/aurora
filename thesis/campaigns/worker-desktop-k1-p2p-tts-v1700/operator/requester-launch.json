@@ -1,0 +1,17 @@
+{
+  "at": "2026-10-20T03:14:40.108855+00:00",
+  "cell": "/home/developer/projects/aurora/.git/aurora-handoff-import-20261006/distributed-k1-mesh-cell-v1700",
+  "conditionManifestSha256": "015fb112210f9c6563fc74ad60dee230d1d10752d8d1f47ebb9bbe18d13a283f",
+  "controllerPid": 2306990,
+  "controllerStartTicks": 124454069,
+  "excludedWarmups": 15,
+  "measurementAdmitted": false,
+  "newOrcaWorker": false,
+  "plannedMeasured": 900,
+  "providerReceiver": {
+    "pid": 3159877,
+    "startTicks": 22126487
+  },
+  "sourceRoot": "/home/developer/projects/aurora/.git/aurora-handoff-import-20261006/distributed-k1-mesh-requester-v1700",
+  "startupIsNotCompletion": true
+}

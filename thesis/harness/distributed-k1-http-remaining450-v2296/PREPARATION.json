@@ -1,0 +1,122 @@
+{
+  "at": "2026-10-21T21:38:36.394961+00:00",
+  "status": "EXACT_REMAINING450_SOURCE_STAGED_NO_LIFECYCLE_OR_INFERENCE",
+  "parentPackage": "thesis/harness/distributed-k1-http-first270-v2234",
+  "sourceFiles": [
+    {
+      "path": "aurora_voice_telemetry_v430.py",
+      "bytes": 11547,
+      "sha256": "fb4f912e1b70989a1fa96e021c274514047a0f10e0e7682b5c73f18bc673286f",
+      "parentSha256": "8129ffe7591a47a0107ede53b101aead9fc1f58b92f0c0c4203176cc7608325d",
+      "changed": true
+    },
+    {
+      "path": "bindings.py",
+      "bytes": 4145,
+      "sha256": "0b15c2c9c02cd3e1e96cb52e44a4ed458c3a790c35aa612d020e54ead351537e",
+      "parentSha256": "52182f956b34788ecbfbbb241c8243ff88baebe2874e3605791793777ed0dc91",
+      "changed": true
+    },
+    {
+      "path": "bootstrap.py",
+      "bytes": 2028,
+      "sha256": "506639751e8cd9a5ce403e87cfe7ee6ebb26840853a0508dec131fe6b65a6fad",
+      "parentSha256": "05303915a1617a3fbc163017902fa084e687257d7b0af9bc692877d08a6a3b7e",
+      "changed": true
+    },
+    {
+      "path": "candidate-input.wav",
+      "bytes": 219794,
+      "sha256": "da0ecc4ad0885746ab6e716585473917ab2b543a505bf0db09ebacfaa7943cbb",
+      "parentSha256": "da0ecc4ad0885746ab6e716585473917ab2b543a505bf0db09ebacfaa7943cbb",
+      "changed": false
+    },
+    {
+      "path": "candidate-manifest.json",
+      "bytes": 220,
+      "sha256": "ce75b965ee5879ebece6ea7dfe133441547d20ccf89ecd5d66ea510bd9645e60",
+      "parentSha256": "ce75b965ee5879ebece6ea7dfe133441547d20ccf89ecd5d66ea510bd9645e60",
+      "changed": false
+    },
+    {
+      "path": "controller.py",
+      "bytes": 20722,
+      "sha256": "c45963b66c92e71c2d6a92727c796ce2a2accdda66dbd469456ae504e1727031",
+      "parentSha256": "9fd74c70ec6393c084319b75e086fc39c66bf5f092161a8ba7b0e9bd59cbc11b",
+      "changed": true
+    },
+    {
+      "path": "eligible-indices.json",
+      "bytes": 3153,
+      "sha256": "1a9c494a3f01bf4eb8ebd35bb675d03bb9a14d80fc1f8a636c96ad47651c897d"
+    },
+    {
+      "path": "observer.py",
+      "bytes": 11803,
+      "sha256": "7e045d5c343942c96a293ecaf6459727067096aca421f8b6bffee2af9946b5ea",
+      "parentSha256": "784cc4bffc0d6824bbe378d17a7f632d587ca0a315896b048b2ebef727082df5",
+      "changed": true
+    },
+    {
+      "path": "receiver_proof.py",
+      "bytes": 11450,
+      "sha256": "a565c1486d087fe7fca8ba2437a8cec3f2e89e95af982ac87105719bcdff11bb",
+      "parentSha256": "1433dd8a62a55c3fc17af0cce2860dd4eb6bf5dbfd645607b6582afac000be51",
+      "changed": true
+    },
+    {
+      "path": "resource_sample.py",
+      "bytes": 7777,
+      "sha256": "c82ac9af1a86198d0fc5396e86a6593bc6e91a220019cda838eea8c378819986",
+      "parentSha256": "8f62ec378e74036d4539d9159e3caf29b8fd7a9115de1ab0f482dfd58b6e1857",
+      "changed": true
+    },
+    {
+      "path": "runner.py",
+      "bytes": 72599,
+      "sha256": "34d5742fcfada0a7c33dce6f035611c426b6fad8cf99c95a1ad70c0f9fa1d5d5",
+      "parentSha256": "e7af3781fd905524a463b65f680a51b6e96e4876544d04e5fabdf6d199faa247",
+      "changed": true
+    },
+    {
+      "path": "source-inventory.json",
+      "bytes": 67817,
+      "sha256": "000202cdddb9803d503fc44f8aaf58eb469475890751a310193418330aa79937",
+      "parentSha256": "000202cdddb9803d503fc44f8aaf58eb469475890751a310193418330aa79937",
+      "changed": false
+    },
+    {
+      "path": "source-inventory.legacy-http.json",
+      "bytes": 58216,
+      "sha256": "96ec8e3e14233520d4cd469c4177264a193d05cf26b4b512d91d98f16bbb7dee",
+      "parentSha256": "96ec8e3e14233520d4cd469c4177264a193d05cf26b4b512d91d98f16bbb7dee",
+      "changed": false
+    },
+    {
+      "path": "tts_http_adapter.py",
+      "bytes": 6956,
+      "sha256": "476255813dc77db12c77fa14f4ea858811ea89fe61f5198a7f1a5388defe7124",
+      "parentSha256": "fe134e55b707908c242fdf1367366afa001efd56456c41b49fc7d80dc197bee5",
+      "changed": true
+    }
+  ],
+  "mapping": {
+    "conditionTarget": 900,
+    "priorMeasured": 450,
+    "priorCorrect": 449,
+    "priorFailed": 1,
+    "first": 451,
+    "last": 900,
+    "operationalEpochMeasured": 450,
+    "excludedWarmups": 15,
+    "failed180Retried": false
+  },
+  "caps": {
+    "requestSeconds": 180,
+    "conditionSeconds": 39000,
+    "controllerSeconds": 39600,
+    "allInclusiveSeconds": 43200,
+    "aggregateSeconds": 115200
+  },
+  "validation": "New source formatted; fatal Ruff and pinnedPython3.11 in-memory compilation passed; native15warmups still required."
+}

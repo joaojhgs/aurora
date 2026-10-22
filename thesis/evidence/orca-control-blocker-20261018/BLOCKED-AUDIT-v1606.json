@@ -1,0 +1,132 @@
+{
+  "at": "2026-10-18T18:28:25.371958+00:00",
+  "decision": "BLOCKED_AUDIT_PASSED_NATIVE_STATUS_UPDATE_PENDING",
+  "nativeThread": "01a112a5-d6bb-74e2-bf7c-ace73cb513b5",
+  "objectivePreserved": "Complete the durable ultragoal plan in .omx/ultragoal/goals.json, including later accepted/appended stories, under the original brief constraints; use .omx/ultragoal/ledger.jsonl as the audit trail.",
+  "blockerIdentity": "SAME_EXISTING_PERSONAL_CONTROL_SEND_REJECTED_NO_SUPPORTED_WORKER_RESTORE_SURFACE",
+  "consecutiveGoalTurns": 3,
+  "turnEvidence": [
+    {
+      "indexRelativeToFirstBlocker": 1,
+      "kind": "original user-triggered turn",
+      "result": "Actual two distinct staging SENDs rejected terminal_not_writable; same existing terminal/incarnation. V1590 safe diagnostic source prepared and reviewed.",
+      "nativeSnapshot": "thesis/campaigns/worker-desktop-k3-orca-relayed-http-remaining-v1590/NATIVE-GOAL-v1597.json",
+      "receipt": "thesis/campaigns/worker-desktop-k3-orca-relayed-http-remaining-v1590/control-admission-v1595/EXACT-BLOCKER.json"
+    },
+    {
+      "indexRelativeToFirstBlocker": 2,
+      "kind": "automatic native-goal continuation",
+      "result": "Same control blocker unrecovered. Independent authorized K1 first360 source prepared and reviewed;0network/model requests.",
+      "nativeSnapshot": "thesis/campaigns/worker-desktop-k1-orca-relayed-http-remaining360-v1600/NATIVE-GOAL-v1604.json",
+      "receipt": "thesis/campaigns/worker-desktop-k1-orca-relayed-http-remaining360-v1600/ROOT-PROGRESS-v1604.json"
+    },
+    {
+      "indexRelativeToFirstBlocker": 3,
+      "kind": "current automatic native-goal continuation",
+      "result": "Actual get_goal active, original monitor mailbox checked/ACKed; heartbeat only, no restoration/admission receipt. All prepared-source reviews alreadyclosed; no remaining safe executable action.",
+      "nativeSnapshot": "thesis/evidence/orca-control-blocker-20261018/NATIVE-GOAL-PRE-BLOCK-v1605.json",
+      "mailReceipt": ".git/aurora-handoff-import-20261006/v1605-root-mail.json"
+    }
+  ],
+  "previousTurnClassification": "PROGRESS: concrete K1 source, static validation and independent review",
+  "currentTurnClassification": "NO_UNBLOCKING_PROGRESS: same genuine external capability condition; not a verified wait for an unconfirmed operator job",
+  "control": {
+    "target": "ssh:ssh-1786238480967-semdev",
+    "terminal": "term_d5651d8d-58e2-4b38-85e2-51c668cc933c",
+    "incarnation": "034ff933-61a3-4c74-b5ad-98a75e8ac21c",
+    "actualRejectedRequestIds": [
+      "8357569b-3463-4576-951a-0c975a3b4cc2",
+      "b3e29dd0-3f85-444a-a865-a37495190408"
+    ],
+    "accepted": false,
+    "metadataReportedConnectedAndWritable": true,
+    "currentCauseUnknown": true,
+    "noFurtherUnchangedSends": true
+  },
+  "availableSurfaceAudit": {
+    "installedNormalPublicCatalog": "301commands; terminal read/show/send, no SSH restore/reconnect command",
+    "enabledDeferredToolMetadata": "No Orca/SSH/terminal restore tools exposed in current ALL_TOOLS metadata",
+    "notUsed": "Manager-owned services, direct SSH/credential bypass, security/access changes, new target/terminal/worker"
+  },
+  "impasse": {
+    "K3remaining184": "Requires working existing Personal control for actual source staging/resource/provider/native proof admission. Source and narrow review already closed.",
+    "K1remaining720": "First360 requester source reviewed; actual compatible new provider/reservation/source/model/resource/lifetime bindings unavailable, not safe to invent or reuse current K3 reservation.",
+    "P2PMesh": "Previously documented approved signaling reachability missing; only owner-approved Personal8000 application route exposed, no unauthorized policy edits.",
+    "Android": "Previously documented exact approved emulator observer fails; not emulator-absence proof and no authorized alternate/new device.",
+    "furtherPreparatoryChurn": "No needed source/result review or test remains for next K3 admission; further speculative versions or repeated passes do not resolve capability."
+  },
+  "formalPlanState": [
+    {
+      "id": "G001-per-278-ui-state-real-time-plan-p1-t",
+      "status": "in_progress"
+    },
+    {
+      "id": "G002-per-279-ui-visual-cleanup-plan-desig",
+      "status": "pending"
+    },
+    {
+      "id": "G003-per-281-native-event-bridge-plan-gen",
+      "status": "pending"
+    },
+    {
+      "id": "G004-per-282-ui-maintainability-plan-feat",
+      "status": "pending"
+    },
+    {
+      "id": "G005-per-283-ui-architecture-review-refer",
+      "status": "complete"
+    },
+    {
+      "id": "G006-per-277-ui-performance-plan-p0-andro",
+      "status": "pending"
+    },
+    {
+      "id": "G007-per-286-fix-native-speech-stage-rout",
+      "status": "pending"
+    },
+    {
+      "id": "G008-per-285-implement-aurora-end-to-end",
+      "status": "pending"
+    },
+    {
+      "id": "G009-per-284-on-device-inference-engines",
+      "status": "pending"
+    },
+    {
+      "id": "G010-per-289-per-288-add-lightweight-tran",
+      "status": "pending"
+    },
+    {
+      "id": "G011-per-290-per-288-add-lightweight-node",
+      "status": "pending"
+    },
+    {
+      "id": "G012-per-291-per-288-plan-the-transcript",
+      "status": "pending"
+    },
+    {
+      "id": "G013-per-288-add-database-and-configurati",
+      "status": "pending"
+    }
+  ],
+  "planSha256Preserved": "7c5333454d3175758d9daa8b898ff865a6059f1cfc4cec4481160315526b60f1",
+  "notCompletion": true,
+  "rootExecutionOwnershipPreserved": true,
+  "originalRun": "run_e6054e76e9fc",
+  "originalMonitorTask": "task_d7ea336050cf",
+  "originalMonitorDispatch": "ctx_37b4d0a3c14f",
+  "originalMonitorTerminal": "term_2eab47ed-ab9b-4e35-bd9b-fc068c60e3fc",
+  "providerReservation": "HELD, no stop/restart/extension; last actual provider process observation18:01:36, no fresh liveness claim",
+  "dataPreserved": {
+    "K3MeasuredAttempts": 716,
+    "K3Correct": 714,
+    "K3Failed": 2,
+    "K3Unattempted": 184,
+    "K1MeasuredAttempts": 180,
+    "K1Correct": 179,
+    "K1Failed": 1,
+    "K1Unattempted": 720,
+    "failedReadinessAndAllRawPreserved": true
+  },
+  "resumeGate": "Changed supported owning-Orca restoration receipt for SAME existing terminal/incarnation, then owner-supported same-native-goal continuation. No automatic goal recreation/resume, blind send, full900 replay or new worker."
+}

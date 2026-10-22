@@ -1,0 +1,6 @@
+{
+  "command": "flock --nonblock /tmp/aurora-global-build.lock docker ps -a --filter name=aurora-matched-root-v315- --format ID/Names",
+  "exit_code": 0,
+  "matched_containers": 0,
+  "scope": "exact owned prefix"
+}

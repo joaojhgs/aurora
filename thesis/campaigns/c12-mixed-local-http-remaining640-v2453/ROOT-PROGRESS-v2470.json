@@ -1,0 +1,101 @@
+{
+  "at": "2026-10-22T13:36:53.161122+00:00",
+  "classification": "PROGRESS_AND_VERIFIED_LIVE_WAIT",
+  "previousTurnClassification": "VERIFIED_WAIT: exact original requester live with progressing completed cases",
+  "specificLiveHandle": {
+    "pid": 462924,
+    "startTicks": 144596371,
+    "state": "S"
+  },
+  "current": {
+    "at": "2026-10-22T13:36:40.538728+00:00",
+    "companion": {
+      "measured": {
+        "attempted": 192,
+        "correct": 192,
+        "failed": 0,
+        "harnessErrorsIncludedInFailed": 0,
+        "incorrectIncludedInFailed": 0,
+        "offered": 192,
+        "planned": 640,
+        "timeouts": 0,
+        "unstarted": 448
+      },
+      "warmup": {
+        "attempted": 15,
+        "correct": 15,
+        "failed": 0,
+        "harnessErrorsIncludedInFailed": 0,
+        "incorrectIncludedInFailed": 0,
+        "offered": 15,
+        "planned": 15,
+        "timeouts": 0,
+        "unstarted": 0
+      }
+    },
+    "completePairedCapsules": 207,
+    "elapsedSeconds": 8690.299893501,
+    "lastIndex": 192,
+    "lastNativeParent": "207fbe3ea6f1a68b545f4f22910d51cd",
+    "lastOrdinal": 207,
+    "manifestSha256": "3bfca19d2dd0a9eec3981eae256168a5badd9ac2bb58a270ff8a55df1d986cce",
+    "phase": "measured",
+    "pid": 462924,
+    "primary": {
+      "measured": {
+        "attempted": 192,
+        "correct": 192,
+        "failed": 0,
+        "harnessErrorsIncludedInFailed": 0,
+        "incorrectIncludedInFailed": 0,
+        "offered": 192,
+        "planned": 640,
+        "timeouts": 0,
+        "unstarted": 448
+      },
+      "warmup": {
+        "attempted": 15,
+        "correct": 15,
+        "failed": 0,
+        "harnessErrorsIncludedInFailed": 0,
+        "incorrectIncludedInFailed": 0,
+        "offered": 15,
+        "planned": 15,
+        "timeouts": 0,
+        "unstarted": 0
+      }
+    },
+    "status": "running"
+  },
+  "priorRetainedMeasuredPerStream": 260,
+  "conditionCorrectPerStream": {
+    "primary": 452,
+    "companion": 452
+  },
+  "terminalPresent": false,
+  "activeErrorPresent": false,
+  "freeBytes": 2234937344,
+  "diskFreeFloorBytes": 2147483648,
+  "mainSourceSettingsCountsClocksFloorChanged": false,
+  "newCompletedControlCustody": "control-link-receipts/20261022T133652.945847Z.json",
+  "newFilesLinked": 220,
+  "newBytesHashed": 1325210,
+  "oldFilesRehashed": 0,
+  "newPayloadAllocations": 0,
+  "progress": "Concrete new shared worker disk conflict reconciled: one joint finite outstanding Main/phone/control budget; prospective phone900 not admitted by independent free>=floor; same worker asked exact saved-pilot-based peak custody, no reruns or device reads",
+  "jointStorageBudget": "JOINT-WORKER-STORAGE-BUDGET-v2470.json",
+  "jointOutstandingReservationBytes": 440401920,
+  "jointAdditionalCapacityNeededAtBudgetBytes": 348930048,
+  "mainLinearFutureShortfallBeforeEofAtBudgetBytes": 81869287,
+  "phoneMeasured900StorageAdmitted": false,
+  "independentNotebookReadinessNotBlanketHeld": true,
+  "phoneRequestReceipt": "msg_bc1b800de813 to SAME term_1f27be31-0284-4366-bb91-30fe538cd30e",
+  "monitorReceipt": "msg_4fe820e64bcf to original dispatch ctx_37b4d0a3c14f",
+  "mailAck": "delivery_8d12c0e1c36a",
+  "newWorkersReviewsModelsBuildsDeviceOrPhoneOperations": 0,
+  "phoneOwner": "term_1f27be31-0284-4366-bb91-30fe538cd30e",
+  "sourceHandoff": "ebde+v2383 closed",
+  "exactUnusedWebpackCachePermission": "PENDING; no deletion/reask/authority inference",
+  "nextSutAction": "Continue exact live Main; finish condition then EOF/audio/normal actor retirement/release before mixed P2P admission on actual resource reserve. Resolve new phone900 shared-disk admission using same worker exact bounded-copy plan, not a Main completion blanket gate.",
+  "nextMaximumObservationUtc": "2026-10-22T13:41:53.161122+00:00"
+}

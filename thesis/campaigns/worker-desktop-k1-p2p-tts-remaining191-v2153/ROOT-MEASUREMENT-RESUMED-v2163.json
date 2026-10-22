@@ -1,0 +1,107 @@
+{
+  "at": "2026-10-21T03:15:42.507124+00:00",
+  "status": "K1_MEASUREMENT_RESUMED_FIRST_NEW_GLOBAL710_CORRECT",
+  "firstGlobalMeasuredIndex": 710,
+  "firstCaseId": "audio-campaign-v2142-0016",
+  "correlation": {
+    "correlation_id": "audio-campaign-62dda97d20674bb4ae26d42798cb2343",
+    "request_id": "audio-request-8999d76e63be4f0cb33d63723a0c290d",
+    "session_id": "audio-session-c9f4bb5a821044bb8c73fdebd4a9f711"
+  },
+  "correctness": {
+    "all_expected": true,
+    "assistant_reply_matches_expected_words": true,
+    "transcript_matches_reference_words": true
+  },
+  "firstFlowDurationMs": 40978.925272,
+  "paths": [
+    {
+      "source": "/home/developer/projects/aurora/.git/aurora-handoff-import-20261006/distributed-k1-mesh-cell-v2153/campaign/attempts/attempt-0016-measured.jsonl",
+      "destination": "thesis/campaigns/worker-desktop-k1-p2p-tts-remaining191-v2153/attempts/attempt-0016-measured.jsonl",
+      "bytes": 4980,
+      "sha256": "9e1321486b026fd44351715a1b31fb24dad59676653f4d8d0719922d05d57e75"
+    },
+    {
+      "source": "/home/developer/projects/aurora/.git/aurora-handoff-import-20261006/distributed-k1-mesh-cell-v2153/campaign/audio/e3303371fed896cb1e9ae08f44c6daec1ca732bbe4cf9400c7d0e7b992e0df5e.wav",
+      "destination": "thesis/campaigns/worker-desktop-k1-p2p-tts-remaining191-v2153/audio/e3303371fed896cb1e9ae08f44c6daec1ca732bbe4cf9400c7d0e7b992e0df5e.wav",
+      "bytes": 31788,
+      "sha256": "e3303371fed896cb1e9ae08f44c6daec1ca732bbe4cf9400c7d0e7b992e0df5e"
+    }
+  ],
+  "wav": {
+    "channels": 1,
+    "sampleWidth": 2,
+    "sampleRate": 22050,
+    "frames": 15872
+  },
+  "sameOriginalNewEpochActors": {
+    "3332811": {
+      "startTicks": 132995693,
+      "state": "S"
+    },
+    "3332919": {
+      "startTicks": 132996503,
+      "state": "S"
+    },
+    "3333678": {
+      "startTicks": 133003703,
+      "state": "S"
+    }
+  },
+  "retiredAuxiliaryFinalizer": 3333679,
+  "nativeProofSha256": "a2571287aab8f63c9af2facf0a3ede4cf81558c403d3b5653ea8b3b33df49991",
+  "selectedCorrectExcludedWarmups": 15,
+  "excludedWarmupAttempts": 15,
+  "excludedWarmupFailures": 0,
+  "remoteNativeTtsCalls": 15,
+  "localNativeSttLlmGate": "Frozen runner passed before real measured710; original constructor/model/CPU settings unchanged",
+  "savedProofAssemblyRecovery": {
+    "failure": "ModuleNotFoundError warmup_policy in retired auxiliary",
+    "originalFailurePreserved": true,
+    "sourceOrManifestChanged": false,
+    "extraInferenceCalls": 0,
+    "remoteResends": 0,
+    "recoveryReceipt": "thesis/campaigns/worker-desktop-k1-p2p-tts-remaining191-v2153/SAVED-PROOF-RECOVERY-v2161.json"
+  },
+  "epochMeasured": {
+    "attempted": 8,
+    "correct": 8,
+    "incorrect": 0,
+    "failed": 0,
+    "planned": 191,
+    "remaining": 183
+  },
+  "combinedK1": {
+    "attempted": 717,
+    "correct": 705,
+    "incorrect": 0,
+    "failed": 12,
+    "planned": 900
+  },
+  "capacity": {
+    "warmupP95MsType7": 50287.369398899995,
+    "measured191ForecastSecondsWith20PercentPlus300": 11825.865066227878,
+    "requesterRemainingSeconds": 13231.783435,
+    "providerRemainingSeconds": 34153.40479
+  },
+  "sameHardDeadlineUtc": "2026-10-21T06:59:42.981693+00:00",
+  "sameOriginalProvider": {
+    "pid": 251473,
+    "startTicks": 29038457,
+    "restarted": false
+  },
+  "personalControlReleased": true,
+  "originalNativeAggregateGoal": "ACTIVE fullscope unchanged",
+  "newOrcaWorker": false,
+  "sutCallsByVerification": 0,
+  "diskFreeBytes": 3929149440,
+  "latestAt": "2026-10-21T03:18:16.904950+00:00",
+  "phase": "MEASURED_RUNNING_ADMITTED",
+  "nextRoutineCheckUtc": "2026-10-21T03:23:16.904950+00:00",
+  "custody": {
+    "sequence": 19,
+    "cases": 22,
+    "wavFiles": 22,
+    "files": 214
+  }
+}

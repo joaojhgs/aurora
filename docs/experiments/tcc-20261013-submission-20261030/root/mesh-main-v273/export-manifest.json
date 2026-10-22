@@ -1,0 +1,40 @@
+{
+  "objective": "tcc:20261013:submission-20261030",
+  "serial_owner": "same original Aurora Root01a112a5",
+  "files_sha256": {
+    "root-manifest.json": "4b3c6ca8d4af5a5567e86c2f2f5566c7988bea840d982dd1cd135e6868083af6",
+    "root-result.json": "b7b1cd144769e90d765c4d0304521ae5224f0619231439afc8760d6f6c5031b7",
+    "live-handle.json": "3715290564e485e201f7ace825f78adcb9b85e182e8f544cbde22554321c7372",
+    "next-autogen-cleanup.json": "c849c47c8cd1b3a506c5b6cf2e21ad661a7958c29c3610d4e0b288237b4684b0",
+    "private-artifact-receipt.json": "e31b5c67c22c3dd8dcb64bc4d57a1fb7ae05d42827b765933844941de0d76593",
+    "stdout.log": "23d0eb1862efd7da1faa1e2cbc8096eef28cfe124f4af79c1b0b1d10fba74771",
+    "stderr.log": "0c7c9156a0b088ab5a72202c1010c6aabb0cab85d3c9fe829ab1ed2c5a4ebde3",
+    "artifacts/python-service.log": "9610aad040c918a71b9f3edc5ab0bda2bace44733d3d2dca7f3d782a0859f517",
+    "artifacts/web-ui.log": "d6b552b5477d286e8230c7c1e73cf3ebf08cbcb60db140d501f9010f359c66e0",
+    "case-history.jsonl": "904ca44a1f52ad8ef84879d25fbc50a8eb712416be7693a4da4cfbe6923068a0"
+  },
+  "log_exports": {
+    "stdout.log": {
+      "private_original_sha256": "23d0eb1862efd7da1faa1e2cbc8096eef28cfe124f4af79c1b0b1d10fba74771",
+      "export_sha256": "23d0eb1862efd7da1faa1e2cbc8096eef28cfe124f4af79c1b0b1d10fba74771",
+      "withheld_lines": 0
+    },
+    "stderr.log": {
+      "private_original_sha256": "1ce0843a42d2dde893d3a9a0c49c7a5d60cca6412fda90b741b3701a1f2a94d3",
+      "export_sha256": "0c7c9156a0b088ab5a72202c1010c6aabb0cab85d3c9fe829ab1ed2c5a4ebde3",
+      "withheld_lines": 1
+    },
+    "artifacts/python-service.log": {
+      "private_original_sha256": "7b9d47edb4fdb2ad26a3dc4dbb9d459f68119c274f2d8fbd8c442b769f235406",
+      "export_sha256": "9610aad040c918a71b9f3edc5ab0bda2bace44733d3d2dca7f3d782a0859f517",
+      "withheld_lines": 26
+    },
+    "artifacts/web-ui.log": {
+      "private_original_sha256": "d6b552b5477d286e8230c7c1e73cf3ebf08cbcb60db140d501f9010f359c66e0",
+      "export_sha256": "d6b552b5477d286e8230c7c1e73cf3ebf08cbcb60db140d501f9010f359c66e0",
+      "withheld_lines": 0
+    }
+  },
+  "private_browser_bodies_exported": false,
+  "source_and_raw_failed_history_preserved": true
+}

@@ -1,0 +1,33 @@
+{
+  "files": [
+    {
+      "name": "driver.py",
+      "sha256": "b5326644fc505e74d710e3aac040b5a757a09daa716da474db858fb87d0685cf",
+      "bytes": 20277
+    },
+    {
+      "name": "driver-controller.py",
+      "sha256": "84ae38f013141aec20f44b7ade4e67e9fa3991521e643331b8056b2b937bce2f",
+      "bytes": 2825
+    },
+    {
+      "name": "supervisor.py",
+      "sha256": "fda6b543babca154cad4508ba50f787d343fe1cab9c124c02335e8f032f13ae1",
+      "bytes": 7869
+    },
+    {
+      "name": "backend-controller.py",
+      "sha256": "1d4aaf81daca69be86e5dec1bf1e5e061bbee27491bf0ee217cdab05d5187b49",
+      "bytes": 6269
+    },
+    {
+      "name": "source_guard_v455.py",
+      "sha256": "b48425c9b50e8f0d1d4dd5b8f58b6852baffe592794b804753be6e593427eefe",
+      "bytes": 1590
+    }
+  ],
+  "AST": "PASS",
+  "historyCaseCountBeforeThis": 0,
+  "V470Failure": "setupIndexError api_keys sanitized, no browser executed",
+  "fixtureRepair": "Reuse identical prior declared fixture API key and token_secret from original retained setup AST; no new credentials/accounts/grants. Old artifacts untouched."
+}

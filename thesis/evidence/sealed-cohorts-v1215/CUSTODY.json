@@ -1,0 +1,514 @@
+{
+  "budgetBytes": 150000000,
+  "copyRateBytesPerSecond": 4194304,
+  "diskAfter": {
+    "free": 7306579968,
+    "total": 109128826880,
+    "used": 101805469696
+  },
+  "diskBefore": {
+    "free": 7450599424,
+    "total": 109128826880,
+    "used": 101661450240
+  },
+  "finishedAt": "2026-10-17T20:29:02.985436+00:00",
+  "knownGaps": {
+    "C06": {
+      "audio": "UNKNOWN/unrecovered",
+      "finalDenominator": "UNKNOWN",
+      "finalOutcome": "UNKNOWN",
+      "historicalOnly": "272completed/273attempted; not final and not lost-file count",
+      "rawBytes": "UNKNOWN",
+      "rawCaseFiles": "UNKNOWN"
+    },
+    "V799": {
+      "currentCustody": "UNKNOWN/unrecovered; metadata is not raw/audio",
+      "originalArchiveBytes": 130072923,
+      "originalArchiveSHA256": "489404814e7667b4c85d371e9e2e895372dc075d1e310669593dff47b1f56e72",
+      "rawArchiveRecovered": false
+    }
+  },
+  "physicalCopiedBytes": 143571171,
+  "possibleConfound": "Concurrent bounded disk custody; no measured cases excluded.",
+  "records": [
+    {
+      "bytes": 4387,
+      "destination": "thesis/evidence/sealed-cohorts-v1215/worker-cpu-full-audio-local900-v491/REPORT.md",
+      "sha256": "d71932dbb8a6d75c23836a73ef7c235110bb107b82e35dc70a0a3369911f7300",
+      "source": "docs/experiments/tcc-20261013-submission-20261030/root/worker-cpu-full-audio-local900-v491/REPORT.md",
+      "state": "VERIFIED_REPO_COPY"
+    },
+    {
+      "archive": {
+        "attemptJsonlMembers": 915,
+        "audioMembers": 916,
+        "members": 1865,
+        "method": "Verified whole ZIP bytes/checksum; central-directory count only; prior outcome audits retained; no repeated per-audio decoding"
+      },
+      "bytes": 33027484,
+      "destination": "thesis/evidence/sealed-cohorts-v1215/worker-cpu-full-audio-local900-v491/aurora-worker-cpu-full-audio-local900-v491.zip",
+      "sha256": "83b9084a09abfe641968b2958e210ed589dbcd655f0a9a26c18f2bc4dd80d897",
+      "source": "docs/experiments/tcc-20261013-submission-20261030/root/worker-cpu-full-audio-local900-v491/aurora-worker-cpu-full-audio-local900-v491.zip",
+      "state": "VERIFIED_REPO_COPY"
+    },
+    {
+      "bytes": 5082,
+      "destination": "thesis/evidence/sealed-cohorts-v1215/worker-cpu-full-audio-local900-v491/verification-v652.json",
+      "sha256": "ec94a94cfe8e7ee4de65a59cfe7990fd02eac94c33c91370c17d5da7ffb77478",
+      "source": "docs/experiments/tcc-20261013-submission-20261030/root/worker-cpu-full-audio-local900-v491/verification-v652.json",
+      "state": "VERIFIED_REPO_COPY"
+    },
+    {
+      "bytes": 691567,
+      "destination": "thesis/evidence/sealed-cohorts-v1215/worker-cpu-padded-local900-v737/ARCHIVE-MANIFEST.json",
+      "sha256": "566bb65177d98f6bba9287b9b87050a00d37cbdef19daf3b8246488cdea045c3",
+      "source": "docs/experiments/tcc-20261013-submission-20261030/root/worker-cpu-padded-local900-v737/ARCHIVE-MANIFEST.json",
+      "state": "VERIFIED_REPO_COPY"
+    },
+    {
+      "bytes": 2689828,
+      "destination": "thesis/evidence/sealed-cohorts-v1215/worker-cpu-padded-local900-v737/NATIVE-STAGE-CASE-HISTORY.json",
+      "sha256": "49f10ddbe98aa090f90ab2b183829f24537807eb6aa495eb63c7b9ddf5a431fb",
+      "source": "docs/experiments/tcc-20261013-submission-20261030/root/worker-cpu-padded-local900-v737/NATIVE-STAGE-CASE-HISTORY.json",
+      "state": "VERIFIED_REPO_COPY"
+    },
+    {
+      "bytes": 3230,
+      "destination": "thesis/evidence/sealed-cohorts-v1215/worker-cpu-padded-local900-v737/REPORT.md",
+      "sha256": "159685710157bb92be3b826eddc2858a8f5afff670abd37474d59cc73f0ded7a",
+      "source": "docs/experiments/tcc-20261013-submission-20261030/root/worker-cpu-padded-local900-v737/REPORT.md",
+      "state": "VERIFIED_REPO_COPY"
+    },
+    {
+      "bytes": 291717,
+      "destination": "thesis/evidence/sealed-cohorts-v1215/worker-cpu-padded-local900-v737/audit-verification.json",
+      "sha256": "316141a59062caed65743c826f9cc7a2391cd6344d9b3715e10c165643bd44f1",
+      "source": "docs/experiments/tcc-20261013-submission-20261030/root/worker-cpu-padded-local900-v737/audit-verification.json",
+      "state": "VERIFIED_REPO_COPY"
+    },
+    {
+      "archive": {
+        "attemptJsonlMembers": 915,
+        "audioMembers": 916,
+        "members": 1858,
+        "method": "Verified whole ZIP bytes/checksum; central-directory count only; prior outcome audits retained; no repeated per-audio decoding"
+      },
+      "bytes": 32740359,
+      "destination": "thesis/evidence/sealed-cohorts-v1215/worker-cpu-padded-local900-v737/aurora-worker-cpu-padded-local900-v737.zip",
+      "sha256": "8647715e745b7a49f8fb270730312909be3918fa7e87900b3174dbf2f8dc2f99",
+      "source": "docs/experiments/tcc-20261013-submission-20261030/root/worker-cpu-padded-local900-v737/aurora-worker-cpu-padded-local900-v737.zip",
+      "state": "VERIFIED_REPO_COPY"
+    },
+    {
+      "bytes": 291918,
+      "destination": "thesis/evidence/sealed-cohorts-v1215/worker-cpu-padded-local900-v737/verification.json",
+      "sha256": "76c3951237070a5c4b2aa18bca604d6d50361c5a24ecba4ada6231c65b1cc1d7",
+      "source": "docs/experiments/tcc-20261013-submission-20261030/root/worker-cpu-padded-local900-v737/verification.json",
+      "state": "VERIFIED_REPO_COPY"
+    },
+    {
+      "bytes": 224453,
+      "destination": "thesis/evidence/sealed-cohorts-v1215/desktop-gpu-padded-local900-v735/ARCHIVE-MANIFEST.json",
+      "sha256": "7e3bc31f88bc9b7448e16c1bf9a68514bbf6408e37be5c08c5b861a3a3c6d9f7",
+      "source": "docs/experiments/tcc-20261013-submission-20261030/root/desktop-gpu-padded-local900-v735/ARCHIVE-MANIFEST.json",
+      "state": "VERIFIED_REPO_COPY"
+    },
+    {
+      "bytes": 1201,
+      "destination": "thesis/evidence/sealed-cohorts-v1215/desktop-gpu-padded-local900-v735/EVIDENCE-LOCATION.json",
+      "sha256": "be2fb369c7dae9b8cfb8fb3b2377a393c69ffbebe89fe688e4eed299e32f0e82",
+      "source": "docs/experiments/tcc-20261013-submission-20261030/root/desktop-gpu-padded-local900-v735/EVIDENCE-LOCATION.json",
+      "state": "VERIFIED_REPO_COPY"
+    },
+    {
+      "bytes": 668392,
+      "destination": "thesis/evidence/sealed-cohorts-v1215/desktop-gpu-padded-local900-v735/NATIVE-STAGE-CASE-HISTORY.json",
+      "sha256": "3eaa2fb076ef6336844422075ea19ef23399c33a02adddda4a60b0494e41e5e8",
+      "source": "docs/experiments/tcc-20261013-submission-20261030/root/desktop-gpu-padded-local900-v735/NATIVE-STAGE-CASE-HISTORY.json",
+      "state": "VERIFIED_REPO_COPY"
+    },
+    {
+      "bytes": 6493,
+      "destination": "thesis/evidence/sealed-cohorts-v1215/desktop-gpu-padded-local900-v735/REPORT.md",
+      "sha256": "fb240fa7fdcd50843bb1fcc96fd24ce58bafeebfb24325c0c5f8b394996c9db1",
+      "source": "docs/experiments/tcc-20261013-submission-20261030/root/desktop-gpu-padded-local900-v735/REPORT.md",
+      "state": "VERIFIED_REPO_COPY"
+    },
+    {
+      "bytes": 2548,
+      "destination": "thesis/evidence/sealed-cohorts-v1215/desktop-gpu-padded-local900-v735/WORKER-CUSTODY-RECEIPT.json",
+      "sha256": "782a653d10ccd3cc9f358af4868d72dce8f816b9f5de0e20609e88f90de7d534",
+      "source": "docs/experiments/tcc-20261013-submission-20261030/root/desktop-gpu-padded-local900-v735/WORKER-CUSTODY-RECEIPT.json",
+      "state": "VERIFIED_REPO_COPY"
+    },
+    {
+      "bytes": 12139,
+      "destination": "thesis/evidence/sealed-cohorts-v1215/desktop-gpu-padded-local900-v735/audit-verification.json",
+      "sha256": "3039125dab6ea4f718a62b584f6b6e6ddcf0eb6311f6387e31b7fae593c5e22b",
+      "source": "docs/experiments/tcc-20261013-submission-20261030/root/desktop-gpu-padded-local900-v735/audit-verification.json",
+      "state": "VERIFIED_REPO_COPY"
+    },
+    {
+      "archive": {
+        "attemptJsonlMembers": 289,
+        "audioMembers": 289,
+        "members": 604,
+        "method": "Verified whole ZIP bytes/checksum; central-directory count only; prior outcome audits retained; no repeated per-audio decoding"
+      },
+      "bytes": 10064090,
+      "destination": "thesis/evidence/sealed-cohorts-v1215/desktop-gpu-padded-local900-v735/aurora-desktop-gpu-padded-local900-v735.zip",
+      "sha256": "1ef1dbd55dde983aea97852dadbeebd7f5540285655a0cbbd447b73b5784db33",
+      "source": "docs/experiments/tcc-20261013-submission-20261030/root/desktop-gpu-padded-local900-v735/aurora-desktop-gpu-padded-local900-v735.zip",
+      "state": "VERIFIED_REPO_COPY"
+    },
+    {
+      "bytes": 12505,
+      "destination": "thesis/evidence/sealed-cohorts-v1215/desktop-gpu-padded-local900-v735/verification.json",
+      "sha256": "491d883cf4d6a1daf715ac810c91deb28a83007c7133e9944faed5063de97798",
+      "source": "docs/experiments/tcc-20261013-submission-20261030/root/desktop-gpu-padded-local900-v735/verification.json",
+      "state": "VERIFIED_REPO_COPY"
+    },
+    {
+      "bytes": 486754,
+      "destination": "thesis/evidence/sealed-cohorts-v1215/desktop-gpu-padded-local900-v745/ARCHIVE-MANIFEST.json",
+      "sha256": "564f752e64e96c7f3b3b90f240495292ae0d7246dee958c63bdb1e9bac4047e1",
+      "source": "docs/experiments/tcc-20261013-submission-20261030/root/desktop-gpu-padded-local900-v745/ARCHIVE-MANIFEST.json",
+      "state": "VERIFIED_REPO_COPY"
+    },
+    {
+      "bytes": 1527115,
+      "destination": "thesis/evidence/sealed-cohorts-v1215/desktop-gpu-padded-local900-v745/NATIVE-STAGE-CASE-HISTORY.json",
+      "sha256": "975da44e64603a9c5747b7b044c1d1b3fae300653dc3899b0b4f2e7738068538",
+      "source": "docs/experiments/tcc-20261013-submission-20261030/root/desktop-gpu-padded-local900-v745/NATIVE-STAGE-CASE-HISTORY.json",
+      "state": "VERIFIED_REPO_COPY"
+    },
+    {
+      "bytes": 6372,
+      "destination": "thesis/evidence/sealed-cohorts-v1215/desktop-gpu-padded-local900-v745/REPORT.md",
+      "sha256": "e786ce4cc1858a7744a1d7ca456e431115f466f34bf3e2ae4d112cd7bb6d5a72",
+      "source": "docs/experiments/tcc-20261013-submission-20261030/root/desktop-gpu-padded-local900-v745/REPORT.md",
+      "state": "VERIFIED_REPO_COPY"
+    },
+    {
+      "bytes": 2550,
+      "destination": "thesis/evidence/sealed-cohorts-v1215/desktop-gpu-padded-local900-v745/WORKER-CUSTODY-RECEIPT.json",
+      "sha256": "3b82b38d0a1dc446af8f6232092ee56d9be71cea6cd0d08209dd0518bb922b00",
+      "source": "docs/experiments/tcc-20261013-submission-20261030/root/desktop-gpu-padded-local900-v745/WORKER-CUSTODY-RECEIPT.json",
+      "state": "VERIFIED_REPO_COPY"
+    },
+    {
+      "bytes": 12169,
+      "destination": "thesis/evidence/sealed-cohorts-v1215/desktop-gpu-padded-local900-v745/audit-verification.json",
+      "sha256": "3ae05d7d3bb9dd23c6aa21c8adf34af2b647507d1c97bd96477e67c4e73f7e01",
+      "source": "docs/experiments/tcc-20261013-submission-20261030/root/desktop-gpu-padded-local900-v745/audit-verification.json",
+      "state": "VERIFIED_REPO_COPY"
+    },
+    {
+      "archive": {
+        "attemptJsonlMembers": 641,
+        "audioMembers": 642,
+        "members": 1309,
+        "method": "Verified whole ZIP bytes/checksum; central-directory count only; prior outcome audits retained; no repeated per-audio decoding"
+      },
+      "bytes": 22099986,
+      "destination": "thesis/evidence/sealed-cohorts-v1215/desktop-gpu-padded-local900-v745/aurora-desktop-gpu-padded-local900-v745.zip",
+      "sha256": "8442f975cc23a273d10088de11357bd4eabccd15cccca11477f7c4a84c316cf2",
+      "source": "docs/experiments/tcc-20261013-submission-20261030/root/desktop-gpu-padded-local900-v745/aurora-desktop-gpu-padded-local900-v745.zip",
+      "state": "VERIFIED_REPO_COPY"
+    },
+    {
+      "bytes": 12535,
+      "destination": "thesis/evidence/sealed-cohorts-v1215/desktop-gpu-padded-local900-v745/verification.json",
+      "sha256": "cb8a6d4982c53c111d5ba6dcb7ec79ea29750e09b2c921a9d6631db03281380a",
+      "source": "docs/experiments/tcc-20261013-submission-20261030/root/desktop-gpu-padded-local900-v745/verification.json",
+      "state": "VERIFIED_REPO_COPY"
+    },
+    {
+      "bytes": 1819,
+      "destination": "thesis/evidence/sealed-cohorts-v1215/desktop-gpu-padded-http900-v692/ANALYSIS-RECEIPT-v733.json",
+      "sha256": "e8def36251c28f884553a559d8b4c5530ed2f909793dc2aa7dcd7ebb19972886",
+      "source": "docs/experiments/tcc-20261013-submission-20261030/root/desktop-gpu-padded-http900-v692/ANALYSIS-RECEIPT-v733.json",
+      "state": "VERIFIED_REPO_COPY"
+    },
+    {
+      "bytes": 690579,
+      "destination": "thesis/evidence/sealed-cohorts-v1215/desktop-gpu-padded-http900-v692/ARCHIVE-MANIFEST.json",
+      "sha256": "d87abd77df46d68fba1a4c420d411a95776026430b7100817aa1bf83f5d63605",
+      "source": "docs/experiments/tcc-20261013-submission-20261030/root/desktop-gpu-padded-http900-v692/ARCHIVE-MANIFEST.json",
+      "state": "VERIFIED_REPO_COPY"
+    },
+    {
+      "bytes": 3906,
+      "destination": "thesis/evidence/sealed-cohorts-v1215/desktop-gpu-padded-http900-v692/EVIDENCE-LOCATION.json",
+      "sha256": "45608aad521bced0e3e237607ca23456068a5faedfc046ee86c2123c2039a80f",
+      "source": "docs/experiments/tcc-20261013-submission-20261030/root/desktop-gpu-padded-http900-v692/EVIDENCE-LOCATION.json",
+      "state": "VERIFIED_REPO_COPY"
+    },
+    {
+      "bytes": 2961,
+      "destination": "thesis/evidence/sealed-cohorts-v1215/desktop-gpu-padded-http900-v692/NATIVE-SPAN-METRICS-v733.json",
+      "sha256": "651d2834e914f526c77f70b26b8c50b334224fd847a7fea3b1882f7099583aa0",
+      "source": "docs/experiments/tcc-20261013-submission-20261030/root/desktop-gpu-padded-http900-v692/NATIVE-SPAN-METRICS-v733.json",
+      "state": "VERIFIED_REPO_COPY"
+    },
+    {
+      "bytes": 2128044,
+      "destination": "thesis/evidence/sealed-cohorts-v1215/desktop-gpu-padded-http900-v692/NATIVE-STAGE-CASE-HISTORY.json",
+      "sha256": "cc4aead5d0650ee8ae667e509b72bf01d6adbdf80de962cb47a1311ecb601158",
+      "source": "docs/experiments/tcc-20261013-submission-20261030/root/desktop-gpu-padded-http900-v692/NATIVE-STAGE-CASE-HISTORY.json",
+      "state": "VERIFIED_REPO_COPY"
+    },
+    {
+      "bytes": 5579,
+      "destination": "thesis/evidence/sealed-cohorts-v1215/desktop-gpu-padded-http900-v692/REPORT.md",
+      "sha256": "625d6d6e0a7a719ebbbea5e869d2e89ac14770b3169ef25cfed663703f1fa465",
+      "source": "docs/experiments/tcc-20261013-submission-20261030/root/desktop-gpu-padded-http900-v692/REPORT.md",
+      "state": "VERIFIED_REPO_COPY"
+    },
+    {
+      "bytes": 3325,
+      "destination": "thesis/evidence/sealed-cohorts-v1215/desktop-gpu-padded-http900-v692/WORKER-CUSTODY-RECEIPT.json",
+      "sha256": "8e84508e312c464d08def00a44d102da1665bd4c3fd8d7bb345818d4da8b628f",
+      "source": "docs/experiments/tcc-20261013-submission-20261030/root/desktop-gpu-padded-http900-v692/WORKER-CUSTODY-RECEIPT.json",
+      "state": "VERIFIED_REPO_COPY"
+    },
+    {
+      "bytes": 12033,
+      "destination": "thesis/evidence/sealed-cohorts-v1215/desktop-gpu-padded-http900-v692/audit-verification.json",
+      "sha256": "9658f29dfc939083445a98f26d222df3b622ac0cba5cc8396d5c22a09a342a6a",
+      "source": "docs/experiments/tcc-20261013-submission-20261030/root/desktop-gpu-padded-http900-v692/audit-verification.json",
+      "state": "VERIFIED_REPO_COPY"
+    },
+    {
+      "archive": {
+        "attemptJsonlMembers": 915,
+        "audioMembers": 916,
+        "members": 1857,
+        "method": "Verified whole ZIP bytes/checksum; central-directory count only; prior outcome audits retained; no repeated per-audio decoding"
+      },
+      "bytes": 34691761,
+      "destination": "thesis/evidence/sealed-cohorts-v1215/desktop-gpu-padded-http900-v692/aurora-desktop-gpu-padded-http900-v692.zip",
+      "sha256": "7f1438bd700d5a794a879f5a38d7293275acf4d827289a50c6c49e01dc1a1870",
+      "source": "docs/experiments/tcc-20261013-submission-20261030/root/desktop-gpu-padded-http900-v692/aurora-desktop-gpu-padded-http900-v692.zip",
+      "state": "VERIFIED_REPO_COPY"
+    },
+    {
+      "bytes": 961770,
+      "destination": "thesis/evidence/sealed-cohorts-v1215/desktop-gpu-padded-http900-v692/native-span-durations-v733.csv",
+      "sha256": "746c192f9eb35ef88d3c8ab6dca39896ad48e51b46e766d4b48d28835b057aef",
+      "source": "docs/experiments/tcc-20261013-submission-20261030/root/desktop-gpu-padded-http900-v692/native-span-durations-v733.csv",
+      "state": "VERIFIED_REPO_COPY"
+    },
+    {
+      "bytes": 12399,
+      "destination": "thesis/evidence/sealed-cohorts-v1215/desktop-gpu-padded-http900-v692/verification.json",
+      "sha256": "199ee53e338185d2e4222b98e88816beee5575cdfdaf9a49499198ce14d36ac2",
+      "source": "docs/experiments/tcc-20261013-submission-20261030/root/desktop-gpu-padded-http900-v692/verification.json",
+      "state": "VERIFIED_REPO_COPY"
+    },
+    {
+      "bytes": 4386,
+      "destination": "thesis/evidence/sealed-cohorts-v1215/browser-normal-ui-padded900-v799/AUDIT.json",
+      "sha256": "f438f9381dc49d3ba2fe014b64d5906bf88a00e4c948e37b4e43cb0d13356730",
+      "source": "docs/experiments/tcc-20261013-submission-20261030/root/browser-normal-ui-padded900-v799/AUDIT.json",
+      "state": "VERIFIED_REPO_COPY"
+    },
+    {
+      "bytes": 5573,
+      "destination": "thesis/evidence/sealed-cohorts-v1215/browser-normal-ui-padded900-v799/FINALIZATION-CONTROL-RECEIPT.json",
+      "sha256": "879e4da96cfe1cfbdf635c0b595898db034e85b373b2ce9d35d0d820de38116b",
+      "source": "docs/experiments/tcc-20261013-submission-20261030/root/browser-normal-ui-padded900-v799/FINALIZATION-CONTROL-RECEIPT.json",
+      "state": "VERIFIED_REPO_COPY"
+    },
+    {
+      "bytes": 5553,
+      "destination": "thesis/evidence/sealed-cohorts-v1215/browser-normal-ui-padded900-v799/FORMAT-DIAGNOSIS.json",
+      "sha256": "45f2df1a78cd523c3755c3d8d64ea614609e3aadb53ebd97bd6b0244024a1319",
+      "source": "docs/experiments/tcc-20261013-submission-20261030/root/browser-normal-ui-padded900-v799/FORMAT-DIAGNOSIS.json",
+      "state": "VERIFIED_REPO_COPY"
+    },
+    {
+      "bytes": 4096,
+      "destination": "thesis/evidence/sealed-cohorts-v1215/browser-normal-ui-padded900-v799/REPORT.md",
+      "sha256": "51d507bafa45abbdcef9505bb410508880c7013482f0e766d410dc1eec4158d5",
+      "source": "docs/experiments/tcc-20261013-submission-20261030/root/browser-normal-ui-padded900-v799/REPORT.md",
+      "state": "VERIFIED_REPO_COPY"
+    },
+    {
+      "bytes": 499,
+      "destination": "thesis/evidence/sealed-cohorts-v1215/browser-normal-ui-padded900-v799/REVIEW-CUSTODY-v952.json",
+      "sha256": "d1571c34aa090de57cbf4817d2162d231a3702ac931105919d153181b41e845f",
+      "source": "docs/experiments/tcc-20261013-submission-20261030/root/browser-normal-ui-padded900-v799/REVIEW-CUSTODY-v952.json",
+      "state": "VERIFIED_REPO_COPY"
+    },
+    {
+      "bytes": 4646,
+      "destination": "thesis/evidence/sealed-cohorts-v1215/browser-normal-ui-padded900-v799/SOL-REVIEW-v949.md",
+      "sha256": "00ab2ad1758916ed726e1b8b73e836f9b3737da58ce3d9d92b6beb666c5ce5a0",
+      "source": "docs/experiments/tcc-20261013-submission-20261030/root/browser-normal-ui-padded900-v799/SOL-REVIEW-v949.md",
+      "state": "VERIFIED_REPO_COPY"
+    },
+    {
+      "bytes": 2283,
+      "destination": "thesis/evidence/sealed-cohorts-v1215/native-desktop-sdk-audio900-v1068/COHORT-ADMISSION.json",
+      "sha256": "5b6f01b575ac344c370666fa69c337be3bdfd6cbf7b9d833d0778396bb10f020",
+      "source": "docs/experiments/tcc-20261013-submission-20261030/root/native-desktop-sdk-audio900-v1068/COHORT-ADMISSION.json",
+      "state": "VERIFIED_REPO_COPY"
+    },
+    {
+      "bytes": 1353,
+      "destination": "thesis/evidence/sealed-cohorts-v1215/native-desktop-sdk-audio900-v1068/CUSTODY-v1071.json",
+      "sha256": "2ba357fae1dd0d20680d66a7afbe80e5e2d7d4fd4989db1d3f8cfe256511aae2",
+      "source": "docs/experiments/tcc-20261013-submission-20261030/root/native-desktop-sdk-audio900-v1068/CUSTODY-v1071.json",
+      "state": "VERIFIED_REPO_COPY"
+    },
+    {
+      "bytes": 444,
+      "destination": "thesis/evidence/sealed-cohorts-v1215/native-desktop-sdk-audio900-v1068/CUSTODY-v1075.json",
+      "sha256": "027e6b96e27bf82598b77aeb95d2f27fc59ad7af1de55d93de5c7f611617b078",
+      "source": "docs/experiments/tcc-20261013-submission-20261030/root/native-desktop-sdk-audio900-v1068/CUSTODY-v1075.json",
+      "state": "VERIFIED_REPO_COPY"
+    },
+    {
+      "bytes": 447,
+      "destination": "thesis/evidence/sealed-cohorts-v1215/native-desktop-sdk-audio900-v1068/CUSTODY-v1079.json",
+      "sha256": "3f48146f917b1b966f5eb545423be40ac87f2b6443ad4b96520201d7dbd035f3",
+      "source": "docs/experiments/tcc-20261013-submission-20261030/root/native-desktop-sdk-audio900-v1068/CUSTODY-v1079.json",
+      "state": "VERIFIED_REPO_COPY"
+    },
+    {
+      "bytes": 437,
+      "destination": "thesis/evidence/sealed-cohorts-v1215/native-desktop-sdk-audio900-v1068/CUSTODY-v1083.json",
+      "sha256": "fc95c3ba989442cd590a7a6a043fb635089a7671d0041034c405cb46d1082d76",
+      "source": "docs/experiments/tcc-20261013-submission-20261030/root/native-desktop-sdk-audio900-v1068/CUSTODY-v1083.json",
+      "state": "VERIFIED_REPO_COPY"
+    },
+    {
+      "bytes": 437,
+      "destination": "thesis/evidence/sealed-cohorts-v1215/native-desktop-sdk-audio900-v1068/CUSTODY-v1085.json",
+      "sha256": "ff917c3411bbd9958013270386ce911acafc760c6b9111f8e199a87784c0bf6d",
+      "source": "docs/experiments/tcc-20261013-submission-20261030/root/native-desktop-sdk-audio900-v1068/CUSTODY-v1085.json",
+      "state": "VERIFIED_REPO_COPY"
+    },
+    {
+      "bytes": 5762,
+      "destination": "thesis/evidence/sealed-cohorts-v1215/native-desktop-sdk-audio900-v1068/FROZEN-MANIFEST.json",
+      "sha256": "88dabaffe8d5a9622753a7441a366ba0abf913fbd5d64282801170f4eaaa7cda",
+      "source": "docs/experiments/tcc-20261013-submission-20261030/root/native-desktop-sdk-audio900-v1068/FROZEN-MANIFEST.json",
+      "state": "VERIFIED_REPO_COPY"
+    },
+    {
+      "bytes": 762,
+      "destination": "thesis/evidence/sealed-cohorts-v1215/native-desktop-sdk-audio900-v1068/LAUNCH.json",
+      "sha256": "c6056215d81cca6d85973b41fe662dbaa8314c7abe9807d69eb807141ddb0ae0",
+      "source": "docs/experiments/tcc-20261013-submission-20261030/root/native-desktop-sdk-audio900-v1068/LAUNCH.json",
+      "state": "VERIFIED_REPO_COPY"
+    },
+    {
+      "bytes": 3169,
+      "destination": "thesis/evidence/sealed-cohorts-v1215/native-desktop-sdk-audio900-v1068/RECOVERY-20261017.md",
+      "sha256": "e281aaea8ccc831e8ed2d506d0e700a649646d23f692f9c1c46d1a655e132826",
+      "source": "docs/experiments/tcc-20261013-submission-20261030/root/native-desktop-sdk-audio900-v1068/RECOVERY-20261017.md",
+      "state": "VERIFIED_REPO_COPY"
+    },
+    {
+      "bytes": 515,
+      "destination": "thesis/evidence/sealed-cohorts-v1215/native-desktop-sdk-audio900-v1068/RECOVERY-FIRST-READ-v1105.json",
+      "sha256": "d76c25c3cfa25d94a453438c1777bffc78b4caa5c3b42c3f633dcea62c81f1af",
+      "source": "docs/experiments/tcc-20261013-submission-20261030/root/native-desktop-sdk-audio900-v1068/RECOVERY-FIRST-READ-v1105.json",
+      "state": "VERIFIED_REPO_COPY"
+    },
+    {
+      "bytes": 4029,
+      "destination": "thesis/evidence/sealed-cohorts-v1215/native-desktop-sdk-audio900-v1068/RECOVERY-RETIREMENT-AND-LOCATE-v1106.json",
+      "sha256": "6c195879e8b41f9d8f99787248185426245fcb3599720d5f5294d61703b7d1f7",
+      "source": "docs/experiments/tcc-20261013-submission-20261030/root/native-desktop-sdk-audio900-v1068/RECOVERY-RETIREMENT-AND-LOCATE-v1106.json",
+      "state": "VERIFIED_REPO_COPY"
+    },
+    {
+      "bytes": 2191,
+      "destination": "thesis/evidence/sealed-cohorts-v1215/native-desktop-sdk-audio900-v1068/RECOVERY-STATE-v1110.json",
+      "sha256": "4bfe71bae83fb47230809a5247e57341870a31b8da3d1ac630baa5789bd03016",
+      "source": "docs/experiments/tcc-20261013-submission-20261030/root/native-desktop-sdk-audio900-v1068/RECOVERY-STATE-v1110.json",
+      "state": "VERIFIED_REPO_COPY"
+    },
+    {
+      "bytes": 4277,
+      "destination": "thesis/evidence/sealed-cohorts-v1215/native-desktop-sdk-audio900-v1068/REPORT.md",
+      "sha256": "c8966fd911473962630be5954d2f142b15e2a1e69d9dd0d59cb9d9597537b2c0",
+      "source": "docs/experiments/tcc-20261013-submission-20261030/root/native-desktop-sdk-audio900-v1068/REPORT.md",
+      "state": "VERIFIED_REPO_COPY"
+    },
+    {
+      "bytes": 1362,
+      "destination": "thesis/evidence/sealed-cohorts-v1215/native-desktop-sdk-audio900-v1068/RUNNING-v1070.json",
+      "sha256": "6645c0a564714763e6cb8ef642e84580d5a6a21e3020976f90c9bb71d85836f0",
+      "source": "docs/experiments/tcc-20261013-submission-20261030/root/native-desktop-sdk-audio900-v1068/RUNNING-v1070.json",
+      "state": "VERIFIED_REPO_COPY"
+    },
+    {
+      "bytes": 12807,
+      "destination": "thesis/evidence/sealed-cohorts-v1215/native-desktop-sdk-audio900-v1068/RUNNING-v1075.json",
+      "sha256": "87ed6b5552190d1798ca9ac40a7a076eab084472804aceabd1623c5e915484d8",
+      "source": "docs/experiments/tcc-20261013-submission-20261030/root/native-desktop-sdk-audio900-v1068/RUNNING-v1075.json",
+      "state": "VERIFIED_REPO_COPY"
+    },
+    {
+      "bytes": 12796,
+      "destination": "thesis/evidence/sealed-cohorts-v1215/native-desktop-sdk-audio900-v1068/RUNNING-v1079.json",
+      "sha256": "02a34f1d30b8842bc083f77a7115eeb8dd886cb545d731ea324aa898482e3a38",
+      "source": "docs/experiments/tcc-20261013-submission-20261030/root/native-desktop-sdk-audio900-v1068/RUNNING-v1079.json",
+      "state": "VERIFIED_REPO_COPY"
+    },
+    {
+      "bytes": 12796,
+      "destination": "thesis/evidence/sealed-cohorts-v1215/native-desktop-sdk-audio900-v1068/RUNNING-v1083.json",
+      "sha256": "06289d640eb220aba0bcae690e35cf9e9d2ce594ba11cf7f6bada392190f437f",
+      "source": "docs/experiments/tcc-20261013-submission-20261030/root/native-desktop-sdk-audio900-v1068/RUNNING-v1083.json",
+      "state": "VERIFIED_REPO_COPY"
+    },
+    {
+      "bytes": 12809,
+      "destination": "thesis/evidence/sealed-cohorts-v1215/native-desktop-sdk-audio900-v1068/RUNNING-v1085.json",
+      "sha256": "6bde86ff7f20e56e3efb4234f00d98f806d5d26f5c38083b3e066d677d471d9d",
+      "source": "docs/experiments/tcc-20261013-submission-20261030/root/native-desktop-sdk-audio900-v1068/RUNNING-v1085.json",
+      "state": "VERIFIED_REPO_COPY"
+    },
+    {
+      "bytes": 2409,
+      "destination": "thesis/evidence/sealed-cohorts-v1215/native-desktop-sdk-audio900-v1068/SOURCE-REVIEW.md",
+      "sha256": "0cbdd95e345de40226c4fa13debd19cc7dc8537d96b04c62e12a9321351784cc",
+      "source": "docs/experiments/tcc-20261013-submission-20261030/root/native-desktop-sdk-audio900-v1068/SOURCE-REVIEW.md",
+      "state": "VERIFIED_REPO_COPY"
+    },
+    {
+      "bytes": 1086,
+      "destination": "thesis/evidence/sealed-cohorts-v1215/native-desktop-sdk-audio900-v1068/WARMUP-GATE.json",
+      "sha256": "2a86670efeb822ab89b8031b15f29e0f7fb7688df03fb3e303961dfb8fa42e12",
+      "source": "docs/experiments/tcc-20261013-submission-20261030/root/native-desktop-sdk-audio900-v1068/WARMUP-GATE.json",
+      "state": "VERIFIED_REPO_COPY"
+    },
+    {
+      "bytes": 65197,
+      "destination": "thesis/evidence/sealed-cohorts-v1215/native-desktop-sdk-audio900-v1068/controller-frozen-v1067.py",
+      "sha256": "5b0d4d58e53aa06d712f54782391872a8a403f81ed7108d51c21afb19d5b292c",
+      "source": "docs/experiments/tcc-20261013-submission-20261030/root/native-desktop-sdk-audio900-v1068/controller-frozen-v1067.py",
+      "state": "VERIFIED_REPO_COPY"
+    },
+    {
+      "bytes": 1555,
+      "destination": "thesis/evidence/sealed-cohorts-v1215/monitor/STORAGE-RULE-AND-RECOVERY-CHECKLIST-20261017T2016.json",
+      "sha256": "47395e1b8c0d04caff8580e870d35b6a1a7c45da9e55a1fa19e87740b2e021e3",
+      "source": ".omx/evidence/orca-monitor-20261010/STORAGE-RULE-AND-RECOVERY-CHECKLIST-20261017T2016.json"
+    },
+    {
+      "bytes": 13257,
+      "destination": "thesis/evidence/sealed-cohorts-v1215/monitor/KNOWN-REPO-CUSTODY-AUDIT-20261017T2021.json",
+      "sha256": "8df2156d4081a2ee99d70623d7db3e194655a793385470c5a8f94367a2a07754",
+      "source": ".omx/evidence/orca-monitor-20261010/KNOWN-REPO-CUSTODY-AUDIT-20261017T2021.json"
+    }
+  ],
+  "reservedFreeBytes": 2147483648,
+  "startedAt": "2026-10-17T20:28:27.128963+00:00",
+  "sutCalls": 0
+}

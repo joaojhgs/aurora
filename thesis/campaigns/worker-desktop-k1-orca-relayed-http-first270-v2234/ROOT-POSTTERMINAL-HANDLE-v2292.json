@@ -1,0 +1,36 @@
+{
+  "at": "2026-10-21T20:51:22.113334+00:00",
+  "toolSessionId": 75141,
+  "intent": "ROOT-POSTTERMINAL-INTENT-v2292.json",
+  "observedActors": [
+    {
+      "pid": 3929022,
+      "parentPid": 3929020,
+      "state": "S",
+      "startTicks": 139427653,
+      "scripts": [
+        "finish_k1_http_epoch_v2254.py"
+      ]
+    },
+    {
+      "pid": 3929126,
+      "parentPid": 3929022,
+      "state": "S",
+      "startTicks": 139428653,
+      "scripts": [
+        "transfer_k1_http_provider_prefix_v2253.py"
+      ]
+    },
+    {
+      "pid": 3930669,
+      "parentPid": 3929126,
+      "state": "S",
+      "startTicks": 139434097,
+      "scripts": [
+        "orca_copy_control_raw_read_v1652.py"
+      ]
+    }
+  ],
+  "maximumPipelineLaunches": 1,
+  "onPollTimeout": "Continue polling tool session75141 and existing PHASE/receipts; do not restart."
+}

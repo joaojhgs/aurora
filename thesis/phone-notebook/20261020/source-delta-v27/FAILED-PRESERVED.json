@@ -1,0 +1,1 @@
+{"status":"FAILED_PRESERVED","reason":"First packaging did not strip the archive root prefix; final seen-path assertion failed; no source copied","supersededBy":"source-delta-v28/DELTA-MANIFEST.json"}

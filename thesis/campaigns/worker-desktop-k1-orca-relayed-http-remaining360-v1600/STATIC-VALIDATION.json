@@ -1,0 +1,41 @@
+{
+  "at": "2026-10-18T18:21:57.048474+00:00",
+  "status": "SOURCE_COMPILED_STATIC_BOUNDARY_CHECKS_PASSED_NOT_RUNTIME_ACCEPTANCE",
+  "compiledPythonFiles": 9,
+  "checks": {
+    "_cpu_warmup_gate": true,
+    "_remote_tts_warmup_gate": true,
+    "_bindings": true,
+    "_r7": true,
+    "_normal_words": true,
+    "_active_config_semantics": true,
+    "_changed_config_paths": true,
+    "tts_exchange_unchanged_except_failure_metadata": true,
+    "diagnostic_helper_identical_to_reviewed_V1590": true
+  },
+  "scientificFieldsCompared": [
+    "audio",
+    "models",
+    "effectiveSetup",
+    "effectiveEnvironment",
+    "sourceClosure",
+    "runtime",
+    "runtimeVersions",
+    "workerHardware",
+    "remoteTtsEndpointSha256",
+    "remoteTtsAuthBinding"
+  ],
+  "scientificFieldsSha256": "87778af6b9b84f3098182c8a07c8ee78aaa70ca1e98fc3a4a562fcfa8e3f1e33",
+  "configReconciliation": "Parent before2b8 -> actualduring211f changed only localtoken; exact existing private211f config reference retained, no credential copy/hash/export",
+  "localModelLoads": 0,
+  "networkRequests": 0,
+  "testOrBenchmarkCampaigns": 0,
+  "newMeasurements": 0,
+  "unpopulatedProviderFields": [
+    "remoteTtsReceiver",
+    "providerManifestSha256",
+    "providerDeadlineUtc",
+    "freshResources"
+  ],
+  "doesNotClaim": "New provider reservation, source/model readiness, health, new warmups, actual launch or measured acceptance"
+}

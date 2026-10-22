@@ -1,0 +1,17 @@
+{
+  "at": "2026-10-20T21:04:37.353595+00:00",
+  "observedCommand": "python3 thesis/harness/start_k3_requester_auxiliaries_v1917.py",
+  "failedAction": "draft",
+  "exitCode": 1,
+  "assertion": "config['services']['orchestrator']['enabled'] is False and config['services']['tts']['enabled'] is False",
+  "actualInheritedFlags": {
+    "orchestrator": true,
+    "tts": true
+  },
+  "OPentries": [],
+  "Dentries": [],
+  "CELLexists": false,
+  "requesterLaunchAttempted": false,
+  "audioRequests": 0,
+  "correction": "Explicitly disable all requester inference services in the new, not-yet-frozen K3 config; resume only exact empty unlaunched draft with same staged hashes. Preserve this failure and old K2 config."
+}

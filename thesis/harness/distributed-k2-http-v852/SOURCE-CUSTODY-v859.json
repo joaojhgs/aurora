@@ -1,0 +1,80 @@
+{
+  "at": "2026-10-16T04:13:50.499873+00:00",
+  "source": "/home/developer/projects/aurora/.git/aurora-handoff-import-20261006/distributed-k2-integrated-prep-v852",
+  "scope": "Exact inert coherent source custody; independent source APPROVE, not runtime/route/model/native acceptance",
+  "files": [
+    {
+      "path": "README.md",
+      "bytes": 5049,
+      "sha256": "b54e4885f8a9200fb118716f62ff65fa08f1be074848941f81768b9ce6f554e1"
+    },
+    {
+      "path": "REPORT.md",
+      "bytes": 2114,
+      "sha256": "623072d75f7aba873e9491eb737692f0a73d15a15fd6860dc3f570ef15dcf3de"
+    },
+    {
+      "path": "aurora_voice_telemetry_v430.py",
+      "bytes": 11584,
+      "sha256": "8129ffe7591a47a0107ede53b101aead9fc1f58b92f0c0c4203176cc7608325d"
+    },
+    {
+      "path": "bindings.py",
+      "bytes": 3230,
+      "sha256": "52182f956b34788ecbfbbb241c8243ff88baebe2874e3605791793777ed0dc91"
+    },
+    {
+      "path": "bootstrap.py",
+      "bytes": 1950,
+      "sha256": "6a8d7827bc9f0939e63e4f911868a178f5ba4c73bcf3aa878d50cd74895ed531"
+    },
+    {
+      "path": "candidate-manifest.json",
+      "bytes": 220,
+      "sha256": "ce75b965ee5879ebece6ea7dfe133441547d20ccf89ecd5d66ea510bd9645e60"
+    },
+    {
+      "path": "controller.py",
+      "bytes": 16504,
+      "sha256": "809bec19682eb717f016d2b9f62453b38945201c561f7d4f4ac72e242024050e"
+    },
+    {
+      "path": "k2_composition.py",
+      "bytes": 14287,
+      "sha256": "08be1fa730d6e49ccf4bd491539b4b8edb5b3476eb7f8f7db9656db5e7b3a053"
+    },
+    {
+      "path": "observer.py",
+      "bytes": 11873,
+      "sha256": "784cc4bffc0d6824bbe378d17a7f632d587ca0a315896b048b2ebef727082df5"
+    },
+    {
+      "path": "receiver_proof.py",
+      "bytes": 13549,
+      "sha256": "06c1bb4aeae3ba8f2de7441bd09ccfc39d426615defd5b8a38b807117df4d791"
+    },
+    {
+      "path": "resource_sample.py",
+      "bytes": 7475,
+      "sha256": "8f62ec378e74036d4539d9159e3caf29b8fd7a9115de1ab0f482dfd58b6e1857"
+    },
+    {
+      "path": "runner.py",
+      "bytes": 59239,
+      "sha256": "1f869903b4a2c5167707891bd1d32294329c5673b7386c60b4f13400c4efba06"
+    },
+    {
+      "path": "source-inventory.json",
+      "bytes": 58216,
+      "sha256": "96ec8e3e14233520d4cd469c4177264a193d05cf26b4b512d91d98f16bbb7dee"
+    },
+    {
+      "path": "stage_adapter.py",
+      "bytes": 8801,
+      "sha256": "204ea4d6b48571ab7ba0add0310a3dadd87b5e1e2afdc172634185755c9bb02c"
+    }
+  ],
+  "reviewSHA256": "b1f4c531281240e08ff1f55541d59af3bc9d0c03299916b489875eae2f514faf",
+  "measurementsLaunched": 0,
+  "remaining": "Root actual source/model/config/endpoint/auth/receiver/resource admission and ordinary15warmup native joins before900."
+}

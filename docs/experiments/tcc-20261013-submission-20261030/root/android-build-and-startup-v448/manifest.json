@@ -1,0 +1,38 @@
+{
+  "createdAt": "2026-10-14T23:25:27.450306+00:00",
+  "projection": "non-sensitive observed build/startup and asset-admission facts; private originals retained",
+  "files": {
+    "app-case-history.json": {
+      "bytes": 2246,
+      "sha256": "4f29b5bc43943797cee6ce2660279a85c545f32d58788ebe384ae99931415a98"
+    },
+    "blank-startup.png": {
+      "bytes": 8245,
+      "sha256": "a6b821d79535ded5d93a2ca6aec30fe27fa6be35970668316d3890562d9df41d"
+    },
+    "artifact.json": {
+      "bytes": 2586,
+      "sha256": "77e079770dbf6918197f4f6fd093e3b8e7655b305c2b762adccf6835f0cbb628"
+    },
+    "next-desktop-asset-admission.json": {
+      "bytes": 1935,
+      "sha256": "f3a1f213d9b571bbbecb71652e335e3c7207797897acc34ab8a44f946dddf668"
+    },
+    "startup-selected-primary.log": {
+      "bytes": 683,
+      "sha256": "ee3f5ecc988fef7ae04482f91eed034e086d8117a9f97b65d376e80675ba1e4f"
+    },
+    "build-case-history.json": {
+      "bytes": 1702,
+      "sha256": "73915eeda7831c910537e099f6a31c251235968b1066244af343555974625967"
+    },
+    "startup-observations.json": {
+      "bytes": 1936,
+      "sha256": "0783c4b026d63514a2000ab6b52a5d02ebebeb4184dc5cf6ab40f5678a03282d"
+    },
+    "README.md": {
+      "bytes": 2610,
+      "sha256": "1726eb68bd50bc2bc61ef570d20fe5edfa882f514dc0e86b2b7ed49c34a67eb6"
+    }
+  }
+}

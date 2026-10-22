@@ -1,0 +1,367 @@
+{
+  "schema": "aurora.thesis.custody-index.v749",
+  "at": "2026-10-15T23:23:30.038089+00:00",
+  "completeInventory": false,
+  "pathsRelativeTo": "existing Aurora repository root unless explicitly absolute/external host",
+  "scope": "Previousfour sealed900 records unchanged plus one independently archived partial and explicit active-segment pointers; metadata index only, no new ZIP audit or archive duplication.",
+  "largeArchivesDuplicated": false,
+  "doNotPool": "Old original-audio, changed padded-audio, CPU/GPU/platform/build/mode cohorts remain separate; do not reconstruct incompatible combined p90/p95.",
+  "records": [
+    {
+      "condition": "desktop-gpu-full-audio-local900-v485",
+      "scope": "original input; historical desktop LocalBus",
+      "custodyOrVerificationReceipt": "docs/experiments/tcc-20261013-submission-20261030/root/desktop-gpu-full-audio-local900-v485/EVIDENCE-LOCATION.json",
+      "receiptBytes": 2016,
+      "receiptSHA256": "3ae3e69f24f7dcd9bda88687b11266cc98c9d3732691eb3c350550d4bba92744",
+      "retainedReceiptMetadata": {
+        "status": "Current bounded check",
+        "host": "personal.skyron-server",
+        "executionHost": "ssh:ssh-1786238480967-semdev",
+        "existingTerminal": "term_2e93af9c-1589-414b-8f92-17649f3c8069",
+        "archive": {
+          "archivePath": "/home/developer/projects/aurora/docs/experiments/tcc-20261013-submission-20261030/root/desktop-gpu-full-audio-local900-v485/aurora-desktop-gpu-full-audio-local900-v485.zip",
+          "bytes": 32688561,
+          "createdAt": "2026-10-15T06:44:20.822009+00:00",
+          "fileCount": 1870,
+          "manifestSHA256": "692c497da33ffa4e329cbddc1cd6116bc9aaebcd54ce071c0bf0ad1038bc56be",
+          "omissions": [
+            {
+              "path": "frozen/harnessFiles/controller.py",
+              "reason": "V481 controller contains fixture literals; retained only as frozen path/size/SHA metadata"
+            },
+            {
+              "path": "campaign-v485/controller.py",
+              "reason": "V485 controller embeds private fixture literals; runtime/launch.json newHarnessSHA256 verified it, so only path/size/SHA are retained"
+            },
+            {
+              "path": "campaign-v485/runtime/absent.env",
+              "reason": "config or environment file excluded by policy"
+            },
+            {
+              "path": "campaign-v485/runtime/backend.private.log",
+              "reason": "raw backend log excluded by policy"
+            },
+            {
+              "path": "campaign-v485/runtime/config.json",
+              "reason": "config or environment file excluded by policy"
+            }
+          ],
+          "privateFixtureScanPassed": true,
+          "scope": "private post-terminal seal; includes failed/partial outcomes without changing raw records",
+          "sha256": "93c3afe2161b031d00b0be53ee9a76c8267369e9fa89d9cbe98cad67eee7d6dc"
+        },
+        "archivePresentInCodingWorker": false,
+        "exactVerificationReportPresentInCodingWorker": true,
+        "reportSHA256": "8b649a34aee6d347c16ea6e6a6a4310babb2d91b0cbf868dc46cddc47c13ae6c",
+        "sourceCollector": "V52048203304",
+        "boundedEvidenceReviewSHA256": "1b078318af816c626d7a51be4a9697835015f8d2783af1988b0449b5e67885fa",
+        "noIndependentReviewerZipAuditClaim": true
+      },
+      "indexingReauditedArchive": false
+    },
+    {
+      "condition": "desktop-gpu-full-audio-http900-v497",
+      "scope": "original input; historical desktop loopback HTTP",
+      "custodyOrVerificationReceipt": "docs/experiments/tcc-20261013-submission-20261030/root/desktop-gpu-full-audio-http900-v497/EVIDENCE-LOCATION.json",
+      "receiptBytes": 1074,
+      "receiptSHA256": "f407c25093444ad547eb422cd02f59bc218e5b20cae7e0179ebd454a644ae06e",
+      "retainedReceiptMetadata": {
+        "host": "personal.skyron-server",
+        "approvedRoute": "original Orca personal desktop terminal term_2e93af9c-1589-414b-8f92-17649f3c8069",
+        "remoteArchivePath": "/home/developer/projects/aurora/docs/experiments/tcc-20261013-submission-20261030/root/desktop-gpu-full-audio-http900-v497/aurora-desktop-gpu-full-audio-http900-v497.zip",
+        "archiveBytes": 35127102,
+        "archiveSHA256": "c0679cba9c544d029b5df45d5cb0a76a3b4045ffb2b23137df656a78c19b53cd",
+        "archiveManifestSHA256": "651260895cf864d92764bcd32852fea38622a1f6aa8c49a66afbb944d0b46725",
+        "localRawArchiveCopyExists": false,
+        "localReportPath": "docs/experiments/tcc-20261013-submission-20261030/root/desktop-gpu-full-audio-http900-v497/verification-v563.json",
+        "localReportSHA256": "f425c39771768ff16a20b90be9cffe43a076dcce4d768f7eba93a213b9dd0e9f",
+        "independentReviewPath": ".git/aurora-handoff-import-20261006/http-audio-seal-verify-v563/EVIDENCE-REVIEW.md",
+        "independentReviewScope": "local saved report and receipt consistency; not independent remote raw-ZIP audit",
+        "copiedReportByteExact": true
+      },
+      "indexingReauditedArchive": false
+    },
+    {
+      "condition": "worker-cpu-full-audio-local900-v491",
+      "scope": "original input; retained extraCPU, local raw ZIP linked by REPORT.md",
+      "custodyOrVerificationReceipt": "docs/experiments/tcc-20261013-submission-20261030/root/worker-cpu-full-audio-local900-v491/verification-v652.json",
+      "receiptBytes": 5082,
+      "receiptSHA256": "ec94a94cfe8e7ee4de65a59cfe7990fd02eac94c33c91370c17d5da7ffb77478",
+      "retainedReceiptMetadata": {
+        "archive": {
+          "bytes": 33027484,
+          "manifestSHA256": "cfcec63729d52a8c59a03efdae52a1ea7cee8bdb9403e662dcac8295f8ea9165",
+          "membersIncludingManifest": 1865,
+          "payloadMembers": 1864,
+          "sha256": "83b9084a09abfe641968b2958e210ed589dbcd655f0a9a26c18f2bc4dd80d897"
+        },
+        "attempts": {
+          "correct": 900,
+          "failedOrInterrupted": 0,
+          "incorrect": 0,
+          "measured": 900,
+          "timeouts": 0,
+          "total": 915,
+          "warmupsExcluded": 15
+        },
+        "audio": {
+          "inputBytes": 153644,
+          "inputSHA256": "139fa0c34b6d18600ad9608fd2d11c9389cae2f5f548ce0f4f23b735b176f0b3",
+          "verifiedOutputReferences": 915,
+          "wavDecodingRepeated": false
+        },
+        "cohortId": "aurora-full-audio-capital-v1-worker-cpu-local-20261015",
+        "collectorOmissions": [
+          {
+            "bytes": 14163,
+            "path": "harness/controller.py",
+            "reason": "fixture-bearing controller source withheld",
+            "sha256": "e726ed7a67ba3cf0d456e7ceff094495ef2f79b514ecc04cdb687b4db6e6dc2b",
+            "sourcePath": "/home/developer/projects/aurora/.git/aurora-handoff-import-20261006/cpu-full-audio-v490/controller.py"
+          },
+          {
+            "bytes": 15338,
+            "path": "campaign-harness-v491/controller.py",
+            "reason": "actual V491 controller contains fixture literals; withheld",
+            "sha256": "d2d4b6bb288edda83e519df92f317e31c826fba1a9cc9ae17b191917ce5d1eb6",
+            "sourcePath": "/home/developer/projects/aurora/.git/aurora-handoff-import-20261006/cpu-audio-campaign-v491/controller.py"
+          },
+          {
+            "bytes": 15940,
+            "path": "runtime/config.json",
+            "reason": "credential-bearing runtime configuration withheld",
+            "sha256": "e4ad73fa5569a311369e4352556ddffee9bfb9d123c252ec2060a2b0bc89632d",
+            "sourcePath": "/home/developer/projects/aurora/.git/aurora-handoff-import-20261006/cpu-audio-campaign-v491/runtime/config.json"
+          },
+          {
+            "bytes": 1257562,
+            "path": "runtime/backend.private.log",
+            "reason": "raw backend log withheld",
+            "sha256": "70666c2cbdb6398eee3030ae991b9efdde75003fbab703836f7711bfd1174c8e",
+            "sourcePath": "/home/developer/projects/aurora/.git/aurora-handoff-import-20261006/cpu-audio-campaign-v491/runtime/backend.private.log"
+          },
+          {
+            "bytes": 188,
+            "path": "runtime/absent.env",
+            "reason": "controller environment path omitted",
+            "sha256": "5d25c8c5fa9f4b18a35e1e5c1bc18f6c49b5295caa9468f0a88228bd309d3840",
+            "sourcePath": "/home/developer/projects/aurora/.git/aurora-handoff-import-20261006/cpu-audio-campaign-v491/runtime/absent.env"
+          },
+          {
+            "bytes": 2055,
+            "path": "runtime/config.json.mesh-policy-rbac.json",
+            "reason": "private policy sidecar withheld",
+            "sha256": "852b252260009a3c00452293c7911cbc3b0d83385d0f1b59b13f33ec9844fb39",
+            "sourcePath": "/home/developer/projects/aurora/.git/aurora-handoff-import-20261006/cpu-audio-campaign-v491/runtime/config.json.mesh-policy-rbac.json"
+          },
+          {
+            "bytes": 303,
+            "path": "controller.private.log",
+            "reason": "raw controller log withheld",
+            "sha256": "678e9b294903fd20569d2118f96bf47ab548d586049e3fe31afd5794b106dc30",
+            "sourcePath": "/home/developer/projects/aurora/.git/aurora-handoff-import-20261006/cpu-audio-campaign-v491/controller.private.log"
+          },
+          {
+            "bytes": 926,
+            "path": "controller-launch.json",
+            "reason": "private launch environment receipt withheld",
+            "sha256": "2a6370e25a8dc5e220b450569a25e13b6c1847c6e177f4fb9652baa8fc63550a",
+            "sourcePath": "/home/developer/projects/aurora/.git/aurora-handoff-import-20261006/cpu-audio-campaign-v491/controller-launch.json"
+          }
+        ],
+        "frozenSourceAliases": [],
+        "incorrectOutcomes": {
+          "falseCheckCounts": {},
+          "responseGroups": []
+        },
+        "latencyMs": {
+          "measuredAllIncludingIncorrect": {
+            "denominator": 900,
+            "type7": {
+              "p90": 49936.7875221,
+              "p95": 52595.94862639999
+            }
+          },
+          "stagePercentilesAreIndependent": true,
+          "stages": {
+            "assistant": {
+              "type7Ms": {
+                "p50": 32615.857633,
+                "p90": 37560.8704425,
+                "p95": 40089.569304799996
+              },
+              "validMeasuredCount": 900
+            },
+            "stt": {
+              "type7Ms": {
+                "p50": 8333.593146,
+                "p90": 10630.5304123,
+                "p95": 11274.449979949995
+              },
+              "validMeasuredCount": 900
+            },
+            "tts": {
+              "type7Ms": {
+                "p50": 2487.012267,
+                "p90": 3928.0318947000005,
+                "p95": 4677.269980749999
+              },
+              "validMeasuredCount": 900
+            }
+          },
+          "successfulCorrect": {
+            "denominator": 900,
+            "type7": {
+              "p90": 49936.7875221,
+              "p95": 52595.94862639999
+            }
+          }
+        },
+        "measuredOutcomes": {
+          "completed_correct": 900
+        },
+        "schema": "aurora.worker_cpu_audio_seal_verification.v1",
+        "sourceHashValidation": "collector_only",
+        "unknowns": [
+          "queue",
+          "first_token",
+          "first_audio",
+          "playback",
+          "physical_audibility"
+        ],
+        "verifiedAt": "2026-10-15T15:23:30.885768+00:00",
+        "warmupOutcomes": {
+          "completed_correct": 15
+        }
+      },
+      "indexingReauditedArchive": false
+    },
+    {
+      "condition": "desktop-gpu-padded-http900-v692",
+      "scope": "qualified padded input; desktop loopback HTTP",
+      "custodyOrVerificationReceipt": "docs/experiments/tcc-20261013-submission-20261030/root/desktop-gpu-padded-http900-v692/EVIDENCE-LOCATION.json",
+      "receiptBytes": 3906,
+      "receiptSHA256": "45608aad521bced0e3e237607ca23456068a5faedfc046ee86c2123c2039a80f",
+      "retainedReceiptMetadata": {
+        "at": "2026-10-15T22:04:06.632161+00:00",
+        "archive": {
+          "bytes": 34691761,
+          "path": "/tmp/aurora-root-padded-http900-v692/export-v715/aurora-desktop-gpu-padded-http900-v692.zip",
+          "sha256": "7f1438bd700d5a794a879f5a38d7293275acf4d827289a50c6c49e01dc1a1870"
+        },
+        "remoteHost": "personal.skyron-server",
+        "rawOriginalsPreserved": true,
+        "archiveOutcomeAuditPerformedOnce": true,
+        "originalAuditReceipt": "audit-verification.json",
+        "workerDestination": "docs/experiments/tcc-20261013-submission-20261030/root/desktop-gpu-padded-http900-v692/aurora-desktop-gpu-padded-http900-v692.zip",
+        "workerArchiveCustodyVerified": true,
+        "workerCopyState": ".git/aurora-handoff-import-20261006/saved-archive-copy-v732/COPY-STATE.json",
+        "workerCopyStatus": "complete",
+        "verifiedCopiedMetadata": [
+          {
+            "name": "ARCHIVE-MANIFEST.json",
+            "bytes": 690579,
+            "sha256": "d87abd77df46d68fba1a4c420d411a95776026430b7100817aa1bf83f5d63605",
+            "path": "/home/developer/projects/aurora/docs/experiments/tcc-20261013-submission-20261030/root/desktop-gpu-padded-http900-v692/ARCHIVE-MANIFEST.json",
+            "savedCopySizeAndSHA256VerifiedOnce": true
+          },
+          {
+            "name": "NATIVE-STAGE-CASE-HISTORY.json",
+            "bytes": 2128044,
+            "sha256": "cc4aead5d0650ee8ae667e509b72bf01d6adbdf80de962cb47a1311ecb601158",
+            "path": "/home/developer/projects/aurora/docs/experiments/tcc-20261013-submission-20261030/root/desktop-gpu-padded-http900-v692/NATIVE-STAGE-CASE-HISTORY.json",
+            "savedCopySizeAndSHA256VerifiedOnce": true
+          },
+          {
+            "name": "audit-verification.json",
+            "bytes": 12033,
+            "sha256": "9658f29dfc939083445a98f26d222df3b622ac0cba5cc8396d5c22a09a342a6a",
+            "path": "/home/developer/projects/aurora/docs/experiments/tcc-20261013-submission-20261030/root/desktop-gpu-padded-http900-v692/audit-verification.json",
+            "savedCopySizeAndSHA256VerifiedOnce": true
+          }
+        ],
+        "workerCustodyReceipt": "WORKER-CUSTODY-RECEIPT.json",
+        "workerSavedFiles": [
+          {
+            "name": "ARCHIVE-MANIFEST.json",
+            "bytes": 690579,
+            "sha256": "d87abd77df46d68fba1a4c420d411a95776026430b7100817aa1bf83f5d63605",
+            "path": "/home/developer/projects/aurora/docs/experiments/tcc-20261013-submission-20261030/root/desktop-gpu-padded-http900-v692/ARCHIVE-MANIFEST.json",
+            "savedCopySizeAndSHA256VerifiedOnce": true
+          },
+          {
+            "name": "NATIVE-STAGE-CASE-HISTORY.json",
+            "bytes": 2128044,
+            "sha256": "cc4aead5d0650ee8ae667e509b72bf01d6adbdf80de962cb47a1311ecb601158",
+            "path": "/home/developer/projects/aurora/docs/experiments/tcc-20261013-submission-20261030/root/desktop-gpu-padded-http900-v692/NATIVE-STAGE-CASE-HISTORY.json",
+            "savedCopySizeAndSHA256VerifiedOnce": true
+          },
+          {
+            "name": "audit-verification.json",
+            "bytes": 12033,
+            "sha256": "9658f29dfc939083445a98f26d222df3b622ac0cba5cc8396d5c22a09a342a6a",
+            "path": "/home/developer/projects/aurora/docs/experiments/tcc-20261013-submission-20261030/root/desktop-gpu-padded-http900-v692/audit-verification.json",
+            "savedCopySizeAndSHA256VerifiedOnce": true
+          },
+          {
+            "name": "aurora-desktop-gpu-padded-http900-v692.zip",
+            "bytes": 34691761,
+            "sha256": "7f1438bd700d5a794a879f5a38d7293275acf4d827289a50c6c49e01dc1a1870",
+            "path": "/home/developer/projects/aurora/docs/experiments/tcc-20261013-submission-20261030/root/desktop-gpu-padded-http900-v692/aurora-desktop-gpu-padded-http900-v692.zip",
+            "savedCopySizeAndSHA256VerifiedOnce": true
+          },
+          {
+            "name": "verification.json",
+            "bytes": 12399,
+            "sha256": "199ee53e338185d2e4222b98e88816beee5575cdfdaf9a49499198ce14d36ac2",
+            "path": "/home/developer/projects/aurora/docs/experiments/tcc-20261013-submission-20261030/root/desktop-gpu-padded-http900-v692/verification.json",
+            "savedCopySizeAndSHA256VerifiedOnce": true
+          }
+        ]
+      },
+      "indexingReauditedArchive": false
+    },
+    {
+      "condition": "desktop-gpu-padded-local900-v735-partial",
+      "status": "PARTIAL_274_RETIRED_ONE_AUDIT_PASS_WORKER_CUSTODY_VERIFIED",
+      "full900Seal": false,
+      "report": "docs/experiments/tcc-20261013-submission-20261030/root/desktop-gpu-padded-local900-v735/REPORT.md",
+      "location": "docs/experiments/tcc-20261013-submission-20261030/root/desktop-gpu-padded-local900-v735/EVIDENCE-LOCATION.json",
+      "locationSHA256": "be2fb369c7dae9b8cfb8fb3b2377a393c69ffbebe89fe688e4eed299e32f0e82",
+      "archive": {
+        "file": "aurora-desktop-gpu-padded-local900-v735.zip",
+        "bytes": 10064090,
+        "sha256": "1ef1dbd55dde983aea97852dadbeebd7f5540285655a0cbbd447b73b5784db33"
+      },
+      "retainedInCompatibleCondition": true,
+      "previousOutcomes": {
+        "planned": 900,
+        "attempted": 274,
+        "correct": 273,
+        "interrupted": 1,
+        "timeouts": 0,
+        "unattempted": 626
+      },
+      "continuationSegment": "V745-new626+15excludedwarmups-originalAbsoluteDeadline",
+      "analysisReceipt": "docs/experiments/tcc-20261013-submission-20261030/root/desktop-gpu-padded-local900-v735/analysis-v749/ANALYSIS-RECEIPT.json"
+    }
+  ],
+  "previousIndex": {
+    "path": "thesis/evidence/custody-index-v738.json",
+    "sha256": "c1aff9f6b35c44b4bab7ac516624b1d4e28b01a57af5565f449a03a6b0729279"
+  },
+  "activeNotSealed": [
+    {
+      "condition": "compatible-desktop-v745-segment2",
+      "state": "live frozen626 planned; previous274 retained toward900",
+      "report": "docs/experiments/tcc-20261013-submission-20261030/root/desktop-gpu-padded-local900-v745/REPORT.md",
+      "sourceManifestSHA256": "31dea74bf4587e7bef60c44ef28c2b3f7a2da73a69891df27bc318b9819d505d"
+    },
+    {
+      "condition": "worker-cpu-padded-v737",
+      "state": "live frozen900 planned; do not modify",
+      "report": "docs/experiments/tcc-20261013-submission-20261030/root/worker-cpu-padded-local900-v737/REPORT.md",
+      "sourceManifestSHA256": "acbdc1d3827502513237220fcc3bf60cc3a007b7dc246b1a4b21b1a0ef8ce5fc"
+    }
+  ]
+}

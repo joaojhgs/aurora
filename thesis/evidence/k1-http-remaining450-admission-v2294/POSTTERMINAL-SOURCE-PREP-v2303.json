@@ -1,0 +1,26 @@
+{
+  "at": "2026-10-21T21:44:19.380451+00:00",
+  "status": "POSTTERMINAL_ONLY_CODE_PREPARED_NOT_EXECUTED",
+  "files": [
+    {
+      "path": "thesis/harness/provider_export_k1_http_prefix_v2301.py",
+      "bytes": 8194,
+      "sha256": "7db452cbb2f02e0639716b7a70e7e320133b3c0e1010001c6645c88e30371b5b"
+    },
+    {
+      "path": "thesis/harness/transfer_k1_http_provider_prefix_v2302.py",
+      "bytes": 12173,
+      "sha256": "62323777240fd175542c1874310504ff0b557777c158930ee5759bfd91879315"
+    },
+    {
+      "path": "thesis/harness/finish_k1_http_epoch_v2303.py",
+      "bytes": 14506,
+      "sha256": "e0e490c0b67e9e978b0f5098e054728811617ef4b5947351807229ed4a65b728"
+    }
+  ],
+  "verification": "Ruffformat/fatalRuff/pinnedPython3.11compile PASS",
+  "gate": "Only after actual original requester/controller/copier natural retirement and terminal summary; exact frozen9adbf9ba epoch; never launch on mere intention",
+  "newInference": 0,
+  "newRPCs": 0,
+  "activeSourceOrManifestChanged": false
+}

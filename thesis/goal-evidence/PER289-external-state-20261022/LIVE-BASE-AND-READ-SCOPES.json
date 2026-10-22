@@ -1,0 +1,27 @@
+{
+  "at": "2026-10-22T12:04:52.536706+00:00",
+  "readOnly": true,
+  "pr": 177,
+  "url": "https://github.com/joaojhgs/aurora/pull/177",
+  "head": "c0f4c0013cea5bb11ef81297194d0dc142a47bc4",
+  "baseBranch": "main",
+  "actualBaseSha": "2a7d0da4f6fb1054e6bdc0ad6cde83fdd954ca69",
+  "prState": "open",
+  "draft": true,
+  "oauthScopesReported": null,
+  "workflowScopeExplicitlyReported": null,
+  "unreportedScopeMeaning": "UNKNOWN, not proof of missing permission",
+  "sourcePrerequisiteAncestry": {
+    "f50f46f57a815156f30cb86cea8bdd2599eb4dad": {
+      "baseObjectPresentLocally": true,
+      "isAncestorOfActualGithubMain": true,
+      "exitCode": 0
+    },
+    "21da8d6830a3f4a586790a7883f2601aab48563e": {
+      "baseObjectPresentLocally": true,
+      "isAncestorOfActualGithubMain": true,
+      "exitCode": 0
+    }
+  },
+  "authOrRepoStateChanged": false
+}

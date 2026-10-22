@@ -1,0 +1,11 @@
+{
+  "at": "2026-10-20T03:50:08.180379+00:00",
+  "source": ".omx/evidence/orca-monitor-20261010/PLAN-AFTER-P2P-20H-BOUND-20261020T0340.md",
+  "destination": "thesis/methodology/owner-requirements-20261020-a6b57bc4.md",
+  "bytes": 644874,
+  "sha256": "a6b57bc411c4681e2382ca1c7ca06a3b65ca8e1b0de4b5c10046360186881891",
+  "previousPrefixBytes": 637437,
+  "unchangedPrefixVerified": true,
+  "appendFullyReadBytes": 7437,
+  "copyOnly": "Original Root; original monitor sole plan writer"
+}

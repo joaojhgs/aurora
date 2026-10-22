@@ -1,0 +1,38 @@
+{
+  "id": "remote-cli-1792517274746",
+  "ok": true,
+  "result": {
+    "runId": "run_e6054e76e9fc",
+    "deliveryId": "delivery_c4301ef1b631",
+    "messages": [
+      {
+        "id": "msg_face76b9e6a7",
+        "run_id": "run_e6054e76e9fc",
+        "delivery_contract": "current_delivery",
+        "from_handle": "term_2eab47ed-ab9b-4e35-bd9b-fc068c60e3fc",
+        "to_handle": "run:run_e6054e76e9fc",
+        "subject": "K2 changed outcomes:288 measured,284 correct,4 retained rejections; same actors live",
+        "body": "Bounded changed-outcome update only: independent17:27:50 original3 PID/start actors live; repo CURRENT17:27:22 has288/900=284correct+4failed,612remain. New measured283 (attempt-0298-measured.jsonl,5183B SHAb7e609ac59922a64575da4d642ab0cc26da24042cfd717d8b3acda55fe95874a) and288 (attempt-0303-measured.jsonl,5181B SHA5a1439653b9af28599cb3e944f6679e8fd8f12cdf4edff0d5cf4becf6fd00c8b) both physicallypresent under same thesis campaign/attempts and match copier hashes. Same preaccept_capability_changed/TTS; timeoutfalse, correctSTT+assistant, eachconsecutive_preaccept_rejections1, withinrequestdeadline, no audio. Existing174/189 retained too. No new causal claim, review gate or test; preserve unchanged frozen next-distinct-index/3consecutive-hardstop policy and allfailed denominator. No request to interrupt/retry/restart/relaxguard; actual current healthy liveness unchanged.",
+        "type": "status",
+        "priority": "normal",
+        "thread_id": null,
+        "payload": "{\"taskId\":\"task_d7ea336050cf\",\"dispatchId\":\"ctx_37b4d0a3c14f\"}",
+        "created_at": "2026-10-20T17:28:02Z",
+        "delivered_at": null
+      }
+    ],
+    "count": 1,
+    "replayed": false,
+    "acknowledged": null,
+    "timedOut": false,
+    "cancelled": false,
+    "connectionLost": false,
+    "mutation": {
+      "requestId": "fa6e9a98-a88a-45d8-b964-cc17ae987520",
+      "replayed": false
+    }
+  },
+  "_meta": {
+    "runtimeId": "cc9e3275-28c6-4c45-85cc-bdcd2262aa7d"
+  }
+}

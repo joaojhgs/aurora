@@ -1,0 +1,12 @@
+{
+  "controlDeadline": "2026-10-22T05:05:00Z",
+  "explicitNewline": true,
+  "host": "ssh:ssh-sem-notebook-personal",
+  "incarnation": "328cd72f-c7ea-49ff-a2db-b9275b085037",
+  "remoteResult": "/home/developer/projects/aurora/thesis/phone-notebook/20261020/evidence/release-blocked-readiness-v113.json",
+  "rootAdmissionMessage": "msg_fc30174d5abf-normal-early-own-lease-release-native-app-startup-blocker-no-pilot-called",
+  "script": "scripts/release_blocked_readiness_v113.py",
+  "scriptSha256": "64e60f2f6c14985fed06ce0bce4ff91b7aa438a3bfca14c33ed892d61da0db2d",
+  "singleSend": true,
+  "terminal": "term_a2ed5feb-7c92-48e4-bd88-d1b0e6737989"
+}

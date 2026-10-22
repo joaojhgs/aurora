@@ -1,0 +1,23 @@
+{
+  "at": "2026-10-16T00:51:58.174810+00:00",
+  "scope": "exact source copies; legacy private path dependencies and existing desktop prerequisites explicit; not a portable launcher or actual runtime proof",
+  "files": [
+    {
+      "source": ".git/aurora-handoff-import-20261006/browser-ready-prep-v772/controller.py",
+      "canonicalCopy": "thesis/harness/browser-ui-v704/controller.py",
+      "bytes": 36769,
+      "sha256": "cb05663181bdb4f00ef758da8c430c712379bcebda944160408999a4d43e812f"
+    },
+    {
+      "source": ".git/aurora-handoff-import-20261006/browser-ready-prep-v772/stage_freeze.py",
+      "canonicalCopy": "thesis/harness/browser-ui-v704/stage_freeze.py",
+      "bytes": 24835,
+      "sha256": "a727592d7bc1d539c6342d788c318f5d921f70316dc0d153e705153fb0fa39fb"
+    }
+  ],
+  "reviewSHA256": "690c05899de20b0a2cf723fd71641fd49af2c1d2f473b9cae6f0071fd0e1fec5",
+  "runtimeStaged": false,
+  "runtimeLaunched": false,
+  "actual900Result": false,
+  "noChangedSourceTestsRequested": "AST parsing and independent source checks closed; next required validation is actual guarded post-predecessor freeze and planned15warmup mainflow gate, no extra pilot"
+}

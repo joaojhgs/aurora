@@ -1,0 +1,24 @@
+{
+  "authoritative_path": "/home/developer/Documents/Obsidian Vault Origin/5-full-notes/faculdade/tcc/future-work-test-requirements.md",
+  "before_sha256": "92f2164224790012e7dd466752fa95fd0e22f8ef80315c9257ee704995820d83",
+  "after_sha256": "70d5b91a495292fb3081803c4da48986083a1ceb4d40bc04b2937a8600850b8b",
+  "before_lines": 1388,
+  "after_lines": 1408,
+  "diff_sha256": "8e7e54f6ca9a9e3d4e11f5496e16e2e8ef06a0cb69dc75d8f524e2cfc817f32e",
+  "checks": {
+    "old1388lines_exact_prefix": true,
+    "T0_T13_retained": true,
+    "900_per_condition_retained": true,
+    "two_phase_gate_retained": true,
+    "production_voice_gate_retained": true,
+    "typed_terminal_checkpoint": true,
+    "full_GPU_unfinished": true,
+    "raw_data_not_verified_claim": true
+  },
+  "root_terminal_message": "msg_a71ecf4b05d9",
+  "root_gate_sha256": "f1f1c8b15b0e00425363de3231fc5d46ab032333786f7c4380b49329d1c1c465",
+  "run": "run_e6054e76e9fc",
+  "task": "task_d7ea336050cf",
+  "dispatch": "ctx_37b4d0a3c14f",
+  "scope": "doc-only datedcheckpoint; no source/test/build/model/goal/ledger operation; no changedmethodology"
+}

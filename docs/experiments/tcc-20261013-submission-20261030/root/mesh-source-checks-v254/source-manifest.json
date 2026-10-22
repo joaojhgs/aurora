@@ -1,0 +1,14 @@
+{
+  "source_head": "5782746afba213f6b36907db2f09f0017625e218",
+  "owned_sha256": {
+    "scripts/hosted_peer_e2e.sh": "8c1d7aba3021f9c12a19ee936a0360bc206b45b29a4b446a54371d4a8e21ee0a",
+    "tests/e2e/hosted_peer/hosted-peer-live-shell.spec.ts": "55bd43c825efd2dc8c2efb8129468a77c9186ce464a69d7cb731309158364021",
+    "tests/e2e/hosted_peer/hosted-peer-live-helpers.ts": "e782858aa3bccce8c0bac0334bac30028443ca8a4651619b86463ed6337f4a75",
+    "packages/aurora-ui/src/use-assistant-foreground-turn.ts": "dae3bdf7ab9baaeffd8d9ae0339b7200e520ec5f0c64e1bdb461d967e85fdcbb",
+    "app/services/gateway/webrtc/rpc.py": "68cdd7c932c23e5054d53013a57f2c39c923d0d4fde98077953c9a665d4cb005",
+    "tests/unit/gateway/test_rpc.py": "50ed8a0e7a19b0c2344a2de6589eb7dee9c6409dfc420fb774e002811e971c29"
+  },
+  "review": "v252-mesh-orbit-sol-review.md",
+  "review_sha256": "10d8f655d17e9f98ff9fd15d6db9696cdf67bc73caa06f6cf46d748a4157d0f9",
+  "uncommitted": true
+}

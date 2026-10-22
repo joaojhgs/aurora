@@ -1,0 +1,11 @@
+{
+  "at": "2026-10-15T01:00:19.627877+00:00",
+  "controllerPid": 2871833,
+  "sourceRuntimeControllerPid": 2871142,
+  "parentRuntimeCapSeconds": 900,
+  "driverCapSeconds": 420,
+  "newOrdinalOnlyOnFirstSTT": 9,
+  "maximumNewVoiceCases": 1,
+  "measuredSamples": 0,
+  "phase2Allowed": false
+}

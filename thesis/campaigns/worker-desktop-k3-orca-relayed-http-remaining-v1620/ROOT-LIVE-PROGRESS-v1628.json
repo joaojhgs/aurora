@@ -1,0 +1,24 @@
+{
+  "at": "2026-10-18T22:44:58.134357+00:00",
+  "status": "CURRENT_FROZEN_V1620_PROGRESS_ONLY_NO_EXTRA_TESTS",
+  "progress": {
+    "attempted": 14,
+    "last_attempt_file": "attempts/attempt-0014-warmup.jsonl",
+    "last_attempt_status": "completed_correct",
+    "measured_attempted": 0,
+    "planned_measured": 96,
+    "planned_warmups": 15,
+    "status": "running",
+    "unattempted_measured": 96,
+    "warmups_attempted": 14
+  },
+  "frozenManifestSha256": "4f1a09e7ac7dedeaeae6c1bef5a364d4a007e9249aec74f20a0b63b6375a6279",
+  "observerSource": "/home/developer/projects/aurora/.git/aurora-handoff-import-20261006/distributed-k3-orca-relayed-http-cell-v1620/campaign/progress.json",
+  "nativeProofResultSource": "/home/developer/projects/aurora/.git/aurora-handoff-import-20261006/distributed-k3-orca-relayed-launch-v1620/warmup-finalizer-result.json",
+  "nativeProofFailureSource": "/home/developer/projects/aurora/.git/aurora-handoff-import-20261006/distributed-k3-orca-relayed-launch-v1620/warmup-finalizer-failure.json",
+  "terminalSource": "/home/developer/projects/aurora/.git/aurora-handoff-import-20261006/distributed-k3-orca-relayed-http-cell-v1620/campaign/summary.json",
+  "custodyIndex": "/home/developer/projects/aurora/thesis/campaigns/worker-desktop-k3-orca-relayed-http-remaining-v1620/CURRENT.json",
+  "personalControl": "EXCLUSIVE actualfinalizer untilproof/result/cursorrelease",
+  "allSourceReviews": "CLOSED",
+  "newProofOrMeasuredAdmissionClaimed": false
+}

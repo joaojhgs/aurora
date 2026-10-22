@@ -1,0 +1,13 @@
+{
+  "controlDeadline": "2026-10-22T13:15:01.552797+00:00",
+  "host": "ssh:ssh-sem-notebook-personal",
+  "incarnation": "328cd72f-c7ea-49ff-a2db-b9275b085037",
+  "remoteResult": "/home/developer/projects/aurora/thesis/phone-notebook/20261020/evidence/launch-corrected-full-flow-v393.json",
+  "rootAdmissionMessage": "Owner continuation: one real native full file STT LLM TTS WAV flow after exact two-keyword formatter correction passed tests, no model/audio/settings substitution; same authorized peer/lease required and finite315s bound",
+  "script": "scripts/launch_corrected_full_flow_v393.py",
+  "scriptSha256": "09fd4777e30c170579c8d27ffdca016ed1c2d6def9f053e94b86bbaabe7c01b0",
+  "singleSend": true,
+  "supportedEnter": true,
+  "terminal": "term_a2ed5feb-7c92-48e4-bd88-d1b0e6737989",
+  "textTrailingNewline": false
+}

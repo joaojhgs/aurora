@@ -1,0 +1,13 @@
+{
+  "controlDeadline": "2026-10-22T14:34:00Z",
+  "host": "ssh:ssh-sem-notebook-personal",
+  "incarnation": "328cd72f-c7ea-49ff-a2db-b9275b085037",
+  "remoteResult": "/home/developer/projects/aurora/thesis/phone-notebook/20261020/evidence/read-native-cancel-v428.json",
+  "rootAdmissionMessage": "Read actual public SDK AbortSignal native cancellation span and teardown result; no repeat inference",
+  "script": "scripts/read_cancel_v428.py",
+  "scriptSha256": "59260b7b725c8796416e4c228f1fe495c117c65562444cc5cc3d64bf4bbf2442",
+  "singleSend": true,
+  "supportedEnter": true,
+  "terminal": "term_a2ed5feb-7c92-48e4-bd88-d1b0e6737989",
+  "textTrailingNewline": false
+}

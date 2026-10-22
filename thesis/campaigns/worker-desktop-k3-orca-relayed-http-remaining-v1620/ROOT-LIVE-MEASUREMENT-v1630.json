@@ -1,0 +1,52 @@
+{
+  "at": "2026-10-18T22:50:27.479682+00:00",
+  "status": "VERIFIED_LIVE_MEASUREMENT_COLLECTION_NATIVE_ADMISSION_PASSED",
+  "currentProgress": {
+    "attempted": 24,
+    "last_attempt_file": "attempts/attempt-0024-measured.jsonl",
+    "last_attempt_status": "completed_correct",
+    "measured_attempted": 9,
+    "planned_measured": 96,
+    "planned_warmups": 15,
+    "status": "running",
+    "unattempted_measured": 87,
+    "warmups_attempted": 15
+  },
+  "savedMeasuredOutcomes": {
+    "completed_correct": 9
+  },
+  "savedMeasuredRows": 9,
+  "conditionAttemptsObserved": 725,
+  "conditionTarget": 900,
+  "priorConditionFailuresPreserved": 2,
+  "ordinaryExcludedWarmups": 15,
+  "nativeModelJoins": 45,
+  "proofSha256": "ddba3b4c18f6ff576b28ca5c559eacc1f38e4c29a1774d2e5e4fec037e4ce025",
+  "liveOwners": {
+    "controller": {
+      "pid": 1501375,
+      "startTicks": 114149321,
+      "state": "S"
+    },
+    "backend": {
+      "pid": 1501420,
+      "startTicks": 114149815,
+      "state": "S"
+    },
+    "copier": {
+      "pid": 1501376,
+      "startTicks": 114149322,
+      "state": "S"
+    }
+  },
+  "custody": {
+    "updatedAt": "2026-10-18T22:50:14.321543+00:00",
+    "completedCases": 24,
+    "errors": []
+  },
+  "sourceAndResultReviews": "CLOSED; no repeated source/tests/collector work",
+  "full96WindowStillRunning": true,
+  "remainingAfterFullWindow": 88,
+  "nativeGoalSnapshot": "NATIVE-GOAL-MEASURING-v1630.json",
+  "nextActualAction": "Continue same frozen96 to natural terminal result with bounded progress/custody; no interference or benchmark restart; seal only after actual terminal outcomes."
+}

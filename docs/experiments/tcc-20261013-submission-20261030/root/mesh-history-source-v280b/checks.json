@@ -1,0 +1,49 @@
+[
+  {
+    "label": "ui-types",
+    "exit_code": 0,
+    "argv": [
+      "flock",
+      "--nonblock",
+      "/tmp/aurora-global-build.lock",
+      "timeout",
+      "--signal=INT",
+      "--kill-after=10s",
+      "120s",
+      "pnpm",
+      "--filter",
+      "@aurora/ui",
+      "exec",
+      "tsc",
+      "--noEmit"
+    ],
+    "elapsed_seconds": 39.08328086393885
+  },
+  {
+    "label": "providerless-history-load",
+    "exit_code": 1,
+    "argv": [
+      "flock",
+      "--nonblock",
+      "/tmp/aurora-global-build.lock",
+      "timeout",
+      "--signal=INT",
+      "--kill-after=10s",
+      "120s",
+      "pnpm",
+      "--filter",
+      "@aurora/ui",
+      "exec",
+      "vitest",
+      "run",
+      "--environment",
+      "jsdom",
+      "tests/native-assistant-view.test.tsx",
+      "-t",
+      "keeps a provisional native turn mounted when a later event assigns the real conversation",
+      "--reporter=json",
+      "--outputFile=/home/developer/projects/aurora/.git/aurora-handoff-import-20261006/mesh-history-source-v280b/vitest.json"
+    ],
+    "elapsed_seconds": 12.292388128000312
+  }
+]

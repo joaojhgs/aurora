@@ -1,0 +1,49 @@
+{
+  "at": "2026-10-17T21:50:06Z",
+  "classification": "PROGRESS_SAVED_DATA_RESOLVER_AND_VERIFIED_WAIT",
+  "progress": {
+    "attempted": 120,
+    "last_attempt_file": "attempts/attempt-0120-measured.jsonl",
+    "last_attempt_status": "completed_correct",
+    "measured_attempted": 105,
+    "planned_measured": 900,
+    "planned_warmups": 15,
+    "status": "running",
+    "unattempted_measured": 795,
+    "warmups_attempted": 15
+  },
+  "originalProcesses": {
+    "430655": {
+      "present": true,
+      "state": "S",
+      "startTicks": 104608580,
+      "sameProcess": true
+    },
+    "430656": {
+      "present": true,
+      "state": "S",
+      "startTicks": 104608648,
+      "sameProcess": true
+    },
+    "442775": {
+      "present": true,
+      "state": "S",
+      "startTicks": 104723117,
+      "sameProcess": true
+    },
+    "421717": {
+      "present": true,
+      "state": "S",
+      "startTicks": 104535394,
+      "sameProcess": true
+    }
+  },
+  "copierCheckpointAt": "2026-10-17T21:49:21.107599+00:00",
+  "physicalCompletedCases": 119,
+  "freeBytes": 7177674752,
+  "summaryPresent": false,
+  "analysisSourceReviewClosed": "msg_f49d271f6ce4",
+  "savedAnalysisOnly": "analysis-v1290: same36measured+15warmup, nativeTTS coverage24to36, no newmeasurement",
+  "nextOrdinaryObservationUtc": "2026-10-17T22:00:00Z",
+  "watchUtc": "2026-10-17T22:05:00Z"
+}

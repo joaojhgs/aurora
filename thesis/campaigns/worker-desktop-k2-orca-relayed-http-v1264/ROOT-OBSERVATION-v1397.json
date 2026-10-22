@@ -1,0 +1,44 @@
+{
+  "at": "2026-10-17T23:47:02.757389+00:00",
+  "progress": {
+    "attempted": 20,
+    "last_attempt_file": "attempts/attempt-0020-measured.jsonl",
+    "last_attempt_status": "completed_correct",
+    "measured_attempted": 5,
+    "planned_measured": 900,
+    "planned_warmups": 15,
+    "status": "running",
+    "unattempted_measured": 895,
+    "warmups_attempted": 15
+  },
+  "physicalCustody": {
+    "sequence": 13,
+    "copiedCases": 19,
+    "audioFiles": 19,
+    "bytes": 2230129,
+    "errors": [],
+    "updatedAt": "2026-10-17T23:46:50.610295+00:00"
+  },
+  "frozenManifestSha256": "b15a49adffc5aaa43b426563d5776fa384c92f58e339030b69cb3877e98f2399",
+  "reviewedControllerSha256": "809bec19682eb717f016d2b9f62453b38945201c561f7d4f4ac72e242024050e",
+  "processes": {
+    "588011": {
+      "state": "S",
+      "ppid": 1,
+      "pgid": 588011,
+      "startTicks": 105853078
+    },
+    "588276": {
+      "state": "S",
+      "ppid": 1,
+      "pgid": 588276,
+      "startTicks": 105855021
+    },
+    "588053": {
+      "state": "S",
+      "ppid": 588011,
+      "pgid": 588053,
+      "startTicks": 105853326
+    }
+  }
+}

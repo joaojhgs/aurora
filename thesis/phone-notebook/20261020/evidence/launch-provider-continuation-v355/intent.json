@@ -1,0 +1,12 @@
+{
+  "controlDeadline": "2026-10-22T12:25:17.456718+00:00",
+  "explicitNewline": true,
+  "host": "ssh:ssh-sem-notebook-personal",
+  "incarnation": "328cd72f-c7ea-49ff-a2db-b9275b085037",
+  "remoteResult": "/home/developer/projects/aurora/thesis/phone-notebook/20261020/evidence/launch-provider-continuation-v355.json",
+  "rootAdmissionMessage": "Owner NEW six-hour independent Personal notebook authority, Main untouched; exact old provider epochs closed, same pinned assets/source/private membership, two notebook CPU threads, hard stop from immutable OWNER-CONTINUATION-v353",
+  "script": "scripts/launch_provider_continuation_v355.py",
+  "scriptSha256": "8992a10a37e04074baf4005e542159a0a74aae0cf66bf1a873a675814e84cc1e",
+  "singleSend": true,
+  "terminal": "term_a2ed5feb-7c92-48e4-bd88-d1b0e6737989"
+}

@@ -1,0 +1,11 @@
+{
+  "id": "cebbc82f-ba78-423a-8275-81f7c8eb5a73",
+  "ok": false,
+  "error": {
+    "code": "runtime_error",
+    "message": "Command \"'/usr/bin/node' -\" failed (exit 1): ORCA_OBSERVER_RESULT:{\"observerError\":\"Execution-host observation failed\"}"
+  },
+  "_meta": {
+    "runtimeId": "cc9e3275-28c6-4c45-85cc-bdcd2262aa7d"
+  }
+}

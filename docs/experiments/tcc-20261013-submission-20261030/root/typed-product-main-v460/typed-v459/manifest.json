@@ -1,0 +1,30 @@
+{
+  "files": {
+    "supervisor.py": {
+      "sha256": "c7d3638d303e691a459fe1b7bac1edbbe41255448aa9f2d3c0c73a9a2a253050",
+      "bytes": 8054
+    },
+    "backend-controller.py": {
+      "sha256": "eeb27fca6511deff1b5b91e5cb21bddc6d6d99d18d955be52d200cefbdf39033",
+      "bytes": 7197
+    },
+    "source_guard_v455.py": {
+      "sha256": "60c3da35cbef86d452d7f69d778ee9120ad51678fbe00e675fbcc8912c17f100",
+      "bytes": 1588
+    },
+    "driver.py": {
+      "sha256": "7c0bb75af8e59c87ce94ab7d838dd85d2de39fdac0fe6c62b3a04940b6ab6a6a",
+      "bytes": 31768
+    },
+    "driver-controller.py": {
+      "sha256": "3edf7588f44ca4c6a986441ae3644f2e6fa259c57b16f4598fd948cc1aef2bfe",
+      "bytes": 2766
+    }
+  },
+  "onlyChanges": "passive actual catalog/registry bodies and exact disabled-composer primary captured inside live context; no new UI actions or predicates",
+  "globalVoiceLogicalFlowsUnchanged": 8,
+  "typedReadinessOrdinal": 2,
+  "noModelRequestUntilNormalVisibleSubmit": true,
+  "measuredSamples": 0,
+  "phase2Allowed": false
+}

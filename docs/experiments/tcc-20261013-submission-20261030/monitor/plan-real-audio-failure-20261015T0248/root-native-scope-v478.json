@@ -1,0 +1,15 @@
+{
+  "id": "msg_c091581a5708",
+  "at": "2026-10-15T02:49:04Z",
+  "rootNativeGoal": {
+    "threadId": "01a112a5-d6bb-74e2-bf7c-ace73cb513b5",
+    "status": "active",
+    "originalGoals": 13,
+    "unbudgeted": true
+  },
+  "runtimeActive": false,
+  "childTasksActive": false,
+  "sourceFixCanonicalOnlyNotDeployed": true,
+  "actualGPUOffloadProven": false,
+  "docsCheckPassed": false
+}

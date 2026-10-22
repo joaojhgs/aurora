@@ -1,0 +1,31 @@
+{
+  "observed_at": "2026-10-14T16:16:42.440757+00:00",
+  "actual_recorded_at": "2026-10-14T16:08:57.567385+00:00",
+  "source": "orca terminal read --screen --limit20",
+  "receipt_id": "f01edc05-7006-4e5e-81ac-5cb15868234b",
+  "terminal": "term_2e93af9c-1589-414b-8f92-17649f3c8069",
+  "known_root_job_incarnation": "9a6a4e5a-d9db-4d83-ae31-907ff2149dd1",
+  "scope": "actual visible JSON marker and shell prompt; no inferred inference launch",
+  "environment_prep": "not_started_resource_floor",
+  "free_disk_bytes": 2040647680,
+  "memory_available_bytes": 21899649024,
+  "memory_total_bytes": 31480418304,
+  "root_source_object": {
+    "sha": "5782746afba213f6b36907db2f09f0017625e218",
+    "exit_code": 128,
+    "commit_present": false
+  },
+  "vulkan_build_packages": {
+    "libvulkan-dev": "not installed; candidate listed",
+    "glslc": "not installed; candidate listed",
+    "libshaderc1": "not installed; candidate listed"
+  },
+  "inference_started": false,
+  "source_changes": false,
+  "target": "/home/developer/projects/aurora/.git/aurora-root-gpu-primary-v408",
+  "dual_completion_barrier_ready": false,
+  "no_cleanup_performed_by_monitor": true,
+  "run": "run_e6054e76e9fc",
+  "task": "task_d7ea336050cf",
+  "dispatch": "ctx_37b4d0a3c14f"
+}

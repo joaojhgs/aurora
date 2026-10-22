@@ -1,0 +1,23 @@
+{
+  "atStarted": "2026-10-18T23:09:11.889159+00:00",
+  "method": "POST",
+  "path": "/api/DB/GetSession",
+  "request": {
+    "session_id": "audio-session-a5a867ec39b3413e898a18b0c2550993",
+    "activate": false
+  },
+  "syntheticSessionOnly": true,
+  "principalOverride": false,
+  "activate": false,
+  "timeoutSeconds": 20,
+  "newModelRequests": 0,
+  "newForward": false,
+  "authChanges": false,
+  "automaticRetry": false,
+  "credentialsLoggedOrCopied": false,
+  "errorType": "RemoteDisconnected",
+  "errno": null,
+  "reasonType": "NoneType",
+  "at": "2026-10-18T23:09:23.819271+00:00",
+  "durationMs": 11930.110562
+}

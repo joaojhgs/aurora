@@ -1,0 +1,20 @@
+{
+  "at": "2026-10-18T08:37:08.743766+00:00",
+  "startedAt": "2026-10-18T08:37:08.732638+00:00",
+  "status": "FULL_CANONICAL_THESIS_MIRROR_PHYSICALLY_COPIED_VERIFIED",
+  "source": ".omx/evidence/orca-monitor-20261010/authoritative-plan-30.54-20261018T083252-after.md",
+  "destination": "thesis/methodology/owner-requirements-20261018-2d81ca2a.md",
+  "bytes": 557225,
+  "sha256": "2d81ca2a42a50931aa5d1956a0b1dd89668737795eeb11e7c1517541ea08b4c3",
+  "sourceDestinationByteEquality": true,
+  "priorMirror": "thesis/methodology/owner-requirements-20261017-dd38c288.md",
+  "priorPrefixBytesPreserved": 541850,
+  "priorMirrorSha256": "dd38c2887a74a9b2463fbbd6d274da30d1fc18a025a6924c002a7da6e7f0a748",
+  "section": "30.54",
+  "authoritativeVaultPlanWriter": "original monitor ctx_37b4d0a3c14f",
+  "rootMirrorOwner": "original Root, same native full13 goal",
+  "sourceOrCampaignSettingsChanged": false,
+  "newSutCalls": 0,
+  "fullGoalComplete": false,
+  "ioNote": "Small checksum/copy interval only; no experiment traffic."
+}

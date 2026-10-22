@@ -1,0 +1,16 @@
+{
+  "owned_only": [
+    [
+      "app/services/gateway/fastapi_app.py",
+      "b23a104a42ade26781aa995ef3ac232e755f5de2bd78278764247758a0ea4efb",
+      "319469ee90ab706eaf5066bcde9f3f65b69b2894a4054c4bfe07190b25f6e94b"
+    ],
+    [
+      "tests/unit/gateway/test_fastapi_dynamic_routes.py",
+      null,
+      "b614fa92186ee74d0979b23c05041930ff90f67a92c246171c1a9d094478f76b"
+    ]
+  ],
+  "review_sha256": "186888b1b257758cc0918896791fd65c5ce2b8cc3bf224908d3055b9d837dddc",
+  "base_and_candidate_verified": true
+}

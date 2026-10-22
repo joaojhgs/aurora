@@ -1,0 +1,8 @@
+{
+  "bytes": 972,
+  "copyOnly": true,
+  "custody": "Notebook result persisted and fsynced before relay; remote receipt in same output",
+  "localPath": "/home/developer/projects/aurora/thesis/phone-notebook/20261020/evidence/observe-native-glare-v274/result.json",
+  "remotePath": "/home/developer/projects/aurora/thesis/phone-notebook/20261020/evidence/observe-native-glare-v274.json",
+  "sha256": "2980a750bc5de643ffe80d1122f50bad84a1b14ee3dbec35e41b4e554f5975fd"
+}

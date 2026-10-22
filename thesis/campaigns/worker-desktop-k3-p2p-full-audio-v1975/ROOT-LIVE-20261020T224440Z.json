@@ -1,0 +1,38 @@
+{
+  "at": "2026-10-20T22:44:40.859391+00:00",
+  "warmup": {
+    "attempted": 18,
+    "correct": 15,
+    "failed": 3
+  },
+  "measured": {
+    "attempted": 0,
+    "correct": 0,
+    "failed": 0
+  },
+  "progress": {
+    "attempted": 18,
+    "last_attempt_file": "attempts/attempt-0018-warmup.jsonl",
+    "last_attempt_status": "completed_correct",
+    "measured_attempted": 0,
+    "planned_measured": 900,
+    "planned_warmups": 15,
+    "status": "running",
+    "unattempted_measured": 900,
+    "warmups_attempted": 18
+  },
+  "actors": {
+    "3147698": {
+      "state": "S",
+      "sameStart": true
+    },
+    "3147699": {
+      "state": "S",
+      "sameStart": true
+    },
+    "3147700": {
+      "state": "S",
+      "sameStart": true
+    }
+  }
+}

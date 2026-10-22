@@ -1,0 +1,60 @@
+{
+  "at": "2026-10-21T03:21:46.946718+00:00",
+  "phase": "MEASURED_RUNNING_NATIVE_ADMISSION_PASSED",
+  "classification": "verified_wait",
+  "epochMeasured": {
+    "attempted": 13,
+    "correct": 13,
+    "incorrect": 0,
+    "failed": 0,
+    "timeouts": 0,
+    "remaining": 178,
+    "planned": 191
+  },
+  "globalMeasuredRangeConsumed": [
+    710,
+    722
+  ],
+  "parent709Preserved": {
+    "attempted": 709,
+    "correct": 697,
+    "failed": 12,
+    "timeouts": 1
+  },
+  "manifestSha256": "d753203e4a53f12ed983a98d776a811d241d0d6bc6061b28e3c1480a077a17d3",
+  "actors": {
+    "3332811": {
+      "state": "S",
+      "startTicks": 132995693
+    },
+    "3332919": {
+      "state": "R",
+      "startTicks": 132996503
+    },
+    "3333678": {
+      "state": "S",
+      "startTicks": 133003703
+    }
+  },
+  "excludedWarmups": {
+    "attempted": 15,
+    "correct": 15,
+    "failed": 0
+  },
+  "proofSha256": "a2571287aab8f63c9af2facf0a3ede4cf81558c403d3b5653ea8b3b33df49991",
+  "originalFinalizerImportFailure": "PRESERVED_RESOLVED_FROM_SAVED_PROOF_NOT_ACTIVE_BLOCKER",
+  "nativeCorroboration": ".omx/evidence/orca-monitor-20261010/K1-V2153-MEASURED-RESUME-VERIFIED-20261021T0318Z.json",
+  "custody": {
+    "sequence": 23,
+    "cases": 28,
+    "uniqueWavFiles": 28,
+    "audioReferences": 28,
+    "errors": [],
+    "files": 258
+  },
+  "sameSessionHardDeadlineUtc": "2026-10-21T06:59:42.981693+00:00",
+  "nextRoutineCheckUtc": "2026-10-21T03:26:46.946718+00:00",
+  "personalControlReleasedProviderReservationContinues": true,
+  "newWorker": false,
+  "sutCallsByObservation": 0
+}

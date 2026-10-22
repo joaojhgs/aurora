@@ -1,0 +1,135 @@
+{
+  "observedAt": "2026-10-20T19:49:15Z",
+  "runId": "run_e6054e76e9fc",
+  "taskId": "task_d7ea336050cf",
+  "dispatchId": "ctx_37b4d0a3c14f",
+  "classification": "changed_outcome_category_attention_to_execution_root",
+  "campaign": "thesis/campaigns/worker-desktop-k2-p2p-assistant-tts-v1826",
+  "actorObservation": [
+    {
+      "role": "controller",
+      "pid": 2830732,
+      "expectedStart": 129050331,
+      "actualStart": 129050331,
+      "state": "S",
+      "sameLive": true
+    },
+    {
+      "role": "backend",
+      "pid": 2830763,
+      "expectedStart": 129050436,
+      "actualStart": 129050436,
+      "state": "R",
+      "sameLive": true
+    },
+    {
+      "role": "copier",
+      "pid": 2831081,
+      "expectedStart": 129052325,
+      "actualStart": 129052325,
+      "state": "S",
+      "sameLive": true
+    }
+  ],
+  "progress": {
+    "updatedAt": "2026-10-20T19:48:09.115653+00:00",
+    "sequence": 227,
+    "progress": {
+      "attempted": 803,
+      "last_attempt_file": "attempts/attempt-0803-measured.jsonl",
+      "last_attempt_status": "failed",
+      "measured_attempted": 788,
+      "planned_measured": 900,
+      "planned_warmups": 15,
+      "status": "running",
+      "unattempted_measured": 112,
+      "warmups_attempted": 15
+    },
+    "phaseStatusCounts": {
+      "warmup:completed_correct": 15,
+      "measured:completed_correct": 774,
+      "measured:failed": 14
+    }
+  },
+  "newFailures": [
+    {
+      "name": "attempt-0801-measured.jsonl",
+      "path": "thesis/campaigns/worker-desktop-k2-p2p-assistant-tts-v1826/attempts/attempt-0801-measured.jsonl",
+      "physicallyPresent": true,
+      "expectedSha": "bb1a19e4fb4a58c5753c252c1460d175c5671af1f3bf0344da89298917fed4b2",
+      "bytes": 4873,
+      "sha256": "bb1a19e4fb4a58c5753c252c1460d175c5671af1f3bf0344da89298917fed4b2",
+      "fields": {
+        "phase_index": 786,
+        "status": "failed",
+        "failure": {
+          "code": "assistant_reply_predicate_failed",
+          "stage": "assistant"
+        },
+        "timeout": false,
+        "correctness": {
+          "assistant_reply_matches_expected_words": false,
+          "transcript_matches_reference_words": true
+        },
+        "consecutive_preaccept_rejections": 0,
+        "flow_duration_ms": 14176.635013,
+        "partial_quality_incorrect": true,
+        "within_request_deadline": true
+      }
+    },
+    {
+      "name": "attempt-0802-measured.jsonl",
+      "path": "thesis/campaigns/worker-desktop-k2-p2p-assistant-tts-v1826/attempts/attempt-0802-measured.jsonl",
+      "physicallyPresent": true,
+      "expectedSha": "364ee03c54620d53c9804cfe60f101c3ddd759d20301a1d3e0e3d3ef096ab28a",
+      "bytes": 4873,
+      "sha256": "364ee03c54620d53c9804cfe60f101c3ddd759d20301a1d3e0e3d3ef096ab28a",
+      "fields": {
+        "phase_index": 787,
+        "status": "failed",
+        "failure": {
+          "code": "assistant_reply_predicate_failed",
+          "stage": "assistant"
+        },
+        "timeout": false,
+        "correctness": {
+          "assistant_reply_matches_expected_words": false,
+          "transcript_matches_reference_words": true
+        },
+        "consecutive_preaccept_rejections": 0,
+        "flow_duration_ms": 13376.689835,
+        "partial_quality_incorrect": true,
+        "within_request_deadline": true
+      }
+    },
+    {
+      "name": "attempt-0803-measured.jsonl",
+      "path": "thesis/campaigns/worker-desktop-k2-p2p-assistant-tts-v1826/attempts/attempt-0803-measured.jsonl",
+      "physicallyPresent": true,
+      "expectedSha": "6f514b749921d16b3020c1e29519bd0bf155d8ffe2727f10955bd40008eb7d61",
+      "bytes": 4872,
+      "sha256": "6f514b749921d16b3020c1e29519bd0bf155d8ffe2727f10955bd40008eb7d61",
+      "fields": {
+        "phase_index": 788,
+        "status": "failed",
+        "failure": {
+          "code": "assistant_reply_predicate_failed",
+          "stage": "assistant"
+        },
+        "timeout": false,
+        "correctness": {
+          "assistant_reply_matches_expected_words": false,
+          "transcript_matches_reference_words": true
+        },
+        "consecutive_preaccept_rejections": 0,
+        "flow_duration_ms": 14219.40758,
+        "partial_quality_incorrect": true,
+        "within_request_deadline": true
+      }
+    }
+  ],
+  "interpretation": "Assistant correctness predicate failures, transcript correct and timeout false. consecutive_preaccept_rejections=0, so not evidence of the three-consecutive preaccept hardstop. Receiver/model cause and quality-policy terminal behavior are unverified.",
+  "requestedAction": "Root alone reconcile saved frozen quality policy and actual controller terminal/liveness once; preserve all outcomes and original denominator, no automatic replay/top-up, source/fixture/model/correctness changes or additional baseline.",
+  "nativeMonitorGoal": "01a123ff-19ba-7332-a2f7-346a722af79f",
+  "nativeMonitorStatus": "active"
+}

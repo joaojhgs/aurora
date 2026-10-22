@@ -1,0 +1,220 @@
+{
+  "schema": "aurora.k2_saved_terminal_analysis.v1",
+  "scope": "Current bounded check; fixed-file audio only",
+  "conditionManifestSha256": "a653d60065616e34844d956d1ed47038aa94f3ff876c36bf3a98e904ca838641",
+  "providerArchiveSha256": "232066d69ed28795544bf181ae8caac00340df71f73892a6f477d861661e24e6",
+  "sourceProcedureSha256": "aefa658239e4e8fab1e4690a6e6156448314f60e4d5c377defe7b0cf49748ed4",
+  "measured": 900,
+  "excludedWarmups": 15,
+  "outcomes": {
+    "completed_correct": 774,
+    "failed": 126
+  },
+  "failureKinds": {
+    "preaccept_capability_changed": 11,
+    "assistant_reply_predicate_failed": 115
+  },
+  "timeouts": 0,
+  "unattempted": 0,
+  "nativeMeasuredStageCounts": {
+    "stt": 900,
+    "assistant": 900,
+    "tts": 774
+  },
+  "nativeWarmupStageJoins": 45,
+  "excludedEarlierProviderCorrelationStagePairs": 30,
+  "routeCallJoinsIncludingWarmups": 1715,
+  "metrics": {
+    "successfulCorrectE2E": {
+      "n": 774,
+      "units": "ms",
+      "estimator": "Hyndman-Fan type 7",
+      "p50": 16524.5190135,
+      "p90": 19429.4432782,
+      "p95": 20761.114956149995,
+      "p99": 23069.04744742
+    },
+    "allMeasuredObservedAttempts": {
+      "n": 900,
+      "units": "ms",
+      "estimator": "Hyndman-Fan type 7",
+      "p50": 16347.1533105,
+      "p90": 19255.1733255,
+      "p95": 20585.01837915,
+      "p99": 23031.64014433
+    },
+    "nativeAllInvokedMeasured": {
+      "stt": {
+        "n": 900,
+        "units": "ms",
+        "estimator": "Hyndman-Fan type 7",
+        "p50": 8107.443547000001,
+        "p90": 10647.7682948,
+        "p95": 11766.732860549993,
+        "p99": 15008.48303946
+      },
+      "assistant": {
+        "n": 900,
+        "units": "ms",
+        "estimator": "Hyndman-Fan type 7",
+        "p50": 253.442318,
+        "p90": 381.360129,
+        "p95": 573.287141849998,
+        "p99": 1443.21539544
+      },
+      "tts": {
+        "n": 774,
+        "units": "ms",
+        "estimator": "Hyndman-Fan type 7",
+        "p50": 1651.4089605,
+        "p90": 1873.7839824999999,
+        "p95": 1975.1265617,
+        "p99": 2283.1239032
+      }
+    },
+    "nativeCorrectFullAudioOnly": {
+      "stt": {
+        "n": 774,
+        "units": "ms",
+        "estimator": "Hyndman-Fan type 7",
+        "p50": 8119.095037,
+        "p90": 10605.1549581,
+        "p95": 11746.19615195,
+        "p99": 14709.15838998999
+      },
+      "assistant": {
+        "n": 774,
+        "units": "ms",
+        "estimator": "Hyndman-Fan type 7",
+        "p50": 250.03181849999999,
+        "p90": 286.3057954,
+        "p95": 586.447642949996,
+        "p99": 1437.0608263199995
+      },
+      "tts": {
+        "n": 774,
+        "units": "ms",
+        "estimator": "Hyndman-Fan type 7",
+        "p50": 1651.4089605,
+        "p90": 1873.7839824999999,
+        "p95": 1975.1265617,
+        "p99": 2283.1239032
+      }
+    }
+  },
+  "resourceInputs": {
+    "worker": {
+      "identityMatchedSamples": 15227,
+      "excludedIdentityOrPrestartup": 0,
+      "counterErrorFields": {
+        "gpu.vendor": 15227,
+        "childNetwork": 1,
+        "childStatus.VmHWM": 1,
+        "childStatus.VmSize": 1,
+        "childStatus.VmRSS": 1
+      }
+    },
+    "desktop": {
+      "identityMatchedSamples": 18621,
+      "excludedIdentityOrPrestartup": 0,
+      "counterErrorFields": {
+        "gpu.gpu_busy_percent": 28,
+        "gpu.vendor": 130347
+      }
+    }
+  },
+  "resourceSemantics": "Same-host native span bracket samples. CPU deltas include bracket slack; process CPU excludes Piper child process CPU. RSS is sampled KiB. GPU and interface counters are host/device-level context, not exclusive request attribution; overlapping brackets must not be summed.",
+  "maxResourceBracketSlackMs": 1513.026308,
+  "clockSemantics": "Native durations use start/end within their own host monotonic domain. No cross-host monotonic subtraction; no network-only latency inferred.",
+  "routeSemantics": "Before/after selected nominated ICE transport snapshots; no continuous path-stability claim.",
+  "models": {
+    "llm": "57d1997790d1744fba5b40a7317df71ea5e2acee28c47e78f0cce39c0703f8cf",
+    "stt": "d01c3014881c9c6f3133c182f3d2887eb6ca1c789a7538c5c007196857a0a6a9",
+    "tts": "6f52a751e2349abe7a76735eb09dc1875298c77ea2342ffd2fef79ff81b87f22",
+    "ttsConfig": "141d612cc0a95ed7efc1ca936b845c2364967f2e9217c5dbfcf69fc4d6c65860"
+  },
+  "audio": {
+    "channels": 1,
+    "sampleRate": 22050,
+    "sampleWidthBytes": 2,
+    "wavBytes": 219794,
+    "wavSha256": "da0ecc4ad0885746ab6e716585473917ab2b543a505bf0db09ebacfaa7943cbb"
+  },
+  "actualStt": [
+    {
+      "actualArguments": {
+        "compute_type": "int8",
+        "device": "cpu",
+        "device_index": null,
+        "model": "/home/developer/.cache/huggingface/hub/models--Systran--faster-whisper-base/snapshots/ebe41f70d5b6dfa9166e2c581c45c9c0cfc57b66"
+      },
+      "event": "stt_constructor_start",
+      "monotonicNs": 1290514573963829,
+      "pid": 2830763
+    },
+    {
+      "actualArguments": {
+        "compute_type": "int8",
+        "device": "cpu",
+        "device_index": null,
+        "model": "/home/developer/.cache/huggingface/hub/models--Systran--faster-whisper-base/snapshots/ebe41f70d5b6dfa9166e2c581c45c9c0cfc57b66"
+      },
+      "actualComputeType": "int8_float32",
+      "actualDevice": "cpu",
+      "engine": {
+        "class": "ctranslate2._ext.Whisper",
+        "objectId": 276979964333936
+      },
+      "event": "stt_constructor_return",
+      "monotonicNs": 1290521425536875,
+      "pid": 2830763,
+      "returned": {
+        "class": "faster_whisper.transcribe.WhisperModel",
+        "objectId": 276979964339088
+      }
+    }
+  ],
+  "actualLlmConstructor": {
+    "actualArguments": {
+      "chat_format": "chatml-function-calling",
+      "max_tokens": 128,
+      "min_p": 0.0,
+      "model_path": "/home/developer/projects/aurora/.git/aurora-handoff-import-20261006/k1-provider-recovery-v1120/models/Qwen3.5-0.8B-Q4_0.gguf",
+      "n_batch": 64,
+      "n_ctx": 4096,
+      "n_gpu_layers": 100,
+      "n_threads": 2,
+      "repeat_penalty": 1.0,
+      "seed": 42,
+      "temperature": 0.0,
+      "top_k": 1,
+      "top_p": 1.0,
+      "verbose": true
+    },
+    "actualClient": {
+      "class": "llama_cpp.llama.AuroraOwnedLlama",
+      "objectId": 130238646808272
+    },
+    "effectiveWrapperSettings": {
+      "n_batch": 64,
+      "n_ctx": 4096,
+      "n_gpu_layers": 100,
+      "n_threads": 2,
+      "seed": 42,
+      "verbose": true
+    },
+    "event": "llm_constructor_return",
+    "monotonicNs": 265828915857924,
+    "pid": 3938202,
+    "returned": {
+      "class": "app.services.orchestrator.chat_llama_cpp.ChatLlamaCpp",
+      "objectId": 130238836927904
+    }
+  },
+  "gpuReadinessProof": "ordinary-warmup-proof-v1826/actual-new-process-gpu.json",
+  "knownReplyFormatOutcome": "115 failed strict city-only predicate; known 31-byte sentence was factually correct. Frozen predicate unchanged; skipped TTS has no expected output WAV.",
+  "receiverPreacceptCause": "UNKNOWN; observed structured capability_changed rejection, no causal inference",
+  "newSutCalls": 0,
+  "physicalMicrophonePlaybackAudibilityTested": false,
+  "allSourceDataPreserved": true
+}

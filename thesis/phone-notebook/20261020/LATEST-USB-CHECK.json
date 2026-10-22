@@ -1,0 +1,49 @@
+{
+  "schema": "aurora.phone_notebook.latest_usb.v2",
+  "at": "2026-10-22T02:53:35.719163+00:00",
+  "status": "PHONE_USB_RESTORED_BUILD_PILOT_BLOCKED_THERMAL",
+  "actualReceipt": "evidence/owner-fresh-check-20261022T025329/result.json",
+  "serverPid": 48127,
+  "serverExe": "/usr/lib/android-sdk/platform-tools/adb",
+  "phoneUsbInventory": [
+    {
+      "node": "/dev/bus/usb/003/015",
+      "product": "POCO X7 Pro",
+      "read": true,
+      "sysfs": "3-1",
+      "write": true
+    }
+  ],
+  "phoneAdbInventory": [
+    {
+      "serial": "KBX8LNFUBE5XGQRG",
+      "state": "device",
+      "model": "2412DPC0AG",
+      "usb": "3-1"
+    }
+  ],
+  "deviceGetStateExit": 0,
+  "deviceGetStateStderr": "",
+  "unauthorizedDialogObserved": false,
+  "newOrcaProxyInventory": [],
+  "nativePilotCalls": 0,
+  "overnightStarted": false,
+  "updatedAtUtc": "2026-10-22T02:53:35.719163+00:00",
+  "latestState": "PHONE_USB_RESTORED_BUILD_PILOT_BLOCKED_THERMAL",
+  "latestOwnerUpdate": "LATEST-OWNER-UPDATE.json",
+  "phoneState": "device",
+  "phoneStateAt": "2026-10-22T02:53:35.719163+00:00",
+  "latestPhoneState": "device",
+  "latestPhoneStateAt": "2026-10-22T02:53:35.719163+00:00",
+  "notebookTemperatureC": 90.75,
+  "currentMaxSensorC": 90.75,
+  "notebookLoad": [
+    4.15478515625,
+    6.4833984375,
+    7.80078125
+  ],
+  "nativeReadiness": false,
+  "deviceGetStateStdout": "device",
+  "newOrcaProxyInventoryObservedAt": "2026-10-22T01:21:44Z",
+  "usbPermissionActionPending": false
+}

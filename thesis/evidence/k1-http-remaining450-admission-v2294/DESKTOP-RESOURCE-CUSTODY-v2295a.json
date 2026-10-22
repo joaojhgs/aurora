@@ -1,0 +1,19 @@
+{
+  "at": "2026-10-21T21:14:42.262274+00:00",
+  "operation": "k1-http-next450-desktop-resource-v2295a",
+  "source": ".git/aurora-handoff-import-20261006/k1-http-next450-desktop-resource-v2295a-RESULT.json",
+  "copy": "thesis/evidence/k1-http-remaining450-admission-v2294/DESKTOP-RESOURCE-READ-v2295a.json",
+  "bytes": 1497,
+  "sha256": "d6f7f6d002a121cdd0239a3b1cc30faf58b7c8d2d2603cf65d9b24b616bdebde",
+  "verifiedCopySha256": "d6f7f6d002a121cdd0239a3b1cc30faf58b7c8d2d2603cf65d9b24b616bdebde",
+  "sendReceipt": ".git/aurora-handoff-import-20261006/k1-http-next450-desktop-resource-v2295a-SEND.json",
+  "sendReceiptSha256": "c895f1be74d9a7e2219d9ab7791f11cf1e2da38d2353342ab736a379c19a1bb3",
+  "sendRequestId": null,
+  "completedCursor": "159341",
+  "maximumSends": 1,
+  "sameOriginalPlainControlTerminal": "term_d5651d8d-58e2-4b38-85e2-51c668cc933c",
+  "sameIncarnation": "034ff933-61a3-4c74-b5ad-98a75e8ac21c",
+  "newInference": 0,
+  "lifecycleChanges": 0,
+  "resourceSnapshotNotSuccessorAdmission": true
+}

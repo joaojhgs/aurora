@@ -1,0 +1,15 @@
+{
+  "schema": "aurora.native-normal-ui-main.v1",
+  "at": "2026-10-16T13:34:16.327202+00:00",
+  "status": "FAILED_BEFORE_UI_SEND",
+  "normalUISends": 0,
+  "fileAudioInvocations": 0,
+  "measured": 0,
+  "phase": "NORMAL_UI_PROMPT_READY",
+  "errorClass": "TimeoutError",
+  "errorMessage": "normal_prompt_enabled_45s",
+  "ownerAbsent": true,
+  "scope": "Normal Assistant UI readiness; prompt disabled45s prevented send/render/reload/history. No appcrash or model-quality inference.",
+  "successfulSDKReadinessPreserved": "../native-desktop-file-audio-readiness-v1049/REPORT.md",
+  "next": "ExistingSol113 finite source-only canSend/local-sidecar readiness versus actual harness/profile authority diagnosis; no identical retry or blanket distributed/performance gate."
+}

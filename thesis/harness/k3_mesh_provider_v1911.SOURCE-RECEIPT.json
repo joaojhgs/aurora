@@ -1,0 +1,8 @@
+{
+  "status": "SOURCE_ONLY_AST_PASS_NOT_LAUNCHED",
+  "sourceSha256": "5e9d2212b0ee59848396888da919ef6a4695349bc880930a00e1aa1acd383dcd",
+  "baseSha256": "8cf12851d4a56cc84daa72f3de429cae2126c1a03123d674b5c997bffefd8bcd",
+  "diffBytes": 7855,
+  "newSutCalls": 0,
+  "delta": "Transcription catalogue/readiness plus actual weight/config identity, unchanged finite locks/resource/retirement controls"
+}

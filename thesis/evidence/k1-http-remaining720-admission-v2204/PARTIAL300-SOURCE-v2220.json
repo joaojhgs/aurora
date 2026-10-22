@@ -1,0 +1,43 @@
+{
+  "at": "2026-10-21T16:00:16.157856+00:00",
+  "status": "PARTIAL300_PREPARED_NO_NEW_RUNTIME",
+  "helpers": [
+    {
+      "path": "thesis/harness/prepare_k1_http_provider_v2220.py",
+      "bytes": 5680,
+      "sha256": "28ac2e890d7d63af26d7e04941bce605da12cce483cbd928b8b3ed5797bfbf85",
+      "parent": "prepare_k1_http_provider_v2209.py"
+    },
+    {
+      "path": "thesis/harness/launch_k1_http_provider_v2220.py",
+      "bytes": 3931,
+      "sha256": "c76b3f5e17210962c3f1e112ce16985f9f68241b6f092d2c2a366f9bcf911c5e",
+      "parent": "launch_k1_http_provider_v2210.py"
+    },
+    {
+      "path": "thesis/harness/custody_k1_http_requester_v2220.py",
+      "bytes": 17569,
+      "sha256": "5f40002c846a21825fc6f08fd4f1aaad8b2d18ac9a5b6ae6bd03acc5b35d1d56",
+      "parent": "custody_k1_http_requester_v2211.py"
+    },
+    {
+      "path": "thesis/harness/k1_http_partial300_root_v2220.py",
+      "bytes": 12201,
+      "sha256": "8367c0a1442150b1a1642454f1e3c6fa80b5f7164dacf54955e92c3e6c81a300",
+      "parent": "k1_http_remaining_root_v2212.py"
+    },
+    {
+      "path": "thesis/harness/k1_http_warmup_finalize_v2220.py",
+      "bytes": 8158,
+      "sha256": "70fd3d547e6032f6ad84b0e77767cb9b2d2e1a01fc96c133a26ea56bab503c4e",
+      "parent": "k1_http_warmup_finalize_v2213.py"
+    }
+  ],
+  "sourcePreparation": "thesis/harness/distributed-k1-http-first300-v2220/PREPARATION.json",
+  "rootAllocationBytesUnchanged": true,
+  "rootAllocationSha256": "069d883c8ae6b029feb1c116f34625d6687f4c08a30ba569042ef18fdf8d62c1",
+  "sourceSyntax": "AST passed",
+  "newProviders": 0,
+  "newWarmups": 0,
+  "newMeasured": 0
+}

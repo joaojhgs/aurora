@@ -1,0 +1,12 @@
+{
+  "controlDeadline": "2026-10-22T11:00:00Z",
+  "explicitNewline": true,
+  "host": "ssh:ssh-sem-notebook-personal",
+  "incarnation": "328cd72f-c7ea-49ff-a2db-b9275b085037",
+  "remoteResult": "/home/developer/projects/aurora/thesis/phone-notebook/20261020/evidence/read-runtime-and-loader-v296.json",
+  "rootAdmissionMessage": "existing-v2398 current runtime snapshot and own app loader labels, exclude pairing dialog contents",
+  "script": "scripts/read_runtime_and_loader_v296.py",
+  "scriptSha256": "e83fd452a2c6f6ea51185af04f6f4e6b4cffc9bb5bf10396ded6f05ca88e6f7d",
+  "singleSend": true,
+  "terminal": "term_a2ed5feb-7c92-48e4-bd88-d1b0e6737989"
+}

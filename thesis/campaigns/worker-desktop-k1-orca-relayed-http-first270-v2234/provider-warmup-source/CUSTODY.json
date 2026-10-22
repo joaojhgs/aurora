@@ -1,0 +1,50 @@
+{
+  "at": "2026-10-21T16:54:42.139581+00:00",
+  "status": "REMOTE_NATIVE_AND_CAPACITY_PROOF_READY_LOCAL_RUNNER_GATE_STILL_ENFORCED",
+  "warmups": 15,
+  "correct": 15,
+  "failed": 0,
+  "newMeasuredObserved": 0,
+  "observedWarmupP95Ms": 55736.2489304,
+  "estimator": "Hyndman-Fan Type7",
+  "forecastReferenceSeconds": 60.3053512957,
+  "remaining270ForecastSeconds": 20018.9338198068,
+  "availableWindows": {
+    "conditionConservativeRemainingSeconds": 23194.755334,
+    "providerRemainingMinus180Seconds": 20890.329073,
+    "rootRemainingMinus2400Seconds": 21685.092306,
+    "conditionAccountingRemainingMinus180Seconds": 25877.311833633998
+  },
+  "capacityAdmitted": true,
+  "receiver": {
+    "pid": 1440196,
+    "state": "S",
+    "startTicks": 35427408
+  },
+  "physicalSourceCopies": [
+    {
+      "path": "thesis/campaigns/worker-desktop-k1-orca-relayed-http-first270-v2234/provider-warmup-source/voice-stages.jsonl",
+      "bytes": 72825,
+      "sha256": "6153da390a493ce3dace9a17150455893a52b14d3bfc66bae589d4177f0a2f62",
+      "sourceOffset": 72825,
+      "sourceThrough": 145650
+    },
+    {
+      "path": "thesis/campaigns/worker-desktop-k1-orca-relayed-http-first270-v2234/provider-warmup-source/actual-provider-bindings.jsonl",
+      "bytes": 11295,
+      "sha256": "9adce68942cef07b4962cad5c6cbededced24ff14575b8299c775ff86eb3cade",
+      "sourceOffset": 12116,
+      "sourceThrough": 23411
+    },
+    {
+      "path": "thesis/campaigns/worker-desktop-k1-orca-relayed-http-first270-v2234/provider-warmup-source/receiver-identity.json",
+      "bytes": 1373,
+      "sha256": "46cea26a99e5b8f9587363dcb7272be52c1a5e3dc922a0a76931c1886430c58d",
+      "sourceOffset": 0,
+      "sourceThrough": 1373
+    }
+  ],
+  "localGate": "Requester runner independently enforces actual local STT/LLM binding/native proof before first181",
+  "newInferenceByFinalizer": 0,
+  "sameRemoteOperationSendCount": 1
+}

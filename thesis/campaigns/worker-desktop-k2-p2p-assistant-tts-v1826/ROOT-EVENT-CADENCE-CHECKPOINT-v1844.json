@@ -1,0 +1,78 @@
+{
+  "at": "2026-10-20T16:49:38.109335+00:00",
+  "classification": "verified_wait",
+  "nativeGoalThread": "01a112a5-d6bb-74e2-bf7c-ace73cb513b5",
+  "nativeGoalStatus": "active",
+  "fullObjectivePreserved": true,
+  "observation": {
+    "progress": {
+      "attempted": 166,
+      "last_attempt_file": "attempts/attempt-0166-measured.jsonl",
+      "last_attempt_status": "completed_correct",
+      "measured_attempted": 151,
+      "planned_measured": 900,
+      "planned_warmups": 15,
+      "status": "running",
+      "unattempted_measured": 749,
+      "warmups_attempted": 15
+    },
+    "outcomes": {
+      "completed_correct": 151
+    },
+    "processes": [
+      {
+        "pid": 2830732,
+        "startTicks": 129050331,
+        "identityMatches": true
+      },
+      {
+        "pid": 2830763,
+        "startTicks": 129050436,
+        "identityMatches": true
+      },
+      {
+        "pid": 2831081,
+        "startTicks": 129052325,
+        "identityMatches": true
+      }
+    ],
+    "custodyAt": "2026-10-20T16:48:11.378000+00:00",
+    "copiedCases": 164,
+    "copiedAudio": 164,
+    "copyErrors": [],
+    "diskFree": 4466524160
+  },
+  "supervisionCadence": {
+    "normalHealthyMode": "existing durable event wakeups with bounded mailbox waits; about five-minute local PID-start/progress/custody checks; immediate terminal/error handling",
+    "mailboxWaitMs": 50000,
+    "localCheckApproxSeconds": 300,
+    "avoid": "minute-by-minute LLM progress restatements, new watchdogs/workers/source changes/tests/reviews/campaign gates",
+    "publicCli": "/home/developer/.orca-relay/bin/orca",
+    "terminal": "term_6a00d9ee-792a-4daf-8578-236290e33108",
+    "run": "run_e6054e76e9fc",
+    "waitArguments": [
+      "orchestration",
+      "check",
+      "--terminal",
+      "term_6a00d9ee-792a-4daf-8578-236290e33108",
+      "--run",
+      "run_e6054e76e9fc",
+      "--wait",
+      "--timeout-ms",
+      "50000",
+      "--json"
+    ],
+    "ackPolicy": "Read every returned whole FIFO delivery before its exact --ack. ACK responses may deliver new messages; read before any further check. No resend on observation timeout.",
+    "realWaitReceipt": ".git/aurora-handoff-import-20261006/root-event-wait-v1843-01.json",
+    "realWaitOutcome": "timedOut=true, connectionLost=false; acknowledged delivery_c697655d5cc5; no messages; normal bounded wait, not campaign failure"
+  },
+  "monitorNudgeCopy": {
+    "path": "thesis/campaigns/worker-desktop-k2-p2p-assistant-tts-v1826/MONITOR-SUPERVISION-CADENCE-20261020T1645Z.json",
+    "bytes": 1706,
+    "sha256": "8e3b7ac85a2cd0d5a51c2df6e703e91823350b9e1b129f97a8331d4f2a69698e"
+  },
+  "newWorker": false,
+  "newCampaign": false,
+  "sourceOrSettingsChanged": false,
+  "nextGate": "Same frozen K2 900 natural terminal boundary, then requester/provider EOF custody and saved-data stage/resource joins. K1 remaining191 and wider matrix remain OPEN."
+}

@@ -1,0 +1,50 @@
+{
+  "at": "2026-10-18T17:28:55.153459+00:00",
+  "status": "ACTUAL_SINGLE_TAIL_LAUNCHED_WARMUP_GATE_PENDING",
+  "frozenManifestSha256": "f5381b6f24422bd61a4a41b3a561c7be8bd7f20bd05dcf7bff6caf67cf1a5426",
+  "progress": {
+    "attempted": 7,
+    "last_attempt_file": "attempts/attempt-0007-warmup.jsonl",
+    "last_attempt_status": "completed_correct",
+    "measured_attempted": 0,
+    "planned_measured": 184,
+    "planned_warmups": 15,
+    "status": "running",
+    "unattempted_measured": 184,
+    "warmups_attempted": 7
+  },
+  "pids": [
+    {
+      "role": "controller",
+      "pid": 1343280,
+      "startTicks": 112272114,
+      "sameLiveProcess": true
+    },
+    {
+      "role": "backend",
+      "pid": 1343339,
+      "startTicks": 112273198,
+      "sameLiveProcess": true
+    },
+    {
+      "role": "copier",
+      "pid": 1343281,
+      "startTicks": 112272115,
+      "sameLiveProcess": true
+    },
+    {
+      "role": "warmupFinalizer",
+      "pid": 1343282,
+      "startTicks": 112272116,
+      "sameLiveProcess": true
+    }
+  ],
+  "priorAttempts": 716,
+  "priorCorrect": 714,
+  "priorFailures": 2,
+  "newMeasuredAdmission": "Onlyafter15correctexcluded+45exactnativejoins",
+  "personalPlainControlReservedFor": "ExistingV1562warmupFinalizer1343282untilactualresult/cursorrelease",
+  "sameProviderAndForward": true,
+  "newOrcaWorkers": 0,
+  "sourceSettingsUnchangedAfterFreeze": true
+}

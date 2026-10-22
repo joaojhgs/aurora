@@ -1,0 +1,15 @@
+{
+  "schema": "aurora.thesis.changed-doc-links.v756",
+  "at": "2026-10-15T23:51:38.382320+00:00",
+  "files": [
+    "thesis/README.md",
+    "thesis/harness/python-cpu-v1/README.md",
+    "thesis/matrix/README.md",
+    "thesis/matrix/owner-dimensions-v755.md"
+  ],
+  "relativeLinksChecked": 30,
+  "failures": [],
+  "newMeasuredRequests": 0,
+  "modelsOrServicesLoaded": false,
+  "globalDocsCheck": "Previous retained check exit2/1049 findings; not repeated or weakened for these bounded doc edits."
+}

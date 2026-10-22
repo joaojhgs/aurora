@@ -1,0 +1,203 @@
+{
+  "at": "2026-10-22T08:34:20.999174+00:00",
+  "status": "READ_ONLY_CANDIDATE_REQUIRES_NEW_OWNER_AUTHORIZATION",
+  "path": "/home/developer/projects/aurora/apps/aurora-web/.next/cache/webpack",
+  "files": [
+    {
+      "relativePath": "client-production/0.pack",
+      "bytes": 177720644,
+      "allocatedBytes": 177725440,
+      "mtimeNs": 1791347332491183992
+    },
+    {
+      "relativePath": "client-production/1.pack",
+      "bytes": 15206041,
+      "allocatedBytes": 15208448,
+      "mtimeNs": 1791330751412627583
+    },
+    {
+      "relativePath": "client-production/10.pack",
+      "bytes": 844344,
+      "allocatedBytes": 847872,
+      "mtimeNs": 1791347332439183596
+    },
+    {
+      "relativePath": "client-production/11.pack",
+      "bytes": 3769,
+      "allocatedBytes": 4096,
+      "mtimeNs": 1791363410202069510
+    },
+    {
+      "relativePath": "client-production/12.pack",
+      "bytes": 16412908,
+      "allocatedBytes": 16416768,
+      "mtimeNs": 1791363410202069510
+    },
+    {
+      "relativePath": "client-production/13.pack",
+      "bytes": 841304,
+      "allocatedBytes": 843776,
+      "mtimeNs": 1791363410207069547
+    },
+    {
+      "relativePath": "client-production/2.pack",
+      "bytes": 2911181,
+      "allocatedBytes": 2912256,
+      "mtimeNs": 1791320865942274302
+    },
+    {
+      "relativePath": "client-production/3.pack",
+      "bytes": 27712757,
+      "allocatedBytes": 27713536,
+      "mtimeNs": 1791337996533953725
+    },
+    {
+      "relativePath": "client-production/4.pack",
+      "bytes": 1490602,
+      "allocatedBytes": 1490944,
+      "mtimeNs": 1791328604137198854
+    },
+    {
+      "relativePath": "client-production/5.pack",
+      "bytes": 1686843,
+      "allocatedBytes": 1687552,
+      "mtimeNs": 1791334412911600699
+    },
+    {
+      "relativePath": "client-production/6.pack",
+      "bytes": 5664323,
+      "allocatedBytes": 5664768,
+      "mtimeNs": 1791330751424627674
+    },
+    {
+      "relativePath": "client-production/7.pack",
+      "bytes": 350937,
+      "allocatedBytes": 352256,
+      "mtimeNs": 1791347332439183596
+    },
+    {
+      "relativePath": "client-production/8.pack",
+      "bytes": 11730889,
+      "allocatedBytes": 11730944,
+      "mtimeNs": 1791363410205069532
+    },
+    {
+      "relativePath": "client-production/9.pack",
+      "bytes": 1166279,
+      "allocatedBytes": 1167360,
+      "mtimeNs": 1791347332458183740
+    },
+    {
+      "relativePath": "client-production/index.pack",
+      "bytes": 61361714,
+      "allocatedBytes": 61362176,
+      "mtimeNs": 1791363410207069547
+    },
+    {
+      "relativePath": "client-production/index.pack.old",
+      "bytes": 61361301,
+      "allocatedBytes": 61362176,
+      "mtimeNs": 1791347332459183748
+    },
+    {
+      "relativePath": "edge-server-production/0.pack",
+      "bytes": 276,
+      "allocatedBytes": 4096,
+      "mtimeNs": 1791317144856733959
+    },
+    {
+      "relativePath": "edge-server-production/index.pack",
+      "bytes": 2563,
+      "allocatedBytes": 4096,
+      "mtimeNs": 1791317144856733959
+    },
+    {
+      "relativePath": "server-production/0.pack",
+      "bytes": 212051958,
+      "allocatedBytes": 212058112,
+      "mtimeNs": 1791347319130082190
+    },
+    {
+      "relativePath": "server-production/1.pack",
+      "bytes": 391311,
+      "allocatedBytes": 393216,
+      "mtimeNs": 1791330738130525892
+    },
+    {
+      "relativePath": "server-production/2.pack",
+      "bytes": 57828907,
+      "allocatedBytes": 57831424,
+      "mtimeNs": 1791337979271821935
+    },
+    {
+      "relativePath": "server-production/3.pack",
+      "bytes": 1978304,
+      "allocatedBytes": 1978368,
+      "mtimeNs": 1791328588176076495
+    },
+    {
+      "relativePath": "server-production/4.pack",
+      "bytes": 7277098,
+      "allocatedBytes": 7278592,
+      "mtimeNs": 1791334404439536182
+    },
+    {
+      "relativePath": "server-production/5.pack",
+      "bytes": 64119340,
+      "allocatedBytes": 64126976,
+      "mtimeNs": 1791330738135525930
+    },
+    {
+      "relativePath": "server-production/6.pack",
+      "bytes": 603480,
+      "allocatedBytes": 606208,
+      "mtimeNs": 1791337979288822065
+    },
+    {
+      "relativePath": "server-production/7.pack",
+      "bytes": 7623831,
+      "allocatedBytes": 7626752,
+      "mtimeNs": 1791347319052081596
+    },
+    {
+      "relativePath": "server-production/8.pack",
+      "bytes": 61936955,
+      "allocatedBytes": 61939712,
+      "mtimeNs": 1791363402044008962
+    },
+    {
+      "relativePath": "server-production/9.pack",
+      "bytes": 15528,
+      "allocatedBytes": 16384,
+      "mtimeNs": 1791363402049008999
+    },
+    {
+      "relativePath": "server-production/index.pack",
+      "bytes": 67458225,
+      "allocatedBytes": 67461120,
+      "mtimeNs": 1791363402049008999
+    },
+    {
+      "relativePath": "server-production/index.pack.old",
+      "bytes": 67458195,
+      "allocatedBytes": 67465216,
+      "mtimeNs": 1791347319055081618
+    }
+  ],
+  "fileCount": 30,
+  "fileAllocatedBytes": 935280640,
+  "duAllocatedBytes": 935297024,
+  "latestWriteUtc": "2026-10-07T08:56:50.207070+00:00",
+  "campaignStartedUtc": "2026-10-22T07:14:51.316179+00:00",
+  "trackedPaths": [],
+  "candidateOpenFileDescriptors": [],
+  "relevantProjectProcesses": [],
+  "inaccessibleProcessDirectories": 175,
+  "freeBeforeBytes": 2657214464,
+  "campaignOriginalRequesterLive": true,
+  "requesterStartTicks": 143363140,
+  "measuredCorrectPerStream": 70,
+  "actualDeletion": false,
+  "authorityBoundary": "Prior owner authorized only two old Rust incremental caches and explicitly said No other cleanup. This Next webpack cache is outside that scope.",
+  "proposedScope": "Only contents of the exact webpack cache directory, after a fresh process/FD/campaign recheck. Preserve Next build/output, SWC cache, all source, dependencies, binaries, models, .git, thesis and current campaign artifacts."
+}

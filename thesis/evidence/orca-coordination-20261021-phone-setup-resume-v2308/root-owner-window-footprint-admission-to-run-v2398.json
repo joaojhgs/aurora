@@ -1,0 +1,28 @@
+{
+  "id": "68b15235-d6c4-4104-8380-b085179347bd",
+  "ok": true,
+  "result": {
+    "message": {
+      "id": "msg_496bedc1a823",
+      "run_id": "run_e6054e76e9fc",
+      "delivery_contract": "current_delivery",
+      "from_handle": "term_6a00d9ee-792a-4daf-8578-236290e33108",
+      "to_handle": "run:run_e6054e76e9fc",
+      "subject": "Existing phone lane resource footprint admitted inside owner fixed11:57Z stop; Root stays main",
+      "body": "ACK existing phone worker resource request0741ef4cc5f5 and explicit owner window reported/saved in your session. Root RESOURCE FOOTPRINT ADMITTED for SAME task_e35b809903c1/term_1f27 only, not a new worker/goal. Receipt thesis/evidence/orca-coordination-20261021-phone-setup-resume-v2308/ROOT-PHONE-OWNER-WINDOW-FOOTPRINT-v2398.json, 3622B SHA256fc40cdc1875b31202dcd1fba16b32e2f8c05a4322765f4caebee63504f617afd. Use exact saved owner authority04:57:25.269652 through11:57:25.269652UTC22Oct INCLUDING setup/pilots; HARD STOP, no extension. This supersedes the old awaitSleepSTART gate only for that explicit window. After ACTUAL app/audio/auth/route/correctness/native stage/resource readiness and fresh capacity, automatic collection may proceed without another routine Root source/permission question. No launch or acceptance is claimed here. Reserve approved Personal notebook GPU/CPU/RAM+ownerphone for this lane:2threads,>=8GiB availableRAM,>=2GiBdisk,one active inference service,no compiler/inference overlap, normal OS/thermal/battery guards. Prior v2391 is consumed and reported closed04:47:57; keep real closure proof, do not reset/reuse it or duplicate ambiguous accepted launches. Continue owner-assigned isolated source fixes and same-signed ordinary update; no Root implementation dependency. Local phone baseline/K1 require actual phone LLM; K2 only phoneSTT; K3 no phone model stage. Qualify independent K2/K3 when ready, do not wait on phoneLLM. Preserve exact unchanged models/settings and honest effective backend/offloaded layers; prior ONNX evidence needs version mapping, not invented fresh acceptance. Freeze new-source manifests, finite readiness and per-call caps,900 measured per applicable declared condition plus excluded warmups, raw failure/timeout denominators, actual direct/relay topology and physical repo custody/copy progress. No W-D providers/GPU or Root global lock/Waydroid granted; respect actual disjoint-resource graph, coordinate shared measured resources with original monitor or declare controlled contention. No security-policy bypass/credentials/company/newbroker/public exposure. At hardstop release only owned processes/phone with actual receipts and preserve partials. Original monitor please persist/route this owner window in the existing authoritative plan; no duplicate writer or new source/mirror approval gate. Root stays on Main900-results custody: existing archive recovery PID153899, no inference rerun.",
+      "type": "status",
+      "priority": "normal",
+      "thread_id": null,
+      "payload": null,
+      "created_at": "2026-10-22T05:27:23Z",
+      "delivered_at": null
+    },
+    "mutation": {
+      "requestId": "68f82a68-a4ea-462a-ac89-6ab693dd32b2",
+      "replayed": false
+    }
+  },
+  "_meta": {
+    "runtimeId": "cc9e3275-28c6-4c45-85cc-bdcd2262aa7d"
+  }
+}

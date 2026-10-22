@@ -1,0 +1,37 @@
+{
+  "updatedAt": "2026-10-17T20:17:31.023238+00:00",
+  "authoritativePlan": "/home/developer/Documents/Obsidian Vault Origin/5-full-notes/faculdade/tcc/future-work-test-requirements.md",
+  "section": "30.49",
+  "oldBytes": 491522,
+  "oldSha256": "ccf603cd5cc0c041779a65e8e54b78b352905e8cdbf92ee5422009d4e9b7b439",
+  "newBytes": 500295,
+  "newSha256": "263d8e3840e26092f60174db90440b22854fd2d4f4b0eca06d5bb98fba4175a4",
+  "originalPrefixByteIdentical": true,
+  "permissionsPreserved": true,
+  "backup": ".omx/evidence/orca-monitor-20261010/authoritative-plan-before-30.49-20261017T2016.md",
+  "diff": ".omx/evidence/orca-monitor-20261010/authoritative-plan-30.49-20261017T2016.patch",
+  "rootCustodyImplementation": "PENDING_ACTUAL_ROOT_RECEIPTS; no copied-data claim",
+  "canonicalPlanPromotion": "PENDING_ROOT_EXACT_FULL_COPY_NOT_MEASUREMENT_INTERRUPT",
+  "storageOwner": "originalRoot solethesis/evidenceimplementation",
+  "planWriter": "originalmonitor",
+  "ownerEscalation": "msg_318cd0f28309",
+  "spaceSnapshot": {
+    "at": "2026-10-17T20:13UTC",
+    "totalBytes": 109128826880,
+    "usedBytes": 101435633664,
+    "availableBytes": 7676416000,
+    "usePercent": 93
+  },
+  "preserve": [
+    "source/git/worktree/dirtyfiles",
+    "activepaths/frozen1197/forward18000",
+    "all oldevidence and failurehistory",
+    "C06 andBrowser fullraw UNKNOWN until actual verifiedcopy"
+  ],
+  "noCleanupCommitPushOrTestByMonitor": true,
+  "lineage": {
+    "runId": "run_e6054e76e9fc",
+    "taskId": "task_d7ea336050cf",
+    "dispatchId": "ctx_37b4d0a3c14f"
+  }
+}

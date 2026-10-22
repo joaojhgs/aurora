@@ -1,0 +1,12 @@
+{
+  "controlDeadline": "2026-10-21T23:59:04.099104+00:00",
+  "explicitNewline": true,
+  "host": "ssh:ssh-sem-notebook-personal",
+  "incarnation": "328cd72f-c7ea-49ff-a2db-b9275b085037",
+  "remoteResult": "/home/developer/projects/aurora/thesis/phone-notebook/20261020/evidence/usb-authorized-custody-20261021T234904-g3.json",
+  "rootAdmissionMessage": "owner-direct-existing-phone-setup-receipt-custody",
+  "script": "evidence/usb-authorized-custody-20261021T234904-g3-copy.py",
+  "scriptSha256": "23b0a54fa8eb6792d07daf4ba8bfe0a414899a21aef5598ff1140f6c753076b9",
+  "singleSend": true,
+  "terminal": "term_a2ed5feb-7c92-48e4-bd88-d1b0e6737989"
+}

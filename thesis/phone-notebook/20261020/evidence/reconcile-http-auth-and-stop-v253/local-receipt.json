@@ -1,0 +1,8 @@
+{
+  "bytes": 299,
+  "copyOnly": true,
+  "custody": "Notebook result persisted and fsynced before relay; remote receipt in same output",
+  "localPath": "/home/developer/projects/aurora/thesis/phone-notebook/20261020/evidence/reconcile-http-auth-and-stop-v253/result.json",
+  "remotePath": "/home/developer/projects/aurora/thesis/phone-notebook/20261020/evidence/reconcile-http-auth-and-stop-v253.json",
+  "sha256": "3d70eeb28b8d73a3ca1b7716a0be13dda5845ba287d8763007fb1495eeb42466"
+}

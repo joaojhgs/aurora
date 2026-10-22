@@ -1,0 +1,38 @@
+{
+  "id": "remote-cli-1792641584643",
+  "ok": true,
+  "result": {
+    "runId": "run_e6054e76e9fc",
+    "deliveryId": "delivery_2a153fa06881",
+    "messages": [
+      {
+        "id": "msg_ab9e0013fd26",
+        "run_id": "run_e6054e76e9fc",
+        "delivery_contract": "current_delivery",
+        "from_handle": "term_2eab47ed-ab9b-4e35-bd9b-fc068c60e3fc",
+        "to_handle": "run:run_e6054e76e9fc",
+        "subject": "CLOSED tiny source overlay copied once; no source wait, main unchanged",
+        "body": "CLOSED tiny source overlay: worker e72eea6eb183 ACKed existing inbox/nudge, one copy finished03:54:01.974918Z. Saved repo result.json1383B SHA256136a5f0eb503661bfbd3e82017fb39acba79764ce8ea48dd2c52642008bbc187 matches both pre-admitted source/manifest hashes and sizes;13,260B total,0.224605077s inside32KiB/30s, modelCalls0, old1959snapshot/failure unchanged. New isolated application identity is ebde+source-closure-overlay-v2383; exact native dependencies reused locally. Closure .omx/evidence/orca-monitor-20261010/PHONE-SOURCE-CLOSURE-OVERLAY-COPY-CLOSED-20261022T0356Z.json SHA256 c0ac9af670cf11fa603914fe0fbb7a01759a7fb8c2b74105b591099716402100. No more source permission/copy/review or Root phone queries needed; existing worker owns APK qualification. This is not APK/native/API/P2P or900 acceptance. GPU attention remains scoped existing event32dad1161ff2, no repeat probe; main HTTP and its requested once-only final900/seal/release notice continue unchanged.",
+        "type": "status",
+        "priority": "normal",
+        "thread_id": null,
+        "payload": "{\"taskId\":\"task_d7ea336050cf\",\"dispatchId\":\"ctx_37b4d0a3c14f\",\"reportPath\":\".omx/evidence/orca-monitor-20261010/PHONE-SOURCE-CLOSURE-OVERLAY-COPY-CLOSED-20261022T0356Z.json\"}",
+        "created_at": "2026-10-22T03:56:12Z",
+        "delivered_at": null
+      }
+    ],
+    "count": 1,
+    "replayed": false,
+    "acknowledged": null,
+    "timedOut": false,
+    "cancelled": false,
+    "connectionLost": false,
+    "mutation": {
+      "requestId": "de766f32-b2ba-40de-beb1-b5477f58e775",
+      "replayed": false
+    }
+  },
+  "_meta": {
+    "runtimeId": "cc9e3275-28c6-4c45-85cc-bdcd2262aa7d"
+  }
+}

@@ -1,0 +1,67 @@
+{
+  "at": "2026-10-20T03:52:19.088253+00:00",
+  "phase": "ACTUAL_FIXED_SOURCE_P2P_K1_FULL_AUDIO_WARMUPS_RUNNING",
+  "nativeGoal": "01a112a5-d6bb-74e2-bf7c-ace73cb513b5",
+  "nativeStatus": "active",
+  "progress": {
+    "attempted": 8,
+    "last_attempt_file": "attempts/attempt-0008-warmup.jsonl",
+    "last_attempt_status": "completed_correct",
+    "measured_attempted": 0,
+    "planned_measured": 900,
+    "planned_warmups": 15,
+    "status": "running",
+    "unattempted_measured": 900,
+    "warmups_attempted": 8
+  },
+  "actors": [
+    {
+      "pid": 2326088,
+      "present": true,
+      "startTicks": 124639716,
+      "state": "S"
+    },
+    {
+      "pid": 2326096,
+      "present": true,
+      "startTicks": 124639833,
+      "state": "S"
+    },
+    {
+      "pid": 2326666,
+      "present": true,
+      "startTicks": 124644125,
+      "state": "S"
+    },
+    {
+      "pid": 2326667,
+      "present": true,
+      "startTicks": 124644125,
+      "state": "S"
+    }
+  ],
+  "correctWarmups": 8,
+  "failedWarmups": 0,
+  "provider": {
+    "controllerPid": 3194385,
+    "controllerStartTicks": 22320508,
+    "receiverPid": 3194394,
+    "receiverStartTicks": 22320527,
+    "manifestSha256": "245d1739111a7162287fcece91dc005958722e062a1e028613c3f85e21e3d339",
+    "actualReadyMethodConstraints": "en-us,standard:piper:en-us,residentdigest b69398ddef468b08ca38a8f52e5e1af17b6b8582b3cabcdf6c987f93ee43ac37,revision1"
+  },
+  "conditionManifestSha256": "04872dbd3948c13a4b269a1eb116f8b92fb3c369a8b0026cbbf339a2257009c1",
+  "nativeProof": "PENDING ordinary15warmups/one finalizer prefix read; no measured admission claimed",
+  "sourceFixReview": "PASS,36targetedtestsPASS,RuffPASS; source only3files changed",
+  "sourceReview": "thesis/evidence/p2p-tts-speech-route-wiring-20261020/SOL-CORRECTNESS-REVIEW.md",
+  "conditionMeasuredTarget": 900,
+  "conditionCapSeconds": 72000,
+  "requestCapSeconds": 180,
+  "providerLifetimeSeconds": 72840,
+  "originalOldProvider": "V1696 NATURALLY retired03:39:28exit0; allraw retained, no extension/restart",
+  "personalControl": "EXCLUSIVE originalRoot warmup finalizer until one15caseprefixread resolves; no competing sends",
+  "nextGate": "Same frozen run15correct excluded fullaudio warmups, exactpeer/provider/native/route proof, unchanged runner admission; then observe first measured. No extra tests or modelcalls.",
+  "methodology": "thesis/methodology/owner-requirements-20261020-a6b57bc4.md",
+  "k3": "CLOSED900=885correct12format3transport; finalraw/native/resource complete, singleSolreviewPASS; no repeats",
+  "android": "UNKNOWN original owning-host adb observer/binding; no absence claim or competing test"
+}

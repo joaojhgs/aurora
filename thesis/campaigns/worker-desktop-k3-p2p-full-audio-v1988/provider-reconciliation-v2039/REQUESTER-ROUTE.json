@@ -1,0 +1,54 @@
+{
+  "address_data_redacted": true,
+  "after": {
+    "clock_domain": "python.monotonic_ns:pid:3154248",
+    "peer_connection_instance_sha256": "fdd632e2ece763119bb5d6fb8d2d9ec287fe7bb60daa0ed9d7e7852d7cf34aec",
+    "peer_id_sha256": "77421aa81ce7ae2e865455348e9aa5ae17013d8f5e1f72d38d71d09f110ef868",
+    "pid": 3154248,
+    "sampled_monotonic_ns": 1318727795517013,
+    "selected_pairs": [
+      {
+        "component": 1,
+        "ice_transport_ordinal": 1,
+        "local_candidate_type": "host",
+        "local_protocol": "udp",
+        "nominated": true,
+        "pair_state": "succeeded",
+        "path_class": "direct",
+        "remote_candidate_type": "srflx",
+        "remote_protocol": "udp"
+      }
+    ],
+    "session_peer_id_sha256": "b277c4ee2f90ee25bf0566cdc5d25ddd6499bd1ff2d38552740d2c5238cd31da",
+    "status": "selected_nominated_pair_observed"
+  },
+  "before": {
+    "clock_domain": "python.monotonic_ns:pid:3154248",
+    "peer_connection_instance_sha256": "57372c4c6b888d7b7e88ebe225029ac403c214b3bd1b87814043c7727564b0ac",
+    "peer_id_sha256": "77421aa81ce7ae2e865455348e9aa5ae17013d8f5e1f72d38d71d09f110ef868",
+    "pid": 3154248,
+    "sampled_monotonic_ns": 1318547794639919,
+    "selected_pairs": [
+      {
+        "component": 1,
+        "ice_transport_ordinal": 1,
+        "local_candidate_type": "host",
+        "local_protocol": "udp",
+        "nominated": true,
+        "pair_state": "succeeded",
+        "path_class": "direct",
+        "remote_candidate_type": "srflx",
+        "remote_protocol": "udp"
+      }
+    ],
+    "session_peer_id_sha256": "b277c4ee2f90ee25bf0566cdc5d25ddd6499bd1ff2d38552740d2c5238cd31da",
+    "status": "selected_nominated_pair_observed"
+  },
+  "correlation_id": "audio-campaign-0da10fbd23d148a18e86a15ece270e83",
+  "request_monotonic_end_ns": 1318727795514213,
+  "request_monotonic_start_ns": 1318547794676760,
+  "request_outcome": "raised",
+  "requester_pid": 3154248,
+  "schema": "aurora.mesh_route_observation.v1",
+  "topic": "Transcription.Transcribe"
+}

@@ -1,0 +1,148 @@
+{
+  "status": "SAVED15_AUDIO_CORRECTNESS_NATIVE_GPU_QUALIFIED_QUEUE_OBSERVER_FAILED",
+  "warmupPairs": 15,
+  "correctPrimary": 15,
+  "correctCompanion": 15,
+  "nativeInvocationPairs": 90,
+  "nativeTtsCalls": 30,
+  "extraAutomaticTts": 0,
+  "nativeAcceleration": [
+    {
+      "actualOffloadedLayers": 25,
+      "totalLayers": 25
+    }
+  ],
+  "caseCorrelations": [
+    [
+      "c12-v2421-8e13e56c5b6740f9b859fcc85262afa0",
+      "c12-v2421-bfddcfdf2aa54b928abe7b28cc78a6cf"
+    ],
+    [
+      "c12-v2421-4f1b6f6d77e244b787684818a1671d4b",
+      "c12-v2421-0c30f44ff15642b89803ee456a97ebb6"
+    ],
+    [
+      "c12-v2421-0544d39891774fe69ae63a030080a1e1",
+      "c12-v2421-a998ed01c317400e9a4c233929b8a620"
+    ],
+    [
+      "c12-v2421-a2b4633c5ec148008403995f41141dc9",
+      "c12-v2421-f52798fe92024ae7bafe31ac3b3573f2"
+    ],
+    [
+      "c12-v2421-6098829905214e28957de82bb017fb5c",
+      "c12-v2421-ca5bf8eafb2f4a608eb70704bcd79c72"
+    ],
+    [
+      "c12-v2421-031e22f0ef684deea68dbff1884dcd5f",
+      "c12-v2421-453391c387154c1fba28d8ec8b139953"
+    ],
+    [
+      "c12-v2421-ca8f7d2a5b354b01b77399c7919e00dd",
+      "c12-v2421-1969954757114aea9774c7a6329b77c2"
+    ],
+    [
+      "c12-v2421-6c5c794d7e2e4fce8390c641608a12f2",
+      "c12-v2421-87e6fc24fa6a42c8828b26a5ed333a74"
+    ],
+    [
+      "c12-v2421-4621bfd95a2e4231a8ac8ab6bd3002f2",
+      "c12-v2421-43a0415541e244c5875964ea5e0c9167"
+    ],
+    [
+      "c12-v2421-cf5860857e48483eb335bc47cb66d206",
+      "c12-v2421-cc7d603d810244a68cfbc5b57d1b0164"
+    ],
+    [
+      "c12-v2421-c1ae232a8cc6461790757437dabc0e65",
+      "c12-v2421-3a3ca4a9a49d405586b006070531fdfd"
+    ],
+    [
+      "c12-v2421-366623242c874c978706fd3ab08a1d2e",
+      "c12-v2421-1d4d9f1253b54c2682840cfdac246150"
+    ],
+    [
+      "c12-v2421-a10b0f0dc0724559ac2a67f103a77eda",
+      "c12-v2421-e601edacdc8a442bb1af0b6e6e9efa62"
+    ],
+    [
+      "c12-v2421-29ade6f4a5404592ba3b041d793f89e1",
+      "c12-v2421-6d96915ebe2541beb6627e1cc8723321"
+    ],
+    [
+      "c12-v2421-044db1acb82a49efb38a83da09b25fab",
+      "c12-v2421-211a1a27225043238e1d1e8270ae3613"
+    ]
+  ],
+  "manifestSha256": "3817e5a54ef45cf806bd337689e0172ec7185d12fdcd54f1a342d07bdac321dd",
+  "sourceHashes": {
+    "campaign.py": "cdadf3e857fa4b39a22d7221653ab1b9d8174c2e4ccbaf322dbd5bff40a838df",
+    "collect_pair.py": "5c1f15a1c67807c6c846edf17f0b7e74899983429d9147a625945c7ad4832615",
+    "k3_composition.py": "777bfb6abf34a1485a38c1076c86a06776de4017f1f27715b326403aba15effa",
+    "local_composition.py": "aaf9585ad24429c44ea5ed78b00a7ad49369f324528f901ac46a56eae9b22ba0",
+    "local_producer.py": "d966d3024eae0cc4d448506220381b8e14bdb8a27bfcd253c90f3ba25229effe",
+    "paired_case.py": "32561e8cf770e13072689acaa87d360c7e1e5f8bfb54377becae5dc6b4b0e5a1",
+    "prepare_and_launch.py": "4c3ddab82ca0cc9694d765086a6f144cb6ee69b9c4904e1b294e76a4bd562c6d",
+    "provider_controller.py": "bede9e003991b41a778f4d4e6a7ef5e4a7a3e572a7fca75aa7714eb5e81b5e18",
+    "queue_observer.py": "34fdb8f412e0c7f028866599700e39fa22ed8074c38c458a6e125221acdc1a87",
+    "requester_controller.py": "8aafc5002e5dbd8fc5b7e1b66db1cc6b060859fdde5b8d689657393911b1f3ec",
+    "stage_adapter.py": "f678712c75a50146194ccb34331fab8d995f057461e565be99be8d69c2b364a6",
+    "warmup_gate.py": "0acf69bf2dc598a450149df389eb08783407a9d0a27208dfc1a194d7c729ec3f"
+  },
+  "configSha256": "1b2e464a9dd2a191954504161862d3aa19a991126eb2b08c4de55a40778fd002",
+  "audioSha256": "da0ecc4ad0885746ab6e716585473917ab2b543a505bf0db09ebacfaa7943cbb",
+  "sourceInventory": {
+    "inventory_path": "/home/developer/projects/aurora/thesis/sources/k3-stt-runtime-v1907/personal/source-inventory.json",
+    "inventory_sha256": "25026c4031e07d2e7cdac2afe269f78611ed375e53d3b64cd751b31867a552cf",
+    "root": "/home/developer/projects/aurora/thesis/sources/k3-stt-runtime-v1907/personal/source"
+  },
+  "modelFiles": {
+    "llmModel": {
+      "bytes": 563036064,
+      "path": "/home/developer/projects/aurora/.git/aurora-handoff-import-20261006/k1-provider-recovery-v1120/models/Qwen3.5-0.8B-Q4_0.gguf",
+      "sha256": "57d1997790d1744fba5b40a7317df71ea5e2acee28c47e78f0cce39c0703f8cf"
+    },
+    "model": {
+      "bytes": 63531379,
+      "path": "/home/developer/projects/aurora/.git/aurora-handoff-import-20261006/piper-asset-recovery-v1109/models/en_US-ljspeech-medium.onnx",
+      "sha256": "6f52a751e2349abe7a76735eb09dc1875298c77ea2342ffd2fef79ff81b87f22"
+    },
+    "piperExecutable": {
+      "bytes": 389,
+      "path": "/home/developer/projects/aurora/.git/aurora-handoff-import-20261006/k1-provider-recovery-v1120/env/bin/piper",
+      "sha256": "182cb51358f0ff104ee258f67f06c410243b81cee056552468977d6bca4cdf46"
+    },
+    "sttModel": {
+      "bytes": 145217532,
+      "path": "/home/developer/projects/aurora/.git/aurora-handoff-import-20261006/k1-provider-recovery-v1120/models/whisper-base/model.bin",
+      "sha256": "d01c3014881c9c6f3133c182f3d2887eb6ca1c789a7538c5c007196857a0a6a9"
+    },
+    "voiceConfig": {
+      "bytes": 4972,
+      "path": "/home/developer/projects/aurora/.git/aurora-handoff-import-20261006/piper-asset-recovery-v1109/models/en_US-ljspeech-medium.onnx.json",
+      "sha256": "141d612cc0a95ed7efc1ca936b845c2364967f2e9217c5dbfcf69fc4d6c65860"
+    }
+  },
+  "inputs": {
+    "thesis/campaigns/c12-mixed-local-http-900-v2421/provider-custody/0001/CUSTODY.json": "748cbb97ef76fb33a3c3d668609551d8245f61e2e7890c91060021b3fb57cddb",
+    "thesis/campaigns/c12-mixed-local-http-900-v2421/provider-custody/0002/CUSTODY.json": "a7b2dd17f2ae4046fb1951f327e9f07a6a6d6049474c71b31ad3efdd32319fb8",
+    "thesis/campaigns/c12-mixed-local-http-900-v2421/provider-custody/0003/CUSTODY.json": "2b6e6a4d3817e5b033be5f30918a99f357202adcb888addfe7233f0dade96f5d",
+    "thesis/campaigns/c12-mixed-local-http-900-v2421/provider-custody/0004/CUSTODY.json": "70fab871eb1c24e765a55482cc4cd6138b6abebcdbdf0a33fe9ab6fb5e16cb05",
+    "thesis/campaigns/c12-mixed-local-http-900-v2421/provider-custody/0005/CUSTODY.json": "07e99157d88aef6db83688153971374708166975c45b468039bfc67a382ec0a0",
+    "thesis/campaigns/c12-mixed-local-http-900-v2421/provider-custody/0006/CUSTODY.json": "a92cd634fa6550354e789b0e0f8cb2e6b82234b96f07009b4b33a6a1cdc268a0",
+    "thesis/campaigns/c12-mixed-local-http-900-v2421/provider-custody/0007/CUSTODY.json": "6e992a84ff1695ac588638f12e508a7266f90beb91f264e0f81667ac5f2acb44",
+    "thesis/campaigns/c12-mixed-local-http-900-v2421/provider-custody/0008/CUSTODY.json": "69a00fa03de2a4ef534c31a270479f459f3932b8c55303b2a6f60c2da752fc32",
+    "thesis/campaigns/c12-mixed-local-http-900-v2421/provider-custody/0009/CUSTODY.json": "7e3c5bcdb6d988abfcf22045ba0ff93df5ee55cc2b86bbfcb6f946fca89b571f",
+    "thesis/campaigns/c12-mixed-local-http-900-v2421/provider-custody/0010/CUSTODY.json": "9e8bbaa8911877d304cf17a76299c2911d75021388186ca831dc9fcef8d35832",
+    "thesis/campaigns/c12-mixed-local-http-900-v2421/provider-custody/0011/CUSTODY.json": "baa02ac387a9f824a2222aae0bd808457332db305a626118d7c7f837fbcde437",
+    "thesis/campaigns/c12-mixed-local-http-900-v2421/provider-custody/0012/CUSTODY.json": "0cdedef327512d54782a424cd37cd5e241e7b95317ce7fd7c7905b952365972c",
+    "thesis/campaigns/c12-mixed-local-http-900-v2421/provider-custody/0013/CUSTODY.json": "25f9a4ed2a4936f021a98450eb2b8cc68fe4656471c4b8866d1e7cbc51d6069e",
+    "thesis/campaigns/c12-mixed-local-http-900-v2421/provider-custody/0014/CUSTODY.json": "9ba8304043024d87de33318626e315d0a35ae5a164e7bfbcff0ca67d2fe98892",
+    "thesis/campaigns/c12-mixed-local-http-900-v2421/provider-custody/0015/CUSTODY.json": "38320a3e328a361cd57ca62f03427bd2812e73bab67bb6b000482d75b49c83c8"
+  },
+  "actualEnqueueEvidence": "MISSING: outer MeshBus publish observer did not intercept delegated inner LocalBus request publication",
+  "modelQualityFailure": false,
+  "newInference": 0,
+  "measuredConsumed": 0,
+  "noWarmupReplay": "Preserve these15passed fullaudio/model/GPU warmups; qualify corrected inner-bus observer in one additional excluded fresh-process pair, separately labelled/source-versioned, before900measured"
+}

@@ -1,0 +1,13 @@
+{
+  "at": "2026-10-21T02:46:22.169813+00:00",
+  "pid": 3325551,
+  "startTicks": 132924275,
+  "kind": "warmupFinalizer",
+  "maximumLaunches": 1,
+  "args": [
+    "python3",
+    "/home/developer/projects/aurora/thesis/harness/k1_mesh_warmup_finalize_v2143.py"
+  ],
+  "sutCallsByAuxiliary": 0,
+  "conditionSha256": "f14a3c823e3de0414b9184838c78b9746a3518320a651874ad6536fdb13e0cda"
+}

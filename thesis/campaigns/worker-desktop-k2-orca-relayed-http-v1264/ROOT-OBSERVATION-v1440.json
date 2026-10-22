@@ -1,0 +1,57 @@
+{
+  "at": "2026-10-18T02:48:25.093700+00:00",
+  "classification": "VERIFIED_WAIT",
+  "progress": {
+    "attempted": 390,
+    "last_attempt_file": "attempts/attempt-0390-measured.jsonl",
+    "last_attempt_status": "completed_correct",
+    "measured_attempted": 375,
+    "planned_measured": 900,
+    "planned_warmups": 15,
+    "status": "running",
+    "unattempted_measured": 525,
+    "warmups_attempted": 15
+  },
+  "measuredOutcomeCounts": {
+    "completed_correct": 375
+  },
+  "outcomeCountProvenance": {
+    "previousObservation": "thesis/campaigns/worker-desktop-k2-orca-relayed-http-v1264/ROOT-OBSERVATION-v1439.json",
+    "previousMeasured": 348,
+    "newClosedCaseRowsRead": 27
+  },
+  "processes": {
+    "588011": {
+      "same": true,
+      "state": "S",
+      "startTicks": 105853078
+    },
+    "588053": {
+      "same": true,
+      "state": "R",
+      "startTicks": 105853326
+    },
+    "588276": {
+      "same": true,
+      "state": "S",
+      "startTicks": 105855021
+    },
+    "421717": {
+      "same": true,
+      "state": "S",
+      "startTicks": 104535394
+    }
+  },
+  "frozenManifestSha256": "b15a49adffc5aaa43b426563d5776fa384c92f58e339030b69cb3877e98f2399",
+  "custody": {
+    "cases": 390,
+    "audio": 390,
+    "at": "2026-10-18T02:48:09.665024+00:00",
+    "missingPhysicalPaths": [],
+    "copierErrors": [],
+    "pendingStatic": [],
+    "receipt": "thesis/campaigns/worker-desktop-k2-orca-relayed-http-v1264/receipts/000194.json"
+  },
+  "observationWindow": "02:36:55 to02:45:00 original PID/startTicks/progress352->369; then ONE bounded provider-copier metadata read, no SUT calls",
+  "providerCustodyReceipt": "thesis/evidence/orca-relayed-http-v1197/provider-custody-observation-v1440/RECEIPT.json"
+}

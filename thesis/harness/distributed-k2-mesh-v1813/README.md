@@ -1,0 +1,25 @@
+# K2 P2P source candidate V1731
+
+Status: **Source only, not launched or scientifically admitted.**
+
+This is the prepared successor to the current K1 measurement. It retains the existing V905 real file-audio -> local STT -> exact-peer Orchestrator.ExternalUserInput -> exact-peer TTS.Synthesize pipeline, strict transcript/Paris/valid-audio correctness and 15warmup/900measured counts. No inference, builds, tests or new agents ran during preparation.
+
+The future private controller must reuse the already-approved worker-node-v1538 data and .env. It creates no new peer identity or credential. The requester now waits up to120seconds for the original local identity and both normal exact-topic catalogue/routes, including nonnull TTS speech constraints, before any ordinary warmup. This follows the qualified K1 admission pattern and performs only metadata requests.
+
+The400-file qualified application snapshot contains the reviewed three-file TTS routing fix. Its inventory and current installed runtime pins are copied exactly. Snapshot integrity replaces a false historical byte-equivalence assertion; old HTTP source/model/runtime/results remain separate retained evidence. New case IDs use v1731 in both runner and unchanged strict proof logic.
+
+SOURCE-QUALIFICATION.diff and SOURCE-QUALIFICATION-RECEIPT.json define this change. Other V905/V907 reports copied with the candidate are historical provenance only; they do not prove admission of V1731. Runtime pins must still match the actual staged files.
+
+After current K1 finishes and its evidence is sealed, Root alone may admit a fresh provider/requester using the existing approved task scopes. Match the completed K2HTTP effective setup: same weights/audio/task and configured llama n_gpu_layers=100, with actual25/25 Vulkan GPU offload proven on the new process, plus PiperCPU and worker accurate STTCPU. Do not silently set constructor layers to25 or claim an old GPU proof covers a new process. All other live resources, profile identity, grants and time windows require fresh admission.
+
+Ordinary15correct full-audio warmups and15localSTT plus30remote native/peer/route joins precede900measured attempts. No old900 baseline replay, hidden retry, local/HTTP substitution, unrelated UI gate or new worker is part of this candidate.
+
+Future measured-only structured pre-accept policy follows the already-qualified K1 rule: real result.ok is False, actual data.accepted is booleanFalse and actual reason_code is capability_changed, with exact observed peer/topic/correlation/clock/PID; retain failure and copied bounded response fields, then advance to the next distinct index. No retry/fallback. Three consecutive qualifying measured denials hard-stop; every warmup failure and all other ambiguous/system failures still stop. This is prospective K2 only; original monitor is sole methodology writer.
+
+The separate prospective Personal launcher is `../k2_mesh_provider_v1733.py`, derived from the current qualified K1 normal-service controller. It adds Assistant catalogue visibility, exact LLM weight/config declarations and independent Assistant identity alongside TTS. Actual configured100/loaded25-of25 Vulkan proof must still come from the new process and ordinary warmups. Its `.SOURCE-RECEIPT.json` and small `.diff` record source-only preparation; it has not launched or claimed GPU admission. Existing task state, profile/environment reference, finite resource/retirement controls and direct repository custody remain required.
+
+The original Sol monitor closed the single setup-timing finding on20October05:53UTC; exact reports/checksums are physically retained under `review/`. This closes the bounded requester source review. Setup duration begins after Supervisor construction and ends at condition start after route admission/bindings; outer process/transfer timing remains separate. Ordinary new-process native/GPU/warmup/resource gates remain pending.
+
+`../k2_mesh_saved_warmup_proof_v1735.py` is the future saved-data collector for those ordinary15warmups. It preserves bounded original native/binding prefixes inside a new physical thesis output, keeps case-scoped derivations separate, checks the new process and actual25/25 Vulkan log, and invokes this unchanged strict proof assembler. It performs no inference and does not publish the requester gate. Root must transfer/reconcile its result, verify local STT and actual remaining timing/resource windows, then publish the existing gate before measured request1. Source-only AST validation is recorded; the collector has not run.
+
+The provider delta and saved-data collector each passed one bounded Sol source review; reports are physically under `review/`. These source reviews are closed. The GPU record copies original selected nativeGPU lines; its full private-backend source byte/hash is provenance, not a copied full backend archive. Root retains important original diagnostics through existing safe custody without copying credential logs. Actual new-process warmup and serial resource/time admission remain pending.

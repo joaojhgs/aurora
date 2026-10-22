@@ -1,0 +1,17 @@
+{
+  "at": "2026-10-17T20:07:05.209894+00:00",
+  "cellRoot": "/home/developer/projects/aurora/.git/aurora-handoff-import-20261006/distributed-k1-orca-relayed-http-cell-v1197",
+  "controllerPid": 430655,
+  "controllerStartTicks": 104608580,
+  "credentialValueLogged": false,
+  "frozenManifest": {
+    "bytes": 13753,
+    "path": "/home/developer/projects/aurora/.git/aurora-handoff-import-20261006/distributed-k1-orca-relayed-launch-v1197/condition-frozen-v1197.json",
+    "sha256": "6bc65cf5cc3c4eddb90b80b0764a01e6a9fc4afbed66f33c731e3ab58528e101"
+  },
+  "host": "code-worker",
+  "plannedMeasured": 900,
+  "plannedWarmups": 15,
+  "providerManifestSha256": "450ee5af677a229e93f75c093e4e5ee3135c25b223f0d73f713f0c31f56c4cae",
+  "startupIsNotWarmupOrMeasurement": true
+}

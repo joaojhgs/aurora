@@ -1,0 +1,179 @@
+{
+  "at": "2026-10-22T11:38:47.819439+00:00",
+  "status": "NEXT_P2P_STATIC_STARTUP_LIFECYCLE_PREPARED_LIVE_ADMISSION_PENDING",
+  "conditionId": "C12-P2P-K3-DLOCAL",
+  "sourceOwner": "Original Root",
+  "compiledPythonFiles": 27,
+  "sourceFiles": {
+    "mesh_route_observer.py": {
+      "bytes": 9586,
+      "sha256": "db390cdc4e05718e111037b3118573aab5ee9215c57b8e4398767a8b07e6ce7a"
+    },
+    "local_composition.py": {
+      "bytes": 14282,
+      "sha256": "aaf9585ad24429c44ea5ed78b00a7ad49369f324528f901ac46a56eae9b22ba0"
+    },
+    "local_producer.py": {
+      "bytes": 4348,
+      "sha256": "fcb518cf6fb7ec7f773bc29c0e67d0ad235945e9036cf0198a745b1cfd8b59b4"
+    },
+    "campaign.py": {
+      "bytes": 2640,
+      "sha256": "cdadf3e857fa4b39a22d7221653ab1b9d8174c2e4ccbaf322dbd5bff40a838df"
+    },
+    "stage_adapter.py": {
+      "bytes": 10931,
+      "sha256": "f678712c75a50146194ccb34331fab8d995f057461e565be99be8d69c2b364a6"
+    },
+    "warmup_gate.py": {
+      "bytes": 8247,
+      "sha256": "3aaca72fe10e37833e7cf7f4c8bfdce629b9b7a9f47d3804437001bbe40d7551"
+    },
+    "config_semantics.py": {
+      "bytes": 3187,
+      "sha256": "076788a2239a11bfff3929a8a9a4cbe4f7f8d73f17cb963e39bb0e134eca8f15"
+    },
+    "route_observation_sink.py": {
+      "bytes": 11671,
+      "sha256": "d02cbff12f4bf88923cbbc8e6e990b1b140833b276fb112ca521dc21b40d1773"
+    },
+    "requester_controller.py": {
+      "bytes": 18359,
+      "sha256": "b2dd3dfaedd41a1107625a8c1159420f8f12ab061c1a26772221270a2aa05067"
+    },
+    "runtime_pins.py": {
+      "bytes": 7121,
+      "sha256": "c3e71266eec5b59d1fe2b63d383c9a31e1c5b247692ab591710a4619f43c3162"
+    },
+    "prepare_worker.py": {
+      "bytes": 8543,
+      "sha256": "425302f3be6aaacc0e5034bf687ed165e6e3acf1f86c805d02d016108ca27099"
+    },
+    "bindings.py": {
+      "bytes": 5492,
+      "sha256": "79558452e6f61268ad246476ca848e060b8ea808e15091bc53a3c4e0e28b1647"
+    },
+    "provider_prepare.py": {
+      "bytes": 13030,
+      "sha256": "50907bc4bf90edaf8445c6978e5c3203b9cbff6c52f94a531aa7b11561c16daa"
+    },
+    "collect_pair.py": {
+      "bytes": 5878,
+      "sha256": "f7efcd8d6bddb41a5322c9e5039a6ef4274d4cd386354dc1545ba0320035f38d"
+    },
+    "launch.py": {
+      "bytes": 7623,
+      "sha256": "98e1ff01d54c8debd717433cfff6c19b764891afe89e98bdf6a78cd7c270a8e5"
+    },
+    "queue_observer.py": {
+      "bytes": 2562,
+      "sha256": "a57ef99e9c48bd7442068d5ea8f8bee016141fbc5f4efd8f9a7e78a1a5631afb"
+    },
+    "provider_controller.py": {
+      "bytes": 19807,
+      "sha256": "94cf5a183bf55f859e4ade22f2f6ffef109c31e3c6f7fde17ddaf81878cc28ea"
+    },
+    "SOURCE-PREPARATION.json": {
+      "bytes": 8020,
+      "sha256": "61fd1be408103ab1fc93d598aa684f27b22421316df1002e7c0e9fa73663da06"
+    },
+    "resource_sample.py": {
+      "bytes": 7475,
+      "sha256": "8f62ec378e74036d4539d9159e3caf29b8fd7a9115de1ab0f482dfd58b6e1857"
+    },
+    "observer.py": {
+      "bytes": 11873,
+      "sha256": "784cc4bffc0d6824bbe378d17a7f632d587ca0a315896b048b2ebef727082df5"
+    },
+    "primary_case.py": {
+      "bytes": 5311,
+      "sha256": "d8d630537b93ba6cb83b6c668c11aedb858ae6e3eb9888b1e2343a41f61d1092"
+    },
+    "local_case.py": {
+      "bytes": 7897,
+      "sha256": "3e8986463cf5090d393e2eab2eef063f6a6a26a23be61d53c6e2894d48781c2b"
+    },
+    "aurora_voice_telemetry_v430.py": {
+      "bytes": 11584,
+      "sha256": "8129ffe7591a47a0107ede53b101aead9fc1f58b92f0c0c4203176cc7608325d"
+    },
+    "worker_runtime.py": {
+      "bytes": 9987,
+      "sha256": "ca251c27795c38bf17862170ac09611f807f5727175cec1a8f51ae5fb2b466d6"
+    },
+    "k3_composition.py": {
+      "bytes": 13755,
+      "sha256": "09399c07cfc44cfbaaac969af5c928e9ae57fab2d6848f76f29950e7fdc314bf"
+    },
+    "route_runtime_pins.json": {
+      "bytes": 2346,
+      "sha256": "5d79681b500485fd7c4c9e3d562a39af957b261f0f75452d25ad9fcc59dbc1db"
+    },
+    "mesh_stage_adapter.py": {
+      "bytes": 10765,
+      "sha256": "6e09f9d66a9178ff184f93395cd81b6bfe3828895a90003057eeeae6c1a0a719"
+    },
+    "authority_observer.py": {
+      "bytes": 2646,
+      "sha256": "4c180f08fb94db1b905f0a3b04d0c9ad0f99a32bf748e1cfe14cf73c213d7c52"
+    },
+    "README.md": {
+      "bytes": 4567,
+      "sha256": "7a5509461084db17f2df6e7619c2246cb3dd3809208a14b860fc757903689ce5"
+    },
+    "RETAINED-HELPER-PROVENANCE.json": {
+      "bytes": 1244,
+      "sha256": "4315246c248335808ee73c13c7ab4ca7be1664f4fe4f1d782ebf965dca628b15"
+    },
+    "admission_boundary.py": {
+      "bytes": 2957,
+      "sha256": "7188a93e6b7d46f2822c5807c5480b557ed051d043dfb7e55f35d28acfc1fa2f"
+    }
+  },
+  "nineQualifiedP2PModulesUnchanged": true,
+  "changedCodeRuffFatalChecks": "PASS",
+  "actualLaunchGuard": {
+    "status": "DEFERRED_NO_NEW_LIFECYCLE",
+    "boundary": {
+      "at": "2026-10-22T11:38:47.802081+00:00",
+      "predecessorOriginalRequesterPresent": false,
+      "predecessorReleaseReceiptPresent": true,
+      "predecessorReleased": false,
+      "interrupted260EpochReleased": true,
+      "remaining640EpochReleaseReceiptPresent": false,
+      "remaining640EpochReleased": false,
+      "currentConditionOperationalAdmission": false,
+      "newRuntimeNetworkOrInference": 0
+    },
+    "newActorsModelsNetwork": 0
+  },
+  "futureCampaignDirectoryAbsent": true,
+  "newLifecycleClockReservationActorOrModelCalls": 0,
+  "requesterDirectoryCreatedBeforeFutureLaunch": true,
+  "credentialsConfigsDatabasesWeightsCopied": 0,
+  "futureQualifiedWorkerRuntime": "cpu-full-audio-v487/env; exact interpreter and aiortc/aioice file pins retained",
+  "futureConfigPolicy": "Reference existing mutable qualified config with equal active semantics and same auth values; preserve immutable old frozen input, no credential copy",
+  "futureCopyHelper": "orca_copy_control_compact_v2453.py, actual working explicit Enter/max24reads/90s/lossless raw.gz",
+  "counts": {
+    "primaryMeasured": 900,
+    "localCompanionMeasured": 900,
+    "newExcludedWarmupPairs": 15
+  },
+  "remainingRealAdmission": [
+    "Whole current HTTP900 condition retirement, EOF/audio custody and release",
+    "Actual finite resource allocation with current free storage and admitted GPU/CPU/RAM",
+    "Fresh exact-peer normal catalogue/route/grant/lease/ICE and15 actual paired native/queue/audio/GPU warmups"
+  ],
+  "currentMain": {
+    "requesterPid": 462924,
+    "requesterStartTicks": 144596371,
+    "live": true,
+    "currentAt": "2026-10-22T11:38:24.940020+00:00",
+    "newMeasuredCorrectPerStream": 23,
+    "priorCorrectPerStream": 260,
+    "sourceHashesUnchanged": true
+  },
+  "noNewReviewOrStandalonePilotGate": true,
+  "phoneRootReadinessActions": 0,
+  "previousTurnClassification": "progress: recovered/sealed260perstream, retired oldactors and resumed remaining-only measured collection"
+}

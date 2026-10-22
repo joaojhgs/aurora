@@ -1,0 +1,42 @@
+{
+  "at": "2026-10-18T17:15:13.470199+00:00",
+  "goal": "01a112a5-d6bb-74e2-bf7c-ace73cb513b5",
+  "originalMonitor": "ctx_37b4d0a3c14f",
+  "originalMonitorTask": "task_d7ea336050cf",
+  "rootRole": "Sole serial executable/resource owner",
+  "android": {
+    "executionHost": "ssh:ssh-1786238480967-semdev",
+    "deviceClass": "historicallyapprovedWaydroid",
+    "serial": "192.168.240.112:5555",
+    "actualCommand": [
+      "/home/developer/.orca-relay/bin/orca",
+      "emulator",
+      "screenshot",
+      "--device",
+      "ssh-adb:WyJzc2gtMTc4NjIzODQ4MDk2Ny1zZW1kZXYiLCIxOTIuMTY4LjI0MC4xMTI6NTU1NSJd",
+      "--json"
+    ],
+    "error": {
+      "code": "runtime_error",
+      "message": "Command \"'/usr/bin/node' -\" failed (exit 1): ORCA_OBSERVER_RESULT:{\"observerError\":\"Execution-host observation failed\"}"
+    },
+    "emulatorAbsenceEstablished": false,
+    "newDeviceOrSecurityChanges": false
+  },
+  "mqtt": {
+    "primaryError": "Errno111 Connectionrefused broker.emqx.io:8084",
+    "existingFallbackError": "Errno101 Networkunreachable test.mosquitto.org:8081",
+    "availableApprovedRoutes": [
+      "desktop-aurora-tts -> Personal100.64.0.3:8000"
+    ],
+    "missingCapability": "Controller-approved existing-broker TCP/TLS/WebSocket reachability with original TLS hostname/auth/room, not newbroker/service/policyeditbyRoot"
+  },
+  "externalOperatorNotification": {
+    "status": "VERIFIED_RECIPIENT_ROUTE_UNAVAILABLE",
+    "sameRunCoordinatorIsRootNotExternalCoding": true,
+    "originalMonitorNotified": true,
+    "receipt": "v1565-monitor-external-routing-gap.json",
+    "notifiedOutsideOwner": "NOT_CLAIMED"
+  },
+  "independentProgress": "V1513all saveddata/resultreviewclosed; V1562remaining184sourceprepared/reviewpending andfreshexistingprovider17:11admittedmetadata, no newmodelrequestyet"
+}

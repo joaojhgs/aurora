@@ -1,0 +1,47 @@
+{
+  "id": "153438a1-646b-4fcf-92d1-23bc977033ae",
+  "ok": true,
+  "result": {
+    "terminals": [],
+    "hostScope": {
+      "hostIds": [
+        "ssh:ssh-sem-notebook-personal"
+      ],
+      "omittedHostIds": [
+        "local",
+        "ssh:ssh-1786238480967-semdev",
+        "ssh:ssh-oci-coding-worker",
+        "ssh:ssh-sem-notebook-university",
+        "ssh:ssh-sem-notebook-work"
+      ],
+      "omittedHostSelectors": [
+        {
+          "hostId": "local",
+          "selector": "--host local"
+        },
+        {
+          "hostId": "ssh:ssh-1786238480967-semdev",
+          "selector": "--host ssh:ssh-1786238480967-semdev"
+        },
+        {
+          "hostId": "ssh:ssh-oci-coding-worker",
+          "selector": "--host ssh:ssh-oci-coding-worker"
+        },
+        {
+          "hostId": "ssh:ssh-sem-notebook-university",
+          "selector": "--host ssh:ssh-sem-notebook-university"
+        },
+        {
+          "hostId": "ssh:ssh-sem-notebook-work",
+          "selector": "--host ssh:ssh-sem-notebook-work"
+        }
+      ]
+    },
+    "topologyRevisions": {},
+    "totalCount": 0,
+    "truncated": false
+  },
+  "_meta": {
+    "runtimeId": "cc9e3275-28c6-4c45-85cc-bdcd2262aa7d"
+  }
+}

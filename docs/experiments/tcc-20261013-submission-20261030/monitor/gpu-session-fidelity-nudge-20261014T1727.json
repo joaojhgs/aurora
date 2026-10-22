@@ -1,0 +1,25 @@
+{
+  "observed_at": "2026-10-14T17:27:55.918913+00:00",
+  "run": "run_e6054e76e9fc",
+  "task": "task_d7ea336050cf",
+  "dispatch": "ctx_37b4d0a3c14f",
+  "root_status": "msg_129499c328d4",
+  "root_delivery_ack": "delivery_64e0c460173a",
+  "monitor_nudge": "msg_17eaedaa09f9",
+  "owner_requirement": "Preserve methodology; rerun SAME e2e setup/workload/model/settings; original frozen CPU unchanged;900MEASUREDperNEWcondition",
+  "observed_proposed_difference": "GPU persistent3logicalblocks vs CPU3freshsessions; not actual equivalent lifecycle",
+  "requested_action": "Root retains fresh application/session lifecycle, explicitsetup/warmboundaries; e.g.3freshGPU sessions*300measured perapplicablecondition+excludedwarmups; no CPU rewrite or optionalmatrix",
+  "root_remaining_original_fixes": [
+    "originaliterator finallyaclose",
+    "passiverecorder known-incomplete stop"
+  ],
+  "root_fix_cap_s": 300,
+  "next_readiness_requests": 2,
+  "next_readiness_counts_as_main": false,
+  "next_readiness_cap_s": 600,
+  "full_primary_scope": "typedcomponent alone cannot close fullvoice/fullsurface individualGPU acceptance",
+  "root_ack_of_methodology_nudge": "pending",
+  "gpu_primary_started": false,
+  "dual_barrier_ready": false,
+  "monitor_source_or_tests_changed": false
+}

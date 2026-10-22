@@ -1,0 +1,115 @@
+{
+  "at": "2026-10-20T16:04:08.906988+00:00",
+  "status": "K2_CORRECTED_NATIVE_FILTER_AND_HANDOFF_REVIEWED_REQUESTER_RUNNING",
+  "nativeGoalStatus": "active",
+  "manifestSha256": "a653d60065616e34844d956d1ed47038aa94f3ff876c36bf3a98e904ca838641",
+  "actors": [
+    {
+      "pid": 2830732,
+      "present": true,
+      "startTicks": 129050331,
+      "state": "S"
+    },
+    {
+      "pid": 2830763,
+      "present": true,
+      "startTicks": 129050436,
+      "state": "R"
+    },
+    {
+      "pid": 2831081,
+      "present": true,
+      "startTicks": 129052325,
+      "state": "S"
+    },
+    {
+      "pid": 2831977,
+      "present": true,
+      "startTicks": 129058953,
+      "state": "S"
+    }
+  ],
+  "provider": {
+    "controller": {
+      "pid": 3938174,
+      "startTicks": 26503295,
+      "state": "S"
+    },
+    "receiver": {
+      "pid": 3938202,
+      "startTicks": 26503353,
+      "state": "S"
+    },
+    "manifestSha256": "d133ecead33bca857e64a5bee381b030f297155ab4e0e723eeb64fc16f4ce667",
+    "expiry": "2026-10-21T07:05:10.563606+00:00",
+    "unchanged": true
+  },
+  "progress": {
+    "attempted": 10,
+    "last_attempt_file": "attempts/attempt-0010-warmup.jsonl",
+    "last_attempt_status": "completed_correct",
+    "measured_attempted": 0,
+    "planned_measured": 900,
+    "planned_warmups": 15,
+    "status": "running",
+    "unattempted_measured": 900,
+    "warmups_attempted": 10
+  },
+  "reviews": {
+    "nativeHandlerAndHashPlumbing": "PASS_CLOSED/msg_e4c68ca67b67",
+    "packetDedup": "PASS_CLOSED/msg_c0c88fb7b9eb"
+  },
+  "savedNativeQualification": {
+    "actual30Joins": true,
+    "modelCalls": 0,
+    "physicalReceipt": "thesis/evidence/k2-native-proof-handler-qualification-v1823/QUALIFICATION-RECEIPT.json"
+  },
+  "actualSavedPacketBytes": 33368,
+  "packetCapBytes": 98304,
+  "proofGeneratorSha256": "3bb4af79cf2579023c0f1ff2025f69367717d49db7d09831c682c1bf52fc441f",
+  "finalizerSourceSha256": "7a65b52ff5cb6f964fb205ab0f24d992b292bcfa42e40448cc8f4be05b5dea49",
+  "plannedExcludedWarmups": 15,
+  "plannedMeasured": 900,
+  "noMeasuredAdmissionClaim": true,
+  "originalCumulativeBudget": {
+    "newOuterCapSeconds": 52200,
+    "originalCapSeconds": 57600,
+    "originalStartUtc": "2026-10-20T14:46:52.056334+00:00",
+    "priorElapsedSeconds": 3968.725641,
+    "providerAbsoluteDeadlineNotExtended": true
+  },
+  "K1": {
+    "attempted": 709,
+    "correct": 697,
+    "failed": 12,
+    "unattempted": 191
+  },
+  "copies": [
+    {
+      "path": "thesis/campaigns/worker-desktop-k2-p2p-assistant-tts-v1826/launch-metadata/requester-launch.json",
+      "bytes": 400,
+      "sha256": "a46e46cb99af82cf450079f46426338abe3b82770d2b0da9543fa57094d3a243"
+    },
+    {
+      "path": "thesis/campaigns/worker-desktop-k2-p2p-assistant-tts-v1826/launch-metadata/copier-LAUNCH-v1832.json",
+      "bytes": 318,
+      "sha256": "ccddf8ca9ce25e920af3e38be243bb3627d871492f4b2377bcb7fbf0bc9bc30f"
+    },
+    {
+      "path": "thesis/campaigns/worker-desktop-k2-p2p-assistant-tts-v1826/launch-metadata/finalizer-LAUNCH-v1833.json",
+      "bytes": 390,
+      "sha256": "55565e68d9b7265a7afa1eb6c8aa171fbfe39979a80d08c632b0d15c14b0d920"
+    },
+    {
+      "path": "thesis/campaigns/worker-desktop-k2-p2p-assistant-tts-v1826/launch-metadata/k2-provider-admission-v1831-RESULT.json",
+      "bytes": 6422,
+      "sha256": "efbe6946bcdf096c0ff7de56fbf2a453fa5bc9934846bf5214871685a00d3d4a"
+    },
+    {
+      "path": "thesis/campaigns/worker-desktop-k2-p2p-assistant-tts-v1826/launch-metadata/ACTUAL-PACKET-SIZE-v1830.json",
+      "bytes": 359,
+      "sha256": "c2b9fc4d973f548cac79b60742c7f863817c412388fab889ff40d27532060b1c"
+    }
+  ],
+  "controlReservation": "Original Personal plain shell RESERVED ONLY finalizer2831977/start129058953 until actual new1826result/cursor release; no competing source/model/ADB/build/remote commands"
+}

@@ -1,0 +1,27 @@
+{
+  "status": "complete",
+  "at": "2026-10-16T01:21:26.670359+00:00",
+  "sourceHost": "personal.skyron-server",
+  "sourceRoot": "/tmp/aurora-root-compatible900-analysis-v779/",
+  "destinationHost": "code-worker",
+  "destination": "/home/developer/projects/aurora/docs/experiments/tcc-20261013-submission-20261030/root/desktop-gpu-padded-local900-joined-v779",
+  "cursor": "177754",
+  "completedFiles": [
+    {
+      "name": "analysis-derived-results-v783.zip",
+      "bytes": 816890,
+      "sha256": "72412ba0364154ffc2c12a385019ee9cf0b915004421b85b837ad42a1beb909a",
+      "path": "/home/developer/projects/aurora/docs/experiments/tcc-20261013-submission-20261030/root/desktop-gpu-padded-local900-joined-v779/analysis-derived-results-v783.zip",
+      "savedCopySizeAndSHA256VerifiedOnce": true
+    }
+  ],
+  "operation": null,
+  "originalAuditRerun": false,
+  "destinationAdmission": {
+    "freeBytes": 9046159360,
+    "requiredBytes": 80816890,
+    "reserveBytes": 80000000
+  },
+  "updatedAt": "2026-10-16T01:22:12.291083+00:00",
+  "currentFile": null
+}

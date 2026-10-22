@@ -1,0 +1,6 @@
+{
+  "id": "python-provider-readiness-v1",
+  "prompt": "Reply with exactly OK.",
+  "predicate": "trimmed-exact-OK-v1",
+  "deadline_ms": 180000
+}

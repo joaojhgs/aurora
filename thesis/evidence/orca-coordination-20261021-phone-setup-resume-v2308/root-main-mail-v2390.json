@@ -1,0 +1,38 @@
+{
+  "id": "remote-cli-1792642804568",
+  "ok": true,
+  "result": {
+    "runId": "run_e6054e76e9fc",
+    "deliveryId": "delivery_cb7643ff1530",
+    "messages": [
+      {
+        "id": "msg_164940c673c0",
+        "run_id": "run_e6054e76e9fc",
+        "delivery_contract": "current_delivery",
+        "from_handle": "term_2eab47ed-ab9b-4e35-bd9b-fc068c60e3fc",
+        "to_handle": "run:run_e6054e76e9fc",
+        "subject": "Changed readiness: notebook GPU exposure restored; retire stale repair alert, actual model proof pending",
+        "body": "CHANGED GPU READINESS supersedes the actual capability blocker in event32dad1161ff2; do not repeat an owner GPU-repair/permission request from the stale report. Verified saved root-main-mail-v2389.json2077B SHA06936b8b6b02974ef507bc4cf0f3946d3c7d5620bb8a10bf7f5ae2977a4d1eea contains workerdfc0ea2c6b53: actual04:10:19\u201322Z both render nodes R/W, NVIDIA ICD/library present, pinned0.3.19 import seesAMD660M+RTX3050/support=true. This is readiness with ZERO model calls, not actual accelerator layers, model correctness, native/API/P2P or900 evidence. Existing worker continues ONLY v89 APK2jobs8GiB/deadline04:29:54; prior4GiB failure preserved and no900START. Same GPU attention dedup is now superseded by changed readiness; this available original-Run update is not claimed Coding/Telegram delivery. Report .omx/evidence/orca-monitor-20261010/NOTEBOOK-GPU-READINESS-RESTORED-PRIOR-ATTENTION-SUPERSEDED-20261022T0416Z.json SHA6490855b15a2b4a85667d5c587d7d2dee87833305332ba1071afa18b0ce5e06a. No duplicate notebook/device/security/driver checks by Root or monitor, no new gate. MainK1 remains frozen and the once-only owner BIG event still waits real full900/scopedanalysis/custody/retirement+release.",
+        "type": "status",
+        "priority": "normal",
+        "thread_id": null,
+        "payload": "{\"taskId\":\"task_d7ea336050cf\",\"dispatchId\":\"ctx_37b4d0a3c14f\",\"reportPath\":\".omx/evidence/orca-monitor-20261010/NOTEBOOK-GPU-READINESS-RESTORED-PRIOR-ATTENTION-SUPERSEDED-20261022T0416Z.json\"}",
+        "created_at": "2026-10-22T04:17:07Z",
+        "delivered_at": null
+      }
+    ],
+    "count": 1,
+    "replayed": false,
+    "acknowledged": null,
+    "timedOut": false,
+    "cancelled": false,
+    "connectionLost": false,
+    "mutation": {
+      "requestId": "20788790-ae83-4890-89f2-42cadc459c3c",
+      "replayed": false
+    }
+  },
+  "_meta": {
+    "runtimeId": "cc9e3275-28c6-4c45-85cc-bdcd2262aa7d"
+  }
+}

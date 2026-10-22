@@ -1,0 +1,20 @@
+{
+  "reason": "raw browser trace/screenshots/DOM may contain private pairing data; retained private only",
+  "files": [
+    {
+      "path": "artifacts/playwright-results/hosted-peer-live-shell-for-7a0e8-d-returns-the-live-response-chromium/test-failed-1.png",
+      "sha256": "c802f3ade93e4c492a009fb67fc867266f537053707121513a7d24a5e5f071a9",
+      "bytes": 61892
+    },
+    {
+      "path": "artifacts/playwright-results/hosted-peer-live-shell-for-7a0e8-d-returns-the-live-response-chromium/trace.zip",
+      "sha256": "bcbd35bf7bf08bd0f335350cbf1a99563e9e778bf5ea93a4b6ba589f019ed5a6",
+      "bytes": 2329273
+    },
+    {
+      "path": "artifacts/playwright-results/hosted-peer-live-shell-for-7a0e8-d-returns-the-live-response-chromium/error-context.md",
+      "sha256": "ddd32691dde3da73f27d7fd289cdb6ce1d38bfe80ebdea84bc6e2ddfaeb406b7",
+      "bytes": 19240
+    }
+  ]
+}

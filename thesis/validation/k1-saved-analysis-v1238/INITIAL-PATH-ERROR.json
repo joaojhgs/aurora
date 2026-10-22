@@ -1,0 +1,11 @@
+{
+  "at": "2026-10-17T20:51:46.337546+00:00",
+  "exitCode": 1,
+  "sourceSha256BeforeFix": "7d9a3968815461c8bb301d08c18242981123bec8f292b76c113f1bb476b4b7d4",
+  "error": "ValueError: relative requester-custody path was compared to absolute REPO in prefix_rows",
+  "stage": "saved-data input resolution before output creation",
+  "outputDirectoryCreated": false,
+  "modelQualityInference": false,
+  "newMeasurements": 0,
+  "sutCalls": 0
+}

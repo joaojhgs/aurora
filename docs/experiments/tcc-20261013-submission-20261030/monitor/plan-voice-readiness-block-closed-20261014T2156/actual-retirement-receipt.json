@@ -1,0 +1,28 @@
+{
+  "root_message": "msg_50478c1490b0",
+  "monitor_ack": "delivery_a97d5773d9ef",
+  "retirement": {
+    "message": "msg_50478c1490b0",
+    "at": "2026-10-14T21:59:10Z",
+    "terminal_exit_code": 0,
+    "terminal_exit_at": "2026-10-14T21:53:33.108701Z",
+    "both_named_pids_absent_at": "2026-10-14T21:54:10.510312Z",
+    "child_pid": 2786324,
+    "controller_pid": 2786310,
+    "prior_v427_absent": true,
+    "desktop_cursor": 4286,
+    "no_live_model_test_transfer": "Rootreported atreceipt; notglobalhostclaim"
+  },
+  "logical_full_flows": 4,
+  "all_nonpass": true,
+  "accepted_voice_samples": 0,
+  "saved_parent4_leg": "downstream_completed_parent_task_failed; not fifth sample/not continuous e2e",
+  "root_native_goal": "01a112a5-d6bb-74e2-bf7c-ace73cb513b5 ACTIVE",
+  "formal_goals": "1complete/1inprogress/11pending",
+  "next_gate": "source-reviewed T0 integration then one bounded connected admission; no900yet",
+  "whole_gpu_voice_surface_seal": false,
+  "phase2_measured_allowed": false,
+  "run": "run_e6054e76e9fc",
+  "task": "task_d7ea336050cf",
+  "dispatch": "ctx_37b4d0a3c14f"
+}

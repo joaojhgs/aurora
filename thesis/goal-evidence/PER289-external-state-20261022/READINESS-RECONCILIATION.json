@@ -1,0 +1,98 @@
+{
+  "at": "2026-10-22T12:09:30.615879+00:00",
+  "goal": "G010-per-289-per-288-add-lightweight-tran",
+  "issueId": "05c50e8f-f15c-4f11-89c0-f208a04e1c05",
+  "workspaceId": "8ba5e156-5ff4-4990-b201-7f5d435fdcef",
+  "technicalStage1": "RETAINED_ACCEPTED_ARCHIVE_AND_CONFIG_SOURCE_UNCHANGED",
+  "formalGoalComplete": false,
+  "currentArchivePr": {
+    "number": 175,
+    "state": "CLOSED",
+    "head": "14df693f0d3f00aa7468ec7be8f64438fec014da",
+    "merged": false
+  },
+  "currentCombinedProductPr": {
+    "number": 177,
+    "state": "OPEN",
+    "draft": true,
+    "head": "c0f4c0013cea5bb11ef81297194d0dc142a47bc4",
+    "baseSha": "2a7d0da4f6fb1054e6bdc0ad6cde83fdd954ca69",
+    "namedReviewDecisionObserved": "",
+    "formalGithubReviews": []
+  },
+  "archivePathCount": 18,
+  "configPolicyPathCount": 13,
+  "sourceDeltaInOwnedPaths": false,
+  "startGateMergeCommitsAreAncestorsOfActualGithubMain": true,
+  "githubCheckRollup": {
+    "175": {
+      "counts": {
+        "SUCCESS": 26,
+        "FAILURE": 0,
+        "CANCELLED": 25,
+        "SKIPPED": 1
+      }
+    },
+    "177": {
+      "counts": {
+        "SUCCESS": 42,
+        "FAILURE": 5,
+        "CANCELLED": 0,
+        "SKIPPED": 2
+      }
+    },
+    "172": {
+      "counts": {
+        "SUCCESS": 47,
+        "FAILURE": 0,
+        "CANCELLED": 0,
+        "SKIPPED": 2
+      }
+    },
+    "171": {
+      "counts": {
+        "SUCCESS": 32,
+        "FAILURE": 0,
+        "CANCELLED": 0,
+        "SKIPPED": 1
+      }
+    }
+  },
+  "currentMulticaReadAdmission": {
+    "at": "2026-10-22T12:02:34.838328+00:00",
+    "skill": ".omx/task-intake/multica-cli-SKILL.md",
+    "expectedWorkspace": "8ba5e156-5ff4-4990-b201-7f5d435fdcef",
+    "readOnly": true,
+    "credentialsGrantsProfilesOrSecurityChanged": false,
+    "commands": [
+      {
+        "command": "multica version",
+        "exitCode": 0,
+        "rawOutputNotStored": true,
+        "version": "0.5.3",
+        "minimumSkillVersionMet": true
+      },
+      {
+        "command": "multica auth status",
+        "exitCode": 0,
+        "rawOutputNotStored": true,
+        "reportedAuthFailure": true,
+        "reportedAuthenticated": false,
+        "safeOutputLines": []
+      },
+      {
+        "command": "multica config show",
+        "exitCode": 0,
+        "rawOutputNotStored": true,
+        "configuredExpectedWorkspaceMentioned": true,
+        "configurationValuesNotExported": true
+      }
+    ]
+  },
+  "currentTrackerIssueAndLinkage": "UNVERIFIED; auth status reports no usable authentication, no bypass or login attempted",
+  "externalNamedQaThenArchitectAcknowledgements": "UNVERIFIED; retained local reviews explicitly do not grant these",
+  "genuineCaptureAddedAsArchiveGate": false,
+  "newTestsReviewsCiRunsAuthChangesOrWorkers": 0,
+  "mainCampaignHeld": false,
+  "nextAllowedCloseoutAction": "After existing supported authentication is usable: read exact issue and linked PRs in same workspace, then record accurate existing delivery without agent mentions or new runs; preserve actual QA/architect requirements."
+}

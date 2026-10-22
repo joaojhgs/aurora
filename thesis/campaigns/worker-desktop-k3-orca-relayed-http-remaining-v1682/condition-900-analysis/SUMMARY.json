@@ -1,0 +1,207 @@
+{
+  "analysisSourceSha256": "fcc27e6a8f44ae8933bbcde2460291809908cbf812b296bd9dc40d6339519937",
+  "at": "2026-10-20T02:52:04.294654+00:00",
+  "comparability": {
+    "identicalRecordedScientificFields": [
+      "comparisonFamilyId",
+      "audio",
+      "candidateManifestSha256",
+      "models",
+      "effectiveSetup",
+      "effectiveEnvironment",
+      "sourceClosure",
+      "runtime",
+      "runtimeVersions",
+      "remoteReceivers",
+      "remoteAssistantConfigBinding",
+      "remoteAssistantResponseIdentity",
+      "remoteConfiguredLlm",
+      "remoteSttEndpointSha256",
+      "remoteAssistantEndpointSha256",
+      "remoteTtsEndpointSha256",
+      "remoteAuthBinding",
+      "stagePlacement",
+      "workerHardware",
+      "transportClassification",
+      "routeClassification"
+    ],
+    "normalization": "Only local auth token excluded; model/settings/source/runtime/route descriptors exact",
+    "normalizedConfigHash": "1ff4a2fef817f04862af88cbfc304a1a2fa83490a6252e09df5436fb2f2587e4",
+    "operationalChanges": "Request/process/lifecycle identities and excluded warmups; raw runtime config differences limited to documented local token migration",
+    "poolingScope": "Only these matched GPU-provider K3 Orca-relayed HTTP epochs; no CPU, other fixture/model, direct-HTTP, P2P or surface cohorts",
+    "providerLifecycles": "V1481/V1513/V1620 reused original provider; V1682 separate fresh provider after original retirement"
+  },
+  "correctOnlyLatencyMs": {
+    "denominator": 885,
+    "p50_ms": 30277.170251,
+    "p90_ms": 31243.1636454,
+    "p95_ms": 31787.947598400002
+  },
+  "correctnessDenominator": 900,
+  "counts": {
+    "attempted": 900,
+    "correct": 885,
+    "failedOrInterrupted": 15,
+    "incorrect": 0,
+    "outcomes": {
+      "completed_correct": 885,
+      "failed": 15
+    },
+    "timeouts": 0
+  },
+  "epochs": [
+    {
+      "correctOnlyLatencyMs": {
+        "denominator": 512,
+        "p50_ms": 30319.603404,
+        "p90_ms": 31478.8600903,
+        "p95_ms": 31878.2577095
+      },
+      "counts": {
+        "attempted": 513,
+        "correct": 512,
+        "failedOrInterrupted": 1,
+        "incorrect": 0,
+        "outcomes": {
+          "completed_correct": 512,
+          "failed": 1
+        },
+        "timeouts": 0
+      },
+      "epoch": "V1481",
+      "firstGlobalIndex": 1,
+      "lastGlobalIndex": 513,
+      "providerManifestSha256": "b4b95d579c29695832c05d96692f2f15fd51cf3258333b9175091ab357280887",
+      "providerReceiver": {
+        "pid": 1227894,
+        "startTicks": 6621473
+      }
+    },
+    {
+      "correctOnlyLatencyMs": {
+        "denominator": 202,
+        "p50_ms": 30281.020010499997,
+        "p90_ms": 31085.7177411,
+        "p95_ms": 31503.6818292
+      },
+      "counts": {
+        "attempted": 203,
+        "correct": 202,
+        "failedOrInterrupted": 1,
+        "incorrect": 0,
+        "outcomes": {
+          "completed_correct": 202,
+          "failed": 1
+        },
+        "timeouts": 0
+      },
+      "epoch": "V1513",
+      "firstGlobalIndex": 514,
+      "lastGlobalIndex": 716,
+      "providerManifestSha256": "b4b95d579c29695832c05d96692f2f15fd51cf3258333b9175091ab357280887",
+      "providerReceiver": {
+        "pid": 1227894,
+        "startTicks": 6621473
+      }
+    },
+    {
+      "correctOnlyLatencyMs": {
+        "denominator": 11,
+        "p50_ms": 30361.644802,
+        "p90_ms": 31998.645717,
+        "p95_ms": 32039.2865055
+      },
+      "counts": {
+        "attempted": 24,
+        "correct": 11,
+        "failedOrInterrupted": 13,
+        "incorrect": 0,
+        "outcomes": {
+          "completed_correct": 11,
+          "failed": 13
+        },
+        "timeouts": 0
+      },
+      "epoch": "V1620",
+      "firstGlobalIndex": 717,
+      "lastGlobalIndex": 740,
+      "providerManifestSha256": "b4b95d579c29695832c05d96692f2f15fd51cf3258333b9175091ab357280887",
+      "providerReceiver": {
+        "pid": 1227894,
+        "startTicks": 6621473
+      }
+    },
+    {
+      "correctOnlyLatencyMs": {
+        "denominator": 160,
+        "p50_ms": 30166.662922,
+        "p90_ms": 30922.5251632,
+        "p95_ms": 31162.45541595
+      },
+      "counts": {
+        "attempted": 160,
+        "correct": 160,
+        "failedOrInterrupted": 0,
+        "incorrect": 0,
+        "outcomes": {
+          "completed_correct": 160
+        },
+        "timeouts": 0
+      },
+      "epoch": "V1682",
+      "firstGlobalIndex": 741,
+      "lastGlobalIndex": 900,
+      "providerManifestSha256": "61fe867af6495a6e130c1148b73b97ac3ca14755dbcba9a034a155d04fa2d62e",
+      "providerReceiver": {
+        "pid": 2991345,
+        "startTicks": 21245707
+      }
+    }
+  ],
+  "failureCodes": {
+    "assistant_reply_predicate_failed": 12,
+    "transport_ambiguous": 3
+  },
+  "limitations": "Four interrupted/continued epochs, not one uninterrupted process. Report cohort strata; no causal inference from provider restart or performance. Model/transport failures preserved; native/resource reports remain separately scoped.",
+  "newMeasurements": 0,
+  "partialQualityFailures": 12,
+  "populationPolicy": "All900 outcomes retained. Latency quantiles condition on885 correct completed valid-audio responses;15 failed/partial attempts are excluded from successful e2e latency, not from outcome denominators. Epoch strata and warmup/setup histories remain separate.",
+  "quantileMethod": "Hyndman-Fan Type7 h=(n-1)*p, linear interpolation; milliseconds; raw rows pooled, never percentile summaries averaged",
+  "references": [
+    {
+      "path": "thesis/campaigns/worker-desktop-k3-orca-relayed-http-v1481/condition-frozen.json",
+      "sha256": "54d51acdf8219b4e69f21cabb9d9fb1b402acf9826196dbdcea4fcfd15bddb25"
+    },
+    {
+      "path": "thesis/campaigns/worker-desktop-k3-orca-relayed-http-v1481/terminal-v1506/final-artifacts/summary.json",
+      "sha256": "e0fd80e370938dda4ff38a4d6004ac3d74d3598b930f1da381c80f987cdc455e"
+    },
+    {
+      "path": "thesis/campaigns/worker-desktop-k3-orca-relayed-http-remaining-v1513/condition-frozen.json",
+      "sha256": "b19c10d9aad4f9a2261d7eac5b52c258315eea94db256a411e66981e6a45d4a4"
+    },
+    {
+      "path": "thesis/campaigns/worker-desktop-k3-orca-relayed-http-remaining-v1513/terminal-v1549/final-artifacts/summary.json",
+      "sha256": "5c87fe077e1f54375e122da07de885786c77911fcbfd78eb2d8dfd83b7e3d415"
+    },
+    {
+      "path": "thesis/campaigns/worker-desktop-k3-orca-relayed-http-remaining-v1620/condition-frozen.json",
+      "sha256": "4f1a09e7ac7dedeaeae6c1bef5a364d4a007e9249aec74f20a0b63b6375a6279"
+    },
+    {
+      "path": "thesis/campaigns/worker-desktop-k3-orca-relayed-http-remaining-v1620/terminal-v1637/summary.json",
+      "sha256": "d1d29fe13c5d858d8c4e67727ef8d0cc1bc2f2c1adb2d3597955cf67435dc864"
+    },
+    {
+      "path": "thesis/campaigns/worker-desktop-k3-orca-relayed-http-remaining-v1682/condition-frozen.json",
+      "sha256": "32c5ac87c8cd765f0117a0312b6941c8f69c7731dfe66987826311e74e34b506"
+    },
+    {
+      "path": "thesis/campaigns/worker-desktop-k3-orca-relayed-http-remaining-v1682/terminal-20261020T0213/summary.json",
+      "sha256": "5f6d4927ee4854c6a7d9285b492fb53d647eeb31427130c359c8b9f728cc3756"
+    }
+  ],
+  "status": "900_COLLECTED_MATCHED_FOUR_EPOCHS_COMBINED_METRICS_PENDING_SINGLE_BOUNDED_REVIEW",
+  "sutCalls": 0,
+  "timeoutFieldAbsent": 0
+}

@@ -1,0 +1,12 @@
+{
+  "controlDeadline": "2026-10-22T07:05:00Z",
+  "explicitNewline": true,
+  "host": "ssh:ssh-sem-notebook-personal",
+  "incarnation": "328cd72f-c7ea-49ff-a2db-b9275b085037",
+  "remoteResult": "/home/developer/projects/aurora/thesis/phone-notebook/20261020/evidence/copy-build-v205-19.json",
+  "rootAdmissionMessage": "owner-copy-only-dual-physical-custody118KB-no-model-APK-or-private-data",
+  "script": "scripts/copy-build-v205-19.py",
+  "scriptSha256": "6d9445cb924d00a463b1c14f88b54fd8457a39dde503c60a2006f63a15ef4c9d",
+  "singleSend": true,
+  "terminal": "term_a2ed5feb-7c92-48e4-bd88-d1b0e6737989"
+}

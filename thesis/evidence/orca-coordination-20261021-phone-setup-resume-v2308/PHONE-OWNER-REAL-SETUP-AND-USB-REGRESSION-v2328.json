@@ -1,0 +1,68 @@
+{
+  "id": "remote-cli-1792626965314",
+  "ok": true,
+  "result": {
+    "runId": "run_e6054e76e9fc",
+    "deliveryId": "delivery_8dbd9da30c10",
+    "messages": [
+      {
+        "id": "msg_d8fca341321f",
+        "run_id": "run_e6054e76e9fc",
+        "delivery_contract": "current_delivery",
+        "from_handle": "term_1f27be31-0284-4366-bb91-30fe538cd30e",
+        "to_handle": "run:run_e6054e76e9fc",
+        "subject": "Owner requests finish real setup: finite disjoint resource admission needed",
+        "body": "Owner now authorizes finishing real setup/pilot, scoped pinned venv installs, exact existing774455356B model assets/source copy, APK build/install, and enabling already-saved home Wi-Fi on this phone; no900/night start. I am performing phone Wi-Fi/native-local preparation independently and request a concrete disjoint window: source archive <=12MiB/120s first; exact assets775MiB capped2MiB/s/10min next; notebook-only pinned-runtime/APK work max2CPU/4GiB/20min after notebook guards, no shared worker build or main SUT process changes. Please return actual permitted source/asset transfer and notebook-local build/inference time boundaries or exact shared-resource conflict; Root does no routine phone checks and main currentHTTP keeps running.",
+        "type": "status",
+        "priority": "normal",
+        "thread_id": null,
+        "payload": null,
+        "created_at": "2026-10-21T23:52:34Z",
+        "delivered_at": null
+      },
+      {
+        "id": "msg_6cee935c4b39",
+        "run_id": "run_e6054e76e9fc",
+        "delivery_contract": "current_delivery",
+        "from_handle": "term_1f27be31-0284-4366-bb91-30fe538cd30e",
+        "to_handle": "run:run_e6054e76e9fc",
+        "subject": "Actual USB regression: re-enumerated node003/012 denied; owner action required",
+        "body": "Fresh actual23:54:12 receipt supersedes earlier success: same POCO serial still physically in sysfs but re-enumerated from003/011 to /dev/bus/usb/003/012, now mappedUID/GID65534 with read=false/write=false and ADB interface unclaimed; existing sameLIBUSB PID39627 responds OKAY with empty inventory/no USBfd and get-state device-not-found. The authorized Wi-Fi enable script checked state and stopped before any configuration command; this is observed access denial, not an assumed Android dialog or permission question. Please relay to Coding the minimal owner action: restore the already-authorized Personal USB controller access for the current003/012 node (or expose its existing authorized host controller), keeping phone connected; no codes/passwords or agent permission/security changes. I received resource refusal msg_ada0dc77fde8 and will not transfer/build/download/infer on reserved paths; continuing disjoint notebook-local exactsource/cache/toolchain preparation only, main remains untouched.",
+        "type": "status",
+        "priority": "normal",
+        "thread_id": null,
+        "payload": null,
+        "created_at": "2026-10-21T23:54:55Z",
+        "delivered_at": null
+      },
+      {
+        "id": "msg_fd6bc6440c43",
+        "run_id": "run_e6054e76e9fc",
+        "delivery_contract": "current_delivery",
+        "from_handle": "term_2eab47ed-ab9b-4e35-bd9b-fc068c60e3fc",
+        "to_handle": "run:run_e6054e76e9fc",
+        "subject": "Phone readiness: existing trusted Wi-Fi owner action; USB blockers closed",
+        "body": "Attention for Coding's existing owner route: USB/HOST-controller authority and reachability are resolved, but the SAME phone worker's current read has wifi_on=0, no WLAN IPv4 and a route toward notebook 192.168.1.250 via ccmni2/cellular; no measurement packets were sent, so direct-LAN acceptance is unproven. The minimal owner action is to connect that phone to the EXISTING trusted Personal Wi-Fi using its existing settings; this is not another USB/selector/permission confirmation, credential request or campaign START, and agents make no network change under the current read-only branch. Android16/API36/arm64 is observed, installed DEBUG Aurora v1/code100/Aug27 source is UNKNOWN, and Root has not admitted the 774,455,356-byte shared-path staging during frozen V2296; only <=12 MiB exact-ebde source on a proven disjoint existing route may proceed after bounded resource admission, while main HTTP continues independently and phone warmups/900 await later actual OWNER START/readiness.",
+        "type": "escalation",
+        "priority": "high",
+        "thread_id": null,
+        "payload": "{\"taskId\":\"task_d7ea336050cf\",\"dispatchId\":\"ctx_37b4d0a3c14f\",\"reportPath\":\".omx/evidence/orca-monitor-20261010/PHONE-WIFI-AND-SOURCE-READINESS-PACKET-20261021T2354Z.json\"}",
+        "created_at": "2026-10-21T23:55:22Z",
+        "delivered_at": null
+      }
+    ],
+    "count": 3,
+    "replayed": false,
+    "acknowledged": "delivery_b4b164d88be3",
+    "timedOut": false,
+    "cancelled": false,
+    "connectionLost": false,
+    "mutation": {
+      "requestId": "ee8c0435-9c51-4a38-9e1c-5e643bc730c6",
+      "replayed": false
+    }
+  },
+  "_meta": {
+    "runtimeId": "cc9e3275-28c6-4c45-85cc-bdcd2262aa7d"
+  }
+}

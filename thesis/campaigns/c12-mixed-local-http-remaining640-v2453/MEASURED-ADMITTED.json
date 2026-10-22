@@ -1,0 +1,27 @@
+{
+  "actualEnqueueObservations": 90,
+  "at": "2026-10-22T11:22:22.030089+00:00",
+  "campaignManifestSha256": "3bfca19d2dd0a9eec3981eae256168a5badd9ac2bb58a270ff8a55df1d986cce",
+  "companionTarget": 640,
+  "correctHTTP": 15,
+  "correctLocal": 15,
+  "excludedFlows": 30,
+  "extraAutomaticTts": 0,
+  "measuredConsumed": 0,
+  "nativeAcceleration": [
+    {
+      "actualOffloadedLayers": 25,
+      "totalLayers": 25
+    }
+  ],
+  "nativeInvocationPairs": 90,
+  "nativeTtsInvocations": 30,
+  "previousQueueObservationsInvented": false,
+  "primaryTarget": 640,
+  "priorAcceptedWarmupPairs": 16,
+  "providerManifestSha256": "1535884cdd504a1dd76b6df7b5e9815d5acdea4867a9fbda1cacd5cef168a15f",
+  "sameStageParallelismClaim": false,
+  "status": "ADMITTED_FRESH15_PAIRED_QUEUE_NATIVE_AUDIO_REMAINING640",
+  "totalActualExcludedPairs": 31,
+  "warmupPooledIntoMeasured": false
+}

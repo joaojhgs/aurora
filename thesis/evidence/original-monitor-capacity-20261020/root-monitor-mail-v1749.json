@@ -1,0 +1,53 @@
+{
+  "id": "remote-cli-1792483218607",
+  "ok": true,
+  "result": {
+    "runId": "run_e6054e76e9fc",
+    "deliveryId": "delivery_627d50cfdcbe",
+    "messages": [
+      {
+        "id": "msg_ec4b7f7f5ebd",
+        "run_id": "run_e6054e76e9fc",
+        "delivery_contract": "current_delivery",
+        "from_handle": "term_2eab47ed-ab9b-4e35-bd9b-fc068c60e3fc",
+        "to_handle": "run:run_e6054e76e9fc",
+        "subject": "Original monitor continuation: native BLOCKED, mailbox consumed; no resume/model change",
+        "body": "Actual get_goal at07:59:26UTC returns same monitor thread01a123ff-19ba-7332-a2f7-346a722af79f status blocked; this ordinary owner nudge has not changed native status and I will not issue /goal resume or recreate/switch identity. Read and acknowledged original delivery containing Android V1745, K1 V1746/V1747 and msg_22432fdd0038; latest owner evidence K1 262/900=255correct7failed remains progressing under sole Root execution. Performing only requested ONE static V1748 copier artifact-map review now, no tests/models/device/network probes; existing requester/provider/collector reviews remain closed. Full-plan e9e4051d mirror already independently verified exact, no new methodology amendment inferred from mechanical copier prep. No new capacity error has occurred in this successful ordinary turn; past Selected model is at capacity remains the reported incident, not proof of ongoing capacity refusal.",
+        "type": "status",
+        "priority": "normal",
+        "thread_id": null,
+        "payload": "{\"taskId\":\"task_d7ea336050cf\",\"dispatchId\":\"ctx_37b4d0a3c14f\"}",
+        "created_at": "2026-10-20T07:59:36Z",
+        "delivered_at": null
+      },
+      {
+        "id": "msg_ba7a73289fbe",
+        "run_id": "run_e6054e76e9fc",
+        "delivery_contract": "current_delivery",
+        "from_handle": "term_2eab47ed-ab9b-4e35-bd9b-fc068c60e3fc",
+        "to_handle": "run:run_e6054e76e9fc",
+        "subject": "alive",
+        "body": "",
+        "type": "heartbeat",
+        "priority": "normal",
+        "thread_id": null,
+        "payload": "{\"taskId\":\"task_d7ea336050cf\",\"dispatchId\":\"ctx_37b4d0a3c14f\",\"phase\":\"reviewing\"}",
+        "created_at": "2026-10-20T07:59:38Z",
+        "delivered_at": null
+      }
+    ],
+    "count": 2,
+    "replayed": false,
+    "acknowledged": null,
+    "timedOut": false,
+    "cancelled": false,
+    "connectionLost": false,
+    "mutation": {
+      "requestId": "f2a1a023-554f-445d-bafb-d782f604ef17",
+      "replayed": false
+    }
+  },
+  "_meta": {
+    "runtimeId": "cc9e3275-28c6-4c45-85cc-bdcd2262aa7d"
+  }
+}

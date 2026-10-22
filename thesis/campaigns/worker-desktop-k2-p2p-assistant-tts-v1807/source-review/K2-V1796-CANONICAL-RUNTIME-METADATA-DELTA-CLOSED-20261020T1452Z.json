@@ -1,0 +1,37 @@
+{
+  "actions": "Source diffs+Root saved actual metadata only. Zero app imports/tests/builds/models/network/device/remote execution or edits. No new owner confirmation, review matrix or provider restart. Root solely admits fresh requester lifecycle and preserves actual failed launch repo custody.",
+  "actualPriorFailureReceipt": {
+    "bytes": 1055,
+    "oldMeasured": 0,
+    "oldWarmups": 0,
+    "rootInterpreterOnlyCheck": "Python3.11.17 sys.prefix canonicalv487; no model calls",
+    "sameInterpreterSha256": "1e463bf849bb038214f6d4278f1aa6e079f307c04db5c9ed192543d5d866fa97",
+    "sha256": "35907414e67776edbaa1ed62ab223c5900ae5a40f3460bd22810593045344ea1"
+  },
+  "at": "2026-10-20T14:52:00Z",
+  "dispatch": "ctx_37b4d0a3c14f",
+  "earlierReviewCorrection": ".omx/evidence/orca-monitor-20261010/K2-V1787-REVIEW-CORRECTION-ACTUAL-RUNTIME-PREFIX-20261020T1449Z.md3697B SHA525b51390a87efa06f95f136616a5618e0d172ea6d8c74b0fbf0f1723691d2f2",
+  "findings": "No blocking delta finding. Root canonicalizes actual admitted prefix and SAME interpreter, verifies same interpreter hash, staged pin hash becomes frozen manifest implementation and exact runtime prefix equality is preserved; all other implementation entries remain exact candidate hashes. New OP/STAGE/CELL/D+manifest paths1796 preserve zero-request predecessor. Copier only path substitutions; finalizer path substitutions plus required remote parent mkdir, unchanged15warmup/collector/GPU/raw/time/correctness proof. Old finalizer stopped before sending any collection, so retained collection name has no observed ambiguous accepted predecessor command.",
+  "request": "msg_22550358f2ad",
+  "run": "run_e6054e76e9fc",
+  "scope": "One actual metadata delta check only; unchanged production/controller/runner/bootstrap/proof/model/settings scopes remain closed",
+  "sources": [
+    {
+      "bytes": 9927,
+      "path": "thesis/harness/k2_mesh_root_v1796.py",
+      "sha256": "34a21c34cc11c230f421e34e81cf46a3180fd8b33963820ab75b5b2bc0f7fdda"
+    },
+    {
+      "bytes": 17478,
+      "path": "thesis/harness/custody_k2_mesh_requester_v1796.py",
+      "sha256": "b56b7e7aec5cb21282a736651c67ac79f1bc95ebf753cec17b0a80be97376e90"
+    },
+    {
+      "bytes": 9020,
+      "path": "thesis/harness/k2_mesh_warmup_finalize_v1796.py",
+      "sha256": "76b3ae3ed5e3a311b1f9bcc0a86226bfe111949e7e6799c5b5961db47c9ff16c"
+    }
+  ],
+  "status": "PASS/CLOSED for metadata delta; actual new launch/runtime/module bindings/warmups remain admission, not source proof",
+  "task": "task_d7ea336050cf"
+}

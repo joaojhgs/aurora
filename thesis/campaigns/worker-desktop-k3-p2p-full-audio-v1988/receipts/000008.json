@@ -1,0 +1,308 @@
+{
+  "diskAfter": {
+    "free": 4171268096,
+    "total": 109128826880,
+    "used": 104940781568
+  },
+  "diskBefore": {
+    "free": 4171599872,
+    "total": 109128826880,
+    "used": 104940449792
+  },
+  "errors": [],
+  "expectedConditionSha256": "46003ef84b71fade94e1d9e3cbac0dcee8bb524680ca613a9f02df5878e4cd6b",
+  "finishedAt": "2026-10-20T22:56:22.688740+00:00",
+  "newFiles": [
+    {
+      "bytes": 29740,
+      "copiedAt": "2026-10-20T22:56:22.620119+00:00",
+      "destination": "thesis/campaigns/worker-desktop-k3-p2p-full-audio-v1988/audio/2ed35b67e806730c19ec17317abdb499c301ef0974385f8281d3157f04acf5e4.wav",
+      "sha256": "2ed35b67e806730c19ec17317abdb499c301ef0974385f8281d3157f04acf5e4",
+      "source": "/home/developer/projects/aurora/.git/aurora-handoff-import-20261006/distributed-k3-mesh-cell-v1988/campaign/audio/2ed35b67e806730c19ec17317abdb499c301ef0974385f8281d3157f04acf5e4.wav",
+      "wav": {
+        "channels": 1,
+        "frames": 14848,
+        "sampleRate": 22050,
+        "sampleWidth": 2
+      }
+    },
+    {
+      "bytes": 5715,
+      "copiedAt": "2026-10-20T22:56:22.625149+00:00",
+      "destination": "thesis/campaigns/worker-desktop-k3-p2p-full-audio-v1988/attempts/attempt-0025-measured.jsonl",
+      "sha256": "a1df86c999ec582a0329d0db9560acf94794b9e8f7897c47e8a00826a1c021b0",
+      "source": "/home/developer/projects/aurora/.git/aurora-handoff-import-20261006/distributed-k3-mesh-cell-v1988/campaign/attempts/attempt-0025-measured.jsonl"
+    },
+    {
+      "bytes": 30252,
+      "copiedAt": "2026-10-20T22:56:22.630931+00:00",
+      "destination": "thesis/campaigns/worker-desktop-k3-p2p-full-audio-v1988/audio/f0f29fd7b2841ca8fab742cb8d7f52a92f4855b2eca5cdf354b89e909b9137c8.wav",
+      "sha256": "f0f29fd7b2841ca8fab742cb8d7f52a92f4855b2eca5cdf354b89e909b9137c8",
+      "source": "/home/developer/projects/aurora/.git/aurora-handoff-import-20261006/distributed-k3-mesh-cell-v1988/campaign/audio/f0f29fd7b2841ca8fab742cb8d7f52a92f4855b2eca5cdf354b89e909b9137c8.wav",
+      "wav": {
+        "channels": 1,
+        "frames": 15104,
+        "sampleRate": 22050,
+        "sampleWidth": 2
+      }
+    },
+    {
+      "bytes": 5713,
+      "copiedAt": "2026-10-20T22:56:22.635749+00:00",
+      "destination": "thesis/campaigns/worker-desktop-k3-p2p-full-audio-v1988/attempts/attempt-0026-measured.jsonl",
+      "sha256": "d806ec336ce6722c8d75652f5d585c57ac553af0238465eb6e66c9088a0322bd",
+      "source": "/home/developer/projects/aurora/.git/aurora-handoff-import-20261006/distributed-k3-mesh-cell-v1988/campaign/attempts/attempt-0026-measured.jsonl"
+    },
+    {
+      "bytes": 30764,
+      "copiedAt": "2026-10-20T22:56:22.639853+00:00",
+      "destination": "thesis/campaigns/worker-desktop-k3-p2p-full-audio-v1988/audio/6e86b398ddabd048e4c0e621d625b270bb3149bb78d54967584e68ac2f96646c.wav",
+      "sha256": "6e86b398ddabd048e4c0e621d625b270bb3149bb78d54967584e68ac2f96646c",
+      "source": "/home/developer/projects/aurora/.git/aurora-handoff-import-20261006/distributed-k3-mesh-cell-v1988/campaign/audio/6e86b398ddabd048e4c0e621d625b270bb3149bb78d54967584e68ac2f96646c.wav",
+      "wav": {
+        "channels": 1,
+        "frames": 15360,
+        "sampleRate": 22050,
+        "sampleWidth": 2
+      }
+    },
+    {
+      "bytes": 5716,
+      "copiedAt": "2026-10-20T22:56:22.643369+00:00",
+      "destination": "thesis/campaigns/worker-desktop-k3-p2p-full-audio-v1988/attempts/attempt-0027-measured.jsonl",
+      "sha256": "94fad5e5c28d1b958d2bacc793c146f7205d9cb64e44edf0334801415a5931f4",
+      "source": "/home/developer/projects/aurora/.git/aurora-handoff-import-20261006/distributed-k3-mesh-cell-v1988/campaign/attempts/attempt-0027-measured.jsonl"
+    },
+    {
+      "bytes": 30764,
+      "copiedAt": "2026-10-20T22:56:22.647310+00:00",
+      "destination": "thesis/campaigns/worker-desktop-k3-p2p-full-audio-v1988/audio/4974cecc0e41ee4e957e1b5026a771cada403db74a177311e3192a56e507d6a6.wav",
+      "sha256": "4974cecc0e41ee4e957e1b5026a771cada403db74a177311e3192a56e507d6a6",
+      "source": "/home/developer/projects/aurora/.git/aurora-handoff-import-20261006/distributed-k3-mesh-cell-v1988/campaign/audio/4974cecc0e41ee4e957e1b5026a771cada403db74a177311e3192a56e507d6a6.wav",
+      "wav": {
+        "channels": 1,
+        "frames": 15360,
+        "sampleRate": 22050,
+        "sampleWidth": 2
+      }
+    },
+    {
+      "bytes": 5718,
+      "copiedAt": "2026-10-20T22:56:22.650601+00:00",
+      "destination": "thesis/campaigns/worker-desktop-k3-p2p-full-audio-v1988/attempts/attempt-0028-measured.jsonl",
+      "sha256": "cb1c0fffe2c328aa79e08699b3e770b5a1575026096935f6b7403849e4248718",
+      "source": "/home/developer/projects/aurora/.git/aurora-handoff-import-20261006/distributed-k3-mesh-cell-v1988/campaign/attempts/attempt-0028-measured.jsonl"
+    },
+    {
+      "bytes": 29740,
+      "copiedAt": "2026-10-20T22:56:22.654811+00:00",
+      "destination": "thesis/campaigns/worker-desktop-k3-p2p-full-audio-v1988/audio/a6e82da5375affadb220ed3f376e1ebc4e62b968174dd70b6b1fc44ae2dc567b.wav",
+      "sha256": "a6e82da5375affadb220ed3f376e1ebc4e62b968174dd70b6b1fc44ae2dc567b",
+      "source": "/home/developer/projects/aurora/.git/aurora-handoff-import-20261006/distributed-k3-mesh-cell-v1988/campaign/audio/a6e82da5375affadb220ed3f376e1ebc4e62b968174dd70b6b1fc44ae2dc567b.wav",
+      "wav": {
+        "channels": 1,
+        "frames": 14848,
+        "sampleRate": 22050,
+        "sampleWidth": 2
+      }
+    },
+    {
+      "bytes": 5717,
+      "copiedAt": "2026-10-20T22:56:22.658137+00:00",
+      "destination": "thesis/campaigns/worker-desktop-k3-p2p-full-audio-v1988/attempts/attempt-0029-measured.jsonl",
+      "sha256": "26d04b3d58e8c08557c77d208658f77715590676f18d622015f87a0daf520d41",
+      "source": "/home/developer/projects/aurora/.git/aurora-handoff-import-20261006/distributed-k3-mesh-cell-v1988/campaign/attempts/attempt-0029-measured.jsonl"
+    },
+    {
+      "bytes": 272,
+      "copiedAt": "2026-10-20T22:56:22.663227+00:00",
+      "destination": "thesis/campaigns/worker-desktop-k3-p2p-full-audio-v1988/snapshots/progress.json/ba3bcc3a75477312afc2eca0677b66b20fceebdd60db9443759f95ccea4867f2.json",
+      "sha256": "ba3bcc3a75477312afc2eca0677b66b20fceebdd60db9443759f95ccea4867f2",
+      "source": "/home/developer/projects/aurora/.git/aurora-handoff-import-20261006/distributed-k3-mesh-cell-v1988/campaign/progress.json"
+    },
+    {
+      "bytes": 327,
+      "copiedAt": "2026-10-20T22:56:22.671005+00:00",
+      "destination": "thesis/campaigns/worker-desktop-k3-p2p-full-audio-v1988/snapshots/mesh-route-sink-status.json/dd1e475f51cd30b1fb2ec5dc9ad4a9e4c28493b888ec185d8d2bce43db38ca71.json",
+      "sha256": "dd1e475f51cd30b1fb2ec5dc9ad4a9e4c28493b888ec185d8d2bce43db38ca71",
+      "source": "/home/developer/projects/aurora/.git/aurora-handoff-import-20261006/distributed-k3-mesh-cell-v1988/mesh-route-sink-status.json"
+    },
+    {
+      "bytes": 77220,
+      "copiedAt": "2026-10-20T22:56:22.677068+00:00",
+      "credentialsRedacted": 0,
+      "destination": "thesis/campaigns/worker-desktop-k3-p2p-full-audio-v1988/prefixes/resources.jsonl/000000459261-000000536481.chunk",
+      "endByte": 536481,
+      "incomplete": true,
+      "sha256": "71ed8174de88be1b5868cdd13592997afb2f0f692ff170b0ee82d09a8d8ad94d",
+      "source": "/home/developer/projects/aurora/.git/aurora-handoff-import-20261006/distributed-k3-mesh-cell-v1988/resources.jsonl",
+      "sourceInode": 2715110,
+      "sourceObservedBytes": 536481,
+      "sourceRawSha256": "71ed8174de88be1b5868cdd13592997afb2f0f692ff170b0ee82d09a8d8ad94d",
+      "startByte": 459261
+    },
+    {
+      "bytes": 9516,
+      "copiedAt": "2026-10-20T22:56:22.680839+00:00",
+      "credentialsRedacted": 0,
+      "destination": "thesis/campaigns/worker-desktop-k3-p2p-full-audio-v1988/prefixes/requester-mesh-calls.jsonl/000000047280-000000056796.chunk",
+      "endByte": 56796,
+      "incomplete": true,
+      "sha256": "263c7f360c9926b7536e6846c92750e35dd6f3502af931445f462948323b5b16",
+      "source": "/home/developer/projects/aurora/.git/aurora-handoff-import-20261006/distributed-k3-mesh-cell-v1988/requester-mesh-calls.jsonl",
+      "sourceInode": 2715125,
+      "sourceObservedBytes": 56796,
+      "sourceRawSha256": "263c7f360c9926b7536e6846c92750e35dd6f3502af931445f462948323b5b16",
+      "startByte": 47280
+    },
+    {
+      "bytes": 23094,
+      "copiedAt": "2026-10-20T22:56:22.684562+00:00",
+      "credentialsRedacted": 0,
+      "destination": "thesis/campaigns/worker-desktop-k3-p2p-full-audio-v1988/prefixes/mesh-route-observations.jsonl/000000113839-000000136933.chunk",
+      "endByte": 136933,
+      "incomplete": true,
+      "sha256": "a7dd42a61854add60a94b2fde49997e2766b55842c312b9bdf22bc8e74d4ad52",
+      "source": "/home/developer/projects/aurora/.git/aurora-handoff-import-20261006/distributed-k3-mesh-cell-v1988/mesh-route-observations.jsonl",
+      "sourceInode": 2715113,
+      "sourceObservedBytes": 136933,
+      "sourceRawSha256": "a7dd42a61854add60a94b2fde49997e2766b55842c312b9bdf22bc8e74d4ad52",
+      "startByte": 113839
+    },
+    {
+      "bytes": 131,
+      "copiedAt": "2026-10-20T22:56:22.688569+00:00",
+      "credentialsRedacted": 0,
+      "destination": "thesis/campaigns/worker-desktop-k3-p2p-full-audio-v1988/prefixes/backend.private.log/000000036021-000000036152.chunk",
+      "endByte": 36152,
+      "incomplete": true,
+      "sha256": "927109e469dff9eb9ed7e0848128340f965f28479944271b52f37751ea5c666d",
+      "source": "/home/developer/projects/aurora/.git/aurora-handoff-import-20261006/distributed-k3-mesh-cell-v1988/backend.private.log",
+      "sourceInode": 2715109,
+      "sourceObservedBytes": 36152,
+      "sourceRawSha256": "927109e469dff9eb9ed7e0848128340f965f28479944271b52f37751ea5c666d",
+      "startByte": 36021
+    }
+  ],
+  "pendingStatic": [
+    "/home/developer/projects/aurora/.git/aurora-handoff-import-20261006/distributed-k3-mesh-launch-v1988/operator-launch.json",
+    "/home/developer/projects/aurora/.git/aurora-handoff-import-20261006/distributed-k3-mesh-launch-v1988/requesterCopier-launch.json",
+    "/home/developer/projects/aurora/.git/aurora-handoff-import-20261006/distributed-k3-mesh-launch-v1988/warmupFinalizer-launch.json",
+    "/home/developer/projects/aurora/.git/aurora-handoff-import-20261006/distributed-k3-mesh-cell-v1988/voice-stages.status.json",
+    "/home/developer/projects/aurora/.git/aurora-handoff-import-20261006/distributed-k3-mesh-cell-v1988/actual-provider-bindings.jsonl"
+  ],
+  "physicalPayloadBytes": 2463110,
+  "possibleConfound": "Concurrent custody reads/writes; keep all affected measurements.",
+  "prefixes": {
+    "backend.private.log": {
+      "chunks": [
+        "thesis/campaigns/worker-desktop-k3-p2p-full-audio-v1988/prefixes/backend.private.log/000000000000-000000034784.chunk",
+        "thesis/campaigns/worker-desktop-k3-p2p-full-audio-v1988/prefixes/backend.private.log/000000034784-000000035121.chunk",
+        "thesis/campaigns/worker-desktop-k3-p2p-full-audio-v1988/prefixes/backend.private.log/000000035121-000000035543.chunk",
+        "thesis/campaigns/worker-desktop-k3-p2p-full-audio-v1988/prefixes/backend.private.log/000000035543-000000035759.chunk",
+        "thesis/campaigns/worker-desktop-k3-p2p-full-audio-v1988/prefixes/backend.private.log/000000035759-000000035890.chunk",
+        "thesis/campaigns/worker-desktop-k3-p2p-full-audio-v1988/prefixes/backend.private.log/000000035890-000000036021.chunk",
+        "thesis/campaigns/worker-desktop-k3-p2p-full-audio-v1988/prefixes/backend.private.log/000000036021-000000036152.chunk"
+      ],
+      "endByte": 36152,
+      "incomplete": true,
+      "inode": 2715109,
+      "observedAt": "2026-10-20T22:56:22.688582+00:00",
+      "sourceObservedBytes": 36152
+    },
+    "controller.private.log": {
+      "chunks": [],
+      "endByte": 0,
+      "incomplete": true,
+      "inode": 2715102,
+      "observedAt": "2026-10-20T22:56:22.688626+00:00",
+      "sourceObservedBytes": 0
+    },
+    "mesh-route-observations.jsonl": {
+      "chunks": [
+        "thesis/campaigns/worker-desktop-k3-p2p-full-audio-v1988/prefixes/mesh-route-observations.jsonl/000000000000-000000011549.chunk",
+        "thesis/campaigns/worker-desktop-k3-p2p-full-audio-v1988/prefixes/mesh-route-observations.jsonl/000000011549-000000037949.chunk",
+        "thesis/campaigns/worker-desktop-k3-p2p-full-audio-v1988/prefixes/mesh-route-observations.jsonl/000000037949-000000062698.chunk",
+        "thesis/campaigns/worker-desktop-k3-p2p-full-audio-v1988/prefixes/mesh-route-observations.jsonl/000000062698-000000077545.chunk",
+        "thesis/campaigns/worker-desktop-k3-p2p-full-audio-v1988/prefixes/mesh-route-observations.jsonl/000000077545-000000089094.chunk",
+        "thesis/campaigns/worker-desktop-k3-p2p-full-audio-v1988/prefixes/mesh-route-observations.jsonl/000000089094-000000113839.chunk",
+        "thesis/campaigns/worker-desktop-k3-p2p-full-audio-v1988/prefixes/mesh-route-observations.jsonl/000000113839-000000136933.chunk"
+      ],
+      "endByte": 136933,
+      "incomplete": true,
+      "inode": 2715113,
+      "observedAt": "2026-10-20T22:56:22.684574+00:00",
+      "sourceObservedBytes": 136933
+    },
+    "proof-collection.private.log": {
+      "chunks": [
+        "thesis/campaigns/worker-desktop-k3-p2p-full-audio-v1988/prefixes/proof-collection.private.log/000000000000-000000000143.chunk"
+      ],
+      "endByte": 143,
+      "incomplete": true,
+      "inode": 2715162,
+      "observedAt": "2026-10-20T22:56:22.688650+00:00",
+      "sourceObservedBytes": 143
+    },
+    "requester-mesh-calls.jsonl": {
+      "chunks": [
+        "thesis/campaigns/worker-desktop-k3-p2p-full-audio-v1988/prefixes/requester-mesh-calls.jsonl/000000000000-000000005086.chunk",
+        "thesis/campaigns/worker-desktop-k3-p2p-full-audio-v1988/prefixes/requester-mesh-calls.jsonl/000000005086-000000015978.chunk",
+        "thesis/campaigns/worker-desktop-k3-p2p-full-audio-v1988/prefixes/requester-mesh-calls.jsonl/000000015978-000000026181.chunk",
+        "thesis/campaigns/worker-desktop-k3-p2p-full-audio-v1988/prefixes/requester-mesh-calls.jsonl/000000026181-000000031989.chunk",
+        "thesis/campaigns/worker-desktop-k3-p2p-full-audio-v1988/prefixes/requester-mesh-calls.jsonl/000000031989-000000037075.chunk",
+        "thesis/campaigns/worker-desktop-k3-p2p-full-audio-v1988/prefixes/requester-mesh-calls.jsonl/000000037075-000000047280.chunk",
+        "thesis/campaigns/worker-desktop-k3-p2p-full-audio-v1988/prefixes/requester-mesh-calls.jsonl/000000047280-000000056796.chunk"
+      ],
+      "endByte": 56796,
+      "incomplete": true,
+      "inode": 2715125,
+      "observedAt": "2026-10-20T22:56:22.680853+00:00",
+      "sourceObservedBytes": 56796
+    },
+    "resources.jsonl": {
+      "chunks": [
+        "thesis/campaigns/worker-desktop-k3-p2p-full-audio-v1988/prefixes/resources.jsonl/000000000000-000000073252.chunk",
+        "thesis/campaigns/worker-desktop-k3-p2p-full-audio-v1988/prefixes/resources.jsonl/000000073252-000000150412.chunk",
+        "thesis/campaigns/worker-desktop-k3-p2p-full-audio-v1988/prefixes/resources.jsonl/000000150412-000000227601.chunk",
+        "thesis/campaigns/worker-desktop-k3-p2p-full-audio-v1988/prefixes/resources.jsonl/000000227601-000000304821.chunk",
+        "thesis/campaigns/worker-desktop-k3-p2p-full-audio-v1988/prefixes/resources.jsonl/000000304821-000000382041.chunk",
+        "thesis/campaigns/worker-desktop-k3-p2p-full-audio-v1988/prefixes/resources.jsonl/000000382041-000000459261.chunk",
+        "thesis/campaigns/worker-desktop-k3-p2p-full-audio-v1988/prefixes/resources.jsonl/000000459261-000000536481.chunk"
+      ],
+      "endByte": 536481,
+      "incomplete": true,
+      "inode": 2715110,
+      "observedAt": "2026-10-20T22:56:22.677082+00:00",
+      "sourceObservedBytes": 536481
+    },
+    "voice-stages.jsonl": {
+      "chunks": [],
+      "endByte": 0,
+      "incomplete": true,
+      "inode": 2715115,
+      "observedAt": "2026-10-20T22:56:22.671158+00:00",
+      "sourceObservedBytes": 0
+    }
+  },
+  "previousReceipt": "thesis/campaigns/worker-desktop-k3-p2p-full-audio-v1988/receipts/000007.json",
+  "progressObservation": {
+    "attempted": 29,
+    "last_attempt_file": "attempts/attempt-0029-measured.jsonl",
+    "last_attempt_status": "completed_correct",
+    "measured_attempted": 12,
+    "planned_measured": 900,
+    "planned_warmups": 15,
+    "status": "running",
+    "unattempted_measured": 888,
+    "warmups_attempted": 17
+  },
+  "providerCoverage": "Separate P2P Assistant+TTS provider custody; actual per-host prefix coverage must be joined explicitly.",
+  "reservedFreeBytes": 2147483648,
+  "retainedAudioBlobs": 27,
+  "retainedCases": 29,
+  "schema": "aurora.physical-custody-checkpoint.v1",
+  "sequence": 8,
+  "startedAt": "2026-10-20T22:56:22.610127+00:00",
+  "sutCalls": 0
+}

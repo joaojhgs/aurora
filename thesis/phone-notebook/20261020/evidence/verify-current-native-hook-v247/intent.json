@@ -1,0 +1,12 @@
+{
+  "controlDeadline": "2026-10-22T09:00:00Z",
+  "explicitNewline": true,
+  "host": "ssh:ssh-sem-notebook-personal",
+  "incarnation": "328cd72f-c7ea-49ff-a2db-b9275b085037",
+  "remoteResult": "/home/developer/projects/aurora/thesis/phone-notebook/20261020/evidence/verify-current-native-hook-v247.json",
+  "rootAdmissionMessage": "verified-v2398-final-real-app-hook-and-same-signed-install-receipt",
+  "script": "scripts/verify_current_native_hook_v247.py",
+  "scriptSha256": "5b9143ccd63ba9d659ea3223eaa48d20cd7327e8ced66827185e1badb6c8119c",
+  "singleSend": true,
+  "terminal": "term_a2ed5feb-7c92-48e4-bd88-d1b0e6737989"
+}

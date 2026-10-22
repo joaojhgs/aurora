@@ -1,0 +1,11 @@
+# Existing desktop app readiness — V964
+
+The current approved Personal plain control responded at2026-10-16T07:56:48UTC as personal.skyron-server in /home/developer/projects/aurora. [Exact returned metadata](../../validation/desktop-app-build-readiness-v964.json) and [custody](../../validation/desktop-app-build-readiness-v964-CUSTODY.json) record the existing source hashes, executable paths and resources. No build, app launch, test, inference, source mutation or install occurred on Personal.
+
+The current desktop checkout differs from the reviewed worker app: tauri-app.tsx is94130bytes/SHA9670bb2560414c8e181e36eb8b532bcd6e7474dfb8167b41d690b31d480606b2, aurora-client.ts is96150bytes/SHA7315a31d64d6e1c84dfd44ed73c0d8fd9a25869619f6821f4fb785f2c715c92d, and SDK client.ts is118426bytes/SHAcf9945e726b65f7bfb24965204167b8d5b4b6699023a7d8ab77044ac28d5ee62. The new file-audio action is absent there. Root preserved all remote source/work; the worker integration is not represented as a deployed desktop app.
+
+Existing node/pnpm/cargo/rustc/Xvfb/pkg-config paths and Tauri CLI shim are present; DISPLAY is:99 and a session-bus address is present. No cargo/rustc/aurora-tauri/tauri-driver/Xvfb process was found in the narrow process-name scan. No aurora-tauri executable existed at the four selected debug/release artifact locations. These observations do not prove a native build or app window, nor global artifact/process absence.
+
+Observed available RAM was11306401792bytes, project filesystem free25403392bytes, /tmp free5888159744bytes. A current-source native build needs explicit source alignment and a bounded target/capacity choice before launch; no blanket claim that every build is impossible follows. Root did not replace source, allocate a build, delete caches/results, install dependencies or change access/security.
+
+This is a scoped later C06 readiness result. It adds no first S-NHTTP gate: that provider already has its separate frozen Python source/config staged under /tmp/aurora-root-k1-http-provider-prep-v825 and does not consume this app checkout. First distributed priority and worker natural finish/single seal/release remain unchanged. No new900run is queued or admitted here.

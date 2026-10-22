@@ -1,0 +1,474 @@
+{
+  "at": "2026-10-22T11:14:26.543465+00:00",
+  "pairedCutoff": 3,
+  "controlFiles": 77,
+  "logicalBytes": 487278,
+  "files": [
+    {
+      "path": "thesis/campaigns/c12-mixed-local-http-remaining640-v2453/control/cli-custody/c12-v2453-pair-0001-page-01-SHOW-FENCE.raw.gz",
+      "bytes": 886,
+      "sha256": "04143fa7d097537ee6f3d2592b76564aff39a82fe625485f794b089f5f4a6156",
+      "onePhysicalCopy": true
+    },
+    {
+      "path": "thesis/campaigns/c12-mixed-local-http-remaining640-v2453/control/cli-custody/c12-v2453-pair-0001-page-02-SHOW-FENCE.raw.gz",
+      "bytes": 890,
+      "sha256": "9f7c8b603b785d7181205513c25031d66775e15b5891c80c3e95abd05b0141a5",
+      "onePhysicalCopy": true
+    },
+    {
+      "path": "thesis/campaigns/c12-mixed-local-http-remaining640-v2453/control/cli-custody/c12-v2453-pair-0001-page-01-SEND-INTENT.json",
+      "bytes": 93,
+      "sha256": "8410e6a54a3a8741137f211c63561ec39acfaac059174b600c2a547f60861bf7",
+      "onePhysicalCopy": true
+    },
+    {
+      "path": "thesis/campaigns/c12-mixed-local-http-remaining640-v2453/control/cli-custody/c12-v2453-pair-0001-page-02-READ-BEFORE.json",
+      "bytes": 475,
+      "sha256": "3ab980fb06a2e2c513f0ffd0901915a3ea824b9520631660357a5294bfa21b22",
+      "onePhysicalCopy": true
+    },
+    {
+      "path": "thesis/campaigns/c12-mixed-local-http-remaining640-v2453/control/cli-custody/c12-v2453-pair-0001-page-00-READ-0.json",
+      "bytes": 476,
+      "sha256": "c0cd488c3fb66cc32004d39b0c29e9086f8f16f527b4f93b99a9f01792caceb8",
+      "onePhysicalCopy": true
+    },
+    {
+      "path": "thesis/campaigns/c12-mixed-local-http-remaining640-v2453/control/cli-custody/c12-v2453-pair-0001-page-01-SHOW-FENCE.json",
+      "bytes": 471,
+      "sha256": "f195d9d66707c91b383c857a8516f67d448f2932b7b1295c88c19b04c7491e51",
+      "onePhysicalCopy": true
+    },
+    {
+      "path": "thesis/campaigns/c12-mixed-local-http-remaining640-v2453/control/cli-custody/c12-v2453-pair-0001-page-02-command.txt",
+      "bytes": 614,
+      "sha256": "abd93bf65207fc10da64d90ff5db2097df9c98597847c9a6c016380105f32f5f",
+      "onePhysicalCopy": true
+    },
+    {
+      "path": "thesis/campaigns/c12-mixed-local-http-remaining640-v2453/control/cli-custody/c12-v2453-pair-0001-page-00-READ-BEFORE.json",
+      "bytes": 475,
+      "sha256": "1d5aced87d606fee71dec6b9a795031b3340ad26528f4f1c65784182878ae00b",
+      "onePhysicalCopy": true
+    },
+    {
+      "path": "thesis/campaigns/c12-mixed-local-http-remaining640-v2453/control/cli-custody/c12-v2453-pair-0001-page-01-READ-0.raw.gz",
+      "bytes": 42789,
+      "sha256": "6cd9c31809a21f244bd7020cd057c37bfebdc94c0b953e95abd3df2494ae75ee",
+      "onePhysicalCopy": true
+    },
+    {
+      "path": "thesis/campaigns/c12-mixed-local-http-remaining640-v2453/control/cli-custody/c12-v2453-pair-0001-page-01-READ-0.json",
+      "bytes": 476,
+      "sha256": "d58b0077f60fabb2c614ca20ad77f4a2d6428f35ef65b1d52eeaf3e759b9dde5",
+      "onePhysicalCopy": true
+    },
+    {
+      "path": "thesis/campaigns/c12-mixed-local-http-remaining640-v2453/control/cli-custody/c12-v2453-pair-0001-page-00-SEND.json",
+      "bytes": 463,
+      "sha256": "66895ec35a5d82a543d525a5558069c33c6c037fa1b4884bd9311fc7f5294947",
+      "onePhysicalCopy": true
+    },
+    {
+      "path": "thesis/campaigns/c12-mixed-local-http-remaining640-v2453/control/cli-custody/c12-v2453-pair-0001-page-00-SHOW-FENCE.json",
+      "bytes": 471,
+      "sha256": "b2d9891082aa17cc28d96d880b0ff8b450d4ce807805429784fddbe41a4e00f8",
+      "onePhysicalCopy": true
+    },
+    {
+      "path": "thesis/campaigns/c12-mixed-local-http-remaining640-v2453/control/cli-custody/c12-v2453-pair-0001-page-00-SEND.raw.gz",
+      "bytes": 526,
+      "sha256": "fd21bb26537e967c542c574182c4880936ff03a6b1edfad62904df0e69c2f715",
+      "onePhysicalCopy": true
+    },
+    {
+      "path": "thesis/campaigns/c12-mixed-local-http-remaining640-v2453/control/cli-custody/c12-v2453-pair-0001-page-00-SEND-INTENT.json",
+      "bytes": 93,
+      "sha256": "8410e6a54a3a8741137f211c63561ec39acfaac059174b600c2a547f60861bf7",
+      "onePhysicalCopy": true
+    },
+    {
+      "path": "thesis/campaigns/c12-mixed-local-http-remaining640-v2453/control/cli-custody/c12-v2453-pair-0001-page-01-SEND.raw.gz",
+      "bytes": 524,
+      "sha256": "40c05e11b1be7c2bd1192b31f81b6747096efcee63d155a6a07dfafc154e2de1",
+      "onePhysicalCopy": true
+    },
+    {
+      "path": "thesis/campaigns/c12-mixed-local-http-remaining640-v2453/control/cli-custody/c12-v2453-pair-0001-page-02-SEND-INTENT.json",
+      "bytes": 93,
+      "sha256": "8410e6a54a3a8741137f211c63561ec39acfaac059174b600c2a547f60861bf7",
+      "onePhysicalCopy": true
+    },
+    {
+      "path": "thesis/campaigns/c12-mixed-local-http-remaining640-v2453/control/cli-custody/c12-v2453-pair-0001-page-01-READ-BEFORE.json",
+      "bytes": 475,
+      "sha256": "307c5368a72a4135d30c3e5d77e393230987f900c36206086730ee878054a7d3",
+      "onePhysicalCopy": true
+    },
+    {
+      "path": "thesis/campaigns/c12-mixed-local-http-remaining640-v2453/control/cli-custody/c12-v2453-pair-0001-page-00-READ-BEFORE.raw.gz",
+      "bytes": 382,
+      "sha256": "aaa486cc7ab3b9bda478397973c6ea11bfbad2a720d44c4726c891eb54958576",
+      "onePhysicalCopy": true
+    },
+    {
+      "path": "thesis/campaigns/c12-mixed-local-http-remaining640-v2453/control/cli-custody/c12-v2453-pair-0001-page-02-SHOW-FENCE.json",
+      "bytes": 471,
+      "sha256": "98b4404e4043dfc777fd5b0dafe94faef5c285b7fbe8441efbcbd3a29fc7d745",
+      "onePhysicalCopy": true
+    },
+    {
+      "path": "thesis/campaigns/c12-mixed-local-http-remaining640-v2453/control/cli-custody/c12-v2453-pair-0001-page-02-READ-BEFORE.raw.gz",
+      "bytes": 384,
+      "sha256": "479f359b60908438e7ba255dffa02847a2808d1020c000435de48d69a1b7cc19",
+      "onePhysicalCopy": true
+    },
+    {
+      "path": "thesis/campaigns/c12-mixed-local-http-remaining640-v2453/control/cli-custody/c12-v2453-pair-0001-page-01-READ-BEFORE.raw.gz",
+      "bytes": 380,
+      "sha256": "f5dbf4f29eebf34981189d18e2c2b8634bd0a993f4de122cd3487210d6cfbaa9",
+      "onePhysicalCopy": true
+    },
+    {
+      "path": "thesis/campaigns/c12-mixed-local-http-remaining640-v2453/control/cli-custody/c12-v2453-pair-0001-page-02-SEND.json",
+      "bytes": 463,
+      "sha256": "9f92c907fe59bd72e6173295a25b94ca877bda6d5eda42a6481f8ce648ce6901",
+      "onePhysicalCopy": true
+    },
+    {
+      "path": "thesis/campaigns/c12-mixed-local-http-remaining640-v2453/control/cli-custody/c12-v2453-pair-0001-page-01-command.txt",
+      "bytes": 614,
+      "sha256": "8b8c64445accf95ac6991fc47bfde72369e981d1df16f6a5b9dbe99d0baefa9e",
+      "onePhysicalCopy": true
+    },
+    {
+      "path": "thesis/campaigns/c12-mixed-local-http-remaining640-v2453/control/cli-custody/c12-v2453-pair-0001-page-00-SHOW-FENCE.raw.gz",
+      "bytes": 862,
+      "sha256": "b6bcbeb259810ee11a5002ee741470c36626ce7a53000dab0119f296e069720e",
+      "onePhysicalCopy": true
+    },
+    {
+      "path": "thesis/campaigns/c12-mixed-local-http-remaining640-v2453/control/cli-custody/c12-v2453-pair-0001-page-02-READ-0.raw.gz",
+      "bytes": 14091,
+      "sha256": "1cccbf44c9dca704ea4bf275ce8ceb6fc8caf6c1bc5410a8bee3289c8207b36c",
+      "onePhysicalCopy": true
+    },
+    {
+      "path": "thesis/campaigns/c12-mixed-local-http-remaining640-v2453/control/cli-custody/c12-v2453-pair-0001-page-02-READ-0.json",
+      "bytes": 475,
+      "sha256": "d26c808abc80fa6462c25670681cbd4ca706da220857b93b0730c65d986ce47b",
+      "onePhysicalCopy": true
+    },
+    {
+      "path": "thesis/campaigns/c12-mixed-local-http-remaining640-v2453/control/cli-custody/c12-v2453-pair-0001-page-00-command.txt",
+      "bytes": 614,
+      "sha256": "49f365377eb3d3853d237e93ba6f9fb7ba5ce76b9e51e683b70e79edeb23a108",
+      "onePhysicalCopy": true
+    },
+    {
+      "path": "thesis/campaigns/c12-mixed-local-http-remaining640-v2453/control/cli-custody/c12-v2453-pair-0001-page-01-SEND.json",
+      "bytes": 463,
+      "sha256": "64aa727cc4a836e570db16ed83a34cf7005544cb67265eea6819a39c5e5c4947",
+      "onePhysicalCopy": true
+    },
+    {
+      "path": "thesis/campaigns/c12-mixed-local-http-remaining640-v2453/control/cli-custody/c12-v2453-pair-0001-page-02-SEND.raw.gz",
+      "bytes": 525,
+      "sha256": "ad88a2136e8963985b061f5ce6aa2d4976d932941e5432ab14735b37b0b09408",
+      "onePhysicalCopy": true
+    },
+    {
+      "path": "thesis/campaigns/c12-mixed-local-http-remaining640-v2453/control/cli-custody/c12-v2453-pair-0001-page-00-RESULT.json",
+      "bytes": 49712,
+      "sha256": "9afd9151c03b8eed626a2c6690d388afb56e20a6435662cfb0f33c05aa0f714a",
+      "onePhysicalCopy": true
+    },
+    {
+      "path": "thesis/campaigns/c12-mixed-local-http-remaining640-v2453/control/cli-custody/c12-v2453-pair-0001-page-02-RESULT.json",
+      "bytes": 13974,
+      "sha256": "7dcd2d2d7cebe70cd0f0e9dc13efb71c3be35d598e8123cf58101819fd4cb559",
+      "onePhysicalCopy": true
+    },
+    {
+      "path": "thesis/campaigns/c12-mixed-local-http-remaining640-v2453/control/cli-custody/c12-v2453-pair-0001-page-00-READ-0.raw.gz",
+      "bytes": 45085,
+      "sha256": "43c28a925f5e978bf8cdd63073866c52d3ed50389bc28be64b18ed9deaf21e34",
+      "onePhysicalCopy": true
+    },
+    {
+      "path": "thesis/campaigns/c12-mixed-local-http-remaining640-v2453/control/cli-custody/c12-v2453-pair-0001-page-01-RESULT.json",
+      "bytes": 43906,
+      "sha256": "d8b9339445e3c99dcc5b6b9aeec7a60f4be48160978822190daa77aa48f03617",
+      "onePhysicalCopy": true
+    },
+    {
+      "path": "thesis/campaigns/c12-mixed-local-http-remaining640-v2453/control/cli-custody/c12-v2453-pair-0002-page-01-READ-BEFORE.json",
+      "bytes": 475,
+      "sha256": "f23f20b4857b616c76437e6760b44ceb73d28da5131177e12f0fc2ee8a2b7e47",
+      "onePhysicalCopy": true
+    },
+    {
+      "path": "thesis/campaigns/c12-mixed-local-http-remaining640-v2453/control/cli-custody/c12-v2453-pair-0002-page-00-SEND-INTENT.json",
+      "bytes": 93,
+      "sha256": "8410e6a54a3a8741137f211c63561ec39acfaac059174b600c2a547f60861bf7",
+      "onePhysicalCopy": true
+    },
+    {
+      "path": "thesis/campaigns/c12-mixed-local-http-remaining640-v2453/control/cli-custody/c12-v2453-pair-0002-page-01-SEND.raw.gz",
+      "bytes": 525,
+      "sha256": "de6782e970174ed429fd3a5257786cf9cb06b77c1a447852f91f4af785159823",
+      "onePhysicalCopy": true
+    },
+    {
+      "path": "thesis/campaigns/c12-mixed-local-http-remaining640-v2453/control/cli-custody/c12-v2453-pair-0002-page-00-RESULT.json",
+      "bytes": 49725,
+      "sha256": "8e59c37765bda46249ae81364da26126fc3966e1c0fbede8a1fbab887b05ecaf",
+      "onePhysicalCopy": true
+    },
+    {
+      "path": "thesis/campaigns/c12-mixed-local-http-remaining640-v2453/control/cli-custody/c12-v2453-pair-0002-page-01-SHOW-FENCE.raw.gz",
+      "bytes": 886,
+      "sha256": "387676e6a3e3e45eb833f2303410b7cbf86b277dbe5acf22e9788dfb036e8180",
+      "onePhysicalCopy": true
+    },
+    {
+      "path": "thesis/campaigns/c12-mixed-local-http-remaining640-v2453/control/cli-custody/c12-v2453-pair-0002-page-01-SHOW-FENCE.json",
+      "bytes": 471,
+      "sha256": "948f350f190e11791dba63f6318d2f6724ced72a8c91cf0ebd3f064435215f7e",
+      "onePhysicalCopy": true
+    },
+    {
+      "path": "thesis/campaigns/c12-mixed-local-http-remaining640-v2453/control/cli-custody/c12-v2453-pair-0002-page-00-SHOW-FENCE.json",
+      "bytes": 471,
+      "sha256": "e06bae084bc45abd4031ab9df89d069f97565146d8c5d57ecb5a6af63e291649",
+      "onePhysicalCopy": true
+    },
+    {
+      "path": "thesis/campaigns/c12-mixed-local-http-remaining640-v2453/control/cli-custody/c12-v2453-pair-0002-page-01-SEND.json",
+      "bytes": 463,
+      "sha256": "bfa0cc65aa5b97fcc2ebbf88714e01aafbc61b75a4dcb0fc1e1b2dd918884051",
+      "onePhysicalCopy": true
+    },
+    {
+      "path": "thesis/campaigns/c12-mixed-local-http-remaining640-v2453/control/cli-custody/c12-v2453-pair-0002-page-01-READ-BEFORE.raw.gz",
+      "bytes": 384,
+      "sha256": "801e5f62c3cf0f20842a45dc6b3720a20237519f406408ff70547dfd1f38714e",
+      "onePhysicalCopy": true
+    },
+    {
+      "path": "thesis/campaigns/c12-mixed-local-http-remaining640-v2453/control/cli-custody/c12-v2453-pair-0002-page-01-command.txt",
+      "bytes": 614,
+      "sha256": "e475fef60e43396d22740fb8cc80d1c6f9513d2b01d6201d2c21990735f3a00e",
+      "onePhysicalCopy": true
+    },
+    {
+      "path": "thesis/campaigns/c12-mixed-local-http-remaining640-v2453/control/cli-custody/c12-v2453-pair-0002-page-00-READ-0.json",
+      "bytes": 476,
+      "sha256": "6dfbdcbf741130be6650f6d38a651f09e268c6d3b87705181779a3010c08d0d4",
+      "onePhysicalCopy": true
+    },
+    {
+      "path": "thesis/campaigns/c12-mixed-local-http-remaining640-v2453/control/cli-custody/c12-v2453-pair-0002-page-00-READ-BEFORE.json",
+      "bytes": 475,
+      "sha256": "a1f562d3fa80c805c202303d6dfb61dd96727143438ca66e01ef0bee4eebde77",
+      "onePhysicalCopy": true
+    },
+    {
+      "path": "thesis/campaigns/c12-mixed-local-http-remaining640-v2453/control/cli-custody/c12-v2453-pair-0002-page-01-READ-0.json",
+      "bytes": 475,
+      "sha256": "1736416619713a6084f6cc1d9700f6b1181406fad4ecc547efe144bf63d3123d",
+      "onePhysicalCopy": true
+    },
+    {
+      "path": "thesis/campaigns/c12-mixed-local-http-remaining640-v2453/control/cli-custody/c12-v2453-pair-0002-page-00-READ-BEFORE.raw.gz",
+      "bytes": 380,
+      "sha256": "81a5e24d2c22bc8889d502ad595d3e211ce25e2ca7124405452ed33c1ef17914",
+      "onePhysicalCopy": true
+    },
+    {
+      "path": "thesis/campaigns/c12-mixed-local-http-remaining640-v2453/control/cli-custody/c12-v2453-pair-0002-page-01-RESULT.json",
+      "bytes": 15114,
+      "sha256": "dca5bd77f01e0650186434e3248d7790f4df91959bb0bb45872e5df0703c2282",
+      "onePhysicalCopy": true
+    },
+    {
+      "path": "thesis/campaigns/c12-mixed-local-http-remaining640-v2453/control/cli-custody/c12-v2453-pair-0002-page-00-command.txt",
+      "bytes": 614,
+      "sha256": "635f6d70b1a13c20b698e468e907673caddf0373ded0ab9bd8f820bd5b74615d",
+      "onePhysicalCopy": true
+    },
+    {
+      "path": "thesis/campaigns/c12-mixed-local-http-remaining640-v2453/control/cli-custody/c12-v2453-pair-0002-page-00-SEND.raw.gz",
+      "bytes": 524,
+      "sha256": "99c0508bbfe138dccf6d8c00b94e6a22aecff463ab2affbcc1ed4edd1550e1d7",
+      "onePhysicalCopy": true
+    },
+    {
+      "path": "thesis/campaigns/c12-mixed-local-http-remaining640-v2453/control/cli-custody/c12-v2453-pair-0002-page-01-SEND-INTENT.json",
+      "bytes": 93,
+      "sha256": "8410e6a54a3a8741137f211c63561ec39acfaac059174b600c2a547f60861bf7",
+      "onePhysicalCopy": true
+    },
+    {
+      "path": "thesis/campaigns/c12-mixed-local-http-remaining640-v2453/control/cli-custody/c12-v2453-pair-0002-page-00-READ-0.raw.gz",
+      "bytes": 46590,
+      "sha256": "3f5fb293ca850104775dd21106df2e4a929ac36c32d80015a1caffd92f3326db",
+      "onePhysicalCopy": true
+    },
+    {
+      "path": "thesis/campaigns/c12-mixed-local-http-remaining640-v2453/control/cli-custody/c12-v2453-pair-0002-page-01-READ-0.raw.gz",
+      "bytes": 15189,
+      "sha256": "065b4fdaf99edeb164ccf56ff3c53443825e5f9977cb3152a4c0dd423a215d48",
+      "onePhysicalCopy": true
+    },
+    {
+      "path": "thesis/campaigns/c12-mixed-local-http-remaining640-v2453/control/cli-custody/c12-v2453-pair-0002-page-00-SEND.json",
+      "bytes": 463,
+      "sha256": "5959a59bb56c59235c137f6a4cdf284507242e62428cef1d3f750c5d6ce30d92",
+      "onePhysicalCopy": true
+    },
+    {
+      "path": "thesis/campaigns/c12-mixed-local-http-remaining640-v2453/control/cli-custody/c12-v2453-pair-0002-page-00-SHOW-FENCE.raw.gz",
+      "bytes": 885,
+      "sha256": "ee3b2afe2b1f28b96781c0832c88667676d125f78bc98d8939582ff7496f4e6a",
+      "onePhysicalCopy": true
+    },
+    {
+      "path": "thesis/campaigns/c12-mixed-local-http-remaining640-v2453/control/cli-custody/c12-v2453-pair-0003-page-00-READ-0.json",
+      "bytes": 476,
+      "sha256": "afe83592415863ca88b0c46d930c49578eddef5f2f9a0bbe1140a199e9956691",
+      "onePhysicalCopy": true
+    },
+    {
+      "path": "thesis/campaigns/c12-mixed-local-http-remaining640-v2453/control/cli-custody/c12-v2453-pair-0003-page-01-SEND-INTENT.json",
+      "bytes": 93,
+      "sha256": "8410e6a54a3a8741137f211c63561ec39acfaac059174b600c2a547f60861bf7",
+      "onePhysicalCopy": true
+    },
+    {
+      "path": "thesis/campaigns/c12-mixed-local-http-remaining640-v2453/control/cli-custody/c12-v2453-pair-0003-page-00-SEND.raw.gz",
+      "bytes": 527,
+      "sha256": "199041192610580aba65ec3e1764f2dd9347e23fc2018e90c2834820d83130e3",
+      "onePhysicalCopy": true
+    },
+    {
+      "path": "thesis/campaigns/c12-mixed-local-http-remaining640-v2453/control/cli-custody/c12-v2453-pair-0003-page-01-SHOW-FENCE.raw.gz",
+      "bytes": 887,
+      "sha256": "02a1da64d862f598b930a03ff2b25ee9c1a0de0b0922634542a6d94af5a63454",
+      "onePhysicalCopy": true
+    },
+    {
+      "path": "thesis/campaigns/c12-mixed-local-http-remaining640-v2453/control/cli-custody/c12-v2453-pair-0003-page-00-SEND.json",
+      "bytes": 463,
+      "sha256": "a9e31369d10005ba328234f332be8a81c0346e42596566cea872fe930d495a5d",
+      "onePhysicalCopy": true
+    },
+    {
+      "path": "thesis/campaigns/c12-mixed-local-http-remaining640-v2453/control/cli-custody/c12-v2453-pair-0003-page-01-READ-0.raw.gz",
+      "bytes": 12111,
+      "sha256": "e2792c1d31a3f3bd3943e2a7fc5efe4e4a60cb3075ca991c193635d6e2581160",
+      "onePhysicalCopy": true
+    },
+    {
+      "path": "thesis/campaigns/c12-mixed-local-http-remaining640-v2453/control/cli-custody/c12-v2453-pair-0003-page-00-READ-BEFORE.json",
+      "bytes": 475,
+      "sha256": "e3bece76c89bc77da87eb5978db1630b164358ac43d4f0402fb57e5dd4ab047d",
+      "onePhysicalCopy": true
+    },
+    {
+      "path": "thesis/campaigns/c12-mixed-local-http-remaining640-v2453/control/cli-custody/c12-v2453-pair-0003-page-01-READ-BEFORE.raw.gz",
+      "bytes": 378,
+      "sha256": "86cb9915c4e47ddff078723f020333c5997fbb552ff78113272bf3b43a927290",
+      "onePhysicalCopy": true
+    },
+    {
+      "path": "thesis/campaigns/c12-mixed-local-http-remaining640-v2453/control/cli-custody/c12-v2453-pair-0003-page-00-command.txt",
+      "bytes": 614,
+      "sha256": "4b587a62813ff225f088f2a7457bbd6577766b5e1653ddbf5243bf2dfb1b8ac5",
+      "onePhysicalCopy": true
+    },
+    {
+      "path": "thesis/campaigns/c12-mixed-local-http-remaining640-v2453/control/cli-custody/c12-v2453-pair-0003-page-01-SEND.json",
+      "bytes": 463,
+      "sha256": "cadf9e59c1bf3797f01c2ff21749db81108e211c31cd62cfd77cc53b05959b96",
+      "onePhysicalCopy": true
+    },
+    {
+      "path": "thesis/campaigns/c12-mixed-local-http-remaining640-v2453/control/cli-custody/c12-v2453-pair-0003-page-01-SEND.raw.gz",
+      "bytes": 524,
+      "sha256": "e16ccfcb8372dfb62b3854de669e636021d57c89021aa6ff4402f7f142f0a5c4",
+      "onePhysicalCopy": true
+    },
+    {
+      "path": "thesis/campaigns/c12-mixed-local-http-remaining640-v2453/control/cli-custody/c12-v2453-pair-0003-page-01-command.txt",
+      "bytes": 614,
+      "sha256": "981aef42cff19343e361e4203957af75befbbbe31f9447674c0aba723fdca65f",
+      "onePhysicalCopy": true
+    },
+    {
+      "path": "thesis/campaigns/c12-mixed-local-http-remaining640-v2453/control/cli-custody/c12-v2453-pair-0003-page-00-READ-0.raw.gz",
+      "bytes": 46747,
+      "sha256": "9fca37fa1650accafd65deda70e94d58b1772c5bf83198da88745644a5da3aec",
+      "onePhysicalCopy": true
+    },
+    {
+      "path": "thesis/campaigns/c12-mixed-local-http-remaining640-v2453/control/cli-custody/c12-v2453-pair-0003-page-01-RESULT.json",
+      "bytes": 11893,
+      "sha256": "c2d970f85ac128cfda4c1058712cc94ba4ee1a948c8f69183b4900505ac7fb45",
+      "onePhysicalCopy": true
+    },
+    {
+      "path": "thesis/campaigns/c12-mixed-local-http-remaining640-v2453/control/cli-custody/c12-v2453-pair-0003-page-00-READ-BEFORE.raw.gz",
+      "bytes": 381,
+      "sha256": "2b52e0e82e46aa80d39126a86232810c595547b2912d04aa209ccfb3e8119110",
+      "onePhysicalCopy": true
+    },
+    {
+      "path": "thesis/campaigns/c12-mixed-local-http-remaining640-v2453/control/cli-custody/c12-v2453-pair-0003-page-00-SEND-INTENT.json",
+      "bytes": 93,
+      "sha256": "8410e6a54a3a8741137f211c63561ec39acfaac059174b600c2a547f60861bf7",
+      "onePhysicalCopy": true
+    },
+    {
+      "path": "thesis/campaigns/c12-mixed-local-http-remaining640-v2453/control/cli-custody/c12-v2453-pair-0003-page-00-SHOW-FENCE.json",
+      "bytes": 471,
+      "sha256": "e4d63962ce029fa3cd5b72386209add58757f5cc159d6f4e41c3bfe5166918c1",
+      "onePhysicalCopy": true
+    },
+    {
+      "path": "thesis/campaigns/c12-mixed-local-http-remaining640-v2453/control/cli-custody/c12-v2453-pair-0003-page-01-READ-BEFORE.json",
+      "bytes": 475,
+      "sha256": "fe9ad586e51000687ead81547c71234fbb169bf041739cc6eafdb4b7dc8f9134",
+      "onePhysicalCopy": true
+    },
+    {
+      "path": "thesis/campaigns/c12-mixed-local-http-remaining640-v2453/control/cli-custody/c12-v2453-pair-0003-page-01-SHOW-FENCE.json",
+      "bytes": 471,
+      "sha256": "6fbe3bddd00bd446b2175fc5bfc1583381796e1aa3a121e0016a3903938091c9",
+      "onePhysicalCopy": true
+    },
+    {
+      "path": "thesis/campaigns/c12-mixed-local-http-remaining640-v2453/control/cli-custody/c12-v2453-pair-0003-page-00-SHOW-FENCE.raw.gz",
+      "bytes": 847,
+      "sha256": "8a60c6c4c86c6c9c3de90f5c779660470f1fff91cc5c200847648eae03a1596b",
+      "onePhysicalCopy": true
+    },
+    {
+      "path": "thesis/campaigns/c12-mixed-local-http-remaining640-v2453/control/cli-custody/c12-v2453-pair-0003-page-00-RESULT.json",
+      "bytes": 49724,
+      "sha256": "5bb29d11733ddbb9d61b12d607a49deaee19a92469fb6ac0b942e5c4823ae372",
+      "onePhysicalCopy": true
+    },
+    {
+      "path": "thesis/campaigns/c12-mixed-local-http-remaining640-v2453/control/cli-custody/c12-v2453-pair-0003-page-01-READ-0.json",
+      "bytes": 475,
+      "sha256": "9a010e2c948178b8b6fc00542c88c911899fc34f2656b927ece06015e3c93717",
+      "onePhysicalCopy": true
+    }
+  ],
+  "futureCopyPolicy": "At safe checkpoints link only completed operation files into physical thesis/control custody; no new inference, no duplicate encoded raw payload allocations",
+  "uniqueCampaignAllocatedBytes": 1421312,
+  "diskFreeBytes": 2416906240,
+  "floorBytes": 2147483648
+}

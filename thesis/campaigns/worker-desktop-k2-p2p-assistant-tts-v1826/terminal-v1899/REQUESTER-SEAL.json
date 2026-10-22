@@ -1,0 +1,99 @@
+{
+  "at": "2026-10-20T20:23:37.102171+00:00",
+  "caseAudioReferencesVerified": 789,
+  "conditionManifestSha256": "a653d60065616e34844d956d1ed47038aa94f3ff876c36bf3a98e904ca838641",
+  "controllerExitCode": 1,
+  "excludedWarmups": 15,
+  "failureKinds": {
+    "assistant_reply_predicate_failed": 115,
+    "preaccept_capability_changed": 11
+  },
+  "files": {
+    "bytes": 893830,
+    "path": "thesis/campaigns/worker-desktop-k2-p2p-assistant-tts-v1826/terminal-v1899/FILES.json",
+    "sha256": "5da4ed52a18a3fdaed2a55f5d475476c56db1f0687fbf51cbcfea30f7a7931ba"
+  },
+  "latencyBoundary": "valid_non_silent_pcm16_tts_wav_received_decoded_and_checked_before_artifact_write",
+  "measured": 900,
+  "metrics": {
+    "all_measured_attempts": {
+      "estimator": "Hyndman-Fan type 7",
+      "n": 900,
+      "p50": 16347.1533105,
+      "p90": 19255.1733255,
+      "p95": 20585.01837915,
+      "p99": 23031.64014433,
+      "units": "ms"
+    },
+    "successful_correct_e2e": {
+      "estimator": "Hyndman-Fan type 7",
+      "n": 774,
+      "p50": 16524.5190135,
+      "p90": 19429.4432782,
+      "p95": 20761.114956149995,
+      "p99": 23069.04744742,
+      "units": "ms"
+    }
+  },
+  "newInferenceOrTestTraffic": false,
+  "originalFilesPreserved": true,
+  "outcomes": {
+    "completed_correct": 774,
+    "failed": 126
+  },
+  "pendingProviderGate": "Preserve same provider reservation until its exact process/EOF custody is reconciled.",
+  "physicalMicrophone": false,
+  "physicalPlaybackOrAudibility": false,
+  "plannedMeasured": 900,
+  "prefixes": {
+    "bytes": 170670,
+    "path": "thesis/campaigns/worker-desktop-k2-p2p-assistant-tts-v1826/terminal-v1899/PREFIX-EOF.json",
+    "sha256": "513822b18eb928056a256b1e80cdff9b51f301f167a4f4c89eecd97187cfc08d"
+  },
+  "priorCopierReceipt": "thesis/campaigns/worker-desktop-k2-p2p-assistant-tts-v1826/receipts/000255.json",
+  "priorCopierReceiptSha256": "f72ed65014ba28b9fad8d43c4c09e965e6aa8257fcb31f426d1813adc35e0719",
+  "producerSummarySha256": "c707557376d884e1267fec37e6067d892167945b3576ccb1501cef43cb5ac757",
+  "requesterActorsAbsent": [
+    2830732,
+    2830763,
+    2831081,
+    2831977
+  ],
+  "requesterObservedStageDurationMs": {
+    "assistant": {
+      "estimator": "Hyndman-Fan type 7",
+      "n": 900,
+      "p50": 5476.765353999999,
+      "p90": 6111.5518291,
+      "p95": 6567.72529945,
+      "p99": 7083.12291996,
+      "units": "ms"
+    },
+    "stt": {
+      "estimator": "Hyndman-Fan type 7",
+      "n": 900,
+      "p50": 8181.7581405,
+      "p90": 10914.0662858,
+      "p95": 11949.4406701,
+      "p99": 15208.03112835,
+      "units": "ms"
+    },
+    "tts": {
+      "estimator": "Hyndman-Fan type 7",
+      "n": 774,
+      "p50": 2500.6395764999997,
+      "p90": 3383.1800275000005,
+      "p95": 3748.1187423499987,
+      "p99": 4700.047267049998,
+      "units": "ms"
+    }
+  },
+  "retainedAudioBlobs": 789,
+  "retainedCases": 915,
+  "shutdownCompleted": true,
+  "stageDurationScope": "Requester-observed stage durations; native model spans/resources require the separate provider join.",
+  "status": "requester_terminal_raw_eof_sealed",
+  "timeouts": 0,
+  "unattempted": 0,
+  "verifiedPayloadBytes": 61115955
+}

@@ -1,0 +1,12 @@
+{
+  "controlDeadline": "2026-10-22T11:56:30Z",
+  "explicitNewline": true,
+  "host": "ssh:ssh-sem-notebook-personal",
+  "incarnation": "328cd72f-c7ea-49ff-a2db-b9275b085037",
+  "remoteResult": "/home/developer/projects/aurora/thesis/phone-notebook/20261020/evidence/launch-last-finite-pilot-v342.json",
+  "rootAdmissionMessage": "existing v2398 final finite150s native setup pilot after verified consumer lease update; hardstop/phone return unchanged, no900 or extension",
+  "script": "scripts/launch_last_finite_pilot_v342.py",
+  "scriptSha256": "4e8e944df64e2f0e4af57efff7178c05534de46332ce73e96ae5cd0035eb4aed",
+  "singleSend": true,
+  "terminal": "term_a2ed5feb-7c92-48e4-bd88-d1b0e6737989"
+}

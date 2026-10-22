@@ -1,0 +1,9 @@
+{
+  "at": "2026-10-22T03:18:09.639469+00:00",
+  "scope": "Targeted setup-guard regression only, not real hardware/native pilot evidence",
+  "notebook100CObservationAllowed": true,
+  "memoryFailureStillRefused": true,
+  "phoneCriticalBatteryStillRefused": true,
+  "collectionOwnerStartStillMissing": true,
+  "modelCalls": 0
+}

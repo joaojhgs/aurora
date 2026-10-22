@@ -1,0 +1,35 @@
+{
+  "at": "2026-10-20T22:24:35.142341+00:00",
+  "warmups": 1,
+  "correctWarmups": 0,
+  "measured": 0,
+  "correctMeasured": 0,
+  "failedCases": [
+    {
+      "case": "attempt-0001-warmup.jsonl",
+      "failure": {
+        "code": "preaccept_capability_changed",
+        "stage": "stt"
+      },
+      "correlation": {
+        "correlation_id": "audio-campaign-5f50ec7091fc477c9cd1e8d2b9ba5f00",
+        "request_id": "audio-request-eea538a7407c4af1a5e6952c2efc03f0",
+        "session_id": "audio-session-29de2b99cd4d49209229efcdd39b2e07"
+      }
+    }
+  ],
+  "warmup-finalizer-failure.json": {
+    "at": "2026-10-20T22:23:01.777757+00:00",
+    "automaticRetry": false,
+    "error": "failed_ordinary_warmup_preserved_no_automatic_retry",
+    "errorCategory": "AssertionError",
+    "sameAcceptedCommandMustBeReconciled": true
+  },
+  "trace": {
+    "accepted_rows": 1,
+    "written_rows": 1,
+    "invalid_rows": 0,
+    "dropped_rows": 0
+  },
+  "backendPid": 3134507
+}

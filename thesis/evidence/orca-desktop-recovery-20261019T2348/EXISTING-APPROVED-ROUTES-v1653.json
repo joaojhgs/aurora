@@ -1,0 +1,19 @@
+{
+  "id": "1fd4590f-b73c-4d35-a329-d5bc3cee57eb",
+  "ok": true,
+  "result": {
+    "routes": [
+      {
+        "id": "desktop-aurora-tts",
+        "label": "Desktop Personal \u2014 Aurora TTS",
+        "targetId": "ssh-1786238480967-semdev",
+        "host": "100.64.0.3",
+        "port": 8000,
+        "reachable": true
+      }
+    ]
+  },
+  "_meta": {
+    "runtimeId": "cc9e3275-28c6-4c45-85cc-bdcd2262aa7d"
+  }
+}

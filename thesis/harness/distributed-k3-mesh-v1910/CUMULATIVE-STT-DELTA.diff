@@ -1,0 +1,999 @@
+--- sealed-k2/mesh_stage_adapter.py
++++ prospective-k3/mesh_stage_adapter.py
+@@ -1,4 +1,4 @@
+-"""One exact-peer typed MeshBus request for K2/K3 audio stages.
++"""One exact-peer typed MeshBus request for K3/K3 audio stages.
+ 
+ Private campaign source only. It does not select an endpoint/peer, retry,
+ change service policy, or claim remote provider identity. The caller must pass
+--- sealed-k2/bootstrap.py
++++ prospective-k3/bootstrap.py
+@@ -1,4 +1,4 @@
+-"""Pinned bootstrap for the private exact-peer K2 mesh condition."""
++"""Pinned bootstrap for the private exact-peer K3 mesh condition."""
+ from __future__ import annotations
+ 
+ import hashlib
+@@ -155,18 +155,18 @@
+ 
+ def main() -> None:
+     os.umask(0o077)
+-    root = Path(os.environ["AURORA_K2_CONTROL_ROOT"]).resolve(strict=True)
+-    runner = Path(os.environ["AURORA_K2_RUNNER_PATH"]).resolve(strict=True)
+-    bindings = Path(os.environ["AURORA_K2_BINDINGS_PATH"]).resolve(strict=True)
+-    telemetry = Path(os.environ["AURORA_K2_TELEMETRY_PATH"]).resolve(strict=True)
+-    observer = Path(os.environ["AURORA_K2_ROUTE_OBSERVER_PATH"]).resolve(strict=True)
+-    sink_module = Path(os.environ["AURORA_K2_ROUTE_SINK_PATH"]).resolve(strict=True)
++    root = Path(os.environ["AURORA_K3_CONTROL_ROOT"]).resolve(strict=True)
++    runner = Path(os.environ["AURORA_K3_RUNNER_PATH"]).resolve(strict=True)
++    bindings = Path(os.environ["AURORA_K3_BINDINGS_PATH"]).resolve(strict=True)
++    telemetry = Path(os.environ["AURORA_K3_TELEMETRY_PATH"]).resolve(strict=True)
++    observer = Path(os.environ["AURORA_K3_ROUTE_OBSERVER_PATH"]).resolve(strict=True)
++    sink_module = Path(os.environ["AURORA_K3_ROUTE_SINK_PATH"]).resolve(strict=True)
+     cohort_path = Path(os.environ["AURORA_FROZEN_MANIFEST"]).resolve(strict=True)
+     candidate_path = Path(os.environ["AURORA_CANDIDATE_MANIFEST"]).resolve(strict=True)
+     stage_output = Path(os.environ["AURORA_VOICE_STAGE_OUTPUT"])
+-    observations_path = Path(os.environ["AURORA_K2_MESH_ROUTE_OBSERVATIONS"])
+-    status_path = Path(os.environ["AURORA_K2_MESH_ROUTE_SINK_STATUS"])
+-    runtime_receipt = Path(os.environ["AURORA_K2_MESH_ROUTE_RUNTIME_PINS"])
++    observations_path = Path(os.environ["AURORA_K3_MESH_ROUTE_OBSERVATIONS"])
++    status_path = Path(os.environ["AURORA_K3_MESH_ROUTE_SINK_STATUS"])
++    runtime_receipt = Path(os.environ["AURORA_K3_MESH_ROUTE_RUNTIME_PINS"])
+ 
+     for path in (runner, bindings, telemetry, observer, sink_module, cohort_path, candidate_path):
+         if not _regular(path):
+@@ -191,6 +191,7 @@
+     sys.path.insert(0, str(root))
+     import mesh_route_observer  # noqa: PLC0415
+     from route_observation_sink import RouteObservationSink  # noqa: PLC0415
++    from app.shared.contracts.models.stt import TranscriptionMethods
+     from app.shared.contracts.models.orchestrator import OrchestratorMethods
+     from app.shared.contracts.models.tts import TTSMethods  # noqa: PLC0415
+     from app.services.gateway.mesh.peer_bridge import PeerBridge  # noqa: PLC0415
+@@ -220,7 +221,7 @@
+     run_error = False
+     try:
+         mesh_route_observer.install_peer_bridge_observer(
+-            PeerBridge, sink.write, topic_filter=(OrchestratorMethods.EXTERNAL_USER_INPUT, TTSMethods.SYNTHESIZE))
++            PeerBridge, sink.write, topic_filter=(TranscriptionMethods.TRANSCRIBE, OrchestratorMethods.EXTERNAL_USER_INPUT, TTSMethods.SYNTHESIZE))
+         sys.path.insert(0, str(telemetry.parent))
+         namespace = runpy.run_path(str(telemetry))
+         install = namespace.get("install")
+--- sealed-k2/controller.py
++++ prospective-k3/controller.py
+@@ -1,4 +1,4 @@
+-"""Fail-closed private launcher for an admitted distributed K2 condition.
++"""Fail-closed private launcher for an admitted distributed K3 condition.
+ 
+ Root must stage the frozen files and set the documented environment. This
+ controller never creates credentials, chooses an endpoint, or edits config.
+@@ -21,7 +21,7 @@
+ ROOT = pathlib.Path(__file__).resolve().parent
+ RUNNER = ROOT / "runner.py"
+ ADAPTER = ROOT / "mesh_stage_adapter.py"
+-COMPOSITION = ROOT / "k2_composition.py"
++COMPOSITION = ROOT / "k3_composition.py"
+ RECEIVER_PROOF = ROOT / "receiver_proof.py"
+ ROUTE_OBSERVER = ROOT / "mesh_route_observer.py"
+ ROUTE_SINK = ROOT / "route_observation_sink.py"
+@@ -68,26 +68,26 @@
+     inventory_path = ROOT / "source-inventory.json"
+     config_path = pathlib.Path(os.environ.get("AURORA_CONFIG_FILE", ""))
+     wav_path = WAV
+-    source_root = pathlib.Path(os.environ.get("AURORA_K2_SOURCE_ROOT", ""))
+-    python = pathlib.Path(os.environ.get("AURORA_K2_PYTHON", ""))
++    source_root = pathlib.Path(os.environ.get("AURORA_K3_SOURCE_ROOT", ""))
++    python = pathlib.Path(os.environ.get("AURORA_K3_PYTHON", ""))
+     model_paths = {
+-        "stt": pathlib.Path(os.environ.get("AURORA_K2_STT_MODEL_PATH", "")),
+-        "llm": pathlib.Path(os.environ.get("AURORA_K2_LLM_MODEL_PATH", "")),
+-        "tts": pathlib.Path(os.environ.get("AURORA_K2_TTS_MODEL_PATH", "")),
+-        "tts_config": pathlib.Path(os.environ.get("AURORA_K2_TTS_CONFIG_PATH", "")),
++        "stt": pathlib.Path(os.environ.get("AURORA_K3_STT_MODEL_PATH", "")),
++        "llm": pathlib.Path(os.environ.get("AURORA_K3_LLM_MODEL_PATH", "")),
++        "tts": pathlib.Path(os.environ.get("AURORA_K3_TTS_MODEL_PATH", "")),
++        "tts_config": pathlib.Path(os.environ.get("AURORA_K3_TTS_CONFIG_PATH", "")),
+     }
+-    control_sha = os.environ.get("AURORA_K2_CONTROLLER_SHA256", "")
++    control_sha = os.environ.get("AURORA_K3_CONTROLLER_SHA256", "")
+     cohort_sha = os.environ.get("AURORA_FROZEN_MANIFEST_SHA256", "")
+     candidate_sha = CANDIDATE_SHA
+-    runner_sha = os.environ.get("AURORA_K2_RUNNER_SHA256", "")
+-    adapter_sha = os.environ.get("AURORA_K2_ADAPTER_SHA256", "")
+-    composition_sha = os.environ.get("AURORA_K2_COMPOSITION_SHA256", "")
+-    receiver_proof_sha = os.environ.get("AURORA_K2_RECEIVER_PROOF_SHA256", "")
+-    assistant_peer = os.environ.get("AURORA_K2_MESH_ASSISTANT_PEER_ID", "")
+-    tts_peer = os.environ.get("AURORA_K2_MESH_TTS_PEER_ID", "")
+-    route_observer_sha = os.environ.get("AURORA_K2_ROUTE_OBSERVER_SHA256", "")
+-    route_sink_sha = os.environ.get("AURORA_K2_ROUTE_SINK_SHA256", "")
+-    route_runtime_pins_sha = os.environ.get("AURORA_K2_ROUTE_RUNTIME_PINS_SHA256", "")
++    runner_sha = os.environ.get("AURORA_K3_RUNNER_SHA256", "")
++    adapter_sha = os.environ.get("AURORA_K3_ADAPTER_SHA256", "")
++    composition_sha = os.environ.get("AURORA_K3_COMPOSITION_SHA256", "")
++    receiver_proof_sha = os.environ.get("AURORA_K3_RECEIVER_PROOF_SHA256", "")
++    assistant_peer = os.environ.get("AURORA_K3_MESH_ASSISTANT_PEER_ID", "")
++    tts_peer = os.environ.get("AURORA_K3_MESH_TTS_PEER_ID", "")
++    route_observer_sha = os.environ.get("AURORA_K3_ROUTE_OBSERVER_SHA256", "")
++    route_sink_sha = os.environ.get("AURORA_K3_ROUTE_SINK_SHA256", "")
++    route_runtime_pins_sha = os.environ.get("AURORA_K3_ROUTE_RUNTIME_PINS_SHA256", "")
+ 
+     if (not ROOT.is_absolute() or not ROOT.is_dir() or ROOT.is_symlink()
+             or not regular(RUNNER) or not regular(ADAPTER) or not regular(COMPOSITION)
+@@ -124,7 +124,7 @@
+             or cohort.get("implementation", {}).get("routeObserverSha256") != route_observer_sha
+             or cohort.get("implementation", {}).get("routeSinkSha256") != route_sink_sha
+             or cohort.get("implementation", {}).get("routeRuntimePinsSha256") != route_runtime_pins_sha
+-            or cohort.get("implementation", {}).get("k2CompositionSha256") != composition_sha
++            or cohort.get("implementation", {}).get("k3CompositionSha256") != composition_sha
+             or cohort.get("implementation", {}).get("receiverProofSha256") != receiver_proof_sha
+             or composition_sha != digest(COMPOSITION)
+             or cohort.get("implementation", {}).get("bootstrapSha256")
+@@ -217,35 +217,35 @@
+     fcntl.flock(lock, fcntl.LOCK_EX | fcntl.LOCK_NB)
+     env = os.environ.copy()
+     env.update({
+-        "AURORA_K2_CONTROL_ROOT": str(ROOT),
+-        "AURORA_K2_RUNNER_PATH": str(RUNNER),
+-        "AURORA_K2_BINDINGS_PATH": str(ROOT / "bindings.py"),
+-        "AURORA_K2_TELEMETRY_PATH": str(ROOT / "aurora_voice_telemetry_v430.py"),
++        "AURORA_K3_CONTROL_ROOT": str(ROOT),
++        "AURORA_K3_RUNNER_PATH": str(RUNNER),
++        "AURORA_K3_BINDINGS_PATH": str(ROOT / "bindings.py"),
++        "AURORA_K3_TELEMETRY_PATH": str(ROOT / "aurora_voice_telemetry_v430.py"),
+         "AURORA_V409_OBSERVER_PATH": str(ROOT / "observer.py"),
+-        "AURORA_K2_RUNNER_SHA256": runner_sha,
+-        "AURORA_K2_CONTROLLER_SHA256": control_sha,
+-        "AURORA_K2_ADAPTER_SHA256": adapter_sha,
+-        "AURORA_K2_COMPOSITION_SHA256": composition_sha,
+-        "AURORA_K2_RECEIVER_PROOF_SHA256": receiver_proof_sha,
+-        "AURORA_K2_MESH_ASSISTANT_PEER_ID": assistant_peer,
+-        "AURORA_K2_MESH_TTS_PEER_ID": tts_peer,
+-        "AURORA_K2_ROUTE_OBSERVER_PATH": str(ROUTE_OBSERVER),
+-        "AURORA_K2_ROUTE_SINK_PATH": str(ROUTE_SINK),
+-        "AURORA_K2_ROUTE_OBSERVER_SHA256": route_observer_sha,
+-        "AURORA_K2_ROUTE_SINK_SHA256": route_sink_sha,
+-        "AURORA_K2_ROUTE_RUNTIME_PINS_PATH": str(ROUTE_RUNTIME_PINS),
+-        "AURORA_K2_ROUTE_RUNTIME_PINS_SHA256": route_runtime_pins_sha,
+-        "AURORA_K2_MESH_ROUTE_OBSERVATIONS": str(output.parent / "mesh-route-observations.jsonl"),
+-        "AURORA_K2_MESH_ROUTE_SINK_STATUS": str(output.parent / "mesh-route-sink-status.json"),
+-        "AURORA_K2_MESH_ROUTE_RUNTIME_PINS": str(output.parent / "mesh-route-runtime-pins.json"),
++        "AURORA_K3_RUNNER_SHA256": runner_sha,
++        "AURORA_K3_CONTROLLER_SHA256": control_sha,
++        "AURORA_K3_ADAPTER_SHA256": adapter_sha,
++        "AURORA_K3_COMPOSITION_SHA256": composition_sha,
++        "AURORA_K3_RECEIVER_PROOF_SHA256": receiver_proof_sha,
++        "AURORA_K3_MESH_ASSISTANT_PEER_ID": assistant_peer,
++        "AURORA_K3_MESH_TTS_PEER_ID": tts_peer,
++        "AURORA_K3_ROUTE_OBSERVER_PATH": str(ROUTE_OBSERVER),
++        "AURORA_K3_ROUTE_SINK_PATH": str(ROUTE_SINK),
++        "AURORA_K3_ROUTE_OBSERVER_SHA256": route_observer_sha,
++        "AURORA_K3_ROUTE_SINK_SHA256": route_sink_sha,
++        "AURORA_K3_ROUTE_RUNTIME_PINS_PATH": str(ROUTE_RUNTIME_PINS),
++        "AURORA_K3_ROUTE_RUNTIME_PINS_SHA256": route_runtime_pins_sha,
++        "AURORA_K3_MESH_ROUTE_OBSERVATIONS": str(output.parent / "mesh-route-observations.jsonl"),
++        "AURORA_K3_MESH_ROUTE_SINK_STATUS": str(output.parent / "mesh-route-sink-status.json"),
++        "AURORA_K3_MESH_ROUTE_RUNTIME_PINS": str(output.parent / "mesh-route-runtime-pins.json"),
+         "AURORA_VOICE_FIXTURE_WAV": str(wav_path),
+-        "AURORA_K2_SOURCE_ROOT": str(source_root),
++        "AURORA_K3_SOURCE_ROOT": str(source_root),
+         "PYTHONPATH": str(ROOT) + os.pathsep + str(source_root),
+         "AURORA_FROZEN_MANIFEST_SHA256": cohort_sha,
+         "AURORA_CANDIDATE_MANIFEST_SHA256": candidate_sha,
+         "AURORA_CANDIDATE_MANIFEST": str(candidate_path),
+         "AURORA_OUTPUT_DIR": str(output),
+-        "AURORA_K2_REMOTE_WARMUP_PROOF": str(output / "remote-warmup-proof.json"),
++        "AURORA_K3_REMOTE_WARMUP_PROOF": str(output / "remote-warmup-proof.json"),
+         "AURORA_ENV_FILE": str(existing_env),
+         "AURORA_DATA_DIR": str(profile_root / "data"),
+         "AURORA_BACKUP_DIR": str(output.parent / "backups"),
+@@ -260,14 +260,14 @@
+     if any(path.exists() or path.is_symlink() for path in (launch_path, log_path, resources_path)):
+         raise ValueError("control_artifact_already_exists")
+     launch = {
+-        "schema": "aurora.distributed_k2_controller_launch.v1",
++        "schema": "aurora.distributed_k3_controller_launch.v1",
+         "controller_pid": os.getpid(),
+         "started_at": datetime.datetime.now(datetime.timezone.utc).isoformat(),
+         "cohort_manifest_sha256": cohort_sha,
+         "candidate_manifest_sha256": candidate_sha,
+         "runner_sha256": runner_sha,
+         "adapter_sha256": adapter_sha,
+-        "k2_composition_sha256": composition_sha,
++        "k3_composition_sha256": composition_sha,
+         "assistant_peer_id_sha256": hashlib.sha256(assistant_peer.encode()).hexdigest(),
+         "tts_peer_id_sha256": hashlib.sha256(tts_peer.encode()).hexdigest(),
+         "source_inventory_sha256": digest(inventory_path),
+@@ -286,7 +286,7 @@
+         if private_file.exists() or private_file.is_symlink():
+             raise ValueError("private_stage_artifact_exists")
+     env["AURORA_VOICE_STAGE_OUTPUT"] = str(stage_path)
+-    env["AURORA_VOICE_STAGE_HOST_ID"] = "code-worker-k2-http-tts"
++    env["AURORA_VOICE_STAGE_HOST_ID"] = "code-worker-k3-http-tts"
+     env["AURORA_VOICE_TELEMETRY_V430"] = "1"
+     with log_path.open("xb") as log_stream, resources_path.open("xb") as resources:
+         os.chmod(log_path, 0o600)
+--- sealed-k2/k3_composition.py
++++ prospective-k3/k3_composition.py
+@@ -1,4 +1,4 @@
+-"""One-case composition: worker-local STT, exact-peer remote Assistant/TTS.
++"""One-case composition: exact-peer remote STT, Assistant and TTS.
+ 
+ The caller owns service startup, frozen inputs/peers, receiver proof,
+ attempt persistence, and campaign limits. This function makes no retries and
+@@ -18,7 +18,7 @@
+ from mesh_stage_adapter import AdmittedMeshPeer, MeshStageError, request_mesh_stage
+ 
+ 
+-class K2CaseError(RuntimeError):
++class K3CaseError(RuntimeError):
+     """Sanitized stage failure for the caller's attempt record."""
+ 
+     def __init__(self, stage: str, category: str, *, duration_ms: float | None = None,
+@@ -40,7 +40,7 @@
+ def _remaining(deadline_monotonic: float, stage: str) -> float:
+     value = deadline_monotonic - time.monotonic()
+     if value <= 0:
+-        raise K2CaseError(stage, "request_deadline_exhausted", stop_campaign=True)
++        raise K3CaseError(stage, "request_deadline_exhausted", stop_campaign=True)
+     return value
+ 
+ 
+@@ -59,13 +59,13 @@
+                 and any(pcm)
+             )
+     except Exception:
+-        raise K2CaseError("input", "input_wav_invalid", stop_campaign=True) from None
++        raise K3CaseError("input", "input_wav_invalid", stop_campaign=True) from None
+     if not valid:
+-        raise K2CaseError("input", "input_wav_profile_invalid", stop_campaign=True)
++        raise K3CaseError("input", "input_wav_profile_invalid", stop_campaign=True)
+     return frames, hashlib.sha256(audio).hexdigest()
+ 
+ 
+-async def run_k2_case(
++async def run_k3_case(
+     supervisor: Any,
+     wav_bytes: bytes,
+     *,
+@@ -75,9 +75,10 @@
+     correlation_id: str,
+     reference_transcript: str,
+     expected_reply_words: Sequence[str],
+-    expected_local_stt_model: str,
++    expected_remote_stt_model: str,
+     expected_remote_provider: str,
+     expected_remote_model: str,
++    stt_peer: AdmittedMeshPeer,
+     assistant_peer: AdmittedMeshPeer,
+     tts_peer: AdmittedMeshPeer,
+     deadline_monotonic: float,
+@@ -85,7 +86,7 @@
+     sample_rate: int = 22_050,
+     channels: int = 1,
+ ) -> tuple[dict[str, Any], bytes]:
+-    """Run one K2 case over local typed bus and admitted exact-peer MeshBus.
++    """Run one K3 case over local typed bus and admitted exact-peer MeshBus.
+ 
+     ``remote_auto_tts_readback_disabled`` must be set only after the caller has
+     verified the selected remote runtime's frozen effective configuration.
+@@ -98,15 +99,15 @@
+     transcript or assistant text in the record, and never writes artifacts.
+     """
+     if remote_auto_tts_readback_disabled is not True:
+-        raise K2CaseError("preflight", "remote_automatic_tts_not_proven_disabled",
++        raise K3CaseError("preflight", "remote_automatic_tts_not_proven_disabled",
+                           stop_campaign=True)
+     if not all(isinstance(value, str) and value for value in
+                (session_id, request_id, correlation_id, reference_transcript,
+-                expected_local_stt_model, expected_remote_provider, expected_remote_model)):
+-        raise K2CaseError("preflight", "case_binding_invalid", stop_campaign=True)
++                expected_remote_stt_model, expected_remote_provider, expected_remote_model)):
++        raise K3CaseError("preflight", "case_binding_invalid", stop_campaign=True)
+     frames, observed_wav_hash = _check_wav(wav_bytes, sample_rate, channels)
+     if observed_wav_hash != wav_sha256:
+-        raise K2CaseError("preflight", "input_wav_hash_mismatch", stop_campaign=True)
++        raise K3CaseError("preflight", "input_wav_hash_mismatch", stop_campaign=True)
+ 
+     from app.shared.contracts.models.orchestrator import (
+         OrchestratorProcessRequest,
+@@ -124,8 +125,8 @@
+ 
+     started_ns = time.monotonic_ns()
+     record: dict[str, Any] = {
+-        "schema": "aurora.distributed_k2_case.v1",
+-        "condition": "worker_local_stt_remote_mesh_assistant_tts",
++        "schema": "aurora.distributed_k3_case.v1",
++        "condition": "remote_mesh_stt_assistant_tts",
+         "local_case_ids": {
+             "session_id": session_id,
+             "request_id": request_id,
+@@ -152,63 +153,40 @@
+             record["stages"][stage].setdefault("duration_ms", duration_ms)
+         if preaccept_response is not None:
+             record["stages"][stage]["preaccept_response"] = preaccept_response
+-        raise K2CaseError(stage, category, duration_ms=duration_ms,
++        raise K3CaseError(stage, category, duration_ms=duration_ms,
+                           stop_campaign=stop_campaign, status=status,
+                           partial_record=record)
+ 
+-    # Stage 1: real local STT through Supervisor's typed bus, never a service call.
++    # Stage 1: actual STT on the admitted exact peer; no local model fallback.
+     stt_started_ns = time.monotonic_ns()
+     try:
+-        remaining = _remaining(deadline_monotonic, "stt")
+-    except K2CaseError as exc:
+-        fail("stt", exc.category, stop_campaign=True)
+-    try:
+-        result = await asyncio.wait_for(
+-            supervisor.bus.request(
+-                TranscriptionMethods.TRANSCRIBE,
+-                TranscribeAudioRequest(
+-                    audio_data=base64.b64encode(wav_bytes).decode("ascii"),
+-                    format="wav", sample_rate=sample_rate, channels=channels,
+-                    language=None, model="accurate",
+-                ),
+-                origin="internal", principal_id="system", correlation_id=correlation_id,
+-                timeout=remaining,
++        transcription, stt_meta = await request_mesh_stage(
++            supervisor.bus, "stt",
++            TranscribeAudioRequest(
++                audio_data=base64.b64encode(wav_bytes).decode("ascii"),
++                format="wav", sample_rate=sample_rate, channels=channels,
++                language=None, model="accurate",
+             ),
+-            timeout=remaining,
++            TranscribeAudioResponse, stt_peer, correlation_id=correlation_id,
++            deadline_monotonic=deadline_monotonic,
+         )
+-    except (asyncio.TimeoutError, TimeoutError):
+-        elapsed = (time.monotonic_ns() - stt_started_ns) / 1_000_000
+-        fail("stt", "local_bus_timeout_ambiguous", duration_ms=elapsed,
+-             stop_campaign=True)
+-    except Exception:
+-        elapsed = (time.monotonic_ns() - stt_started_ns) / 1_000_000
+-        fail("stt", "local_bus_exception", duration_ms=elapsed, stop_campaign=True)
++    except MeshStageError as exc:
++        fail("stt", exc.category, duration_ms=exc.duration_ms,
++             stop_campaign=exc.stop_campaign, preaccept_response=exc.preaccept_response)
+     stt_ended_ns = time.monotonic_ns()
+     stt_ms = (stt_ended_ns - stt_started_ns) / 1_000_000
+-    if not getattr(result, "ok", False):
+-        fail("stt", "local_bus_request_failed", duration_ms=stt_ms,
+-             stop_campaign=True)
+-    try:
+-        transcription = TranscribeAudioResponse.model_validate(result.data)
+-    except Exception:
+-        fail("stt", "typed_response_invalid", duration_ms=stt_ms, stop_campaign=True)
+     if not transcription.text.strip():
+         fail("stt", "empty_transcript", duration_ms=stt_ms)
+-    if transcription.model_used != expected_local_stt_model:
+-        fail("stt", "local_model_identity_mismatch", duration_ms=stt_ms,
+-             stop_campaign=True)
++    if transcription.model_used != expected_remote_stt_model:
++        fail("stt", "remote_stt_model_identity_mismatch", duration_ms=stt_ms, stop_campaign=True)
+     transcript_matches = _normal_words(transcription.text) == _normal_words(reference_transcript)
+     record["stages"]["stt"] = {
+-        "status": "completed",
+-        "transport": "worker_local_typed_bus",
+-        "start_monotonic_ns": stt_started_ns,
+-        "end_monotonic_ns": stt_ended_ns,
+-        "duration_ms": stt_ms,
++        "status": "completed", "start_monotonic_ns": stt_started_ns,
++        "end_monotonic_ns": stt_ended_ns, "duration_ms": stt_ms,
+         "duration_ms_reported_by_service": transcription.duration_ms,
+-        "model_used": transcription.model_used,
+-        "language": transcription.language,
++        "model_used": transcription.model_used, "language": transcription.language,
+         "transcript_sha256": hashlib.sha256(transcription.text.encode("utf-8")).hexdigest(),
+-        "transcript_chars": len(transcription.text),
++        "transcript_chars": len(transcription.text), **stt_meta,
+     }
+     record["correctness"]["transcript_matches_reference_words"] = transcript_matches
+     if not transcript_matches:
+@@ -311,7 +289,7 @@
+         fail("tts", "synthesis_audio_encoding_invalid", duration_ms=tts_ms)
+     try:
+         output_frames, output_hash = _check_wav(audio, tts.sample_rate, 1)
+-    except K2CaseError as exc:
++    except K3CaseError as exc:
+         category = {
+             "input_wav_invalid": "synthesized_wav_invalid",
+             "input_wav_profile_invalid": "synthesized_wav_profile_invalid",
+--- sealed-k2/receiver_proof.py
++++ prospective-k3/receiver_proof.py
+@@ -1,4 +1,4 @@
+-"""Offline K2 receiver proof assembler; reads retained rows and never starts a service."""
++"""Offline K3 receiver proof assembler; reads retained rows and never starts a service."""
+ from __future__ import annotations
+ import argparse
+ import hashlib
+@@ -37,9 +37,9 @@
+             route_rows, route_bytes = _rows(rows_path, 64 * 1024 * 1024)
+             if (isinstance(status, dict) and status.get("state") == "accepting"
+                     and status.get("complete") is False
+-                    and status.get("accepted_rows") == 30
+-                    and status.get("written_rows") == 30
+-                    and len(route_rows) == 30):
++                    and status.get("accepted_rows") == 45
++                    and status.get("written_rows") == 45
++                    and len(route_rows) == 45):
+                 return route_rows, route_bytes, status_bytes, status
+         except (OSError, ValueError, json.JSONDecodeError):
+             pass
+@@ -77,7 +77,7 @@
+     return raw, canonical
+ 
+ def build_proof(*, attempts_dir: Path, stage_path: Path, bindings_path: Path,
+-                assistant_identity_path: Path, tts_identity_path: Path,
++                assistant_identity_path: Path, tts_identity_path: Path, stt_identity_path: Path,
+                 mesh_calls_path: Path, route_observations_path: Path,
+                 route_sink_status_path: Path, route_runtime_pins_path: Path,
+                 frozen_manifest_path: Path,
+@@ -85,13 +85,13 @@
+                 expected_receivers: dict[str, Any]) -> dict[str, Any]:
+     if not HEX.fullmatch(candidate_sha) or not HEX.fullmatch(cohort_sha):
+         raise ValueError("manifest_pin_invalid")
+-    if set(expected_receivers) != {"assistant", "tts"}:
++    if set(expected_receivers) != {"stt", "assistant", "tts"}:
+         raise ValueError("receiver_manifest_invalid")
+-    if any(not isinstance(expected_receivers.get(stage), dict) for stage in ("assistant", "tts")):
++    if any(not isinstance(expected_receivers.get(stage), dict) for stage in ("stt", "assistant", "tts")):
+         raise ValueError("receiver_manifest_invalid")
+     identities: dict[str, dict[str, Any]] = {}
+     paths: dict[str, dict[str, str]] = {}
+-    for stage, identity_path in (("assistant", assistant_identity_path), ("tts", tts_identity_path)):
++    for stage, identity_path in (("stt", stt_identity_path), ("assistant", assistant_identity_path), ("tts", tts_identity_path)):
+         identities[stage], paths[stage] = _identity(identity_path, expected_receivers[stage])
+     spans, span_bytes = _rows(stage_path, 64 * 1024 * 1024)
+     bindings, binding_bytes = _rows(bindings_path, 16 * 1024 * 1024)
+@@ -106,14 +106,15 @@
+     cohort = json.loads(cohort_bytes)
+     frozen_implementation = cohort.get("implementation", {})
+     if (cohort.get("remoteReceivers") != expected_receivers
++            or expected_receivers.get("stt", {}).get("peer_id_sha256") != cohort.get("meshSttPeerIdSha256")
+             or expected_receivers.get("assistant", {}).get("peer_id_sha256") != cohort.get("meshAssistantPeerIdSha256")
+             or expected_receivers.get("tts", {}).get("peer_id_sha256") != cohort.get("meshTtsPeerIdSha256")
+             or cohort.get("meshAuthorityBinding") != "existing_authorized_peer_session"):
+         raise ValueError("frozen_mesh_receiver_binding_mismatch")
+-    if (len(route_rows) != 30
++    if (len(route_rows) != 45
+             or route_status.get("schema") != "aurora.mesh_route_observation_sink.v1"
+             or route_status.get("state") != "accepting" or route_status.get("complete") is not False
+-            or route_status.get("accepted_rows") != 30 or route_status.get("written_rows") != 30
++            or route_status.get("accepted_rows") != 45 or route_status.get("written_rows") != 45
+             or any(route_status.get(key) != 0 for key in ("dropped_rows", "oversize_rows", "quota_rows", "invalid_rows"))
+             or route_status.get("writer_error_class") is not None
+             or route_runtime.get("schema") != "aurora.mesh_route_runtime_install.v1"
+@@ -124,7 +125,7 @@
+             or route_runtime.get("runtime_pins_sha256") != frozen_implementation.get("routeRuntimePinsSha256")
+             or route_runtime.get("observation_limit") != "before_after_snapshots_all_pc_transports_no_pair_id_no_continuous_stability"):
+         raise ValueError("mesh_route_warmup_observation_gate_incomplete")
+-    topics = {"assistant": "Orchestrator.ExternalUserInput", "tts": "TTS.Synthesize"}
++    topics = {"stt": "Transcription.Transcribe", "assistant": "Orchestrator.ExternalUserInput", "tts": "TTS.Synthesize"}
+     routes: dict[tuple[str, str], dict[str, Any]] = {}
+     for row in route_rows:
+         stage = next((key for key, topic in topics.items() if row.get("topic") == topic), None)
+@@ -140,8 +141,7 @@
+         routes[(stage, corr)] = row
+     mesh_calls_by_key: dict[tuple[str, str], list[dict[str, Any]]] = {}
+     for row in mesh_calls:
+-        stage = "assistant" if row.get("topic") == topics["assistant"] else (
+-            "tts" if row.get("topic") == topics["tts"] else None)
++        stage = next((s for s, topic in topics.items() if row.get("topic") == topic), None)
+         corr = row.get("correlation_id")
+         if stage is None or not isinstance(corr, str):
+             raise ValueError("requester_mesh_call_row_invalid")
+@@ -150,7 +150,9 @@
+     groups: dict[tuple[str, str], dict[str, list[dict[str, Any]]]] = {}
+     for row in spans:
+         stage = "assistant" if row.get("stage") == "llm" and row.get("handler") == "resolved_chat_model.astream" else row.get("stage")
+-        if stage not in {"assistant", "tts"} or row.get("record_kind") != "invocation_span_boundary":
++        if stage not in {"stt", "assistant", "tts"} or row.get("record_kind") != "invocation_span_boundary":
++            continue
++        if stage == "stt" and row.get("handler") != "stt.model_invoke":
+             continue
+         if stage == "tts" and row.get("handler") != "tts.model_invoke":
+             continue
+@@ -173,7 +175,7 @@
+     seen_server: set[tuple[str, str]] = set()
+     pids: dict[str, int] = {}
+     for ordinal in range(1, 16):
+-        case_id = f"audio-campaign-v1731-{ordinal:04d}"
++        case_id = f"audio-campaign-v1910-{ordinal:04d}"
+         attempt = json.loads(_read(attempts_dir / f"attempt-{ordinal:04d}-warmup.jsonl", 2 * 1024 * 1024))
+         local_id = attempt.get("correlation", {}).get("correlation_id")
+         if (attempt.get("harness_case_id") != case_id or attempt.get("phase") != "warmup"
+@@ -181,7 +183,7 @@
+                 or attempt.get("correctness", {}).get("all_expected") is not True
+                 or not isinstance(local_id, str) or not MAX_ID.fullmatch(local_id)):
+             raise ValueError("requester_warmup_not_complete")
+-        for stage, handler in (("assistant", "resolved_chat_model.astream"), ("tts", "tts.model_invoke")):
++        for stage, handler in (("stt", "stt.model_invoke"), ("assistant", "resolved_chat_model.astream"), ("tts", "tts.model_invoke")):
+             attempt_stage = attempt.get("stages", {}).get(stage, {})
+             server_id = attempt_stage.get("mesh_correlation_id")
+             request_sha = attempt_stage.get("request_payload_sha256")
+@@ -316,7 +318,7 @@
+                     for r in llm_rows
+                 ):
+                     raise ValueError("actual_assistant_constructor_binding_missing")
+-            else:
++            elif stage == "tts":
+                 if (begin.get("operation_id") != finish.get("operation_id")
+                         or begin.get("attempt_id") != finish.get("attempt_id")):
+                     raise ValueError("tts_native_ids_mismatch")
+@@ -339,15 +341,31 @@
+                         or voice.get("config_file") != paths["tts"]["config"]
+                         or actual.get("useCuda") is not False):
+                     raise ValueError("tts_actual_provider_binding_mismatch")
++            else:
++                if (begin.get("operation_id") != finish.get("operation_id")
++                        or begin.get("attempt_id") != finish.get("attempt_id")):
++                    raise ValueError("stt_native_ids_mismatch")
++                op, att = finish.get("operation_id"), finish.get("attempt_id")
++                if not all(isinstance(v, str) and MAX_ID.fullmatch(v) for v in (op, att)):
++                    raise ValueError("stt_native_ids_missing")
++                records = [r for r in bindings if r.get("event") == "stt_constructor_return" and r.get("pid") == pid]
++                if (len(records) != 1 or records[0].get("actualDevice") != "cpu"
++                        or records[0].get("actualComputeType") != "int8_float32"
++                        or records[0].get("returned", {}).get("class") != expected_receivers[stage]["provider_class"]
++                        or records[0].get("actualArguments", {}).get("device") != "cpu"
++                        or records[0].get("actualArguments", {}).get("compute_type") != "int8"
++                        or str((Path(records[0].get("actualArguments", {}).get("model", "")) / "model.bin").resolve()) != paths["stt"]["model"]):
++                    raise ValueError("actual_stt_constructor_binding_mismatch")
++                record.update(operation_id=op, attempt_id=att)
+             calls.append(record)
+             seen_server.add((stage, server_id))
+             pids[stage] = pid
+-    if (len(calls) != 30 or len(used_piper_starts) != 15 or len(used_piper_ends) != 15
+-            or len(routes) != 30 or len(mesh_calls_by_key) != 30
++    if (len(calls) != 45 or len(used_piper_starts) != 15 or len(used_piper_ends) != 15
++            or len(routes) != 45 or len(mesh_calls_by_key) != 45
+             or any(len(rows) != 2 for rows in mesh_calls_by_key.values())):
+         raise ValueError("remote_stage_denominator_mismatch")
+     return {
+-        "schema": "aurora.distributed_k2_mesh_remote_stages_warmup.v1",
++        "schema": "aurora.distributed_k3_mesh_remote_stages_warmup.v1",
+         "proof_generator_sha256": _sha(Path(__file__).read_bytes()),
+         "candidate_manifest_sha256": candidate_sha, "cohort_manifest_sha256": cohort_sha,
+         "receivers": expected_receivers, "calls": calls,
+@@ -369,7 +387,7 @@
+ 
+ def main() -> int:
+     p = argparse.ArgumentParser(description=__doc__)
+-    for name in ("attempts-dir", "receiver-stages", "provider-bindings", "assistant-identity", "tts-identity", "mesh-calls", "route-observations", "route-sink-status", "route-runtime-pins", "frozen-manifest", "output"):
++    for name in ("attempts-dir", "receiver-stages", "provider-bindings", "assistant-identity", "tts-identity", "stt-identity", "mesh-calls", "route-observations", "route-sink-status", "route-runtime-pins", "frozen-manifest", "output"):
+         p.add_argument("--" + name, type=Path, required=True)
+     p.add_argument("--candidate-manifest-sha256", required=True)
+     p.add_argument("--cohort-manifest-sha256", required=True)
+@@ -378,7 +396,7 @@
+     expected = json.loads(_read(a.expected_receivers, 64 * 1024))
+     proof = build_proof(attempts_dir=a.attempts_dir, stage_path=a.receiver_stages,
+         bindings_path=a.provider_bindings, assistant_identity_path=a.assistant_identity,
+-        tts_identity_path=a.tts_identity, mesh_calls_path=a.mesh_calls,
++        tts_identity_path=a.tts_identity, stt_identity_path=a.stt_identity, mesh_calls_path=a.mesh_calls,
+         route_observations_path=a.route_observations, route_sink_status_path=a.route_sink_status,
+         route_runtime_pins_path=a.route_runtime_pins, frozen_manifest_path=a.frozen_manifest,
+         candidate_sha=a.candidate_manifest_sha256,
+@@ -389,7 +407,7 @@
+     fd = os.open(a.output, os.O_WRONLY | os.O_CREAT | os.O_EXCL, 0o600)
+     with os.fdopen(fd, "wb") as stream:
+         stream.write(data); stream.flush(); os.fsync(stream.fileno())
+-    print(json.dumps({"status": "receiver_proof_written", "calls": 30, "sha256": _sha(data)}))
++    print(json.dumps({"status": "receiver_proof_written", "calls": 45, "sha256": _sha(data)}))
+     return 0
+ 
+ if __name__ == "__main__":
+--- sealed-k2/route_runtime_pins.json
++++ prospective-k3/route_runtime_pins.json
+@@ -1,6 +1,6 @@
+ {
+   "schema": "aurora.mesh_route_runtime_pins.v1",
+-  "runtimePrefix": "/home/developer/projects/aurora/.git/aurora-handoff-import-20261006/cpu-audio-campaign-v491/env",
++  "runtimePrefix": "/home/developer/projects/aurora/.git/aurora-handoff-import-20261006/cpu-full-audio-v487/env",
+   "pathFile": {
+     "relativePath": "lib/python3.11/site-packages/aurora-preserved-backends.pth",
+     "bytes": 188,
+--- sealed-k2/runner.py
++++ prospective-k3/runner.py
+@@ -1,5 +1,5 @@
+ #!/usr/bin/env python3
+-"""One bounded retained-Supervisor K2 condition: local STT, remote LLM and TTS.
++"""One bounded retained-Supervisor K3 condition: remote STT, LLM and TTS.
+ 
+ Source-only campaign runner. Root owns configuration, launch, resource caps and
+ all execution; this file is not a benchmark result or product telemetry hook.
+@@ -22,7 +22,7 @@
+ os.umask(0o077)
+ sys.path.insert(0, str(Path(__file__).resolve().parent))
+ from mesh_stage_adapter import AdmittedMeshPeer
+-from k2_composition import K2CaseError, run_k2_case
++from k3_composition import K3CaseError, run_k3_case
+ 
+ WARMUP_COUNT = 15
+ MEASURED_COUNT = 900
+@@ -168,104 +168,45 @@
+ 
+ 
+ def _local_stt_warmup_gate(attempts_dir: Path, stage_output: Path, wav_hash: str,
+-                           candidate_hash: str, config: dict[str, Any], *,
+-                           case_prefix: str = "audio-campaign-v1731") -> dict[str, Any]:
+-    """Require correct warmups and actual local STT; K2's LLM is remote."""
+-    ended: dict[str, dict[str, list[dict[str, Any]]]] = {}
+-    try:
++                           candidate_hash: str, config: dict[str, Any],
++                           case_prefix: str = "audio-campaign-v1910") -> dict[str, Any]:
++    """Require correct requester warmups and no hidden local model execution."""
++    if config["services"]["stt"]["transcription"]["enabled"]:
++        raise CampaignFailure("warmup_gate", "requester_local_stt_enabled", stop=True)
++    if stage_output.exists():
+         for line in stage_output.read_text().splitlines():
+-            record = json.loads(line)
+-            correlation = record.get("correlation_id")
+-            stage = record.get("stage")
+-            if (record.get("record_kind") == "invocation_span_boundary"
+-                    and record.get("event") == "span_end"
+-                    and isinstance(correlation, str) and stage in {"stt", "llm", "tts"}):
+-                ended.setdefault(correlation, {}).setdefault(stage, []).append(record)
+-    except Exception:
+-        raise CampaignFailure("warmup_gate", "native_stage_records_unreadable", stop=True) from None
+-
+-    cases: list[dict[str, Any]] = []
+-    seen_correlations: set[str] = set()
++            row = json.loads(line)
++            if row.get("record_kind") == "invocation_span_boundary" and row.get("handler") in (
++                "stt.model_invoke", "resolved_chat_model.astream", "tts.model_invoke"
++            ):
++                raise CampaignFailure("warmup_gate", "unexpected_requester_model_invocation", stop=True)
++    binding_path = stage_output.with_name("actual-provider-bindings.jsonl")
++    if binding_path.exists() and binding_path.read_bytes().strip():
++        raise CampaignFailure("warmup_gate", "unexpected_requester_model_constructor_or_call", stop=True)
+     for ordinal in range(1, WARMUP_COUNT + 1):
+-        case_id = f"{case_prefix}-{ordinal:04d}"
+-        path = attempts_dir / f"attempt-{ordinal:04d}-warmup.jsonl"
+-        try:
+-            attempt = json.loads(path.read_text())
+-        except Exception:
+-            raise CampaignFailure("warmup_gate", "warmup_attempt_unreadable", stop=True) from None
+-        correlation_record = attempt.get("correlation")
+-        correlation = correlation_record.get("correlation_id") if isinstance(correlation_record, dict) else None
+-        bus_complete = all(
+-            attempt.get("stages", {}).get(stage, {}).get("status") == "completed"
+-            for stage in ("stt", "assistant", "tts")
+-        )
+-        correctness = attempt.get("correctness", {})
+-        correct = (
+-            attempt.get("status") == "completed_correct"
+-            and correctness.get("all_expected") is True
+-            and correctness.get("transcript_matches_reference_words") is True
+-            and correctness.get("assistant_reply_matches_expected_words") is True
+-        )
+-        span_stages = ended.get(correlation, {}) if isinstance(correlation, str) else {}
+-        stt_spans = span_stages.get("stt", [])
+-        native_complete = any(
+-            r.get("handler") == "stt.model_invoke" and r.get("outcome") == "completed"
+-            and isinstance(r.get("operation_id"), str)
+-            and isinstance(r.get("attempt_id"), str) for r in stt_spans
+-        )
+-        if (attempt.get("ordinal") != ordinal or attempt.get("phase") != "warmup"
+-                or attempt.get("harness_case_id") != case_id
++        attempt = json.loads((attempts_dir / f"attempt-{ordinal:04d}-warmup.jsonl").read_text())
++        if (attempt.get("harness_case_id") != f"{case_prefix}-{ordinal:04d}"
++                or attempt.get("phase") != "warmup" or attempt.get("status") != "completed_correct"
+                 or attempt.get("input_wav_sha256") != wav_hash
+                 or attempt.get("candidate_manifest_sha256") != candidate_hash
+-                or not isinstance(correlation, str) or correlation in seen_correlations
+-                or not bus_complete or not correct or not native_complete):
+-            raise CampaignFailure("warmup_gate", "fifteen_correct_native_flows_required", stop=True)
+-        seen_correlations.add(correlation)
+-        cases.append({"harness_case_id": case_id, "correlation_id": correlation,
+-                      "local_bus_stages_complete": True, "native_spans_complete": True,
+-                      "correctness_complete": True})
+-
+-    binding_path = stage_output.with_name("actual-provider-bindings.jsonl")
+-    try:
+-        bindings = [json.loads(line) for line in binding_path.read_text().splitlines()]
+-    except Exception:
+-        raise CampaignFailure("warmup_gate", "actual_provider_records_unreadable", stop=True) from None
+-    stt = [r for r in bindings if r.get("event") == "stt_constructor_return"]
+-    stt_config = config["services"]["stt"]["transcription"]["accurate_model"]
+-    stt_object_ids = {r.get("returned", {}).get("objectId") for r in stt}
+-    stt_engine_ids = {r.get("engine", {}).get("objectId") for r in stt}
+-    actual_stt = (bool(stt)
+-        and len(stt_object_ids) == 1 and None not in stt_object_ids
+-        and len(stt_engine_ids) == 1 and None not in stt_engine_ids and all(
+-        r.get("returned", {}).get("class") == "faster_whisper.transcribe.WhisperModel"
+-        and r.get("engine", {}).get("class") == "ctranslate2._ext.Whisper"
+-        and r.get("actualDevice") == "cpu" and r.get("actualComputeType") == "int8_float32"
+-        and r.get("actualArguments", {}).get("model") == stt_config.get("model_size_or_path")
+-        and r.get("actualArguments", {}).get("device") == stt_config.get("device") == "cpu"
+-        and r.get("actualArguments", {}).get("compute_type") == stt_config.get("compute_type") == "int8" for r in stt
+-    ))
+-    if not actual_stt:
+-        raise CampaignFailure("warmup_gate", "actual_cpu_provider_identity_incomplete", stop=True)
+-    return {
+-        "status": "passed", "planned_and_correct_warmups": WARMUP_COUNT,
+-        "all_expected_predicates": True, "native_stt_span": True,
+-        "actual_stt_cpu_binding": True,
+-        "actual_provider_record_sha256": _sha256(binding_path.read_bytes()),
+-        "warmup_cases": cases,
+-    }
+-
+-
+-async def _remote_k2_warmup_gate(attempts_dir: Path, stage_output: Path,
++                or attempt.get("correctness", {}).get("all_expected") is not True
++                or any(attempt.get("stages", {}).get(stage, {}).get("status") != "completed"
++                       for stage in ("stt", "assistant", "tts"))):
++            raise CampaignFailure("warmup_gate", "fifteen_correct_remote_audio_flows_required", stop=True)
++    return {"status": "passed", "correct_warmups": WARMUP_COUNT, "requester_model_invocations": 0}
++
++
++async def _remote_k3_warmup_gate(attempts_dir: Path, stage_output: Path,
+                                  cohort_manifest: dict[str, Any], candidate_hash: str,
+                                  cohort_hash: str,
+                                  config: dict[str, Any], condition_deadline: float) -> dict[str, Any]:
+-    """Require independent receiver spans for both remote K2 stages before measured 1."""
++    """Require independent receiver spans for both remote K3 stages before measured 1."""
+     expected = cohort_manifest.get("remoteReceivers")
+-    proof_path_raw = os.environ.get("AURORA_K2_REMOTE_WARMUP_PROOF", "")
+-    if not isinstance(expected, dict) or set(expected) != {"assistant", "tts"} or not proof_path_raw:
++    proof_path_raw = os.environ.get("AURORA_K3_REMOTE_WARMUP_PROOF", "")
++    if not isinstance(expected, dict) or set(expected) != {"stt", "assistant", "tts"} or not proof_path_raw:
+         raise CampaignFailure("warmup_gate", "remote_stage_receiver_binding_missing", stop=True)
+     identity_keys = {"receiver_id", "source_sha256", "provider_class", "model_sha256", "config_sha256", "peer_id_sha256"}
+-    for stage in ("assistant", "tts"):
++    for stage in ("stt", "assistant", "tts"):
+         identity = expected.get(stage)
+         if not isinstance(identity, dict) or set(identity) != identity_keys:
+             raise CampaignFailure("warmup_gate", "remote_stage_receiver_manifest_invalid", stop=True)
+@@ -292,7 +233,7 @@
+         raise CampaignFailure("warmup_gate", "remote_stage_proof_outside_private_output", stop=True)
+     local_gate = _local_stt_warmup_gate(
+         attempts_dir, stage_output, _load_frozen_manifest()[0]["wav_sha256"],
+-        candidate_hash, config, case_prefix="audio-campaign-v1731",
++        candidate_hash, config, case_prefix="audio-campaign-v1910",
+     )
+     proof_deadline = min(condition_deadline, time.monotonic() + REQUEST_CAP_SECONDS)
+     while not proof_path.is_file():
+@@ -311,7 +252,7 @@
+     except Exception:
+         raise CampaignFailure("warmup_gate", "remote_stage_proof_invalid", stop=True) from None
+     if (not isinstance(proof, dict)
+-            or proof.get("schema") != "aurora.distributed_k2_mesh_remote_stages_warmup.v1"
++            or proof.get("schema") != "aurora.distributed_k3_mesh_remote_stages_warmup.v1"
+             or proof.get("candidate_manifest_sha256") != candidate_hash
+             or proof.get("cohort_manifest_sha256") != cohort_hash
+             or proof.get("proof_generator_sha256") != cohort_manifest.get("implementation", {}).get("receiverProofSha256")
+@@ -319,18 +260,18 @@
+         raise CampaignFailure("warmup_gate", "remote_stage_proof_binding_mismatch", stop=True)
+     route_gate = proof.get("mesh_route_observation_gate")
+     if (not isinstance(route_gate, dict) or route_gate.get("status") != "passed"
+-            or route_gate.get("route_rows") != WARMUP_COUNT * 2
+-            or route_gate.get("mesh_call_rows") != WARMUP_COUNT * 4
++            or route_gate.get("route_rows") != WARMUP_COUNT * 3
++            or route_gate.get("mesh_call_rows") != WARMUP_COUNT * 6
+             or route_gate.get("continuous_route_stability_claimed") is not False
+             or route_gate.get("snapshot_scope") != "before_after_snapshots_all_pc_transports_no_pair_id_no_continuous_stability"):
+         raise CampaignFailure("warmup_gate", "mesh_route_observation_gate_incomplete", stop=True)
+     calls = proof.get("calls")
+-    if not isinstance(calls, list) or len(calls) != WARMUP_COUNT * 2:
++    if not isinstance(calls, list) or len(calls) != WARMUP_COUNT * 3:
+         raise CampaignFailure("warmup_gate", "remote_stage_proof_call_count_mismatch", stop=True)
+ 
+     expected_calls: dict[tuple[str, str], dict[str, Any]] = {}
+     for ordinal in range(1, WARMUP_COUNT + 1):
+-        case_id = f"audio-campaign-v1731-{ordinal:04d}"
++        case_id = f"audio-campaign-v1910-{ordinal:04d}"
+         try:
+             attempt = json.loads((attempts_dir / f"attempt-{ordinal:04d}-warmup.jsonl").read_text())
+         except Exception:
+@@ -340,11 +281,11 @@
+                 or attempt.get("candidate_manifest_sha256") != candidate_hash
+                 or attempt.get("status") != "completed_correct"
+                 or attempt.get("correctness", {}).get("all_expected") is not True):
+-            raise CampaignFailure("warmup_gate", "fifteen_correct_k2_flows_required", stop=True)
++            raise CampaignFailure("warmup_gate", "fifteen_correct_k3_flows_required", stop=True)
+         local_id = attempt.get("correlation", {}).get("correlation_id")
+         if not isinstance(local_id, str):
+             raise CampaignFailure("warmup_gate", "warmup_local_correlation_missing", stop=True)
+-        for stage in ("assistant", "tts"):
++        for stage in ("stt", "assistant", "tts"):
+             row = attempt.get("stages", {}).get(stage, {})
+             server_id = row.get("mesh_correlation_id")
+             if (row.get("status") != "completed" or not isinstance(server_id, str)
+@@ -366,11 +307,11 @@
+         if not isinstance(call, dict):
+             raise CampaignFailure("warmup_gate", "remote_stage_native_span_invalid", stop=True)
+         stage, case_id = call.get("stage"), call.get("harness_case_id")
+-        if stage not in ("assistant", "tts") or not isinstance(case_id, str):
++        if stage not in ("stt", "assistant", "tts") or not isinstance(case_id, str):
+             raise CampaignFailure("warmup_gate", "remote_stage_native_span_invalid", stop=True)
+         joined = expected_calls.get((stage, case_id))
+         receiver = expected.get(stage)
+-        handler = "resolved_chat_model.astream" if stage == "assistant" else "tts.model_invoke"
++        handler = {"stt": "stt.model_invoke", "assistant": "resolved_chat_model.astream", "tts": "tts.model_invoke"}[stage]
+         server_key = (stage, joined["server"]) if joined is not None else None
+         if (joined is None or receiver is None or (stage, case_id) in seen
+                 or server_key in seen_server
+@@ -386,7 +327,7 @@
+                     or call.get("attempt_id") is not None
+                     or call.get("native_id_absence_reason") != "v430_async_span_exposes_span_id_only"
+                 ))
+-                or (stage == "tts" and (
++                or (stage in ("stt", "tts") and (
+                     not isinstance(call.get("operation_id"), str)
+                     or not re.fullmatch(r"[A-Za-z0-9._:-]{1,160}", call["operation_id"])
+                     or not isinstance(call.get("attempt_id"), str)
+@@ -416,7 +357,7 @@
+     return {
+         "status": "passed", "planned_and_correct_warmups": WARMUP_COUNT,
+         "local_stt_gate": local_gate,
+-        "remote_assistant_tts_receiver_gate": True,
++        "remote_stt_assistant_tts_receiver_gate": True,
+         "remote_stage_proof_sha256": _sha256(proof_bytes),
+         "remote_server_correlations_joined_per_stage": WARMUP_COUNT,
+     }
+@@ -552,8 +493,10 @@
+         != CONDITION_CAP_SECONDS
+     ):
+         raise CampaignFailure("preflight", "frozen_condition_cap_mismatch", stop=True)
+-    assistant_peer_id = os.environ.get("AURORA_K2_MESH_ASSISTANT_PEER_ID", "")
+-    tts_peer_id = os.environ.get("AURORA_K2_MESH_TTS_PEER_ID", "")
++    stt_peer_id = os.environ.get("AURORA_K3_MESH_STT_PEER_ID", "")
++    stt_peer = AdmittedMeshPeer(stt_peer_id, _sha256(stt_peer_id.encode("utf-8")))
++    assistant_peer_id = os.environ.get("AURORA_K3_MESH_ASSISTANT_PEER_ID", "")
++    tts_peer_id = os.environ.get("AURORA_K3_MESH_TTS_PEER_ID", "")
+     assistant_peer = AdmittedMeshPeer(assistant_peer_id, _sha256(assistant_peer_id.encode("utf-8")))
+     tts_peer = AdmittedMeshPeer(tts_peer_id, _sha256(tts_peer_id.encode("utf-8")))
+     response_identity = cohort_manifest.get("remoteAssistantResponseIdentity")
+@@ -562,7 +505,9 @@
+     if (not re.fullmatch(r"[A-Za-z0-9][A-Za-z0-9._:-]{0,127}", assistant_peer_id)
+             or not re.fullmatch(r"[A-Za-z0-9][A-Za-z0-9._:-]{0,127}", tts_peer_id)
+             or not isinstance(remote_receivers, dict)
+-            or set(remote_receivers) != {"assistant", "tts"}
++            or set(remote_receivers) != {"stt", "assistant", "tts"}
++            or not re.fullmatch(r"[A-Za-z0-9][A-Za-z0-9._:-]{0,127}", stt_peer_id)
++            or remote_receivers.get("stt", {}).get("peer_id_sha256") != stt_peer.sha256
+             or remote_receivers.get("assistant", {}).get("peer_id_sha256") != assistant_peer.sha256
+             or remote_receivers.get("tts", {}).get("peer_id_sha256") != tts_peer.sha256
+             or not isinstance(remote_config_binding, dict)
+@@ -580,26 +525,26 @@
+     if cohort_manifest.get("implementation", {}).get("runnerSha256") != runner_hash:
+         raise CampaignFailure("preflight", "frozen_runner_hash_mismatch", stop=True)
+     adapter_path = Path(__file__).resolve().with_name("mesh_stage_adapter.py")
+-    expected_adapter_hash = os.environ.get("AURORA_K2_ADAPTER_SHA256", "")
++    expected_adapter_hash = os.environ.get("AURORA_K3_ADAPTER_SHA256", "")
+     if (not re.fullmatch(r"[0-9a-f]{64}", expected_adapter_hash)
+             or _sha256(adapter_path.read_bytes()) != expected_adapter_hash
+             or cohort_manifest.get("implementation", {}).get("adapterSha256") != expected_adapter_hash):
+         raise CampaignFailure("preflight", "frozen_mesh_adapter_hash_mismatch", stop=True)
+-    composition_path = Path(__file__).resolve().with_name("k2_composition.py")
+-    expected_composition_hash = os.environ.get("AURORA_K2_COMPOSITION_SHA256", "")
++    composition_path = Path(__file__).resolve().with_name("k3_composition.py")
++    expected_composition_hash = os.environ.get("AURORA_K3_COMPOSITION_SHA256", "")
+     if (not re.fullmatch(r"[0-9a-f]{64}", expected_composition_hash)
+             or _sha256(composition_path.read_bytes()) != expected_composition_hash
+-            or cohort_manifest.get("implementation", {}).get("k2CompositionSha256")
++            or cohort_manifest.get("implementation", {}).get("k3CompositionSha256")
+                 != expected_composition_hash):
+         raise CampaignFailure("preflight", "frozen_composition_hash_mismatch", stop=True)
+     proof_path = Path(__file__).resolve().with_name("receiver_proof.py")
+-    expected_proof_hash = os.environ.get("AURORA_K2_RECEIVER_PROOF_SHA256", "")
++    expected_proof_hash = os.environ.get("AURORA_K3_RECEIVER_PROOF_SHA256", "")
+     if (not re.fullmatch(r"[0-9a-f]{64}", expected_proof_hash)
+             or _sha256(proof_path.read_bytes()) != expected_proof_hash
+             or cohort_manifest.get("implementation", {}).get("receiverProofSha256") != expected_proof_hash):
+         raise CampaignFailure("preflight", "frozen_receiver_proof_hash_mismatch", stop=True)
+     controller_path = Path(__file__).resolve().with_name("controller.py")
+-    expected_controller_hash = os.environ.get("AURORA_K2_CONTROLLER_SHA256", "")
++    expected_controller_hash = os.environ.get("AURORA_K3_CONTROLLER_SHA256", "")
+     if (not re.fullmatch(r"[0-9a-f]{64}", expected_controller_hash)
+             or _sha256(controller_path.read_bytes()) != expected_controller_hash
+             or cohort_manifest.get("implementation", {}).get("controllerSha256") != expected_controller_hash):
+@@ -633,8 +578,8 @@
+     if config.get("ui", {}).get("assistant", {}).get("automatic_tts_readback", False):
+         raise CampaignFailure("preflight", "automatic_server_tts_must_be_disabled", stop=True)
+     stt_settings = config.get("services", {}).get("stt", {}).get("transcription", {}).get("accurate_model", {})
+-    expected_local_stt_model = "accurate"  # request snapshot.model returned by the selected typed-bus route
+-    if not isinstance(expected_local_stt_model, str) or not expected_local_stt_model:
++    expected_remote_stt_model = "accurate"  # request snapshot.model returned by the selected typed-bus route
++    if not isinstance(expected_remote_stt_model, str) or not expected_remote_stt_model:
+         raise CampaignFailure("preflight", "local_stt_model_binding_missing", stop=True)
+ 
+     # Root's existing bootstrap installs the opt-in bindings/observer before
+@@ -657,7 +602,7 @@
+     summary: dict[str, Any] = {
+         "schema_version": "aurora.full_audio_campaign.v1",
+         "status": status,
+-        "condition": "worker_local_stt_remote_mesh_assistant_tts",
++        "condition": "remote_mesh_stt_assistant_tts",
+         "setup_started_monotonic_ns": setup_started_ns,
+         "setup_completed": False,
+         "mesh_route_admission_timing": {"status": "not_started", "clock_domain": "python_process_monotonic",
+@@ -734,6 +679,7 @@
+             RouteExplainRequest, RouteExplainResponse, RouteExplainSpeechConstraints,
+         )
+         from app.shared.contracts.models.mesh import MeshAddressSelector
++        from app.shared.contracts.models.stt import TranscriptionMethods
+         from app.shared.contracts.models.orchestrator import OrchestratorMethods
+         from app.shared.contracts.models.tts import TTSMethods
+         from app.messaging.mesh_bus import MeshBus
+@@ -747,12 +693,13 @@
+                 if isinstance(supervisor.bus, MeshBus):
+                     cat_raw = await supervisor.bus.request(
+                         GatewayMethods.GET_CAPABILITY_CATALOG,
+-                        CapabilityCatalogRequest(modules=["Orchestrator", "TTS"], include_schemas=False), timeout=10)
++                        CapabilityCatalogRequest(modules=["Transcription", "Orchestrator", "TTS"], include_schemas=False), timeout=10)
+                     if cat_raw.ok:
+                         cat = CapabilityCatalogResponse.model_validate(cat_raw.data)
+                         admitted = cat.local_peer_id == cohort_manifest["existingAuthorizedTaskProfile"]["expectedLocalPeerId"]
+                         routes = {}
+                         for name, topic, peer, speech in (
++                            ("stt", TranscriptionMethods.TRANSCRIBE, stt_peer, RouteExplainSpeechConstraints()),
+                             ("assistant", OrchestratorMethods.EXTERNAL_USER_INPUT, assistant_peer, None),
+                             ("tts", TTSMethods.SYNTHESIZE, tts_peer, RouteExplainSpeechConstraints()),
+                         ):
+@@ -770,7 +717,7 @@
+                                 and any(p.peer_id == peer.peer_id and p.eligible for p in cat.providers))
+                         last_admission = {"at_monotonic_ns": time.monotonic_ns(), "catalogue": cat.model_dump(mode="json"),
+                             "routes": routes, "model_requests_for_admission": 0}
+-                        if admitted and set(routes) == {"assistant", "tts"}:
++                        if admitted and set(routes) == {"stt", "assistant", "tts"}:
+                             admission_status = "admitted"
+                             last_admission["status"] = "existing_exact_peers_both_normal_routes_admitted"
+                             _atomic_progress(output / "mesh-route-admission.json", last_admission)
+@@ -834,7 +781,7 @@
+             correlation_id = f"audio-campaign-{uuid.uuid4().hex}"
+             session_id = f"audio-session-{uuid.uuid4().hex}"
+             request_id = f"audio-request-{uuid.uuid4().hex}"
+-            harness_case_id = f"audio-campaign-v1731-{ordinal:04d}"
++            harness_case_id = f"audio-campaign-v1910-{ordinal:04d}"
+             row: dict[str, Any] = {
+                 "schema_version": "aurora.full_audio_attempt.v1",
+                 "ordinal": ordinal, "phase": phase, "phase_index": attempt_index,
+@@ -853,22 +800,22 @@
+             abort_after_row = False
+             try:
+                 try:
+-                    k2_record, audio_data = await run_k2_case(
++                    k3_record, audio_data = await run_k3_case(
+                         supervisor, wav_data, wav_sha256=wav_facts["sha256"],
+                         session_id=session_id, request_id=request_id,
+                         correlation_id=correlation_id,
+                         reference_transcript=candidate["reference_transcript"],
+                         expected_reply_words=candidate["expected_reply_words"],
+-                        expected_local_stt_model=expected_local_stt_model,
++                        expected_remote_stt_model=expected_remote_stt_model,
+                         expected_remote_provider=response_identity["provider"],
+                         expected_remote_model=response_identity["model"],
+-                        assistant_peer=assistant_peer, tts_peer=tts_peer,
++                        stt_peer=stt_peer, assistant_peer=assistant_peer, tts_peer=tts_peer,
+                         deadline_monotonic=attempt_deadline,
+                         remote_auto_tts_readback_disabled=(
+                             remote_config_binding.get("automatic_tts_readback") is False
+                         ),
+                     )
+-                except K2CaseError as exc:
++                except K3CaseError as exc:
+                     partial = exc.partial_record or {}
+                     row["stages"] = partial.get("stages", {})
+                     row["correctness"] = partial.get("correctness", {})
+@@ -881,8 +828,8 @@
+                     raise CampaignFailure(
+                         exc.stage, exc.category, stop=exc.stop_campaign or phase == "warmup"
+                     ) from None
+-                row["stages"] = k2_record["stages"]
+-                row["correctness"] = k2_record["correctness"]
++                row["stages"] = k3_record["stages"]
++                row["correctness"] = k3_record["correctness"]
+                 row["flow_ended_monotonic_ns"] = time.monotonic_ns()
+                 row["flow_duration_ms"] = (
+                     row["flow_ended_monotonic_ns"] - attempt_started_ns
+@@ -1013,7 +960,7 @@
+                 break
+             if ordinal == WARMUP_COUNT:
+                 try:
+-                    summary["warmup_instrumentation_gate"] = await _remote_k2_warmup_gate(
++                    summary["warmup_instrumentation_gate"] = await _remote_k3_warmup_gate(
+                         attempts_dir, Path(os.environ["AURORA_VOICE_STAGE_OUTPUT"]).resolve(),
+                         cohort_manifest, manifest_hash, cohort_manifest_hash,
+                         config, condition_deadline,

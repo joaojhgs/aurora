@@ -1,0 +1,53 @@
+{
+  "at": "2026-10-16T15:13:01.355886+00:00",
+  "records": [
+    {
+      "source": ".git/aurora-handoff-import-20261006/v1088-c06-app900-progress-and-artifact-metadata-SEND.json",
+      "path": "v1088-c06-app900-progress-and-artifact-metadata-SEND.json",
+      "bytes": 3292,
+      "sha256": "ff51e9f2f18cab950701b16809f686c8f3e1accb125d85b576769cd0c6a0880f"
+    },
+    {
+      "source": ".git/aurora-handoff-import-20261006/v1088-terminal-submit-retry.json",
+      "path": "v1088-terminal-submit-retry.json",
+      "bytes": 3508,
+      "sha256": "5df02b227749e1fd92f1dcf20965925f3946d60c2b7cf65906f03de49669a5da"
+    },
+    {
+      "source": ".git/aurora-handoff-import-20261006/v1088-terminal-submit-same-request-after-switch.json",
+      "path": "v1088-terminal-submit-same-request-after-switch.json",
+      "bytes": 3508,
+      "sha256": "10d783e8855a45eabb399616e2a668fd7d1d7d21fc737e3ac7a3de6657279d53"
+    },
+    {
+      "source": ".git/aurora-handoff-import-20261006/v1088-existing-control-show-after-submit-unknown.json",
+      "path": "v1088-existing-control-show-after-submit-unknown.json",
+      "bytes": 1307,
+      "sha256": "bdd2b400fda9a051138bfde978df95b4e04c2cb42ec816f1d27af1b7882b340e"
+    },
+    {
+      "source": ".git/aurora-handoff-import-20261006/v1088-existing-control-read-after-submit-unknown.json",
+      "path": "v1088-existing-control-read-after-submit-unknown.json",
+      "bytes": 487,
+      "sha256": "a696dac1c670485d359f776a31f0c4d31a0e7b3b5c873a76c6511b6e9de350e3"
+    },
+    {
+      "source": ".git/aurora-handoff-import-20261006/v1088-existing-control-switch.json",
+      "path": "v1088-existing-control-switch.json",
+      "bytes": 413,
+      "sha256": "d20cdcd4d370e31d8b9999bb36bfba8faa1d2da4b664bcfb898278428103b692"
+    },
+    {
+      "source": ".git/aurora-handoff-import-20261006/v1090-control-connectivity-only-SEND.json",
+      "path": "v1090-control-connectivity-only-SEND.json",
+      "bytes": 812,
+      "sha256": "6732be0021536cda7c82f85de1338c2f7b807786ac61c3b82f4831ce0cad79d1"
+    },
+    {
+      "source": ".git/aurora-handoff-import-20261006/v1090-control-connectivity-only-RETRY.json",
+      "path": "v1090-control-connectivity-only-RETRY.json",
+      "bytes": 1028,
+      "sha256": "60de413dddb5c8c7a251c09f1528d5fe524f314742d901ab9aca306336c24f72"
+    }
+  ]
+}

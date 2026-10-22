@@ -1,0 +1,24 @@
+{
+  "at": "2026-10-22T11:51:14.249169+00:00",
+  "status": "NEXT_P2P_POSTTERMINAL_SOURCE_PREPARED_NOT_EXECUTED",
+  "analyzer": {
+    "path": "thesis/harness/c12-p2p-k3-dlocal-v2445/analyze_saved.py",
+    "sha256": "cac927300f770ca5ba6baae93e5592e4d5741f2a4ea8fa1d7d264c37836c340a",
+    "boundary": "Saved complete paired cases only; actual P2P correlation/native/queue joins, route+dispatch history, separate streams/epochs, Type7/ms and actual denominators"
+  },
+  "collector": {
+    "path": "thesis/harness/c12-p2p-k3-dlocal-v2445/terminal_custody.py",
+    "sha256": "0de86afb4c0c2beec90ba26afe3ce5d19efe43cbeee1af84fc0a363779716814",
+    "boundary": "Actual future actor/start ticks and manifest/deadline binding; WphysicalEOF hash manifest; Dsealed prefix+EOF-tail copy and reconstruction, no model/credential copies",
+    "failedWorkerShutdownOrSinkDeclarations": "Recorded as actual false/unknown; process-absent stable raw preservation is not gated on perfect declarations"
+  },
+  "syntaxValidation": "All29 Python modules and generated remote seal source compile; fatal Ruff checks pass",
+  "defaultActualCollectGuard": "DEFERRED_ACTIVE_CAMPAIGN_NO_REMOTE_OPERATION, actualCampaignAndActorsBound=false",
+  "staticGeneratedSourceUsesSentinelsOnly": true,
+  "staticSentinelsAreNotAllocationOrHardwareProof": true,
+  "newConditionCampaignManifestClockReservationRuntimeOrInference": 0,
+  "currentHTTPSourceModified": false,
+  "phoneRootOperations": 0,
+  "remaining": "Actual future condition allocation/admission and15ordinary paired warmups only after current whole HTTP900 seal/release; future saved analysis and EOF use actual results",
+  "updatedAt": "2026-10-22T11:53:51.751110+00:00"
+}

@@ -1,0 +1,14 @@
+{
+  "schema": "aurora.owner.phone_continuation.v1",
+  "authority": "Direct owner continuation in SAME existing phone session: keep testing; six prospective hours including setup and collection",
+  "actualLaunchUtc": "2026-10-22T12:21:09.788710+00:00",
+  "hardStopUtc": "2026-10-22T18:21:09.788710+00:00",
+  "automaticExtensionAllowed": false,
+  "originalWindowAndReceiptsUnchanged": true,
+  "sameTaskContextOnly": "task_e35b809903c1",
+  "noNewTaskDispatchAgentOrRun": true,
+  "phoneSerial": "KBX8LNFUBE5XGQRG",
+  "notebook": "ssh:ssh-sem-notebook-personal",
+  "pauseOnOwnerPhoneUseOrRealSafetyFailure": true,
+  "mainCampaignUntouched": true
+}

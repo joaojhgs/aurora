@@ -1,0 +1,18 @@
+{
+  "at": "2026-10-22T11:11:50.214695+00:00",
+  "fix": "Create the required empty requester output directory before original execute()",
+  "frozenSourceUnmodified": true,
+  "globalMeasuredIndices": [
+    261,
+    900
+  ],
+  "manifestSha256": "3bfca19d2dd0a9eec3981eae256168a5badd9ac2bb58a270ff8a55df1d986cce",
+  "maximumNewCompanion": 655,
+  "maximumNewPrimary": 655,
+  "modelsReplayed": 0,
+  "newWorker": false,
+  "oldStartupZeroCallsProved": true,
+  "pid": 462924,
+  "startTicks": 144596371,
+  "wrapperSha256": "e7859151913ba56a17bacf4f8a69db40330d7e798a513ce7176e86884436a0a3"
+}

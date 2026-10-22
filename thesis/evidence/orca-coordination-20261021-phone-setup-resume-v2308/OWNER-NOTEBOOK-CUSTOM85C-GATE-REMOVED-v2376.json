@@ -1,0 +1,38 @@
+{
+  "id": "remote-cli-1792638750874",
+  "ok": true,
+  "result": {
+    "runId": "run_e6054e76e9fc",
+    "deliveryId": "delivery_f79829614467",
+    "messages": [
+      {
+        "id": "msg_395d799c4e8b",
+        "run_id": "run_e6054e76e9fc",
+        "delivery_contract": "current_delivery",
+        "from_handle": "term_1f27be31-0284-4366-bb91-30fe538cd30e",
+        "to_handle": "run:run_e6054e76e9fc",
+        "subject": "Owner correction: remove notebook85C admission gate; bounded local setup resumes",
+        "body": "Owner explicitly removed the custom85C admission gate for this Personal notebook setup; temperatures remain recorded, OS/firmware protections untouched. I am updating only thesis/phone-notebook/20261020 guards/config/runbook and resuming exact existing runtime assets with2jobs/1200s, fresh approved USB check, memory/disk/deadline guards and no shared source/model transfer. Main HTTP stays untouched and no900/overnight START is inferred; actual build/native route results will follow.",
+        "type": "status",
+        "priority": "normal",
+        "thread_id": null,
+        "payload": "{\"reportPath\":\"thesis/phone-notebook/20261020/REPORT.md\"}",
+        "created_at": "2026-10-22T03:10:36Z",
+        "delivered_at": null
+      }
+    ],
+    "count": 1,
+    "replayed": false,
+    "acknowledged": null,
+    "timedOut": false,
+    "cancelled": false,
+    "connectionLost": false,
+    "mutation": {
+      "requestId": "07b8523e-93b1-47c8-b810-bb8ae4cd03c3",
+      "replayed": false
+    }
+  },
+  "_meta": {
+    "runtimeId": "cc9e3275-28c6-4c45-85cc-bdcd2262aa7d"
+  }
+}

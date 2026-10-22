@@ -1,0 +1,22 @@
+[
+  {
+    "label": "ui-types",
+    "exit_code": 1,
+    "argv": [
+      "flock",
+      "--nonblock",
+      "/tmp/aurora-global-build.lock",
+      "timeout",
+      "--signal=INT",
+      "--kill-after=10s",
+      "120s",
+      "pnpm",
+      "--filter",
+      "@aurora/ui",
+      "exec",
+      "tsc",
+      "--noEmit"
+    ],
+    "elapsed_seconds": 38.368158683995716
+  }
+]

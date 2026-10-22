@@ -1,0 +1,12 @@
+{
+  "at": "2026-10-22T09:28:13.041931+00:00",
+  "source": "/home/developer/Documents/Obsidian Vault Origin/5-full-notes/faculdade/tcc/future-work-test-requirements.md",
+  "destination": "/home/developer/projects/aurora/thesis/methodology/owner-requirements-20261022-ca93e202.md",
+  "bytes": 894176,
+  "sha256": "ca93e2026274de90755ce4ccbb088b454f84fa11e318dc3ad91d8fa27ab088a7",
+  "unchangedPriorPrefixBytes": 884494,
+  "unchangedPriorPrefixSha256": "b0fa802b36ced4a92fd39069d9b59728d8afa04ad31441e3daffa36d4dc8b61f",
+  "sourceChangedByRoot": false,
+  "currentMeasurementChanged": false,
+  "scope": "Exact complete \u00a730.84 copy. C12-P2P-K3-DLOCAL is existing requirement label, static preparation only, no lifecycle clock/lease/actors allocated."
+}

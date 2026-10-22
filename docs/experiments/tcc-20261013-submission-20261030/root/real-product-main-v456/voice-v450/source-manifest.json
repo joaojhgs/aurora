@@ -1,0 +1,28 @@
+{
+  "state": "source-reviewed launch preparation; no runtime proof",
+  "supervisorReviewSHA256": "d5ca44d6ba6eb5d844125f8064557f4cc4621756884669679579dae93c25bc4e",
+  "webBuild": "V450 EXIT0/65.326s buildUBSgEGgCRuvqTsFtR7xbp",
+  "surface": "real web browser HTTP to SAMEpersonaldesktop Gateway; no native/K0/crossdevice substitution",
+  "stageProviderMap": {
+    "capture": "Chromium getUserMedia fixed syntheticfile; software16k resampling",
+    "stt": "Python accurate base CPU int8/beam5/VADtrue",
+    "llm": "Python llama_cpp Vulkan RX7600, actualoffload pendingruntime",
+    "tts": "Python PiperLJmedium CPU",
+    "playback": "actual productbrowser software completion, audibilityunverified",
+    "history": "normal browser/production serverDB"
+  },
+  "frozenPreviousHistory": "sixTinyexcludedNONPASS; originalCPUextra+typedGPU immutable",
+  "measurementStarted": false,
+  "conditionAdmitted": false,
+  "applicable900PerConditionAfterAdmission": true,
+  "files": {
+    "supervisor.py": {
+      "sha256": "6df4a7263d1e93f2af7f3fb644f8ee7b25cdd926f8c6dc682dc67672d19a03d7",
+      "bytes": 7232
+    },
+    "backend-controller.py": {
+      "sha256": "83ebada95ecfe87a4b5499158a2db1d450e446139b4f4804dbd8736b6396d350",
+      "bytes": 6975
+    }
+  }
+}

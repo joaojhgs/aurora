@@ -1,0 +1,1754 @@
+{
+  "schema": "aurora.thesis.publication-exclusions.v1",
+  "snapshot_utc": "2026-10-22T16:17:41.301135+00:00",
+  "credential_like_file_exclusions": [
+    {
+      "path": "thesis/campaigns/worker-desktop-k3-orca-relayed-http-remaining-v1682/provider-transfer-post900-20261020/extracted/provider-raw/input/provider-manifest.json",
+      "bytes": 14315,
+      "sha256": "61fe867af6495a6e130c1148b73b97ac3ca14755dbcba9a034a155d04fa2d62e",
+      "disposition": "excluded_credential_like_field_or_copy"
+    },
+    {
+      "path": "thesis/campaigns/worker-desktop-k3-orca-relayed-http-v1481/provider-transfer-v1508/extracted/provider-raw/input/provider-manifest.json",
+      "bytes": 14060,
+      "sha256": "b4b95d579c29695832c05d96692f2f15fd51cf3258333b9175091ab357280887",
+      "disposition": "excluded_credential_like_field_or_copy"
+    },
+    {
+      "path": "thesis/evidence/orca-relayed-http-v1197/provider-transfer-v1232/extracted/provider-raw/input/provider-manifest.json",
+      "bytes": 11597,
+      "sha256": "450ee5af677a229e93f75c093e4e5ee3135c25b223f0d73f713f0c31f56c4cae",
+      "disposition": "excluded_credential_like_field_or_copy"
+    },
+    {
+      "path": "thesis/evidence/orca-relayed-http-v1197/provider-warmups/provider-frozen-manifest.json",
+      "bytes": 11597,
+      "sha256": "450ee5af677a229e93f75c093e4e5ee3135c25b223f0d73f713f0c31f56c4cae",
+      "disposition": "excluded_credential_like_field_or_copy"
+    },
+    {
+      "path": "thesis/phone-notebook/20261020/evidence/current-setup-raw-dual-v255/intent.json",
+      "bytes": 705,
+      "sha256": "da6d028b4e2bb2491456b082f0956e7d65cd4d1107760e1e1e182bdec878c8ee",
+      "disposition": "excluded_credential_like_field_or_copy"
+    },
+    {
+      "path": "thesis/phone-notebook/20261020/evidence/current-setup-raw-dual-v255/terminal-show.json",
+      "bytes": 1202,
+      "sha256": "061d699b6010b98f5b7ead0fa0484bfa0d726b23cf85caaf34554f8d14b29833",
+      "disposition": "excluded_credential_like_field_or_copy"
+    },
+    {
+      "path": "thesis/phone-notebook/20261020/evidence/launch-cancel-diagnosis-v420/show.json",
+      "bytes": 1343,
+      "sha256": "725789bb5b139bb9d3ca44e2224b1f9bd9f3ef6fd4d970be163c354ffdf9f41b",
+      "disposition": "excluded_credential_like_field_or_copy"
+    },
+    {
+      "path": "thesis/phone-notebook/20261020/evidence/paced-public-custody-smoke-v261/intent.json",
+      "bytes": 915,
+      "sha256": "aab4d5760d652ee5fdc1d0b58c5a1697967077213d8aa6a1451488af77155434",
+      "disposition": "excluded_credential_like_field_or_copy"
+    },
+    {
+      "path": "thesis/phone-notebook/20261020/evidence/real-pilot-dual-v419/PREFIX-RECEIPT.json",
+      "bytes": 197,
+      "sha256": "0ec263c18cd01b025e85f4fb061df9fdcce03754f3de35fc81a1cfeaef3f1f0d",
+      "disposition": "excluded_credential_like_field_or_copy"
+    },
+    {
+      "path": "thesis/phone-notebook/20261020/evidence/release-setup-phone-v256/show.json",
+      "bytes": 1343,
+      "sha256": "c7e6463802b3cf490f7ee54bff95a5fee9544bd8facb5f78044fd1b92e980210",
+      "disposition": "excluded_credential_like_field_or_copy"
+    },
+    {
+      "path": "thesis/phone-notebook/20261020/evidence/sync-closed-report-chunk-v348-000/show.json",
+      "bytes": 1343,
+      "sha256": "944a0595631056c7edff1a71edebd052ed60e9649e8eeac42c766eeac00332e8",
+      "disposition": "excluded_credential_like_field_or_copy"
+    },
+    {
+      "path": "thesis/phone-notebook/20261020/evidence/sync-public-readiness-v262-00/show.json",
+      "bytes": 1343,
+      "sha256": "a562bd5f160f4612fdc24e3e5845272afbd0be65e55353cde5395e1bdb94a8f3",
+      "disposition": "excluded_credential_like_field_or_copy"
+    },
+    {
+      "path": "thesis/phone-notebook/20261020/evidence/window-final-public-dual-v346/intent.json",
+      "bytes": 1301,
+      "sha256": "7fc1aa6a8dfd6b8752024264231123bbb6817a0c2e575f427379374b17b1197c",
+      "disposition": "excluded_credential_like_field_or_copy"
+    }
+  ],
+  "regenerable_cache_exclusions": [
+    {
+      "path": "docs/experiments/tcc-20261013-submission-20261030/root/matched-main-campaign-6ce98ae97d594d9fafcd1ff9ad4b9b1c/source/__pycache__/campaign_runner.cpython-311.pyc",
+      "bytes": 63531,
+      "sha256": "dbc524fddbc07771d88153ed8d74b365f51b6013ba74c51fd33bcc8ed03183db",
+      "disposition": "excluded_regenerable_cache"
+    },
+    {
+      "path": "docs/experiments/tcc-20261013-submission-20261030/root/matched-main-campaign-6ce98ae97d594d9fafcd1ff9ad4b9b1c/source/scripts/experiments/__pycache__/assistant_measurement_records.cpython-311.pyc",
+      "bytes": 24684,
+      "sha256": "0e692f78ce1958ee277baf0cf727d9877a603fd0cfa8d21a76f27059bd07a7b6",
+      "disposition": "excluded_regenerable_cache"
+    },
+    {
+      "path": "thesis/__pycache__/preflight.cpython-311.pyc",
+      "bytes": 8320,
+      "sha256": "0f8877c24b2e8cbda64a1a3073d30793681ef5f765b29063e5ee482453654cfd",
+      "disposition": "excluded_regenerable_cache"
+    },
+    {
+      "path": "thesis/analysis/__pycache__/index_worker_desktop_closed_core_v2463.cpython-312.pyc",
+      "bytes": 12287,
+      "sha256": "74d7c0eb6cd2f4b098d771d59fbc5a9cee66db793f5673e2f9380d0e47179ef2",
+      "disposition": "excluded_regenerable_cache"
+    },
+    {
+      "path": "thesis/analysis/__pycache__/join_local_segments.cpython-311.pyc",
+      "bytes": 34032,
+      "sha256": "7945c91e2b3db45ad588ad540b10f8cde3878635dffef3642101ab03bb00bb4f",
+      "disposition": "excluded_regenerable_cache"
+    },
+    {
+      "path": "thesis/analysis/__pycache__/k1_saved_case_history.cpython-311.pyc",
+      "bytes": 32257,
+      "sha256": "882de716355f4c5fdf4d5563f28147ade7fa651a276ed83df835ebe019cd83d0",
+      "disposition": "excluded_regenerable_cache"
+    },
+    {
+      "path": "thesis/analysis/__pycache__/k1_saved_case_history.cpython-312.pyc",
+      "bytes": 26440,
+      "sha256": "5c7af53db023bbabfc28915c5d84c58b8d580bb5e25332da9497607623aaadc8",
+      "disposition": "excluded_regenerable_cache"
+    },
+    {
+      "path": "thesis/analysis/__pycache__/native_span_metrics_v2.cpython-311.pyc",
+      "bytes": 9968,
+      "sha256": "d07ee830a5d9758089f7229d47e3327ad75fe118414968335dbdd4f4d008b3b8",
+      "disposition": "excluded_regenerable_cache"
+    },
+    {
+      "path": "thesis/analysis/__pycache__/native_span_metrics_v2.cpython-312.pyc",
+      "bytes": 8514,
+      "sha256": "50f7ab8cb34cef54bbdfbd0703081ce0d418084d0e54b27846e7b44ef5f157b5",
+      "disposition": "excluded_regenerable_cache"
+    },
+    {
+      "path": "thesis/audit/20261017-data-and-results/__pycache__/audit_io.cpython-311.pyc",
+      "bytes": 9550,
+      "sha256": "b882662201330d1696a0ee0eae253a428375d16d0867bca6e5e508e2a934987d",
+      "disposition": "excluded_regenerable_cache"
+    },
+    {
+      "path": "thesis/harness/__pycache__/copy_frozen_assets_v1212.cpython-311.pyc",
+      "bytes": 9957,
+      "sha256": "df66b815bad448ed55d6bdad08ca10638192e378cfe24182717fac59d997f868",
+      "disposition": "excluded_regenerable_cache"
+    },
+    {
+      "path": "thesis/harness/__pycache__/custody_v1197.cpython-311.pyc",
+      "bytes": 19667,
+      "sha256": "847090fec1231447749426f695308223ece8a0fdf49e203ca84b4c4adbdcc553",
+      "disposition": "excluded_regenerable_cache"
+    },
+    {
+      "path": "thesis/harness/__pycache__/custody_v1197.cpython-312.pyc",
+      "bytes": 16959,
+      "sha256": "111778f71a4a76b5b8f2a780ab3ef02485e5dfbc320dc58393ef5f5b0e6c75ad",
+      "disposition": "excluded_regenerable_cache"
+    },
+    {
+      "path": "thesis/harness/__pycache__/k3_binding_guard_diagnostic_v1963.cpython-311.pyc",
+      "bytes": 11747,
+      "sha256": "af40f21bfca90bd78448c0cc2209e34038828a391263e77c4975b9afa352bf24",
+      "disposition": "excluded_regenerable_cache"
+    },
+    {
+      "path": "thesis/harness/__pycache__/k3_remaining_root_v1573.cpython-311.pyc",
+      "bytes": 28086,
+      "sha256": "8f8cfc41aaaf812d180b24f5c1d36ecf08d822f48c9911a603ebf04f91568540",
+      "disposition": "excluded_regenerable_cache"
+    },
+    {
+      "path": "thesis/harness/__pycache__/k3_remaining_root_v1620.cpython-311.pyc",
+      "bytes": 28185,
+      "sha256": "00e19e1c1ffe9377214ca84192a9041877d1c6f9a14466f257c5854aea19df1c",
+      "disposition": "excluded_regenerable_cache"
+    },
+    {
+      "path": "thesis/harness/__pycache__/provider_custody_v1216.cpython-311.pyc",
+      "bytes": 14596,
+      "sha256": "8d72e80617907d8a0eca99ca817f88ccc5182731f00faeb192856bf5a24489b0",
+      "disposition": "excluded_regenerable_cache"
+    },
+    {
+      "path": "thesis/harness/c12-mixed-local-http-900-v2421/__pycache__/campaign.cpython-311.pyc",
+      "bytes": 6998,
+      "sha256": "3b304eaed5beebacc3dad15e7046f85b04ee086a6af9b4489a3639d570bbecb5",
+      "disposition": "excluded_regenerable_cache"
+    },
+    {
+      "path": "thesis/harness/c12-mixed-local-http-900-v2421/__pycache__/warmup_gate.cpython-311.pyc",
+      "bytes": 7303,
+      "sha256": "63243777ac5e8817224bb4445cf4f27b0b3b9e281e8182666b0f0f9081c0650d",
+      "disposition": "excluded_regenerable_cache"
+    },
+    {
+      "path": "thesis/harness/c12-mixed-local-http-900-v2426/__pycache__/campaign.cpython-311.pyc",
+      "bytes": 6998,
+      "sha256": "47bd67836f33da8452f004ad87390757a57b43a0056097688384df3fdae0c259",
+      "disposition": "excluded_regenerable_cache"
+    },
+    {
+      "path": "thesis/harness/c12-p2p-k3-dlocal-v2445/__pycache__/admission_boundary.cpython-311.pyc",
+      "bytes": 4491,
+      "sha256": "2b927009cf2f7d8681602596a0bd7e95c237bb099813d69bd2b6c4b94464d07a",
+      "disposition": "excluded_regenerable_cache"
+    },
+    {
+      "path": "thesis/harness/c12-p2p-k3-dlocal-v2445/__pycache__/campaign.cpython-311.pyc",
+      "bytes": 6991,
+      "sha256": "06a6220602f4cc03e9ed2950f2432dce2dd0ff21288301c11c284869e160aa68",
+      "disposition": "excluded_regenerable_cache"
+    },
+    {
+      "path": "thesis/harness/c12-p2p-k3-dlocal-v2445/__pycache__/config_semantics.cpython-311.pyc",
+      "bytes": 5057,
+      "sha256": "0f60b34d5139ca88431c0852c69a4d0a8642b312380bd2ec953c0d358219d652",
+      "disposition": "excluded_regenerable_cache"
+    },
+    {
+      "path": "thesis/harness/c12-p2p-k3-dlocal-v2445/__pycache__/config_semantics.cpython-312.pyc",
+      "bytes": 4223,
+      "sha256": "1b4db05698fb53e05e83ea2ff79472c079baee6fbacda572ec261414bc6ae561",
+      "disposition": "excluded_regenerable_cache"
+    },
+    {
+      "path": "thesis/harness/c12-p2p-k3-dlocal-v2445/__pycache__/prepare_worker.cpython-311.pyc",
+      "bytes": 17095,
+      "sha256": "9a19b979eff200eaa54245fe41fdd941a50bc0c29b62d3ae25893e58bebc05b7",
+      "disposition": "excluded_regenerable_cache"
+    },
+    {
+      "path": "thesis/harness/c12-p2p-k3-dlocal-v2445/__pycache__/primary_case.cpython-311.pyc",
+      "bytes": 9662,
+      "sha256": "837cdcef71766bae7bb37ebf768a0b37629423bf0e48730fd5ec1f089ed85d20",
+      "disposition": "excluded_regenerable_cache"
+    },
+    {
+      "path": "thesis/harness/c12-p2p-k3-dlocal-v2445/__pycache__/runtime_pins.cpython-311.pyc",
+      "bytes": 12660,
+      "sha256": "82f5df58932d9c5705a22302aec911c22f94c48050e01974a4db3b569e1293b3",
+      "disposition": "excluded_regenerable_cache"
+    },
+    {
+      "path": "thesis/harness/c12-p2p-k3-dlocal-v2445/__pycache__/worker_runtime.cpython-311.pyc",
+      "bytes": 15488,
+      "sha256": "f1eee70bb874c77b72804a284a9c0ddd72f47ccf7be42f2ff07b7b6fddf73217",
+      "disposition": "excluded_regenerable_cache"
+    },
+    {
+      "path": "thesis/harness/distributed-k1-mesh-remaining191-v1779/requester/__pycache__/tts_mesh_adapter.cpython-311.pyc",
+      "bytes": 7699,
+      "sha256": "ebb30808e0e3bef3b127d912676ec2cef2fa63915c955a26b81fbb0ccd11b35a",
+      "disposition": "excluded_regenerable_cache"
+    },
+    {
+      "path": "thesis/harness/distributed-k1-mesh-remaining880-v1719/requester/__pycache__/tts_mesh_adapter.cpython-311.pyc",
+      "bytes": 7699,
+      "sha256": "ebb30808e0e3bef3b127d912676ec2cef2fa63915c955a26b81fbb0ccd11b35a",
+      "disposition": "excluded_regenerable_cache"
+    },
+    {
+      "path": "thesis/harness/distributed-k2-mesh-v1731/__pycache__/mesh_stage_adapter.cpython-312.pyc",
+      "bytes": 12951,
+      "sha256": "9fcd14bdf04ef55f7f79ee1e04d275e0bcab71081cae9738d0480068beead79e",
+      "disposition": "excluded_regenerable_cache"
+    },
+    {
+      "path": "thesis/harness/distributed-k2-mesh-v1807/__pycache__/mesh_stage_adapter.cpython-312.pyc",
+      "bytes": 12951,
+      "sha256": "9fcd14bdf04ef55f7f79ee1e04d275e0bcab71081cae9738d0480068beead79e",
+      "disposition": "excluded_regenerable_cache"
+    },
+    {
+      "path": "thesis/harness/distributed-k2-mesh-v1813/__pycache__/mesh_stage_adapter.cpython-312.pyc",
+      "bytes": 12951,
+      "sha256": "9fcd14bdf04ef55f7f79ee1e04d275e0bcab71081cae9738d0480068beead79e",
+      "disposition": "excluded_regenerable_cache"
+    },
+    {
+      "path": "thesis/harness/distributed-k2-mesh-v1826/__pycache__/mesh_stage_adapter.cpython-312.pyc",
+      "bytes": 12951,
+      "sha256": "9fcd14bdf04ef55f7f79ee1e04d275e0bcab71081cae9738d0480068beead79e",
+      "disposition": "excluded_regenerable_cache"
+    },
+    {
+      "path": "thesis/harness/distributed-k3-mesh-v1919/__pycache__/route_observation_sink.cpython-312.pyc",
+      "bytes": 17682,
+      "sha256": "5cde941ce8e46f42ddece2cfe45396fd1e8a1ffe5ea49aa499a67ad371c7d9c4",
+      "disposition": "excluded_regenerable_cache"
+    },
+    {
+      "path": "thesis/harness/distributed-k3-mesh-v1948/__pycache__/route_observation_sink.cpython-312.pyc",
+      "bytes": 17708,
+      "sha256": "35bab4b3f7e62feed8e37a417b521e3ceec4c7dd781f278532aab0261adcd70f",
+      "disposition": "excluded_regenerable_cache"
+    },
+    {
+      "path": "thesis/harness/distributed-k3-mesh-v1973/__pycache__/route_observation_sink.cpython-312.pyc",
+      "bytes": 17708,
+      "sha256": "35bab4b3f7e62feed8e37a417b521e3ceec4c7dd781f278532aab0261adcd70f",
+      "disposition": "excluded_regenerable_cache"
+    },
+    {
+      "path": "thesis/harness/distributed-k3-mesh-v1985/__pycache__/route_observation_sink.cpython-312.pyc",
+      "bytes": 17708,
+      "sha256": "35bab4b3f7e62feed8e37a417b521e3ceec4c7dd781f278532aab0261adcd70f",
+      "disposition": "excluded_regenerable_cache"
+    },
+    {
+      "path": "thesis/harness/distributed-k3-mesh-v2042/__pycache__/route_observation_sink.cpython-312.pyc",
+      "bytes": 17708,
+      "sha256": "35bab4b3f7e62feed8e37a417b521e3ceec4c7dd781f278532aab0261adcd70f",
+      "disposition": "excluded_regenerable_cache"
+    },
+    {
+      "path": "thesis/harness/worker-cpu-v737/__pycache__/post_terminal.cpython-311.pyc",
+      "bytes": 65998,
+      "sha256": "b75550aaff8e8bb2eea8a216a1fcdb0cd6af8c452f6564a4e383d25ed11365c5",
+      "disposition": "excluded_regenerable_cache"
+    },
+    {
+      "path": "thesis/phone-notebook/20261020/scripts/__pycache__/backend_readiness_lease_v109.cpython-311.pyc",
+      "bytes": 19282,
+      "sha256": "f8d0f8d8c4de8ead5368f1dcac6e1fcac56d8fa621c248401c7950b64779009d",
+      "disposition": "excluded_regenerable_cache"
+    },
+    {
+      "path": "thesis/phone-notebook/20261020/scripts/__pycache__/build_android_apk_v186.cpython-311.pyc",
+      "bytes": 21539,
+      "sha256": "bb80bbe608519ae570c3c1a48bb5cb947a8d1b8e820e3b078a205bee36779f1c",
+      "disposition": "excluded_regenerable_cache"
+    },
+    {
+      "path": "thesis/phone-notebook/20261020/scripts/__pycache__/build_android_apk_v199.cpython-311.pyc",
+      "bytes": 19079,
+      "sha256": "6eec990ec409907b0d8ffe05d2c8d39aa0b89a3a55fdae7868edcce949fbbe39",
+      "disposition": "excluded_regenerable_cache"
+    },
+    {
+      "path": "thesis/phone-notebook/20261020/scripts/__pycache__/build_android_apk_v217.cpython-311.pyc",
+      "bytes": 20989,
+      "sha256": "93ea93fa116db83778175a78ba5c401728609ee099a4370b96098ab95d860789",
+      "disposition": "excluded_regenerable_cache"
+    },
+    {
+      "path": "thesis/phone-notebook/20261020/scripts/__pycache__/build_android_apk_v288.cpython-311.pyc",
+      "bytes": 23039,
+      "sha256": "a2aa9f2161127c95693e0e939e567a9d35e2e0a2ab5275585cb2d09c6087f876",
+      "disposition": "excluded_regenerable_cache"
+    },
+    {
+      "path": "thesis/phone-notebook/20261020/scripts/__pycache__/collect_window_retirement_v260.cpython-311.pyc",
+      "bytes": 10783,
+      "sha256": "cbe2cad8773fcc0d81f58723f8feb581410fbcc315d966f72f92b3535e8f9b12",
+      "disposition": "excluded_regenerable_cache"
+    },
+    {
+      "path": "thesis/phone-notebook/20261020/scripts/__pycache__/compare_piper_graph_v192.cpython-311.pyc",
+      "bytes": 7095,
+      "sha256": "b6e2e94d67653ea86a6b7b77f679e79b38516742ae31d7f641cc5ce46925a463",
+      "disposition": "excluded_regenerable_cache"
+    },
+    {
+      "path": "thesis/phone-notebook/20261020/scripts/__pycache__/copy_notebook_public_artifact.cpython-311.pyc",
+      "bytes": 20765,
+      "sha256": "4948a621e7da72a6e4680e11e4fe882e4998e13df20dcbc8ec49824afc68d4ca",
+      "disposition": "excluded_regenerable_cache"
+    },
+    {
+      "path": "thesis/phone-notebook/20261020/scripts/__pycache__/copy_phone_speech_cache_v188.cpython-311.pyc",
+      "bytes": 13684,
+      "sha256": "5ca17a977b8bd103de28beb0cb27db2ec4036c417ddbdb2d963c8118aa1c63a0",
+      "disposition": "excluded_regenerable_cache"
+    },
+    {
+      "path": "thesis/phone-notebook/20261020/scripts/__pycache__/copy_phone_speech_cache_v191.cpython-311.pyc",
+      "bytes": 14474,
+      "sha256": "6e971b3ffe52ac92cab863ceab4445ffc77bc4a9901ae9f8168ba478c0569b87",
+      "disposition": "excluded_regenerable_cache"
+    },
+    {
+      "path": "thesis/phone-notebook/20261020/scripts/__pycache__/custody.cpython-311.pyc",
+      "bytes": 10899,
+      "sha256": "21dea5b9a4c595917736378235409a023241f501356b658b4eb12c6fd6958ded",
+      "disposition": "excluded_regenerable_cache"
+    },
+    {
+      "path": "thesis/phone-notebook/20261020/scripts/__pycache__/download_phone_speech_assets_v181.cpython-311.pyc",
+      "bytes": 14103,
+      "sha256": "7e1d5ae93e75e532d7014aa9ada4fa1bfb991263414ccb50e6eb435123575ca3",
+      "disposition": "excluded_regenerable_cache"
+    },
+    {
+      "path": "thesis/phone-notebook/20261020/scripts/__pycache__/file_audio_update_controller_v194.cpython-311.pyc",
+      "bytes": 18020,
+      "sha256": "ed4d4810fd7c23ceed21b9ddf70108b2ceb1b4a7b6958fe0478b71401d3161c6",
+      "disposition": "excluded_regenerable_cache"
+    },
+    {
+      "path": "thesis/phone-notebook/20261020/scripts/__pycache__/file_audio_update_controller_v200.cpython-311.pyc",
+      "bytes": 18974,
+      "sha256": "92b7d7fba9aadc5f7f3a37b038672fefae736c6a9d1faf506f34deadd6e4787f",
+      "disposition": "excluded_regenerable_cache"
+    },
+    {
+      "path": "thesis/phone-notebook/20261020/scripts/__pycache__/finite_runner.cpython-311.pyc",
+      "bytes": 25191,
+      "sha256": "60c68f1065b05480c46cb9442b4785534e4347b3349e0ba9334a827a589dc5ce",
+      "disposition": "excluded_regenerable_cache"
+    },
+    {
+      "path": "thesis/phone-notebook/20261020/scripts/__pycache__/launch_file_audio_build_v186.cpython-311.pyc",
+      "bytes": 6928,
+      "sha256": "03a251b635ec62f6f112a9c6dc51e3591df224f366fe7f6e70592acd5148ea21",
+      "disposition": "excluded_regenerable_cache"
+    },
+    {
+      "path": "thesis/phone-notebook/20261020/scripts/__pycache__/launch_notebook_owner_service_v225.cpython-311.pyc",
+      "bytes": 19100,
+      "sha256": "7678fbfbada977658fc38df5855d0f0b4625e1ab0c891ba7e6c883cef09d4461",
+      "disposition": "excluded_regenerable_cache"
+    },
+    {
+      "path": "thesis/phone-notebook/20261020/scripts/__pycache__/launch_phone_file_audio_v201.cpython-311.pyc",
+      "bytes": 13063,
+      "sha256": "b0a11b86dae1bc0b8c8b2b895692dce5c22a9da1f9ea7a4f510a08c0755ed1a5",
+      "disposition": "excluded_regenerable_cache"
+    },
+    {
+      "path": "thesis/phone-notebook/20261020/scripts/__pycache__/launch_phone_speech_assets_v181.cpython-311.pyc",
+      "bytes": 6097,
+      "sha256": "a63a9d71b56c0860dbd305c60d46c20863c6a45c93d1a5529530946fdbfc616e",
+      "disposition": "excluded_regenerable_cache"
+    },
+    {
+      "path": "thesis/phone-notebook/20261020/scripts/__pycache__/launch_phone_speech_cache_v191.cpython-311.pyc",
+      "bytes": 5399,
+      "sha256": "4016afbaf499279b79790deb8a2cd0bfb1f420847e34a11577dac5b751d75994",
+      "disposition": "excluded_regenerable_cache"
+    },
+    {
+      "path": "thesis/phone-notebook/20261020/scripts/__pycache__/matrix.cpython-311.pyc",
+      "bytes": 22774,
+      "sha256": "889b0863459d4eeb82e09f52875548c1eec3771431e77236c210e5ea1cf7e50a",
+      "disposition": "excluded_regenerable_cache"
+    },
+    {
+      "path": "thesis/phone-notebook/20261020/scripts/__pycache__/notebook_control.cpython-311.pyc",
+      "bytes": 11096,
+      "sha256": "c019b9748e85226b6ba9e1b8729dae24a69fc2fd6fa2779649b148706d338f28",
+      "disposition": "excluded_regenerable_cache"
+    },
+    {
+      "path": "thesis/phone-notebook/20261020/scripts/__pycache__/notebook_owner_service_v225.cpython-311.pyc",
+      "bytes": 24985,
+      "sha256": "a6a4aa338485b06fc6ce10592ea5a228f933f5422472ef380aed607d01e8dbcd",
+      "disposition": "excluded_regenerable_cache"
+    },
+    {
+      "path": "thesis/phone-notebook/20261020/scripts/__pycache__/notebook_owner_service_v286.cpython-311.pyc",
+      "bytes": 25353,
+      "sha256": "ac240bb5130d41438da2a71c978559d0a2ca657c07fd5b0a6b51c21e08ae47a1",
+      "disposition": "excluded_regenerable_cache"
+    },
+    {
+      "path": "thesis/phone-notebook/20261020/scripts/__pycache__/phone_file_audio_controller_v196.cpython-311.pyc",
+      "bytes": 17013,
+      "sha256": "c708e0915a4c2e55927985d1bc68532ca165239b25c3cc31ae910f4e83aa3fa6",
+      "disposition": "excluded_regenerable_cache"
+    },
+    {
+      "path": "thesis/phone-notebook/20261020/scripts/__pycache__/phone_file_audio_controller_v201.cpython-311.pyc",
+      "bytes": 18194,
+      "sha256": "35328ea87c0c786bfe5481b9e10eac7cc27c2894df0a152cccc6ec2d30dc5b23",
+      "disposition": "excluded_regenerable_cache"
+    },
+    {
+      "path": "thesis/phone-notebook/20261020/scripts/__pycache__/phone_file_audio_controller_v207.cpython-311.pyc",
+      "bytes": 18393,
+      "sha256": "0a3397ec4a66b9b921ab8ed5e8499c5ddede0c565c52115930912420ba9f1480",
+      "disposition": "excluded_regenerable_cache"
+    },
+    {
+      "path": "thesis/phone-notebook/20261020/scripts/__pycache__/phone_file_audio_controller_v211.cpython-311.pyc",
+      "bytes": 18393,
+      "sha256": "1d93bd81a351c4a6117b9be834aa6e215978c6d01cab029b91eb1fab19bef676",
+      "disposition": "excluded_regenerable_cache"
+    },
+    {
+      "path": "thesis/phone-notebook/20261020/scripts/__pycache__/phone_file_audio_controller_v213.cpython-311.pyc",
+      "bytes": 18393,
+      "sha256": "87fb110416a7211b2a9f88a5367a72001ab913359012398b11104e264f46242f",
+      "disposition": "excluded_regenerable_cache"
+    },
+    {
+      "path": "thesis/phone-notebook/20261020/scripts/__pycache__/phone_safe_return_v299.cpython-311.pyc",
+      "bytes": 8525,
+      "sha256": "87f09c92fb732cacc3e2c68461d1a5cbc1c3fd8a1534ac77e1fc955ab1f897dc",
+      "disposition": "excluded_regenerable_cache"
+    },
+    {
+      "path": "thesis/phone-notebook/20261020/scripts/__pycache__/prepare_isolated_backend_v92.cpython-311.pyc",
+      "bytes": 10254,
+      "sha256": "959bbf0d94a9b6dd253e12542cd3fa0c99ab05c4c98fa32289d90a01e0f7de8f",
+      "disposition": "excluded_regenerable_cache"
+    },
+    {
+      "path": "thesis/phone-notebook/20261020/scripts/__pycache__/read_own_window_retirement_v260.cpython-311.pyc",
+      "bytes": 3190,
+      "sha256": "d03e2ea719476f770ca5818a70b3998120340bf1ae14bf55c30bccc07ecdccca",
+      "disposition": "excluded_regenerable_cache"
+    },
+    {
+      "path": "thesis/phone-notebook/20261020/scripts/__pycache__/read_repair_build_v121.cpython-311.pyc",
+      "bytes": 3748,
+      "sha256": "a8cff481584f72ea4c920fae95edb38302887507db85b19044cfaac8b22f7f4d",
+      "disposition": "excluded_regenerable_cache"
+    },
+    {
+      "path": "thesis/phone-notebook/20261020/scripts/__pycache__/read_update_state_v130.cpython-311.pyc",
+      "bytes": 3384,
+      "sha256": "af199eb6ce73411900e66ccd668f713603b8b5fbe2b7d305a4e23662503fe14f",
+      "disposition": "excluded_regenerable_cache"
+    },
+    {
+      "path": "thesis/phone-notebook/20261020/scripts/__pycache__/remote_file_audio_controller_v306.cpython-311.pyc",
+      "bytes": 20068,
+      "sha256": "d81d6ac905976d958e572553756b604a9bdd8040912bd297a58e4f8de9f17ef6",
+      "disposition": "excluded_regenerable_cache"
+    },
+    {
+      "path": "thesis/phone-notebook/20261020/scripts/__pycache__/repair_update_controller_v122.cpython-311.pyc",
+      "bytes": 14908,
+      "sha256": "eead08aebfed09a2a91e7ecb248483e26cbd421de1baea54cb35d5fd0866f917",
+      "disposition": "excluded_regenerable_cache"
+    },
+    {
+      "path": "thesis/phone-notebook/20261020/scripts/__pycache__/sdk_update_controller_v224.cpython-311.pyc",
+      "bytes": 18961,
+      "sha256": "3dbeece8f3faf3c665594831f346abd054491c6b0e3781cdb8ac7b75dc9db670",
+      "disposition": "excluded_regenerable_cache"
+    },
+    {
+      "path": "thesis/phone-notebook/20261020/scripts/__pycache__/sdk_update_controller_v290.cpython-311.pyc",
+      "bytes": 19948,
+      "sha256": "eef1af9e97a4b9f20b4f5a2932bf73dab1cd3bd94347fdeb5cd6795efc4e0009",
+      "disposition": "excluded_regenerable_cache"
+    },
+    {
+      "path": "thesis/phone-notebook/20261020/scripts/__pycache__/source_frame_sender_v30.cpython-311.pyc",
+      "bytes": 13900,
+      "sha256": "7b975103eca94d6e788821662af418ba4daa08255acff0bff9144c2a105a801b",
+      "disposition": "excluded_regenerable_cache"
+    },
+    {
+      "path": "thesis/phone-notebook/20261020/scripts/__pycache__/stage_android_sdk_v216.cpython-311.pyc",
+      "bytes": 18125,
+      "sha256": "e8811374ee9216424e098999e3988de8bb005470d9450d6f2b795dc035e4f5b1",
+      "disposition": "excluded_regenerable_cache"
+    },
+    {
+      "path": "thesis/phone-notebook/20261020/scripts/__pycache__/stage_file_audio_acl_v198.cpython-311.pyc",
+      "bytes": 9330,
+      "sha256": "fb1d4a03e9133d22647f38bd169b3b0dae492621189639ba46c641a29133489b",
+      "disposition": "excluded_regenerable_cache"
+    },
+    {
+      "path": "thesis/phone-notebook/20261020/scripts/__pycache__/stage_file_audio_fix_v184.cpython-311.pyc",
+      "bytes": 11866,
+      "sha256": "b072ee34cd7966b0d3b85a78a36ee2a5dbc2b79064aa2b3d0f3008cdf7297621",
+      "disposition": "excluded_regenerable_cache"
+    },
+    {
+      "path": "thesis/phone-notebook/20261020/tests/__pycache__/test_finite_stop.cpython-311.pyc",
+      "bytes": 7665,
+      "sha256": "faad89185f4c1c7b52205f16f05ca16532ab0de90f3d776157c7bb6b25114457",
+      "disposition": "excluded_regenerable_cache"
+    },
+    {
+      "path": "thesis/sources/k3-stt-runtime-v1907/worker/source/app/__pycache__/__init__.cpython-311.pyc",
+      "bytes": 653,
+      "sha256": "7c10f33c709f0d6038ab1c9f5fd7e86150953e9a99cf13a0d395242ee47c6ec7",
+      "disposition": "excluded_regenerable_cache"
+    },
+    {
+      "path": "thesis/sources/k3-stt-runtime-v1907/worker/source/app/helpers/__pycache__/aurora_logger.cpython-311.pyc",
+      "bytes": 6933,
+      "sha256": "b1da9c880c76e30dcbbcdb290a67e1006a5e324d4f696edba2c175a7c0ef1256",
+      "disposition": "excluded_regenerable_cache"
+    },
+    {
+      "path": "thesis/sources/k3-stt-runtime-v1907/worker/source/app/messaging/__pycache__/__init__.cpython-311.pyc",
+      "bytes": 2016,
+      "sha256": "eb13eaf17fc8e5190c74527a321b4e6796857d91cf3bda586d48b3ccd5b7be9b",
+      "disposition": "excluded_regenerable_cache"
+    },
+    {
+      "path": "thesis/sources/k3-stt-runtime-v1907/worker/source/app/messaging/__pycache__/audio_messages.cpython-311.pyc",
+      "bytes": 9997,
+      "sha256": "82e70fb4bcb87bb31d5352c879c5775f804c14755673905b0fdf99a04e4f5372",
+      "disposition": "excluded_regenerable_cache"
+    },
+    {
+      "path": "thesis/sources/k3-stt-runtime-v1907/worker/source/app/messaging/__pycache__/bus.cpython-311.pyc",
+      "bytes": 12642,
+      "sha256": "df112921ba9d9ff48305c882de623e88bc41e3de224d6da08725abd9b580b9ea",
+      "disposition": "excluded_regenerable_cache"
+    },
+    {
+      "path": "thesis/sources/k3-stt-runtime-v1907/worker/source/app/messaging/__pycache__/bus_runtime.cpython-311.pyc",
+      "bytes": 1415,
+      "sha256": "f4c0ea7b8627829934ccb1f06f9e27b40948c5f0d5a5739881062bccd3f650b2",
+      "disposition": "excluded_regenerable_cache"
+    },
+    {
+      "path": "thesis/sources/k3-stt-runtime-v1907/worker/source/app/messaging/__pycache__/local_bus.cpython-311.pyc",
+      "bytes": 29719,
+      "sha256": "973f6fb14f5ddf51d7e7f3eb966f4eb188e3fade53ad7932e0a308f6781c8bf7",
+      "disposition": "excluded_regenerable_cache"
+    },
+    {
+      "path": "thesis/sources/k3-stt-runtime-v1907/worker/source/app/messaging/__pycache__/priority_helpers.cpython-311.pyc",
+      "bytes": 2620,
+      "sha256": "96c6b0e7d8a2da991ad94010e6fc85b445a830a70e522f38961ed1e940745dc9",
+      "disposition": "excluded_regenerable_cache"
+    },
+    {
+      "path": "thesis/sources/k3-stt-runtime-v1907/worker/source/app/messaging/__pycache__/transcription_messages.cpython-311.pyc",
+      "bytes": 5115,
+      "sha256": "0a91c0c576dae7c0e2ae7a4d9d48e95fd9d11ac40089dec0cee7ab5762a09f89",
+      "disposition": "excluded_regenerable_cache"
+    },
+    {
+      "path": "thesis/sources/k3-stt-runtime-v1907/worker/source/app/services/__pycache__/__init__.cpython-311.pyc",
+      "bytes": 1373,
+      "sha256": "1a92f57623d3f545a2ee2150b921b8131ae3a4335c59e35f34abfe0442441836",
+      "disposition": "excluded_regenerable_cache"
+    },
+    {
+      "path": "thesis/sources/k3-stt-runtime-v1907/worker/source/app/services/auth/__pycache__/__init__.cpython-311.pyc",
+      "bytes": 1034,
+      "sha256": "30ea3701cb846ad4dff5bfabac2c65b2d512c6afee59e476a5fd1c10acdea071",
+      "disposition": "excluded_regenerable_cache"
+    },
+    {
+      "path": "thesis/sources/k3-stt-runtime-v1907/worker/source/app/services/auth/__pycache__/auth_manager.cpython-311.pyc",
+      "bytes": 116944,
+      "sha256": "1f7f8c32154e8e5184195791a70b1e718105455a4b16dd3e66415ffd29e03e07",
+      "disposition": "excluded_regenerable_cache"
+    },
+    {
+      "path": "thesis/sources/k3-stt-runtime-v1907/worker/source/app/services/auth/__pycache__/service.cpython-311.pyc",
+      "bytes": 60268,
+      "sha256": "727d0d87389bd45f4e6108a8818a2c22814ec0b9ff4962110a9a5f4c50d87231",
+      "disposition": "excluded_regenerable_cache"
+    },
+    {
+      "path": "thesis/sources/k3-stt-runtime-v1907/worker/source/app/services/config/__pycache__/__init__.cpython-311.pyc",
+      "bytes": 401,
+      "sha256": "2cc244395b7a1b78e620069091c0fca386f09d3fa348e8b8a39256e0f7e30f11",
+      "disposition": "excluded_regenerable_cache"
+    },
+    {
+      "path": "thesis/sources/k3-stt-runtime-v1907/worker/source/app/services/config/__pycache__/config_manager.cpython-311.pyc",
+      "bytes": 113154,
+      "sha256": "f497401f8239b2d46dc96fcff0bf00dd0e428f794a48bddd1525d2fa240cd86b",
+      "disposition": "excluded_regenerable_cache"
+    },
+    {
+      "path": "thesis/sources/k3-stt-runtime-v1907/worker/source/app/services/config/__pycache__/env_config.cpython-311.pyc",
+      "bytes": 7007,
+      "sha256": "941bbf7560567ee4cd267a50a399e0f718f6ce1091ed1ea5c46ba0ab91d4477f",
+      "disposition": "excluded_regenerable_cache"
+    },
+    {
+      "path": "thesis/sources/k3-stt-runtime-v1907/worker/source/app/services/config/__pycache__/mesh_policy_migration.cpython-311.pyc",
+      "bytes": 42657,
+      "sha256": "9928121337b5a6b04e74fc05048355f813be731833909495623413334a8c2c75",
+      "disposition": "excluded_regenerable_cache"
+    },
+    {
+      "path": "thesis/sources/k3-stt-runtime-v1907/worker/source/app/services/config/__pycache__/messages.cpython-311.pyc",
+      "bytes": 4507,
+      "sha256": "434835810f388ead1821efca43fc4612d479856c42137956e93ea841e2e32114",
+      "disposition": "excluded_regenerable_cache"
+    },
+    {
+      "path": "thesis/sources/k3-stt-runtime-v1907/worker/source/app/services/config/__pycache__/service.cpython-311.pyc",
+      "bytes": 34224,
+      "sha256": "cb29a06cb03cd1987490c497eb770482a2b7f529f3f6a970a10d52eb11629183",
+      "disposition": "excluded_regenerable_cache"
+    },
+    {
+      "path": "thesis/sources/k3-stt-runtime-v1907/worker/source/app/services/db/__pycache__/__init__.cpython-311.pyc",
+      "bytes": 1535,
+      "sha256": "307404e537350b844cbe91bd0422760990febd1967eb2037dddfd54150ac71cd",
+      "disposition": "excluded_regenerable_cache"
+    },
+    {
+      "path": "thesis/sources/k3-stt-runtime-v1907/worker/source/app/services/db/__pycache__/manager.cpython-311.pyc",
+      "bytes": 179190,
+      "sha256": "36e02dda56bd9651744f48c539f3614c0b10a07c174640f250f474a73ea3347f",
+      "disposition": "excluded_regenerable_cache"
+    },
+    {
+      "path": "thesis/sources/k3-stt-runtime-v1907/worker/source/app/services/db/__pycache__/migration_manager.cpython-311.pyc",
+      "bytes": 11879,
+      "sha256": "34b63296ecbd170d36591b20c1ac7d932e0eb4471c4477b797e9e0d0f74488fd",
+      "disposition": "excluded_regenerable_cache"
+    },
+    {
+      "path": "thesis/sources/k3-stt-runtime-v1907/worker/source/app/services/db/__pycache__/models.cpython-311.pyc",
+      "bytes": 768,
+      "sha256": "e842de9fdadfe39b76ab0f6bc46ec86c06474419d4a4eb5dac22bdd0ac83aa79",
+      "disposition": "excluded_regenerable_cache"
+    },
+    {
+      "path": "thesis/sources/k3-stt-runtime-v1907/worker/source/app/services/db/__pycache__/rag_service.cpython-311.pyc",
+      "bytes": 36910,
+      "sha256": "ecaf467f757e7c45c158982ac3ae0816b4697ac50eb07eda0bcc12a8b6ee9b11",
+      "disposition": "excluded_regenerable_cache"
+    },
+    {
+      "path": "thesis/sources/k3-stt-runtime-v1907/worker/source/app/services/db/__pycache__/scheduler_db_service.cpython-311.pyc",
+      "bytes": 20489,
+      "sha256": "8b4b6ff7bdc1ff8ade14ae4a2b82fc86795692fde4f1224e3bfd9eb610ecfff3",
+      "disposition": "excluded_regenerable_cache"
+    },
+    {
+      "path": "thesis/sources/k3-stt-runtime-v1907/worker/source/app/services/db/__pycache__/service.cpython-311.pyc",
+      "bytes": 126321,
+      "sha256": "3bba7dbb012f2416d68f0eef2c1da3916c42f6e1c9e7de3d45dfdc001702e129",
+      "disposition": "excluded_regenerable_cache"
+    },
+    {
+      "path": "thesis/sources/k3-stt-runtime-v1907/worker/source/app/services/db/__pycache__/sqlite_connection.cpython-311.pyc",
+      "bytes": 5059,
+      "sha256": "5f50d50302c516511beefc753a40dde31f506b7b71fa6024b7d66af1d3e2d47e",
+      "disposition": "excluded_regenerable_cache"
+    },
+    {
+      "path": "thesis/sources/k3-stt-runtime-v1907/worker/source/app/services/db/__pycache__/tool_identity_store.cpython-311.pyc",
+      "bytes": 35767,
+      "sha256": "e811a2e47c0436f1476c3b6734000adedec5d00df82e9700273c9684d6eb9a13",
+      "disposition": "excluded_regenerable_cache"
+    },
+    {
+      "path": "thesis/sources/k3-stt-runtime-v1907/worker/source/app/services/db/__pycache__/tooling_export_policy_store.cpython-311.pyc",
+      "bytes": 21883,
+      "sha256": "42c69823041b037ca6ff8213ff9e3b58ce7908f51a41315b23df37c81967d816",
+      "disposition": "excluded_regenerable_cache"
+    },
+    {
+      "path": "thesis/sources/k3-stt-runtime-v1907/worker/source/app/services/db/__pycache__/tooling_exposure_ledger_store.cpython-311.pyc",
+      "bytes": 4342,
+      "sha256": "1cac7fef0a5d4694b3b11f7f3c5e1de13248a8de74e5531572174a7bc89077a7",
+      "disposition": "excluded_regenerable_cache"
+    },
+    {
+      "path": "thesis/sources/k3-stt-runtime-v1907/worker/source/app/services/db/__pycache__/tooling_mesh_activation_store.cpython-311.pyc",
+      "bytes": 9033,
+      "sha256": "4f1c6d59e4c932ae72de14fb5589dacb60142a1a20871193da58063dee7b14b0",
+      "disposition": "excluded_regenerable_cache"
+    },
+    {
+      "path": "thesis/sources/k3-stt-runtime-v1907/worker/source/app/services/db/__pycache__/tooling_remote_catalog_store.cpython-311.pyc",
+      "bytes": 103340,
+      "sha256": "1e804333060683ada02b73a36bf15bf6037fdbe61413909d4707d691aa6051a4",
+      "disposition": "excluded_regenerable_cache"
+    },
+    {
+      "path": "thesis/sources/k3-stt-runtime-v1907/worker/source/app/shared/__pycache__/__init__.cpython-311.pyc",
+      "bytes": 279,
+      "sha256": "f7e0a38bc5d98eb1ac256354a33fb07d42b154c85d37c7ccb6406dce51d03860",
+      "disposition": "excluded_regenerable_cache"
+    },
+    {
+      "path": "thesis/sources/k3-stt-runtime-v1907/worker/source/app/shared/__pycache__/crypto.cpython-311.pyc",
+      "bytes": 3573,
+      "sha256": "45bd6e47fa9dc77232cdc2ec350a5369b0d297cf6eedab34da8be2d3f0aa6525",
+      "disposition": "excluded_regenerable_cache"
+    },
+    {
+      "path": "thesis/sources/k3-stt-runtime-v1907/worker/source/app/shared/auth/__pycache__/__init__.cpython-311.pyc",
+      "bytes": 926,
+      "sha256": "09fc005125ac9cb7335fb66648f6f19ce3a5ab16eae44a4fa4ff2caa2f7f569b",
+      "disposition": "excluded_regenerable_cache"
+    },
+    {
+      "path": "thesis/sources/k3-stt-runtime-v1907/worker/source/app/shared/auth/__pycache__/audit.cpython-311.pyc",
+      "bytes": 1996,
+      "sha256": "5419fb58c26dcaa381c487d0ddb0583c44f06ed17d3ecc0a81191af1cb3052ff",
+      "disposition": "excluded_regenerable_cache"
+    },
+    {
+      "path": "thesis/sources/k3-stt-runtime-v1907/worker/source/app/shared/auth/__pycache__/identity.cpython-311.pyc",
+      "bytes": 6077,
+      "sha256": "e0f0bc848aaec0e4b947a63da425772a772013b62aa929de113b170593e1a7fd",
+      "disposition": "excluded_regenerable_cache"
+    },
+    {
+      "path": "thesis/sources/k3-stt-runtime-v1907/worker/source/app/shared/auth/__pycache__/permissions.cpython-311.pyc",
+      "bytes": 14706,
+      "sha256": "24a79f822ab7d147429b4818cbfab070aac285e5f6705fbbfe4e59673bb1ff6c",
+      "disposition": "excluded_regenerable_cache"
+    },
+    {
+      "path": "thesis/sources/k3-stt-runtime-v1907/worker/source/app/shared/config/__pycache__/__init__.cpython-311.pyc",
+      "bytes": 282,
+      "sha256": "55a0ca16044ba4bc51fba7c98a8ca86773b4d45255789085be716f2c0b6c6caa",
+      "disposition": "excluded_regenerable_cache"
+    },
+    {
+      "path": "thesis/sources/k3-stt-runtime-v1907/worker/source/app/shared/config/__pycache__/interface.cpython-311.pyc",
+      "bytes": 37608,
+      "sha256": "7c6e4604d95c55f7dfda3ec79369992ec298ced5efd8a9a685c101a8bee7a0c6",
+      "disposition": "excluded_regenerable_cache"
+    },
+    {
+      "path": "thesis/sources/k3-stt-runtime-v1907/worker/source/app/shared/config/__pycache__/keys.cpython-311.pyc",
+      "bytes": 100679,
+      "sha256": "76789847bc91fd408753c2c54ec6e3bd63a302aaebeb2c48386693c714f917ca",
+      "disposition": "excluded_regenerable_cache"
+    },
+    {
+      "path": "thesis/sources/k3-stt-runtime-v1907/worker/source/app/shared/config/__pycache__/models.cpython-311.pyc",
+      "bytes": 41766,
+      "sha256": "0cc9aa7ca3137d1690ebe0175f80f0c2b9f5101953588d3060860332753a6c36",
+      "disposition": "excluded_regenerable_cache"
+    },
+    {
+      "path": "thesis/sources/k3-stt-runtime-v1907/worker/source/app/shared/config/__pycache__/models_base.cpython-311.pyc",
+      "bytes": 851,
+      "sha256": "6505f732067e19363002bece5d4b36b942ac887fa783e5d9688159a7c0f69744",
+      "disposition": "excluded_regenerable_cache"
+    },
+    {
+      "path": "thesis/sources/k3-stt-runtime-v1907/worker/source/app/shared/contracts/__pycache__/__init__.cpython-311.pyc",
+      "bytes": 391,
+      "sha256": "6090c3e14271f65e1058d623c3faecf3156d37bca79f2d53b80b64eb609c9743",
+      "disposition": "excluded_regenerable_cache"
+    },
+    {
+      "path": "thesis/sources/k3-stt-runtime-v1907/worker/source/app/shared/contracts/__pycache__/io_model.cpython-311.pyc",
+      "bytes": 680,
+      "sha256": "0a3ff8d99e5869d4a55e395fab32052cea2fe807adfb97a41d92484a74160fa2",
+      "disposition": "excluded_regenerable_cache"
+    },
+    {
+      "path": "thesis/sources/k3-stt-runtime-v1907/worker/source/app/shared/contracts/__pycache__/mesh_compatibility.cpython-311.pyc",
+      "bytes": 1245,
+      "sha256": "9d9d2f817a7b1e3f3562029da508be11dc8e371e76262ff918e1647a1b1c90d7",
+      "disposition": "excluded_regenerable_cache"
+    },
+    {
+      "path": "thesis/sources/k3-stt-runtime-v1907/worker/source/app/shared/contracts/__pycache__/mesh_surface.cpython-311.pyc",
+      "bytes": 23251,
+      "sha256": "21bd11a30d4851cab5b3fad53d37564bb48e49547ba1514c28bb62093259cfde",
+      "disposition": "excluded_regenerable_cache"
+    },
+    {
+      "path": "thesis/sources/k3-stt-runtime-v1907/worker/source/app/shared/contracts/__pycache__/registry.cpython-311.pyc",
+      "bytes": 25399,
+      "sha256": "869010af76a43d51765fea596ced376c05922c3184ea61ebba32c74b85abb104",
+      "disposition": "excluded_regenerable_cache"
+    },
+    {
+      "path": "thesis/sources/k3-stt-runtime-v1907/worker/source/app/shared/contracts/models/__pycache__/__init__.cpython-311.pyc",
+      "bytes": 9431,
+      "sha256": "48da0238f67cfa6a042675617547e47914777be6772f539ef187d325e084e269",
+      "disposition": "excluded_regenerable_cache"
+    },
+    {
+      "path": "thesis/sources/k3-stt-runtime-v1907/worker/source/app/shared/contracts/models/__pycache__/audio.cpython-311.pyc",
+      "bytes": 1380,
+      "sha256": "8265e649e45bcfe7fcc764edc7438d0736c106958869ac945e82aad530622b45",
+      "disposition": "excluded_regenerable_cache"
+    },
+    {
+      "path": "thesis/sources/k3-stt-runtime-v1907/worker/source/app/shared/contracts/models/__pycache__/aurora.cpython-311.pyc",
+      "bytes": 4492,
+      "sha256": "4654ae2a6234bff70d96c2c313c7fd7d1c5d032e5599d04fc21135891313a4d6",
+      "disposition": "excluded_regenerable_cache"
+    },
+    {
+      "path": "thesis/sources/k3-stt-runtime-v1907/worker/source/app/shared/contracts/models/__pycache__/auth.cpython-311.pyc",
+      "bytes": 29384,
+      "sha256": "e5a2e545f4e977a8683dccece631253c91f228fe9d5f341c905c0bf10584644c",
+      "disposition": "excluded_regenerable_cache"
+    },
+    {
+      "path": "thesis/sources/k3-stt-runtime-v1907/worker/source/app/shared/contracts/models/__pycache__/backup.cpython-311.pyc",
+      "bytes": 10602,
+      "sha256": "5429d950525a91bde1b3cfe378dceb96b5ea99eeee81fcdbfafa01719aeebf35",
+      "disposition": "excluded_regenerable_cache"
+    },
+    {
+      "path": "thesis/sources/k3-stt-runtime-v1907/worker/source/app/shared/contracts/models/__pycache__/common.cpython-311.pyc",
+      "bytes": 1716,
+      "sha256": "fd04777536b267484a6e0ba6f21cc272672fdb1df1f70f6d8f8b28b011535240",
+      "disposition": "excluded_regenerable_cache"
+    },
+    {
+      "path": "thesis/sources/k3-stt-runtime-v1907/worker/source/app/shared/contracts/models/__pycache__/config.cpython-311.pyc",
+      "bytes": 16661,
+      "sha256": "fe98cceb8b7523ff3c95e6d4344cb960c20c2e09fb764d2c02fb2d00ef3abcff",
+      "disposition": "excluded_regenerable_cache"
+    },
+    {
+      "path": "thesis/sources/k3-stt-runtime-v1907/worker/source/app/shared/contracts/models/__pycache__/db.cpython-311.pyc",
+      "bytes": 104437,
+      "sha256": "bf4864319d40a60e3e64adf5a8b30131b06cf155068831a4856ac340959eeb9c",
+      "disposition": "excluded_regenerable_cache"
+    },
+    {
+      "path": "thesis/sources/k3-stt-runtime-v1907/worker/source/app/shared/contracts/models/__pycache__/gateway.cpython-311.pyc",
+      "bytes": 73469,
+      "sha256": "4717c25d2565e2222c87498ea4af52c1102bd6df23c437b979b81dd1c23930be",
+      "disposition": "excluded_regenerable_cache"
+    },
+    {
+      "path": "thesis/sources/k3-stt-runtime-v1907/worker/source/app/shared/contracts/models/__pycache__/mesh.cpython-311.pyc",
+      "bytes": 16098,
+      "sha256": "fa37056de80a4f9bd53023a2dc10e96f01c85ec2cde41eda55808504fadc5277",
+      "disposition": "excluded_regenerable_cache"
+    },
+    {
+      "path": "thesis/sources/k3-stt-runtime-v1907/worker/source/app/shared/contracts/models/__pycache__/orchestrator.cpython-311.pyc",
+      "bytes": 36130,
+      "sha256": "55d33ea7d6428268c48f84bf75a9836219355258a74bc36e570ac96a0d0ae686",
+      "disposition": "excluded_regenerable_cache"
+    },
+    {
+      "path": "thesis/sources/k3-stt-runtime-v1907/worker/source/app/shared/contracts/models/__pycache__/scheduler.cpython-311.pyc",
+      "bytes": 15029,
+      "sha256": "53441e074ddc108bf5b12bf5db3a114caf84f483fe97291e231cc34abb890839",
+      "disposition": "excluded_regenerable_cache"
+    },
+    {
+      "path": "thesis/sources/k3-stt-runtime-v1907/worker/source/app/shared/contracts/models/__pycache__/speech.cpython-311.pyc",
+      "bytes": 20213,
+      "sha256": "5b8d670d060209dc27f01496c361b2f84f2216734b958fe719b0c9e834bfe5c4",
+      "disposition": "excluded_regenerable_cache"
+    },
+    {
+      "path": "thesis/sources/k3-stt-runtime-v1907/worker/source/app/shared/contracts/models/__pycache__/speech_runtime.cpython-311.pyc",
+      "bytes": 31814,
+      "sha256": "0d32907accd64c4fede9182b09193c427c3c996267e7c2374da5960f063004d1",
+      "disposition": "excluded_regenerable_cache"
+    },
+    {
+      "path": "thesis/sources/k3-stt-runtime-v1907/worker/source/app/shared/contracts/models/__pycache__/stt.cpython-311.pyc",
+      "bytes": 39241,
+      "sha256": "2fa0cd53333bd3281ce0f68fbdb7ff00b44217093fe6f64bff72aa42a9369efb",
+      "disposition": "excluded_regenerable_cache"
+    },
+    {
+      "path": "thesis/sources/k3-stt-runtime-v1907/worker/source/app/shared/contracts/models/__pycache__/supervisor.cpython-311.pyc",
+      "bytes": 4745,
+      "sha256": "379e2c3b3261c99c76f651214dfc40591aa8d14caefb7e396c1528704c2c04a5",
+      "disposition": "excluded_regenerable_cache"
+    },
+    {
+      "path": "thesis/sources/k3-stt-runtime-v1907/worker/source/app/shared/contracts/models/__pycache__/tooling.cpython-311.pyc",
+      "bytes": 102534,
+      "sha256": "20662eb23d5e73efad1c3d8bf8974b3bad3291f5171fa663c96dc68bbfc8e255",
+      "disposition": "excluded_regenerable_cache"
+    },
+    {
+      "path": "thesis/sources/k3-stt-runtime-v1907/worker/source/app/shared/contracts/models/__pycache__/tts.cpython-311.pyc",
+      "bytes": 93545,
+      "sha256": "afa23ef717aa69448692fb8bac9519a058489f1b307fcec3aa6bcd7cd5c0d07d",
+      "disposition": "excluded_regenerable_cache"
+    },
+    {
+      "path": "thesis/sources/k3-stt-runtime-v1907/worker/source/app/shared/mesh/__pycache__/__init__.cpython-311.pyc",
+      "bytes": 254,
+      "sha256": "af1bbbc0a3c7f96e78a23e390a46d2a214c4a6f82b2481837988f7f1a3360d9b",
+      "disposition": "excluded_regenerable_cache"
+    },
+    {
+      "path": "thesis/sources/k3-stt-runtime-v1907/worker/source/app/shared/mesh/__pycache__/observability.cpython-311.pyc",
+      "bytes": 8633,
+      "sha256": "1ecc080f21d2ae1d6f973a1fe3e608294228216e656ec88c6dc97bef57adf7f2",
+      "disposition": "excluded_regenerable_cache"
+    },
+    {
+      "path": "thesis/sources/k3-stt-runtime-v1907/worker/source/app/shared/messaging/__pycache__/__init__.cpython-311.pyc",
+      "bytes": 287,
+      "sha256": "9fa96ed4697338ce56274c8ead374501965210513aef02413d5aedc1110caa56",
+      "disposition": "excluded_regenerable_cache"
+    },
+    {
+      "path": "thesis/sources/k3-stt-runtime-v1907/worker/source/app/shared/messaging/__pycache__/bus_init.cpython-311.pyc",
+      "bytes": 6007,
+      "sha256": "440c5aec95f3ba3b48df10f60710985dadc1270c3f08109f71efd55cd00cdfbc",
+      "disposition": "excluded_regenerable_cache"
+    },
+    {
+      "path": "thesis/sources/k3-stt-runtime-v1907/worker/source/app/shared/models/__pycache__/__init__.cpython-311.pyc",
+      "bytes": 220,
+      "sha256": "f766e6cd0357a37928d0ebdb14efbbba8a50636730c2baa7d5e0b0fe5f983e31",
+      "disposition": "excluded_regenerable_cache"
+    },
+    {
+      "path": "thesis/sources/k3-stt-runtime-v1907/worker/source/app/shared/models/__pycache__/db.cpython-311.pyc",
+      "bytes": 24263,
+      "sha256": "19657cfdc984f87d40f5a06ed200de75ea021ea5536bcf47556e6a783c2f41bf",
+      "disposition": "excluded_regenerable_cache"
+    },
+    {
+      "path": "thesis/sources/k3-stt-runtime-v1907/worker/source/app/shared/services/__pycache__/__init__.cpython-311.pyc",
+      "bytes": 280,
+      "sha256": "4b313a395ff2cc0183221f8782a18a9d8b6dc419ccb5e4c2461119d431b1ba76",
+      "disposition": "excluded_regenerable_cache"
+    },
+    {
+      "path": "thesis/sources/k3-stt-runtime-v1907/worker/source/app/shared/services/__pycache__/base_service.cpython-311.pyc",
+      "bytes": 69414,
+      "sha256": "8319beff591f8508ad499d22177533041677d2599816f1fc5631ae6811086fea",
+      "disposition": "excluded_regenerable_cache"
+    },
+    {
+      "path": "thesis/sources/python-audio-p2p-tts-wiring-v1706/source/app/__pycache__/__init__.cpython-311.pyc",
+      "bytes": 659,
+      "sha256": "16a29869aa2aeea4653d0f2bef5d5b574993bf08584ac650992736e266282a68",
+      "disposition": "excluded_regenerable_cache"
+    },
+    {
+      "path": "thesis/sources/python-audio-p2p-tts-wiring-v1706/source/app/helpers/__pycache__/aurora_logger.cpython-311.pyc",
+      "bytes": 6939,
+      "sha256": "b46e498413cf4bc9333bd609a4b3a0a9ed89bb73fc67c28e67d2ea5859c0d226",
+      "disposition": "excluded_regenerable_cache"
+    },
+    {
+      "path": "thesis/sources/python-audio-p2p-tts-wiring-v1706/source/app/messaging/__pycache__/__init__.cpython-311.pyc",
+      "bytes": 2022,
+      "sha256": "302b8a1c1c4baa56fd3d889e918d4271c59f109cee259438e9c6d469743539e6",
+      "disposition": "excluded_regenerable_cache"
+    },
+    {
+      "path": "thesis/sources/python-audio-p2p-tts-wiring-v1706/source/app/messaging/__pycache__/audio_messages.cpython-311.pyc",
+      "bytes": 10003,
+      "sha256": "1b2a1f3877c8aeaa56bdcb12597cec68f51cfadfa629013a4365fe3c3aa358c0",
+      "disposition": "excluded_regenerable_cache"
+    },
+    {
+      "path": "thesis/sources/python-audio-p2p-tts-wiring-v1706/source/app/messaging/__pycache__/bus.cpython-311.pyc",
+      "bytes": 12648,
+      "sha256": "f5c334d72ebac87dae7dcef3c2b09477431428f1d677faadc72ab647afeae71a",
+      "disposition": "excluded_regenerable_cache"
+    },
+    {
+      "path": "thesis/sources/python-audio-p2p-tts-wiring-v1706/source/app/messaging/__pycache__/bus_runtime.cpython-311.pyc",
+      "bytes": 1421,
+      "sha256": "eb36d53a2af0d61ed5da7f10bb719a9702254bb443d6a2b8759040335c5dee69",
+      "disposition": "excluded_regenerable_cache"
+    },
+    {
+      "path": "thesis/sources/python-audio-p2p-tts-wiring-v1706/source/app/messaging/__pycache__/local_bus.cpython-311.pyc",
+      "bytes": 29725,
+      "sha256": "73beab93d5cceef09003f581c5cfefc49a676a1bc17010a76f10c882b1a3cce9",
+      "disposition": "excluded_regenerable_cache"
+    },
+    {
+      "path": "thesis/sources/python-audio-p2p-tts-wiring-v1706/source/app/messaging/__pycache__/mesh_bus.cpython-311.pyc",
+      "bytes": 53939,
+      "sha256": "b23b70c5ccb3d331e6d5e2d0eb0fb226f7aea4030dc05ca03d2e4f3e3f1b8b68",
+      "disposition": "excluded_regenerable_cache"
+    },
+    {
+      "path": "thesis/sources/python-audio-p2p-tts-wiring-v1706/source/app/messaging/__pycache__/priority_helpers.cpython-311.pyc",
+      "bytes": 2626,
+      "sha256": "2e7f29719989b6357938ba9dd231515f4b65b4707cbeb2ccfde8d87de2c61e14",
+      "disposition": "excluded_regenerable_cache"
+    },
+    {
+      "path": "thesis/sources/python-audio-p2p-tts-wiring-v1706/source/app/messaging/__pycache__/transcription_messages.cpython-311.pyc",
+      "bytes": 5121,
+      "sha256": "e2ae8290e233635d889886030b7aab881600c67c8bbea79d474083defbc08171",
+      "disposition": "excluded_regenerable_cache"
+    },
+    {
+      "path": "thesis/sources/python-audio-p2p-tts-wiring-v1706/source/app/services/__pycache__/__init__.cpython-311.pyc",
+      "bytes": 1379,
+      "sha256": "76cb21ea24547e79aac828ce53fa5a19ab97bb5e41b1e201951439bec8b871dd",
+      "disposition": "excluded_regenerable_cache"
+    },
+    {
+      "path": "thesis/sources/python-audio-p2p-tts-wiring-v1706/source/app/services/auth/__pycache__/__init__.cpython-311.pyc",
+      "bytes": 1040,
+      "sha256": "ac0758f3e3183d0868bbd3369155cce743bd8904bffce2ddfb0ca998e72f499e",
+      "disposition": "excluded_regenerable_cache"
+    },
+    {
+      "path": "thesis/sources/python-audio-p2p-tts-wiring-v1706/source/app/services/auth/__pycache__/auth_manager.cpython-311.pyc",
+      "bytes": 116950,
+      "sha256": "b52596aa94de334bbf8d370b93230a7c82d093ec7aed939e7858b897c4c304f1",
+      "disposition": "excluded_regenerable_cache"
+    },
+    {
+      "path": "thesis/sources/python-audio-p2p-tts-wiring-v1706/source/app/services/auth/__pycache__/service.cpython-311.pyc",
+      "bytes": 60274,
+      "sha256": "cc80dc877f976bb4592575f87232975fb82ff0db46ba7a4c56df1eb0542f4ba6",
+      "disposition": "excluded_regenerable_cache"
+    },
+    {
+      "path": "thesis/sources/python-audio-p2p-tts-wiring-v1706/source/app/services/config/__pycache__/__init__.cpython-311.pyc",
+      "bytes": 407,
+      "sha256": "002bfcc657d4c3086cfb5bafbc299949979b0124f6fca39d7b0737ef772dffef",
+      "disposition": "excluded_regenerable_cache"
+    },
+    {
+      "path": "thesis/sources/python-audio-p2p-tts-wiring-v1706/source/app/services/config/__pycache__/config_manager.cpython-311.pyc",
+      "bytes": 113160,
+      "sha256": "095bd542a9ffcb444180385d79633d55ab63e96a72a0ed28cf539ac0de0389e0",
+      "disposition": "excluded_regenerable_cache"
+    },
+    {
+      "path": "thesis/sources/python-audio-p2p-tts-wiring-v1706/source/app/services/config/__pycache__/env_config.cpython-311.pyc",
+      "bytes": 7013,
+      "sha256": "3a1e030fe1d902cdff030acd98664836550c9f4892b099572705914d2ddcab15",
+      "disposition": "excluded_regenerable_cache"
+    },
+    {
+      "path": "thesis/sources/python-audio-p2p-tts-wiring-v1706/source/app/services/config/__pycache__/mesh_policy_migration.cpython-311.pyc",
+      "bytes": 42663,
+      "sha256": "ac374a56882ba9ff91f0ca4f6395883a11fb2a655ba40907907996dcaccab08f",
+      "disposition": "excluded_regenerable_cache"
+    },
+    {
+      "path": "thesis/sources/python-audio-p2p-tts-wiring-v1706/source/app/services/config/__pycache__/messages.cpython-311.pyc",
+      "bytes": 4513,
+      "sha256": "eaf9f9d598f8c30592884985555c5d325589945a7be69596f04cf4c7ec51145a",
+      "disposition": "excluded_regenerable_cache"
+    },
+    {
+      "path": "thesis/sources/python-audio-p2p-tts-wiring-v1706/source/app/services/config/__pycache__/service.cpython-311.pyc",
+      "bytes": 34230,
+      "sha256": "9c9b7e0d3d4f6d383782abcbaf0ae5c54b6f9d9129d2798b8559dd02f2913aca",
+      "disposition": "excluded_regenerable_cache"
+    },
+    {
+      "path": "thesis/sources/python-audio-p2p-tts-wiring-v1706/source/app/services/db/__pycache__/__init__.cpython-311.pyc",
+      "bytes": 1541,
+      "sha256": "4cac9ecc48a602d0596cbf879ea147eb24fca3ac20858d17973fab0b9aa344eb",
+      "disposition": "excluded_regenerable_cache"
+    },
+    {
+      "path": "thesis/sources/python-audio-p2p-tts-wiring-v1706/source/app/services/db/__pycache__/manager.cpython-311.pyc",
+      "bytes": 179196,
+      "sha256": "bdad33c2083a72183b8173b42121ae81063963d9e3f2fd3922f3d18fb27c2b21",
+      "disposition": "excluded_regenerable_cache"
+    },
+    {
+      "path": "thesis/sources/python-audio-p2p-tts-wiring-v1706/source/app/services/db/__pycache__/migration_manager.cpython-311.pyc",
+      "bytes": 11885,
+      "sha256": "f64df3580587fa32037667b4b9f474d485d7b5697d2d4398e53ca5b77d9e6aaa",
+      "disposition": "excluded_regenerable_cache"
+    },
+    {
+      "path": "thesis/sources/python-audio-p2p-tts-wiring-v1706/source/app/services/db/__pycache__/models.cpython-311.pyc",
+      "bytes": 774,
+      "sha256": "6a50b4628efa69876e2b941a475193b1ec3aa39f324b3fe358ece0f97d56e203",
+      "disposition": "excluded_regenerable_cache"
+    },
+    {
+      "path": "thesis/sources/python-audio-p2p-tts-wiring-v1706/source/app/services/db/__pycache__/rag_service.cpython-311.pyc",
+      "bytes": 36916,
+      "sha256": "31616959fc9af73e398d36de365c02860cdc454950d7d022f099ce3de78c55d3",
+      "disposition": "excluded_regenerable_cache"
+    },
+    {
+      "path": "thesis/sources/python-audio-p2p-tts-wiring-v1706/source/app/services/db/__pycache__/scheduler_db_service.cpython-311.pyc",
+      "bytes": 20495,
+      "sha256": "bd80ee882f89968451c06779bcd3b4f4139cb022afce1902ff3d1c5a3c2c20f4",
+      "disposition": "excluded_regenerable_cache"
+    },
+    {
+      "path": "thesis/sources/python-audio-p2p-tts-wiring-v1706/source/app/services/db/__pycache__/service.cpython-311.pyc",
+      "bytes": 126327,
+      "sha256": "0b27ddc081d1195bf6183c87b41823810e41437b9888e4f9099aaf4b773511c1",
+      "disposition": "excluded_regenerable_cache"
+    },
+    {
+      "path": "thesis/sources/python-audio-p2p-tts-wiring-v1706/source/app/services/db/__pycache__/sqlite_connection.cpython-311.pyc",
+      "bytes": 5065,
+      "sha256": "5912f445187d5f716a7b9aa4105af37c372e3281306afe5ed59958046f6a43b8",
+      "disposition": "excluded_regenerable_cache"
+    },
+    {
+      "path": "thesis/sources/python-audio-p2p-tts-wiring-v1706/source/app/services/db/__pycache__/tool_identity_store.cpython-311.pyc",
+      "bytes": 35773,
+      "sha256": "9aa461d714946f57201d6a344777713a538e891e1fd2b9ee02e4009eb035a829",
+      "disposition": "excluded_regenerable_cache"
+    },
+    {
+      "path": "thesis/sources/python-audio-p2p-tts-wiring-v1706/source/app/services/db/__pycache__/tooling_export_policy_store.cpython-311.pyc",
+      "bytes": 21889,
+      "sha256": "f7a237b3d4798fed4d3e7ecde6aeeeeeeb47aa755bfe290d6ddd67a6d10820d5",
+      "disposition": "excluded_regenerable_cache"
+    },
+    {
+      "path": "thesis/sources/python-audio-p2p-tts-wiring-v1706/source/app/services/db/__pycache__/tooling_exposure_ledger_store.cpython-311.pyc",
+      "bytes": 4348,
+      "sha256": "0c47382b77d80bfa47bf2a9942e34aa639470bafd1d66463295a7be27eec284e",
+      "disposition": "excluded_regenerable_cache"
+    },
+    {
+      "path": "thesis/sources/python-audio-p2p-tts-wiring-v1706/source/app/services/db/__pycache__/tooling_mesh_activation_store.cpython-311.pyc",
+      "bytes": 9039,
+      "sha256": "785f003ea8633316f6d7f3e926af4a5d9ccee6e55a9b8bd34ddf59802f4a275e",
+      "disposition": "excluded_regenerable_cache"
+    },
+    {
+      "path": "thesis/sources/python-audio-p2p-tts-wiring-v1706/source/app/services/db/__pycache__/tooling_remote_catalog_store.cpython-311.pyc",
+      "bytes": 103346,
+      "sha256": "3ea1aad3d4e6479397d565815d042b4fcbed0a7365e55927c6b1e064bb71096a",
+      "disposition": "excluded_regenerable_cache"
+    },
+    {
+      "path": "thesis/sources/python-audio-p2p-tts-wiring-v1706/source/app/services/gateway/__pycache__/__init__.cpython-311.pyc",
+      "bytes": 1923,
+      "sha256": "f457cca95d8ebed251916f2aae66ac0cd3595a5f2788704df2d7a225c995cf35",
+      "disposition": "excluded_regenerable_cache"
+    },
+    {
+      "path": "thesis/sources/python-audio-p2p-tts-wiring-v1706/source/app/services/gateway/__pycache__/admin_action.cpython-311.pyc",
+      "bytes": 12915,
+      "sha256": "6ffd42cd980d53bfeddd54ec243db390111ed8a38609733abfdaa4b66f54ff54",
+      "disposition": "excluded_regenerable_cache"
+    },
+    {
+      "path": "thesis/sources/python-audio-p2p-tts-wiring-v1706/source/app/services/gateway/__pycache__/audio_session.cpython-311.pyc",
+      "bytes": 16813,
+      "sha256": "86da54255a350dd49ae17a89e51f325d94909ef6136c7d462b09ec3026640c6c",
+      "disposition": "excluded_regenerable_cache"
+    },
+    {
+      "path": "thesis/sources/python-audio-p2p-tts-wiring-v1706/source/app/services/gateway/__pycache__/auth_proxy.cpython-311.pyc",
+      "bytes": 27653,
+      "sha256": "f2ec147d500e47882aebce5626ff4eeeee5257d463826dc15d9dd7944652b8ea",
+      "disposition": "excluded_regenerable_cache"
+    },
+    {
+      "path": "thesis/sources/python-audio-p2p-tts-wiring-v1706/source/app/services/gateway/__pycache__/config.cpython-311.pyc",
+      "bytes": 13501,
+      "sha256": "1bde134c00bdf14dacfd24c6812232be2e7c81042fbd767edb0beb57d84a9541",
+      "disposition": "excluded_regenerable_cache"
+    },
+    {
+      "path": "thesis/sources/python-audio-p2p-tts-wiring-v1706/source/app/services/gateway/__pycache__/dependencies.cpython-311.pyc",
+      "bytes": 2710,
+      "sha256": "9423cd2986aad308d14f368a2807ba4fee86e95f826b883ba53839421154cbc7",
+      "disposition": "excluded_regenerable_cache"
+    },
+    {
+      "path": "thesis/sources/python-audio-p2p-tts-wiring-v1706/source/app/services/gateway/__pycache__/orchestrator_runtime_policy.cpython-311.pyc",
+      "bytes": 6547,
+      "sha256": "c66f025386756a4d4ceb9a2864da43f0a2551b7ccafcd938f395a31e0e855ae4",
+      "disposition": "excluded_regenerable_cache"
+    },
+    {
+      "path": "thesis/sources/python-audio-p2p-tts-wiring-v1706/source/app/services/gateway/__pycache__/registry_aggregator.cpython-311.pyc",
+      "bytes": 38828,
+      "sha256": "eb50a656d1b353c36eb7a5fe4397259c802acdd26b384bf28b3ce0b23fa86c45",
+      "disposition": "excluded_regenerable_cache"
+    },
+    {
+      "path": "thesis/sources/python-audio-p2p-tts-wiring-v1706/source/app/services/gateway/__pycache__/service.cpython-311.pyc",
+      "bytes": 241944,
+      "sha256": "b5c9efe0d12c4fa42ced856a7b7c869c9ffc361d4905d5a8a40f7ecb1843ada0",
+      "disposition": "excluded_regenerable_cache"
+    },
+    {
+      "path": "thesis/sources/python-audio-p2p-tts-wiring-v1706/source/app/services/gateway/acl/__pycache__/__init__.cpython-311.pyc",
+      "bytes": 937,
+      "sha256": "ff22ba4043991a1a38b263535ab447012b56352c315950eb7fb897b7c28b8753",
+      "disposition": "excluded_regenerable_cache"
+    },
+    {
+      "path": "thesis/sources/python-audio-p2p-tts-wiring-v1706/source/app/services/gateway/acl/__pycache__/audit.cpython-311.pyc",
+      "bytes": 482,
+      "sha256": "b82b4b1eb76bc12b012d86810caacfee8a171876f90281d429623b7ab29b69cc",
+      "disposition": "excluded_regenerable_cache"
+    },
+    {
+      "path": "thesis/sources/python-audio-p2p-tts-wiring-v1706/source/app/services/gateway/acl/__pycache__/identity.cpython-311.pyc",
+      "bytes": 652,
+      "sha256": "434a786003d2cda3c530051e3d3b76dbe39ae2c2e0a239260180e781b1ae8525",
+      "disposition": "excluded_regenerable_cache"
+    },
+    {
+      "path": "thesis/sources/python-audio-p2p-tts-wiring-v1706/source/app/services/gateway/mesh/__pycache__/__init__.cpython-311.pyc",
+      "bytes": 868,
+      "sha256": "27580f9a8551185be46eb7b1c9cf3b11a72a12ded88aa05c11d94df5c80ffd8e",
+      "disposition": "excluded_regenerable_cache"
+    },
+    {
+      "path": "thesis/sources/python-audio-p2p-tts-wiring-v1706/source/app/services/gateway/mesh/__pycache__/announcer.cpython-311.pyc",
+      "bytes": 4948,
+      "sha256": "21bd194a75cce35051ca97fb563cc9d059631bdd310d04b8dd1c7347763bdb7f",
+      "disposition": "excluded_regenerable_cache"
+    },
+    {
+      "path": "thesis/sources/python-audio-p2p-tts-wiring-v1706/source/app/services/gateway/mesh/__pycache__/capability_catalog.cpython-311.pyc",
+      "bytes": 30117,
+      "sha256": "b4b04d8b774755d9d2dd84b7c2099ce7f0b85c357fb6cbe8d3c078f76b60ac4d",
+      "disposition": "excluded_regenerable_cache"
+    },
+    {
+      "path": "thesis/sources/python-audio-p2p-tts-wiring-v1706/source/app/services/gateway/mesh/__pycache__/capability_graph.cpython-311.pyc",
+      "bytes": 18473,
+      "sha256": "c64f4c2d41a606d3884fc20b0fbf816c7003b39d6b562dc3eeef4b87a86feca4",
+      "disposition": "excluded_regenerable_cache"
+    },
+    {
+      "path": "thesis/sources/python-audio-p2p-tts-wiring-v1706/source/app/services/gateway/mesh/__pycache__/latency.cpython-311.pyc",
+      "bytes": 10386,
+      "sha256": "adee0d5a32ec237923059bc09fcd97055692f163a92220678bfef0b811c3fb89",
+      "disposition": "excluded_regenerable_cache"
+    },
+    {
+      "path": "thesis/sources/python-audio-p2p-tts-wiring-v1706/source/app/services/gateway/mesh/__pycache__/models.cpython-311.pyc",
+      "bytes": 17124,
+      "sha256": "a68b8d78bf2bf7d1a75746cac0983d648a256f22b8d24f6869d0f95d08b62197",
+      "disposition": "excluded_regenerable_cache"
+    },
+    {
+      "path": "thesis/sources/python-audio-p2p-tts-wiring-v1706/source/app/services/gateway/mesh/__pycache__/negotiation.cpython-311.pyc",
+      "bytes": 72473,
+      "sha256": "b131078690ac8197ba9b734409674fc45e980770646c6fe3df189cd5463768eb",
+      "disposition": "excluded_regenerable_cache"
+    },
+    {
+      "path": "thesis/sources/python-audio-p2p-tts-wiring-v1706/source/app/services/gateway/mesh/__pycache__/peer_bridge.cpython-311.pyc",
+      "bytes": 33674,
+      "sha256": "eed77c4e5b88f5414c9377167f452203c47b2e92a4d30ae7934952b5429469f0",
+      "disposition": "excluded_regenerable_cache"
+    },
+    {
+      "path": "thesis/sources/python-audio-p2p-tts-wiring-v1706/source/app/services/gateway/mesh/__pycache__/peer_registry.cpython-311.pyc",
+      "bytes": 62641,
+      "sha256": "fdf8f00671348fcd5def871af90e6be618a76b347afda53b565b4c64604df6e8",
+      "disposition": "excluded_regenerable_cache"
+    },
+    {
+      "path": "thesis/sources/python-audio-p2p-tts-wiring-v1706/source/app/services/gateway/mesh/__pycache__/policy_store.cpython-311.pyc",
+      "bytes": 4677,
+      "sha256": "6c26f9a7f640213ae47ac517f87ce517516a60bd9b4a4bac0b196eaa624e08a1",
+      "disposition": "excluded_regenerable_cache"
+    },
+    {
+      "path": "thesis/sources/python-audio-p2p-tts-wiring-v1706/source/app/services/gateway/mesh/__pycache__/provider_eligibility.cpython-311.pyc",
+      "bytes": 20746,
+      "sha256": "25f2de1cda26a1683dfa5330ac8409a4ae8d9b1ad5b63cca574ad860a3b6e97c",
+      "disposition": "excluded_regenerable_cache"
+    },
+    {
+      "path": "thesis/sources/python-audio-p2p-tts-wiring-v1706/source/app/services/gateway/mesh/__pycache__/provider_export.cpython-311.pyc",
+      "bytes": 78198,
+      "sha256": "0a34b1c0f0a19b158d5fff08285b5e3dc9368a91209ad20ab00b7e7f0a992c37",
+      "disposition": "excluded_regenerable_cache"
+    },
+    {
+      "path": "thesis/sources/python-audio-p2p-tts-wiring-v1706/source/app/services/gateway/mesh/__pycache__/route_errors.cpython-311.pyc",
+      "bytes": 6043,
+      "sha256": "11bb708354a4636101510295d6c4c17d8e4d9543cbecab1f8f91b6c29fc78770",
+      "disposition": "excluded_regenerable_cache"
+    },
+    {
+      "path": "thesis/sources/python-audio-p2p-tts-wiring-v1706/source/app/services/gateway/mesh/__pycache__/routing_table.cpython-311.pyc",
+      "bytes": 20572,
+      "sha256": "54dcb9ed0898d0f31b73287f9c176e6b15a5db3edcf215f12aeaac603347dde7",
+      "disposition": "excluded_regenerable_cache"
+    },
+    {
+      "path": "thesis/sources/python-audio-p2p-tts-wiring-v1706/source/app/services/gateway/mesh/__pycache__/speech_constraints.cpython-311.pyc",
+      "bytes": 5188,
+      "sha256": "17964da6bcd5bf26e3215f90954f7e57662b51ee83763c007ef44aae28290f75",
+      "disposition": "excluded_regenerable_cache"
+    },
+    {
+      "path": "thesis/sources/python-audio-p2p-tts-wiring-v1706/source/app/services/gateway/mesh/__pycache__/tooling_projection_transport.cpython-311.pyc",
+      "bytes": 4274,
+      "sha256": "a5829aff7ee6548364e3a666d241bcc46b94477f4b3eadb25c0f7261fb94bc67",
+      "disposition": "excluded_regenerable_cache"
+    },
+    {
+      "path": "thesis/sources/python-audio-p2p-tts-wiring-v1706/source/app/services/gateway/mesh/__pycache__/version_compat.cpython-311.pyc",
+      "bytes": 4583,
+      "sha256": "942e8cf49c31727a2695ba3dfee345794563df29701fc7afb4fde16689c336e2",
+      "disposition": "excluded_regenerable_cache"
+    },
+    {
+      "path": "thesis/sources/python-audio-p2p-tts-wiring-v1706/source/app/services/gateway/utils/__pycache__/__init__.cpython-311.pyc",
+      "bytes": 235,
+      "sha256": "9c13ab05a7cc74353501f26674eb7bd28d5aab40261723e6344a2a9be47f8c08",
+      "disposition": "excluded_regenerable_cache"
+    },
+    {
+      "path": "thesis/sources/python-audio-p2p-tts-wiring-v1706/source/app/services/gateway/utils/__pycache__/crypto.cpython-311.pyc",
+      "bytes": 8033,
+      "sha256": "4cd760adc94d030dd1707ca36b7336f4cca8839ec0a49f3a35b14689665ea541",
+      "disposition": "excluded_regenerable_cache"
+    },
+    {
+      "path": "thesis/sources/python-audio-p2p-tts-wiring-v1706/source/app/services/gateway/webrtc/__pycache__/__init__.cpython-311.pyc",
+      "bytes": 317,
+      "sha256": "4809c2627a2d81d903df58de96b2dbfa2c7bf7a645ad8b17b685830b176cdbf3",
+      "disposition": "excluded_regenerable_cache"
+    },
+    {
+      "path": "thesis/sources/python-audio-p2p-tts-wiring-v1706/source/app/services/gateway/webrtc/__pycache__/datachannel_flow.cpython-311.pyc",
+      "bytes": 21103,
+      "sha256": "969e140d310fb85266c59101214304eb3b0e47c559e318d0ef18e8e5f3a1376c",
+      "disposition": "excluded_regenerable_cache"
+    },
+    {
+      "path": "thesis/sources/python-audio-p2p-tts-wiring-v1706/source/app/services/gateway/webrtc/__pycache__/event_subscriptions.cpython-311.pyc",
+      "bytes": 21749,
+      "sha256": "27a951c44db92283889a28ea1030e1bc669e72b0e857c7007ea9d8d046f56bff",
+      "disposition": "excluded_regenerable_cache"
+    },
+    {
+      "path": "thesis/sources/python-audio-p2p-tts-wiring-v1706/source/app/services/gateway/webrtc/__pycache__/pairing_sas.cpython-311.pyc",
+      "bytes": 18713,
+      "sha256": "2add42cb7ae3fc863faaca375e197f31c9225e692bf58fc7edf88bbbf2ec18b3",
+      "disposition": "excluded_regenerable_cache"
+    },
+    {
+      "path": "thesis/sources/python-audio-p2p-tts-wiring-v1706/source/app/services/gateway/webrtc/__pycache__/peer_protocol.cpython-311.pyc",
+      "bytes": 40596,
+      "sha256": "d839dc679a48e5286bdc115d2b62c9fbf207fb2f5d2d6dc08d34f7402055c5a8",
+      "disposition": "excluded_regenerable_cache"
+    },
+    {
+      "path": "thesis/sources/python-audio-p2p-tts-wiring-v1706/source/app/services/gateway/webrtc/__pycache__/rpc.cpython-311.pyc",
+      "bytes": 98786,
+      "sha256": "71f2f7619b76d6fde554325e37bea83bb482099b7b327430f3e9e217344f1e20",
+      "disposition": "excluded_regenerable_cache"
+    },
+    {
+      "path": "thesis/sources/python-audio-p2p-tts-wiring-v1706/source/app/services/gateway/webrtc/__pycache__/rtc_client.cpython-311.pyc",
+      "bytes": 362289,
+      "sha256": "0d287a6061ec9884fc765a508315cc319985febf54493f74aa5a9b1e2295fbf9",
+      "disposition": "excluded_regenerable_cache"
+    },
+    {
+      "path": "thesis/sources/python-audio-p2p-tts-wiring-v1706/source/app/services/gateway/webrtc/signaling/__pycache__/base.cpython-311.pyc",
+      "bytes": 1887,
+      "sha256": "1ebcd9117f461f8fe3069a6a175296c6c01561d37a72a1b778de600d8557d5d2",
+      "disposition": "excluded_regenerable_cache"
+    },
+    {
+      "path": "thesis/sources/python-audio-p2p-tts-wiring-v1706/source/app/services/gateway/webrtc/signaling/__pycache__/mqtt_client.cpython-311.pyc",
+      "bytes": 18036,
+      "sha256": "70bb0a23b0627b06794ebd50e74f41ab9bbffb3456dc41cd340bce560e6e5ce3",
+      "disposition": "excluded_regenerable_cache"
+    },
+    {
+      "path": "thesis/sources/python-audio-p2p-tts-wiring-v1706/source/app/shared/__pycache__/__init__.cpython-311.pyc",
+      "bytes": 285,
+      "sha256": "28c2bd2f9f744bde4c809b155d82fccde00a9a498b907571cb2843c8c5b70e92",
+      "disposition": "excluded_regenerable_cache"
+    },
+    {
+      "path": "thesis/sources/python-audio-p2p-tts-wiring-v1706/source/app/shared/__pycache__/crypto.cpython-311.pyc",
+      "bytes": 3579,
+      "sha256": "470a84fc59e31e90440f4d3bf1da35bcab837afb703b31bb708a5646a9f62dd8",
+      "disposition": "excluded_regenerable_cache"
+    },
+    {
+      "path": "thesis/sources/python-audio-p2p-tts-wiring-v1706/source/app/shared/auth/__pycache__/__init__.cpython-311.pyc",
+      "bytes": 932,
+      "sha256": "472243f737f87dfa3d2288668ce505de6ac36ef52e654f667729f96222f77745",
+      "disposition": "excluded_regenerable_cache"
+    },
+    {
+      "path": "thesis/sources/python-audio-p2p-tts-wiring-v1706/source/app/shared/auth/__pycache__/audit.cpython-311.pyc",
+      "bytes": 2002,
+      "sha256": "9a4098a2dbc6f3fa344db2b1384793ed00ba744592b2555918cc555ec9d6068c",
+      "disposition": "excluded_regenerable_cache"
+    },
+    {
+      "path": "thesis/sources/python-audio-p2p-tts-wiring-v1706/source/app/shared/auth/__pycache__/identity.cpython-311.pyc",
+      "bytes": 6083,
+      "sha256": "74b54168ce7c63b2db00933f093cbd0351c631bfeb40801d3db87cc345356cd9",
+      "disposition": "excluded_regenerable_cache"
+    },
+    {
+      "path": "thesis/sources/python-audio-p2p-tts-wiring-v1706/source/app/shared/auth/__pycache__/permissions.cpython-311.pyc",
+      "bytes": 14712,
+      "sha256": "03d9176f4a8283a3085c5fc971707d4af4c041b423e4238c8ae11396f9ca92b5",
+      "disposition": "excluded_regenerable_cache"
+    },
+    {
+      "path": "thesis/sources/python-audio-p2p-tts-wiring-v1706/source/app/shared/config/__pycache__/__init__.cpython-311.pyc",
+      "bytes": 288,
+      "sha256": "1dff83c3db9aeb172dbfd9e01a3eba7bf9057e22e14a07682c92b5b63210c3aa",
+      "disposition": "excluded_regenerable_cache"
+    },
+    {
+      "path": "thesis/sources/python-audio-p2p-tts-wiring-v1706/source/app/shared/config/__pycache__/interface.cpython-311.pyc",
+      "bytes": 37614,
+      "sha256": "e66161ebd7ad316c3985aef48ad5b450f2142a57da4e1c1ef91a2941b327843a",
+      "disposition": "excluded_regenerable_cache"
+    },
+    {
+      "path": "thesis/sources/python-audio-p2p-tts-wiring-v1706/source/app/shared/config/__pycache__/keys.cpython-311.pyc",
+      "bytes": 100685,
+      "sha256": "59169888cb4195bea6c0fc8ebb289b7c23a973621d304780e50cfabc14ec0dd8",
+      "disposition": "excluded_regenerable_cache"
+    },
+    {
+      "path": "thesis/sources/python-audio-p2p-tts-wiring-v1706/source/app/shared/config/__pycache__/models.cpython-311.pyc",
+      "bytes": 41772,
+      "sha256": "8ca6ce415ef201dfe3fde3e5c8f0c1b66292371356d02e022877483d5e513862",
+      "disposition": "excluded_regenerable_cache"
+    },
+    {
+      "path": "thesis/sources/python-audio-p2p-tts-wiring-v1706/source/app/shared/config/__pycache__/models_base.cpython-311.pyc",
+      "bytes": 857,
+      "sha256": "7219c13f791a426dac0e55894739b5a8bc25e1332248c339276a42d4ecfbab08",
+      "disposition": "excluded_regenerable_cache"
+    },
+    {
+      "path": "thesis/sources/python-audio-p2p-tts-wiring-v1706/source/app/shared/contracts/__pycache__/__init__.cpython-311.pyc",
+      "bytes": 397,
+      "sha256": "9971ba90b5aa494f08ef5902063e4ba67d4ef70cd3c4bf01410be1402d261a7b",
+      "disposition": "excluded_regenerable_cache"
+    },
+    {
+      "path": "thesis/sources/python-audio-p2p-tts-wiring-v1706/source/app/shared/contracts/__pycache__/io_model.cpython-311.pyc",
+      "bytes": 686,
+      "sha256": "33a8bae8bd2cca264a8281fe678f529977e19a7e8f0f6757bc0f6630eba5a246",
+      "disposition": "excluded_regenerable_cache"
+    },
+    {
+      "path": "thesis/sources/python-audio-p2p-tts-wiring-v1706/source/app/shared/contracts/__pycache__/mesh_compatibility.cpython-311.pyc",
+      "bytes": 1251,
+      "sha256": "572cddc3e014b173a021279d3bae73c82af7d7734297409a4347b0e94c6fceb9",
+      "disposition": "excluded_regenerable_cache"
+    },
+    {
+      "path": "thesis/sources/python-audio-p2p-tts-wiring-v1706/source/app/shared/contracts/__pycache__/mesh_surface.cpython-311.pyc",
+      "bytes": 23257,
+      "sha256": "f4ff399558c4c646043727b38fb563eefcc9b205a91ce8bd1bdaf6e32083a462",
+      "disposition": "excluded_regenerable_cache"
+    },
+    {
+      "path": "thesis/sources/python-audio-p2p-tts-wiring-v1706/source/app/shared/contracts/__pycache__/registry.cpython-311.pyc",
+      "bytes": 25405,
+      "sha256": "00b03bfde2a4767fcf08959d7a0076ad6e4b07906982235ae9f529a63aff4026",
+      "disposition": "excluded_regenerable_cache"
+    },
+    {
+      "path": "thesis/sources/python-audio-p2p-tts-wiring-v1706/source/app/shared/contracts/__pycache__/speech_routing.cpython-311.pyc",
+      "bytes": 2055,
+      "sha256": "9d98bab4d6e1c832f5bfac052ad01f3d063033afba25892b9f6dda79cb0f0cdb",
+      "disposition": "excluded_regenerable_cache"
+    },
+    {
+      "path": "thesis/sources/python-audio-p2p-tts-wiring-v1706/source/app/shared/contracts/models/__pycache__/__init__.cpython-311.pyc",
+      "bytes": 9437,
+      "sha256": "29cf2cb3d0532de31d1c5269821ea84a067153f2ba12fdc4caaf149ae00a201d",
+      "disposition": "excluded_regenerable_cache"
+    },
+    {
+      "path": "thesis/sources/python-audio-p2p-tts-wiring-v1706/source/app/shared/contracts/models/__pycache__/audio.cpython-311.pyc",
+      "bytes": 1386,
+      "sha256": "b17bd2be0e66e8e3b86b297ac31a50b201de91321e287120de8b96e6bd51f1ac",
+      "disposition": "excluded_regenerable_cache"
+    },
+    {
+      "path": "thesis/sources/python-audio-p2p-tts-wiring-v1706/source/app/shared/contracts/models/__pycache__/aurora.cpython-311.pyc",
+      "bytes": 4498,
+      "sha256": "abe4431a0d2140fb2bfd23b8732250b48d12b802cd55c84598b3fa42d3f53c38",
+      "disposition": "excluded_regenerable_cache"
+    },
+    {
+      "path": "thesis/sources/python-audio-p2p-tts-wiring-v1706/source/app/shared/contracts/models/__pycache__/auth.cpython-311.pyc",
+      "bytes": 29390,
+      "sha256": "9967cbe5e13cea63e4fdbcf72d547fee855dc0bfa13576e97eea2e8dd549b54c",
+      "disposition": "excluded_regenerable_cache"
+    },
+    {
+      "path": "thesis/sources/python-audio-p2p-tts-wiring-v1706/source/app/shared/contracts/models/__pycache__/backup.cpython-311.pyc",
+      "bytes": 10608,
+      "sha256": "039034e7fa18259023e70778d08ab3ed31c8e4861c11cfb830c9c1c2dc326665",
+      "disposition": "excluded_regenerable_cache"
+    },
+    {
+      "path": "thesis/sources/python-audio-p2p-tts-wiring-v1706/source/app/shared/contracts/models/__pycache__/common.cpython-311.pyc",
+      "bytes": 1722,
+      "sha256": "60e5e0088e31daaf18d14f21faf4e5f7a01e2287e47f7d0c12cfa5297bba790f",
+      "disposition": "excluded_regenerable_cache"
+    },
+    {
+      "path": "thesis/sources/python-audio-p2p-tts-wiring-v1706/source/app/shared/contracts/models/__pycache__/config.cpython-311.pyc",
+      "bytes": 16667,
+      "sha256": "75b1f69fdee2e19e3321ad4f4c071d72071a789da823336c347260c867aca1e3",
+      "disposition": "excluded_regenerable_cache"
+    },
+    {
+      "path": "thesis/sources/python-audio-p2p-tts-wiring-v1706/source/app/shared/contracts/models/__pycache__/db.cpython-311.pyc",
+      "bytes": 104443,
+      "sha256": "0691f22f7212182d5068a1499198061004316085f84f28e6ce9e05fcf6c587b8",
+      "disposition": "excluded_regenerable_cache"
+    },
+    {
+      "path": "thesis/sources/python-audio-p2p-tts-wiring-v1706/source/app/shared/contracts/models/__pycache__/gateway.cpython-311.pyc",
+      "bytes": 73475,
+      "sha256": "67aaccbc9e3cc2322bb82dd3b889d02d6ebc4807caa4bc9e175103ab6822006f",
+      "disposition": "excluded_regenerable_cache"
+    },
+    {
+      "path": "thesis/sources/python-audio-p2p-tts-wiring-v1706/source/app/shared/contracts/models/__pycache__/mesh.cpython-311.pyc",
+      "bytes": 16104,
+      "sha256": "cafb7870e13c34af11e21d8b06ee9e86fded63c3ee057027362c619a00ad1e85",
+      "disposition": "excluded_regenerable_cache"
+    },
+    {
+      "path": "thesis/sources/python-audio-p2p-tts-wiring-v1706/source/app/shared/contracts/models/__pycache__/orchestrator.cpython-311.pyc",
+      "bytes": 36136,
+      "sha256": "242d358956dd732bad90e91e759fd8b8995131267fa2f6f52a95dadcb8100773",
+      "disposition": "excluded_regenerable_cache"
+    },
+    {
+      "path": "thesis/sources/python-audio-p2p-tts-wiring-v1706/source/app/shared/contracts/models/__pycache__/scheduler.cpython-311.pyc",
+      "bytes": 15035,
+      "sha256": "b04b5d8fe831a0421ad30a4fece5aa2162e1e5446fc6d9c74a11ce2723b28b6e",
+      "disposition": "excluded_regenerable_cache"
+    },
+    {
+      "path": "thesis/sources/python-audio-p2p-tts-wiring-v1706/source/app/shared/contracts/models/__pycache__/speech.cpython-311.pyc",
+      "bytes": 20219,
+      "sha256": "435c00199d1da6a6b0015e21ef587bf7a33ebdab2aa0a898411072528f840dab",
+      "disposition": "excluded_regenerable_cache"
+    },
+    {
+      "path": "thesis/sources/python-audio-p2p-tts-wiring-v1706/source/app/shared/contracts/models/__pycache__/speech_runtime.cpython-311.pyc",
+      "bytes": 31762,
+      "sha256": "062748fa97ee4cca00bf0316ebb9bfe18b5875cb50bcf893aa134109b7acb90d",
+      "disposition": "excluded_regenerable_cache"
+    },
+    {
+      "path": "thesis/sources/python-audio-p2p-tts-wiring-v1706/source/app/shared/contracts/models/__pycache__/stt.cpython-311.pyc",
+      "bytes": 39247,
+      "sha256": "47a761dd8eb780e380da987c3a00b86f5027e4d46db1d2bb6fcf783b0a46c6ad",
+      "disposition": "excluded_regenerable_cache"
+    },
+    {
+      "path": "thesis/sources/python-audio-p2p-tts-wiring-v1706/source/app/shared/contracts/models/__pycache__/supervisor.cpython-311.pyc",
+      "bytes": 4751,
+      "sha256": "62684e8722b9bce52609d72ce6fef05341494cab5c887bc14928e1ff635ef4fc",
+      "disposition": "excluded_regenerable_cache"
+    },
+    {
+      "path": "thesis/sources/python-audio-p2p-tts-wiring-v1706/source/app/shared/contracts/models/__pycache__/tooling.cpython-311.pyc",
+      "bytes": 102540,
+      "sha256": "93a02c9e1d649690f636c5c842dfa78260d16a6c647a990b72c2cc1b91aed715",
+      "disposition": "excluded_regenerable_cache"
+    },
+    {
+      "path": "thesis/sources/python-audio-p2p-tts-wiring-v1706/source/app/shared/contracts/models/__pycache__/tts.cpython-311.pyc",
+      "bytes": 93551,
+      "sha256": "94cac20d1038dc793c635105b3e061ec5151983b4da7ec705f330278ef473e53",
+      "disposition": "excluded_regenerable_cache"
+    },
+    {
+      "path": "thesis/sources/python-audio-p2p-tts-wiring-v1706/source/app/shared/mesh/__pycache__/__init__.cpython-311.pyc",
+      "bytes": 260,
+      "sha256": "802a6253f5ada000d6ddc5fcc3ccd7be2f2c19797ce400ad1010eeca935207b4",
+      "disposition": "excluded_regenerable_cache"
+    },
+    {
+      "path": "thesis/sources/python-audio-p2p-tts-wiring-v1706/source/app/shared/mesh/__pycache__/observability.cpython-311.pyc",
+      "bytes": 8639,
+      "sha256": "b8dc4ed3030cedaccfcc8cb93735888aa85131b80d1067605a2097aa7ab9b5b6",
+      "disposition": "excluded_regenerable_cache"
+    },
+    {
+      "path": "thesis/sources/python-audio-p2p-tts-wiring-v1706/source/app/shared/mesh/__pycache__/tracing.cpython-311.pyc",
+      "bytes": 13405,
+      "sha256": "dc4b3a86a415cc57c99a35623151fd0650a9afb46e00414208832b317e39843e",
+      "disposition": "excluded_regenerable_cache"
+    },
+    {
+      "path": "thesis/sources/python-audio-p2p-tts-wiring-v1706/source/app/shared/messaging/__pycache__/__init__.cpython-311.pyc",
+      "bytes": 293,
+      "sha256": "ca953ee2777157b9ae1a5989a68243d3de340007f49f1b32f55d24e53f9b9783",
+      "disposition": "excluded_regenerable_cache"
+    },
+    {
+      "path": "thesis/sources/python-audio-p2p-tts-wiring-v1706/source/app/shared/messaging/__pycache__/bus_init.cpython-311.pyc",
+      "bytes": 6013,
+      "sha256": "5853618e77270bc801b5f1d38cc2f549990031e9185a7eb0e76082c0ad262536",
+      "disposition": "excluded_regenerable_cache"
+    },
+    {
+      "path": "thesis/sources/python-audio-p2p-tts-wiring-v1706/source/app/shared/models/__pycache__/__init__.cpython-311.pyc",
+      "bytes": 226,
+      "sha256": "b01c94e656a6b0d87dcb5fa9d44102929d177c27668bdcbf30c690bd2d5f651c",
+      "disposition": "excluded_regenerable_cache"
+    },
+    {
+      "path": "thesis/sources/python-audio-p2p-tts-wiring-v1706/source/app/shared/models/__pycache__/db.cpython-311.pyc",
+      "bytes": 24269,
+      "sha256": "748012b55f7edc3d71cdd50a2cc018bca174269fd5e9cd65e27d0db2ab714b95",
+      "disposition": "excluded_regenerable_cache"
+    },
+    {
+      "path": "thesis/sources/python-audio-p2p-tts-wiring-v1706/source/app/shared/services/__pycache__/__init__.cpython-311.pyc",
+      "bytes": 286,
+      "sha256": "78650a285eb780647ac3c71e217493eb8793a242aea93e09f8477cd18d759e97",
+      "disposition": "excluded_regenerable_cache"
+    },
+    {
+      "path": "thesis/sources/python-audio-p2p-tts-wiring-v1706/source/app/shared/services/__pycache__/base_service.cpython-311.pyc",
+      "bytes": 69420,
+      "sha256": "a6784e1034ffeadaff71297eb115bed582e315f2f3b306bd48702c879fd9b315",
+      "disposition": "excluded_regenerable_cache"
+    }
+  ],
+  "pending_paths": [
+    "docs/experiments/tcc-20261013-submission-20261030/root/CURRENT.md",
+    "thesis/analysis/coding-harness-repair-six-cell-scan-20261022.json",
+    "thesis/analysis/paris-lifecycle-audit-20261022/",
+    "thesis/analysis/paris-lifecycle-audit-20261022/AUTHORITATIVE-PLAN.before.md.gz",
+    "thesis/analysis/paris-lifecycle-audit-20261022/METHODOLOGY-AMENDMENT.md",
+    "thesis/analysis/paris-lifecycle-audit-20261022/OWNERSHIP.json",
+    "thesis/analysis/paris-lifecycle-audit-20261022/PHONE-EXPORT-MESSAGE.json",
+    "thesis/analysis/paris-lifecycle-audit-20261022/PLAN-RECEIPT.json",
+    "thesis/analysis/paris-lifecycle-audit-20261022/__pycache__/audit.cpython-312.pyc",
+    "thesis/analysis/paris-lifecycle-audit-20261022/audit.py",
+    "thesis/analysis/paris-lifecycle-audit-20261022/test_audit.py",
+    "thesis/evidence/orca-relayed-http-v1197/reports-v1234/root/CURRENT.md"
+  ],
+  "deferred_external_scopes": [
+    "personal.skyron-server:/home/developer/projects/aurora/thesis/",
+    "personal.skyron-server:/home/developer/projects/aurora/docs/experiments/"
+  ],
+  "deferred_raw_publication": "Owner explicitly deferred the GitHub Release and all raw-data upload; no release parts created.",
+  "raw_exclusion_inventory": "EVIDENCE-INVENTORY/INDEX.json and all listed worker-*.jsonl shards enumerate every worker file withheld, including raw audio, logs, prefixes, archives, encoded payloads and source custody.",
+  "personal_recordings": "No raw audio or opaque personal-custody bundles are published in this snapshot; their privacy review remains pending before any later release. The fixture manifest identifies the agent-authored synthetic France-capital question.",
+  "raw_originals_deleted_or_modified": false,
+  "other_sessions_deleted_paths": [],
+  "tests_or_measurements_run": false
+}

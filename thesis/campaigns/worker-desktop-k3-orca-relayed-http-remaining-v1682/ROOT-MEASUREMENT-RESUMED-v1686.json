@@ -1,0 +1,133 @@
+{
+  "at": "2026-10-20T00:54:22.936826+00:00",
+  "status": "ACTUAL_MEASUREMENT_RESUMED_FIRST_NEW741_COMPLETED_CORRECT",
+  "nativeGoal": "01a112a5-d6bb-74e2-bf7c-ace73cb513b5",
+  "nativeStatus": "active",
+  "run": "run_e6054e76e9fc",
+  "cohortId": "aurora-worker-desktop-k3-orca-relayed-http-stt-llm-tts-remaining-v1682",
+  "frozenManifest": {
+    "path": "thesis/campaigns/worker-desktop-k3-orca-relayed-http-remaining-v1682/condition-frozen.json",
+    "sha256": "32c5ac87c8cd765f0117a0312b6941c8f69c7731dfe66987826311e74e34b506"
+  },
+  "providerManifestSha256": "61fe867af6495a6e130c1148b73b97ac3ca14755dbcba9a034a155d04fa2d62e",
+  "providerReceiver": {
+    "pid": 2991345,
+    "startTicks": 21245707
+  },
+  "hosts": [
+    "code-worker requester",
+    "personal.skyron-server native STT/LLM/TTS"
+  ],
+  "route": "Existing Orca-relayed authenticated HTTP 127.0.0.1:18000; not P2P",
+  "localProcesses": [
+    {
+      "role": "controller",
+      "pid": 2202799,
+      "startTicks": 123551050,
+      "alive": true
+    },
+    {
+      "role": "backend",
+      "pid": 2202983,
+      "startTicks": 123552157,
+      "alive": true
+    },
+    {
+      "role": "copier",
+      "pid": 2202800,
+      "startTicks": 123551051,
+      "alive": true
+    }
+  ],
+  "nativeAdmission": {
+    "actualOffloadedLayers": 25,
+    "actualSttComputeType": "int8_float32",
+    "actualSttDevice": "cpu",
+    "actualTotalLayers": 25,
+    "at": "2026-10-20T00:52:28.102621+00:00",
+    "calls": 45,
+    "forecastWith20PercentMarginPlus300Seconds": 6176.905088217601,
+    "measurementAdmission": "Unchanged reviewed runner must independently verify the published proof before measured1",
+    "modelCallsByFinalizer": 0,
+    "nativeProofHandlers": [
+      "stt.model_invoke",
+      "resolved_chat_model.astream",
+      "tts.model_invoke"
+    ],
+    "nextPersonalCursor": "74900",
+    "ordinaryWarmupP95MsType7": 30608.8806678,
+    "proofSha256": "e28082eceab9d637e8bbd7bf274159681434cb4cc6f22cfb448f8201ca99f7ea",
+    "providerDeadlineUtc": "2026-10-20T03:42:15.698294+00:00",
+    "providerReceiverPid": 2991345,
+    "providerRemainingSecondsAtCheck": 10203.26265,
+    "status": "K3_15_EXCLUDED_WARMUPS_45_NATIVE_JOINS_PROOF_PUBLISHED",
+    "warmupDurationsMs": [
+      29485.977939,
+      29559.092114,
+      29563.792588,
+      29581.891768,
+      29651.512736,
+      29659.391884,
+      29705.814469,
+      29834.878654,
+      29870.597335,
+      29903.56541,
+      29910.798366,
+      30172.991221,
+      30203.046439,
+      30368.91096,
+      31168.809986
+    ]
+  },
+  "firstMeasured": {
+    "globalIndex": 741,
+    "status": "completed_correct",
+    "flowDurationMs": 29840.026166,
+    "caseSource": ".git/aurora-handoff-import-20261006/distributed-k3-orca-relayed-http-cell-v1682/campaign/attempts/attempt-0016-measured.jsonl",
+    "caseRetained": "thesis/campaigns/worker-desktop-k3-orca-relayed-http-remaining-v1682/attempts/attempt-0016-measured.jsonl",
+    "caseBytes": 6630,
+    "caseSha256": "6e71b8cfccd0c947b768bafb1981f2eee710f9454ad55aed8d0803f17a4cbbc7",
+    "completedCaseFileMtimeUtc": "2026-10-20T00:52:58.184050+00:00",
+    "outputAudio": {
+      "path": "thesis/campaigns/worker-desktop-k3-orca-relayed-http-remaining-v1682/audio/4666a3f9683ed9653f7b87cbd3d3223deec29535c6eb898432d7434a2af37c9d.wav",
+      "bytes": 31788,
+      "sha256": "4666a3f9683ed9653f7b87cbd3d3223deec29535c6eb898432d7434a2af37c9d"
+    },
+    "flowStartedMonotonicNs": 1236008931748244,
+    "flowEndedMonotonicNs": 1236038771774410
+  },
+  "newEpochPointInTime": {
+    "measured": 3,
+    "correct": 3,
+    "failed": 0,
+    "target": 160,
+    "unattempted": 157,
+    "excludedWarmups": 15
+  },
+  "conditionCountsOnly": {
+    "attempted": 743,
+    "correct": 728,
+    "failed": 15,
+    "target": 900,
+    "unattempted": 157,
+    "old740AllRetained": true
+  },
+  "percentilePolicy": "No percentile inference from first cases; old epochs never silently pooled",
+  "custodyPointInTime": {
+    "sequence": 11,
+    "files": 97,
+    "completedCases": 18,
+    "physicalWAVs": 19,
+    "freeBytes": 5386457088
+  },
+  "personalControl": "Finalizer completed naturally; cursor74900; Root controls, no new remote action scheduled",
+  "documentationValidation": {
+    "command": "make check-docs",
+    "exitCode": 2,
+    "finding": "Historical experiment generated-artifact policy violations and archived campaign.py broken link; no cleanup sweep or measurement gate added"
+  },
+  "nextAction": "Continue same frozen160 tail through index900, preserving every failed case and raw/WAV prefixes; no repeated baseline, new worker, provider restart or resume",
+  "nextObservationUtc": "2026-10-20T00:56:22.936826+00:00",
+  "noAdvanceNudgeUtc": "2026-10-20T00:59:22.936826+00:00",
+  "providerDeadlineUtc": "2026-10-20T03:42:15.698294+00:00"
+}

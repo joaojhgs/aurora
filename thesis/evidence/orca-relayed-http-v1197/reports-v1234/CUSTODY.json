@@ -1,0 +1,25 @@
+{
+  "at": "2026-10-17T20:45:42.260359+00:00",
+  "priorReportVersionsPreserved": true,
+  "records": [
+    {
+      "bytes": 10156,
+      "destination": "thesis/evidence/orca-relayed-http-v1197/reports-v1234/root/CURRENT.md",
+      "sha256": "9d6758a8e17f2d0cc453c6e18af46a73b57c957154d45f23c020cecff853ddba",
+      "source": "docs/experiments/tcc-20261013-submission-20261030/root/CURRENT.md"
+    },
+    {
+      "bytes": 5067,
+      "destination": "thesis/evidence/orca-relayed-http-v1197/reports-v1234/orca-relayed-http-v1197/README.md",
+      "sha256": "1bca1ffb40382e612c1141bb8853a02a839bd7207719866d8846df817523708f",
+      "source": "thesis/evidence/orca-relayed-http-v1197/README.md"
+    },
+    {
+      "bytes": 4720,
+      "destination": "thesis/evidence/orca-relayed-http-v1197/reports-v1234/models/README.md",
+      "sha256": "9437224a96431eff7361c4332d6b0835af5f665ec698202808b2c9b53ff204ca",
+      "source": "thesis/models/README.md"
+    }
+  ],
+  "transferReceipt": "thesis/evidence/orca-relayed-http-v1197/provider-transfer-v1232/CUSTODY.json"
+}

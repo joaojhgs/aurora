@@ -1,0 +1,40 @@
+{
+  "sourceSha": "ebde3a8acf6315f920d03593845f17a1fc65a733",
+  "remoteSha": null,
+  "baseSha": "df23fd6e1f80e87dc45b6221bed87c00b4187e66",
+  "baseTreeSha256": "a9699da8ab6c086674dfa5abfb8add03e8029708eb35da8adf3ab2fb0f1777c4",
+  "targetFiles": 1959,
+  "reusedGitObjects": 759,
+  "deltaFiles": 1200,
+  "deltaUncompressedBytes": 28680591,
+  "files": [
+    {
+      "name": "ORIGINAL-FIXED-INPUT.wav",
+      "bytes": 219794,
+      "sha256": "da0ecc4ad0885746ab6e716585473917ab2b543a505bf0db09ebacfaa7943cbb"
+    },
+    {
+      "name": "SOURCE-DELTA.tar.xz",
+      "bytes": 3575664,
+      "sha256": "b3fbbc88962f4882710a92a7d49b70ab14a31edc63b39526867ba6d7e7f1f966"
+    },
+    {
+      "name": "SOURCE-FILE-INVENTORY.json.gz",
+      "bytes": 114458,
+      "sha256": "8939411a36fc6d6b09b48099ad388a70e09c24269996609669e4fbb6e0342bd6"
+    },
+    {
+      "name": "SOURCE-REUSE-INDEX.json",
+      "bytes": 3820,
+      "sha256": "214813fc362db20f409b532d934de268ca60d54de0b44f729985f70f193601e8"
+    }
+  ],
+  "totalBytes": 3913736,
+  "maximumBytes": 12582912,
+  "frameBytes": 65536,
+  "frames": 60,
+  "elapsedPackagingSeconds": 80.5635923978407,
+  "inventoryDecompressedSha256": "88c7330effe93499e9c673921e9b12c90c54db53e572885f34bbd40644c8d47b",
+  "gitWrites": false,
+  "resourcePolicy": "oneCPU nice19 idleIO <=120s >=2GiB free"
+}

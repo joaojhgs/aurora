@@ -1,0 +1,64 @@
+{
+  "applicationSourceIdentity": "ebde3a8acf6315f920d03593845f17a1fc65a733 + source-closure-overlay-v2383 + android-bundled-model-rename-v1 + android-node-policy-initial-publication-v2",
+  "buildDeadlineUtc": "2026-10-22T06:12:20.081363+00:00",
+  "buildPid": 216093,
+  "buildStartedAt": "2026-10-22T05:52:20.081352+00:00",
+  "canonicalAppPreserved": true,
+  "command": [
+    "node",
+    "apps/aurora-tauri/scripts/build-android-client-bundle.mjs",
+    "--kind",
+    "apk",
+    "--voice-live-test",
+    "--target",
+    "aarch64"
+  ],
+  "elapsedSeconds": 305.1379385049986,
+  "exit": 0,
+  "finishedAt": "2026-10-22T05:57:04.836931+00:00",
+  "log": "/home/developer/projects/aurora/thesis/phone-notebook/20261020/deployment/ebde3a8acf6315f920d03593845f17a1fc65a733/android-apk-build-v170/build.log",
+  "logSha256": "c881d355abf831cde5460827d1128664e6dc0bf04fdedd36e39184b604155d74",
+  "maxJobs": 2,
+  "maxOwnedTreeRssBytes": 8589934592,
+  "modelCalls": 0,
+  "ownBuildChildrenActive": false,
+  "ownedBuildTreeRssBytes": 223203328,
+  "peakOwnedBuildTreeRssBytes": 4786806784,
+  "pid": 215684,
+  "resources": {
+    "at": "2026-10-22T05:57:01.516452+00:00",
+    "diskFreeBytes": 62739820544,
+    "load": [
+      9.44384765625,
+      6.65234375,
+      4.16796875
+    ],
+    "maxSensorC": 79.85,
+    "memAvailableBytes": 23822176256
+  },
+  "startTicks": "2890976",
+  "startedAt": "2026-10-22T05:51:59.705023+00:00",
+  "status": "ANDROID_VOICE_LIVE_APK_BUILT",
+  "targetedPolicyTests": {
+    "elapsedSeconds": 20.336181976999796,
+    "exit": 0,
+    "log": "/home/developer/projects/aurora/thesis/phone-notebook/20261020/deployment/ebde3a8acf6315f920d03593845f17a1fc65a733/android-apk-build-v170/policy-tests.log",
+    "sha256": "ec4888600742fb1c59ef10a582bf814e1dc54c5bfb91768b0ca5838de22acabf",
+    "timeout": false
+  },
+  "temperaturePolicy": "observe_only_owner_correction",
+  "testApplicationId": "dev.aurora.desktop.phonenotebook",
+  "testCommand": [
+    "cargo",
+    "test",
+    "--offline",
+    "--manifest-path",
+    "/home/developer/projects/aurora/thesis/phone-notebook/20261020/deployment/ebde3a8acf6315f920d03593845f17a1fc65a733/android-build-ebde-v2383-native-rename-v1/rust/Cargo.toml",
+    "-p",
+    "aurora-voice-native",
+    "--lib",
+    "node_config_file::",
+    "--",
+    "--test-threads=1"
+  ]
+}

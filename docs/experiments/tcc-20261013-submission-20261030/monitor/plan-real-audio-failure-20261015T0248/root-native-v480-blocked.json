@@ -1,0 +1,23 @@
+{
+  "message": "msg_f400db3ab069",
+  "createdAt": "2026-10-15T02:56:40Z",
+  "rootThread": "01a112a5-d6bb-74e2-bf7c-ace73cb513b5",
+  "actualNativeUpdate": "update_goal(status=blocked), followed by fresh get_goal=blocked",
+  "rootStatus": "blocked",
+  "aggregateComplete": false,
+  "aggregateCancelled": false,
+  "fullOriginalObjectivePreserved": true,
+  "originalGoalCount": 13,
+  "budget": "unbudgeted",
+  "blockedAuditTurns": [
+    "V478",
+    "V479",
+    "V480"
+  ],
+  "reason": "Original fixed WAV+accurate/base task-correctness fails; no deterministic source fix established; one original native owner calibration choice remains pending; no alternative approved condition established",
+  "ownerQuestionDuplicated": false,
+  "activeExecutable": false,
+  "modelFixtureMethodChanged": false,
+  "phase2MeasuredAllowed": false,
+  "monitorWorkerDoneSent": false
+}

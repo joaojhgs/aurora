@@ -1,0 +1,62 @@
+{
+  "at": "2026-10-21T05:26:27.677333+00:00",
+  "source": "fresh primary case files and kernel PID/start identities",
+  "classification": "verified_wait",
+  "phase": "MEASURED_RUNNING",
+  "epochMeasured": {
+    "attempted": 178,
+    "correct": 175,
+    "incorrect": 0,
+    "failed": 3,
+    "timeouts": 0,
+    "planned": 191,
+    "remaining": 13
+  },
+  "combinedK1": {
+    "attempted": 887,
+    "correct": 872,
+    "incorrect": 0,
+    "failed": 15,
+    "timeouts": 1,
+    "planned": 900,
+    "remaining": 13
+  },
+  "actors": {
+    "3332811": {
+      "state": "S",
+      "startTicks": 132995693,
+      "sameStart": true
+    },
+    "3332919": {
+      "state": "S",
+      "startTicks": 132996503,
+      "sameStart": true
+    },
+    "3333678": {
+      "state": "S",
+      "startTicks": 133003703,
+      "sameStart": true
+    }
+  },
+  "warmups": {
+    "attempted": 15,
+    "correct": 15,
+    "failed": 0
+  },
+  "custody": {
+    "sequence": 147,
+    "cases": 192,
+    "wavFiles": 189,
+    "files": 1575,
+    "errors": []
+  },
+  "terminal": null,
+  "originalAuxiliaryError": "preserved and resolved from same saved15native warmups; not an active blocker",
+  "sameHardDeadlineUtc": "2026-10-21T06:59:42.981693+00:00",
+  "nextRoutineCheckUtc": "2026-10-21T05:31:27.677333+00:00",
+  "freeBytes": 3848781824,
+  "nextOfflineHandoff": "thesis/evidence/k1-http-remaining720-offline-prep-v2173/HANDOFF.json",
+  "sutCallsByObserver": 0,
+  "phoneSeparate": true,
+  "nativeAggregateGoal": "ACTIVE original full scope"
+}

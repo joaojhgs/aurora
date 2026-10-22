@@ -1,0 +1,370 @@
+{
+  "audio": {
+    "channels": 1,
+    "sampleRate": 22050,
+    "sampleWidthBytes": 2,
+    "wavBytes": 219794,
+    "wavSha256": "da0ecc4ad0885746ab6e716585473917ab2b543a505bf0db09ebacfaa7943cbb"
+  },
+  "authAdmission": {
+    "at": "2026-10-21T16:16:17.506591+00:00",
+    "authorizationChanges": false,
+    "bodyBytes": 10784,
+    "bodySha256": "d437ed8c255dfb7e1d85eed824a2d055147aebe312e08195d4e373fca8515ceb",
+    "credentialsCopiedOrLogged": false,
+    "durationMs": 5976.00522,
+    "existingApprovedPeer": "aurora-276bb04e1276201922851f6a222110de",
+    "httpStatus": 200,
+    "newInference": 0,
+    "path": "/api/services",
+    "route": "existing desktop-aurora-tts / worker127.0.0.1:18000",
+    "status": "EXISTING_PEER_BEARER_PROTECTED_HTTP_READ_PASSED"
+  },
+  "candidateManifestSha256": "ce75b965ee5879ebece6ea7dfe133441547d20ccf89ecd5d66ea510bd9645e60",
+  "canonicalModelFiles": {
+    "llm": {
+      "bytes": 563036064,
+      "path": "/home/developer/projects/aurora/.artifacts/local-inference/models/Qwen3.5-0.8B-Q4_0.gguf",
+      "sha256": "57d1997790d1744fba5b40a7317df71ea5e2acee28c47e78f0cce39c0703f8cf"
+    },
+    "stt": {
+      "bytes": 145217532,
+      "path": "/home/developer/.cache/huggingface/hub/models--Systran--faster-whisper-base/blobs/d01c3014881c9c6f3133c182f3d2887eb6ca1c789a7538c5c007196857a0a6a9",
+      "sha256": "d01c3014881c9c6f3133c182f3d2887eb6ca1c789a7538c5c007196857a0a6a9"
+    },
+    "tts": {
+      "bytes": 63531379,
+      "path": "/home/developer/projects/aurora/.git/aurora-handoff-import-20261006/cpu-full-audio-v483/models/en_US-ljspeech-medium.onnx",
+      "sha256": "6f52a751e2349abe7a76735eb09dc1875298c77ea2342ffd2fef79ff81b87f22"
+    },
+    "tts_config": {
+      "bytes": 4972,
+      "path": "/home/developer/projects/aurora/.git/aurora-handoff-import-20261006/cpu-full-audio-v483/models/en_US-ljspeech-medium.onnx.json",
+      "sha256": "141d612cc0a95ed7efc1ca936b845c2364967f2e9217c5dbfcf69fc4d6c65860"
+    }
+  },
+  "cohortId": "aurora-worker-desktop-k1-orca-relayed-http-first270-v2224",
+  "comparisonFamilyId": "aurora-full-audio-capital-base-qwen-piper-v1",
+  "comparisonPolicy": "Existing approved peerBearer HTTP identity differs from historical APIkey; stratify auth/source/residency. LatestP2P app source/configuration matched; parentHTTP history retained, epoch/source/residency latency stratified; no pure-protocol-overhead claim",
+  "cumulativeConditionBudget": {
+    "conditionCapSeconds": 72000,
+    "historicalParentOperationalCapSeconds": 57600,
+    "policy": "Explicit prospective allocation per solemonitor30.73; parent900target/57600cap and all10027.780472366charges preserved; not a nativegoalbudget or hidden oldclock extension",
+    "priorUsedSeconds": 10027.780472366
+  },
+  "draftPreparedAt": "2026-10-16T04:05:10.598170+00:00",
+  "effectiveEnvironment": {
+    "AURORA_STT_WHISPER_DOWNLOAD_ROOT": "/home/developer/.cache/huggingface/hub/models--Systran--faster-whisper-base/snapshots/ebe41f70d5b6dfa9166e2c581c45c9c0cfc57b66",
+    "LD_LIBRARY_PATH": "/home/developer/projects/aurora/.git/aurora-handoff-import-20261006/cpu-full-audio-v487/portable-libs/usr/lib/aarch64-linux-gnu",
+    "MKL_NUM_THREADS": "2",
+    "NLTK_DATA": "/home/developer/projects/aurora/.git/aurora-handoff-import-20261006/cpu-full-audio-v487/nltk-data",
+    "OMP_NUM_THREADS": "2",
+    "OPENBLAS_NUM_THREADS": "2"
+  },
+  "effectiveSetup": {
+    "llm": {
+      "actualClient": null,
+      "actualConstructor": {
+        "chat_format": "chatml-function-calling",
+        "max_tokens": 128,
+        "min_p": 0.0,
+        "model_path": "/home/developer/projects/aurora/.artifacts/local-inference/models/Qwen3.5-0.8B-Q4_0.gguf",
+        "n_batch": 64,
+        "n_ctx": 4096,
+        "n_gpu_layers": 0,
+        "n_threads": 2,
+        "repeat_penalty": 1.0,
+        "seed": 42,
+        "temperature": 0.0,
+        "top_k": 1,
+        "top_p": 1.0,
+        "verbose": true
+      },
+      "actualCpuProof": [],
+      "actualGpuProof": [],
+      "actualOffloadedLayers": 0,
+      "backend": "llama-cpp-python/CPU",
+      "effectiveWrapperSettings": {
+        "n_batch": 64,
+        "n_ctx": 4096,
+        "n_gpu_layers": 0,
+        "n_threads": 2,
+        "seed": 42,
+        "verbose": true
+      },
+      "hardware": "coding-worker ARM64 CPU",
+      "quantization": "Q4_0",
+      "runtimeProofForThisCondition": "pending normal warmup gate; declared frozen CPU options checked against actual constructor before measured1",
+      "weights": {
+        "bytes": 563036064,
+        "path": "/home/developer/projects/aurora/.artifacts/local-inference/models/Qwen3.5-0.8B-Q4_0.gguf",
+        "sha256": "57d1997790d1744fba5b40a7317df71ea5e2acee28c47e78f0cce39c0703f8cf"
+      }
+    },
+    "stt": {
+      "actualComputeType": "int8_float32",
+      "actualDevice": "cpu",
+      "decode": {
+        "actualProviderInputHash": null,
+        "actualProviderInputHashReason": "Preprocessed numpy argument was not separately recorded in this passing pilot; full WAV hash/frame count and service source/pinned numpy version are retained.",
+        "beamSize": 5,
+        "inputSampleRate": 22050,
+        "language": null,
+        "modelSampleRate": 16000,
+        "resample": "single source-linked numpy.interp to float32; padded source WAV 109875frames/22050Hz; actual provider input hash remains separately recorded or null with reason",
+        "role": "accurate",
+        "vadFilter": true
+      },
+      "engine": "faster_whisper/ctranslate2",
+      "weightFiles": [
+        {
+          "bytes": 2309,
+          "path": "/home/developer/.cache/huggingface/hub/models--Systran--faster-whisper-base/snapshots/ebe41f70d5b6dfa9166e2c581c45c9c0cfc57b66/config.json",
+          "sha256": "56a6d8110d311f19c8f0471e562832c7527f146b567275bfca59fcf7c184da9a"
+        },
+        {
+          "bytes": 145217532,
+          "path": "/home/developer/.cache/huggingface/hub/models--Systran--faster-whisper-base/snapshots/ebe41f70d5b6dfa9166e2c581c45c9c0cfc57b66/model.bin",
+          "sha256": "d01c3014881c9c6f3133c182f3d2887eb6ca1c789a7538c5c007196857a0a6a9"
+        },
+        {
+          "bytes": 2203239,
+          "path": "/home/developer/.cache/huggingface/hub/models--Systran--faster-whisper-base/snapshots/ebe41f70d5b6dfa9166e2c581c45c9c0cfc57b66/tokenizer.json",
+          "sha256": "fb7b63191e9bb045082c79fd742a3106a12c99513ab30df4a0d47fa6cb6fd0ab"
+        },
+        {
+          "bytes": 459861,
+          "path": "/home/developer/.cache/huggingface/hub/models--Systran--faster-whisper-base/snapshots/ebe41f70d5b6dfa9166e2c581c45c9c0cfc57b66/vocabulary.txt",
+          "sha256": "34ce3fe1c5041027b3f8d42912270993f986dbc4bb34cf27f951e34a1e453913"
+        }
+      ]
+    },
+    "tts": {
+      "actualCall": null,
+      "executable": {
+        "bytes": 382,
+        "path": "/home/developer/projects/aurora/.git/aurora-handoff-import-20261006/cpu-full-audio-v483/env/bin/piper",
+        "sha256": "7cbc3e2a6c86ed33e91d8ab142030d0d34580fd3cc37e84b5cfa3056f55fcd7c"
+      },
+      "outputFormat": "monoPCM16/22050Hz",
+      "perChildORTProviderEnumeration": null,
+      "perChildORTProviderEnumerationReason": "Actual Piper CLI invocation has useCuda=false; per-child execution-provider enumeration not recorded.",
+      "provider": {
+        "config_sha256": "141d612cc0a95ed7efc1ca936b845c2364967f2e9217c5dbfcf69fc4d6c65860",
+        "model_sha256": "6f52a751e2349abe7a76735eb09dc1875298c77ea2342ffd2fef79ff81b87f22",
+        "peer_id_sha256": "77421aa81ce7ae2e865455348e9aa5ae17013d8f5e1f72d38d71d09f110ef868",
+        "provider_class": "app.services.tts.providers.piper.PiperTTSProvider",
+        "receiver_id": "personal-k1-http-piper-v2220",
+        "source_sha256": "25026c4031e07d2e7cdac2afe269f78611ed375e53d3b64cd751b31867a552cf"
+      },
+      "runtimeProofForThisCondition": "pending normal warmup gate",
+      "voiceConfig": {
+        "bytes": 4972,
+        "path": "/home/developer/projects/aurora/.git/aurora-handoff-import-20261006/cpu-full-audio-v483/models/en_US-ljspeech-medium.onnx.json",
+        "sha256": "141d612cc0a95ed7efc1ca936b845c2364967f2e9217c5dbfcf69fc4d6c65860"
+      },
+      "weights": {
+        "bytes": 63531379,
+        "path": "/home/developer/projects/aurora/.git/aurora-handoff-import-20261006/cpu-full-audio-v483/models/en_US-ljspeech-medium.onnx",
+        "sha256": "6f52a751e2349abe7a76735eb09dc1875298c77ea2342ffd2fef79ff81b87f22"
+      }
+    }
+  },
+  "epochLineage": {
+    "conditionTargetMeasured": 900,
+    "epochId": "V2224",
+    "failed180Retried": false,
+    "firstConditionMeasuredIndex": 181,
+    "lastConditionMeasuredIndex": 450,
+    "parentManifestSha256": "6bc65cf5cc3c4eddb90b80b0764a01e6a9fc4afbed66f33c731e3ab58528e101",
+    "parentSealSha256": "613158562e914f5d952f009b87c3d6438b350d4809d6a97f9bf82ed301918829",
+    "plannedEpochMeasured": 270,
+    "priorAttemptedMeasured": 180,
+    "priorCorrect": 179,
+    "priorFailed": 1
+  },
+  "freezeAt": "2026-10-21T16:19:17.196419+00:00",
+  "freshWorkerResources": {
+    "at": "2026-10-21T16:19:17.198123+00:00",
+    "freeBytes": 3778011136,
+    "memAvailableBytes": 5241311232
+  },
+  "immutableRuntimeConfigInput": {
+    "bytes": 15958,
+    "path": "/home/developer/projects/aurora/.git/aurora-handoff-import-20261006/distributed-k1-orca-relayed-launch-v1197/runtime-config.json",
+    "referenceOnlyNoCredentialCopy": true,
+    "sha256": "2b8cc043fc75c8978e2528379badb9fff7cd2ad2bc82729e61c560d35bbd1cc1"
+  },
+  "implementation": {
+    "adapterSha256": "fe134e55b707908c242fdf1367366afa001efd56456c41b49fc7d80dc197bee5",
+    "bindingsSha256": "52182f956b34788ecbfbbb241c8243ff88baebe2874e3605791793777ed0dc91",
+    "bootstrapSha256": "05303915a1617a3fbc163017902fa084e687257d7b0af9bc692877d08a6a3b7e",
+    "controllerSha256": "2403ae5a81f5449461d55a8b2742d3c4639057c2fb36ffaa2dff0d1f5daa00e4",
+    "observerSha256": "784cc4bffc0d6824bbe378d17a7f632d587ca0a315896b048b2ebef727082df5",
+    "receiverProofSha256": "7a78023aac7f2012ebca1793e31303f135c5d7c518d5f65fb324692eb72d905e",
+    "resourceSamplerSha256": "8f62ec378e74036d4539d9159e3caf29b8fd7a9115de1ab0f482dfd58b6e1857",
+    "runnerSha256": "a260566d13a3a6bf80924a0c683058f98628e8b6ec4d2781165960afc6641fb3",
+    "telemetrySha256": "8129ffe7591a47a0107ede53b101aead9fc1f58b92f0c0c4203176cc7608325d"
+  },
+  "measurementPlan": {
+    "conditionOverallCapSeconds": 24000,
+    "controllerOuterCapSeconds": 24300,
+    "plannedEpochMeasured": 270,
+    "plannedMeasuredPerCondition": 900,
+    "plannedWarmups": 15,
+    "requestCapSeconds": 180,
+    "sessionAllInclusiveCapSeconds": 60000
+  },
+  "models": {
+    "llm": "57d1997790d1744fba5b40a7317df71ea5e2acee28c47e78f0cce39c0703f8cf",
+    "stt": "d01c3014881c9c6f3133c182f3d2887eb6ca1c789a7538c5c007196857a0a6a9",
+    "tts": "6f52a751e2349abe7a76735eb09dc1875298c77ea2342ffd2fef79ff81b87f22",
+    "ttsConfig": "141d612cc0a95ed7efc1ca936b845c2364967f2e9217c5dbfcf69fc4d6c65860"
+  },
+  "orcaRelay": {
+    "authenticatedHealthReceiptSha256": "daa86dfbf8e2c2abe9a971480539d636f9176df84e74aa77a18472f356694b9a",
+    "clockScope": "requester HTTP duration includes relay hop and server; native receiver stage uses receiver clock; no cross-host timestamp subtraction",
+    "destinationExecutionHost": "ssh:ssh-1786238480967-semdev",
+    "existingMainPid": 421717,
+    "existingService": "orca-network-aurora-tts.service",
+    "forwardReceiptSha256": "dc52eb1403c502cf939eef98674ccb390441e4617e5b5e0e761e9f2736a1cc76",
+    "providerDestination": "100.64.0.3:8000",
+    "relayOnlyLatency": "not independently instrumented; no fabricated relay-only span or percentiles",
+    "routeId": "desktop-aurora-tts",
+    "routeReceiptSha256": "d434623d9085d920738c5e86824c7b9a303d1ce2c4e06f6bcbee31042eefe66b",
+    "runtimeId": "cc9e3275-28c6-4c45-85cc-bdcd2262aa7d",
+    "sourceExecutionHost": "ssh:ssh-oci-coding-worker",
+    "workerIngress": "127.0.0.1:18000"
+  },
+  "parentComparableWorkerManifestSha256": "acbdc1d3827502513237220fcc3bf60cc3a007b7dc246b1a4b21b1a0ef8ce5fc",
+  "parentFrozenCohortSHA256": "acbdc1d3827502513237220fcc3bf60cc3a007b7dc246b1a4b21b1a0ef8ce5fc",
+  "precedingStartupFailure": {
+    "cause": "historicalAPIkeyNotConfiguredForCurrentProvider",
+    "epoch": "V2220",
+    "measuredAttempted": 0,
+    "retained": true,
+    "warmupsAttempted": 1,
+    "warmupsFailed": 1
+  },
+  "proposedRemoteTtsEndpoint": "http://127.0.0.1:18000/api/TTS/Synthesize",
+  "prospectiveSessionAllocation": {
+    "absoluteDeadlineUtc": "2026-10-21T23:36:07.231887+00:00",
+    "allInclusiveSeconds": 60000,
+    "authority": "Existing owner fullmatrix900percondition + solemonitor30.73 explicit fresh finite lifecycle/allocation; preserve alloldcaps/charges/raw",
+    "excludedWarmups": 15,
+    "executionSourceIndex": "thesis/evidence/k1-http-remaining720-admission-v2204/EXECUTION-SOURCE-INDEX-v2216.json",
+    "executionSourceIndexSha256": "839209be21b4946be8d3d0a447a64b2171b41a0eab71fe26d3389c00a61510b3",
+    "globalFirst": 181,
+    "globalLast": 900,
+    "historicalParentCapSeconds": 57600,
+    "methodologyFullMirror": "thesis/methodology/owner-requirements-20261021-ff4670cd.md",
+    "methodologySha256": "ff4670cdea55160a1556ba2d5eb68316ca549ccb33bd99b8b7173d05ac9151ad",
+    "nativeGoalBudget": "unbudgeted unchanged; experimental wall allocation only",
+    "nativeGoalStatus": "active",
+    "nativeGoalThread": "01a112a5-d6bb-74e2-bf7c-ace73cb513b5",
+    "newMeasured": 720,
+    "newMeasuredAtFreeze": 0,
+    "newProvidersLaunchedAtFreeze": 0,
+    "oldProviderFence": {
+      "controllerPid": 251472,
+      "controllerStartTicks": 29038396,
+      "manifestSha256": "716b893424f28ef19a1820820000c8a30fb6adbf87252c9f65e1bca30e717bb9",
+      "oldEffectiveDeadlineUtc": "2026-10-21T12:41:24.961804+00:00",
+      "receiverPid": 251473,
+      "receiverStartTicks": 29038457
+    },
+    "postprocessingReserveSeconds": 2400,
+    "priorRuntimeChargeSeconds": 10027.780472366,
+    "prospective900AccountingCapSeconds": 72000,
+    "providerMaximumAbsoluteDeadlineUtc": "2026-10-21T22:56:07.231887+00:00",
+    "providerNominalLifetimeSeconds": 55000,
+    "requestCapSeconds": 180,
+    "rootTerminal": "term_6a00d9ee-792a-4daf-8578-236290e33108",
+    "run": "run_e6054e76e9fc",
+    "schema": "aurora.explicit_k1_http_session_allocation.v1",
+    "startedAtUtc": "2026-10-21T06:56:07.231887+00:00",
+    "state": "CLOCK_FROZEN_BEFORE_ANY_LIFECYCLE_ACTION",
+    "warmupsAtFreeze": 0,
+    "workerConditionCapSeconds": 55200,
+    "workerControllerOuterSeconds": 55800
+  },
+  "providerDeadlinePolicy": "Original provider57840second cap is preserved; no live deadline extension/restart. Requester retains180second/request and57600second condition cap; record any expiry/failure and unattempted denominator honestly.",
+  "providerDeadlineUtc": "2026-10-21T22:45:52.468654+00:00",
+  "providerManifestSha256": "950d449e3c337764a654ae4dd08c66623f50f96617615328be0cd8c54a4eaea2",
+  "providerOutput": "/home/developer/projects/aurora/thesis/campaigns/worker-desktop-k1-http-provider-v2220/provider",
+  "providerReceiver": {
+    "pid": 1440196,
+    "startTicks": 35427408,
+    "state": "S"
+  },
+  "providerRuntimeConfigSha256": "1b2e464a9dd2a191954504161862d3aa19a991126eb2b08c4de55a40778fd002",
+  "remainingActualAdmission": [
+    "15correct ordinaryfullaudio excludedwarmups",
+    "actual localSTT/LLM and newreceiverTTS native joins",
+    "postwarmup conservative270capacity",
+    "firstnew181case+validWAV"
+  ],
+  "remoteTtsAuthBinding": "existing_authorized_peer_bearer",
+  "remoteTtsEndpointSha256": "f479f9eb33d508640167787da28f14067bdcf72b41d7e29f2a056cb48a1567df",
+  "remoteTtsReceiver": {
+    "config_sha256": "141d612cc0a95ed7efc1ca936b845c2364967f2e9217c5dbfcf69fc4d6c65860",
+    "model_sha256": "6f52a751e2349abe7a76735eb09dc1875298c77ea2342ffd2fef79ff81b87f22",
+    "peer_id_sha256": "77421aa81ce7ae2e865455348e9aa5ae17013d8f5e1f72d38d71d09f110ef868",
+    "provider_class": "app.services.tts.providers.piper.PiperTTSProvider",
+    "receiver_id": "personal-k1-http-piper-v2220",
+    "source_sha256": "25026c4031e07d2e7cdac2afe269f78611ed375e53d3b64cd751b31867a552cf"
+  },
+  "routeClassification": {
+    "directLAN": false,
+    "directWAN": false,
+    "intermediaryHop": true,
+    "meshOrICE": false,
+    "physicalPathOrLocationInferred": false
+  },
+  "routeLabel": "ORCA-RELAYED HTTP",
+  "runtime": {
+    "resolvedInterpreterSha256": "1e463bf849bb038214f6d4278f1aa6e079f307c04db5c9ed192543d5d866fa97",
+    "venvExecutable": "/home/developer/projects/aurora/.git/aurora-handoff-import-20261006/cpu-audio-campaign-v491/env/bin/python"
+  },
+  "runtimeConfigCopyPolicy": "Existing private operational configuration referenced; parentfrozeninput untouched; no config/env/credential copy",
+  "runtimeConfigSha256": "2b8cc043fc75c8978e2528379badb9fff7cd2ad2bc82729e61c560d35bbd1cc1",
+  "runtimeVersions": {
+    "packages": {
+      "ctranslate2": "4.7.1",
+      "faster-whisper": "1.1.1",
+      "llama-cpp-python": "0.3.19",
+      "numpy": "2.2.6",
+      "onnxruntime": "1.20.1",
+      "piper-tts": "1.2.0"
+    }
+  },
+  "schema": "aurora.k1.http_remaining_condition.v2224",
+  "sourceClosure": {
+    "cpuSourceInventorySha256": "000202cdddb9803d503fc44f8aaf58eb469475890751a310193418330aa79937",
+    "cpuSourceRoot": "/home/developer/projects/aurora/thesis/sources/k1-speech-contract-compat-v2151/worker/source",
+    "equivalenceScope": "Exact latestK1P2P400file snapshot, matching localSTT/LLM configurations; oldHTTP4file source delta and separate latency strata retained",
+    "equivalenceVerified": true,
+    "witness": "thesis/evidence/k1-http-remaining720-admission-v2204/SOURCE-WITNESS-v2220.json",
+    "witnessSha256": "4c41d69a6ed1dc52d43ae9ac7b34947d4038ece03bdca5e96864d17f6758f051"
+  },
+  "stagePlacement": {
+    "llm": "workerCPU",
+    "stt": "workerCPU",
+    "tts": "Personal PiperCPU"
+  },
+  "status": "FROZEN_ONLY181_450_REAL15_NATIVE_WARMUPS_PENDING",
+  "transportClassification": "ORCA_RELAYED_HTTP_EXISTING_INTERMEDIARY_NOT_DIRECT_HTTP_OR_MESH",
+  "workerHardware": {
+    "CPUThreads": 2,
+    "GPUOffloadLayers": 0,
+    "admissionEvidence": {
+      "bytes": 370,
+      "path": "/home/developer/projects/aurora/.git/aurora-handoff-import-20261006/worker-padded900-prep-v737/fresh-resource-admission-v737.json",
+      "sha256": "cff47ed3ca7002c189cb172ca535f5e38c09a8b8089f68c881e48e8c29c92006"
+    },
+    "diskFloorBytes": 500000000,
+    "host": "code-worker",
+    "machine": "aarch64",
+    "resourceFloorBytes": 2500000000
+  }
+}

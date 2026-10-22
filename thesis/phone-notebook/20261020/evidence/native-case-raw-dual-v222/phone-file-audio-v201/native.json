@@ -1,0 +1,17 @@
+{
+  "at": "2026-10-22T06:44:16.538Z",
+  "status": "NATIVE_FILE_AUDIO_SETUP_OR_FLOW_FAILED_PRESERVED",
+  "caseId": "phone-local-46535d10-cf91-4927-9e9b-33e48b545bb5",
+  "measuredCases": 0,
+  "pilotCases": 0,
+  "route": "ALL_LOCAL_PHONE",
+  "adbRole": "setup/control/custody only; full timed pipeline executes inside phone without ADB round trips",
+  "calls": [
+    {
+      "command": "aurora_android_voice_live_test_prepare_file",
+      "at": "2026-10-22T06:44:16.615Z"
+    }
+  ],
+  "error": "Android WebView CDP command timed out: Runtime.evaluate",
+  "finishedAt": "2026-10-22T06:47:16.720Z"
+}

@@ -1,0 +1,19 @@
+{
+  "at": "2026-10-17T20:58:02.785959+00:00",
+  "host": "code-worker",
+  "disk": {
+    "total": 109128826880,
+    "used": 101893984256,
+    "free": 7218065408
+  },
+  "memory": {
+    "MemTotal": 12506693632,
+    "MemAvailable": 4202029056
+  },
+  "loadavg": [
+    8.19970703125,
+    8.29345703125,
+    7.10693359375
+  ],
+  "scope": "Local read-only resource evidence; not a substitute for unavailable Orca account quota/model admission"
+}

@@ -1,0 +1,13 @@
+{
+  "observedAt": "2026-10-16T13:15:09.602836+00:00",
+  "host": "personal.skyron-server",
+  "source": "saved native-app.private.log of V1049; no new model invocation",
+  "lines": [
+    "[aurora][stderr] ggml_vulkan: Found 1 Vulkan devices:",
+    "[aurora][stderr] ggml_vulkan: 0 = AMD Radeon RX 7600 (RADV NAVI33) (radv) | uma: 0 | fp16: 1 | bf16: 0 | warp size: 64 | shared memory: 65536 | int dot: 0 | matrix cores: KHR_coopmat",
+    "[aurora][stderr] llama_model_load_from_file_impl: using device Vulkan0 (AMD Radeon RX 7600 (RADV NAVI33)) (0000:03:00.0) - 8162 MiB free",
+    "[aurora][stderr] load_tensors: offloading output layer to GPU",
+    "[aurora][stderr] load_tensors: offloading 23 repeating layers to GPU",
+    "[aurora][stderr] load_tensors: offloaded 25/25 layers to GPU"
+  ]
+}

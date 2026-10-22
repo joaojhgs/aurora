@@ -1,0 +1,10 @@
+{
+  "at": "2026-10-17T23:18:24.248900+00:00",
+  "url": "http://127.0.0.1:18000/openapi.json",
+  "method": "GET",
+  "readOnly": true,
+  "modelCalls": 0,
+  "errorType": "HTTPError",
+  "error": "HTTP Error 401: Unauthorized",
+  "elapsedSeconds": 6.309876328799874
+}

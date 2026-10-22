@@ -1,0 +1,29 @@
+{
+  "at": "2026-10-14T22:03:41.750789+00:00",
+  "host": "personal.skyron-server",
+  "pid": 2793447,
+  "backendPid": 2793190,
+  "instrumentedPythonPid": 2793197,
+  "mainEntrypoint": [
+    "/home/developer/.local/bin/uv",
+    "run",
+    "--active",
+    "--no-sync",
+    "python",
+    "main.py"
+  ],
+  "workloadSHA256": "396ce032cbf58e55ce7485d234f96795ac5a42986cc431225c792ea8025e748c",
+  "bundleSHA256": "93a4f4a0e9699a0fe559a3f64686976c30e62da3865f486dd8b4de4b7e9427e9",
+  "TTSReady": true,
+  "sameModelsSettingsAudio": true,
+  "changedSource": "reviewed_optin_correlation_and_main_only_observer",
+  "purpose": "T0_capture_admission_NOT_task_quality_retry",
+  "logicalFlowNumberAcrossVoiceHistory": 5,
+  "thisBlockLogicalFlowsPlanned": 1,
+  "capSeconds": 600,
+  "measurementStarted": false,
+  "acceptedMeasuredSamples": 0,
+  "productionReactUI": false,
+  "physicalMicrophone": false,
+  "physicalAudibility": false
+}

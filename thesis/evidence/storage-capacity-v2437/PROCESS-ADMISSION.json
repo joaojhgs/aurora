@@ -1,0 +1,23 @@
+{
+  "at": "2026-10-22T08:35:24.597442+00:00",
+  "cacheOwnerUid": 1002,
+  "readerUid": 1002,
+  "permissionCounts": {
+    "fd_denied_other_uid": 173,
+    "fd_denied_cache_owner": 4
+  },
+  "cacheOwnerCompilerCandidates": [
+    {
+      "pid": 325250,
+      "comm": "node-MainThread",
+      "cwd": "/home/developer/.hermes"
+    },
+    {
+      "pid": 3930935,
+      "comm": "node-MainThread",
+      "cwd": "/home/developer/.hermes/hermes-agent/ui-tui"
+    }
+  ],
+  "allAccessibleProcessFDsCandidateMatches": "None in CANDIDATE.json scan; root/other-UID descriptors not inspected",
+  "deletionAuthorized": false
+}

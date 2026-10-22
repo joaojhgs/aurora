@@ -1,0 +1,18 @@
+[
+  {
+    "label": "bash syntax; Python heredocs parsed separately",
+    "argv": [
+      "flock",
+      "--nonblock",
+      "/tmp/aurora-global-build.lock",
+      "timeout",
+      "--signal=INT",
+      "--kill-after=10s",
+      "60s",
+      "bash",
+      "-n",
+      "scripts/hosted_peer_e2e.sh"
+    ],
+    "exit_code": 0
+  }
+]

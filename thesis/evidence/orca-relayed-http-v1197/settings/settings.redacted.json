@@ -1,0 +1,535 @@
+{
+  "derivativeOnly": true,
+  "doesNotChangeRunningConfig": true,
+  "originalPrivateSha256": "2b8cc043fc75c8978e2528379badb9fff7cd2ad2bc82729e61c560d35bbd1cc1",
+  "redactedPaths": [
+    ".services.gateway.api.token_secret",
+    ".services.gateway.webrtc.password",
+    ".services.auth.api_keys",
+    ".services.orchestrator.llm.third_party.openai.options.api_key",
+    ".services.orchestrator.llm.third_party.huggingface_endpoint.options.access_token",
+    ".services.tooling.plugins.brave_search.api_key"
+  ],
+  "settings": {
+    "services": {
+      "auth": {
+        "api_keys": "<REDACTED>",
+        "audit_enabled": true,
+        "audit_retention_days": 90,
+        "default_pairing_permissions": [],
+        "enabled": true,
+        "mesh_peer_orphan_prune_max_rows": 256,
+        "mesh_peer_orphan_pruning_enabled": true,
+        "mesh_peer_orphan_retention_seconds": 2592000,
+        "pairing_code_expiry_minutes": 5,
+        "pairing_max_attempts_per_ip": 5,
+        "session_token_expiry_hours": 24,
+        "token_expiry_days": 365,
+        "webrtc_auth_timeout_seconds": 10.0,
+        "webrtc_pairing_timeout_seconds": 300.0
+      },
+      "config": {
+        "enabled": true
+      },
+      "db": {
+        "embeddings": {
+          "use_local": false
+        },
+        "enabled": true,
+        "mesh_routing": {
+          "allowed_provider_peer_ids": null,
+          "fallback": "local",
+          "min_version": null,
+          "prefer": "local",
+          "require_explicit_selector": false,
+          "required_provider_capability_tags": [],
+          "required_provider_feature_ids": []
+        },
+        "mesh_sharing": {
+          "allowed_peers": null,
+          "fallback": "local",
+          "max_concurrent": 10,
+          "min_version": null,
+          "prefer": "local",
+          "require_explicit_selector": false,
+          "required_capabilities": [],
+          "share": false,
+          "unshared_feature_ids": [],
+          "unshared_method_ids": []
+        }
+      },
+      "gateway": {
+        "api": {
+          "cors": {
+            "allow_credentials": true,
+            "origins": [
+              "http://127.0.0.1:37469"
+            ]
+          },
+          "host": "127.0.0.1",
+          "port": 37469,
+          "request_timeout_s": 180.0,
+          "token_secret": "<REDACTED>"
+        },
+        "enabled": true,
+        "mesh_network": {
+          "enabled": false,
+          "node_name": "",
+          "peer_selection": "lowest_latency",
+          "ping_interval_s": 30.0,
+          "registry_announce_interval_s": 60.0,
+          "remote_timeout_s": 30.0,
+          "stale_peer_timeout_s": 120.0,
+          "version_policy": "compatible"
+        },
+        "signaling_mqtt": {
+          "brokers": [
+            "wss://broker.emqx.io:8084/mqtt",
+            "wss://test.mosquitto.org:8081/mqtt"
+          ],
+          "topic_root": "aurora"
+        },
+        "webrtc": {
+          "app_id": "aurora",
+          "enable_app_layer_e2ee": false,
+          "enabled": false,
+          "encrypt_signaling": true,
+          "legacy_event_broadcast": true,
+          "password": "<REDACTED>",
+          "room": "default",
+          "strategy": "mqtt",
+          "stun_servers": [
+            "stun:stun.l.google.com:19302"
+          ],
+          "turn_servers": []
+        }
+      },
+      "orchestrator": {
+        "enabled": true,
+        "hardware_acceleration": false,
+        "llm": {
+          "local": {
+            "huggingface_pipeline": {
+              "options": {
+                "device": null,
+                "max_tokens": null,
+                "model": "microsoft/DialoGPT-medium",
+                "model_kwargs": {},
+                "pipeline_kwargs": {},
+                "temperature": 0.7,
+                "torch_dtype": "auto"
+              }
+            },
+            "llama_cpp": {
+              "options": {
+                "chat_format": "chatml-function-calling",
+                "max_tokens": 128,
+                "min_p": 0.0,
+                "model_path": "/home/developer/projects/aurora/.artifacts/local-inference/models/Qwen3.5-0.8B-Q4_0.gguf",
+                "n_batch": 64,
+                "n_ctx": 4096,
+                "n_gpu_layers": 0,
+                "n_threads": 2,
+                "repeat_penalty": 1.0,
+                "seed": 42,
+                "temperature": 0.0,
+                "top_k": 1,
+                "top_p": 1.0,
+                "verbose": true
+              }
+            }
+          },
+          "mesh_peer": {
+            "peer_id": null,
+            "provider_id": null,
+            "resource_namespace": "inference",
+            "service_instance_id": null,
+            "timeout_s": 60
+          },
+          "provider": "llama_cpp",
+          "remote_peer": {
+            "peer_id": null,
+            "provider_id": null,
+            "resource_namespace": "inference",
+            "service_instance_id": null,
+            "timeout_s": 60
+          },
+          "third_party": {
+            "huggingface_endpoint": {
+              "options": {
+                "access_token": "<REDACTED>",
+                "endpoint_url": "",
+                "max_tokens": 512,
+                "model": "",
+                "temperature": 0.7
+              }
+            },
+            "openai": {
+              "options": {
+                "api_key": "<REDACTED>",
+                "max_tokens": 512,
+                "model": "gpt-4o",
+                "temperature": 0.7
+              }
+            }
+          }
+        },
+        "mesh_routing": {
+          "allowed_provider_peer_ids": null,
+          "fallback": "local",
+          "min_version": null,
+          "prefer": "local",
+          "require_explicit_selector": false,
+          "required_provider_capability_tags": [],
+          "required_provider_feature_ids": []
+        },
+        "mesh_sharing": {
+          "allowed_peers": null,
+          "fallback": "local",
+          "max_concurrent": 10,
+          "min_version": null,
+          "prefer": "local",
+          "require_explicit_selector": false,
+          "required_capabilities": [],
+          "share": false,
+          "unshared_feature_ids": [],
+          "unshared_method_ids": []
+        },
+        "routing": {
+          "dispatch_default": {
+            "enabled": false,
+            "peer_id": null,
+            "provider_id": null,
+            "resource_namespace": null,
+            "service_instance_id": null,
+            "timeout_s": null
+          },
+          "inference_default": {
+            "model_id": null,
+            "peer_id": null,
+            "provider": "configured",
+            "provider_id": null,
+            "resource_namespace": "inference",
+            "service_instance_id": null,
+            "timeout_s": 60
+          }
+        }
+      },
+      "scheduler": {
+        "enabled": false,
+        "mesh_routing": {
+          "allowed_provider_peer_ids": null,
+          "fallback": "local",
+          "min_version": null,
+          "prefer": "local",
+          "require_explicit_selector": false,
+          "required_provider_capability_tags": [],
+          "required_provider_feature_ids": []
+        },
+        "mesh_sharing": {
+          "allowed_peers": null,
+          "fallback": "local",
+          "max_concurrent": 10,
+          "min_version": null,
+          "prefer": "local",
+          "require_explicit_selector": false,
+          "required_capabilities": [],
+          "share": false,
+          "unshared_feature_ids": [],
+          "unshared_method_ids": []
+        }
+      },
+      "stt": {
+        "coordinator": {
+          "ambient_transcription": {
+            "chunk_duration": 3.0,
+            "enable": false,
+            "filter_short_transcriptions": true,
+            "min_transcription_length": 10,
+            "storage_path": "ambient_logs/"
+          },
+          "audio_input": {
+            "channels": 1,
+            "chunk_size": 1024,
+            "device_index": null,
+            "format": "int16",
+            "sample_rate": 16000
+          },
+          "enabled": false,
+          "mesh_routing": {
+            "allowed_provider_peer_ids": null,
+            "fallback": "local",
+            "min_version": null,
+            "prefer": "local",
+            "require_explicit_selector": false,
+            "required_provider_capability_tags": [],
+            "required_provider_feature_ids": []
+          },
+          "mesh_sharing": {
+            "allowed_peers": null,
+            "fallback": "local",
+            "max_concurrent": 10,
+            "min_version": null,
+            "prefer": "local",
+            "require_explicit_selector": false,
+            "required_capabilities": [],
+            "share": false,
+            "unshared_feature_ids": [],
+            "unshared_method_ids": []
+          },
+          "multi_turn_enabled": false,
+          "pause_tts_on_listen": true,
+          "session_timeout_s": 30.0
+        },
+        "hardware_acceleration": false,
+        "language": "en-us",
+        "transcription": {
+          "accurate_model": {
+            "compute_type": "int8",
+            "device": "cpu",
+            "enabled": true,
+            "model_size": "base",
+            "model_size_or_path": "/home/developer/.cache/huggingface/hub/models--Systran--faster-whisper-base/snapshots/ebe41f70d5b6dfa9166e2c581c45c9c0cfc57b66"
+          },
+          "enabled": true,
+          "max_speech_duration_s": 30,
+          "mesh_routing": {
+            "allowed_provider_peer_ids": null,
+            "fallback": "local",
+            "min_version": null,
+            "prefer": "local",
+            "require_explicit_selector": false,
+            "required_provider_capability_tags": [],
+            "required_provider_feature_ids": []
+          },
+          "mesh_sharing": {
+            "allowed_peers": null,
+            "fallback": "local",
+            "max_concurrent": 10,
+            "min_version": null,
+            "prefer": "local",
+            "require_explicit_selector": false,
+            "required_capabilities": [],
+            "share": false,
+            "unshared_feature_ids": [],
+            "unshared_method_ids": []
+          },
+          "realtime_model": {
+            "compute_type": "int8",
+            "device": "cpu",
+            "enabled": false,
+            "model_size": null,
+            "model_size_or_path": null
+          },
+          "silence_duration_ms": 900,
+          "vad_enabled": false,
+          "vad_threshold": 0.5
+        },
+        "wakeword": {
+          "backend": "oww",
+          "enabled": false,
+          "inference_framework": "onnx",
+          "mesh_routing": {
+            "allowed_provider_peer_ids": null,
+            "fallback": "local",
+            "min_version": null,
+            "prefer": "local",
+            "require_explicit_selector": false,
+            "required_provider_capability_tags": [],
+            "required_provider_feature_ids": []
+          },
+          "mesh_sharing": {
+            "allowed_peers": null,
+            "fallback": "local",
+            "max_concurrent": 10,
+            "min_version": null,
+            "prefer": "local",
+            "require_explicit_selector": false,
+            "required_capabilities": [],
+            "share": false,
+            "unshared_feature_ids": [],
+            "unshared_method_ids": []
+          },
+          "model_path": null,
+          "threshold": 0.5
+        }
+      },
+      "tooling": {
+        "approval_policy": {
+          "default_approval_mode": "approve_all_local_safe",
+          "default_share": true,
+          "default_token_ttl_seconds": 300,
+          "policy_mode": "enforce",
+          "rules": []
+        },
+        "enabled": false,
+        "hardware_acceleration": {
+          "ocr_bg": false,
+          "ocr_curr": false
+        },
+        "mcp": {
+          "enabled": true,
+          "servers": {}
+        },
+        "mesh_routing": {
+          "allowed_provider_peer_ids": null,
+          "fallback": "local",
+          "min_version": null,
+          "prefer": "local",
+          "require_explicit_selector": false,
+          "required_provider_capability_tags": [],
+          "required_provider_feature_ids": []
+        },
+        "mesh_sharing": {
+          "allowed_peers": null,
+          "fallback": "local",
+          "max_concurrent": 10,
+          "min_version": null,
+          "prefer": "local",
+          "require_explicit_selector": false,
+          "required_capabilities": [],
+          "share": false,
+          "unshared_feature_ids": [],
+          "unshared_method_ids": []
+        },
+        "plugins": {
+          "brave_search": {
+            "activate": false,
+            "api_key": "<REDACTED>"
+          },
+          "gcalendar": {
+            "activate": false
+          },
+          "github": {
+            "activate": false,
+            "app_id": "",
+            "app_private_key": "",
+            "repository": ""
+          },
+          "gmail": {
+            "activate": false
+          },
+          "google": {
+            "credentials_file": ""
+          },
+          "jira": {
+            "activate": false,
+            "api_token": "",
+            "instance_url": "https://jira.atlassian.net/",
+            "username": ""
+          },
+          "openrecall": {
+            "activate": false
+          },
+          "slack": {
+            "activate": false,
+            "user_token": ""
+          }
+        }
+      },
+      "tts": {
+        "default_voice_id": null,
+        "enabled": true,
+        "fallback_provider": null,
+        "hardware_acceleration": false,
+        "mesh_routing": {
+          "allowed_provider_peer_ids": null,
+          "fallback": "local",
+          "min_version": null,
+          "prefer": "local",
+          "require_explicit_selector": false,
+          "required_provider_capability_tags": [],
+          "required_provider_feature_ids": []
+        },
+        "mesh_sharing": {
+          "allowed_peers": null,
+          "fallback": "local",
+          "max_concurrent": 10,
+          "min_version": null,
+          "prefer": "local",
+          "require_explicit_selector": false,
+          "required_capabilities": [],
+          "share": false,
+          "unshared_feature_ids": [],
+          "unshared_method_ids": []
+        },
+        "model_config_file_path": "/home/developer/projects/aurora/.git/aurora-handoff-import-20261006/worker-padded900-prep-v737/models/en_US-ljspeech-medium.onnx.json",
+        "model_file_path": "/home/developer/projects/aurora/.git/aurora-handoff-import-20261006/worker-padded900-prep-v737/models/en_US-ljspeech-medium.onnx",
+        "model_sample_rate": 22050,
+        "piper_path": "/home/developer/projects/aurora/.git/aurora-handoff-import-20261006/cpu-full-audio-v483/env/bin/piper",
+        "provider": "piper",
+        "providers": {
+          "piper": {
+            "cache_dir": "/home/developer/projects/aurora/.git/aurora-handoff-import-20261006/worker-padded900-prep-v737/models/piper-cache",
+            "executable_path": "/home/developer/projects/aurora/.git/aurora-handoff-import-20261006/cpu-full-audio-v483/env/bin/piper",
+            "model_config_file_path": "/home/developer/projects/aurora/.git/aurora-handoff-import-20261006/worker-padded900-prep-v737/models/en_US-ljspeech-medium.onnx.json",
+            "model_file_path": "/home/developer/projects/aurora/.git/aurora-handoff-import-20261006/worker-padded900-prep-v737/models/en_US-ljspeech-medium.onnx",
+            "model_sample_rate": 22050
+          },
+          "pockettts": {
+            "cache_dir": "voice_models/pockettts",
+            "custom_config_path": null,
+            "device": "cpu",
+            "eos_threshold": -4.0,
+            "initialization_timeout_s": 120.0,
+            "lsd_decode_steps": 1,
+            "max_concurrent_requests": 1,
+            "noise_clamp": null,
+            "preload_model": false,
+            "preload_voice_ids": [],
+            "quality_tier": "compact",
+            "quantize": false,
+            "request_timeout_s": 120.0,
+            "temperature": null,
+            "voice_state_dir": "voice_models/pockettts/voices"
+          }
+        },
+        "voice_registry": {
+          "accepted_import_formats": [
+            "wav",
+            "mp3",
+            "mp4",
+            "m4a",
+            "webm"
+          ],
+          "asset_base_url": null,
+          "cache_dir": "voice_models/voice-pack",
+          "clone_max_duration_s": 15.0,
+          "clone_max_source_bytes": 20971520,
+          "clone_max_wire_bytes": 2097152,
+          "clone_min_duration_s": 6.0,
+          "cloning_enabled": true,
+          "manifest_path": "voice_models/voices.manifest.json",
+          "retain_clone_source": false,
+          "standard_pack_enabled": true,
+          "trusted_manifest_public_keys": [],
+          "trusted_manifest_sha256": null,
+          "trusted_manifest_signature": null,
+          "verify_sha256": true
+        }
+      }
+    },
+    "system": {
+      "models_dir": "/home/developer/projects/aurora/.git/aurora-handoff-import-20261006/worker-padded900-prep-v737/models",
+      "primary_language": "en-us",
+      "voice_language": "en-us"
+    },
+    "ui": {
+      "activate": false,
+      "assistant": {
+        "automatic_tts_readback": false
+      },
+      "dark_mode": false,
+      "debug": false,
+      "desktop_overlay": {
+        "auto_close_delay_ms": 1200,
+        "close_behavior": "hide_to_tray",
+        "enabled": true,
+        "persist_positions": true,
+        "text_hotkey": "CommandOrControl+K",
+        "visible_on_all_workspaces": true,
+        "voice_overlay_enabled": true
+      }
+    }
+  }
+}

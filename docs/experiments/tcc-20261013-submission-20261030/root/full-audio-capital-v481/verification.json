@@ -1,0 +1,11 @@
+{
+  "at": "2026-10-15T03:31:45.827161+00:00",
+  "frames": 255,
+  "archiveBytes": 195329,
+  "archiveSHA256": "a39ae341d2adf2d18d12e934083cd511c64f1dbf1a9fefe80a78419e6c575eb5",
+  "archiveMembers": 19,
+  "payloadMembersVerified": 18,
+  "allHashesVerifiedOnce": true,
+  "cohortManifestSHA256": "d34d21d1a9b1a2db03be2ad64c096e77082168b3bcc09c28d442b4a61eaff3d7",
+  "registrySHA256": "cda9eb1931def2c1a177a13b69b6c8d6dd9a58e9a7135d50e51c43721c514cc5"
+}

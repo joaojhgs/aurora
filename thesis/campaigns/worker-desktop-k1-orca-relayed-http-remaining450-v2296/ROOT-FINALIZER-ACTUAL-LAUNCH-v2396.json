@@ -1,0 +1,17 @@
+{
+  "at": "2026-10-22T04:58:08.738271+00:00",
+  "intent": {
+    "path": "thesis/campaigns/worker-desktop-k1-orca-relayed-http-remaining450-v2296/ROOT-FINALIZATION-INTENT-v2396.json",
+    "bytes": 3238,
+    "sha256": "787bdb0f2ccdfd8f5f115da03107184056a91cfa05ec08d7a66e3cab4021eee6"
+  },
+  "pid": 134649,
+  "startTicks": 142354932,
+  "command": [
+    "/home/developer/projects/aurora/.git/aurora-handoff-import-20261006/cpu-audio-campaign-v491/env/bin/python",
+    "/home/developer/projects/aurora/thesis/harness/finish_k1_http_epoch_v2303.py"
+  ],
+  "log": "thesis/campaigns/worker-desktop-k1-orca-relayed-http-remaining450-v2296/FINALIZER-v2396.log",
+  "state": "LAUNCHED_NOT_COMPLETED",
+  "sameNativeGoal": "01a112a5-d6bb-74e2-bf7c-ace73cb513b5"
+}

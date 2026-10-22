@@ -1,0 +1,59 @@
+{
+  "status": "PASS",
+  "runs": [
+    {
+      "name": "python-main-flows",
+      "command": [
+        "/home/developer/projects/aurora/.venv/bin/python",
+        "-m",
+        "pytest",
+        "-o",
+        "addopts=",
+        "-q",
+        "tests/unit/stt_transcription/test_runtime_speech_announcement.py"
+      ],
+      "startedAt": "2026-10-20T20:45:00.627786+00:00",
+      "finishedAt": "2026-10-20T20:45:06.247942+00:00",
+      "capSeconds": 120,
+      "exitCode": 0,
+      "log": "thesis/evidence/k3-stt-runtime-validation-v1905/python-main-flows.log"
+    },
+    {
+      "name": "sdk-main-flow",
+      "command": [
+        "pnpm",
+        "--filter",
+        "@aurora/client",
+        "exec",
+        "vitest",
+        "run",
+        "--environment",
+        "node",
+        "tests/webrtc-manifest.test.ts",
+        "-t",
+        "preserves a full multilingual STT capability through projection verification"
+      ],
+      "startedAt": "2026-10-20T20:45:06.249882+00:00",
+      "finishedAt": "2026-10-20T20:45:09.436570+00:00",
+      "capSeconds": 120,
+      "exitCode": 0,
+      "log": "thesis/evidence/k3-stt-runtime-validation-v1905/sdk-main-flow.log"
+    },
+    {
+      "name": "sdk-typecheck",
+      "command": [
+        "pnpm",
+        "--filter",
+        "@aurora/client",
+        "typecheck"
+      ],
+      "startedAt": "2026-10-20T20:45:09.437295+00:00",
+      "finishedAt": "2026-10-20T20:45:40.263332+00:00",
+      "capSeconds": 120,
+      "exitCode": 0,
+      "log": "thesis/evidence/k3-stt-runtime-validation-v1905/sdk-typecheck.log"
+    }
+  ],
+  "newInference": false,
+  "extraEdgeCaseTests": false
+}

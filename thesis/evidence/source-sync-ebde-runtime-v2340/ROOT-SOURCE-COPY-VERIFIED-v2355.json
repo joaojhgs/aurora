@@ -1,0 +1,22 @@
+{
+  "at": "2026-10-22T01:45:59.626913+00:00",
+  "state": "ROOT_VERIFIED_EXACT_SOURCE_PAYLOAD_COPY_COMPLETE",
+  "operationId": "source-delta-v33-copy-v2353-20261022",
+  "admission": "thesis/evidence/source-sync-ebde-runtime-v2340/SOURCE-DELTA-TRANSFER-ADMISSION-v2353.json",
+  "receiverReceipt": "thesis/evidence/source-sync-ebde-runtime-v2340/NOTEBOOK-SOURCE-RECEIVER-RECEIPT-v2355.json",
+  "receiverReceiptSha256": "ac098d1b746364dda9a3d9237e4cd138e72e49b3ed1db26fe1680111d161e5cb",
+  "totalBytes": 3913736,
+  "frames": 43,
+  "elapsedSeconds": 70.80041577600059,
+  "fourLengthsAndSha256Match": true,
+  "finishedWithinExactAdmittedWindow": true,
+  "sourceSha": "ebde3a8acf6315f920d03593845f17a1fc65a733",
+  "nextOwnedByExistingSetupWorker": [
+    "current TTY/process closure receipt",
+    "immutable1959source blob/mode assembly verification",
+    "runtime/app/native readiness under actual guards"
+  ],
+  "rootPhoneQueries": 0,
+  "newSutCalls": 0,
+  "mainReservationUnchanged": true
+}

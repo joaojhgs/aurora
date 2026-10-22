@@ -1,0 +1,59 @@
+{
+  "schema": "aurora.thesis.canonical-source-inventory.v747",
+  "at": "2026-10-15T23:13:02.089177+00:00",
+  "status": "PARTIAL_SOURCE_ONLY_NOT_EXECUTABLE_SETUP",
+  "entries": [
+    {
+      "canonical": "thesis/harness/python-cpu-v1/runner.py",
+      "bytes": 54617,
+      "sha256": "7a4b01b357e235fdc70c8ad6d80f5254d854b145d529b3e464759da2b498146d",
+      "retainedOrigin": ".git/aurora-handoff-import-20261006/worker-padded900-prep-v737/runner.py",
+      "originBytes": 54409,
+      "originSHA256": "d17a7dcb9aa2c57aaf8c83f2fb15505da9bfd73572f73cb9ebd841eb425c62e3",
+      "byteIdentical": false
+    },
+    {
+      "canonical": "thesis/harness/python-cpu-v1/bootstrap.py",
+      "bytes": 1677,
+      "sha256": "f5427da01815047ea886cf867147bd0175a187d1dda2c2bbc0fc905209d755d7",
+      "retainedOrigin": ".git/aurora-handoff-import-20261006/worker-padded900-prep-v737/bootstrap.py",
+      "originBytes": 1377,
+      "originSHA256": "45d544db5a32d588ce33e94458d16f445791f9813d2c7500ca584c7f49df2174",
+      "byteIdentical": false
+    },
+    {
+      "canonical": "thesis/harness/python-cpu-v1/bindings.py",
+      "bytes": 3230,
+      "sha256": "52182f956b34788ecbfbbb241c8243ff88baebe2874e3605791793777ed0dc91",
+      "retainedOrigin": ".git/aurora-handoff-import-20261006/worker-padded900-prep-v737/bindings.py",
+      "originBytes": 3230,
+      "originSHA256": "52182f956b34788ecbfbbb241c8243ff88baebe2874e3605791793777ed0dc91",
+      "byteIdentical": true
+    },
+    {
+      "canonical": "thesis/harness/python-cpu-v1/hook/observer.py",
+      "bytes": 11873,
+      "sha256": "784cc4bffc0d6824bbe378d17a7f632d587ca0a315896b048b2ebef727082df5",
+      "retainedOrigin": ".git/aurora-handoff-import-20261006/worker-padded900-prep-v737/hook/observer.py",
+      "originBytes": 11873,
+      "originSHA256": "784cc4bffc0d6824bbe378d17a7f632d587ca0a315896b048b2ebef727082df5",
+      "byteIdentical": true
+    },
+    {
+      "canonical": "thesis/harness/python-cpu-v1/hook/aurora_voice_telemetry_v430.py",
+      "bytes": 11584,
+      "sha256": "8129ffe7591a47a0107ede53b101aead9fc1f58b92f0c0c4203176cc7608325d",
+      "retainedOrigin": ".git/aurora-handoff-import-20261006/worker-padded900-prep-v737/hook/aurora_voice_telemetry_v430.py",
+      "originBytes": 11584,
+      "originSHA256": "8129ffe7591a47a0107ede53b101aead9fc1f58b92f0c0c4203176cc7608325d",
+      "byteIdentical": true
+    }
+  ],
+  "transforms": [
+    "runner: data root from explicit AURORA_THESIS_RUN_ROOT; AURORA_V737_ env keys renamed AURORA_THESIS_; explicit opt-in main guard",
+    "bootstrap: main-guard wrapper, relative runner and same explicit opt-in; underlying observer/version/pipeline checks unchanged"
+  ],
+  "runtimeSmokePerformed": false,
+  "defaultRefusalReceipt": "../../validation/default-execution-guard-v747.json",
+  "newMeasuredRequests": 0
+}

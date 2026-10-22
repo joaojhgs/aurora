@@ -1,0 +1,12 @@
+{
+  "controlDeadline": "2026-10-22T05:45:00Z",
+  "explicitNewline": true,
+  "host": "ssh:ssh-sem-notebook-personal",
+  "incarnation": "328cd72f-c7ea-49ff-a2db-b9275b085037",
+  "remoteResult": "/home/developer/projects/aurora/thesis/phone-notebook/20261020/evidence/reconcile-usb-model-v157.json",
+  "rootAdmissionMessage": "reconcile prior streamed public asset size/hash before any retry or native load; preservefailedstage",
+  "script": "scripts/reconcile_usb_model_v157.py",
+  "scriptSha256": "e4272d6258619a9583d3831c9bac89b5ed54e43b9c4fd2fb72c1550577a23827",
+  "singleSend": true,
+  "terminal": "term_a2ed5feb-7c92-48e4-bd88-d1b0e6737989"
+}

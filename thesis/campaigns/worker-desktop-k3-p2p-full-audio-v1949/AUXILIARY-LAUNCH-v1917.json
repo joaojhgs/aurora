@@ -1,0 +1,43 @@
+{
+  "at": "2026-10-20T21:57:42.933436+00:00",
+  "status": "K3_REQUESTER_AND_BOUNDED_AUXILIARIES_STARTED",
+  "requester": {
+    "at": "2026-10-20T21:57:42.864066+00:00",
+    "conditionManifestSha256": "4ffe1f86fa652554123fd30b6cf18f6794ee8bfe9f08ae624e0304814e6258de",
+    "controllerPid": 3116126,
+    "controllerStartTicks": 131192345,
+    "excludedWarmups": 15,
+    "measurementAdmitted": false,
+    "newWorker": false,
+    "plannedMeasured": 900,
+    "provider": {
+      "pid": 212717,
+      "startTicks": 28836628,
+      "state": "S"
+    }
+  },
+  "auxiliaries": {
+    "copier": {
+      "pid": 3116127,
+      "startTicks": 131192351,
+      "state": "R",
+      "sourceSha256": "469a14d2bd2237c2b0bcf27b37aaa94ca540188ffc36d7582bb046229638897a"
+    },
+    "warmup-finalizer": {
+      "pid": 3116128,
+      "startTicks": 131192352,
+      "state": "R",
+      "sourceSha256": "e7288e95762b1fee4981a1a5448d8e4f468c21d765b2ab846d29e4c1c5cd01a8"
+    }
+  },
+  "conditionManifestSha256": "4ffe1f86fa652554123fd30b6cf18f6794ee8bfe9f08ae624e0304814e6258de",
+  "measurementAdmitted": false,
+  "plannedMeasured": 900,
+  "excludedWarmups": 15,
+  "newOrcaWorker": false,
+  "provider": {
+    "pid": 212717,
+    "state": "S",
+    "startTicks": 28836628
+  }
+}

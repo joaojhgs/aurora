@@ -1,0 +1,28 @@
+{
+  "id": "8f5088aa-31c9-4839-9b0b-6e86411ed116",
+  "ok": true,
+  "result": {
+    "message": {
+      "id": "msg_8560f2ed0ee7",
+      "run_id": "run_e6054e76e9fc",
+      "delivery_contract": "current_delivery",
+      "from_handle": "term_6a00d9ee-792a-4daf-8578-236290e33108",
+      "to_handle": "dispatch:ctx_104db5d889d2",
+      "subject": "OWNER phone already paired endpoint; SETUP ONLY pending explicit later start",
+      "body": "NEW DIRECT OWNER FOLLOWUP overrides pending phone discovery and window assumptions: phone is ALREADY PAIRED with Personalnotebook. ExistingADBCONNECT endpoint100.64.0.4:35431; reuse existingpairidentity, NO newpair/reset/codeprompt unless actualstate requires. Modelunknown: bounded Androidgetprops via existing authorized notebookADB, noownerquestion needed. SETUP authorizedNOW only resource-safe smallboundedreadiness checks whileowneravailable. Nightwindow7–8h BUTSTARTTIME NOTSET; ownerwill explicitlyauthorizeWHENgoingtosleep. HARDGATE: DO NOT START warmupcampaign/900measured/unattendedphoneoccupation now, even ifready. Prepare guard requiring laterRoot-relayed explicitownerstart permission plus finite7–8h cap. Address100.64.0.4 mayoverlay, notdirectLAN evidence; determineactualphone->notebookHTTP/P2Ppath matchedtopology direct/relay. ExistingRootACTUALworker-start alreadyready/turnobserved underrequestefac9415-b8a2-4852-a543-e4c38fcd5559, Tasktask_e35b809903c1/Dispatchctx_104db5d889d2; do notlaunchanythingelse. Owner mentions otherpendingrequestca8509cb-ecab-419e-8474-e6a34b0ad4b4: Root is read-onlyreconciling it, neverretry/duplicate. Notebookread/setupwindowthrough22:02Z and noheavybuild/modeltransfer/inferencewithoutRootresourceadmission remains. Discover actualphone model/ABI only, no personalcontent/logharvest; safeconnect/disconnect reversible. Report actual adbconnection proof and setupinventory toRoot.",
+      "type": "status",
+      "priority": "normal",
+      "thread_id": null,
+      "payload": null,
+      "created_at": "2026-10-20T21:36:01Z",
+      "delivered_at": null
+    },
+    "mutation": {
+      "requestId": "299c85c0-5b36-46cc-9692-e49f31ed42ea",
+      "replayed": false
+    }
+  },
+  "_meta": {
+    "runtimeId": "cc9e3275-28c6-4c45-85cc-bdcd2262aa7d"
+  }
+}

@@ -1,0 +1,136 @@
+{
+  "at": "2026-10-20T05:43:39.468302+00:00",
+  "status": "FUTURE_K2_SOURCE_CANDIDATE_PREPARED_NOT_LAUNCHED",
+  "priorCandidate": "thesis/harness/distributed-k2-mesh-v905",
+  "changedPythonFiles": [
+    "controller.py",
+    "runner.py",
+    "receiver_proof.py",
+    "mesh_stage_adapter.py",
+    "k2_composition.py"
+  ],
+  "refreshedDataFiles": [
+    "source-inventory.json",
+    "route_runtime_pins.json",
+    "freeze-template.json"
+  ],
+  "diffSha256": "daf984ae7428334e18cbbab7e961125a09d5273018a068c6f8e26e45173b5ef7",
+  "plannedMeasured": 900,
+  "excludedWarmups": 15,
+  "conditionCapSeconds": 57600,
+  "sourceInventoryFiles": 400,
+  "sourceInventorySha256": "a38421a03ffafb73a4c469aa7c82fb299210eedd6fe97809beb3c508782883d4",
+  "applicationSourceChanged": false,
+  "sameAudioWeightsAndWorkerRuntimeEnvironmentAsQualifiedK1AndClosedK2Http": true,
+  "remoteGpuLlmComparison": "Match closedK2HTTP, not K1 workerCPU-LLM placement; actual new GPU process proof pending",
+  "comparisonHttpManifest": {
+    "path": "thesis/campaigns/worker-desktop-k2-orca-relayed-http-v1264/condition-frozen.json",
+    "sha256": "b15a49adffc5aaa43b426563d5776fa384c92f58e339030b69cb3877e98f2399"
+  },
+  "configuredRemoteLlmGpuLayers": 100,
+  "previousActualLoadedGpuLayers": "25/25; new process must prove actual offload in ordinary warmups",
+  "localProfile": "Reuse original approved worker-node-v1538/data and .env; no fresh identity, grants or credentials",
+  "readinessGate": "120second normal catalogue + exact per-topic RouteExplain, nonnull speech constraints for TTS, expected original local identity; zero model requests",
+  "sourceSnapshotMeaning": "Exact qualified source snapshot; historical HTTP source byte-identity false and delta retained",
+  "frozenLiveSourcesOrManifestsModified": false,
+  "syntaxParsedFiles": 13,
+  "execution": {
+    "modelCalls": 0,
+    "networkTests": 0,
+    "builds": 0,
+    "newOrcaWorkers": 0,
+    "runtimeImports": 0
+  },
+  "remainingBeforeLaunch": [
+    "Current K1 natural terminal/raw custody and serial resource release",
+    "New finite provider and requester manifests using original task identities, same effective closedK2HTTP model/constructor/backend settings and resource reservations",
+    "15strict ordinary fullaudio warmups +15localSTT/30remoteactualmodel joins +30exactpeer/beforeafter route joins"
+  ],
+  "prospectiveFailurePolicy": {
+    "exactStructuredAcceptedFalseCapabilityChanged": "record_failed_then_next_distinct_measured_index",
+    "consecutiveMeasuredRejectionHardStop": 3,
+    "warmupAnyFailure": "hard_stop",
+    "otherAmbiguousOrSystemFailure": "hard_stop",
+    "retryOrFallback": false
+  },
+  "offlineClassifierSmoke": {
+    "status": "PASS",
+    "cases": [
+      {
+        "case": "successful_assistant",
+        "outcome": "ok",
+        "stopCampaign": null,
+        "calls": 1
+      },
+      {
+        "case": "exact_tts_preaccept_denial",
+        "outcome": "preaccept_capability_changed",
+        "stopCampaign": false,
+        "calls": 1
+      },
+      {
+        "case": "unstructured_assistant_error_stops",
+        "outcome": "exact_peer_call_failed",
+        "stopCampaign": true,
+        "calls": 1
+      },
+      {
+        "case": "wrong_peer_never_recoverable",
+        "outcome": "exact_peer_call_binding_mismatch",
+        "stopCampaign": true,
+        "calls": 1
+      }
+    ],
+    "modelCalls": 0,
+    "networkCalls": 0,
+    "runtimeImports": 0
+  },
+  "reviewStatus": "SOURCE_SCOPE_PASS_TIMING_FINDING_CLOSED_NOT_RUNTIME_ADMITTED",
+  "setupTimingCorrection": {
+    "smallDeltaPath": "thesis/harness/distributed-k2-mesh-v1731/SETUP-TIMING-ONLY.diff",
+    "smallDeltaSha256": "646c12ed81de712773d439e52a59bac6a304ef4a2dd1417323ffa14805d71e7e",
+    "priorReviewedRunnerSha256": "d031a116f02a17ef0a60a9b62f4729119dfa2f0466d4cd5f5bd6822e3f9dccd9",
+    "newRunnerSha256": "8347fc103a11ca6c9d0c3686b442bd2e4236a4122c668a42bcc10944b7408285",
+    "setupWaitIncluded": true,
+    "failedPartialTimingRecorded": true,
+    "syntax": "PASS",
+    "oldClassifierSmokeRerun": false,
+    "newModelCalls": 0
+  },
+  "actualResponseFieldsRetained": [
+    "accepted",
+    "reason_code"
+  ],
+  "joinedCallerObserverFields": [
+    "method_topic",
+    "peer_id_sha256",
+    "correlation_id",
+    "peer_call_pid"
+  ],
+  "reviewEvidence": [
+    {
+      "source": ".omx/evidence/orca-monitor-20261010/P2P-K2-V1731-BOUNDED-SOURCE-REVIEW-20261020T0525.md",
+      "path": "thesis/harness/distributed-k2-mesh-v1731/review/P2P-K2-V1731-BOUNDED-SOURCE-REVIEW-20261020T0525.md",
+      "bytes": 5257,
+      "sha256": "180543b21c82b3ee3ca0d661e45c02307f243f44eb386e7c96e24f88fe32035f"
+    },
+    {
+      "source": ".omx/evidence/orca-monitor-20261010/P2P-K2-V1731-SETUP-TIMING-ADDENDUM-20261020T0528.md",
+      "path": "thesis/harness/distributed-k2-mesh-v1731/review/P2P-K2-V1731-SETUP-TIMING-ADDENDUM-20261020T0528.md",
+      "bytes": 2517,
+      "sha256": "8953ed1e55e6dad43072448d07b6348b506a7ea6013a1bcef75e7d6881bea035"
+    },
+    {
+      "source": ".omx/evidence/orca-monitor-20261010/P2P-K2-V1731-TIMING-DELTA-CLOSURE-20261020T0554.md",
+      "path": "thesis/harness/distributed-k2-mesh-v1731/review/P2P-K2-V1731-TIMING-DELTA-CLOSURE-20261020T0554.md",
+      "bytes": 3685,
+      "sha256": "d19d059f55e9205a72e45eb76b54a21c114c59f62df3c48d891b5cbd272f2580"
+    },
+    {
+      "source": ".omx/evidence/orca-monitor-20261010/P2P-K2-V1731-TIMING-DELTA-CLOSURE-RECEIPT-20261020T0554.json",
+      "path": "thesis/harness/distributed-k2-mesh-v1731/review/P2P-K2-V1731-TIMING-DELTA-CLOSURE-RECEIPT-20261020T0554.json",
+      "bytes": 590,
+      "sha256": "5487a2c95b056c5d3525626a4cdad642dcf15027650c2cc70725713bd192a22b"
+    }
+  ]
+}

@@ -1,0 +1,1 @@
+{"accepted_rows":836,"complete":false,"dropped_rows":0,"invalid_rows":0,"max_row_bytes":32768,"max_rows":1846,"max_total_bytes":67108864,"oversize_rows":0,"queue_capacity":256,"quota_rows":0,"schema":"aurora.mesh_route_observation_sink.v1","state":"accepting","writer_error_class":null,"written_bytes":1378588,"written_rows":836}

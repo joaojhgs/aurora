@@ -1,0 +1,9 @@
+{
+  "exit_code": 1,
+  "finished_at": "2026-10-14T02:21:27.149221+00:00",
+  "elapsed_seconds": 130.1975273230346,
+  "redis_cleanup_exit_code": 0,
+  "protected_private_files_unchanged": true,
+  "requests_available": true,
+  "scope": "same-host actual independently spawned Config/DB/Auth/Orchestrator/Gateway text Assistant over Redis; API-key SYSTEM, Auth token validation not exercised; no mobile/voice/clean stable tails"
+}

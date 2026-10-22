@@ -1,0 +1,63 @@
+{
+  "services": {
+    "stt": {
+      "coordinator": {
+        "enabled": false
+      },
+      "transcription": {
+        "enabled": true,
+        "realtime_model": {
+          "enabled": false
+        },
+        "accurate_model": {
+          "enabled": true,
+          "model_size": "base",
+          "model_size_or_path": "/home/developer/projects/aurora/thesis/phone-notebook/20261020/deployment/ebde3a8acf6315f920d03593845f17a1fc65a733/models/whisper-base",
+          "device": "cpu",
+          "compute_type": "int8"
+        }
+      }
+    },
+    "orchestrator": {
+      "llm": {
+        "provider": "llama_cpp",
+        "local": {
+          "llama_cpp": {
+            "options": {
+              "chat_format": "chatml-function-calling",
+              "max_tokens": 128,
+              "min_p": 0.0,
+              "model_path": "/home/developer/projects/aurora/thesis/phone-notebook/20261020/deployment/ebde3a8acf6315f920d03593845f17a1fc65a733/models/Qwen3.5-0.8B-Q4_0.gguf",
+              "n_batch": 64,
+              "n_ctx": 4096,
+              "n_gpu_layers": 100,
+              "n_threads": 2,
+              "repeat_penalty": 1.0,
+              "seed": 42,
+              "temperature": 0.0,
+              "top_k": 1,
+              "top_p": 1.0,
+              "verbose": true
+            }
+          }
+        }
+      }
+    },
+    "tts": {
+      "enabled": true,
+      "provider": "piper",
+      "hardware_acceleration": false,
+      "model_file_path": "/home/developer/projects/aurora/thesis/phone-notebook/20261020/deployment/ebde3a8acf6315f920d03593845f17a1fc65a733/models/en_US-ljspeech-medium.onnx",
+      "model_config_file_path": "/home/developer/projects/aurora/thesis/phone-notebook/20261020/deployment/ebde3a8acf6315f920d03593845f17a1fc65a733/models/en_US-ljspeech-medium.onnx.json",
+      "model_sample_rate": 22050,
+      "providers": {
+        "piper": {
+          "model_file_path": "/home/developer/projects/aurora/thesis/phone-notebook/20261020/deployment/ebde3a8acf6315f920d03593845f17a1fc65a733/models/en_US-ljspeech-medium.onnx",
+          "model_config_file_path": "/home/developer/projects/aurora/thesis/phone-notebook/20261020/deployment/ebde3a8acf6315f920d03593845f17a1fc65a733/models/en_US-ljspeech-medium.onnx.json",
+          "model_sample_rate": 22050,
+          "executable_path": "/home/developer/projects/aurora/thesis/phone-notebook/20261020/deployment/ebde3a8acf6315f920d03593845f17a1fc65a733/.venv/bin/piper"
+        }
+      }
+    }
+  }
+}

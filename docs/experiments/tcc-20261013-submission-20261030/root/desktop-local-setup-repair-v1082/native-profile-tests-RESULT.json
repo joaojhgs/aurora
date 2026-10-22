@@ -1,0 +1,19 @@
+{
+  "command": [
+    "cargo",
+    "test",
+    "--locked",
+    "--manifest-path",
+    "rust/Cargo.toml",
+    "-p",
+    "aurora-voice-native",
+    "--no-default-features",
+    "--lib",
+    "runtime_profile::tests"
+  ],
+  "startedAt": "2026-10-16T14:36:35.184719+00:00",
+  "endedAt": "2026-10-16T14:36:40.326028+00:00",
+  "exitCode": 101,
+  "error": null,
+  "log": ".git/aurora-handoff-import-20261006/desktop-local-profile-integration-v1082/native-profile-tests.log"
+}

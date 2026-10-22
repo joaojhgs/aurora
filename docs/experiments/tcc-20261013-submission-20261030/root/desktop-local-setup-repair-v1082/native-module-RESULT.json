@@ -1,0 +1,20 @@
+{
+  "command": [
+    "cargo",
+    "test",
+    "--offline",
+    "--manifest-path",
+    "/home/developer/projects/aurora/.git/aurora-handoff-import-20261006/native-profile-module-check-v1084/Cargo.toml",
+    "--target-dir",
+    "/home/developer/projects/aurora/rust/target",
+    "--lib"
+  ],
+  "startedAt": "2026-10-16T14:42:00.772042+00:00",
+  "endedAt": "2026-10-16T14:43:18.786811+00:00",
+  "exitCode": 0,
+  "error": null,
+  "sourceModule": "/home/developer/projects/aurora/rust/crates/aurora-voice-native/src/runtime_profile.rs",
+  "sourceSha256": "40c25d866e95cdfe2cd9d22fcbcb6dfde8e8be2d6f8364d5e9eabc575c61a29e",
+  "scope": "Exact production profile-validator module with existing contracts/voice-engine, offline workspace-locked dependency versions. This is not a full native crate/app/ALSA or live UI pass.",
+  "canonicalManifestOrLockChanged": false
+}

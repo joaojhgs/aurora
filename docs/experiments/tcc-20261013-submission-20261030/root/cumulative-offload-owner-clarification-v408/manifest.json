@@ -1,0 +1,13 @@
+{
+  "owner_message_id": "msg_2829bfde1e6e",
+  "files": {
+    "scope-receipt.json": {
+      "bytes": 2347,
+      "sha256": "34ce7866bad7d3d08ed048b3cbac8649b4a498d2ce04755c2b024a9fe06a0d87"
+    },
+    "README.md": {
+      "bytes": 2609,
+      "sha256": "09d9271521b65c24e41e9a05c1752a81f50bb6097895790dc6169b3833a82114"
+    }
+  }
+}

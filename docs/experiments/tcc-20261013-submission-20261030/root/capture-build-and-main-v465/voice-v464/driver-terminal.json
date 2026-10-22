@@ -1,0 +1,19 @@
+{
+  "startedAt": "2026-10-15T01:00:19.674063+00:00",
+  "controllerPid": 2871833,
+  "capSeconds": 420,
+  "measurementStarted": false,
+  "acceptedMeasuredSamples": 0,
+  "previousTinyLogicalFlows": 6,
+  "previousAccurateTransportFailures": 1,
+  "priorAccurateTaskFailures": 1,
+  "newOrdinalOnlyOnFirstSTT": 9,
+  "childPid": 2871860,
+  "driverSHA256": "ff10454458ac72155f8ddb6862971c67c777aacad551c8fea3170310aec1db9f",
+  "webRuntimePid": 2871162,
+  "backendPid": 2871169,
+  "sourceRuntimeControllerPid": 2871142,
+  "exitCode": 1,
+  "finishedAt": "2026-10-15T01:01:12.719213+00:00",
+  "elapsedSeconds": 53.04518962698057
+}

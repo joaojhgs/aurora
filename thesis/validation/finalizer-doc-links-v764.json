@@ -1,0 +1,14 @@
+{
+  "schema": "aurora.thesis.finalizer-doc-links.v764",
+  "at": "2026-10-16T00:29:54.123818+00:00",
+  "scope": "New/updated finalizer/inventory/main README only; unchanged code/model/archive checks not repeated",
+  "files": [
+    "thesis/harness/worker-cpu-v737/README.md",
+    "thesis/inventory/README.md",
+    "thesis/README.md"
+  ],
+  "checked": 36,
+  "failures": [],
+  "newMeasuredRequests": 0,
+  "modelsOrServicesLoaded": false
+}

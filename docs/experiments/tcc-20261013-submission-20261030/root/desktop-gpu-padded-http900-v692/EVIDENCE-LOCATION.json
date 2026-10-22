@@ -1,0 +1,77 @@
+{
+  "at": "2026-10-15T22:04:06.632161+00:00",
+  "archive": {
+    "bytes": 34691761,
+    "path": "/tmp/aurora-root-padded-http900-v692/export-v715/aurora-desktop-gpu-padded-http900-v692.zip",
+    "sha256": "7f1438bd700d5a794a879f5a38d7293275acf4d827289a50c6c49e01dc1a1870"
+  },
+  "remoteHost": "personal.skyron-server",
+  "rawOriginalsPreserved": true,
+  "archiveOutcomeAuditPerformedOnce": true,
+  "originalAuditReceipt": "audit-verification.json",
+  "workerDestination": "docs/experiments/tcc-20261013-submission-20261030/root/desktop-gpu-padded-http900-v692/aurora-desktop-gpu-padded-http900-v692.zip",
+  "workerArchiveCustodyVerified": true,
+  "workerCopyState": ".git/aurora-handoff-import-20261006/saved-archive-copy-v732/COPY-STATE.json",
+  "workerCopyStatus": "complete",
+  "verifiedCopiedMetadata": [
+    {
+      "name": "ARCHIVE-MANIFEST.json",
+      "bytes": 690579,
+      "sha256": "d87abd77df46d68fba1a4c420d411a95776026430b7100817aa1bf83f5d63605",
+      "path": "/home/developer/projects/aurora/docs/experiments/tcc-20261013-submission-20261030/root/desktop-gpu-padded-http900-v692/ARCHIVE-MANIFEST.json",
+      "savedCopySizeAndSHA256VerifiedOnce": true
+    },
+    {
+      "name": "NATIVE-STAGE-CASE-HISTORY.json",
+      "bytes": 2128044,
+      "sha256": "cc4aead5d0650ee8ae667e509b72bf01d6adbdf80de962cb47a1311ecb601158",
+      "path": "/home/developer/projects/aurora/docs/experiments/tcc-20261013-submission-20261030/root/desktop-gpu-padded-http900-v692/NATIVE-STAGE-CASE-HISTORY.json",
+      "savedCopySizeAndSHA256VerifiedOnce": true
+    },
+    {
+      "name": "audit-verification.json",
+      "bytes": 12033,
+      "sha256": "9658f29dfc939083445a98f26d222df3b622ac0cba5cc8396d5c22a09a342a6a",
+      "path": "/home/developer/projects/aurora/docs/experiments/tcc-20261013-submission-20261030/root/desktop-gpu-padded-http900-v692/audit-verification.json",
+      "savedCopySizeAndSHA256VerifiedOnce": true
+    }
+  ],
+  "workerCustodyReceipt": "WORKER-CUSTODY-RECEIPT.json",
+  "workerSavedFiles": [
+    {
+      "name": "ARCHIVE-MANIFEST.json",
+      "bytes": 690579,
+      "sha256": "d87abd77df46d68fba1a4c420d411a95776026430b7100817aa1bf83f5d63605",
+      "path": "/home/developer/projects/aurora/docs/experiments/tcc-20261013-submission-20261030/root/desktop-gpu-padded-http900-v692/ARCHIVE-MANIFEST.json",
+      "savedCopySizeAndSHA256VerifiedOnce": true
+    },
+    {
+      "name": "NATIVE-STAGE-CASE-HISTORY.json",
+      "bytes": 2128044,
+      "sha256": "cc4aead5d0650ee8ae667e509b72bf01d6adbdf80de962cb47a1311ecb601158",
+      "path": "/home/developer/projects/aurora/docs/experiments/tcc-20261013-submission-20261030/root/desktop-gpu-padded-http900-v692/NATIVE-STAGE-CASE-HISTORY.json",
+      "savedCopySizeAndSHA256VerifiedOnce": true
+    },
+    {
+      "name": "audit-verification.json",
+      "bytes": 12033,
+      "sha256": "9658f29dfc939083445a98f26d222df3b622ac0cba5cc8396d5c22a09a342a6a",
+      "path": "/home/developer/projects/aurora/docs/experiments/tcc-20261013-submission-20261030/root/desktop-gpu-padded-http900-v692/audit-verification.json",
+      "savedCopySizeAndSHA256VerifiedOnce": true
+    },
+    {
+      "name": "aurora-desktop-gpu-padded-http900-v692.zip",
+      "bytes": 34691761,
+      "sha256": "7f1438bd700d5a794a879f5a38d7293275acf4d827289a50c6c49e01dc1a1870",
+      "path": "/home/developer/projects/aurora/docs/experiments/tcc-20261013-submission-20261030/root/desktop-gpu-padded-http900-v692/aurora-desktop-gpu-padded-http900-v692.zip",
+      "savedCopySizeAndSHA256VerifiedOnce": true
+    },
+    {
+      "name": "verification.json",
+      "bytes": 12399,
+      "sha256": "199ee53e338185d2e4222b98e88816beee5575cdfdaf9a49499198ce14d36ac2",
+      "path": "/home/developer/projects/aurora/docs/experiments/tcc-20261013-submission-20261030/root/desktop-gpu-padded-http900-v692/verification.json",
+      "savedCopySizeAndSHA256VerifiedOnce": true
+    }
+  ]
+}

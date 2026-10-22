@@ -1,0 +1,71 @@
+{
+  "at": "2026-10-22T00:11:51.224225+00:00",
+  "classification": "VERIFIED_WAIT",
+  "manifestSha256": "9adbf9ba3a7ec0948a087edad3655cf94ee344b3a2371a78d15f188f44150d42",
+  "actors": [
+    {
+      "pid": 3965950,
+      "expectedStartTicks": 139740362,
+      "state": "S",
+      "startTicks": 139740362,
+      "matches": true
+    },
+    {
+      "pid": 3965978,
+      "expectedStartTicks": 139740616,
+      "state": "S",
+      "startTicks": 139740616,
+      "matches": true
+    },
+    {
+      "pid": 3965951,
+      "expectedStartTicks": 139740363,
+      "state": "S",
+      "startTicks": 139740363,
+      "matches": true
+    }
+  ],
+  "epochMeasured": {
+    "attempted": 148,
+    "correct": 148,
+    "failed": 0,
+    "incorrect": 0,
+    "timeouts": 0,
+    "planned": 450
+  },
+  "conditionCountsOnly": {
+    "attempted": 598,
+    "correct": 597,
+    "failed": 1,
+    "incorrect": 0,
+    "unattempted": 302,
+    "planned": 900
+  },
+  "copier": {
+    "receipt": "thesis/campaigns/worker-desktop-k1-orca-relayed-http-remaining450-v2296/receipts/000149.json",
+    "sha256": "f8d9a004a38e9628aec5ffbe8d563388a639ec8c70bb993e7ff3aa244ac9bd5d",
+    "cases": 162,
+    "WAV": 162,
+    "errors": [],
+    "freeBytes": 3284127744
+  },
+  "terminalSummaryPresent": false,
+  "observationOnly": true,
+  "newSutCalls": 0,
+  "processSignals": 0,
+  "measurementInputsNotModifiedByThisObserver": true,
+  "version": "V2330",
+  "previousGoalTurn": "VERIFIED_WAIT: exact original requester/backend/copier confirmed live with measured outcomes progressing",
+  "nativeGoalThread": "01a112a5-d6bb-74e2-bf7c-ace73cb513b5",
+  "nativeGoalStatus": "active",
+  "nativeGoalBudget": null,
+  "nativeGoalSnapshot": "thesis/campaigns/worker-desktop-k1-orca-relayed-http-remaining450-v2296/NATIVE-GOAL-VERIFIED-WAIT-v2330.json",
+  "nextBoundedCheckUtc": "2026-10-22T00:16:51.224225+00:00",
+  "earlierFor": "actual failure/terminal/resourceguard; preserve same handles and no restart from observation timeout",
+  "normalNextAction": "Continue unchanged frozen450; finalizer2303 ONLY after actual summary and original3Wactors natural retirement",
+  "phoneExclusivelyDelegated": true,
+  "coordination": "Phone remains solely existing owner-resumed worker; original monitor confirmed retained identity/settledDispatch history, no lifecycle adoption. Root performs no phone/notebook read or sharedrun pause.",
+  "observerSourceSha256": "8f6dd46dede0653e0b40efb47ee6fb4db5bc7d28819adc8d4eae9913994d037e",
+  "noNewWorkersOrReviewLoops": true,
+  "remainingFull13AndFullMatrixOpen": true
+}

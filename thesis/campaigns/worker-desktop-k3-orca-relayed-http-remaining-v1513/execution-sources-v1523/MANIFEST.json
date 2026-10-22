@@ -1,0 +1,40 @@
+{
+  "at": "2026-10-18T14:45:06.994408+00:00",
+  "status": "EXACT_PRELAUNCH_OPERATOR_SOURCES_PINNED",
+  "files": [
+    {
+      "source": "thesis/harness/k3_remaining_root_v1513.py",
+      "copy": "thesis/campaigns/worker-desktop-k3-orca-relayed-http-remaining-v1513/execution-sources-v1523/k3_remaining_root_v1513.py",
+      "bytes": 15581,
+      "sha256": "a4e54219424a3ccf7f57578340247351d3d41e329d2e1cf33dccc91822b7df14"
+    },
+    {
+      "source": "thesis/harness/k3_warmup_finalize_v1513.py",
+      "copy": "thesis/campaigns/worker-desktop-k3-orca-relayed-http-remaining-v1513/execution-sources-v1523/k3_warmup_finalize_v1513.py",
+      "bytes": 7305,
+      "sha256": "1b4116ea46226bfc96cf5c56190662caf3070fc93c05f59465d332e5843a9488"
+    },
+    {
+      "source": "thesis/harness/k3_remote_warmup_proof_v1513.py",
+      "copy": "thesis/campaigns/worker-desktop-k3-orca-relayed-http-remaining-v1513/execution-sources-v1523/k3_remote_warmup_proof_v1513.py",
+      "bytes": 7487,
+      "sha256": "fed0a8815ea1436b1b29e39fbda32e4bc04b4424694d0813eef1cddddf75e327"
+    },
+    {
+      "source": "thesis/harness/custody_k3_requester_v1513.py",
+      "copy": "thesis/campaigns/worker-desktop-k3-orca-relayed-http-remaining-v1513/execution-sources-v1523/custody_k3_requester_v1513.py",
+      "bytes": 15847,
+      "sha256": "c11a7c4d0d8133603e52a0658eba797747cbb5ac99b87dd9f7248cf57ea0279a"
+    },
+    {
+      "source": "thesis/harness/orca_control_raw_read_v1523.py",
+      "copy": "thesis/campaigns/worker-desktop-k3-orca-relayed-http-remaining-v1513/execution-sources-v1523/orca_control_raw_read_v1523.py",
+      "bytes": 2691,
+      "sha256": "c3536841f9d16b0a43d21f98f769e9f091ebe402ed12fadb5d1cb77a494481a6"
+    }
+  ],
+  "configBindingCorrection": "EFFECTIVE-CONFIG-BINDING-v1523.json",
+  "rawCallerCorrection": "RAW-CONTROL-CALLER-CORRECTION.json",
+  "credentialScan": "Scans both existing frozen input and actual current parent-measured private config in memory; copies no credentials.",
+  "newModelRequests": 0
+}

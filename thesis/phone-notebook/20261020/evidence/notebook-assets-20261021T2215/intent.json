@@ -1,0 +1,12 @@
+{
+  "controlDeadline": "2026-10-21T22:22:00Z",
+  "explicitNewline": true,
+  "host": "ssh:ssh-sem-notebook-personal",
+  "incarnation": "328cd72f-c7ea-49ff-a2db-b9275b085037",
+  "remoteResult": "/home/developer/projects/aurora/thesis/phone-notebook/20261020/evidence/notebook-assets-20261021T2215.json",
+  "rootAdmissionMessage": "owner-direct-usb-resume-20261021",
+  "script": "scripts/notebook_assets_v2.py",
+  "scriptSha256": "b5415e42ab5e19c332c7a40960254ebafb742b030a69b3d0fc08f783fc1235ff",
+  "singleSend": true,
+  "terminal": "term_a2ed5feb-7c92-48e4-bd88-d1b0e6737989"
+}

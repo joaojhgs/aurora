@@ -1,0 +1,29 @@
+{
+  "at": "2026-10-17T23:34:49.623824+00:00",
+  "controller": {
+    "at": "2026-10-17T23:34:30.209686+00:00",
+    "controllerPid": 588011,
+    "controllerStartTicks": 105853078,
+    "credentialValueLogged": false,
+    "excludedWarmups": 15,
+    "existingProviderUnchanged": true,
+    "frozenManifestSha256": "b15a49adffc5aaa43b426563d5776fa384c92f58e339030b69cb3877e98f2399",
+    "plannedMeasured": 900,
+    "sourceControllerSha256": "809bec19682eb717f016d2b9f62453b38945201c561f7d4f4ac72e242024050e",
+    "startupIsNotWarmupOrMeasurement": true
+  },
+  "operatorProcesses": {
+    "finalizer": {
+      "pid": 588275,
+      "startTicks": 105855021,
+      "sutCalls": 0,
+      "role": "Root operator, not new agent/worker"
+    },
+    "requesterCopier": {
+      "pid": 588276,
+      "startTicks": 105855021,
+      "sutCalls": 0,
+      "role": "Root operator, not new agent/worker"
+    }
+  }
+}

@@ -1,0 +1,24 @@
+{
+  "at": "2026-10-22T13:05:48.037337+00:00",
+  "sourceEpoch": "llama0319-chatml-message-v390",
+  "baseProviderSourceSha": "ebde3a8acf6315f920d03593845f17a1fc65a733",
+  "pinnedPublicFormatterSourceSha256": "dee83e0c4f561d92700fa5b9c41190c0d66407a5a3aac9692f9a1e7d6b215b5f",
+  "actualFailure": "native v359 and v381 empty message; pinned message branch applies follow-up tool-name grammar and ignores max_tokens",
+  "changedBehavior": "Normal message branch retains caller grammar and max_tokens; tool selection and tool JSON grammar unchanged",
+  "nativeMethodsOrOwnershipChecksChanged": false,
+  "installedPackageOrOldSourceModified": false,
+  "files": [
+    {
+      "path": "app/services/orchestrator/chatml_message_compat.py",
+      "sha256": "9e5d979257d3281efe0c888c3517d756c7549977f09cb4755cd8188da28acbb5",
+      "bytes": 3925
+    },
+    {
+      "path": "tests/test_chatml_message_compat.py",
+      "sha256": "18b4a1f16e27cb718a76222a8a347a7a94a4b0d415adfde556bf8921502e501a",
+      "bytes": 2650
+    }
+  ],
+  "patchSha256": "029bf040f5edad7d917929e52148fd703358015aa0ad43d6dd35914f61a8a1a4",
+  "actualNativeQualificationPending": true
+}

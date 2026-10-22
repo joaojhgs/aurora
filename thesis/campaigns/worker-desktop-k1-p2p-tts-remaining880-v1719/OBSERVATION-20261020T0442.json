@@ -1,0 +1,44 @@
+{
+  "at": "2026-10-20T04:42:37.285284+00:00",
+  "progress": {
+    "attempted": 8,
+    "last_attempt_file": "attempts/attempt-0008-warmup.jsonl",
+    "last_attempt_status": "completed_correct",
+    "measured_attempted": 0,
+    "planned_measured": 880,
+    "planned_warmups": 15,
+    "status": "running",
+    "unattempted_measured": 880,
+    "warmups_attempted": 8
+  },
+  "correctWarmups": 8,
+  "actors": [
+    {
+      "pid": 2360747,
+      "present": true,
+      "startTicks": 124937766,
+      "state": "S"
+    },
+    {
+      "pid": 2360768,
+      "present": true,
+      "startTicks": 124937952,
+      "state": "R"
+    },
+    {
+      "pid": 2361201,
+      "present": true,
+      "startTicks": 124942780,
+      "state": "S"
+    },
+    {
+      "pid": 2361202,
+      "present": true,
+      "startTicks": 124942780,
+      "state": "S"
+    }
+  ],
+  "conditionSha256": "120dd99a4de0a242c30ebe4bb46d854ca77313c482a0c74f024edb624829a6e8",
+  "sutCallsByObserver": 0,
+  "personalControl": "Exclusivefinalizer reserved; no pendingRootsend"
+}

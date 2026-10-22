@@ -1,0 +1,63 @@
+{
+  "schema": "aurora.monitor.narrow-observability-closure.v1",
+  "observedAt": "2026-10-18T18:11:08.799534+00:00",
+  "reviewScope": "V1590 r2/r5 ONLY failure-metadata safety, no retry, namespace/pins/custody and cumulative budget. No whole-harness acceptance or route remedy inferred.",
+  "result": "NO_BLOCKING_FINDING_IN_REQUESTED_DELTA",
+  "sourceFilePinsChecked": 13,
+  "sourcePinErrors": [],
+  "operatorCopiesPreviouslyChecked": 10,
+  "operatorCopyErrors": [],
+  "requestGatewayAstEqualAfterRemovingOnlyFailureDiagnosticAwaits": true,
+  "unchangedExchangeAndBinding": true,
+  "diagnosticIO": "three failure-only asyncio.to_thread calls; OSError does not replace original transport result; bounded safe type/errno/digest/length fields, no freeform exception text/URL/headers/body/key",
+  "savedMetadataCheckHashVerified": true,
+  "savedMetadataKeys": [
+    "automaticRetry",
+    "durationMs",
+    "errno",
+    "exceptionTextHeadersBodyOrCredentialsRetained",
+    "exceptionType",
+    "monotonicNs",
+    "payloadBytes",
+    "payloadSha256",
+    "reasonErrno",
+    "reasonType",
+    "schema",
+    "stage",
+    "wallTimeNs"
+  ],
+  "existingCollectorAlgorithm": "namespace-only diff; no requalification/model calls required",
+  "draftSha256": "d95ebd55ca591dac3ba80d7eedd957ca58cb5e18723cc4e7df93f591adeadc56",
+  "scienceSha256": "f683a1c7e330076240bbb1d495b8f5b8af3d03cc70bb5a931980ebb142a4a7a7",
+  "budget": {
+    "capSeconds": 57600,
+    "priorUsedSeconds": 23578.905962333003,
+    "remainingSeconds": 34021.094037667,
+    "newFailedSetupChargedSeconds": 62.831509676,
+    "providerDeadlineUtc": "2026-10-19T00:08:53.328388Z"
+  },
+  "measurement": {
+    "priorMeasured": 716,
+    "priorCorrect": 714,
+    "priorFailed": 2,
+    "newPlanned": 184,
+    "indices": [
+      717,
+      900
+    ],
+    "excludedWarmups": 15,
+    "nativeGateJoins": 45,
+    "automaticRetry": false
+  },
+  "admissionBoundary": "Root alone must reconcile pending exact v1591 staging/provider-resource result, freshness and reservation before one actual next first ordinary excluded STT. Any failed transport preserves safe exact cause and stops, no blind warmup loop. GET health200 not POST/model remedy. If successful, ordinary15/45 gate precedes measurements.",
+  "actualNewRuntimeLaunchVerified": false,
+  "newSUTRequestsByMonitor": 0,
+  "nativeGoal": "01a123ff-19ba-7332-a2f7-346a722af79f",
+  "run": "run_e6054e76e9fc",
+  "task": "task_d7ea336050cf",
+  "dispatch": "ctx_37b4d0a3c14f",
+  "rootRequestMessages": [
+    "msg_1b80f3ff3495",
+    "msg_9055d8d5af10"
+  ]
+}

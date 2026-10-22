@@ -1,0 +1,38 @@
+{
+  "kind": "actual_desktop_gpu_typed_component_launch_v415",
+  "files": [
+    {
+      "name": "README.md",
+      "bytes": 1949,
+      "sha256": "d15834bc8d1dc416c21a70b1c9ef9da0a105988501aca3d725da057dbbea1bf4"
+    },
+    {
+      "name": "actual-first-measured-progress.json",
+      "bytes": 2817,
+      "sha256": "d536a81955e1cd5ad235a93a2995e4b6885194b34e1367d21b9fc45d8a110a40"
+    },
+    {
+      "name": "independent-sol-admission.md",
+      "bytes": 4349,
+      "sha256": "6af4cc34b4378c4e72fdfb98a318f3ffbe289b0c836185853fc988893185c302"
+    },
+    {
+      "name": "owned-controller.py",
+      "bytes": 4254,
+      "sha256": "7f0a1c3cdbd4578034e6def8502a0758cf6c90e755886c8615307c845d0a8b4b"
+    },
+    {
+      "name": "owned-epoch-launcher.py",
+      "bytes": 5453,
+      "sha256": "0f072fbb3d840dc4db30f55248a59827da3c677bef206479643eab16e9956d09"
+    },
+    {
+      "name": "readiness-proof.json",
+      "bytes": 7290,
+      "sha256": "1c5aaebba89f36ae3357a87dbf0729e78675e630037bf1c3961f553539af761f"
+    }
+  ],
+  "CPUExtraFinishedSealedReviewed": true,
+  "GPUWholeIndividualFinishedSealed": false,
+  "crossDeviceMeasuredAllowed": false
+}

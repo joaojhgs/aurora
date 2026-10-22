@@ -1,0 +1,43 @@
+{
+  "at": "2026-10-17T22:45:44.726943+00:00",
+  "progress": {
+    "attempted": 184,
+    "last_attempt_file": "attempts/attempt-0184-measured.jsonl",
+    "last_attempt_status": "completed_correct",
+    "measured_attempted": 169,
+    "planned_measured": 900,
+    "planned_warmups": 15,
+    "status": "running",
+    "unattempted_measured": 731,
+    "warmups_attempted": 15
+  },
+  "freeBytes": 6977196032,
+  "summaryExists": false,
+  "pids": {
+    "430655": {
+      "same": true,
+      "startTicks": 104608580,
+      "state": "S"
+    },
+    "430656": {
+      "same": true,
+      "startTicks": 104608648,
+      "state": "S"
+    },
+    "442775": {
+      "same": true,
+      "startTicks": 104723117,
+      "state": "S"
+    },
+    "421717": {
+      "same": true,
+      "startTicks": 104535394,
+      "state": "S"
+    }
+  },
+  "copiedCases": 184,
+  "copiedPhaseCounts": {
+    "warmup": 15,
+    "measured": 169
+  }
+}

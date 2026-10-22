@@ -1,0 +1,33 @@
+{
+  "at": "2026-10-20T04:30:05.785309+00:00",
+  "host": "personal.skyron-server",
+  "sutCalls": 0,
+  "receiver": {
+    "pid": 3194394,
+    "state": "S",
+    "startTicks": 22320527
+  },
+  "controller": {
+    "pid": 3194385,
+    "state": "R",
+    "startTicks": 22320508
+  },
+  "manifestSha256": "245d1739111a7162287fcece91dc005958722e062a1e028613c3f85e21e3d339",
+  "sourceConfigUnchanged": false,
+  "sourceThreeFilesUnchanged": true,
+  "configSha256": "06a199cfb688cd952359bc5fadfc26ca83fabf13059a0f9fa3d581832eb62493",
+  "expectedConfigSha256": "8fb168df7a62d04c99c16a61c1fc3b5a18500ebf2e0009c0cb41c1e9069ec27c",
+  "memAvailableBytes": 24638676992,
+  "freeBytes": 147504820224,
+  "statusAt": "2026-10-20T04:29:54.190233+00:00",
+  "resourceDeltaReceipt": {
+    "source": "/home/developer/projects/aurora/thesis/campaigns/worker-desktop-k1-p2p-tts-v1710/provider/resources.jsonl",
+    "inode": 4620267,
+    "startByte": 8386754,
+    "endByte": 12568599,
+    "observedBytes": 12568599,
+    "sha256": "bbc24ac309bac5861453f0c83b384188f0382b9142f5e7cd3bff824851bc8e2d",
+    "prefixOnly": true,
+    "destination": "thesis/campaigns/worker-desktop-k1-p2p-tts-remaining880-v1719/provider-resources-000008386754-000012568599.chunk"
+  }
+}

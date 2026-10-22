@@ -1,0 +1,20 @@
+{
+  "sourceSha": "ebde3a8acf6315f920d03593845f17a1fc65a733",
+  "remoteSha": null,
+  "sourceDirectory": "/home/developer/projects/aurora/thesis/phone-notebook/20261020/deployment/ebde3a8acf6315f920d03593845f17a1fc65a733/source-ebde3a8a-verified-v37",
+  "files": 1959,
+  "bytes": 37949666,
+  "inventorySha256": "88c7330effe93499e9c673921e9b12c90c54db53e572885f34bbd40644c8d47b",
+  "receipt": "evidence/assemble-exact-repair-20261022T014230/result.json",
+  "gitWrites": false,
+  "schema": "aurora.phone_notebook.actual_source_pin.v2",
+  "status": "EXACT_LOCAL_SNAPSHOT_ASSEMBLED_AND_VERIFIED",
+  "approvedByRootMessage": "msg_4dbe5c7c5f1e",
+  "copyReceipt": "evidence/source-delta-v33-copy-v2353-20261022/receiver-receipt.json",
+  "previousServerSubsetPin": "evidence/SOURCE-PIN-before-native-source-assembly.json",
+  "completeInventoryFile": "/home/developer/projects/aurora/thesis/phone-notebook/20261020/deployment/ebde3a8acf6315f920d03593845f17a1fc65a733/source-delta-v33-copy-v2353-20261022/SOURCE-FILE-INVENTORY.json.gz",
+  "sourceSmokeReceipt": "evidence/source-device-smoke-20261022T014507/result.json",
+  "sourcePythonSyntaxFilesPassed": 224,
+  "appBuildVerified": false,
+  "nativeRuntimeVerified": false
+}

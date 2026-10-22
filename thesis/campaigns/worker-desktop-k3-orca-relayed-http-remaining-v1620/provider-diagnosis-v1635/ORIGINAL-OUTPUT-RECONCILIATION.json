@@ -1,0 +1,7 @@
+{
+  "originalRejectedRequest": "f2f7472f-e005-46ec-9eb9-715187e69291",
+  "baselineCursor": "57008",
+  "readOnly": true,
+  "newCommandSends": 0,
+  "purpose": "Check original terminal output only; do not replay even if APIreportedrejection"
+}

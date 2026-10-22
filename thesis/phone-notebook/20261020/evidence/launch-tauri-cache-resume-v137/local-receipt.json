@@ -1,0 +1,8 @@
+{
+  "bytes": 472,
+  "copyOnly": true,
+  "custody": "Notebook result persisted and fsynced before relay; remote receipt in same output",
+  "localPath": "/home/developer/projects/aurora/thesis/phone-notebook/20261020/evidence/launch-tauri-cache-resume-v137/result.json",
+  "remotePath": "/home/developer/projects/aurora/thesis/phone-notebook/20261020/evidence/launch-tauri-cache-resume-v137.json",
+  "sha256": "d6b1f1c5e62f1c91544b0f530696c73294926a9447a98c4a2915dae3942b3335"
+}

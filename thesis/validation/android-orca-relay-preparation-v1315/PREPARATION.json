@@ -1,0 +1,105 @@
+{
+  "at": "2026-10-17T22:08:03Z",
+  "currentDeviceCallable": null,
+  "currentK1Changed": false,
+  "currentOrcaRuntime": "cc9e3275-28c6-4c45-85cc-bdcd2262aa7d",
+  "currentRawAdbRouteCallable": null,
+  "discoveryPolicy": "Use only the existing owner-approved Personal context/device identity. Global device inventory is not queued automatically; do not inspect company hosts or infer access from discovery. A historical device ID is not proof of current callability.",
+  "documentedFixedSshProxy": {
+    "callerRequiresLocalSdkOrVpn": false,
+    "notExposedByThisFixedProxy": [
+      "raw exec",
+      "APK install",
+      "ADB connect/pair",
+      "arbitrary ports"
+    ],
+    "ownerApprovedSeparateRawRelayNotDisprovedByProxyLimits": true,
+    "supported": [
+      "screenshot",
+      "tap",
+      "gesture",
+      "type",
+      "button",
+      "rotate",
+      "ax",
+      "app launch",
+      "runtime permission verbs",
+      "bounded logcat"
+    ]
+  },
+  "executionPolicy": "At a Root-owned resource window, revalidate the approved existing relay and record exact command/host/error. Coordinate through the original monitor. Use explicit device IDs; do not attach/change another session default, pair/connect, install SDKs, change keys/grants/network/security, stop devices or create a new relay to solve discovery. No device action while the current frozen condition is measuring.",
+  "existingExecutionHost": "ssh:ssh-1786238480967-semdev",
+  "existingHistoricalApprovedDeviceId": "ssh-adb:WyJzc2gtMTc4NjIzODQ4MDk2Ny1zZW1kZXYiLCIxOTIuMTY4LjI0MC4xMTI6NTU1NSJd",
+  "futureAndroidAcceptance": "Current native UI/offline answer/history/notification capture and applicable measured cells remain unproven; proxy documentation does not satisfy them.",
+  "guide": "Orca version-matched orca-emulator-android, fetched through the existing relay executable",
+  "guideSources": [
+    {
+      "bytes": 10254,
+      "path": "thesis/validation/android-orca-relay-preparation-v1315/SKILL.md",
+      "sha256": "4de175839cbcfbe01d5e87069510592cfcfa06cf832c12adb06a3a3ca9de724e"
+    },
+    {
+      "bytes": 10493,
+      "path": "thesis/validation/android-orca-relay-preparation-v1315/GUIDE-RECEIPT.json",
+      "sha256": "640c13028b76dabedbd0d5c2bb1e0fc34a2abf298cfe08626323d8d7d6caf2ec"
+    }
+  ],
+  "historicalRuntime": "5168da61-e878-402a-92a3-5ea447243a89",
+  "historicalSuccessfulReceipt": "00918889-0223-41e5-bc2c-4f5d72943495",
+  "newDeviceActions": 0,
+  "newFirstK2Gate": false,
+  "newMeasurements": 0,
+  "oldDirectConnectIsNotEmulatorAbsence": true,
+  "ownerDeclaredEmulatorAccessibleThroughExistingOrcaAdbUse": true,
+  "physicalDeviceClass": "Waydroid per owner authorization",
+  "preparedReadOnlyCommandsNotExecuted": {
+    "boundedLogcat": [
+      "/home/developer/.orca-relay/bin/orca",
+      "emulator",
+      "logcat",
+      "--lines",
+      "200",
+      "--device",
+      "ssh-adb:WyJzc2gtMTc4NjIzODQ4MDk2Ny1zZW1kZXYiLCIxOTIuMTY4LjI0MC4xMTI6NTU1NSJd",
+      "--json"
+    ],
+    "screenshot": [
+      "/home/developer/.orca-relay/bin/orca",
+      "emulator",
+      "screenshot",
+      "--device",
+      "ssh-adb:WyJzc2gtMTc4NjIzODQ4MDk2Ny1zZW1kZXYiLCIxOTIuMTY4LjI0MC4xMTI6NTU1NSJd",
+      "--json"
+    ]
+  },
+  "preservedPreviousFailure": {
+    "command": [
+      "/home/developer/.orca-relay/bin/orca",
+      "emulator",
+      "screenshot",
+      "--device",
+      "ssh-adb:WyJzc2gtMTc4NjIzODQ4MDk2Ny1zZW1kZXYiLCIxOTIuMTY4LjI0MC4xMTI6NTU1NSJd",
+      "--json"
+    ],
+    "errorCode": "runtime_error",
+    "errorMessage": "Command /usr/bin/node - failed(exit1):ORCA_OBSERVER_RESULT observerError=Execution-host observation failed",
+    "host": "ssh:ssh-1786238480967-semdev / personal-distrobox",
+    "noDeviceAbsenceOrAuthorizationDenialInferred": true,
+    "noIdenticalRetryQueued": true,
+    "ok": false,
+    "physicalResourceBoundary": "AfterV799naturalterminal/sealed941/auditpass; no modeltraffic",
+    "receipt": "v943-approved-waydroid-bound-screenshot.json",
+    "requestId": "445d78c2-e525-47ad-80fe-78b39e2b38c7"
+  },
+  "rawAdbPolicy": "Owner states an existing orca adb use route is available. The fixed SSH proxy guide does not document that separate raw-relay command/options/host binding. Preserve that owner fact; do not treat local ADB transport absence, old direct-connect failure or missing CLI catalog entry as emulator/route absence.",
+  "repeatOldDirectAdbConnect": false,
+  "roleAndOwnership": {
+    "monitorDispatch": "ctx_37b4d0a3c14f",
+    "monitorSoleMethodologyWriter": true,
+    "originalRun": "run_e6054e76e9fc",
+    "root": "01a112a5-d6bb-74e2-bf7c-ace73cb513b5",
+    "rootOwnsWaydroidAndExecutableReservation": true
+  },
+  "schema": "aurora.android_orca_route_preparation.v1",
+  "status": "DOCUMENTED_APPROVED_PROXY_PREPARATION_NO_DEVICE_ACTION"
+}

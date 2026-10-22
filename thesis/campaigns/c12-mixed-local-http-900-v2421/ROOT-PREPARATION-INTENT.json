@@ -1,0 +1,9 @@
+{
+  "at": "2026-10-22T07:14:51.316179+00:00",
+  "maximumSends": 1,
+  "maximumProviderPopen": 1,
+  "commandSha256": "e1b5e66334adb16cd73d6a733a4390cc1d71f205f35636ddb150dbb945b98e1c",
+  "allocationSha256": "8764dfb9111e43df673ad4f51830058b79eabc8a29924b4c4a91b4619c8e1d42",
+  "existingForwardReused": true,
+  "newMeasuredAdmitted": 0
+}

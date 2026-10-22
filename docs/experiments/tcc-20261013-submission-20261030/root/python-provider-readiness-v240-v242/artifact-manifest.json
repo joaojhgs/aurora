@@ -1,0 +1,126 @@
+{
+  "schema_version": 1,
+  "originals_retained": true,
+  "files": [
+    {
+      "path": "python-model-readiness-v240/harness-startup-error.json",
+      "sha256": "4b4453f2db100be0eb4f64636019b091dcd85fb12821a314a9f3cd86ce055992",
+      "original_sha256": "4b4453f2db100be0eb4f64636019b091dcd85fb12821a314a9f3cd86ce055992",
+      "transform": "none; public synthetic prompt only, no config/environment backups"
+    },
+    {
+      "path": "python-model-readiness-v240/settings.json",
+      "sha256": "623aa15894690793f6d02da8c50a76977d963aea13fb5bfe9e90843abede0857",
+      "original_sha256": "623aa15894690793f6d02da8c50a76977d963aea13fb5bfe9e90843abede0857",
+      "transform": "none; public synthetic prompt only, no config/environment backups"
+    },
+    {
+      "path": "python-model-readiness-v240/workload.json",
+      "sha256": "03e8139177bd21521c59b5c112f0fb677b79e5d1c988ee22b17c9b66f82b8586",
+      "original_sha256": "03e8139177bd21521c59b5c112f0fb677b79e5d1c988ee22b17c9b66f82b8586",
+      "transform": "none; public synthetic prompt only, no config/environment backups"
+    },
+    {
+      "path": "python-model-readiness-v240/readiness.py",
+      "sha256": "bb9f99f3306b9bbe9429b2e0970929954825c0b54f3bbd995dac1adcf5fc2ed8",
+      "original_sha256": "bb9f99f3306b9bbe9429b2e0970929954825c0b54f3bbd995dac1adcf5fc2ed8",
+      "transform": "none; public synthetic prompt only, no config/environment backups"
+    },
+    {
+      "path": "python-model-readiness-v241/manifest.json",
+      "sha256": "e3cd6df14fb133e16c84f7c67515883b2a693cc8c93a74eb9511bf7d0418fb4a",
+      "original_sha256": "e3cd6df14fb133e16c84f7c67515883b2a693cc8c93a74eb9511bf7d0418fb4a",
+      "transform": "none; public synthetic prompt only, no config/environment backups"
+    },
+    {
+      "path": "python-model-readiness-v241/result.json",
+      "sha256": "13daf6ee36a441ce8d48a3d9cf2812ad5b8e5b1255b105dcf4216efbd854e765",
+      "original_sha256": "13daf6ee36a441ce8d48a3d9cf2812ad5b8e5b1255b105dcf4216efbd854e765",
+      "transform": "none; public synthetic prompt only, no config/environment backups"
+    },
+    {
+      "path": "python-model-readiness-v241/settings.json",
+      "sha256": "623aa15894690793f6d02da8c50a76977d963aea13fb5bfe9e90843abede0857",
+      "original_sha256": "623aa15894690793f6d02da8c50a76977d963aea13fb5bfe9e90843abede0857",
+      "transform": "none; public synthetic prompt only, no config/environment backups"
+    },
+    {
+      "path": "python-model-readiness-v241/workload.json",
+      "sha256": "03e8139177bd21521c59b5c112f0fb677b79e5d1c988ee22b17c9b66f82b8586",
+      "original_sha256": "03e8139177bd21521c59b5c112f0fb677b79e5d1c988ee22b17c9b66f82b8586",
+      "transform": "none; public synthetic prompt only, no config/environment backups"
+    },
+    {
+      "path": "python-model-readiness-v241/readiness.py",
+      "sha256": "bb9f99f3306b9bbe9429b2e0970929954825c0b54f3bbd995dac1adcf5fc2ed8",
+      "original_sha256": "bb9f99f3306b9bbe9429b2e0970929954825c0b54f3bbd995dac1adcf5fc2ed8",
+      "transform": "none; public synthetic prompt only, no config/environment backups"
+    },
+    {
+      "path": "python-model-readiness-v241/stdout.log",
+      "sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+      "original_sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+      "transform": "none; public synthetic prompt only, no config/environment backups"
+    },
+    {
+      "path": "python-model-readiness-v241/stderr.log",
+      "sha256": "93326fa4057fdf62c8a64199f8b258d04503a82ebb0c594034d2d036ef7c56ee",
+      "original_sha256": "93326fa4057fdf62c8a64199f8b258d04503a82ebb0c594034d2d036ef7c56ee",
+      "transform": "none; public synthetic prompt only, no config/environment backups"
+    },
+    {
+      "path": "python-model-readiness-v242/manifest.json",
+      "sha256": "e38ecad449b9e8b8cfda43eac65e6ad3d36cb636635aea9ddfb25b28fa27bc11",
+      "original_sha256": "e38ecad449b9e8b8cfda43eac65e6ad3d36cb636635aea9ddfb25b28fa27bc11",
+      "transform": "none; public synthetic prompt only, no config/environment backups"
+    },
+    {
+      "path": "python-model-readiness-v242/result.json",
+      "sha256": "b57fe57166feb450b77647e3cbac0be883a27393b53a227f3d7d069a273510fb",
+      "original_sha256": "b57fe57166feb450b77647e3cbac0be883a27393b53a227f3d7d069a273510fb",
+      "transform": "none; public synthetic prompt only, no config/environment backups"
+    },
+    {
+      "path": "python-model-readiness-v242/settings.json",
+      "sha256": "623aa15894690793f6d02da8c50a76977d963aea13fb5bfe9e90843abede0857",
+      "original_sha256": "623aa15894690793f6d02da8c50a76977d963aea13fb5bfe9e90843abede0857",
+      "transform": "none; public synthetic prompt only, no config/environment backups"
+    },
+    {
+      "path": "python-model-readiness-v242/workload.json",
+      "sha256": "03e8139177bd21521c59b5c112f0fb677b79e5d1c988ee22b17c9b66f82b8586",
+      "original_sha256": "03e8139177bd21521c59b5c112f0fb677b79e5d1c988ee22b17c9b66f82b8586",
+      "transform": "none; public synthetic prompt only, no config/environment backups"
+    },
+    {
+      "path": "python-model-readiness-v242/readiness.py",
+      "sha256": "22ed92348e6bc6dc9c72976a7472e2b6d521dcaa58bcdb28f76c8d0e5fb3a0ae",
+      "original_sha256": "22ed92348e6bc6dc9c72976a7472e2b6d521dcaa58bcdb28f76c8d0e5fb3a0ae",
+      "transform": "none; public synthetic prompt only, no config/environment backups"
+    },
+    {
+      "path": "python-model-readiness-v242/stdout.log",
+      "sha256": "fbcbad486b62acb682e1e3bed9a51c299fde49620ff26a705f43f80ee4e4c9de",
+      "original_sha256": "fbcbad486b62acb682e1e3bed9a51c299fde49620ff26a705f43f80ee4e4c9de",
+      "transform": "none; public synthetic prompt only, no config/environment backups"
+    },
+    {
+      "path": "python-model-readiness-v242/stderr.log",
+      "sha256": "8376059164c1918b30ac9237639e5844955c968c0353ec0de7480b87748c6bf8",
+      "original_sha256": "8376059164c1918b30ac9237639e5844955c968c0353ec0de7480b87748c6bf8",
+      "transform": "none; public synthetic prompt only, no config/environment backups"
+    },
+    {
+      "path": "python-model-readiness-v242/request-observation.json",
+      "sha256": "078ff0b7661d6d5224a36c83be9fb17837079ae973ba07e8990abd32eca25ce8",
+      "original_sha256": "078ff0b7661d6d5224a36c83be9fb17837079ae973ba07e8990abd32eca25ce8",
+      "transform": "none; public synthetic prompt only, no config/environment backups"
+    },
+    {
+      "path": "python-model-readiness-v242/provider-result.json",
+      "sha256": "bae33b1bd3f80ef23fa4171ee6671e047e19463f54df76d76faf7f01bbd3920f",
+      "original_sha256": "bae33b1bd3f80ef23fa4171ee6671e047e19463f54df76d76faf7f01bbd3920f",
+      "transform": "none; public synthetic prompt only, no config/environment backups"
+    }
+  ]
+}

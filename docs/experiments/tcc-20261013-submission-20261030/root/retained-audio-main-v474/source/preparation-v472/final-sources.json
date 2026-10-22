@@ -1,0 +1,34 @@
+{
+  "files": [
+    {
+      "name": "driver.py",
+      "sha256": "50a7528c6a310b35bfd0aa0c0431a05abe03d12cb6cdeac24d79a71c64d87e95",
+      "bytes": 29201
+    },
+    {
+      "name": "driver-controller.py",
+      "sha256": "d05ad60cbc41ce79e04710e389201f01bf22698de2dfe842ba7cd2a5fc862141",
+      "bytes": 2821
+    },
+    {
+      "name": "supervisor.py",
+      "sha256": "fac70481a2f3bb5323e7181514f320ad1cfe55f55a3ed9a906002ac7aa8c0a92",
+      "bytes": 7859
+    },
+    {
+      "name": "backend-controller.py",
+      "sha256": "5f0002ac08881c2f1594166bfe3edf209fe63da6e611d2ac767301f8a6fd8252",
+      "bytes": 6253
+    },
+    {
+      "name": "source_guard_v455.py",
+      "sha256": "c63286ff0227f95a043a6c95133f12c50ae15fc68463597691f06cf35c4e85e6",
+      "bytes": 1588
+    }
+  ],
+  "AST": "PASS",
+  "RootCorrection": "A same-page media completion is ordered after the Read aloud click, not after the Python observer finishes reading HTTP body. WAV receipt and unique matching request are checked separately. Original candidate retained.",
+  "UIBuildId": "hrxU1EH9eftYmJl3tw_eR",
+  "UIBuildSource": "e5caa61b1158946b4e9f0d274a898c3e2c6b538cff5b4aef941d474ee3a08745",
+  "audioCaseLaunched": false
+}

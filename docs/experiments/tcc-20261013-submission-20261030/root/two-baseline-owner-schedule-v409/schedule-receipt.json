@@ -1,0 +1,58 @@
+{
+  "recordedAt": "2026-10-14T16:17:18.724452+00:00",
+  "ownerSchedule": "individual_cpu_and_desktop_gpu_parallel_then_barrier_then_cross_device",
+  "individualCPU": {
+    "originalFrozenCampaign": "6ce98ae97d594d9fafcd1ff9ad4b9b1c",
+    "measuredPlannedOriginalTotal": 900,
+    "measuredReviewed": 800,
+    "role": "extraCPU",
+    "finishUnchanged": true,
+    "finishedAndSealed": false,
+    "currentAPIChild": 1665506,
+    "startticks": 77236557
+  },
+  "individualGPU": {
+    "role": "separate_primary_desktop_GPU",
+    "startDoesNotWaitForCPU": true,
+    "hardware": "AMD Radeon RX 7600 RADV NAVI33",
+    "exposedVRAMBytes": 8573157376,
+    "vulkanSummaryExitCode": 0,
+    "backendAndInferenceVerified": false,
+    "benchmarkStarted": false,
+    "setupBlocker": {
+      "projectFilesystemAvailableBytes": 2040647680,
+      "missingExactSourceCommit": "5782746afba213f6b36907db2f09f0017625e218",
+      "missingBuildPrerequisites": [
+        "Vulkan headers",
+        "glslc"
+      ]
+    },
+    "finishedAndSealed": false
+  },
+  "phase1CrossDeviceCrossSurfaceMeasuredTrafficAllowed": false,
+  "crossDeviceBarrier": "both_individual_campaigns_finished_and_sealed",
+  "barrierReady": false,
+  "phase2SharedProviderLocalUserPlusMesh": "required_declared_controlled_load_contention_conditions",
+  "newMeasuredPerApplicableCondition": 900,
+  "warmups": "additional_excluded",
+  "cumulativeRemoteStages": [
+    [
+      "TTS"
+    ],
+    [
+      "TTS",
+      "LLM"
+    ],
+    [
+      "TTS",
+      "LLM",
+      "STT"
+    ]
+  ],
+  "iOSActiveScope": false,
+  "poolCPUGPU": false,
+  "monitorSoleAuthoritativeVaultPlanWriter": true,
+  "planSha256": "b7efb40b33ae4ea952569706c97bb1dbe7583351e009d882213afed409f4a189",
+  "newWorkersOrRoot": false,
+  "securityOrCompanyChanges": false
+}

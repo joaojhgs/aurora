@@ -1,0 +1,16 @@
+{
+  "stdout.log": {
+    "original_sha256": "991e68d4ebff7d22197a2e54ae44bc5983fb86e60b7e3892c2f8e6c625d5d99f",
+    "original_bytes": 77038,
+    "exported_redacted_sha256": "4685fe33d6e8939e6a0145e564242990270221ca876661c0216e67eb17aaed59",
+    "credential_matching_lines_withheld": 34,
+    "original_retained_private": true
+  },
+  "stderr.log": {
+    "original_sha256": "346fd052d3dc03d700fe1124091660cd8b67a5980763ea7e056b6c8e94aa18e4",
+    "original_bytes": 827,
+    "exported_redacted_sha256": "346fd052d3dc03d700fe1124091660cd8b67a5980763ea7e056b6c8e94aa18e4",
+    "credential_matching_lines_withheld": 0,
+    "original_retained_private": true
+  }
+}

@@ -1,0 +1,158 @@
+{
+  "at": "2026-10-20T17:01:38.578882+00:00",
+  "classification": "progress_new_measured_failure_evidence_and_verified_live_collection",
+  "nativeGoalThread": "01a112a5-d6bb-74e2-bf7c-ace73cb513b5",
+  "nativeGoalStatus": "active",
+  "fullObjectivePreserved": true,
+  "status": "FROZEN_K2_RUNNING_WITH_RETAINED_PREACCEPT_FAILURES",
+  "conditionManifestSha256": "a653d60065616e34844d956d1ed47038aa94f3ff876c36bf3a98e904ca838641",
+  "measuredCompleted": 197,
+  "measuredOutcomes": {
+    "completed_correct": 195,
+    "failed": 2
+  },
+  "failures": [
+    {
+      "case": "thesis/campaigns/worker-desktop-k2-p2p-assistant-tts-v1826/attempts/attempt-0189-measured.jsonl",
+      "source": ".git/aurora-handoff-import-20261006/distributed-k2-mesh-cell-v1826/campaign/attempts/attempt-0189-measured.jsonl",
+      "bytes": 5182,
+      "sha256": "4b70adf9999896fbab762db0cc90bea1c8c42b24a745ef92a9e04253a816db49",
+      "physicalThesisCaseCopyMatches": true,
+      "phaseIndex": 174,
+      "harnessCaseId": "audio-campaign-v1731-0189",
+      "correlation": {
+        "correlation_id": "audio-campaign-132811437e1e46a8a36257f005fcfb82",
+        "request_id": "audio-request-1283e42fc1a647b19d6f11352fe7c8df",
+        "session_id": "audio-session-dc178f93bef2465bbf62e9c047028641"
+      },
+      "failure": {
+        "code": "preaccept_capability_changed",
+        "stage": "tts"
+      },
+      "consecutivePreacceptRejections": 1,
+      "correctness": {
+        "assistant_reply_matches_expected_words": true,
+        "transcript_matches_reference_words": true
+      },
+      "outputAudio": null,
+      "flowDurationMs": 15295.65726,
+      "preacceptResponse": {
+        "accepted": false,
+        "correlation_id": "audio-campaign-132811437e1e46a8a36257f005fcfb82",
+        "method_topic": "TTS.Synthesize",
+        "peer_call_pid": 2830763,
+        "peer_id_sha256": "77421aa81ce7ae2e865455348e9aa5ae17013d8f5e1f72d38d71d09f110ef868",
+        "reason_code": "capability_changed"
+      },
+      "frozenStructuredPolicyChecks": {
+        "acceptedFalse": true,
+        "reasonCapabilityChanged": true,
+        "exactMethod": true,
+        "exactPeerHash": true,
+        "exactCorrelation": true,
+        "exactRequesterPid": true,
+        "positiveMonotonicFlow": true,
+        "notTimeout": true
+      }
+    },
+    {
+      "case": "thesis/campaigns/worker-desktop-k2-p2p-assistant-tts-v1826/attempts/attempt-0204-measured.jsonl",
+      "source": ".git/aurora-handoff-import-20261006/distributed-k2-mesh-cell-v1826/campaign/attempts/attempt-0204-measured.jsonl",
+      "bytes": 5183,
+      "sha256": "34dc2df432b1c87a2fd1d26c793df1c083e67e0919458cab40a5de3c0be2e24f",
+      "physicalThesisCaseCopyMatches": true,
+      "phaseIndex": 189,
+      "harnessCaseId": "audio-campaign-v1731-0204",
+      "correlation": {
+        "correlation_id": "audio-campaign-b04cc857342047ac874784210413a58c",
+        "request_id": "audio-request-c3701b53d9174cb894be07cd3b8c64db",
+        "session_id": "audio-session-13eb4ec693924be29e4cf71db6be5e20"
+      },
+      "failure": {
+        "code": "preaccept_capability_changed",
+        "stage": "tts"
+      },
+      "consecutivePreacceptRejections": 1,
+      "correctness": {
+        "assistant_reply_matches_expected_words": true,
+        "transcript_matches_reference_words": true
+      },
+      "outputAudio": null,
+      "flowDurationMs": 16468.015003,
+      "preacceptResponse": {
+        "accepted": false,
+        "correlation_id": "audio-campaign-b04cc857342047ac874784210413a58c",
+        "method_topic": "TTS.Synthesize",
+        "peer_call_pid": 2830763,
+        "peer_id_sha256": "77421aa81ce7ae2e865455348e9aa5ae17013d8f5e1f72d38d71d09f110ef868",
+        "reason_code": "capability_changed"
+      },
+      "frozenStructuredPolicyChecks": {
+        "acceptedFalse": true,
+        "reasonCapabilityChanged": true,
+        "exactMethod": true,
+        "exactPeerHash": true,
+        "exactCorrelation": true,
+        "exactRequesterPid": true,
+        "positiveMonotonicFlow": true,
+        "notTimeout": true
+      }
+    }
+  ],
+  "frozenFailurePolicy": {
+    "consecutiveMeasuredRejectionHardStop": 3,
+    "exactStructuredAcceptedFalseCapabilityChanged": "record_failed_then_next_distinct_measured_index",
+    "otherAmbiguousOrSystemFailure": "hard_stop",
+    "retryOrFallback": false,
+    "warmupAnyFailure": "hard_stop"
+  },
+  "requesterProcesses": [
+    {
+      "pid": 2830732,
+      "startTicks": 129050331,
+      "state": "S",
+      "verifiedLive": true
+    },
+    {
+      "pid": 2830763,
+      "startTicks": 129050436,
+      "state": "S",
+      "verifiedLive": true
+    },
+    {
+      "pid": 2831081,
+      "startTicks": 129052325,
+      "state": "S",
+      "verifiedLive": true
+    }
+  ],
+  "custody": {
+    "updatedAt": "2026-10-20T17:01:15.435081+00:00",
+    "receipt": "thesis/campaigns/worker-desktop-k2-p2p-assistant-tts-v1826/receipts/000061.json",
+    "receiptSha256": "1b55f3627c488acb6647704f8dad51ee14a2a908729d090cf8be0756637cdf60",
+    "cases": 211,
+    "audioBlobs": 209,
+    "physicalPayloadBytes": 15715241,
+    "errors": [],
+    "diskAfter": {
+      "free": 4453920768,
+      "total": 109128826880,
+      "used": 104658128896
+    }
+  },
+  "interpretation": {
+    "classification": "Explicit TTS rejection before acceptance. STT transcript and assistant answer correct; no TTS audio expected on rejected cases. These are retained failed measured attempts, not lost-audio evidence or model-quality failures.",
+    "receiverPredicateCause": "UNKNOWN; no live source or authority changes to infer or remove it",
+    "requesterPidVersusPeerClarification": "2830763 is the worker PeerBridge process PID; selected remote peer is separately bound by peer_id_sha256. Configured local worker LLM settings are not actual remote GPU backend evidence.",
+    "retriesOrFallbackAdded": false,
+    "consecutiveFailureHardStopChanged": false,
+    "controllerDecision": "Continue next DISTINCT measured index under unchanged frozen policy; later success rows observed."
+  },
+  "supervision": {
+    "mailboxWaitMs": 50000,
+    "localCheckApproxSeconds": 300,
+    "lastHeartbeat": "msg_119a13218b5f",
+    "lastEventWaitReceipt": ".git/aurora-handoff-import-20261006/root-event-wait-v1846-06.json"
+  },
+  "nextGate": "Natural terminal boundary of same900, then EOF requester/provider custody and saved-data native-stage/resource analysis. K1 remaining191 and full matrix stayOPEN."
+}

@@ -1,0 +1,13 @@
+{
+  "at": "2026-10-22T10:59:33.289135+00:00",
+  "oldHelper": "thesis/harness/orca_copy_control_raw_read_v1652.py",
+  "oldSha256": "4fea952826614564402c1926e565e38771601600757c7b7d6d931d18793c3a3f",
+  "newHelper": "thesis/harness/orca_copy_control_enter_v2449.py",
+  "newSha256": "85e6795f710849c5f5fcedefb7480c98e84050a5d03ccb358518b8befe1651e5",
+  "change": "supported terminal send explicit --enter; omit trailing raw LF from text",
+  "actualEvidence": "recovery-v2448/RESULT.json recovered10454 missing bytes through same original terminal",
+  "originalControlFailureRootCause": "UNCONFIRMED raw-LF input acceptance did not produce observable output; explicit supported Enter confirmed new read execution",
+  "originalFrozenSourcesUnmodified": true,
+  "inference": 0,
+  "maximumSendsPerOperation": 1
+}

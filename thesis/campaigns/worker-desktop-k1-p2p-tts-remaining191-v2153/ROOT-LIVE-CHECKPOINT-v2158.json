@@ -1,0 +1,31 @@
+{
+  "at": "2026-10-21T03:10:29.029270+00:00",
+  "warmups": {
+    "attempted": 15,
+    "correct": 15,
+    "failed": 0
+  },
+  "newMeasured": 0,
+  "remaining": 191,
+  "actors": {
+    "3332811": {
+      "state": "S",
+      "sameStart": true,
+      "startTicks": 132995693
+    },
+    "3332919": {
+      "state": "S",
+      "sameStart": true,
+      "startTicks": 132996503
+    },
+    "3333678": {
+      "state": "S",
+      "sameStart": true,
+      "startTicks": 133003703
+    },
+    "3333679": "absent"
+  },
+  "classification": "requires_same_actor_reconciliation",
+  "nextRoutineCheckUtc": "2026-10-21T03:15:29.029270+00:00",
+  "sutCallsByObserver": 0
+}

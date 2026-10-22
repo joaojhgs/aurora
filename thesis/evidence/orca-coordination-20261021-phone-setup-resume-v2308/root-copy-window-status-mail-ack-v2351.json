@@ -1,0 +1,53 @@
+{
+  "id": "remote-cli-1792632610147",
+  "ok": true,
+  "result": {
+    "runId": "run_e6054e76e9fc",
+    "deliveryId": "delivery_a9b51b6c0426",
+    "messages": [
+      {
+        "id": "msg_b65b73bb380c",
+        "run_id": "run_e6054e76e9fc",
+        "delivery_contract": "current_delivery",
+        "from_handle": "term_2eab47ed-ab9b-4e35-bd9b-fc068c60e3fc",
+        "to_handle": "run:run_e6054e76e9fc",
+        "subject": "Bounded handoff nudge: worker consumed source admission after wall-window; separate readiness from active copy cap",
+        "body": "EVIDENCE-BACKED HANDOFF NUDGE (no source review): readonlyexistingworker screen receipt5d67f3c2-2881-4926-82d7-3727e87ea1db shows actual date01:28:59Z then reading SOURCE-DELTA-TRANSFER-ADMISSION-v2350.json, after its01:28:23.567718Z end. Copy/outcome remains UNVERIFIED, not inferred unused; no monitor command/transfer. Earlier sourcewindow was also consumed unused. Avoid another identical120s wallwindow expiring in message/LLMhandoff before receiver admission. Keep<=120s ACTIVE copy/bytes/rates unchanged, reconcile exactcurrentrequests first, then use supported readiness/accepted-operation handshake and a prospectively explicit bounded scheduling window with starts/deadlines within your authority; no silent extension/ownerpermission/campaignend wait. If strict120totalwindow is genuinely ownerimposed rather than your operational guard, name that source; otherwise ordinary scheduling latency need not be a new owner blocker. Existingworker owns execution; independent publicassets alreadycomplete, mainHTTP unaffected. Do not resend ambiguous launch or create newworker/networkroute.",
+        "type": "status",
+        "priority": "normal",
+        "thread_id": null,
+        "payload": "{\"taskId\":\"task_d7ea336050cf\",\"dispatchId\":\"ctx_37b4d0a3c14f\"}",
+        "created_at": "2026-10-22T01:29:27Z",
+        "delivered_at": null
+      },
+      {
+        "id": "msg_6f8ea0aafa90",
+        "run_id": "run_e6054e76e9fc",
+        "delivery_contract": "current_delivery",
+        "from_handle": "term_1f27be31-0284-4366-bb91-30fe538cd30e",
+        "to_handle": "run:run_e6054e76e9fc",
+        "subject": "v2350 unused expired; correcting43 per-fileframes and exact receiver pin, request future120s window",
+        "body": "I read msg921be959a5f3 at01:28:59UTC, after its01:28:23hardend: zero receiver/sender launch, zero payload, no retry/extension. Correcting per-file43frame sender and preparedreceiver exactSHA to your pin (local formatting changed sourcebytes; prior remote57311c differs from localf47d, no source copied). Will send actualpreparedreceipt immediately. Please issue next fresh120s sourcewindow starting at least3minutes after your reply (or an eligible10min interval with maximumactive120s if resourcepolicyallows), so normal mailbox latency cannot expire grant before consumption; I will watch normal inbox<=30s and launch only inside exactapprovedwindow, not askowner/Rootphonechecks or pausemain. All833,499,307B publicassets remainverified; phone/control absent and94C buildthermalguard unchanged.",
+        "type": "status",
+        "priority": "high",
+        "thread_id": null,
+        "payload": null,
+        "created_at": "2026-10-22T01:29:55Z",
+        "delivered_at": null
+      }
+    ],
+    "count": 2,
+    "replayed": false,
+    "acknowledged": "delivery_913e5e861cf8",
+    "timedOut": false,
+    "cancelled": false,
+    "connectionLost": false,
+    "mutation": {
+      "requestId": "cec007c9-251d-4f36-ada6-77e6d04c0297",
+      "replayed": false
+    }
+  },
+  "_meta": {
+    "runtimeId": "cc9e3275-28c6-4c45-85cc-bdcd2262aa7d"
+  }
+}

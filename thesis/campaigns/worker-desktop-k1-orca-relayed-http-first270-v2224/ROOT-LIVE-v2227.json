@@ -1,0 +1,63 @@
+{
+  "at": "2026-10-21T16:24:38.187323+00:00",
+  "status": "FROZEN_HTTP_BEARER_REQUESTER_RUNNING_WARMUPS",
+  "nativeGoalThread": "01a112a5-d6bb-74e2-bf7c-ace73cb513b5",
+  "nativeGoalStatus": "active",
+  "actors": [
+    {
+      "pid": 3736705,
+      "state": "S",
+      "startTicks": 137801780
+    },
+    {
+      "pid": 3736724,
+      "state": "S",
+      "startTicks": 137801974
+    },
+    {
+      "pid": 3736706,
+      "state": "S",
+      "startTicks": 137801781
+    },
+    {
+      "pid": 3736707,
+      "state": "S",
+      "startTicks": 137801782
+    }
+  ],
+  "counts": {
+    "warmup": {
+      "attempted": 5,
+      "correct": 5,
+      "failed": 0
+    },
+    "measured": {
+      "attempted": 0,
+      "correct": 0,
+      "failed": 0
+    }
+  },
+  "physicalCases": 4,
+  "verifiedWAV": 4,
+  "custodyErrors": [],
+  "copierSequence": 6,
+  "manifestSha256": "40a606f2113708bbb5bf6cc528f038c00a35a8944ebfb1e424c93215dc922294",
+  "sameProviderReceiver": {
+    "pid": 1440196,
+    "startTicks": 35427408
+  },
+  "sameProviderNoRestart": true,
+  "nextReadOnlyCheckAt": "2026-10-21T16:29:38.187323+00:00",
+  "immediateOn": "terminal/failure/custody error",
+  "nextAutomaticGate": "15 correct excluded realaudio flows, saved native+capacity proof, then firstnew measured181",
+  "nextMeasurementAutomatic": true,
+  "phoneTaskExclusiveTerminal": "term_1f27be31-0284-4366-bb91-30fe538cd30e",
+  "phoneSHAHandedOff": "ebde3a8acf6315f920d03593845f17a1fc65a733",
+  "phoneNotMainGate": true,
+  "targetStill900": true,
+  "originalHTTPMeasuredRetained": 180,
+  "newMeasuredPlanned": 270,
+  "remainingAfterActual270": 450,
+  "rootDeadlineUtc": "2026-10-21T23:36:07.231887+00:00",
+  "providerDeadlineUtc": "2026-10-21T22:45:52.468654+00:00"
+}

@@ -1,0 +1,38 @@
+{
+  "at": "2026-10-19T23:54:36.595874+00:00",
+  "control": "RESTORED_BY_ACTUAL_EXECUTED_COMMAND",
+  "actualProviderReadReceipt": "thesis/evidence/orca-desktop-recovery-20261019T2348/ACTUAL-ORIGINAL-PROVIDER-RECONCILIATION-v1651.json",
+  "allOriginalProviderOwnersAbsent": true,
+  "providerIdentities": "b4manifest/aaConfig exact, expired admission not renewed",
+  "forward": {
+    "pid": 421717,
+    "startTicks": 104535394,
+    "actualObservedSame": true,
+    "readyForApplicationInference": false,
+    "reason": "Original provider retired; no application traffic issued"
+  },
+  "globalBuildLock": {
+    "path": "/tmp/aurora-global-build.lock",
+    "inode": 3093,
+    "kernelLocksObserved": [],
+    "noLockAcquiredOrChanged": true
+  },
+  "copyOwner": {
+    "pid": 2163792,
+    "startTicks": 123242907,
+    "execSession": 60354,
+    "source": "thesis/campaigns/worker-desktop-k3-orca-relayed-http-remaining-v1620/provider-transfer-v1654/STATE.json",
+    "status": "transferring_existing_checkpoint",
+    "copiedBytesAtCheckpoint": 2162688,
+    "totalCompressedBytes": 7513422,
+    "rawFiles": 489,
+    "rawBytes": 117658016,
+    "baselineFilesReused": 1305,
+    "baselineRawBytesRecopied": 0
+  },
+  "nativeRootStatus": "BLOCKED_UNTIL_OWNER_REQUIRED_RAW_RECONCILIATION_CUSTODY_COMPLETE",
+  "nativeMonitorStatus": "blocked as owner-recovery turn confirmed; no resume requested yet",
+  "newInference": 0,
+  "newWorkersOrProviders": 0,
+  "oldDataPreserved": true
+}

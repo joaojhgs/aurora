@@ -1,0 +1,79 @@
+{
+  "at": "2026-10-21T02:27:17.035614+00:00",
+  "host": "code-worker",
+  "status": "ACTUAL_K1_WORKER_MODEL_INTERPRETER_INVENTORY_PARENT_SEAL_PREFLIGHT_PASS",
+  "models": [
+    {
+      "model": "llm",
+      "path": "/home/developer/projects/aurora/.artifacts/local-inference/models/Qwen3.5-0.8B-Q4_0.gguf",
+      "bytes": 563036064,
+      "sha256": "57d1997790d1744fba5b40a7317df71ea5e2acee28c47e78f0cce39c0703f8cf",
+      "matchesHistoricalK1": true
+    },
+    {
+      "model": "stt",
+      "path": "/home/developer/.cache/huggingface/hub/models--Systran--faster-whisper-base/blobs/d01c3014881c9c6f3133c182f3d2887eb6ca1c789a7538c5c007196857a0a6a9",
+      "bytes": 145217532,
+      "sha256": "d01c3014881c9c6f3133c182f3d2887eb6ca1c789a7538c5c007196857a0a6a9",
+      "matchesHistoricalK1": true
+    },
+    {
+      "model": "tts",
+      "path": "/home/developer/projects/aurora/.git/aurora-handoff-import-20261006/cpu-full-audio-v483/models/en_US-ljspeech-medium.onnx",
+      "bytes": 63531379,
+      "sha256": "6f52a751e2349abe7a76735eb09dc1875298c77ea2342ffd2fef79ff81b87f22",
+      "matchesHistoricalK1": true
+    },
+    {
+      "model": "tts_config",
+      "path": "/home/developer/projects/aurora/.git/aurora-handoff-import-20261006/cpu-full-audio-v483/models/en_US-ljspeech-medium.onnx.json",
+      "bytes": 4972,
+      "sha256": "141d612cc0a95ed7efc1ca936b845c2364967f2e9217c5dbfcf69fc4d6c65860",
+      "matchesHistoricalK1": true
+    }
+  ],
+  "interpreterVersion": "Python 3.11.17",
+  "interpreterSha256": "1e463bf849bb038214f6d4278f1aa6e079f307c04db5c9ed192543d5d866fa97",
+  "historicalSourceInventorySha256": "a38421a03ffafb73a4c469aa7c82fb299210eedd6fe97809beb3c508782883d4",
+  "parentSeals": [
+    {
+      "path": "thesis/campaigns/worker-desktop-k1-p2p-tts-v1711/terminal-v1716/seal/REQUESTER-SEAL.json",
+      "sha256": "4e01efc4f7ee0274ff21bf68c6e53294c9543dd009f14177bc180ece4262ab89",
+      "measurement": {
+        "planned": 900,
+        "attempted": 20,
+        "correct": 19,
+        "failed": 1,
+        "timeoutFlagged": 0,
+        "unattempted": 880
+      }
+    },
+    {
+      "path": "thesis/campaigns/worker-desktop-k1-p2p-tts-remaining880-v1719/terminal-v1777/seal/REQUESTER-SEAL.json",
+      "sha256": "a85ca3225c99ef6f467568b1c69dff9378769ee5ef495af4a172c1352f153e43",
+      "measurement": {
+        "epochPlanned": 880,
+        "attempted": 689,
+        "correct": 678,
+        "failed": 11,
+        "timeoutFlagged": 1,
+        "unattempted": 191
+      }
+    }
+  ],
+  "memAvailableBytes": 5480972288,
+  "freeBytes": 3935784960,
+  "workerMemoryDiskAdmission": true,
+  "sameK3RequesterActorsAbsent": true,
+  "modelInferenceCalls": 0,
+  "measuredRequests": 0,
+  "warmups": 0,
+  "nextRemainingMeasured": 191,
+  "globalRange": [
+    710,
+    900
+  ],
+  "providerAdmission": "NOT_ADMITTED: fresh ordinary provider/source/current task mapping and finite readiness policy not frozen/launched",
+  "budgetCorrection": "Earlier carry-forward37512.993896s is retained historical charged accounting through V1779 termination, not a current unexpired allocation. The old wall-clock/provider deadline has expired. Arithmetic34487.006104s in the prep receipt is NOT current launch authority. Under ownerplan30.72 any new condition-sized lifecycle must have an explicit prospective separate finite allocation and retain original72000s allocation/all charges and current calendar elapsed; never silently reuse/reset/extend old deadline.",
+  "phoneSeparate": true
+}

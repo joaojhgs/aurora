@@ -1,0 +1,6 @@
+{
+  "at": "2026-10-22T10:43:54.922583+00:00",
+  "exceptionType": "RuntimeError",
+  "modelQualityInference": false,
+  "reconcileBeforeAnyNewInference": true
+}

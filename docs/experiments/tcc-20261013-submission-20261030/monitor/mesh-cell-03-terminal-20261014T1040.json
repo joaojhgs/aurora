@@ -1,0 +1,93 @@
+{
+  "observed_at": "2026-10-14T10:39:06.242351+00:00",
+  "cell": "03-mesh",
+  "terminal": {
+    "status": "completed",
+    "child_exit_code": 0,
+    "exit_code": 0,
+    "finished_at": "2026-10-14T10:36:52.948081+00:00",
+    "receipt_validation": {
+      "validated": true,
+      "failure_classes": [],
+      "expected_requests": 105,
+      "expected_provider_captures": 105,
+      "capture_join": "ordered_serial_count",
+      "raw_artifacts_retained": true
+    },
+    "detached_group_cleanup": [
+      {
+        "group_owned": true,
+        "leader_verified": true,
+        "reaped": true
+      },
+      {
+        "group_owned": true,
+        "leader_verified": true,
+        "reaped": true
+      },
+      {
+        "group_owned": true,
+        "leader_verified": true,
+        "reaped": true
+      }
+    ]
+  },
+  "attachment_count": 105,
+  "measured_count": 100,
+  "warmup_count": 5,
+  "measured_outcomes": {
+    "completed_exact": 100
+  },
+  "warmup_outcomes": {
+    "completed_exact": 5
+  },
+  "all_exact_response_true": true,
+  "all_completion_counts_one": true,
+  "completion_kind_counts": {
+    "fallback": 74,
+    "completed": 31
+  },
+  "all_identifiers_nonempty": true,
+  "unique_request_ids": true,
+  "unique_message_ids": true,
+  "unique_correlation_ids": true,
+  "all_durations_within_180s": true,
+  "warmups_excluded": true,
+  "measured_not_excluded": true,
+  "capture_count": 105,
+  "all_captured": true,
+  "all_three_hashes_match": true,
+  "capture_ordinal_complete": true,
+  "capture_request_ordinal_complete": {
+    "provided_count": 0,
+    "expected_join": "ordered_serial_count"
+  },
+  "quantile_method": "Hyndman-Fan Type 7",
+  "population": "success-only single loaded-host session; 5 warmups excluded; no pooled/causal claim",
+  "derived_ms": {
+    "p50": 34570.5,
+    "p90": 40538.2,
+    "p95": 41758.75,
+    "p99": 45166.600000000006
+  },
+  "playwright_report_sha256": "6176293be40fe97653a15863a21c3815da33770436a6e237ace8799bc74ca9af",
+  "cell_result_sha256": "6d899a7f36b7d76c9d06101c18b2603ef1d3164919733db9094415a0fc02e9f1",
+  "provider_capture_sha256": "94826b93435f5c1fa5866d1496481e8036e941c3cab98c0e940ccae7defc0c3e",
+  "next_cell_baseline_resources_exists": true,
+  "runId": "run_e6054e76e9fc",
+  "taskId": "task_d7ea336050cf",
+  "dispatchId": "ctx_37b4d0a3c14f",
+  "rootNotification": "msg_45e70fcb6a42",
+  "rootReadConfirmed": false,
+  "completedMeasuredTotal": 300,
+  "plannedMeasuredTotal": 900,
+  "nextCell": "04-api",
+  "nextCellObservedPhase": "prebaseline",
+  "nextCellObservedAt": "2026-10-14T10:40:15.299156+00:00",
+  "firstSessionComparisons": {
+    "mesh_minus_local_p90_ms": 5910.645463899993,
+    "mesh_minus_local_p95_ms": 5020.8257233999975,
+    "mesh_minus_api_p90_ms": 4024.046940299995,
+    "mesh_minus_api_p95_ms": 3414.9674885999993
+  }
+}

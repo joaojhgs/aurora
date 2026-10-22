@@ -1,0 +1,59 @@
+{
+  "schema": "aurora.phone.speech_assets.v1",
+  "items": [
+    {
+      "id": "stt:whisper:base",
+      "archive": {
+        "asset_id": 196350768,
+        "byte_size": 207557382,
+        "filename": "sherpa-onnx-whisper-base.tar.bz2",
+        "format": "tar_bzip2",
+        "root": "sherpa-onnx-whisper-base",
+        "sha256": "911b2083efd7c0dca2ac3b358b75222660dc09fb716d64fbfc417ba6c99ff3de",
+        "updated_at": "2024-10-02T09:31:09Z",
+        "url": "https://github.com/k2-fsa/sherpa-onnx/releases/download/asr-models/sherpa-onnx-whisper-base.tar.bz2"
+      },
+      "bindings": {
+        "decoder": "sherpa-onnx-whisper-base/base-decoder.int8.onnx",
+        "encoder": "sherpa-onnx-whisper-base/base-encoder.int8.onnx",
+        "tokens": "sherpa-onnx-whisper-base/base-tokens.txt"
+      },
+      "catalogSourceCommit": "ebde3a8acf6315f920d03593845f17a1fc65a733",
+      "catalogSourcePath": "rust/crates/aurora-voice-engine/resources/sherpa_onnx_speech_catalog.json"
+    },
+    {
+      "id": "standard:piper:en_us-ljspeech-medium",
+      "archive": {
+        "asset_id": 276487068,
+        "byte_size": 67169893,
+        "filename": "vits-piper-en_US-ljspeech-medium.tar.bz2",
+        "format": "tar_bzip2",
+        "root": "vits-piper-en_US-ljspeech-medium",
+        "sha256": "3dfb4b759d8be032a4903a9538d128b0fda2a06ab1de6cbc2d93a97e2dd83dba",
+        "updated_at": "2025-07-26T03:06:49Z",
+        "url": "https://github.com/k2-fsa/sherpa-onnx/releases/download/tts-models/vits-piper-en_US-ljspeech-medium.tar.bz2"
+      },
+      "bindings": {
+        "config": "vits-piper-en_US-ljspeech-medium/en_US-ljspeech-medium.onnx.json",
+        "data_dir": "vits-piper-en_US-ljspeech-medium/espeak-ng-data",
+        "model": "vits-piper-en_US-ljspeech-medium/en_US-ljspeech-medium.onnx",
+        "model_card": "vits-piper-en_US-ljspeech-medium/MODEL_CARD",
+        "tokens": "vits-piper-en_US-ljspeech-medium/tokens.txt"
+      },
+      "catalogSourceCommit": "ebde3a8acf6315f920d03593845f17a1fc65a733",
+      "catalogSourcePath": "rust/crates/aurora-voice-engine/resources/sherpa_onnx_tts_catalog.json"
+    }
+  ],
+  "totalArchiveBytes": 274727275,
+  "downloadScope": "direct Personal notebook HTTPS from exact original public release, bounded1MiB/s, no worker/desktop transfer",
+  "noSubstitution": [
+    "Whisper base multilingual int8 ONNX; never tiny/base.en",
+    "Piper LJS medium; never cori/fp16/int8 voice alternatives"
+  ],
+  "comparisonBoundary": "Phone Sherpa ONNX backend is distinct from notebook CTranslate2/Piper. Extracted model/config hashes must be recorded and compared; logical model name alone never proves binary equality. No pooling changed device/backend/model strata.",
+  "referenceNotebookSttSha256": "d01c3014881c9c6f3133c182f3d2887eb6ca1c789a7538c5c007196857a0a6a9",
+  "referencePiperSha256": "6f52a751e2349abe7a76735eb09dc1875298c77ea2342ffd2fef79ff81b87f22",
+  "referencePiperConfigSha256": "141d612cc0a95ed7efc1ca936b845c2364967f2e9217c5dbfcf69fc4d6c65860",
+  "eligibility": "unverified until exact assets + actual native STT/TTS correctness",
+  "notebookModelDownloadsRepeated": false
+}

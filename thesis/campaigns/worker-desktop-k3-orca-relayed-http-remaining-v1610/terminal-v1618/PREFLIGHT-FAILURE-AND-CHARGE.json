@@ -1,0 +1,43 @@
+{
+  "at": "2026-10-18T22:30:34.216066+00:00",
+  "status": "NATURAL_PREFLIGHT_FAILURE_ZERO_REQUESTS_NO_NATIVE_PROOF_SEND",
+  "frozenManifestSha256": "369f518fb7a67f3e5df44a6bd5039ef5fc3f64efddb91946f1c0623f11e3bc2b",
+  "guardFailure": "remaining_epoch_lineage_invalid",
+  "specificFalseRequirements": [
+    "PRIOR_MEASURED_COUNT + MEASURED_COUNT != CONDITION_TARGET:716+120!=900",
+    "epoch.lastConditionMeasuredIndex != CONDITION_TARGET:836!=900"
+  ],
+  "properFinitePrefixRequirements": [
+    "0<MEASURED_COUNT and PRIOR_MEASURED_COUNT+MEASURED_COUNT<=CONDITION_TARGET",
+    "lastConditionMeasuredIndex == PRIOR_MEASURED_COUNT+MEASURED_COUNT",
+    "conditionTargetMeasured remains900 and allunattempted remainrequired"
+  ],
+  "requests": 0,
+  "warmups": 0,
+  "measured": 0,
+  "modelQualityInference": false,
+  "remoteCollectorRequested": false,
+  "elapsedChargeBoundary": "RootLAUNCH-INTENT at -> actual controllerfinished_at; all preflight/child startup included; no finer unrecorded phase times invented",
+  "elapsedChargeSeconds": 15.223255,
+  "cumulativeUsedSeconds": 23594.129217333004,
+  "remainingOf57600Seconds": 34005.870782667,
+  "old716AttemptsUnchanged": true,
+  "operatorStates": {
+    "controller": {
+      "pid": 1494269,
+      "present": false
+    },
+    "backend": {
+      "pid": 1494424,
+      "present": false
+    },
+    "copier": {
+      "pid": 1494270,
+      "present": true
+    },
+    "finalizer": {
+      "pid": 1494271,
+      "present": false
+    }
+  }
+}

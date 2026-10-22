@@ -1,0 +1,28 @@
+{
+  "startedAt": "2026-10-14T23:33:47.694924+00:00",
+  "controllerPid": 2845075,
+  "capSeconds": 300,
+  "voiceAttemptsAdded": 0,
+  "measurementStarted": false,
+  "globalBuildLockHeld": true,
+  "changes": "build-only webpack cache disabled, standalone packaging disabled, one build worker; production app/SDK/UI sources unchanged",
+  "priorFailurePreserved": true,
+  "previousFailure": "actual MODULE_NOT_FOUND next compiled app-page runtime from real devshm output; compile35.9/typecheck24.4 passed, old partials preserved",
+  "buildConfigSHA256": "1bf3295f877ab9335a3384476f18522a9f6d917c7908f2948bf37aed7b95f7ae",
+  "resolutionPreflight": {
+    "exitCode": 0,
+    "actualPath": "/tmp/aurora-root-android-current-v438/source/node_modules/.pnpm/next@16.2.6_@babel+core@7.29.7_@opentelemetry+api@1.9.1_@playwright+test@1.61.1_react-d_e097ef611b4b4003619fad182aff9611/node_modules/next/dist/compiled/next-server/app-page.runtime.prod.js",
+    "NODE_PATH": "/home/developer/projects/aurora/.git/aurora-web-product-v448/source/apps/aurora-web/node_modules:/home/developer/projects/aurora/.git/aurora-web-product-v448/source/node_modules",
+    "sourceChange": false
+  },
+  "childPid": 2845102,
+  "command": [
+    "/home/developer/.asdf/installs/nodejs/24.19.0/bin/node",
+    "/home/developer/projects/aurora/.git/aurora-web-product-v448/source/apps/aurora-web/node_modules/next/dist/bin/next",
+    "build",
+    "--webpack"
+  ],
+  "initialHomeFree": 462647296,
+  "initialShmFree": 649027584,
+  "initialMemAvailable": 3378008064
+}

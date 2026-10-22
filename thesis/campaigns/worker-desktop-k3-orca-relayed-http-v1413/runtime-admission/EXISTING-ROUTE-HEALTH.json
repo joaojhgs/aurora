@@ -1,0 +1,9 @@
+{
+  "at": "2026-10-18T08:06:58.512283+00:00",
+  "route": "existing18000 Orca-relayed HTTP",
+  "credentialValueLogged": false,
+  "modelCalls": 0,
+  "status": 200,
+  "responseBytes": 126,
+  "responseSha256": "a15fa164f592ed6b6ae655c7d2864d66937186f1287f39dc3beb821f06edcc71"
+}

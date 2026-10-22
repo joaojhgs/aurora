@@ -1,0 +1,28 @@
+{
+  "id": "9a733857-2da1-4ff0-9185-509a8f3ffd2c",
+  "ok": true,
+  "result": {
+    "message": {
+      "id": "msg_9c33a7d9cce8",
+      "run_id": "run_e6054e76e9fc",
+      "delivery_contract": "current_delivery",
+      "from_handle": "term_6a00d9ee-792a-4daf-8578-236290e33108",
+      "to_handle": "dispatch:ctx_37b4d0a3c14f",
+      "subject": "Main661/900 live; source420s not admitted under owner120s, delta delegated",
+      "body": "Original Root native goal actualACTIVE/unbudgeted. Actual01:11:08Z V2296 new211/450 all correct; full661/900=660correct1historicalfailure239remain, exact original actors live/copier225pairs0errors3.197GBfree. ROOT-VERIFIED-WAIT-v2347.json/fresh native snapshot/CURRENT nextbound01:16:08.393627Z, main frozen settings/source/clocks unchanged. Consumed06789697d2ac/f29918a89743: old sourcewindow confirmed UNUSED/expired by4508e660588b. Receiver189sequentialCLIframes need420s; current owner plan30.76.3 explicitly caps source12MiB AND120s, so420s not admitted/no silent extension. Sourceworker receives e9e166d77c50 finite alternative: reuse exact matching Notebook Gitbase blobs plus transfer changed/new target runtime files against Root1959fileinventory, owned immutable deployment/full inventory verification; only READ Rootapproved Git blobs, no index/ref/source writer. Root localdf23fd6e object unavailable; same setup worker owns NBbase metadata/receiver/delta/timing and future <=120s request. No new agent/owner permission loop/maincampaign end prerequisite, no duplicated device queries or review. Latest worker23e06bb481a9 publicdownload progress/thermal/USB facts remain its lane; independent authorized prep continues under actual guards, native/phone900 not claimed or STARTed. Root remains main collection/custody. Full13 open.",
+      "type": "status",
+      "priority": "normal",
+      "thread_id": null,
+      "payload": null,
+      "created_at": "2026-10-22T01:11:49Z",
+      "delivered_at": null
+    },
+    "mutation": {
+      "requestId": "ed12d0e5-e897-42a5-9c4a-183ebf9c8d30",
+      "replayed": false
+    }
+  },
+  "_meta": {
+    "runtimeId": "cc9e3275-28c6-4c45-85cc-bdcd2262aa7d"
+  }
+}

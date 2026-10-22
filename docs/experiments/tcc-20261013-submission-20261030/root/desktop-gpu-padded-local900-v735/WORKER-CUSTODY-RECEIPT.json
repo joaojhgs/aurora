@@ -1,0 +1,55 @@
+{
+  "status": "complete",
+  "at": "2026-10-15T23:06:49.464576+00:00",
+  "sourceHost": "personal.skyron-server",
+  "sourceRoot": "/tmp/aurora-root-padded-local900-v735/export-v744/",
+  "destinationHost": "code-worker",
+  "destination": "/home/developer/projects/aurora/docs/experiments/tcc-20261013-submission-20261030/root/desktop-gpu-padded-local900-v735",
+  "cursor": "117902",
+  "completedFiles": [
+    {
+      "name": "ARCHIVE-MANIFEST.json",
+      "bytes": 224453,
+      "sha256": "7e3bc31f88bc9b7448e16c1bf9a68514bbf6408e37be5c08c5b861a3a3c6d9f7",
+      "path": "/home/developer/projects/aurora/docs/experiments/tcc-20261013-submission-20261030/root/desktop-gpu-padded-local900-v735/ARCHIVE-MANIFEST.json",
+      "savedCopySizeAndSHA256VerifiedOnce": true
+    },
+    {
+      "name": "NATIVE-STAGE-CASE-HISTORY.json",
+      "bytes": 668392,
+      "sha256": "3eaa2fb076ef6336844422075ea19ef23399c33a02adddda4a60b0494e41e5e8",
+      "path": "/home/developer/projects/aurora/docs/experiments/tcc-20261013-submission-20261030/root/desktop-gpu-padded-local900-v735/NATIVE-STAGE-CASE-HISTORY.json",
+      "savedCopySizeAndSHA256VerifiedOnce": true
+    },
+    {
+      "name": "audit-verification.json",
+      "bytes": 12139,
+      "sha256": "3039125dab6ea4f718a62b584f6b6e6ddcf0eb6311f6387e31b7fae593c5e22b",
+      "path": "/home/developer/projects/aurora/docs/experiments/tcc-20261013-submission-20261030/root/desktop-gpu-padded-local900-v735/audit-verification.json",
+      "savedCopySizeAndSHA256VerifiedOnce": true
+    },
+    {
+      "name": "aurora-desktop-gpu-padded-local900-v735.zip",
+      "bytes": 10064090,
+      "sha256": "1ef1dbd55dde983aea97852dadbeebd7f5540285655a0cbbd447b73b5784db33",
+      "path": "/home/developer/projects/aurora/docs/experiments/tcc-20261013-submission-20261030/root/desktop-gpu-padded-local900-v735/aurora-desktop-gpu-padded-local900-v735.zip",
+      "savedCopySizeAndSHA256VerifiedOnce": true
+    },
+    {
+      "name": "verification.json",
+      "bytes": 12505,
+      "sha256": "491d883cf4d6a1daf715ac810c91deb28a83007c7133e9944faed5063de97798",
+      "path": "/home/developer/projects/aurora/docs/experiments/tcc-20261013-submission-20261030/root/desktop-gpu-padded-local900-v735/verification.json",
+      "savedCopySizeAndSHA256VerifiedOnce": true
+    }
+  ],
+  "operation": null,
+  "originalAuditRerun": false,
+  "destinationAdmission": {
+    "freeBytes": 9371766784,
+    "requiredBytes": 90981579,
+    "reserveBytes": 80000000
+  },
+  "updatedAt": "2026-10-15T23:17:12.923439+00:00",
+  "currentFile": null
+}

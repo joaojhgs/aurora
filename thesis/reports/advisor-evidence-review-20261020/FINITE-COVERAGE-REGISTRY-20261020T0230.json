@@ -1,0 +1,989 @@
+{
+  "at": "2026-10-20T02:30:57.640021+00:00",
+  "scope": "Owner full applicable non-iOS matrix; finite readiness register, not additional Cartesian launch authority",
+  "runId": "run_e6054e76e9fc",
+  "taskId": "task_d7ea336050cf",
+  "dispatchId": "ctx_37b4d0a3c14f",
+  "authority_plan": "/home/developer/Documents/Obsidian Vault Origin/5-full-notes/faculdade/tcc/future-work-test-requirements.md",
+  "authority_plan_sha256": "5f66356ee745238e0593c104f866275b1775adebe11406638397585696979f94",
+  "core_instantiated_conditions": [
+    {
+      "id": "W-D-K1-HTTP",
+      "surface": "headless controlled-file audio",
+      "requester": "W",
+      "provider": "D",
+      "mode": "orca_relayed_http",
+      "remote_stages": [
+        "tts"
+      ],
+      "stage_provider_map": {
+        "stt": "W",
+        "llm": "W",
+        "tts": "D"
+      },
+      "condition_target": 900,
+      "n_measured": 180,
+      "n_correct": 179,
+      "n_failed": 1,
+      "n_remaining": 720,
+      "status": "partial_stopped_epoch",
+      "p90_p95": "See per-epoch source summaries; no synthetic pooled statistic",
+      "excluded_warmups": 15,
+      "native_model_admission": "preserved actual receipts"
+    },
+    {
+      "id": "W-D-K1-P2P",
+      "surface": "headless controlled-file audio",
+      "requester": "W",
+      "provider": "D",
+      "mode": "actual_p2p",
+      "remote_stages": [
+        "tts"
+      ],
+      "stage_provider_map": {
+        "stt": "W",
+        "llm": "W",
+        "tts": "D"
+      },
+      "condition_target": 900,
+      "n_measured": 0,
+      "n_correct": 0,
+      "n_failed": 0,
+      "n_remaining": 900,
+      "status": "never_started_measured",
+      "p90_p95": "See per-epoch source summaries; no synthetic pooled statistic",
+      "excluded_warmups": 15,
+      "native_model_admission": "historical control pairing only, actual model-route warmups pending"
+    },
+    {
+      "id": "W-D-K2-HTTP",
+      "surface": "headless controlled-file audio",
+      "requester": "W",
+      "provider": "D",
+      "mode": "orca_relayed_http",
+      "remote_stages": [
+        "llm",
+        "tts"
+      ],
+      "stage_provider_map": {
+        "stt": "W",
+        "llm": "D",
+        "tts": "D"
+      },
+      "condition_target": 900,
+      "n_measured": 900,
+      "n_correct": 797,
+      "n_failed": 103,
+      "n_remaining": 0,
+      "status": "terminal_native_analysis_complete_with_failures",
+      "p90_p95": "See per-epoch source summaries; no synthetic pooled statistic",
+      "excluded_warmups": 15,
+      "native_model_admission": "preserved actual receipts"
+    },
+    {
+      "id": "W-D-K2-P2P",
+      "surface": "headless controlled-file audio",
+      "requester": "W",
+      "provider": "D",
+      "mode": "actual_p2p",
+      "remote_stages": [
+        "llm",
+        "tts"
+      ],
+      "stage_provider_map": {
+        "stt": "W",
+        "llm": "D",
+        "tts": "D"
+      },
+      "condition_target": 900,
+      "n_measured": 0,
+      "n_correct": 0,
+      "n_failed": 0,
+      "n_remaining": 900,
+      "status": "never_started_measured",
+      "p90_p95": "See per-epoch source summaries; no synthetic pooled statistic",
+      "excluded_warmups": 15,
+      "native_model_admission": "historical control pairing only, actual model-route warmups pending"
+    },
+    {
+      "id": "W-D-K3-HTTP",
+      "surface": "headless controlled-file audio",
+      "requester": "W",
+      "provider": "D",
+      "mode": "orca_relayed_http",
+      "remote_stages": [
+        "stt",
+        "llm",
+        "tts"
+      ],
+      "stage_provider_map": {
+        "stt": "D",
+        "llm": "D",
+        "tts": "D"
+      },
+      "condition_target": 900,
+      "n_measured": 900,
+      "n_correct": 885,
+      "n_failed": 15,
+      "n_remaining": 0,
+      "status": "collection900_requester_sealed_provider_seal_pending",
+      "p90_p95": "See per-epoch source summaries; no synthetic pooled statistic",
+      "excluded_warmups": 15,
+      "native_model_admission": "preserved actual receipts"
+    },
+    {
+      "id": "W-D-K3-P2P",
+      "surface": "headless controlled-file audio",
+      "requester": "W",
+      "provider": "D",
+      "mode": "actual_p2p",
+      "remote_stages": [
+        "stt",
+        "llm",
+        "tts"
+      ],
+      "stage_provider_map": {
+        "stt": "D",
+        "llm": "D",
+        "tts": "D"
+      },
+      "condition_target": 900,
+      "n_measured": 0,
+      "n_correct": 0,
+      "n_failed": 0,
+      "n_remaining": 900,
+      "status": "never_started_measured",
+      "p90_p95": "See per-epoch source summaries; no synthetic pooled statistic",
+      "excluded_warmups": 15,
+      "native_model_admission": "historical control pairing only, actual model-route warmups pending"
+    }
+  ],
+  "core_denominator": {
+    "conditions": 6,
+    "target": 5400,
+    "measured": 1980,
+    "correct": 1861,
+    "failed": 119,
+    "remaining": 3420,
+    "scope": "this six-cell subset ONLY"
+  },
+  "android_applicability_registry": [
+    {
+      "id": "A-L0",
+      "surface": "actual Android Waydroid",
+      "requester": "A-D",
+      "provider": null,
+      "mode": "local",
+      "stage_provider_map": {
+        "stt": "A-D",
+        "llm": "A-D",
+        "tts": "A-D"
+      },
+      "target_if_feasible": 900,
+      "n_admitted_verified": 0,
+      "n_measured": null,
+      "status": "capability_unknown",
+      "missing": "actual approved ADB binding/app/source/matched-model runtime/file-audio admission",
+      "physical_map": {
+        "A-D": "D"
+      },
+      "local_infeasible_policy": "record finite preflight capability result, no forced OOM or smaller model"
+    },
+    {
+      "id": "A-W-H-K1",
+      "surface": "actual Android Waydroid",
+      "requester": "A-D",
+      "provider": "W",
+      "mode": "actual_http",
+      "remote_stages": [
+        "tts"
+      ],
+      "stage_provider_map": {
+        "stt": "A-D",
+        "llm": "A-D",
+        "tts": "W"
+      },
+      "condition_target_if_applicable": 900,
+      "n_admitted_verified": 0,
+      "n_measured": null,
+      "n_correct": null,
+      "n_failed": null,
+      "status": "capability_unknown_no_admitted_manifest_verified",
+      "warmups_additional_excluded": 15,
+      "physical_cross_device": true,
+      "physical_map": {
+        "A-D": "D"
+      },
+      "missing": "Root actual approved ADB binding/app/source/file-audio/model/route/authority/native-stage/resource admission",
+      "timing": "unknown until actual matched pilot"
+    },
+    {
+      "id": "A-W-H-K2",
+      "surface": "actual Android Waydroid",
+      "requester": "A-D",
+      "provider": "W",
+      "mode": "actual_http",
+      "remote_stages": [
+        "llm",
+        "tts"
+      ],
+      "stage_provider_map": {
+        "stt": "A-D",
+        "llm": "W",
+        "tts": "W"
+      },
+      "condition_target_if_applicable": 900,
+      "n_admitted_verified": 0,
+      "n_measured": null,
+      "n_correct": null,
+      "n_failed": null,
+      "status": "capability_unknown_no_admitted_manifest_verified",
+      "warmups_additional_excluded": 15,
+      "physical_cross_device": true,
+      "physical_map": {
+        "A-D": "D"
+      },
+      "missing": "Root actual approved ADB binding/app/source/file-audio/model/route/authority/native-stage/resource admission",
+      "timing": "unknown until actual matched pilot"
+    },
+    {
+      "id": "A-W-H-K3",
+      "surface": "actual Android Waydroid",
+      "requester": "A-D",
+      "provider": "W",
+      "mode": "actual_http",
+      "remote_stages": [
+        "stt",
+        "llm",
+        "tts"
+      ],
+      "stage_provider_map": {
+        "stt": "W",
+        "llm": "W",
+        "tts": "W"
+      },
+      "condition_target_if_applicable": 900,
+      "n_admitted_verified": 0,
+      "n_measured": null,
+      "n_correct": null,
+      "n_failed": null,
+      "status": "capability_unknown_no_admitted_manifest_verified",
+      "warmups_additional_excluded": 15,
+      "physical_cross_device": true,
+      "physical_map": {
+        "A-D": "D"
+      },
+      "missing": "Root actual approved ADB binding/app/source/file-audio/model/route/authority/native-stage/resource admission",
+      "timing": "unknown until actual matched pilot"
+    },
+    {
+      "id": "A-W-P-K1",
+      "surface": "actual Android Waydroid",
+      "requester": "A-D",
+      "provider": "W",
+      "mode": "actual_p2p",
+      "remote_stages": [
+        "tts"
+      ],
+      "stage_provider_map": {
+        "stt": "A-D",
+        "llm": "A-D",
+        "tts": "W"
+      },
+      "condition_target_if_applicable": 900,
+      "n_admitted_verified": 0,
+      "n_measured": null,
+      "n_correct": null,
+      "n_failed": null,
+      "status": "capability_unknown_no_admitted_manifest_verified",
+      "warmups_additional_excluded": 15,
+      "physical_cross_device": true,
+      "physical_map": {
+        "A-D": "D"
+      },
+      "missing": "Root actual approved ADB binding/app/source/file-audio/model/route/authority/native-stage/resource admission",
+      "timing": "unknown until actual matched pilot"
+    },
+    {
+      "id": "A-W-P-K2",
+      "surface": "actual Android Waydroid",
+      "requester": "A-D",
+      "provider": "W",
+      "mode": "actual_p2p",
+      "remote_stages": [
+        "llm",
+        "tts"
+      ],
+      "stage_provider_map": {
+        "stt": "A-D",
+        "llm": "W",
+        "tts": "W"
+      },
+      "condition_target_if_applicable": 900,
+      "n_admitted_verified": 0,
+      "n_measured": null,
+      "n_correct": null,
+      "n_failed": null,
+      "status": "capability_unknown_no_admitted_manifest_verified",
+      "warmups_additional_excluded": 15,
+      "physical_cross_device": true,
+      "physical_map": {
+        "A-D": "D"
+      },
+      "missing": "Root actual approved ADB binding/app/source/file-audio/model/route/authority/native-stage/resource admission",
+      "timing": "unknown until actual matched pilot"
+    },
+    {
+      "id": "A-W-P-K3",
+      "surface": "actual Android Waydroid",
+      "requester": "A-D",
+      "provider": "W",
+      "mode": "actual_p2p",
+      "remote_stages": [
+        "stt",
+        "llm",
+        "tts"
+      ],
+      "stage_provider_map": {
+        "stt": "W",
+        "llm": "W",
+        "tts": "W"
+      },
+      "condition_target_if_applicable": 900,
+      "n_admitted_verified": 0,
+      "n_measured": null,
+      "n_correct": null,
+      "n_failed": null,
+      "status": "capability_unknown_no_admitted_manifest_verified",
+      "warmups_additional_excluded": 15,
+      "physical_cross_device": true,
+      "physical_map": {
+        "A-D": "D"
+      },
+      "missing": "Root actual approved ADB binding/app/source/file-audio/model/route/authority/native-stage/resource admission",
+      "timing": "unknown until actual matched pilot"
+    },
+    {
+      "id": "A-D-H-K1",
+      "surface": "actual Android Waydroid",
+      "requester": "A-D",
+      "provider": "D",
+      "mode": "actual_http",
+      "remote_stages": [
+        "tts"
+      ],
+      "stage_provider_map": {
+        "stt": "A-D",
+        "llm": "A-D",
+        "tts": "D"
+      },
+      "condition_target_if_applicable": 900,
+      "n_admitted_verified": 0,
+      "n_measured": null,
+      "n_correct": null,
+      "n_failed": null,
+      "status": "capability_unknown_no_admitted_manifest_verified",
+      "warmups_additional_excluded": 15,
+      "physical_cross_device": false,
+      "physical_map": {
+        "A-D": "D"
+      },
+      "missing": "Root actual approved ADB binding/app/source/file-audio/model/route/authority/native-stage/resource admission",
+      "timing": "unknown until actual matched pilot"
+    },
+    {
+      "id": "A-D-H-K2",
+      "surface": "actual Android Waydroid",
+      "requester": "A-D",
+      "provider": "D",
+      "mode": "actual_http",
+      "remote_stages": [
+        "llm",
+        "tts"
+      ],
+      "stage_provider_map": {
+        "stt": "A-D",
+        "llm": "D",
+        "tts": "D"
+      },
+      "condition_target_if_applicable": 900,
+      "n_admitted_verified": 0,
+      "n_measured": null,
+      "n_correct": null,
+      "n_failed": null,
+      "status": "capability_unknown_no_admitted_manifest_verified",
+      "warmups_additional_excluded": 15,
+      "physical_cross_device": false,
+      "physical_map": {
+        "A-D": "D"
+      },
+      "missing": "Root actual approved ADB binding/app/source/file-audio/model/route/authority/native-stage/resource admission",
+      "timing": "unknown until actual matched pilot"
+    },
+    {
+      "id": "A-D-H-K3",
+      "surface": "actual Android Waydroid",
+      "requester": "A-D",
+      "provider": "D",
+      "mode": "actual_http",
+      "remote_stages": [
+        "stt",
+        "llm",
+        "tts"
+      ],
+      "stage_provider_map": {
+        "stt": "D",
+        "llm": "D",
+        "tts": "D"
+      },
+      "condition_target_if_applicable": 900,
+      "n_admitted_verified": 0,
+      "n_measured": null,
+      "n_correct": null,
+      "n_failed": null,
+      "status": "capability_unknown_no_admitted_manifest_verified",
+      "warmups_additional_excluded": 15,
+      "physical_cross_device": false,
+      "physical_map": {
+        "A-D": "D"
+      },
+      "missing": "Root actual approved ADB binding/app/source/file-audio/model/route/authority/native-stage/resource admission",
+      "timing": "unknown until actual matched pilot"
+    },
+    {
+      "id": "A-D-P-K1",
+      "surface": "actual Android Waydroid",
+      "requester": "A-D",
+      "provider": "D",
+      "mode": "actual_p2p",
+      "remote_stages": [
+        "tts"
+      ],
+      "stage_provider_map": {
+        "stt": "A-D",
+        "llm": "A-D",
+        "tts": "D"
+      },
+      "condition_target_if_applicable": 900,
+      "n_admitted_verified": 0,
+      "n_measured": null,
+      "n_correct": null,
+      "n_failed": null,
+      "status": "capability_unknown_no_admitted_manifest_verified",
+      "warmups_additional_excluded": 15,
+      "physical_cross_device": false,
+      "physical_map": {
+        "A-D": "D"
+      },
+      "missing": "Root actual approved ADB binding/app/source/file-audio/model/route/authority/native-stage/resource admission",
+      "timing": "unknown until actual matched pilot"
+    },
+    {
+      "id": "A-D-P-K2",
+      "surface": "actual Android Waydroid",
+      "requester": "A-D",
+      "provider": "D",
+      "mode": "actual_p2p",
+      "remote_stages": [
+        "llm",
+        "tts"
+      ],
+      "stage_provider_map": {
+        "stt": "A-D",
+        "llm": "D",
+        "tts": "D"
+      },
+      "condition_target_if_applicable": 900,
+      "n_admitted_verified": 0,
+      "n_measured": null,
+      "n_correct": null,
+      "n_failed": null,
+      "status": "capability_unknown_no_admitted_manifest_verified",
+      "warmups_additional_excluded": 15,
+      "physical_cross_device": false,
+      "physical_map": {
+        "A-D": "D"
+      },
+      "missing": "Root actual approved ADB binding/app/source/file-audio/model/route/authority/native-stage/resource admission",
+      "timing": "unknown until actual matched pilot"
+    },
+    {
+      "id": "A-D-P-K3",
+      "surface": "actual Android Waydroid",
+      "requester": "A-D",
+      "provider": "D",
+      "mode": "actual_p2p",
+      "remote_stages": [
+        "stt",
+        "llm",
+        "tts"
+      ],
+      "stage_provider_map": {
+        "stt": "D",
+        "llm": "D",
+        "tts": "D"
+      },
+      "condition_target_if_applicable": 900,
+      "n_admitted_verified": 0,
+      "n_measured": null,
+      "n_correct": null,
+      "n_failed": null,
+      "status": "capability_unknown_no_admitted_manifest_verified",
+      "warmups_additional_excluded": 15,
+      "physical_cross_device": false,
+      "physical_map": {
+        "A-D": "D"
+      },
+      "missing": "Root actual approved ADB binding/app/source/file-audio/model/route/authority/native-stage/resource admission",
+      "timing": "unknown until actual matched pilot"
+    },
+    {
+      "id": "A-N-H-K1",
+      "surface": "actual Android Waydroid",
+      "requester": "A-D",
+      "provider": "N",
+      "mode": "actual_http",
+      "remote_stages": [
+        "tts"
+      ],
+      "stage_provider_map": {
+        "stt": "A-D",
+        "llm": "A-D",
+        "tts": "N"
+      },
+      "condition_target_if_applicable": 900,
+      "n_admitted_verified": 0,
+      "n_measured": null,
+      "n_correct": null,
+      "n_failed": null,
+      "status": "capability_unknown_no_admitted_manifest_verified",
+      "warmups_additional_excluded": 15,
+      "physical_cross_device": true,
+      "physical_map": {
+        "A-D": "D"
+      },
+      "missing": "Root actual approved ADB binding/app/source/file-audio/model/route/authority/native-stage/resource admission; N matched runtime/assets/source/resources",
+      "timing": "unknown until actual matched pilot"
+    },
+    {
+      "id": "A-N-H-K2",
+      "surface": "actual Android Waydroid",
+      "requester": "A-D",
+      "provider": "N",
+      "mode": "actual_http",
+      "remote_stages": [
+        "llm",
+        "tts"
+      ],
+      "stage_provider_map": {
+        "stt": "A-D",
+        "llm": "N",
+        "tts": "N"
+      },
+      "condition_target_if_applicable": 900,
+      "n_admitted_verified": 0,
+      "n_measured": null,
+      "n_correct": null,
+      "n_failed": null,
+      "status": "capability_unknown_no_admitted_manifest_verified",
+      "warmups_additional_excluded": 15,
+      "physical_cross_device": true,
+      "physical_map": {
+        "A-D": "D"
+      },
+      "missing": "Root actual approved ADB binding/app/source/file-audio/model/route/authority/native-stage/resource admission; N matched runtime/assets/source/resources",
+      "timing": "unknown until actual matched pilot"
+    },
+    {
+      "id": "A-N-H-K3",
+      "surface": "actual Android Waydroid",
+      "requester": "A-D",
+      "provider": "N",
+      "mode": "actual_http",
+      "remote_stages": [
+        "stt",
+        "llm",
+        "tts"
+      ],
+      "stage_provider_map": {
+        "stt": "N",
+        "llm": "N",
+        "tts": "N"
+      },
+      "condition_target_if_applicable": 900,
+      "n_admitted_verified": 0,
+      "n_measured": null,
+      "n_correct": null,
+      "n_failed": null,
+      "status": "capability_unknown_no_admitted_manifest_verified",
+      "warmups_additional_excluded": 15,
+      "physical_cross_device": true,
+      "physical_map": {
+        "A-D": "D"
+      },
+      "missing": "Root actual approved ADB binding/app/source/file-audio/model/route/authority/native-stage/resource admission; N matched runtime/assets/source/resources",
+      "timing": "unknown until actual matched pilot"
+    },
+    {
+      "id": "A-N-P-K1",
+      "surface": "actual Android Waydroid",
+      "requester": "A-D",
+      "provider": "N",
+      "mode": "actual_p2p",
+      "remote_stages": [
+        "tts"
+      ],
+      "stage_provider_map": {
+        "stt": "A-D",
+        "llm": "A-D",
+        "tts": "N"
+      },
+      "condition_target_if_applicable": 900,
+      "n_admitted_verified": 0,
+      "n_measured": null,
+      "n_correct": null,
+      "n_failed": null,
+      "status": "capability_unknown_no_admitted_manifest_verified",
+      "warmups_additional_excluded": 15,
+      "physical_cross_device": true,
+      "physical_map": {
+        "A-D": "D"
+      },
+      "missing": "Root actual approved ADB binding/app/source/file-audio/model/route/authority/native-stage/resource admission; N matched runtime/assets/source/resources",
+      "timing": "unknown until actual matched pilot"
+    },
+    {
+      "id": "A-N-P-K2",
+      "surface": "actual Android Waydroid",
+      "requester": "A-D",
+      "provider": "N",
+      "mode": "actual_p2p",
+      "remote_stages": [
+        "llm",
+        "tts"
+      ],
+      "stage_provider_map": {
+        "stt": "A-D",
+        "llm": "N",
+        "tts": "N"
+      },
+      "condition_target_if_applicable": 900,
+      "n_admitted_verified": 0,
+      "n_measured": null,
+      "n_correct": null,
+      "n_failed": null,
+      "status": "capability_unknown_no_admitted_manifest_verified",
+      "warmups_additional_excluded": 15,
+      "physical_cross_device": true,
+      "physical_map": {
+        "A-D": "D"
+      },
+      "missing": "Root actual approved ADB binding/app/source/file-audio/model/route/authority/native-stage/resource admission; N matched runtime/assets/source/resources",
+      "timing": "unknown until actual matched pilot"
+    },
+    {
+      "id": "A-N-P-K3",
+      "surface": "actual Android Waydroid",
+      "requester": "A-D",
+      "provider": "N",
+      "mode": "actual_p2p",
+      "remote_stages": [
+        "stt",
+        "llm",
+        "tts"
+      ],
+      "stage_provider_map": {
+        "stt": "N",
+        "llm": "N",
+        "tts": "N"
+      },
+      "condition_target_if_applicable": 900,
+      "n_admitted_verified": 0,
+      "n_measured": null,
+      "n_correct": null,
+      "n_failed": null,
+      "status": "capability_unknown_no_admitted_manifest_verified",
+      "warmups_additional_excluded": 15,
+      "physical_cross_device": true,
+      "physical_map": {
+        "A-D": "D"
+      },
+      "missing": "Root actual approved ADB binding/app/source/file-audio/model/route/authority/native-stage/resource admission; N matched runtime/assets/source/resources",
+      "timing": "unknown until actual matched pilot"
+    }
+  ],
+  "android_denominator": {
+    "candidate_rows": 19,
+    "new_admitted_verified": 0,
+    "actual_measured": null,
+    "minimum_families_if_feasible": 7,
+    "minimum_ids": [
+      "A-L0",
+      "A-W-H-K1",
+      "A-W-H-K2",
+      "A-W-H-K3",
+      "A-W-P-K1",
+      "A-W-P-K2",
+      "A-W-P-K3"
+    ],
+    "same_physical_host_control_rows": 6,
+    "third_node_conditional_rows": 6,
+    "rows_are_not_19_admitted_900_cells": true,
+    "same_physical_host_controls_are_not_independent_cross_device_acceptance": true
+  },
+  "multi_provider_maps": [
+    {
+      "id": "MP-1",
+      "requester": "W",
+      "stage_provider_map": {
+        "stt": "W",
+        "llm": "N",
+        "tts": "D"
+      },
+      "physical_hosts": [
+        "W",
+        "D",
+        "N"
+      ],
+      "condition_target_if_supported": 900,
+      "n_admitted_verified": 0,
+      "n_measured": null,
+      "status": "runtime_capability_unknown",
+      "missing": "actual existing multi-provider production routing/grants/native joins; N matched source/model/runtime/reservation",
+      "transport_intermediary_is_compute_provider": false
+    },
+    {
+      "id": "MP-2",
+      "requester": "A-D",
+      "stage_provider_map": {
+        "stt": "W",
+        "llm": "D",
+        "tts": "N"
+      },
+      "physical_hosts": [
+        "W",
+        "D",
+        "N"
+      ],
+      "condition_target_if_supported": 900,
+      "n_admitted_verified": 0,
+      "n_measured": null,
+      "status": "runtime_capability_unknown",
+      "missing": "actual existing multi-provider production routing/grants/native joins; N matched source/model/runtime/reservation",
+      "transport_intermediary_is_compute_provider": false
+    },
+    {
+      "id": "MP-3",
+      "requester": "W",
+      "stage_provider_map": {
+        "stt": "D",
+        "llm": "N",
+        "tts": "D"
+      },
+      "physical_hosts": [
+        "W",
+        "D",
+        "N"
+      ],
+      "condition_target_if_supported": 900,
+      "n_admitted_verified": 0,
+      "n_measured": null,
+      "status": "runtime_capability_unknown",
+      "missing": "actual existing multi-provider production routing/grants/native joins; N matched source/model/runtime/reservation",
+      "transport_intermediary_is_compute_provider": false
+    }
+  ],
+  "multi_provider_selection_and_mixed_load": {
+    "id": "MP-S",
+    "status": "finite_applicable_condition_count_not_yet_frozen",
+    "required_fields": [
+      "same_stage_model_provider_equivalence",
+      "local_workload",
+      "concurrency",
+      "queueing",
+      "native_selected_provider",
+      "per_host_resource",
+      "target900_per_admitted_condition"
+    ],
+    "company_host_forbidden": true
+  },
+  "geographic_pair_registry": [
+    {
+      "registry_id": "GEO-BR-PT",
+      "requester_region_requested": "BR",
+      "provider_region_requested": "PT",
+      "exact_verified_identity_map": null,
+      "instantiated_condition_ids": [],
+      "status": "identity_country_route_surface_eligibility_unknown",
+      "not_an_extra_900_condition_until_instantiated": true
+    },
+    {
+      "registry_id": "GEO-BR-US",
+      "requester_region_requested": "BR",
+      "provider_region_requested": "US",
+      "exact_verified_identity_map": null,
+      "instantiated_condition_ids": [],
+      "status": "identity_country_route_surface_eligibility_unknown",
+      "not_an_extra_900_condition_until_instantiated": true
+    },
+    {
+      "registry_id": "GEO-BR-M",
+      "requester_region_requested": "BR",
+      "provider_region_requested": "M",
+      "exact_verified_identity_map": null,
+      "instantiated_condition_ids": [],
+      "status": "identity_country_route_surface_eligibility_unknown",
+      "not_an_extra_900_condition_until_instantiated": true
+    },
+    {
+      "registry_id": "GEO-PT-BR",
+      "requester_region_requested": "PT",
+      "provider_region_requested": "BR",
+      "exact_verified_identity_map": null,
+      "instantiated_condition_ids": [],
+      "status": "identity_country_route_surface_eligibility_unknown",
+      "not_an_extra_900_condition_until_instantiated": true
+    },
+    {
+      "registry_id": "GEO-PT-US",
+      "requester_region_requested": "PT",
+      "provider_region_requested": "US",
+      "exact_verified_identity_map": null,
+      "instantiated_condition_ids": [],
+      "status": "identity_country_route_surface_eligibility_unknown",
+      "not_an_extra_900_condition_until_instantiated": true
+    },
+    {
+      "registry_id": "GEO-PT-M",
+      "requester_region_requested": "PT",
+      "provider_region_requested": "M",
+      "exact_verified_identity_map": null,
+      "instantiated_condition_ids": [],
+      "status": "identity_country_route_surface_eligibility_unknown",
+      "not_an_extra_900_condition_until_instantiated": true
+    },
+    {
+      "registry_id": "GEO-US-BR",
+      "requester_region_requested": "US",
+      "provider_region_requested": "BR",
+      "exact_verified_identity_map": null,
+      "instantiated_condition_ids": [],
+      "status": "identity_country_route_surface_eligibility_unknown",
+      "not_an_extra_900_condition_until_instantiated": true
+    },
+    {
+      "registry_id": "GEO-US-PT",
+      "requester_region_requested": "US",
+      "provider_region_requested": "PT",
+      "exact_verified_identity_map": null,
+      "instantiated_condition_ids": [],
+      "status": "identity_country_route_surface_eligibility_unknown",
+      "not_an_extra_900_condition_until_instantiated": true
+    },
+    {
+      "registry_id": "GEO-US-M",
+      "requester_region_requested": "US",
+      "provider_region_requested": "M",
+      "exact_verified_identity_map": null,
+      "instantiated_condition_ids": [],
+      "status": "identity_country_route_surface_eligibility_unknown",
+      "not_an_extra_900_condition_until_instantiated": true
+    },
+    {
+      "registry_id": "GEO-M-BR",
+      "requester_region_requested": "M",
+      "provider_region_requested": "BR",
+      "exact_verified_identity_map": null,
+      "instantiated_condition_ids": [],
+      "status": "identity_country_route_surface_eligibility_unknown",
+      "not_an_extra_900_condition_until_instantiated": true
+    },
+    {
+      "registry_id": "GEO-M-PT",
+      "requester_region_requested": "M",
+      "provider_region_requested": "PT",
+      "exact_verified_identity_map": null,
+      "instantiated_condition_ids": [],
+      "status": "identity_country_route_surface_eligibility_unknown",
+      "not_an_extra_900_condition_until_instantiated": true
+    },
+    {
+      "registry_id": "GEO-M-US",
+      "requester_region_requested": "M",
+      "provider_region_requested": "US",
+      "exact_verified_identity_map": null,
+      "instantiated_condition_ids": [],
+      "status": "identity_country_route_surface_eligibility_unknown",
+      "not_an_extra_900_condition_until_instantiated": true
+    }
+  ],
+  "surface_registry": {
+    "native_headless": "actual retained W/D controlled-file data; local reference mapping still exact per cohort",
+    "desktop_local": "historical individual controls retained; no automatic repeat",
+    "desktop_remote_console": "separate surface applicability/runtime read required",
+    "browser": "V794 second-turn preSTT capture failure; V799 summary/full raw custody unresolved; no blanket file-audio gate",
+    "android": "actual approved Waydroid binding check pending, generic [] not absence",
+    "ios": "excluded active scope; historical artifacts preserved"
+  },
+  "other_required_families": [
+    "same-effective-model local feasibility/weak-device limitations",
+    "declared unloaded versus mixed local+mesh load and bounded concurrency",
+    "supported recovery/offline/fallback/revocation",
+    "locality_privacy_cost_and_reproducibility",
+    "direct_selected_ICE_and_actual_relay_or_honest_not_observed_limit"
+  ],
+  "excluded": {
+    "ios": {
+      "platform_families": 1,
+      "numeric_cell_count": null,
+      "reason": "explicit owner exclusion"
+    },
+    "company_work": {
+      "execution_authorized": false
+    },
+    "additional_unknown_rows": "not excluded or passed"
+  },
+  "physical_aliases": {
+    "A-D": "D",
+    "notebook_personal_and_work": "same physical N; never access Work"
+  },
+  "resource_conflicts": [
+    [
+      "W-D core",
+      "A-D-W Android"
+    ],
+    [
+      "W-D core",
+      "A-D-N Android"
+    ],
+    [
+      "W-D core",
+      "A-D-D Android"
+    ],
+    [
+      "N local",
+      "N provider/composition"
+    ],
+    [
+      "N personal",
+      "physical Work workload unknown; no access permitted"
+    ]
+  ],
+  "potential_disjoint_measured_lane": "N-only local after actual matched source/runtime/assets and physical reservation/noninterference; NOT admitted now",
+  "available_non_model_parallel_work": [
+    "read-only Android binding/package/source inventory through Root approved control",
+    "monitor plan/custody-index analysis and early advisor brief",
+    "Root-approved model-free notebook metadata/staging admission"
+  ],
+  "next_preferred_measured": "W-D-K1-P2P after finite K3 provider seal and actual15excluded model-route/native-stage warmups",
+  "next_actual_launch": "NONE VERIFIED at this snapshot",
+  "whole_matrix_executable_denominator": null,
+  "why_no_whole_matrix_percentage_or_ETA": "Unknown Android/N/composition/surface/geographic eligibility and no admitted pilots; candidate registries overlap and must not be summed as independent campaigns",
+  "source_refs": [
+    "thesis/campaigns/worker-desktop-k3-orca-relayed-http-remaining-v1682/terminal-20261020T0213/REQUESTER-SEAL-AND-RESULT.json",
+    "thesis/campaigns/worker-desktop-k2-orca-relayed-http-v1264/terminal-v1465/FINAL-VALIDATION-v1472.json",
+    "thesis/evidence/orca-relayed-http-v1197/terminal-v1377/summary.json",
+    "thesis/evidence/personal-notebook-readiness-20261020/MATCHED-RUNTIME-ADMISSION-FACTS.json"
+  ],
+  "newTestsOrModelCalls": 0
+}

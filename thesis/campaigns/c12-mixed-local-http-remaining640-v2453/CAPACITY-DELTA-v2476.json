@@ -1,0 +1,26 @@
+{
+  "at": "2026-10-22T14:08:08.337474+00:00",
+  "priorReceipt": "ROOT-VERIFIED-WAIT-v2475.json",
+  "previousAt": "2026-10-22T14:04:47.367349+00:00",
+  "previousFreeBytes": 2205089792,
+  "firstObservedAt": "2026-10-22T14:06:28.797420+00:00",
+  "firstObservedFreeBytes": 2191437824,
+  "firstObservedDropBytes": 13651968,
+  "freeBytesNow": 2202095616,
+  "headroomNowBytes": 54611968,
+  "cause": "UNATTRIBUTED; no assumption that phone copies or a specific process caused decline",
+  "currentCorrectPerStream": {
+    "primary": 497,
+    "companion": 497
+  },
+  "requester": {
+    "pid": 462924,
+    "startTicks": 144596371,
+    "state": "S"
+  },
+  "floorBytes": 2147483648,
+  "mainStoppedOrChanged": false,
+  "newMeasurementsWorkersOrDeviceReads": 0,
+  "cleanupApproval": "Existing exact935297024B webpack question PENDING; no deletion/reask",
+  "existingSharedAdmission": "Phone prospective900 not admitted; avoid new unadmitted bulk copy/ZIP/base64/extract peaks while preserving raw on approved repo paths; no active session/worker/provider stop or data deletion"
+}

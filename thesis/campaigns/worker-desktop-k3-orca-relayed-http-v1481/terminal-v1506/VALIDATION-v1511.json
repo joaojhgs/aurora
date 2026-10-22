@@ -1,0 +1,120 @@
+{
+  "at": "2026-10-18T13:47:49.760946+00:00",
+  "status": "REQUESTER_PARTIAL_SEALED_PROVIDER_RAW_IMPORTED_NATIVE_RESOURCE_ANALYZED_900_OPEN",
+  "originalThreadGoal": "01a112a5-d6bb-74e2-bf7c-ace73cb513b5",
+  "cohort": "V1481",
+  "measuredAttempted": 513,
+  "measuredOutcomes": {
+    "completed_correct": 512,
+    "failed": 1
+  },
+  "harnessTimeoutFlags": 0,
+  "timeoutScope": "Requester harness boolean only; unavailable underlying transport exception detail remains unknown.",
+  "unattempted": 387,
+  "excludedWarmups": 15,
+  "physicalCases": 528,
+  "physicalWavs": 527,
+  "requesterVerifiedFiles": 1342,
+  "requesterVerifiedBytes": 41009448,
+  "providerImportedFiles": 880,
+  "providerImportedBytes": 92612561,
+  "providerSnapshotAt": "2026-10-18T13:24:23.934984+00:00",
+  "nativeCoverage": [
+    {
+      "host": "provider",
+      "handler": "Transcription.Transcribe",
+      "casesWithAnyCompletedSpan": 513,
+      "missingCasesInSavedPrefixes": 0,
+      "multipleCompletedSpanCases": 0
+    },
+    {
+      "host": "provider",
+      "handler": "stt.model_invoke",
+      "casesWithAnyCompletedSpan": 513,
+      "missingCasesInSavedPrefixes": 0,
+      "multipleCompletedSpanCases": 0
+    },
+    {
+      "host": "provider",
+      "handler": "resolved_chat_model.astream",
+      "casesWithAnyCompletedSpan": 513,
+      "missingCasesInSavedPrefixes": 0,
+      "multipleCompletedSpanCases": 0
+    },
+    {
+      "host": "provider",
+      "handler": "OrchestratorService._persist_chat_message",
+      "casesWithAnyCompletedSpan": 513,
+      "missingCasesInSavedPrefixes": 0,
+      "multipleCompletedSpanCases": 513
+    },
+    {
+      "host": "provider",
+      "handler": "TTS.Synthesize",
+      "casesWithAnyCompletedSpan": 512,
+      "missingCasesInSavedPrefixes": 1,
+      "multipleCompletedSpanCases": 0
+    },
+    {
+      "host": "provider",
+      "handler": "tts.model_invoke",
+      "casesWithAnyCompletedSpan": 512,
+      "missingCasesInSavedPrefixes": 1,
+      "multipleCompletedSpanCases": 0
+    }
+  ],
+  "resourceCoverage": {
+    "provider.llm_model": {
+      "casesWithNativeWindow": 513,
+      "casesWithSamples": 126,
+      "casesWithTwoSamples": 2
+    },
+    "provider.native_case_window": {
+      "casesWithNativeWindow": 513,
+      "casesWithSamples": 513,
+      "casesWithTwoSamples": 513
+    },
+    "provider.stt_model": {
+      "casesWithNativeWindow": 513,
+      "casesWithSamples": 513,
+      "casesWithTwoSamples": 513
+    },
+    "provider.tts_model": {
+      "casesWithNativeWindow": 512,
+      "casesWithSamples": 512,
+      "casesWithTwoSamples": 355
+    },
+    "requester.full_attempt": {
+      "casesWithNativeWindow": 513,
+      "casesWithSamples": 513,
+      "casesWithTwoSamples": 513
+    }
+  },
+  "correctCompletedFlowQuantilesMs": {
+    "n": 512,
+    "unit": "ms",
+    "estimator": "Hyndman-Fan Type 7",
+    "p50": 30319.603404,
+    "p90": 31478.8600903,
+    "p95": 31878.2577095
+  },
+  "failureAssociation": "Failed client TTS has no received server-correlation ID; adjacent provider TTS completion retained separately without a strict join.",
+  "cause": "UNKNOWN_TRANSPORT_DELIVERY; current route reachability and empty worker journal do not establish historical cause.",
+  "providerAndReceiverReservation": "HELD; same frozen live provider, no model/source/settings/lifecycle changes",
+  "physicalMicPlaybackOrAudibilityAccepted": false,
+  "sourceCopies": [
+    {
+      "path": "thesis/campaigns/worker-desktop-k3-orca-relayed-http-v1481/terminal-v1506/native-analysis-v1509/ANALYSIS-SOURCE-AS-EXECUTED.py",
+      "bytes": 11994,
+      "sha256": "28370bdfd79a585d9fe337e7769200dca9a4f3c4c50f5960cceb92972db30fac"
+    },
+    {
+      "path": "thesis/campaigns/worker-desktop-k3-orca-relayed-http-v1481/terminal-v1506/resource-analysis-v1510/ANALYSIS-SOURCE-AS-EXECUTED.py",
+      "bytes": 11280,
+      "sha256": "da45e6241a572c004a3d793bdb401d2402044731cf15357c7bb2eec25b14ab3b"
+    }
+  ],
+  "newWorkloadRequestsDuringDataValidation": 0,
+  "target900Complete": false,
+  "aggregateFull13Complete": false
+}

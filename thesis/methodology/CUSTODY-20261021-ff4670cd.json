@@ -1,0 +1,16 @@
+{
+  "at": "2026-10-21T06:14:37.145067+00:00",
+  "status": "COMPLETE_AUTHORITATIVE_PLAN_PHYSICAL_MIRROR_VERIFIED",
+  "source": "/home/developer/Documents/Obsidian Vault Origin/5-full-notes/faculdade/tcc/future-work-test-requirements.md",
+  "destination": "thesis/methodology/owner-requirements-20261021-ff4670cd.md",
+  "bytes": 790588,
+  "sha256": "ff4670cdea55160a1556ba2d5eb68316ca549ccb33bd99b8b7173d05ac9151ad",
+  "section": "30.73",
+  "priorFullMirror": "thesis/methodology/owner-requirements-20261021-aba3306d.md",
+  "priorBytes": 780151,
+  "priorPrefixByteIdentical": true,
+  "sourceChanged": false,
+  "soleWriter": "original monitor task_d7ea336050cf/ctx_37b4d0a3c14f",
+  "rootAction": "copy-only full-plan custody; no competing plan edit",
+  "newSutRequests": 0
+}

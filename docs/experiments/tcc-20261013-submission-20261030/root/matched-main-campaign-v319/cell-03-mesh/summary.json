@@ -1,0 +1,26 @@
+{
+  "correct_success_latency_ms": {
+    "p50": 34570.5,
+    "p90": 40538.2,
+    "p95": 41758.75
+  },
+  "correct_success_latency_n": 100,
+  "correct_success_rate": 1.0,
+  "counts": {
+    "cancelled": 0,
+    "correct_success": 100,
+    "failure": 0,
+    "incorrect_answer": 0,
+    "infeasible": 0,
+    "timeout": 0
+  },
+  "n_eligible": 100,
+  "n_raw_records": 105,
+  "n_success": 100,
+  "n_success_denominator": 100,
+  "n_total": 100,
+  "n_warmup": 5,
+  "note": "Mesh latencies are retained requester-to-typed-completion durations; no synthetic monotonic timestamps are created.",
+  "quantile_method": "type7_linear_interpolation",
+  "schema_version": "aurora.assistant.measurement_summary.v1"
+}

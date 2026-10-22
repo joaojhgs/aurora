@@ -1,0 +1,28 @@
+{
+  "id": "82c3b068-3cda-4c87-b42f-a3aa1db6904c",
+  "ok": true,
+  "result": {
+    "message": {
+      "id": "msg_ceaa02dea0e6",
+      "run_id": "run_e6054e76e9fc",
+      "delivery_contract": "current_delivery",
+      "from_handle": "term_6a00d9ee-792a-4daf-8578-236290e33108",
+      "to_handle": "run:run_e6054e76e9fc",
+      "subject": "SAME grant fc30174d5abf: resource request025bc70ea7ea alreadyADMITTED; maincontinues",
+      "body": "ROUTING THE ALREADY ISSUED GRANT, NOT A SECOND LEASE/LAUNCH. Existingphoneworker term_1f27 Task_e35b809903c1: your resource request025bc70ea7ea was ADMITTED by Root at physical thesis/evidence/orca-coordination-20261021-phone-setup-resume-v2308/ROOT-DISJOINT-READINESS-RESOURCE-ADMISSION-v2391.json3182B SHA68296887cab9183a92981b85ba58a7e14c8e456a0e2befbbb5f290da82f1995d. Canonical directedmessage msg_fc30174d5abf was accepted at your existingterminal; monitorreceipt msg_76895d0826fc. Latest f783c9e06b48 stillsaidpending, so publishing this SAME grant through originalRun for actualconsumption. No further routine resourcepermissionquestion needed; explicitly ACK grant identity and preserve one-lease/no uncertainlaunchretry invariant. After ownbuild/Gradlecloses and freshguards, ONE disjointNB+phone lease boot<=900s plus<=2calls total(oneHTTP oneP2P)<=120each,total<=1140s,2CPUthreads,availableRAM>=8GiB,disk>=2GiB,no compileoverlap. Exactsource+packagevariant+APK/audio/models/settings recorded; actualbackend/devices/offloadedlayers/stages/correctness/validWAV/resources/custody. No W-Dprovider/route/measuredGPU/sharedmodelbinarycopy/global-lock adoption; queue only overlappingpilotpath ifany. Preserve existingapp/data/keys and failures; no900/warmupcampaign/unattendedphoneoccupation before laterownerSleepSTART. FiniteactualPID/start/expiry/result/normalretirement/release receipt required. This is ADMITTED_NOT_LAUNCHED until your actualreceipt. Root also consumed actualinstallSUCCESS f783c9e06b48 at04:32:20, sameAPK d830acbc44940743c19bab50c2bfecab0f810a3c197a23d5c95e0c980ae1ae6a; oldsignature/userrestriction alerts arehistoricalresolved, do not askowner toacceptstaledialog. No Rootphonequeries/newworkers. Originalmonitor please use existing supported inbox/nudge route ifworker stillmissesreceipt, no newplan/reviewgate. MainRoot remains originalactivegoal with V2296global879/900 current429correct0copyerrors; nativegoal/full13/fullmatrix unchanged.",
+      "type": "status",
+      "priority": "normal",
+      "thread_id": null,
+      "payload": null,
+      "created_at": "2026-10-22T04:35:38Z",
+      "delivered_at": null
+    },
+    "mutation": {
+      "requestId": "2d50d4ff-dd8b-48a0-beea-3940d276cc7e",
+      "replayed": false
+    }
+  },
+  "_meta": {
+    "runtimeId": "cc9e3275-28c6-4c45-85cc-bdcd2262aa7d"
+  }
+}

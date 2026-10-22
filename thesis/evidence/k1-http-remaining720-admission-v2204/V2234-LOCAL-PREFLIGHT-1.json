@@ -1,0 +1,13 @@
+{
+  "at": "2026-10-21T16:41:13.841190+00:00",
+  "status": "KNOWN_LOCAL_PREFLIGHT_EXIT_BEFORE_SUT_LAUNCH",
+  "launcherPid": 3750377,
+  "launcherAbsent": true,
+  "requesterCellExists": false,
+  "requesterLaunchExists": false,
+  "sourceSha256": "194cce6dff50e917021aed01e02c42a7a6745429174be45a08346cbd6f7701e2",
+  "reason": "Previous requester auto-persisted only local token_secret; source manifest scientific settings unchanged and summary records actual poststartup d0c1aff9 hash",
+  "newSUTProcesses": 0,
+  "newWarmups": 0,
+  "newMeasured": 0
+}

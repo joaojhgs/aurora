@@ -1,0 +1,9 @@
+{
+  "exit_code": 2,
+  "failure_count": 178,
+  "reasons": {
+    "generated/report artifact should not live in current docs": 178
+  },
+  "owner_section25_storage_override": true,
+  "no_docs_deleted_or_reclassified": true
+}

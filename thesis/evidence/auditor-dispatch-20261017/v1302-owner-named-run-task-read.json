@@ -1,0 +1,32 @@
+{
+  "id": "dd025c42-8ae8-43d9-95b8-7ab93d6f97da",
+  "ok": true,
+  "result": {
+    "runId": "run_8e16b490b21b",
+    "legacyReadOnly": false,
+    "tasks": [
+      {
+        "id": "task_c2f1ff86c6f3",
+        "run_id": "run_8e16b490b21b",
+        "parent_id": null,
+        "created_by_terminal_handle": null,
+        "created_by_pane_key": null,
+        "created_by_process_incarnation": null,
+        "created_by_run_generation": null,
+        "task_title": "Resume authorized tests and verify scientific review lineage",
+        "display_name": "Resume authorized tests and verify scientific review lineage",
+        "spec": "Owner now authorizes full testing, benchmarks/builds and necessary test deployments, plus durable monitoring/advancement until all acceptance cases are tested\u2026",
+        "status": "ready",
+        "deps": "[]",
+        "result": null,
+        "created_at": "2026-10-13 23:37:30",
+        "completed_at": null,
+        "spec_truncated": true
+      }
+    ],
+    "count": 1
+  },
+  "_meta": {
+    "runtimeId": "cc9e3275-28c6-4c45-85cc-bdcd2262aa7d"
+  }
+}

@@ -1,0 +1,444 @@
+[
+  {
+    "cohort": "V735",
+    "evidenceKind": "recomputed_from_retained_derived_span_rows; raw pair validation is prior audit",
+    "handler": "resolved_chat_model.astream",
+    "host": "same original receiver host",
+    "metrics": {
+      "denominator": 274,
+      "estimator": "Hyndman-Fan Type 7, h=(n-1)*p; linear interpolation",
+      "p50": 262.674202,
+      "p90": 275.75078790000003,
+      "p95": 289.1938640499999,
+      "population": "completed exact-handler spans in saved derived case history",
+      "units": "ms"
+    },
+    "source": "thesis/evidence/sealed-cohorts-v1215/desktop-gpu-padded-local900-v735/NATIVE-STAGE-CASE-HISTORY.json",
+    "stage": "llm"
+  },
+  {
+    "cohort": "V735",
+    "evidenceKind": "recomputed_from_retained_derived_span_rows; raw pair validation is prior audit",
+    "handler": "stt.model_invoke",
+    "host": "same original receiver host",
+    "metrics": {
+      "denominator": 274,
+      "estimator": "Hyndman-Fan Type 7, h=(n-1)*p; linear interpolation",
+      "p50": 3275.8173225,
+      "p90": 3371.9605781,
+      "p95": 3443.82581585,
+      "population": "completed exact-handler spans in saved derived case history",
+      "units": "ms"
+    },
+    "source": "thesis/evidence/sealed-cohorts-v1215/desktop-gpu-padded-local900-v735/NATIVE-STAGE-CASE-HISTORY.json",
+    "stage": "stt"
+  },
+  {
+    "cohort": "V735",
+    "evidenceKind": "recomputed_from_retained_derived_span_rows; raw pair validation is prior audit",
+    "handler": "Transcription.Transcribe",
+    "host": "same original receiver host",
+    "metrics": {
+      "denominator": 274,
+      "estimator": "Hyndman-Fan Type 7, h=(n-1)*p; linear interpolation",
+      "p50": 3279.7486639999997,
+      "p90": 3382.5907134000004,
+      "p95": 3469.7932462999993,
+      "population": "completed exact-handler spans in saved derived case history",
+      "units": "ms"
+    },
+    "source": "thesis/evidence/sealed-cohorts-v1215/desktop-gpu-padded-local900-v735/NATIVE-STAGE-CASE-HISTORY.json",
+    "stage": "stt"
+  },
+  {
+    "cohort": "V735",
+    "evidenceKind": "recomputed_from_retained_derived_span_rows; raw pair validation is prior audit",
+    "handler": "tts.model_invoke",
+    "host": "same original receiver host",
+    "metrics": {
+      "denominator": 274,
+      "estimator": "Hyndman-Fan Type 7, h=(n-1)*p; linear interpolation",
+      "p50": 1499.319499,
+      "p90": 1676.4884798,
+      "p95": 1764.5427720999999,
+      "population": "completed exact-handler spans in saved derived case history",
+      "units": "ms"
+    },
+    "source": "thesis/evidence/sealed-cohorts-v1215/desktop-gpu-padded-local900-v735/NATIVE-STAGE-CASE-HISTORY.json",
+    "stage": "tts"
+  },
+  {
+    "cohort": "V735",
+    "evidenceKind": "recomputed_from_retained_derived_span_rows; raw pair validation is prior audit",
+    "handler": "TTS.Synthesize",
+    "host": "same original receiver host",
+    "metrics": {
+      "denominator": 274,
+      "estimator": "Hyndman-Fan Type 7, h=(n-1)*p; linear interpolation",
+      "p50": 1499.939355,
+      "p90": 1677.2884401000001,
+      "p95": 1765.2813635999998,
+      "population": "completed exact-handler spans in saved derived case history",
+      "units": "ms"
+    },
+    "source": "thesis/evidence/sealed-cohorts-v1215/desktop-gpu-padded-local900-v735/NATIVE-STAGE-CASE-HISTORY.json",
+    "stage": "tts"
+  },
+  {
+    "cohort": "V745",
+    "evidenceKind": "recomputed_from_retained_derived_span_rows; raw pair validation is prior audit",
+    "handler": "resolved_chat_model.astream",
+    "host": "same original receiver host",
+    "metrics": {
+      "denominator": 626,
+      "estimator": "Hyndman-Fan Type 7, h=(n-1)*p; linear interpolation",
+      "p50": 263.389464,
+      "p90": 282.58943999999997,
+      "p95": 300.5491555,
+      "population": "completed exact-handler spans in saved derived case history",
+      "units": "ms"
+    },
+    "source": "thesis/evidence/sealed-cohorts-v1215/desktop-gpu-padded-local900-v745/NATIVE-STAGE-CASE-HISTORY.json",
+    "stage": "llm"
+  },
+  {
+    "cohort": "V745",
+    "evidenceKind": "recomputed_from_retained_derived_span_rows; raw pair validation is prior audit",
+    "handler": "stt.model_invoke",
+    "host": "same original receiver host",
+    "metrics": {
+      "denominator": 626,
+      "estimator": "Hyndman-Fan Type 7, h=(n-1)*p; linear interpolation",
+      "p50": 3254.8471215,
+      "p90": 3357.0060110000004,
+      "p95": 3425.9782275000002,
+      "population": "completed exact-handler spans in saved derived case history",
+      "units": "ms"
+    },
+    "source": "thesis/evidence/sealed-cohorts-v1215/desktop-gpu-padded-local900-v745/NATIVE-STAGE-CASE-HISTORY.json",
+    "stage": "stt"
+  },
+  {
+    "cohort": "V745",
+    "evidenceKind": "recomputed_from_retained_derived_span_rows; raw pair validation is prior audit",
+    "handler": "Transcription.Transcribe",
+    "host": "same original receiver host",
+    "metrics": {
+      "denominator": 626,
+      "estimator": "Hyndman-Fan Type 7, h=(n-1)*p; linear interpolation",
+      "p50": 3259.351542,
+      "p90": 3365.574532,
+      "p95": 3437.736895,
+      "population": "completed exact-handler spans in saved derived case history",
+      "units": "ms"
+    },
+    "source": "thesis/evidence/sealed-cohorts-v1215/desktop-gpu-padded-local900-v745/NATIVE-STAGE-CASE-HISTORY.json",
+    "stage": "stt"
+  },
+  {
+    "cohort": "V745",
+    "evidenceKind": "recomputed_from_retained_derived_span_rows; raw pair validation is prior audit",
+    "handler": "tts.model_invoke",
+    "host": "same original receiver host",
+    "metrics": {
+      "denominator": 626,
+      "estimator": "Hyndman-Fan Type 7, h=(n-1)*p; linear interpolation",
+      "p50": 1492.733468,
+      "p90": 1667.7094594999999,
+      "p95": 1753.4315225,
+      "population": "completed exact-handler spans in saved derived case history",
+      "units": "ms"
+    },
+    "source": "thesis/evidence/sealed-cohorts-v1215/desktop-gpu-padded-local900-v745/NATIVE-STAGE-CASE-HISTORY.json",
+    "stage": "tts"
+  },
+  {
+    "cohort": "V745",
+    "evidenceKind": "recomputed_from_retained_derived_span_rows; raw pair validation is prior audit",
+    "handler": "TTS.Synthesize",
+    "host": "same original receiver host",
+    "metrics": {
+      "denominator": 626,
+      "estimator": "Hyndman-Fan Type 7, h=(n-1)*p; linear interpolation",
+      "p50": 1493.5152845,
+      "p90": 1668.482993,
+      "p95": 1754.13614875,
+      "population": "completed exact-handler spans in saved derived case history",
+      "units": "ms"
+    },
+    "source": "thesis/evidence/sealed-cohorts-v1215/desktop-gpu-padded-local900-v745/NATIVE-STAGE-CASE-HISTORY.json",
+    "stage": "tts"
+  },
+  {
+    "cohort": "V692",
+    "evidenceKind": "recomputed_from_retained_derived_span_rows; raw pair validation is prior audit",
+    "handler": "resolved_chat_model.astream",
+    "host": "same original receiver host",
+    "metrics": {
+      "denominator": 900,
+      "estimator": "Hyndman-Fan Type 7, h=(n-1)*p; linear interpolation",
+      "p50": 265.981442,
+      "p90": 303.40116240000003,
+      "p95": 396.76407414999994,
+      "population": "completed exact-handler spans in saved derived case history",
+      "units": "ms"
+    },
+    "source": "thesis/evidence/sealed-cohorts-v1215/desktop-gpu-padded-http900-v692/NATIVE-STAGE-CASE-HISTORY.json",
+    "stage": "llm"
+  },
+  {
+    "cohort": "V692",
+    "evidenceKind": "recomputed_from_retained_derived_span_rows; raw pair validation is prior audit",
+    "handler": "stt.model_invoke",
+    "host": "same original receiver host",
+    "metrics": {
+      "denominator": 900,
+      "estimator": "Hyndman-Fan Type 7, h=(n-1)*p; linear interpolation",
+      "p50": 3290.3111595,
+      "p90": 3463.3750054,
+      "p95": 3538.07191285,
+      "population": "completed exact-handler spans in saved derived case history",
+      "units": "ms"
+    },
+    "source": "thesis/evidence/sealed-cohorts-v1215/desktop-gpu-padded-http900-v692/NATIVE-STAGE-CASE-HISTORY.json",
+    "stage": "stt"
+  },
+  {
+    "cohort": "V692",
+    "evidenceKind": "recomputed_from_retained_derived_span_rows; raw pair validation is prior audit",
+    "handler": "Transcription.Transcribe",
+    "host": "same original receiver host",
+    "metrics": {
+      "denominator": 900,
+      "estimator": "Hyndman-Fan Type 7, h=(n-1)*p; linear interpolation",
+      "p50": 3297.1943745,
+      "p90": 3473.8818394,
+      "p95": 3558.5327789999997,
+      "population": "completed exact-handler spans in saved derived case history",
+      "units": "ms"
+    },
+    "source": "thesis/evidence/sealed-cohorts-v1215/desktop-gpu-padded-http900-v692/NATIVE-STAGE-CASE-HISTORY.json",
+    "stage": "stt"
+  },
+  {
+    "cohort": "V692",
+    "evidenceKind": "recomputed_from_retained_derived_span_rows; raw pair validation is prior audit",
+    "handler": "tts.model_invoke",
+    "host": "same original receiver host",
+    "metrics": {
+      "denominator": 900,
+      "estimator": "Hyndman-Fan Type 7, h=(n-1)*p; linear interpolation",
+      "p50": 1522.1532630000002,
+      "p90": 1742.556882,
+      "p95": 1881.7084657499997,
+      "population": "completed exact-handler spans in saved derived case history",
+      "units": "ms"
+    },
+    "source": "thesis/evidence/sealed-cohorts-v1215/desktop-gpu-padded-http900-v692/NATIVE-STAGE-CASE-HISTORY.json",
+    "stage": "tts"
+  },
+  {
+    "cohort": "V692",
+    "evidenceKind": "recomputed_from_retained_derived_span_rows; raw pair validation is prior audit",
+    "handler": "TTS.Synthesize",
+    "host": "same original receiver host",
+    "metrics": {
+      "denominator": 900,
+      "estimator": "Hyndman-Fan Type 7, h=(n-1)*p; linear interpolation",
+      "p50": 1522.9608205,
+      "p90": 1743.2337898,
+      "p95": 1882.55398295,
+      "population": "completed exact-handler spans in saved derived case history",
+      "units": "ms"
+    },
+    "source": "thesis/evidence/sealed-cohorts-v1215/desktop-gpu-padded-http900-v692/NATIVE-STAGE-CASE-HISTORY.json",
+    "stage": "tts"
+  },
+  {
+    "cohort": "V737",
+    "evidenceKind": "recomputed_from_retained_derived_span_rows; raw pair validation is prior audit",
+    "handler": "resolved_chat_model.astream",
+    "host": "same original receiver host",
+    "metrics": {
+      "denominator": 900,
+      "estimator": "Hyndman-Fan Type 7, h=(n-1)*p; linear interpolation",
+      "p50": 27758.9691665,
+      "p90": 33208.5676245,
+      "p95": 36202.32170259999,
+      "population": "completed exact-handler spans in saved derived case history",
+      "units": "ms"
+    },
+    "source": "thesis/evidence/sealed-cohorts-v1215/worker-cpu-padded-local900-v737/NATIVE-STAGE-CASE-HISTORY.json",
+    "stage": "llm"
+  },
+  {
+    "cohort": "V737",
+    "evidenceKind": "recomputed_from_retained_derived_span_rows; raw pair validation is prior audit",
+    "handler": "stt.model_invoke",
+    "host": "same original receiver host",
+    "metrics": {
+      "denominator": 900,
+      "estimator": "Hyndman-Fan Type 7, h=(n-1)*p; linear interpolation",
+      "p50": 7979.21532,
+      "p90": 10509.2671009,
+      "p95": 11317.553169899998,
+      "population": "completed exact-handler spans in saved derived case history",
+      "units": "ms"
+    },
+    "source": "thesis/evidence/sealed-cohorts-v1215/worker-cpu-padded-local900-v737/NATIVE-STAGE-CASE-HISTORY.json",
+    "stage": "stt"
+  },
+  {
+    "cohort": "V737",
+    "evidenceKind": "recomputed_from_retained_derived_span_rows; raw pair validation is prior audit",
+    "handler": "Transcription.Transcribe",
+    "host": "same original receiver host",
+    "metrics": {
+      "denominator": 900,
+      "estimator": "Hyndman-Fan Type 7, h=(n-1)*p; linear interpolation",
+      "p50": 8024.8589235,
+      "p90": 10601.935136,
+      "p95": 11490.17697279999,
+      "population": "completed exact-handler spans in saved derived case history",
+      "units": "ms"
+    },
+    "source": "thesis/evidence/sealed-cohorts-v1215/worker-cpu-padded-local900-v737/NATIVE-STAGE-CASE-HISTORY.json",
+    "stage": "stt"
+  },
+  {
+    "cohort": "V737",
+    "evidenceKind": "recomputed_from_retained_derived_span_rows; raw pair validation is prior audit",
+    "handler": "tts.model_invoke",
+    "host": "same original receiver host",
+    "metrics": {
+      "denominator": 900,
+      "estimator": "Hyndman-Fan Type 7, h=(n-1)*p; linear interpolation",
+      "p50": 2583.460301,
+      "p90": 3960.4580996,
+      "p95": 4607.340928049997,
+      "population": "completed exact-handler spans in saved derived case history",
+      "units": "ms"
+    },
+    "source": "thesis/evidence/sealed-cohorts-v1215/worker-cpu-padded-local900-v737/NATIVE-STAGE-CASE-HISTORY.json",
+    "stage": "tts"
+  },
+  {
+    "cohort": "V737",
+    "evidenceKind": "recomputed_from_retained_derived_span_rows; raw pair validation is prior audit",
+    "handler": "TTS.Synthesize",
+    "host": "same original receiver host",
+    "metrics": {
+      "denominator": 900,
+      "estimator": "Hyndman-Fan Type 7, h=(n-1)*p; linear interpolation",
+      "p50": 2584.093753,
+      "p90": 3961.0224797,
+      "p95": 4607.933079049997,
+      "population": "completed exact-handler spans in saved derived case history",
+      "units": "ms"
+    },
+    "source": "thesis/evidence/sealed-cohorts-v1215/worker-cpu-padded-local900-v737/NATIVE-STAGE-CASE-HISTORY.json",
+    "stage": "tts"
+  },
+  {
+    "cohort": "V1197_historical_analysis_v1290_36measured",
+    "evidenceKind": "recomputed_same_host_span_endpoints_in_saved_case_history",
+    "handler": "stt.model_invoke",
+    "host": "requester",
+    "metrics": {
+      "denominator": 36,
+      "estimator": "Hyndman-Fan Type 7, h=(n-1)*p; linear interpolation",
+      "p50": 8010.9583775,
+      "p90": 9740.435224,
+      "p95": 10565.734623249999,
+      "population": "completed native invocations in historical36-case snapshot; not latest requester population",
+      "units": "ms"
+    },
+    "source": "thesis/evidence/orca-relayed-http-v1197/analysis-v1290/CASE-HISTORY.json",
+    "stage": "stt"
+  },
+  {
+    "cohort": "V1197_historical_analysis_v1290_36measured",
+    "evidenceKind": "recomputed_same_host_span_endpoints_in_saved_case_history",
+    "handler": "Transcription.Transcribe",
+    "host": "requester",
+    "metrics": {
+      "denominator": 36,
+      "estimator": "Hyndman-Fan Type 7, h=(n-1)*p; linear interpolation",
+      "p50": 8016.2198775,
+      "p90": 9747.359556,
+      "p95": 10577.51324325,
+      "population": "completed native invocations in historical36-case snapshot; not latest requester population",
+      "units": "ms"
+    },
+    "source": "thesis/evidence/orca-relayed-http-v1197/analysis-v1290/CASE-HISTORY.json",
+    "stage": "stt"
+  },
+  {
+    "cohort": "V1197_historical_analysis_v1290_36measured",
+    "evidenceKind": "recomputed_same_host_span_endpoints_in_saved_case_history",
+    "handler": "OrchestratorService._persist_chat_message",
+    "host": "requester",
+    "metrics": {
+      "denominator": 72,
+      "estimator": "Hyndman-Fan Type 7, h=(n-1)*p; linear interpolation",
+      "p50": 23.578018999999998,
+      "p90": 39.700037599999995,
+      "p95": 47.96209665000002,
+      "population": "completed native invocations in historical36-case snapshot; not latest requester population",
+      "units": "ms"
+    },
+    "source": "thesis/evidence/orca-relayed-http-v1197/analysis-v1290/CASE-HISTORY.json",
+    "stage": "history"
+  },
+  {
+    "cohort": "V1197_historical_analysis_v1290_36measured",
+    "evidenceKind": "recomputed_same_host_span_endpoints_in_saved_case_history",
+    "handler": "resolved_chat_model.astream",
+    "host": "requester",
+    "metrics": {
+      "denominator": 36,
+      "estimator": "Hyndman-Fan Type 7, h=(n-1)*p; linear interpolation",
+      "p50": 28085.61099,
+      "p90": 31909.647243,
+      "p95": 32443.18214525,
+      "population": "completed native invocations in historical36-case snapshot; not latest requester population",
+      "units": "ms"
+    },
+    "source": "thesis/evidence/orca-relayed-http-v1197/analysis-v1290/CASE-HISTORY.json",
+    "stage": "llm"
+  },
+  {
+    "cohort": "V1197_historical_analysis_v1290_36measured",
+    "evidenceKind": "recomputed_same_host_span_endpoints_in_saved_case_history",
+    "handler": "tts.model_invoke",
+    "host": "provider",
+    "metrics": {
+      "denominator": 36,
+      "estimator": "Hyndman-Fan Type 7, h=(n-1)*p; linear interpolation",
+      "p50": 1724.611764,
+      "p90": 1916.576771,
+      "p95": 1950.88474725,
+      "population": "completed native invocations in historical36-case snapshot; not latest requester population",
+      "units": "ms"
+    },
+    "source": "thesis/evidence/orca-relayed-http-v1197/analysis-v1290/CASE-HISTORY.json",
+    "stage": "tts"
+  },
+  {
+    "cohort": "V1197_historical_analysis_v1290_36measured",
+    "evidenceKind": "recomputed_same_host_span_endpoints_in_saved_case_history",
+    "handler": "TTS.Synthesize",
+    "host": "provider",
+    "metrics": {
+      "denominator": 36,
+      "estimator": "Hyndman-Fan Type 7, h=(n-1)*p; linear interpolation",
+      "p50": 1725.270748,
+      "p90": 1917.357082,
+      "p95": 1951.9365275,
+      "population": "completed native invocations in historical36-case snapshot; not latest requester population",
+      "units": "ms"
+    },
+    "source": "thesis/evidence/orca-relayed-http-v1197/analysis-v1290/CASE-HISTORY.json",
+    "stage": "tts"
+  }
+]

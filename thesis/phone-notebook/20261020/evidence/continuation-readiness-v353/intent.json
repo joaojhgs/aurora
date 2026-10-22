@@ -1,0 +1,12 @@
+{
+  "controlDeadline": "2026-10-22T12:23:04.367933+00:00",
+  "explicitNewline": true,
+  "host": "ssh:ssh-sem-notebook-personal",
+  "incarnation": "328cd72f-c7ea-49ff-a2db-b9275b085037",
+  "remoteResult": "/home/developer/projects/aurora/thesis/phone-notebook/20261020/evidence/continuation-readiness-v353.json",
+  "rootAdmissionMessage": "NEW direct owner six-hour continuation authority; initial read-only USB WiFi installed-source and Personal resource checks; Main untouched",
+  "script": "scripts/continuation_readiness_v353.py",
+  "scriptSha256": "950e0bf148ac5bd9534c58997469cc1da67b7ed86a5e946f9ca406ec1d5821d1",
+  "singleSend": true,
+  "terminal": "term_a2ed5feb-7c92-48e4-bd88-d1b0e6737989"
+}

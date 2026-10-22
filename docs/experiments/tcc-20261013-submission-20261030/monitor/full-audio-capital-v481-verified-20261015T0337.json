@@ -1,0 +1,16 @@
+{
+  "status": "Current bounded check; actual passed pilot and frozen cohort receipts verified",
+  "at": "2026-10-15T03:37:20.816630+00:00",
+  "package": "docs/experiments/tcc-20261013-submission-20261030/root/full-audio-capital-v481",
+  "projectManifestSHA256": "695245c5f4b75a45e462d4c2b8302b4dea8e281bf756c8f8b7c06e68f039b4a9",
+  "listedMembersVerified": 30,
+  "actualFilesObserved": 31,
+  "frozenManifest": "docs/experiments/tcc-20261013-submission-20261030/root/full-audio-capital-v481/raw/candidate-v481/frozen-manifest-v1.json",
+  "frozenManifestSHA256": "d34d21d1a9b1a2db03be2ad64c096e77082168b3bcc09c28d442b4a61eaff3d7",
+  "replacementRegistry": "docs/experiments/tcc-20261013-submission-20261030/root/full-audio-capital-v481/raw/candidate-v481/cohort-replacements-v1.json",
+  "replacementRegistrySHA256": "cda9eb1931def2c1a177a13b69b6c8d6dd9a58e9a7135d50e51c43721c514cc5",
+  "readmeSHA256": "efed830db1ac40ca6a971a55d9f92f2b18209c374c3057bdc0385723278b50aa",
+  "rootSourceMessage": "msg_1928ae46bc57",
+  "scope": "One artifact hash/byte check; no modelcall/test/pilot replay; n1 readiness not900/fullsurface/crossdevice acceptance",
+  "phase2MeasuredAllowed": false
+}

@@ -1,0 +1,17 @@
+--- v1973/receiver_proof.py
++++ v1985/receiver_proof.py
+@@ -224,11 +224,13 @@
+             or route_runtime.get("observation_limit") != "before_after_snapshots_all_pc_transports_no_pair_id_no_continuous_stability"):
+         raise ValueError("mesh_route_warmup_observation_gate_incomplete")
+     topics = {"stt": "Transcription.Transcribe", "assistant": "Orchestrator.ExternalUserInput", "tts": "TTS.Synthesize"}
++    rejected_stage_keys = {(item["row"]["failure"]["stage"], item["row"]["correlation"]["correlation_id"])
++                           for item in qualification["rejected"]}
+     routes: dict[tuple[str, str], dict[str, Any]] = {}
+     for row in route_rows:
+         stage = next((key for key, topic in topics.items() if row.get("topic") == topic), None)
+         corr = row.get("correlation_id")
+-        if (stage is None or not isinstance(corr, str) or not corr or row.get("request_outcome") != "ok"
++        if (stage is None or not isinstance(corr, str) or not corr or row.get("request_outcome") != ("failed" if (stage, corr) in rejected_stage_keys else "ok")
+                 or type(row.get("requester_pid")) is not int
+                 or type(row.get("request_monotonic_start_ns")) is not int
+                 or type(row.get("request_monotonic_end_ns")) is not int

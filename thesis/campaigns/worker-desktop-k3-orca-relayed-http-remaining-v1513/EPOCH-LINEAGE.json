@@ -1,0 +1,22 @@
+{
+  "analysisPolicy": "Report each epoch separately. Any condition-level saved-row analysis must explicitly establish comparability, retain the original failure and expose the interruption; never average or pool percentile summaries.",
+  "conditionTargetMeasured": 900,
+  "epochId": "V1513",
+  "firstConditionMeasuredIndex": 514,
+  "lastConditionMeasuredIndex": 900,
+  "parentCohortId": "aurora-worker-desktop-k3-orca-relayed-http-stt-llm-tts-v1481",
+  "parentManifestSha256": "54d51acdf8219b4e69f21cabb9d9fb1b402acf9826196dbdcea4fcfd15bddb25",
+  "parentMeasuredRowsPath": "thesis/campaigns/worker-desktop-k3-orca-relayed-http-v1481/terminal-v1506/requester-analysis-v1506/MEASURED-REQUESTS.jsonl",
+  "parentMeasuredRowsSha256": "6c02415fb32763eeb2878e914799d991ff7738469f7aa667f079f913d27a1a37",
+  "parentValidationPath": "thesis/campaigns/worker-desktop-k3-orca-relayed-http-v1481/terminal-v1506/VALIDATION-v1511.json",
+  "parentValidationSha256": "3c4bf3d5151ec1d0e451cc905af0f149711a36ed495804241841085becd3da03",
+  "plannedEpochMeasured": 387,
+  "plannedFreshExcludedWarmups": 15,
+  "poolEpochPercentilesAutomatically": false,
+  "preserveParentFailure": true,
+  "priorAttemptedMeasured": 513,
+  "priorCorrect": 512,
+  "priorFailed": 1,
+  "reason": "Natural transport termination left 387 declared attempts unstarted. No measured request is retried or replaced; no full900 replay.",
+  "sameProcessResume": false
+}

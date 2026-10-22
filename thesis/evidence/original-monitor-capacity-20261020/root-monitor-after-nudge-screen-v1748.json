@@ -1,0 +1,39 @@
+{
+  "id": "0ada8a75-de0c-4644-afbb-a600f8b05a61",
+  "ok": true,
+  "result": {
+    "terminal": {
+      "handle": "term_2eab47ed-ab9b-4e35-bd9b-fc068c60e3fc",
+      "status": "running",
+      "tail": [
+        "  authoritative-plan writing role. This is one ordinary continuation after",
+        "  actual capacity error; if capacity persists retain exact error, no automatic",
+        "  model switch or retry loop.",
+        "\u2022 I\u2019ll verify the native goal, consume and acknowledge the original mailbox,",
+        "  then review the pending copier artifact-map delta once. I\u2019ll preserve the",
+        "  model, identity and Root\u2019s execution ownership.",
+        "\u2022 Ran timeout --kill-after=2s 28s /home/developer/.orca-relay/bin/orca orchestr\u2026",
+        "  \u2514     \"runtimeId\": \"cc9e3275-28c6-4c45-85cc-bdcd2262aa7d\"",
+        "      }",
+        "    }",
+        "    + 82 lines (ctrl+t to expand)",
+        "\u2022 Compacting context (1m 42s \u2022 esc to interrupt)",
+        "  \u2514 Making room to continue.",
+        "  \u2514 Tip: Use /theme to choose a syntax highlighting theme.",
+        "\u203a Ask Codex to do anything",
+        "  GPT-6.1-Sol xhigh \u00b7 ~/projects/aurora \u00b7 Report \u2026 Goal stalled (/goal resume)",
+        "  ? for shortcuts                                      \u26a0 1 warning \u00b7 f2 to view"
+      ],
+      "truncated": true,
+      "limited": false,
+      "oldestCursor": "0",
+      "nextCursor": "0",
+      "latestCursor": "0",
+      "returnedLineCount": 17,
+      "source": "screen"
+    }
+  },
+  "_meta": {
+    "runtimeId": "cc9e3275-28c6-4c45-85cc-bdcd2262aa7d"
+  }
+}

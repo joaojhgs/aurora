@@ -1,0 +1,38 @@
+{
+  "capturedAt": "2026-10-10T00:50:19.523090+00:00",
+  "task": "PER-291",
+  "delivery": "local committed conditional plan/spec candidate",
+  "commit": "35973dee721e2db39da0622e5caf2e02dc3e9208",
+  "workerCustodyCommit": "3a32a5a141989c31b5f75f20c423ebfa22b70a32",
+  "review": "APPROVE by actual gpt-6.1-sol/high; zero tool executions",
+  "validation": "15 source hashes, 5 explicitly named source paths, five-surface/state matrix and whitespace checked; no product test repetition",
+  "artifacts": [
+    {
+      "path": ".omx/plans/transcript-library-20261010/implementation-plan.md",
+      "sha256": "7eaf5ef7568684d104fafe4a34b0b05894abb65e0af7feade288c6e58678355a"
+    },
+    {
+      "path": ".omx/evidence/receiving-session-20261006/PER291-PLAN-CONTRACT-SOURCES-V1.json",
+      "sha256": "787ae8ffa9f988de1578640df0e34004729469156e877ca8968c72c2fa0a61c5"
+    },
+    {
+      "path": ".omx/evidence/receiving-session-20261006/PER291-PLAN-SOL-REVIEW-PROVENANCE-V1.json",
+      "sha256": "add1810eab9989c62f7b9e32d0302f043a4ea07b7231694f9d3f40d97f553429"
+    },
+    {
+      "path": ".omx/evidence/receiving-session-20261006/PER291-PLAN-SOL-V1-REVIEW.md",
+      "sha256": "d04b7305c654b65ceb34728aa5426711d13637f86be56c0c46b06015ddff06d2"
+    }
+  ],
+  "nativeGoalSnapshot": ".omx/evidence/receiving-session-20261006/PER291-PLAN-NATIVE-GOAL-V1.json",
+  "formalAcceptedOriginalTasks": 1,
+  "originalTaskCount": 13,
+  "remaining": [
+    "Stage 2 full acceptance/start gate",
+    "Original plan QA/architecture and linked PR/tracker acceptance",
+    "Source Astra final aesthetic decision for any later UI",
+    "Separately authorized viewer implementation; no screen code in this task"
+  ],
+  "nextWork": "PER-284 composite local action/chat provider, with existing approval flow and turn ownership; Root serial main-flow validation only",
+  "prohibitedActionsPerformed": false
+}

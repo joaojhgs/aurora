@@ -1,0 +1,21 @@
+{
+  "actualProductFix": "only CORS registration outsideauth; source-independentSolAPPROVE59f0b74c",
+  "globalNextLogicalFlow": 8,
+  "previousHistory": "6Tinyfailed +1accuratebrowserpreflightfailed, modelinference7notestablished; no countreset/accepted0",
+  "surface": "samehost realbrowserproductionHTTP, no K0/native/crossdevice claim",
+  "priorProductionWebBuild": "V450 samebuildUBSgEGgCRuvqTsFtR7xbp reused, no rebuild/deps/UI/native/WASM replay",
+  "files": {
+    "supervisor.py": {
+      "bytes": 7290,
+      "sha256": "6f298af409eca9b3009e5e0500531716f39afa3e386ace08212da0909322ab3b"
+    },
+    "backend-controller.py": {
+      "bytes": 7124,
+      "sha256": "ea913ac60d1058210952cee71fecb39870ef74cfb99915b264690da5222b1f7c"
+    },
+    "fastapi_app.py": {
+      "bytes": 24489,
+      "sha256": "c90ade3dc52f1dfdf3840225894d24cefa530b063b2b32e1b289139772e65273"
+    }
+  }
+}

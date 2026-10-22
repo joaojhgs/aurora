@@ -1,0 +1,7 @@
+# Current execution addendum
+
+The copied advisor brief and coverage registry retain their original observation timestamps. K3 Orca-relayed HTTP is now sealed and independently reviewed: 900 attempted, 885 correct, 12 strict answer-format failures and 3 transport failures. Correct-complete n=885 Hyndman–Fan Type7 p90=31,243.1636454 ms and p95=31,787.9475984 ms, with four lifecycle strata and the disclosed source/configuration witnesses preserved.
+
+The first actual P2P K1 file-audio main flow now works: local worker STT and LLM, exact approved peer TTS on Personal, and valid WAV output. At03:54 UTC11/15 excluded warmups were correct;0/900 measured requests had been admitted. The three-file speech routing metadata correction passed36 targeted tests, Ruff and the original Sol review. The new fixed manifests preserve models/audio/settings and explicitly record the source delta and prospective20h cap. The earlier failed warmup and setup failures remain retained. Native/provider/route warmup proof precedes measurement.
+
+Current execution and exact raw paths are in `docs/experiments/tcc-20261013-submission-20261030/root/CURRENT.md`. Android availability remains unknown because the original owning-host observer/binding is unresolved; it is not evidence of device absence. Remaining P2P, K1HTTP720, applicable non-iOS surfaces and multiple-provider/load work stay open. This is early review material, with full-matrix completion still pending.

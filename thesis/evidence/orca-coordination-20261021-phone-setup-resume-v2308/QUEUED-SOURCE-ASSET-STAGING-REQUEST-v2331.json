@@ -1,0 +1,51 @@
+{
+  "at": "2026-10-22T00:20:17.415270+00:00",
+  "requestMessage": "msg_bffcad56b7d4",
+  "state": "QUEUED_FIRST_NATURAL_MAIN_TERMINAL_SEAL_RESOURCE_RELEASE_NOT_ADMITTED_NOT_STARTED",
+  "originalRun": "run_e6054e76e9fc",
+  "rootNativeGoal": "01a112a5-d6bb-74e2-bf7c-ace73cb513b5",
+  "existingWorker": "term_1f27be31-0284-4366-bb91-30fe538cd30e",
+  "priority": "At first actual applicable resource release after current frozen HTTP natural completion/sealing, before scheduling a conflicting new executable lane, Root returns explicit admission or exact residual blocker on same Run/worker. No invented start time.",
+  "source": {
+    "sha": "ebde3a8acf6315f920d03593845f17a1fc65a733",
+    "maximumBytes": 12582912,
+    "maximumSeconds": 120
+  },
+  "modelsAndAudio": {
+    "bytes": 774675150,
+    "priorModelsOnlyBytes": 774455356,
+    "additionalFixedAudioBytes": 219794,
+    "maximumBytesPerSecond": 2097152,
+    "maximumSeconds": 600,
+    "mustHaveExactSourcePathsHashesAndSupportedRoute": true,
+    "runtimeAcquisition": "Required llama0.3.19 is engineering input acquisition, no owner version choice. Any runtime package downloads must be explicitly manifested within the later admitted resource window, not silently substitute cache0.3.34."
+  },
+  "notebookBuildProposal": {
+    "maxParallelJobs": 2,
+    "maximumSeconds": 1200,
+    "existingGuardsRemain": true
+  },
+  "prerequisites": [
+    "Current same frozen V2296 requester/backend/copier actual natural terminal/retirement",
+    "Sealed requester and provider custody/finalizer release of relevant shared resources",
+    "Actual current storage/RAM/network/other ownership admission and frozen UTC bounds before transfer",
+    "No credential/private config/DB copies, destructive cleanup, source branch overwrite, main pause or current manifest/settings change",
+    "No transfer merely because queued; Root explicitly releases and sends actual bounded admission",
+    "Phone campaign900/warmups still requires separate actual owner START/readiness/resource gates"
+  ],
+  "earliestStartUtc": null,
+  "sharedTransferStarted": false,
+  "newWorkersOrLifecycleAdoption": 0,
+  "noMainHold": true,
+  "physicalIncomingReceipt": "thesis/evidence/orca-coordination-20261021-phone-setup-resume-v2308/OFFLINE-CLOSURE-STAGING-QUEUE-USB-RECOVERY-MAIL-v2331.json",
+  "latestReceivedPhoneEvidence": {
+    "message": "msg_7114f34553d8",
+    "actualEventUtc": "2026-10-22T00:13:17+00:00",
+    "currentNode": "003/014",
+    "readWrite": true,
+    "getState": "device / exit0",
+    "fiveGetprops": "exit0 Android16/API36 arm64-v8a",
+    "supersedesPriorNode012Denial": true,
+    "rootRoutinePhoneChecks": 0
+  }
+}

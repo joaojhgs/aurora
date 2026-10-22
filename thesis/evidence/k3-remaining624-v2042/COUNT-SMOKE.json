@@ -1,0 +1,35 @@
+{
+  "at": "2026-10-20T23:59:07.383684+00:00",
+  "status": "PASS",
+  "scope": "counter/global-index mapping and source pins only; no model or SUT calls",
+  "priorIndicesPreserved": [
+    1,
+    276
+  ],
+  "newIndicesExactly": [
+    277,
+    900
+  ],
+  "newCount": 624,
+  "conditionTarget": 900,
+  "duplicateOldIndices": 0,
+  "failed276Replayed": false,
+  "extra625thRequest": false,
+  "warmupIsExcluded": true,
+  "unchangedRuntimeModules": 11,
+  "implementation": {
+    "adapterSha256": "6e09f9d66a9178ff184f93395cd81b6bfe3828895a90003057eeeae6c1a0a719",
+    "bindingsSha256": "79558452e6f61268ad246476ca848e060b8ea808e15091bc53a3c4e0e28b1647",
+    "bootstrapSha256": "df9957c1880d45b5a1d059d7743b51a2d7fe34b3f5331e1331633eee5e8f45bc",
+    "controllerSha256": "d0ea770797403167c6bc53908990b733dd10eec49c0d79029410feb8ae12a9e1",
+    "k3CompositionSha256": "09399c07cfc44cfbaaac969af5c928e9ae57fab2d6848f76f29950e7fdc314bf",
+    "observerSha256": "784cc4bffc0d6824bbe378d17a7f632d587ca0a315896b048b2ebef727082df5",
+    "receiverProofSha256": "5f010b519a23b048a4cb878201469088d93eecab137b03537971dccc02913fd0",
+    "resourceSamplerSha256": "8f62ec378e74036d4539d9159e3caf29b8fd7a9115de1ab0f482dfd58b6e1857",
+    "routeObserverSha256": "db390cdc4e05718e111037b3118573aab5ee9215c57b8e4398767a8b07e6ce7a",
+    "routeRuntimePinsSha256": "5d79681b500485fd7c4c9e3d562a39af957b261f0f75452d25ad9fcc59dbc1db",
+    "routeSinkSha256": "d02cbff12f4bf88923cbbc8e6e990b1b140833b276fb112ca521dc21b40d1773",
+    "runnerSha256": "77f5bba964721a3d6a26f1df7ca7148397aeed9a8eae6767a6016c26e6b321ba",
+    "telemetrySha256": "8129ffe7591a47a0107ede53b101aead9fc1f58b92f0c0c4203176cc7608325d"
+  }
+}

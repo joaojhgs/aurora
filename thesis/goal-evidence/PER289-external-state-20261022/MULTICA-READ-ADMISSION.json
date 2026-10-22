@@ -1,0 +1,31 @@
+{
+  "at": "2026-10-22T12:02:34.838328+00:00",
+  "skill": ".omx/task-intake/multica-cli-SKILL.md",
+  "expectedWorkspace": "8ba5e156-5ff4-4990-b201-7f5d435fdcef",
+  "readOnly": true,
+  "credentialsGrantsProfilesOrSecurityChanged": false,
+  "commands": [
+    {
+      "command": "multica version",
+      "exitCode": 0,
+      "rawOutputNotStored": true,
+      "version": "0.5.3",
+      "minimumSkillVersionMet": true
+    },
+    {
+      "command": "multica auth status",
+      "exitCode": 0,
+      "rawOutputNotStored": true,
+      "reportedAuthFailure": true,
+      "reportedAuthenticated": false,
+      "safeOutputLines": []
+    },
+    {
+      "command": "multica config show",
+      "exitCode": 0,
+      "rawOutputNotStored": true,
+      "configuredExpectedWorkspaceMentioned": true,
+      "configurationValuesNotExported": true
+    }
+  ]
+}

@@ -1,0 +1,184 @@
+{
+  "at": "2026-10-21T05:41:27.083406+00:00",
+  "status": "original_live_provider_fixed_prefix_snapshot",
+  "actors": [
+    {
+      "pid": 251472,
+      "startTicks": 29038396,
+      "state": "S"
+    },
+    {
+      "pid": 251473,
+      "startTicks": 29038457,
+      "state": "S"
+    }
+  ],
+  "providerRetired": false,
+  "reservationPreserved": true,
+  "nativeSpansAtBoundary": 4678,
+  "openNativeSpansAtBoundary": 0,
+  "files": [
+    {
+      "name": "raw/provider-manifest.json",
+      "source": "/home/developer/projects/aurora/thesis/campaigns/worker-desktop-k3-p2p-full-audio-v1965/provider/provider-manifest.json",
+      "bytes": 7720,
+      "sha256": "716b893424f28ef19a1820820000c8a30fb6adbf87252c9f65e1bca30e717bb9",
+      "sourceInode": 4621201,
+      "observedSourceBytes": 7720,
+      "terminalEOF": false,
+      "completeLinePrefix": false
+    },
+    {
+      "name": "raw/controller-launch.json",
+      "source": "/home/developer/projects/aurora/thesis/campaigns/worker-desktop-k3-p2p-full-audio-v1965/provider/controller-launch.json",
+      "bytes": 300,
+      "sha256": "709e177210d5782ecc89852ee7231b256100dab321e9d27aa9262838641df8ef",
+      "sourceInode": 4621207,
+      "observedSourceBytes": 300,
+      "terminalEOF": false,
+      "completeLinePrefix": false
+    },
+    {
+      "name": "raw/receiver-identity.json",
+      "source": "/home/developer/projects/aurora/thesis/campaigns/worker-desktop-k3-p2p-full-audio-v1965/provider/receiver-identity.json",
+      "bytes": 1372,
+      "sha256": "37e4c22e225c8f863dd3ed7645633b2fad56525497faf7937fb5b0a41c63de72",
+      "sourceInode": 4621208,
+      "observedSourceBytes": 1372,
+      "terminalEOF": false,
+      "completeLinePrefix": false
+    },
+    {
+      "name": "raw/assistant-identity.json",
+      "source": "/home/developer/projects/aurora/thesis/campaigns/worker-desktop-k3-p2p-full-audio-v1965/provider/assistant-identity.json",
+      "bytes": 1417,
+      "sha256": "724ecceadfd25a49647315e9c3f9a6a56a0d93e57609897d683e91ea6dc575c7",
+      "sourceInode": 4621209,
+      "observedSourceBytes": 1417,
+      "terminalEOF": false,
+      "completeLinePrefix": false
+    },
+    {
+      "name": "raw/stt-identity.json",
+      "source": "/home/developer/projects/aurora/thesis/campaigns/worker-desktop-k3-p2p-full-audio-v1965/provider/stt-identity.json",
+      "bytes": 1399,
+      "sha256": "9444b654369a01f07128d8829882fcd982dcf0d0a49446da37545ba6f042c17a",
+      "sourceInode": 4621210,
+      "observedSourceBytes": 1399,
+      "terminalEOF": false,
+      "completeLinePrefix": false
+    },
+    {
+      "name": "raw/runtime-versions.json",
+      "source": "/home/developer/projects/aurora/thesis/campaigns/worker-desktop-k3-p2p-full-audio-v1965/provider/runtime-versions.json",
+      "bytes": 210,
+      "sha256": "7e90ffef48ceeb59038664d0f5c75f71096e5eb6e5362894307353b40ee7c40a",
+      "sourceInode": 4621205,
+      "observedSourceBytes": 210,
+      "terminalEOF": false,
+      "completeLinePrefix": false
+    },
+    {
+      "name": "raw/ACTUAL-FILES-v1965.json",
+      "source": "/home/developer/projects/aurora/thesis/campaigns/worker-desktop-k3-p2p-full-audio-v1965/provider/ACTUAL-FILES-v1965.json",
+      "bytes": 2221,
+      "sha256": "bff2a1486e4042787590fa8c9bb08c879317eca656e616cce54087488941741f",
+      "sourceInode": 4621200,
+      "observedSourceBytes": 2221,
+      "terminalEOF": false,
+      "completeLinePrefix": false
+    },
+    {
+      "name": "raw/PREPARATION-v1965.json",
+      "source": "/home/developer/projects/aurora/thesis/campaigns/worker-desktop-k3-p2p-full-audio-v1965/provider/PREPARATION-v1965.json",
+      "bytes": 9631,
+      "sha256": "b4b853275d86b949af57b0fa188407dcb5c16b44303c0c0ed94d06376a8afd3a",
+      "sourceInode": 4621202,
+      "observedSourceBytes": 9631,
+      "terminalEOF": false,
+      "completeLinePrefix": false
+    },
+    {
+      "name": "raw/ROOT-ADMISSION-v1966.json",
+      "source": "/home/developer/projects/aurora/thesis/campaigns/worker-desktop-k3-p2p-full-audio-v1965/provider/ROOT-ADMISSION-v1966.json",
+      "bytes": 8872,
+      "sha256": "35c2c553c8ed1bbd4c3c462bfc0a7d72cd20a1daa56a50ef1c526bb23b9c84a4",
+      "sourceInode": 4621215,
+      "observedSourceBytes": 8872,
+      "terminalEOF": false,
+      "completeLinePrefix": false
+    },
+    {
+      "name": "raw/ROOT-LAUNCH-v1966.json",
+      "source": "/home/developer/projects/aurora/thesis/campaigns/worker-desktop-k3-p2p-full-audio-v1965/provider/ROOT-LAUNCH-v1966.json",
+      "bytes": 275,
+      "sha256": "eb4f9e0379276e7a6be22aa27f40ff193a2434a9b0da690bf5d590e6d097aa9b",
+      "sourceInode": 4621204,
+      "observedSourceBytes": 275,
+      "terminalEOF": false,
+      "completeLinePrefix": false
+    },
+    {
+      "name": "raw/STATUS.json",
+      "source": "/home/developer/projects/aurora/thesis/campaigns/worker-desktop-k3-p2p-full-audio-v1965/provider/STATUS.json",
+      "bytes": 161090,
+      "sha256": "0b8fa9dd16a5013c3e9e5545f0590eabde027a4766be42fed006276a7ed32c33",
+      "sourceInode": 4621414,
+      "observedSourceBytes": 161090,
+      "terminalEOF": false,
+      "completeLinePrefix": false
+    },
+    {
+      "name": "raw/voice-stages.jsonl",
+      "source": "/home/developer/projects/aurora/thesis/campaigns/worker-desktop-k3-p2p-full-audio-v1965/provider/voice-stages.jsonl",
+      "bytes": 12568894,
+      "sha256": "d117ad48bf70b9011adc23e0dcdf4fbc2beed3c8fa94f39340c32c554d26571a",
+      "sourceInode": 4621211,
+      "observedSourceBytes": 12568894,
+      "terminalEOF": false,
+      "completeLinePrefix": true
+    },
+    {
+      "name": "raw/actual-provider-bindings.jsonl",
+      "source": "/home/developer/projects/aurora/thesis/campaigns/worker-desktop-k3-p2p-full-audio-v1965/provider/actual-provider-bindings.jsonl",
+      "bytes": 768960,
+      "sha256": "163f0eef5b03984a3f999525a70b2a1232c577aa74f91882cc46e0fc970cca99",
+      "sourceInode": 4621214,
+      "observedSourceBytes": 768960,
+      "terminalEOF": false,
+      "completeLinePrefix": true
+    },
+    {
+      "name": "raw/binding-guard-diagnostic.jsonl",
+      "source": "/home/developer/projects/aurora/thesis/campaigns/worker-desktop-k3-p2p-full-audio-v1965/provider/binding-guard-diagnostic.jsonl",
+      "bytes": 186118,
+      "sha256": "c143fe91596e154f1d5694c686250099d08467ab245c0b3925cc49c13b3c5d45",
+      "sourceInode": 4621212,
+      "observedSourceBytes": 186118,
+      "terminalEOF": false,
+      "completeLinePrefix": true
+    },
+    {
+      "name": "raw/resources.jsonl",
+      "source": "/home/developer/projects/aurora/thesis/campaigns/worker-desktop-k3-p2p-full-audio-v1965/provider/resources.jsonl",
+      "bytes": 114040525,
+      "sha256": "31adf9009440245424ec835c8bf11cb7a138bab4d8aefa6e900108e65bf0f113",
+      "sourceInode": 4621206,
+      "observedSourceBytes": 114040525,
+      "terminalEOF": false,
+      "completeLinePrefix": true
+    }
+  ],
+  "rawPayloadBytes": 127759004,
+  "originalFilesPreserved": true,
+  "archiveContainsPhysicalCopies": true,
+  "sutCalls": 0,
+  "K1MeasuredAttempted": 900,
+  "K1Correct": 885,
+  "K1Failed": 15,
+  "K1Remaining": 0,
+  "inheritedConditionEffectiveDeadlineUtc": "2026-10-21T12:41:24.961804+00:00",
+  "manifestOriginalProviderDeadlineUtc": "2026-10-21T12:45:06.664473+00:00",
+  "deadlinePolicy": "Use earlier inherited effective condition bound; no extension or setting change",
+  "nativeCoverageScope": "K1 current global710-900 TTS-only remote; archive includes prior K3 and readiness rows. Join only exact current correlations; local STT/LLM traces use worker clock, no cross-host subtraction."
+}

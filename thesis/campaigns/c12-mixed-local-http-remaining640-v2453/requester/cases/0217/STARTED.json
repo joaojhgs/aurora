@@ -1,0 +1,17 @@
+{
+  "at": "2026-10-22T13:42:54.218649+00:00",
+  "condition": "C12-mixed-local-plus-Orca-relayed-HTTP-K3-concurrency2",
+  "correlation_id": "c12-v2453-0d3a69a00db646b69100f7234054de17",
+  "eligible_measured": true,
+  "global_measured_index": 462,
+  "manifest_sha256": "3bfca19d2dd0a9eec3981eae256168a5badd9ac2bb58a270ff8a55df1d986cce",
+  "ordinal": 217,
+  "parent_remote_stt_correlation_id": null,
+  "phase": "measured",
+  "phase_index": 202,
+  "recovery_epoch": "v2453",
+  "request_cap_seconds": 180,
+  "schema": "aurora.c12.paired_case.v1",
+  "start_monotonic_ns": 1455034807912107,
+  "stream": "worker-http"
+}

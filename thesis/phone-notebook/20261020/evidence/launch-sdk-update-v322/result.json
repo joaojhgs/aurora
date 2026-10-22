@@ -1,0 +1,1 @@
+{"at": "2026-10-22T11:27:21.743976+00:00", "controllerPid": 361825, "job": "sdk-update-v320", "normalReplacementAttemptsAllowed": 1, "maximumInstallerSeconds": 180, "sameVerifiedCertificateRequired": true, "noConfirmationAutomation": true, "buildJobWaitedWithoutRestart": "android-apk-build-v318"}

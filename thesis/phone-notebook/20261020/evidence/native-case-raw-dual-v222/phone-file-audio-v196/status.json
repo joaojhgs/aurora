@@ -1,0 +1,53 @@
+{
+  "adbMeasurementTransport": false,
+  "apkSha256": "a5b3d0847d433656ac9021da0832a58f331090db6a6a6c07ea969609fe87fb94",
+  "appPid": "6267",
+  "at": "2026-10-22T06:33:30.821991+00:00",
+  "batteryAfter": {
+    "AC powered": "false",
+    "USB powered": "true",
+    "health": "2",
+    "level": "78",
+    "status": "2",
+    "temperature": "269"
+  },
+  "batteryBefore": {
+    "AC powered": "false",
+    "USB powered": "true",
+    "health": "2",
+    "level": "78",
+    "status": "2",
+    "temperature": "271"
+  },
+  "deadlineUtc": "2026-10-22T06:43:41.235220+00:00",
+  "elapsedSeconds": 13.600140571001248,
+  "finishedAt": "2026-10-22T06:33:44.424672+00:00",
+  "input": {
+    "avVersion": "16.0.1",
+    "entrypointFormat": "pcm_s16le",
+    "entrypointRateHz": 16000,
+    "fasterWhisperVersion": "1.1.1",
+    "normalization": "production faster_whisper.audio.decode_audio(PyAV) to16k float32 then rint*32768/clip/LEint16; setup before phone timing",
+    "numpyVersion": "2.2.6",
+    "pcmBytes": 159456,
+    "pcmSha256": "1d5147ec00b8582ffeeb2d6a196cfab6e713cc33c9beea9212e7bc91eeed8fbf",
+    "sampleCount": 79728,
+    "sourceChannels": 1,
+    "sourceFrames": 109875,
+    "sourceSampleRateHz": 22050,
+    "sourceWavSha256": "da0ecc4ad0885746ab6e716585473917ab2b543a505bf0db09ebacfaa7943cbb"
+  },
+  "maxPilotFlows": 1,
+  "maximumSeconds": 600,
+  "measuredCases": 0,
+  "nativeResultPath": "/home/developer/projects/aurora/thesis/phone-notebook/20261020/deployment/ebde3a8acf6315f920d03593845f17a1fc65a733/phone-file-audio-v196/native.json",
+  "nativeResultSha256": "c64480fcd9353c42edd99dbfe4e365ef814e5a3681979d5ebd4795c373f61c5f",
+  "nativeSessionClosed": null,
+  "nodeExit": 0,
+  "nodePid": 239046,
+  "notebookInference": false,
+  "ownedAppStoppedAfterUnconfirmedNativeClose": true,
+  "sourceIdentity": "ebde3a8acf6315f920d03593845f17a1fc65a733 + source-closure-overlay-v2383 + android-bundled-model-rename-v1 + android-node-policy-initial-publication-v2 + android-finite-file-audio-v3",
+  "startedAt": "2026-10-22T06:33:41.235211+00:00",
+  "status": "NATIVE_FILE_AUDIO_SETUP_OR_FLOW_FAILED_PRESERVED"
+}

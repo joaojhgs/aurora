@@ -1,0 +1,46 @@
+{
+  "id": "1472042b-5d76-43a4-8019-00c1cf98ffaa",
+  "ok": true,
+  "result": {
+    "terminal": {
+      "handle": "term_d5651d8d-58e2-4b38-85e2-51c668cc933c",
+      "status": "running",
+      "tail": [
+        "AURORA_C12_PAIR_CAPSULE_V2426 {\"seq\": 108, \"total\": 111, \"data\": \"dGxoUmlHMmtaeE",
+        "RFS2pSSXZ5WFFmQ1FwaGZmU1N2eWpveVNkRWZTNkJud0ZwSWh5cnhmdnpDRVdSRGRBbGNSMmVMbWRQRn",
+        "l4RUtwUjdSM2RoQjM2UWVJS1N1Rjh3aGpvRlBtRlBoWXY4UDdKTHpnRzQyRnI2QTl1aUZkZy8waUorTl",
+        "VxRFNwbFBXY25OWEFSTGlXMW9rdlNHRDVkK0VOM3h5U0NOZ2NJRlJYUHNrVmdOUFFaQnhCcXdTdXdxWn",
+        "ozRTAvQjBQZ1FHRUVlRWRWSTcrSlI0QlN1NXZleDhHS3Jpd1JGNkFEc016NmUrZ0k1Y0E4NENLckJOV0",
+        "RYcGdkQVJheUt1a1pOVEsrMURQVkFqOEJacU1GSWNMNzJFQllTZTNNTEdpbGZ4QkhJUXRwbGVpazhobm",
+        "ttenhYYW9Nd2t3UFZzaG5LUnFvZmRjVTNFclNlQ1p0RCtQWWFlbzVWaWVjNWlvMWNRUTFUamNlNThvVW",
+        "JlWHRONFFETk9NaEJXMG0rNUFsS2xEd1c3UFB5aFpRY3J1MUUyNkxhZGdRM1FkdkFaWHdGRitwckNVR2",
+        "9lZjVvWnkyOEVESWwrcWt2eWdT\"}",
+        "AURORA_C12_PAIR_CAPSULE_V2426 {\"seq\": 109, \"total\": 111, \"data\": \"OHdBMGVDazJKUD",
+        "RKak45cGhCQWpLUUdnUkg4TUtHUnVqdE1rbzVLcDZSNzJFVkZDdmlMdlNlTm9aWmlHNlhaTUlCdmd0SX",
+        "dVdnFLNFdBMSt3RVdVQk5BZTFZTlJtSWpPWUlJVk96bEduTHY4RXQ0ZmJBQUdLVUlxUXpmQ252TDdzSH",
+        "dzOEIvUko2YzVZZllEK2dDcVJBV1M2ZmdMeUVJcE9NV1lTTFhuVG9sUHVQS2xHMUVGVDFPSnQ3MldIMW",
+        "lNLytOZzhRenZEWElFL29JU2VnSVhpQWRBYU14SC9NS2UwUjhFTnZpYlZHZ2Q1bHFGcUZrU2lVRmxvTj",
+        "lCcnRoZFZndXJlVzc0RStKTFV3SS9FcE1GWXFGRW5DVE9pKytGK3VBN2VBek1WSVV2VnJ5SlBWYlBDcV",
+        "kySDVFbnZxVk5NelZWWHFvcDBHMGZTM21wMTRwOUpBcDlUV0lJZldvQjkwUVRNRzJnUGRTTDc0Wk1oQW",
+        "44QWJDYzFBZlExeU1vamw0NVIyaitvWUZpOHZnQlNtR01HSmZwYXRDc2lvQjZCMFZpa09xR0trZHZVcl",
+        "lwaFFveExWeVJhaEc2aHU1SHpM\"}",
+        "AURORA_C12_PAIR_CAPSULE_V2426 {\"seq\": 110, \"total\": 111, \"data\": \"NVZJUW1WRnBqcW",
+        "NJeVRXbTR0cXFEZEUzZml6emxBK3c5OHFQeWtoQmk1NkRUVUpjNFVNa3prdm1SU3VOWjdka29IQTc2bT",
+        "loYkJORXpVNmJxdW1PZGE0NWhzM1lBZmROdHdSUkdxelRiL2g1WXRNdmdRSGNETmszN1RQT1pNVmVFcX",
+        "NPREIzcy9PZnFTbGRRd01KVHhFd0owcTNEQk9ZYUxWN3QxZ2pjPSJ9\"}",
+        "%",
+        "\u279c  aurora git:(main) \u2717"
+      ],
+      "truncated": true,
+      "limited": true,
+      "oldestCursor": "223703",
+      "nextCursor": "224134",
+      "latestCursor": "224134",
+      "returnedLineCount": 24,
+      "source": "screen"
+    }
+  },
+  "_meta": {
+    "runtimeId": "cc9e3275-28c6-4c45-85cc-bdcd2262aa7d"
+  }
+}

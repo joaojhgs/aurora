@@ -1,0 +1,207 @@
+{
+  "actualGpu": {
+    "actualOffloadedLayers": 25,
+    "actualTotalLayers": 25,
+    "backend": "Vulkan",
+    "configuredLayers": 100,
+    "nativeLogPrefix": {
+      "bytes": 217249,
+      "sha256": "4b6041b98314ba707b6edc78a198ced9e966faaceb2361199f0483d9f5174b41",
+      "source": "/home/developer/projects/aurora/.git/aurora-handoff-import-20261006/k3-mesh-provider-v1965/backend.private.log"
+    },
+    "notCrossHostClockSubtraction": true,
+    "receiverPid": 251473,
+    "receiverStartTicks": 29038457,
+    "selectedNativeLines": [
+      {
+        "lineNumber": 105,
+        "text": "ggml_vulkan: Found 1 Vulkan devices:"
+      },
+      {
+        "lineNumber": 107,
+        "text": "llama_model_load_from_file_impl: using device Vulkan0 (AMD Radeon RX 7600 (RADV NAVI33)) (0000:03:00.0) - 8129 MiB free"
+      },
+      {
+        "lineNumber": 257,
+        "text": "load_tensors: layer   0 assigned to device Vulkan0, is_swa = 0"
+      },
+      {
+        "lineNumber": 258,
+        "text": "load_tensors: layer   1 assigned to device Vulkan0, is_swa = 0"
+      },
+      {
+        "lineNumber": 259,
+        "text": "load_tensors: layer   2 assigned to device Vulkan0, is_swa = 0"
+      },
+      {
+        "lineNumber": 260,
+        "text": "load_tensors: layer   3 assigned to device Vulkan0, is_swa = 0"
+      },
+      {
+        "lineNumber": 261,
+        "text": "load_tensors: layer   4 assigned to device Vulkan0, is_swa = 0"
+      },
+      {
+        "lineNumber": 262,
+        "text": "load_tensors: layer   5 assigned to device Vulkan0, is_swa = 0"
+      },
+      {
+        "lineNumber": 263,
+        "text": "load_tensors: layer   6 assigned to device Vulkan0, is_swa = 0"
+      },
+      {
+        "lineNumber": 264,
+        "text": "load_tensors: layer   7 assigned to device Vulkan0, is_swa = 0"
+      },
+      {
+        "lineNumber": 265,
+        "text": "load_tensors: layer   8 assigned to device Vulkan0, is_swa = 0"
+      },
+      {
+        "lineNumber": 266,
+        "text": "load_tensors: layer   9 assigned to device Vulkan0, is_swa = 0"
+      },
+      {
+        "lineNumber": 267,
+        "text": "load_tensors: layer  10 assigned to device Vulkan0, is_swa = 0"
+      },
+      {
+        "lineNumber": 268,
+        "text": "load_tensors: layer  11 assigned to device Vulkan0, is_swa = 0"
+      },
+      {
+        "lineNumber": 269,
+        "text": "load_tensors: layer  12 assigned to device Vulkan0, is_swa = 0"
+      },
+      {
+        "lineNumber": 270,
+        "text": "load_tensors: layer  13 assigned to device Vulkan0, is_swa = 0"
+      },
+      {
+        "lineNumber": 271,
+        "text": "load_tensors: layer  14 assigned to device Vulkan0, is_swa = 0"
+      },
+      {
+        "lineNumber": 272,
+        "text": "load_tensors: layer  15 assigned to device Vulkan0, is_swa = 0"
+      },
+      {
+        "lineNumber": 273,
+        "text": "load_tensors: layer  16 assigned to device Vulkan0, is_swa = 0"
+      },
+      {
+        "lineNumber": 274,
+        "text": "load_tensors: layer  17 assigned to device Vulkan0, is_swa = 0"
+      },
+      {
+        "lineNumber": 275,
+        "text": "load_tensors: layer  18 assigned to device Vulkan0, is_swa = 0"
+      },
+      {
+        "lineNumber": 276,
+        "text": "load_tensors: layer  19 assigned to device Vulkan0, is_swa = 0"
+      },
+      {
+        "lineNumber": 277,
+        "text": "load_tensors: layer  20 assigned to device Vulkan0, is_swa = 0"
+      },
+      {
+        "lineNumber": 278,
+        "text": "load_tensors: layer  21 assigned to device Vulkan0, is_swa = 0"
+      },
+      {
+        "lineNumber": 279,
+        "text": "load_tensors: layer  22 assigned to device Vulkan0, is_swa = 0"
+      },
+      {
+        "lineNumber": 280,
+        "text": "load_tensors: layer  23 assigned to device Vulkan0, is_swa = 0"
+      },
+      {
+        "lineNumber": 281,
+        "text": "load_tensors: layer  24 assigned to device Vulkan0, is_swa = 0"
+      },
+      {
+        "lineNumber": 606,
+        "text": "load_tensors: offloaded 25/25 layers to GPU"
+      },
+      {
+        "lineNumber": 608,
+        "text": "load_tensors:      Vulkan0 model buffer size =   526.50 MiB"
+      }
+    ]
+  },
+  "at": "2026-10-21T00:05:13.146985+00:00",
+  "conditionMeasuredTarget": 900,
+  "excludedWarmups": 18,
+  "globalMeasuredEnd": 900,
+  "globalMeasuredStart": 277,
+  "measured624ForecastSecondsWith20PercentPlus300": 10044.4315024992,
+  "measuredAdmission": "runner independently validates zero requester model calls and all three remote native stage proofs",
+  "plannedMeasuredThisEpoch": 624,
+  "proofSha256": "d4f66435ec3492ed20ae2a2d6eef81601153ec373442a4edab62c6d141097b32",
+  "providerRemainingSeconds": 45371.81716,
+  "remoteModelJoins": 45,
+  "requesterRemainingSeconds": 45201.037041,
+  "status": "K3_15_ORDINARY_WARMUPS_REMOTE_NATIVE_GPU_ROUTE_PROOF_PUBLISHED",
+  "sutCallsByFinalizer": 0,
+  "warmupP95MsType7": 13013.3967715,
+  "warmupQualification": {
+    "all_raw_case_sha256": {
+      "attempt-0001-warmup.jsonl": "7bbcdfc0a39597632369e09d52a684029c1560b36ccdfbde607dcdbdbc6598d8",
+      "attempt-0002-warmup.jsonl": "2c6140cba5cbc92144a57a2facd36720a6a2eb1e9dc3fb7d0d9732a8629b134d",
+      "attempt-0003-warmup.jsonl": "bb32c11e4b585e0eeb3c634651251b6bcc37591d83f1b5711f0ff0cba872bbbf",
+      "attempt-0004-warmup.jsonl": "cbf1d1b839b52d31683ef37363f8cf724ee2edd0687cb14cd00b2f30ec1eea93",
+      "attempt-0005-warmup.jsonl": "66c0f04ff390adee7d6aa19d28ee3f37932b4aa679df36a9ba61954059e49368",
+      "attempt-0006-warmup.jsonl": "ef6959b1d77a370ba6e2be8e8ca5e5432dc05368d90f8ca420ed99dfbce5360c",
+      "attempt-0007-warmup.jsonl": "89228a640137cd25624124ad814098144ed06c91a27cf9fdec1043d920523ba8",
+      "attempt-0008-warmup.jsonl": "870586b4fbc0cac6ae1346c03b7ee5bcb658dceea4442ed8d165271659696195",
+      "attempt-0009-warmup.jsonl": "268bf04bc88b92c5513958b914ef8ea07547a45b43ff34bbe54973111d23362c",
+      "attempt-0010-warmup.jsonl": "c5d190aa00188cc139950487597b4b2670c532e03cd661eb00cff2d329d644fa",
+      "attempt-0011-warmup.jsonl": "4a405c73ec2ee10f8d622d2926d01fdc92e90449879877f3e5f47e259a500180",
+      "attempt-0012-warmup.jsonl": "02ce469e039ec9b4f160dd9720fdb6d3be3c92e79acae0be9462165ec48150f7",
+      "attempt-0013-warmup.jsonl": "e9c0e1661dd84e9d8930bee7d12f376a590c05812293877810305a558b3c971b",
+      "attempt-0014-warmup.jsonl": "9c256602bb62cce19a7c32a7726d18249db65a9f4b0389a8d25011f5d3b6a896",
+      "attempt-0015-warmup.jsonl": "c52880d813018b25b0f2c923ed932093b3689cb6f5874a511cd6fa88ce832a86",
+      "attempt-0016-warmup.jsonl": "eae3d430cf470b9fc72f49651935699d70a5c03859c3895352e3b627350e00e2",
+      "attempt-0017-warmup.jsonl": "a255f23c477d09a039384a1fbf2084e02de647acd317b43854f0410314bba46e",
+      "attempt-0018-warmup.jsonl": "7e87c6b354ba142d584f6d25d1be8d2839630581cccda360977663b6122e87f7"
+    },
+    "attempted_excluded": 18,
+    "completed_correct_excluded": 15,
+    "failed_ordinals": [
+      1,
+      5,
+      9
+    ],
+    "failed_preaccept_excluded": 3,
+    "policy": {
+      "all_warmup_attempts_and_failures_retained": true,
+      "continuable_failure": "preaccept_capability_changed",
+      "failed_attempt_retry": false,
+      "maximum_consecutive_preaccept_rejections": 3,
+      "maximum_distinct_attempts": 30,
+      "measured_attempts": 900,
+      "measured_retry": false,
+      "qualification": "first_15_completed_correct_full_audio_flows",
+      "target_correct": 15
+    },
+    "qualified_ordinals": [
+      2,
+      3,
+      4,
+      6,
+      7,
+      8,
+      10,
+      11,
+      12,
+      13,
+      14,
+      15,
+      16,
+      17,
+      18
+    ]
+  }
+}

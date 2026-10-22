@@ -1,0 +1,26 @@
+{
+  "quantile_method": "Type7 h=(n-1)p linear interpolation on correct_success only",
+  "n_planned_observations": 2,
+  "n_observed_attempts": 2,
+  "n_dispatched_model_requests": 1,
+  "n_correct_success": 1,
+  "n_measured_failure": 0,
+  "n_readiness_infeasible": 1,
+  "n_explicit_timeout": 0,
+  "n_warmup": 0,
+  "n_provider_invocations": 1,
+  "successful_reply_ms": [
+    38229
+  ],
+  "separate_readiness_wait_ms": [
+    1884,
+    0
+  ],
+  "p50_ms": 38229,
+  "p90_ms": 38229,
+  "p95_ms": 38229,
+  "stable_tail_claim": false,
+  "all_condition_input_join_complete": false,
+  "first_input_matches_local_api": true,
+  "second_model_request": "not_dispatched_preflight_manifest_unavailable"
+}

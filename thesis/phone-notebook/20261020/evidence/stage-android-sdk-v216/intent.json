@@ -1,0 +1,12 @@
+{
+  "controlDeadline": "2026-10-22T08:00:00Z",
+  "explicitNewline": true,
+  "host": "ssh:ssh-sem-notebook-personal",
+  "incarnation": "328cd72f-c7ea-49ff-a2db-b9275b085037",
+  "remoteResult": "/home/developer/projects/aurora/thesis/phone-notebook/20261020/evidence/stage-android-sdk-v216.json",
+  "rootAdmissionMessage": "owner-v2398-actual-source-frozen-isolated-Android-K3-SDK-entrypoint-no-main-mutation",
+  "script": "scripts/stage_android_sdk_v216.py",
+  "scriptSha256": "f0aa04267a31213024558e79924cb07a8511512a3dceef8008a3bc0223d82a2c",
+  "singleSend": true,
+  "terminal": "term_a2ed5feb-7c92-48e4-bd88-d1b0e6737989"
+}

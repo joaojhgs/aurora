@@ -1,0 +1,9 @@
+{
+  "at": "2026-10-22T06:35:02.915321+00:00",
+  "maximumPopenCalls": 1,
+  "releaseAtUtc": "2026-10-22T06:34:58.722503+00:00",
+  "sourceSha256": "87881819ce0a7b838acbfe6c76fbf88b78ed73c38f11fefb003a3016bc1f5919",
+  "correctiveCandidate": true,
+  "sameOriginalAllocationDeadline": "2026-10-22T06:47:13.434835+00:00",
+  "measured": 0
+}

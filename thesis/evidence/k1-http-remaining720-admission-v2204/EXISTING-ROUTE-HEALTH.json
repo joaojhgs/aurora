@@ -1,0 +1,23 @@
+{
+  "at": "2026-10-21T05:56:31.210635+00:00",
+  "operation": "one GET existing Orca-relayed application health, no inference",
+  "url": "http://127.0.0.1:18000/api/health",
+  "routeId": "desktop-aurora-tts",
+  "existingKeyUsedInMemory": true,
+  "credentialCopiedOrLogged": false,
+  "providerDeadlineUnchanged": "2026-10-21T12:41:24.961804+00:00",
+  "measuredRequestsAdded": 0,
+  "status": 200,
+  "bodyBytes": 126,
+  "bodySha256": "b3f6f7bc90befe762b500ad04bf94baa60fe4e52a1547184f6a8ce7f92d15c52",
+  "reportedStatus": "healthy",
+  "responseTopLevelKeys": [
+    "status",
+    "timestamp",
+    "gateway",
+    "services",
+    "routes"
+  ],
+  "durationMs": 6610.35554,
+  "admissionScope": "Health with existing credential only; real TTS/native and15excludedcorrelated warmups still required before measured181"
+}

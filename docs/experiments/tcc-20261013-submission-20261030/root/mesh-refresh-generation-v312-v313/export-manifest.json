@@ -1,0 +1,97 @@
+{
+  "files": {
+    "test_rtc_client_lifecycle.py": {
+      "private_original_sha256": "f165e5b7c7ec8d93681e01803390c1bdeda51bd14913da5abbc8ae0456369d0d",
+      "export_sha256": "f165e5b7c7ec8d93681e01803390c1bdeda51bd14913da5abbc8ae0456369d0d",
+      "credential_lines_withheld": 0,
+      "byte_identical": true
+    },
+    "candidate.patch": {
+      "private_original_sha256": "3fa0d59956ea98adae23ca6fcf815a0a2c1624f4287be715a02978d4e61f0c0b",
+      "export_sha256": "3fa0d59956ea98adae23ca6fcf815a0a2c1624f4287be715a02978d4e61f0c0b",
+      "credential_lines_withheld": 0,
+      "byte_identical": true
+    },
+    "rtc_client.py": {
+      "private_original_sha256": "ecc207cd7a164959e2bec0aa1e0dcd90af7e3790c8eed418563c610e64dcbd40",
+      "export_sha256": "ecc207cd7a164959e2bec0aa1e0dcd90af7e3790c8eed418563c610e64dcbd40",
+      "credential_lines_withheld": 0,
+      "byte_identical": true
+    },
+    "root-regression-v313-receipt.json": {
+      "private_original_sha256": "e5abad91b981a7011093b7b7554aa468d7e9e52bca286f5771c494fb280ab2a4",
+      "export_sha256": "e5abad91b981a7011093b7b7554aa468d7e9e52bca286f5771c494fb280ab2a4",
+      "credential_lines_withheld": 0,
+      "byte_identical": true
+    },
+    "root-regression-v313.xml": {
+      "private_original_sha256": "229098bdd5d64425206020121aad6c7eb0ebd63f8dd9e83bf98d7b34ffb55e3c",
+      "export_sha256": "229098bdd5d64425206020121aad6c7eb0ebd63f8dd9e83bf98d7b34ffb55e3c",
+      "credential_lines_withheld": 0,
+      "byte_identical": true
+    },
+    "root-lint-v313.json": {
+      "private_original_sha256": "ed7e9510a31ff402e61a20161fa947dd8a3179d853bad1bb6c372ecbd8fd1f19",
+      "export_sha256": "ed7e9510a31ff402e61a20161fa947dd8a3179d853bad1bb6c372ecbd8fd1f19",
+      "credential_lines_withheld": 0,
+      "byte_identical": true
+    },
+    "root-lint-v313.log": {
+      "private_original_sha256": "82b3e6a6c090a57601d22943bd23fca9218d1031dbe5a7b754092f9a156b4f18",
+      "export_sha256": "82b3e6a6c090a57601d22943bd23fca9218d1031dbe5a7b754092f9a156b4f18",
+      "credential_lines_withheld": 0,
+      "byte_identical": true
+    },
+    "test_rtc_client_lifecycle.py.canonical-before": {
+      "private_original_sha256": "5b5604dcb2d29a5e4293052ce754e681c4828b3f26ecfec1d5a39e9a8ce6e0df",
+      "export_sha256": "5b5604dcb2d29a5e4293052ce754e681c4828b3f26ecfec1d5a39e9a8ce6e0df",
+      "credential_lines_withheld": 0,
+      "byte_identical": true
+    },
+    "REPORT.md": {
+      "private_original_sha256": "2f7c9f6ea2f8a2978f769281a8b0f4b3d6b2aa436dc283981d2b6df306920b1f",
+      "export_sha256": "2f7c9f6ea2f8a2978f769281a8b0f4b3d6b2aa436dc283981d2b6df306920b1f",
+      "credential_lines_withheld": 0,
+      "byte_identical": true
+    },
+    "rtc_client.py.canonical-before": {
+      "private_original_sha256": "e7614c0725cc5e0dfe9d08a7c3b60c6d1dc66dc4450029df9d05b4efd9f293d0",
+      "export_sha256": "e7614c0725cc5e0dfe9d08a7c3b60c6d1dc66dc4450029df9d05b4efd9f293d0",
+      "credential_lines_withheld": 0,
+      "byte_identical": true
+    },
+    "root-regression-v313.log": {
+      "private_original_sha256": "302330e20ee3dd8c49b17ebebaaf9d8b8b53fddcba11c26ca2284414b3b55701",
+      "export_sha256": "302330e20ee3dd8c49b17ebebaaf9d8b8b53fddcba11c26ca2284414b3b55701",
+      "credential_lines_withheld": 0,
+      "byte_identical": true
+    },
+    "mesh-refresh-generation-v312-sol-review.md": {
+      "private_original_sha256": "92a3103d76a3ec7e2ef18562eb8f31566248254a5767c56c5e9a38a399f58e60",
+      "export_sha256": "92a3103d76a3ec7e2ef18562eb8f31566248254a5767c56c5e9a38a399f58e60",
+      "credential_lines_withheld": 0,
+      "byte_identical": true
+    },
+    "mesh-provider-loss-cause-v311.md": {
+      "private_original_sha256": "fd7f035796b62df322cb1b8eba70ed06cac54f745a588f7125bd3b6c7ef343ca",
+      "export_sha256": "fd7f035796b62df322cb1b8eba70ed06cac54f745a588f7125bd3b6c7ef343ca",
+      "credential_lines_withheld": 0,
+      "byte_identical": true
+    },
+    "mesh-provider-loss-sdk-v311.md": {
+      "private_original_sha256": "e6fd47f85e97ccb9d2a55011816eaf325ae07ec79c43cbcbed554e8168a73930",
+      "export_sha256": "e6fd47f85e97ccb9d2a55011816eaf325ae07ec79c43cbcbed554e8168a73930",
+      "credential_lines_withheld": 0,
+      "byte_identical": true
+    },
+    "root-disk-headroom-v313.json": {
+      "private_original_sha256": "970eb1231fd3f536536e66839648aceef6899f34879056c147d64fa7f7da6e37",
+      "export_sha256": "970eb1231fd3f536536e66839648aceef6899f34879056c147d64fa7f7da6e37",
+      "credential_lines_withheld": 0,
+      "byte_identical": true
+    }
+  },
+  "root_regression_stdout_truncated": true,
+  "full_junit_retained": true,
+  "runtime_v313": "pending"
+}

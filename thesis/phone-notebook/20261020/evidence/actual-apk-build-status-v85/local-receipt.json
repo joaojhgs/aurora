@@ -1,0 +1,8 @@
+{
+  "bytes": 5524,
+  "copyOnly": true,
+  "custody": "Notebook result persisted and fsynced before relay; remote receipt in same output",
+  "localPath": "/home/developer/projects/aurora/thesis/phone-notebook/20261020/evidence/actual-apk-build-status-v85/result.json",
+  "remotePath": "/home/developer/projects/aurora/thesis/phone-notebook/20261020/evidence/actual-apk-build-status-v85.json",
+  "sha256": "b37d69a8e38b7c726976f70dfa50755d1871a5a5051bdc9166fd01b84cefb728"
+}

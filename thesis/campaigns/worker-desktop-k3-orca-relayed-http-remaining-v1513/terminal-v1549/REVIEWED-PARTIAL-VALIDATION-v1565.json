@@ -1,0 +1,55 @@
+{
+  "at": "2026-10-18T17:01:02.688421+00:00",
+  "status": "SAVED_DATA_VALIDATED_ORIGINAL_SOL_REVIEW_CLOSED",
+  "measured": 203,
+  "correct": 202,
+  "failed": 1,
+  "unattempted": 184,
+  "excludedWarmups": 15,
+  "globalCountsOnly": {
+    "attempted": 716,
+    "correct": 714,
+    "failed": 2,
+    "unattempted": 184
+  },
+  "requesterSeal": "thesis/campaigns/worker-desktop-k3-orca-relayed-http-remaining-v1513/terminal-v1549/requester-analysis-v1549/LOCAL-CUSTODY-SEAL.json",
+  "providerCustody": "thesis/campaigns/worker-desktop-k3-orca-relayed-http-remaining-v1513/provider-transfer-v1556/CUSTODY.json",
+  "nativeSummary": "thesis/campaigns/worker-desktop-k3-orca-relayed-http-remaining-v1513/terminal-v1549/native-analysis-v1559/SUMMARY.json",
+  "resourceSummary": "thesis/campaigns/worker-desktop-k3-orca-relayed-http-remaining-v1513/terminal-v1549/resource-analysis-v1560/SUMMARY.json",
+  "sources": [
+    {
+      "source": "thesis/analysis/k3_saved_case_history_v1559.py",
+      "physicalCopy": "thesis/campaigns/worker-desktop-k3-orca-relayed-http-remaining-v1513/terminal-v1549/executed-analysis-sources/k3_saved_case_history_v1559.py",
+      "bytes": 12155,
+      "sha256": "11000b5f475c3247c364559b699b707c2d9e759441cb5eb62400bfbd7fab5b7c"
+    },
+    {
+      "source": "thesis/analysis/k3_saved_resource_windows_v1560.py",
+      "physicalCopy": "thesis/campaigns/worker-desktop-k3-orca-relayed-http-remaining-v1513/terminal-v1549/executed-analysis-sources/k3_saved_resource_windows_v1560.py",
+      "bytes": 11281,
+      "sha256": "9d1a3351d89496a53a68a1934de8bc200c549da2a06cae86ef11bcf46688c2f8"
+    },
+    {
+      "source": "thesis/analysis/k1_saved_case_history.py",
+      "physicalCopy": "thesis/campaigns/worker-desktop-k3-orca-relayed-http-remaining-v1513/terminal-v1549/executed-analysis-sources/k1_saved_case_history.py",
+      "bytes": 18039,
+      "sha256": "4a406dd330e2396d38a6ce3b8b5a38362a7727058aff644d0232bdff54474608"
+    },
+    {
+      "source": "thesis/analysis/native_span_metrics_v2.py",
+      "physicalCopy": "thesis/campaigns/worker-desktop-k3-orca-relayed-http-remaining-v1513/terminal-v1549/executed-analysis-sources/native_span_metrics_v2.py",
+      "bytes": 5210,
+      "sha256": "b8fc433bae6e941bd8829df1fa65a5df42af94f2a45d1f3e7174aca8767a7932"
+    }
+  ],
+  "newModelRequests": 0,
+  "all900Complete": false,
+  "full13Complete": false,
+  "diskFreeBytes": 5746675712,
+  "originalSolReview": {
+    "message": "msg_3e3773c8c587",
+    "path": "thesis/campaigns/worker-desktop-k3-orca-relayed-http-remaining-v1513/terminal-v1549/ORIGINAL-SOL-SAVED-RESULT-REVIEW.md",
+    "blockingFindings": 0,
+    "extraSutCalls": 0
+  }
+}

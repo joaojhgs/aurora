@@ -1,0 +1,45 @@
+{
+  "schema": "aurora.phone.local_llm.qualification.v1",
+  "at": "2026-10-22T06:05:03.489719+00:00",
+  "receipt": "evidence/read-phone-llm-v177/result.json",
+  "receiptSha256": "f5ecd48d58b01d397ad9bc3c2458d20212d00b2964401d783dd27ea63dc291ba",
+  "phone": "KBX8LNFUBE5XGQRG",
+  "apkSha256": "549f760f5ceec5bce629a075f4e28df1ed74da4e503be0d15407ff7f3e4bd662",
+  "sourceIdentity": "ebde3a8acf6315f920d03593845f17a1fc65a733 + source-closure-overlay-v2383 + android-bundled-model-rename-v1 + android-node-policy-initial-publication-v2",
+  "engine": "llamacpp",
+  "engineVersion": "0.4.1",
+  "accelerator": "cpu",
+  "nativePolicyRevision": 1,
+  "contextTokens": 4096,
+  "modelSha256": "57d1997790d1744fba5b40a7317df71ea5e2acee28c47e78f0cce39c0703f8cf",
+  "modelId": "chat-qwen3-0b8",
+  "modelBytes": 563036064,
+  "initialIntegrityAndLoadMs": 55244.669042,
+  "fixedQuestionResponse": {
+    "content": "Paris",
+    "type": "message"
+  },
+  "generationMs": 3267.0683590000044,
+  "exactCorrectness": true,
+  "cancellation": {
+    "qualified": true,
+    "sameRequestId": true,
+    "terminalAfterCancellationIssued": true,
+    "nativeTerminal": {
+      "error": {
+        "code": "unavailable_service",
+        "message": "The offline answer was stopped."
+      },
+      "ok": false
+    },
+    "nativeSessionDestroyed": true,
+    "initialProbeClassification": false,
+    "classificationCorrection": "Original probe expected a different error code; pinned native Cancelled maps to unavailable_service with exact stopped message. Correlated raw stop and destroy suffice, no repeat inference."
+  },
+  "measuredCases": 0,
+  "nativeGenerationAttempts": 2,
+  "phoneSttTtsQualified": false,
+  "fullNativeFileAudioQualified": false,
+  "httpP2pQualified": false,
+  "noPoolingWithNotebookBackend": true
+}

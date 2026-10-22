@@ -1,0 +1,9 @@
+{
+  "status": "PASS_SYNTHETIC_DELEGATION_ONLY",
+  "sourceSha256": "4c180f08fb94db1b905f0a3b04d0c9ad0f99a32bf748e1cfe14cf73c213d7c52",
+  "originalCalledExactlyOnce": true,
+  "sameReturnObject": true,
+  "payloadNotLogged": true,
+  "actualModelNetworkOrDeviceCalls": 0,
+  "scientificCampaignResult": false
+}

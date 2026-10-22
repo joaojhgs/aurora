@@ -1,0 +1,172 @@
+{
+  "at": "2026-10-21T00:05:13.142006+00:00",
+  "custodyScope": "Seven new native proof/GPU/identity data files copied here. Duplicate requester inputs already on worker; complete provider prefixes/reports physically retained under Personal repo thesis.",
+  "files": {
+    "actual-new-process-gpu.json": {
+      "bytes": 3901,
+      "sha256": "61c2fc1a0175e0912f6ef40c431b1cfaac640ce189f7df567099e436dcf817b2"
+    },
+    "actual-provider-bindings.jsonl": {
+      "bytes": 13454,
+      "sha256": "d05988392ec8f3500eccdfa675a0f7bf8a92dd49aaa52c51741dab3a38a91459"
+    },
+    "assistant-identity.json": {
+      "bytes": 1417,
+      "sha256": "724ecceadfd25a49647315e9c3f9a6a56a0d93e57609897d683e91ea6dc575c7"
+    },
+    "remote-warmup-proof.json": {
+      "bytes": 101220,
+      "sha256": "d4f66435ec3492ed20ae2a2d6eef81601153ec373442a4edab62c6d141097b32"
+    },
+    "stt-identity.json": {
+      "bytes": 1399,
+      "sha256": "9444b654369a01f07128d8829882fcd982dcf0d0a49446da37545ba6f042c17a"
+    },
+    "tts-identity.json": {
+      "bytes": 1372,
+      "sha256": "37e4c22e225c8f863dd3ed7645633b2fad56525497faf7937fb5b0a41c63de72"
+    },
+    "voice-stages.jsonl": {
+      "bytes": 120930,
+      "sha256": "f64f9ab302323490b411bc759e8f21eb06cc58c479f71fde4ac2e61e630f7336"
+    }
+  },
+  "sourceRetainedFiles": {
+    "RESULT.json": {
+      "bytes": 113509,
+      "sha256": "5e190681568e3dc144e459653bc6c0506e6dc18f903417e12a5f48ce131084b9",
+      "source": "/home/developer/projects/aurora/thesis/campaigns/worker-desktop-k3-p2p-full-audio-v2043/ordinary-warmup-proof-v2043/RESULT.json"
+    },
+    "attempts/attempt-0001-warmup.jsonl": {
+      "bytes": 2368,
+      "sha256": "7bbcdfc0a39597632369e09d52a684029c1560b36ccdfbde607dcdbdbc6598d8",
+      "source": "/home/developer/projects/aurora/thesis/campaigns/worker-desktop-k3-p2p-full-audio-v2043/ordinary-warmup-proof-v2043/attempts/attempt-0001-warmup.jsonl"
+    },
+    "attempts/attempt-0002-warmup.jsonl": {
+      "bytes": 5740,
+      "sha256": "2c6140cba5cbc92144a57a2facd36720a6a2eb1e9dc3fb7d0d9732a8629b134d",
+      "source": "/home/developer/projects/aurora/thesis/campaigns/worker-desktop-k3-p2p-full-audio-v2043/ordinary-warmup-proof-v2043/attempts/attempt-0002-warmup.jsonl"
+    },
+    "attempts/attempt-0003-warmup.jsonl": {
+      "bytes": 5745,
+      "sha256": "bb32c11e4b585e0eeb3c634651251b6bcc37591d83f1b5711f0ff0cba872bbbf",
+      "source": "/home/developer/projects/aurora/thesis/campaigns/worker-desktop-k3-p2p-full-audio-v2043/ordinary-warmup-proof-v2043/attempts/attempt-0003-warmup.jsonl"
+    },
+    "attempts/attempt-0004-warmup.jsonl": {
+      "bytes": 5745,
+      "sha256": "cbf1d1b839b52d31683ef37363f8cf724ee2edd0687cb14cd00b2f30ec1eea93",
+      "source": "/home/developer/projects/aurora/thesis/campaigns/worker-desktop-k3-p2p-full-audio-v2043/ordinary-warmup-proof-v2043/attempts/attempt-0004-warmup.jsonl"
+    },
+    "attempts/attempt-0005-warmup.jsonl": {
+      "bytes": 2368,
+      "sha256": "66c0f04ff390adee7d6aa19d28ee3f37932b4aa679df36a9ba61954059e49368",
+      "source": "/home/developer/projects/aurora/thesis/campaigns/worker-desktop-k3-p2p-full-audio-v2043/ordinary-warmup-proof-v2043/attempts/attempt-0005-warmup.jsonl"
+    },
+    "attempts/attempt-0006-warmup.jsonl": {
+      "bytes": 5744,
+      "sha256": "ef6959b1d77a370ba6e2be8e8ca5e5432dc05368d90f8ca420ed99dfbce5360c",
+      "source": "/home/developer/projects/aurora/thesis/campaigns/worker-desktop-k3-p2p-full-audio-v2043/ordinary-warmup-proof-v2043/attempts/attempt-0006-warmup.jsonl"
+    },
+    "attempts/attempt-0007-warmup.jsonl": {
+      "bytes": 5745,
+      "sha256": "89228a640137cd25624124ad814098144ed06c91a27cf9fdec1043d920523ba8",
+      "source": "/home/developer/projects/aurora/thesis/campaigns/worker-desktop-k3-p2p-full-audio-v2043/ordinary-warmup-proof-v2043/attempts/attempt-0007-warmup.jsonl"
+    },
+    "attempts/attempt-0008-warmup.jsonl": {
+      "bytes": 5743,
+      "sha256": "870586b4fbc0cac6ae1346c03b7ee5bcb658dceea4442ed8d165271659696195",
+      "source": "/home/developer/projects/aurora/thesis/campaigns/worker-desktop-k3-p2p-full-audio-v2043/ordinary-warmup-proof-v2043/attempts/attempt-0008-warmup.jsonl"
+    },
+    "attempts/attempt-0009-warmup.jsonl": {
+      "bytes": 2368,
+      "sha256": "268bf04bc88b92c5513958b914ef8ea07547a45b43ff34bbe54973111d23362c",
+      "source": "/home/developer/projects/aurora/thesis/campaigns/worker-desktop-k3-p2p-full-audio-v2043/ordinary-warmup-proof-v2043/attempts/attempt-0009-warmup.jsonl"
+    },
+    "attempts/attempt-0010-warmup.jsonl": {
+      "bytes": 5745,
+      "sha256": "c5d190aa00188cc139950487597b4b2670c532e03cd661eb00cff2d329d644fa",
+      "source": "/home/developer/projects/aurora/thesis/campaigns/worker-desktop-k3-p2p-full-audio-v2043/ordinary-warmup-proof-v2043/attempts/attempt-0010-warmup.jsonl"
+    },
+    "attempts/attempt-0011-warmup.jsonl": {
+      "bytes": 5746,
+      "sha256": "4a405c73ec2ee10f8d622d2926d01fdc92e90449879877f3e5f47e259a500180",
+      "source": "/home/developer/projects/aurora/thesis/campaigns/worker-desktop-k3-p2p-full-audio-v2043/ordinary-warmup-proof-v2043/attempts/attempt-0011-warmup.jsonl"
+    },
+    "attempts/attempt-0012-warmup.jsonl": {
+      "bytes": 5745,
+      "sha256": "02ce469e039ec9b4f160dd9720fdb6d3be3c92e79acae0be9462165ec48150f7",
+      "source": "/home/developer/projects/aurora/thesis/campaigns/worker-desktop-k3-p2p-full-audio-v2043/ordinary-warmup-proof-v2043/attempts/attempt-0012-warmup.jsonl"
+    },
+    "attempts/attempt-0013-warmup.jsonl": {
+      "bytes": 5747,
+      "sha256": "e9c0e1661dd84e9d8930bee7d12f376a590c05812293877810305a558b3c971b",
+      "source": "/home/developer/projects/aurora/thesis/campaigns/worker-desktop-k3-p2p-full-audio-v2043/ordinary-warmup-proof-v2043/attempts/attempt-0013-warmup.jsonl"
+    },
+    "attempts/attempt-0014-warmup.jsonl": {
+      "bytes": 5747,
+      "sha256": "9c256602bb62cce19a7c32a7726d18249db65a9f4b0389a8d25011f5d3b6a896",
+      "source": "/home/developer/projects/aurora/thesis/campaigns/worker-desktop-k3-p2p-full-audio-v2043/ordinary-warmup-proof-v2043/attempts/attempt-0014-warmup.jsonl"
+    },
+    "attempts/attempt-0015-warmup.jsonl": {
+      "bytes": 5746,
+      "sha256": "c52880d813018b25b0f2c923ed932093b3689cb6f5874a511cd6fa88ce832a86",
+      "source": "/home/developer/projects/aurora/thesis/campaigns/worker-desktop-k3-p2p-full-audio-v2043/ordinary-warmup-proof-v2043/attempts/attempt-0015-warmup.jsonl"
+    },
+    "attempts/attempt-0016-warmup.jsonl": {
+      "bytes": 5744,
+      "sha256": "eae3d430cf470b9fc72f49651935699d70a5c03859c3895352e3b627350e00e2",
+      "source": "/home/developer/projects/aurora/thesis/campaigns/worker-desktop-k3-p2p-full-audio-v2043/ordinary-warmup-proof-v2043/attempts/attempt-0016-warmup.jsonl"
+    },
+    "attempts/attempt-0017-warmup.jsonl": {
+      "bytes": 5745,
+      "sha256": "a255f23c477d09a039384a1fbf2084e02de647acd317b43854f0410314bba46e",
+      "source": "/home/developer/projects/aurora/thesis/campaigns/worker-desktop-k3-p2p-full-audio-v2043/ordinary-warmup-proof-v2043/attempts/attempt-0017-warmup.jsonl"
+    },
+    "attempts/attempt-0018-warmup.jsonl": {
+      "bytes": 5744,
+      "sha256": "7e87c6b354ba142d584f6d25d1be8d2839630581cccda360977663b6122e87f7",
+      "source": "/home/developer/projects/aurora/thesis/campaigns/worker-desktop-k3-p2p-full-audio-v2043/ordinary-warmup-proof-v2043/attempts/attempt-0018-warmup.jsonl"
+    },
+    "frozen-manifest.json": {
+      "bytes": 12262,
+      "sha256": "ac92f9ba1455c3778e378c6548f0e518fcf0115c6ea9ebf7624f8c30df14d2c5",
+      "source": "/home/developer/projects/aurora/thesis/campaigns/worker-desktop-k3-p2p-full-audio-v2043/ordinary-warmup-proof-v2043/frozen-manifest.json"
+    },
+    "mesh-route-observations.jsonl": {
+      "bytes": 79200,
+      "sha256": "f120a15525071607855c712da1a1e658f16ea1e88d5eb0fc1e3c4a2e5b5aa296",
+      "source": "/home/developer/projects/aurora/thesis/campaigns/worker-desktop-k3-p2p-full-audio-v2043/ordinary-warmup-proof-v2043/mesh-route-observations.jsonl"
+    },
+    "mesh-route-runtime-pins.json": {
+      "bytes": 2880,
+      "sha256": "7d90ac585ce6f945cdfd37c8b05d4afd976292a78fcd0975c59ebfcc5caa4de4",
+      "source": "/home/developer/projects/aurora/thesis/campaigns/worker-desktop-k3-p2p-full-audio-v2043/ordinary-warmup-proof-v2043/mesh-route-runtime-pins.json"
+    },
+    "mesh-route-sink-status.json": {
+      "bytes": 326,
+      "sha256": "edb6be9e14e16394f655b6e32d0109e0834155402a1351bc8790c65e1ddd6705",
+      "source": "/home/developer/projects/aurora/thesis/campaigns/worker-desktop-k3-p2p-full-audio-v2043/ordinary-warmup-proof-v2043/mesh-route-sink-status.json"
+    },
+    "raw-prefixes/actual-provider-bindings.jsonl": {
+      "bytes": 228240,
+      "sha256": "5954c570b84c1f84b832cf041daec8dd9585064fef3259147539e4e3a84c296f",
+      "source": "/home/developer/projects/aurora/thesis/campaigns/worker-desktop-k3-p2p-full-audio-v2043/ordinary-warmup-proof-v2043/raw-prefixes/actual-provider-bindings.jsonl"
+    },
+    "raw-prefixes/voice-stages.jsonl": {
+      "bytes": 4089989,
+      "sha256": "d3a8d201374febc3989a9653f1957a0fe81ee2c9145caab04b3d7843387841aa",
+      "source": "/home/developer/projects/aurora/thesis/campaigns/worker-desktop-k3-p2p-full-audio-v2043/ordinary-warmup-proof-v2043/raw-prefixes/voice-stages.jsonl"
+    },
+    "receiver_proof.py": {
+      "bytes": 33596,
+      "sha256": "5f010b519a23b048a4cb878201469088d93eecab137b03537971dccc02913fd0",
+      "source": "/home/developer/projects/aurora/thesis/campaigns/worker-desktop-k3-p2p-full-audio-v2043/ordinary-warmup-proof-v2043/receiver_proof.py"
+    },
+    "requester-mesh-calls.jsonl": {
+      "bytes": 32676,
+      "sha256": "ed2ec3d83de64e3ee1e3e4baf78475cc3761bb9c27bded955ef25f9523925924",
+      "source": "/home/developer/projects/aurora/thesis/campaigns/worker-desktop-k3-p2p-full-audio-v2043/ordinary-warmup-proof-v2043/requester-mesh-calls.jsonl"
+    }
+  },
+  "sutCalls": 0
+}

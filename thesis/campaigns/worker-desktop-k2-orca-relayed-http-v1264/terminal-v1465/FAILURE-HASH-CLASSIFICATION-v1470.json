@@ -1,0 +1,22 @@
+{
+  "at": "2026-10-18T07:33:55.900332+00:00",
+  "classification": "strict_answer_format_predicate_failure",
+  "firstMeasuredCase": 798,
+  "frozenExpectedReplyWords": [
+    "paris"
+  ],
+  "hashMatchedPublicTextCandidate": "The capital of France is Paris.",
+  "lastMeasuredCase": 900,
+  "matchCount": 103,
+  "measuredFailureCount": 103,
+  "method": "Compare one public task-answer candidate UTF-8 SHA256 and character count with all retained failed-response hashes. No provider query, changed predicate or regenerated response.",
+  "primaryOutcomesUnchanged": {
+    "correct": 797,
+    "failed": 103,
+    "measured": 900
+  },
+  "recordedReplyCharacters": 31,
+  "recordedReplyHash": "a1b7eb2ee7a6aded8dda4e6cf30826f5afffb28a5597ee9389e91eb326d4e319",
+  "scope": "The retained hash establishes the matching sentence; why generation changed from a single city word was not investigated. Native LLM completed spans exist for all900; no transport/runtime failure is inferred from these format failures.",
+  "sutCalls": 0
+}

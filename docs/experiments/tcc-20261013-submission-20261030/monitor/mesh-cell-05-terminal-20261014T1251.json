@@ -1,0 +1,105 @@
+{
+  "observed_at": "2026-10-14T12:49:44.672596+00:00",
+  "cell": "05-mesh",
+  "terminal": {
+    "status": "completed",
+    "child_exit_code": 0,
+    "exit_code": 0,
+    "started_at": "2026-10-14T11:44:15.320345+00:00",
+    "finished_at": "2026-10-14T12:48:33.381881+00:00",
+    "elapsed_seconds": 3858.0613120039925,
+    "receipt_validation": {
+      "validated": true,
+      "failure_classes": [],
+      "expected_requests": 105,
+      "expected_provider_captures": 105,
+      "capture_join": "ordered_serial_count",
+      "raw_artifacts_retained": true
+    },
+    "detached_group_cleanup": [
+      {
+        "group_owned": true,
+        "leader_verified": true,
+        "reaped": true
+      },
+      {
+        "group_owned": true,
+        "leader_verified": true,
+        "reaped": true
+      },
+      {
+        "group_owned": true,
+        "leader_verified": true,
+        "reaped": true
+      },
+      {
+        "group_owned": true,
+        "leader_verified": true,
+        "reaped": true
+      },
+      {
+        "group_owned": true,
+        "leader_verified": true,
+        "reaped": true
+      }
+    ]
+  },
+  "attachment_count": 105,
+  "attachment_names_unique": true,
+  "measured_count": 100,
+  "warmup_count": 5,
+  "measured_outcomes": {
+    "completed_exact": 100
+  },
+  "warmup_outcomes": {
+    "completed_exact": 5
+  },
+  "all_exact_response_true": true,
+  "all_completion_counts_one": true,
+  "completion_kind_counts": {
+    "fallback": 83,
+    "completed": 22
+  },
+  "all_identifiers_nonempty": true,
+  "unique_request_ids": true,
+  "unique_message_ids": true,
+  "unique_correlation_ids": true,
+  "all_durations_within_180s": true,
+  "warmups_excluded": true,
+  "measured_not_excluded": true,
+  "capture_count": 105,
+  "all_captured": true,
+  "all_three_hashes_match": true,
+  "capture_ordinal_complete": true,
+  "capture_request_ordinal_complete": {
+    "provided_count": 0,
+    "expected_join": "ordered_serial_count"
+  },
+  "quantile_method": "Hyndman-Fan Type 7",
+  "population": "success-only single loaded-host session; 5 warmups excluded; readiness waiting excluded; no pooled/causal claim",
+  "derived_ms": {
+    "p50": 35104.5,
+    "p90": 41006,
+    "p95": 42095.35,
+    "p99": 44525.79000000001
+  },
+  "playwright_report_sha256": "5063f5ce308111f3d7cf2256b4184e2d34e89e4071f64abcb49d4aeff5226441",
+  "cell_result_sha256": "dbc7bfe9e243f4b743ccd8cac792953315652aa8e0a8a56f0bf5c8118ab61b50",
+  "provider_capture_sha256": "94826b93435f5c1fa5866d1496481e8036e941c3cab98c0e940ccae7defc0c3e",
+  "next_cell_baseline_resources_exists": true,
+  "campaign_result_exists": false,
+  "runId": "run_e6054e76e9fc",
+  "taskId": "task_d7ea336050cf",
+  "dispatchId": "ctx_37b4d0a3c14f",
+  "actualCompletedMeasured": 500,
+  "independentlyReviewedMeasured": 400,
+  "plannedMeasured": 900,
+  "rootTerminalMessage": "msg_0841cf3c683e",
+  "rootDeliveryAck": "delivery_8ab7f9de3bdf",
+  "monitorNotification": "msg_f479531645ec",
+  "monitorNotificationRead": false,
+  "independentReview": "pending",
+  "cleanupQualification": "five owned groups recorded reaped; compose command exit0, final container inspection unverified",
+  "nextCell": "06-local-only",
+  "nextCellPhase": "prebaseline"
+}

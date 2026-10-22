@@ -1,0 +1,13 @@
+{
+  "schema": "aurora.frozen-metadata-custody.v783",
+  "at": "2026-10-16T01:21:07.804682+00:00",
+  "sourceArchive": "docs/experiments/tcc-20261013-submission-20261030/root/desktop-gpu-padded-local900-v745/aurora-desktop-gpu-padded-local900-v745.zip",
+  "sourceArchiveVerifiedSHA256": "8442f975cc23a273d10088de11357bd4eabccd15cccca11477f7c4a84c316cf2",
+  "workerCustodyReceiptSHA256": "3b82b38d0a1dc446af8f6232092ee56d9be71cea6cd0d08209dd0518bb922b00",
+  "member": "input/frozen-local-manifest.json",
+  "destination": "thesis/evidence/frozen-manifests/desktop-local-v745.json",
+  "bytes": 149858,
+  "sha256": "31dea74bf4587e7bef60c44ef28c2b3f7a2da73a69891df27bc318b9819d505d",
+  "credentialRedacted": false,
+  "scope": "Read one exact already-audited metadata member; no ZIP-wide rehash/testzip/transcript/audio audit or model load"
+}

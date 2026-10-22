@@ -1,0 +1,67 @@
+{
+  "at": "2026-10-22T06:32:18.321583+00:00",
+  "audioPath": "/home/developer/projects/aurora/thesis/harness/c12-mixed-local-http-readiness-v2411/candidate.wav",
+  "audioSha256": "da0ecc4ad0885746ab6e716585473917ab2b543a505bf0db09ebacfaa7943cbb",
+  "condition": "C12 mixed local user plus Orca-relayed HTTP K3, concurrency2",
+  "eligibility": "Actual overlap/native joins/correct valid WAV/capacity before any new measured admission",
+  "endpoints": {
+    "assistant": "http://127.0.0.1:18000/api/Orchestrator/ExternalUserInput",
+    "stt": "http://127.0.0.1:18000/api/Transcription/Transcribe",
+    "tts": "http://127.0.0.1:18000/api/TTS/Synthesize"
+  },
+  "expectedReplyWords": [
+    "paris"
+  ],
+  "maximumFlows": {
+    "desktop-local": 1,
+    "worker-http": 1
+  },
+  "measuredRequests": 0,
+  "oldComparisons": "Closed K3 HTTP full900 remains reference with explicit source/auth/residency lineage, never replayed",
+  "output": "/home/developer/projects/aurora/thesis/campaigns/c12-mixed-local-http-readiness-v2411/provider",
+  "phase": "finite_excluded_readiness_only",
+  "physicalExclusions": [
+    "Personal notebook",
+    "physical phone",
+    "Waydroid"
+  ],
+  "prospectiveMeasuredTargetPerEligibleCondition": 900,
+  "providerManifestSha256ExpectedConfig": "1b2e464a9dd2a191954504161862d3aa19a991126eb2b08c4de55a40778fd002",
+  "referenceTranscript": "What is the capital of France? Answer with only the city name.",
+  "requestCapSeconds": 180,
+  "resourceAdmission": {
+    "absoluteDeadlineUtc": "2026-10-22T06:47:13.434835+00:00",
+    "currentCandidate": "corrective v2411 local UserInput/Response events, actual remote-STT arrival interlock",
+    "diskFreeFloorBytes": 2147483648,
+    "maximumFlowsPerStream": 1,
+    "measured": 0,
+    "nativeGoalBudget": null,
+    "newCandidateMaximumFlows": 2,
+    "noMeasuredAdmission": true,
+    "oldCandidateFlows": 2,
+    "originalClockUnchanged": true,
+    "originalNativeGoal": "01a112a5-d6bb-74e2-bf7c-ace73cb513b5",
+    "providerLifetimeSeconds": 600,
+    "purpose": "C12 new mixed local plus existing Orca-relayed HTTP readiness, not closed baseline replay",
+    "requestCapSeconds": 180,
+    "resources": "Root W + Personal D only, no N/phone/Waydroid; existing D native GPU and CPU; no concurrent compiler or new model transfer",
+    "startedAtUtc": "2026-10-22T06:17:13.434835+00:00",
+    "state": "CLOCK_FROZEN_BEFORE_NEW_C12_LIFECYCLE",
+    "stop": "Finite own provider normal stop and physical custody; no ambiguous request retry"
+  },
+  "schema": "aurora.c12.mixed_readiness.v1",
+  "sourceHashes": {
+    "k3_composition.py": "777bfb6abf34a1485a38c1076c86a06776de4017f1f27715b326403aba15effa",
+    "local_composition.py": "aaf9585ad24429c44ea5ed78b00a7ad49369f324528f901ac46a56eae9b22ba0",
+    "paired_case.py": "f682f17a02c9a998e963fbaade53494883a3bf9e25011f6be8740f00dd10816f",
+    "prepare_and_launch.py": "f71f4d4f029c090ab8315697083eb3f707e3206e09b0e95affeb0040cd57eef3",
+    "provider_controller.py": "82413b36c2de85cc09d1661e17c8de5c70817062fd67f8e62b0a851c34cdf6aa",
+    "stage_adapter.py": "f678712c75a50146194ccb34331fab8d995f057461e565be99be8d69c2b364a6",
+    "worker_driver.py": "87881819ce0a7b838acbfe6c76fbf88b78ed73c38f11fefb003a3016bc1f5919"
+  },
+  "stageMap": {
+    "localUser": "D STT + D LLM + D TTS, production typed bus",
+    "remoteUser": "W authenticated HTTP -> same D STT + D LLM + D TTS"
+  },
+  "triggerWaitCapSeconds": 300
+}

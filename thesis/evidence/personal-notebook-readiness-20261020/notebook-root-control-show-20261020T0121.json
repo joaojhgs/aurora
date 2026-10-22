@@ -1,0 +1,29 @@
+{
+  "id": "ac8f36fd-b294-438f-a0bc-429639c4fd0f",
+  "ok": true,
+  "result": {
+    "terminal": {
+      "handle": "term_f40f2bd6-0f71-4484-8347-ac221cf6ce9b",
+      "ptyId": "ssh:ssh-sem-notebook-personal@@pty2:922594b2-6958-4b97-b1b9-f337a2304f64:1",
+      "incarnationId": "633939eb-60f4-4bc0-9a0c-5941dc6db36a",
+      "orphaned": false,
+      "worktreeId": "03d8a475-d62e-43b3-8885-e382b313ab1b::/home/developer/projects/aurora",
+      "worktreePath": "/home/developer/projects/aurora",
+      "branch": "refs/heads/feat/ui-multi-platform-integration",
+      "tabId": "27c1f189-f3bc-467f-a639-73475e9428a3",
+      "leafId": "c17246d3-4a6b-4c65-b221-ba95d14240aa",
+      "title": "Aurora Root Personal notebook read-only inventory",
+      "connected": true,
+      "writable": true,
+      "lastOutputAt": 1792459201691,
+      "preview": "\u279c  aurora git:(feat/ui-multi-platform-integration) \u2717\n[1]  + 42298 exit 1     /usr/local/bin/setup-default-inputs > /dev/null 2>&1\n\u279c  aurora git:(feat/ui-multi-platform-integration) \u2717",
+      "executionHostId": "ssh:ssh-sem-notebook-personal",
+      "paneRuntimeId": -1,
+      "rendererGraphEpoch": 0,
+      "agentWait": null
+    }
+  },
+  "_meta": {
+    "runtimeId": "cc9e3275-28c6-4c45-85cc-bdcd2262aa7d"
+  }
+}

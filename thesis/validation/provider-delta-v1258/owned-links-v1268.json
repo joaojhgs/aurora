@@ -1,0 +1,174 @@
+{
+  "status": "ALL_OWNED_MARKDOWN_RELATIVE_LINKS_RESOLVE",
+  "links": [
+    {
+      "doc": "docs/experiments/tcc-20261013-submission-20261030/root/CURRENT.md",
+      "target": "distributed-k1-orca-relayed-http-v1197/REPORT.md",
+      "exists": true
+    },
+    {
+      "doc": "docs/experiments/tcc-20261013-submission-20261030/root/CURRENT.md",
+      "target": "distributed-k1-orca-relayed-http-v1197/provider-budget-v1203.json",
+      "exists": true
+    },
+    {
+      "doc": "docs/experiments/tcc-20261013-submission-20261030/root/CURRENT.md",
+      "target": "../../../../thesis/evidence/orca-relayed-http-v1197/STORAGE-AMENDMENT-v1217.json",
+      "exists": true
+    },
+    {
+      "doc": "docs/experiments/tcc-20261013-submission-20261030/root/CURRENT.md",
+      "target": "../../../../thesis/evidence/orca-relayed-http-v1197/CURRENT.json",
+      "exists": true
+    },
+    {
+      "doc": "docs/experiments/tcc-20261013-submission-20261030/root/CURRENT.md",
+      "target": "../../../../thesis/evidence/orca-relayed-http-v1197/provider-transfer-v1232/CUSTODY.json",
+      "exists": true
+    },
+    {
+      "doc": "docs/experiments/tcc-20261013-submission-20261030/root/CURRENT.md",
+      "target": "../../../../thesis/evidence/orca-relayed-http-v1197/provider-transfer-delta-v1261/CUSTODY.json",
+      "exists": true
+    },
+    {
+      "doc": "docs/experiments/tcc-20261013-submission-20261030/root/CURRENT.md",
+      "target": "../../../../thesis/evidence/orca-relayed-http-v1197/provider-transfer-delta-v1261/COVERAGE-CHAIN.json",
+      "exists": true
+    },
+    {
+      "doc": "docs/experiments/tcc-20261013-submission-20261030/root/CURRENT.md",
+      "target": "../../../../thesis/evidence/orca-relayed-http-v1197/provider-transfer-delta-v1261/POST-TRANSFER-LIVENESS.json",
+      "exists": true
+    },
+    {
+      "doc": "docs/experiments/tcc-20261013-submission-20261030/root/CURRENT.md",
+      "target": "../../../../thesis/evidence/sealed-cohorts-v1215/CUSTODY.json",
+      "exists": true
+    },
+    {
+      "doc": "docs/experiments/tcc-20261013-submission-20261030/root/CURRENT.md",
+      "target": "../../../../thesis/models/retained-v1212/CUSTODY.json",
+      "exists": true
+    },
+    {
+      "doc": "docs/experiments/tcc-20261013-submission-20261030/root/CURRENT.md",
+      "target": "../../../../thesis/methodology/owner-requirements-20261017-aed7aef2.md",
+      "exists": true
+    },
+    {
+      "doc": "docs/experiments/tcc-20261013-submission-20261030/root/CURRENT.md",
+      "target": "distributed-k1-recovery-v1139/RELAY-DISCOVERY-v1184.md",
+      "exists": true
+    },
+    {
+      "doc": "docs/experiments/tcc-20261013-submission-20261030/root/CURRENT.md",
+      "target": "HISTORY-v1203-before-live-relay-condition.md",
+      "exists": true
+    },
+    {
+      "doc": "docs/experiments/tcc-20261013-submission-20261030/root/CURRENT.md",
+      "target": "../../../../thesis/evidence/auditor-dispatch-20261017/FINAL-ADMISSION-STATE-v1254.json",
+      "exists": true
+    },
+    {
+      "doc": "docs/experiments/tcc-20261013-submission-20261030/root/CURRENT.md",
+      "target": "../../../../thesis/campaigns/worker-desktop-k2-orca-relayed-http-v1264/ADMISSION-PREPARED.json",
+      "exists": true
+    },
+    {
+      "doc": "docs/experiments/tcc-20261013-submission-20261030/root/CURRENT.md",
+      "target": "worker-cpu-padded-local900-v737/REPORT.md",
+      "exists": true
+    },
+    {
+      "doc": "docs/experiments/tcc-20261013-submission-20261030/root/CURRENT.md",
+      "target": "browser-normal-ui-padded900-v799/REPORT.md",
+      "exists": true
+    },
+    {
+      "doc": "docs/experiments/tcc-20261013-submission-20261030/root/CURRENT.md",
+      "target": "native-desktop-sdk-audio900-v1068/RECOVERY-20261017.md",
+      "exists": true
+    },
+    {
+      "doc": "docs/experiments/tcc-20261013-submission-20261030/root/CURRENT.md",
+      "target": "distributed-k1-recovery-v1139/provider-and-archive-state-v1170.json",
+      "exists": true
+    },
+    {
+      "doc": "docs/experiments/tcc-20261013-submission-20261030/root/CURRENT.md",
+      "target": "full13-evidence-map-v748/REPORT.md",
+      "exists": true
+    },
+    {
+      "doc": "docs/experiments/tcc-20261013-submission-20261030/root/CURRENT.md",
+      "target": "HISTORY-v1176-before-relay-correction.md",
+      "exists": true
+    },
+    {
+      "doc": "thesis/evidence/orca-relayed-http-v1197/README.md",
+      "target": "STORAGE-AMENDMENT-v1217.json",
+      "exists": true
+    },
+    {
+      "doc": "thesis/evidence/orca-relayed-http-v1197/README.md",
+      "target": "CURRENT.json",
+      "exists": true
+    },
+    {
+      "doc": "thesis/evidence/orca-relayed-http-v1197/README.md",
+      "target": "copier-launch.json",
+      "exists": true
+    },
+    {
+      "doc": "thesis/evidence/orca-relayed-http-v1197/README.md",
+      "target": "settings/settings.redacted.json",
+      "exists": true
+    },
+    {
+      "doc": "thesis/evidence/orca-relayed-http-v1197/README.md",
+      "target": "provider-copy-receipt-v1216.json",
+      "exists": true
+    },
+    {
+      "doc": "thesis/evidence/orca-relayed-http-v1197/README.md",
+      "target": "provider-transfer-v1232/CUSTODY.json",
+      "exists": true
+    },
+    {
+      "doc": "thesis/evidence/orca-relayed-http-v1197/README.md",
+      "target": "provider-transfer-delta-v1261/CUSTODY.json",
+      "exists": true
+    },
+    {
+      "doc": "thesis/evidence/orca-relayed-http-v1197/README.md",
+      "target": "provider-transfer-delta-v1261/COVERAGE-CHAIN.json",
+      "exists": true
+    },
+    {
+      "doc": "thesis/evidence/orca-relayed-http-v1197/README.md",
+      "target": "provider-transfer-delta-v1261/POST-TRANSFER-LIVENESS.json",
+      "exists": true
+    },
+    {
+      "doc": "thesis/evidence/orca-relayed-http-v1197/README.md",
+      "target": "../../models/retained-v1212/CUSTODY.json",
+      "exists": true
+    },
+    {
+      "doc": "thesis/evidence/orca-relayed-http-v1197/README.md",
+      "target": "../sealed-cohorts-v1215/CUSTODY.json",
+      "exists": true
+    },
+    {
+      "doc": "thesis/evidence/orca-relayed-http-v1197/README.md",
+      "target": "../sealed-cohorts-v1215/monitor/KNOWN-REPO-CUSTODY-AUDIT-20261017T2021.json",
+      "exists": true
+    }
+  ],
+  "count": 33,
+  "fullDocsCheck": "check-docs-v1268.json",
+  "fullDocsPassed": false,
+  "noCheckerWeakeningOrArtifactMove": true
+}

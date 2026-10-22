@@ -1,0 +1,120 @@
+{
+  "schema_version": "aurora.assistant.measurement_summary.v1",
+  "quantile_method": "type7_linear_interpolation",
+  "group_count": 2,
+  "groups": [
+    {
+      "schema_version": "aurora.assistant.measurement_summary.v1",
+      "quantile_method": "type7_linear_interpolation",
+      "group": {
+        "config_sha256": "9c44e0e250e72a74fd222a9f73977c2c3c957f8121d75e76c664ce3381451caa",
+        "host_id_pseudonym": "e97aea7d0d5e7701",
+        "model_id": "qwen3.5-0.8b-q4_0-gguf",
+        "model_sha256": "57d1997790d1744fba5b40a7317df71ea5e2acee28c47e78f0cce39c0703f8cf",
+        "route": "python_gateway_api",
+        "session_id": "pilot-run-951cb4c99e3548a8b204306bcb2fc2f3",
+        "source_commit": "5782746afba213f6b36907db2f09f0017625e218",
+        "surface": "python-production-local",
+        "workload_id": "public-exact-answer-orbit-v1",
+        "workload_sha256": "0f3b83f8fbf0e55e7b7faf8a75e99f42fdad42128b908e7f7c18cd4d8faeed86"
+      },
+      "n_raw_records": 1,
+      "n_warmup": 0,
+      "warmup_counts": {
+        "cancelled": 0,
+        "correct_success": 0,
+        "excluded": 0,
+        "failure": 0,
+        "incorrect_answer": 0,
+        "infeasible": 0,
+        "timeout": 0
+      },
+      "n_total": 1,
+      "n_excluded": 0,
+      "n_eligible": 1,
+      "counts": {
+        "cancelled": 0,
+        "correct_success": 0,
+        "failure": 0,
+        "incorrect_answer": 1,
+        "infeasible": 0,
+        "timeout": 0
+      },
+      "n_success": 0,
+      "n_success_denominator": 1,
+      "correct_success_rate": 0.0,
+      "correct_success_latency_ms": {
+        "p50": null,
+        "p90": null,
+        "p95": null
+      },
+      "correct_success_latency_n": 0,
+      "exclusion_reasons_predeclared": {},
+      "censored_outcomes_retained": {
+        "timeout": 0,
+        "cancelled": 0,
+        "infeasible": 0
+      }
+    },
+    {
+      "schema_version": "aurora.assistant.measurement_summary.v1",
+      "quantile_method": "type7_linear_interpolation",
+      "group": {
+        "config_sha256": "9c44e0e250e72a74fd222a9f73977c2c3c957f8121d75e76c664ce3381451caa",
+        "host_id_pseudonym": "e97aea7d0d5e7701",
+        "model_id": "qwen3.5-0.8b-q4_0-gguf",
+        "model_sha256": "57d1997790d1744fba5b40a7317df71ea5e2acee28c47e78f0cce39c0703f8cf",
+        "route": "python_local_bus",
+        "session_id": "pilot-run-951cb4c99e3548a8b204306bcb2fc2f3",
+        "source_commit": "5782746afba213f6b36907db2f09f0017625e218",
+        "surface": "python-production-local",
+        "workload_id": "public-exact-answer-orbit-v1",
+        "workload_sha256": "0f3b83f8fbf0e55e7b7faf8a75e99f42fdad42128b908e7f7c18cd4d8faeed86"
+      },
+      "n_raw_records": 2,
+      "n_warmup": 1,
+      "warmup_counts": {
+        "cancelled": 0,
+        "correct_success": 0,
+        "excluded": 0,
+        "failure": 0,
+        "incorrect_answer": 1,
+        "infeasible": 0,
+        "timeout": 0
+      },
+      "n_total": 1,
+      "n_excluded": 0,
+      "n_eligible": 1,
+      "counts": {
+        "cancelled": 0,
+        "correct_success": 0,
+        "failure": 0,
+        "incorrect_answer": 1,
+        "infeasible": 0,
+        "timeout": 0
+      },
+      "n_success": 0,
+      "n_success_denominator": 1,
+      "correct_success_rate": 0.0,
+      "correct_success_latency_ms": {
+        "p50": null,
+        "p90": null,
+        "p95": null
+      },
+      "correct_success_latency_n": 0,
+      "exclusion_reasons_predeclared": {},
+      "censored_outcomes_retained": {
+        "timeout": 0,
+        "cancelled": 0,
+        "infeasible": 0
+      }
+    }
+  ],
+  "claim_scope": "Same-host production Python Assistant reply-latency diagnostic gated by declared exact answer and DB history. No correct answers; no successful latency estimates/mesh/UI/mobile/stable tail acceptance.",
+  "raw_runs_retained": [
+    "v245 pre-service syntax failure/zero requests",
+    "v246 actual3requests:1warmup and2measured incorrect answers"
+  ],
+  "clean_benchmark_condition": false,
+  "source_review_basis": "Independent Sol correctedsource3b107369 approved; Root integration fixed syntax/default path/unused variable/import formatting toexecuted dff6012...; originalsource-onlyapproval isnotruntimeacceptance."
+}

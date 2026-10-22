@@ -1,0 +1,13 @@
+{
+  "at": "2026-10-19T23:24:10.112819+00:00",
+  "terminal": "term_2eab47ed-ab9b-4e35-bd9b-fc068c60e3fc",
+  "incarnation": "37e50d9c-6cf5-4e28-a63b-f2bc3eed5661",
+  "sameNativeGoal": "01a123ff-19ba-7332-a2f7-346a722af79f",
+  "command": "/goal resume",
+  "maximumSends": 1,
+  "freshShowRequest": "v1648-monitor-resume-show-fence.json",
+  "idleScreenRequest": "79ee8e95-d545-4e19-890e-1bdaf4670bf6",
+  "ownerAuthorization": "Original owner recovery msg_b4ce22199473 and explicit owner-turn-end msg_30caab1bbcc6",
+  "interrupt": false,
+  "newSession": false
+}

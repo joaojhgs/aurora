@@ -1,0 +1,17 @@
+{
+  "scope": "Actual source bytes before optional provider-coverage-chain resolver; no measurements or source experiment changes.",
+  "files": [
+    {
+      "original": "thesis/analysis/k1_saved_case_history.py",
+      "retained": "thesis/analysis/source-history/k1-before-coverage-chain-v1289/k1_saved_case_history.py",
+      "bytes": 16553,
+      "sha256": "e8e531b95dedac0296b6dcb24cab44d5461f6cf9e44d4291cdde962a4ad1d2c3"
+    },
+    {
+      "original": "thesis/analysis/native_span_metrics_v2.py",
+      "retained": "thesis/analysis/source-history/k1-before-coverage-chain-v1289/native_span_metrics_v2.py",
+      "bytes": 5210,
+      "sha256": "b8fc433bae6e941bd8829df1fa65a5df42af94f2a45d1f3e7174aca8767a7932"
+    }
+  ]
+}

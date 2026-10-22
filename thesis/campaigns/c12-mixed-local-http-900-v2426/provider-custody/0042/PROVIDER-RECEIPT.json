@@ -1,0 +1,173 @@
+{
+  "archive": "/home/developer/projects/aurora/thesis/campaigns/c12-mixed-local-http-900-v2426/provider/capsules/0042/provider-pair.tar.gz",
+  "at": "2026-10-22T08:14:14.384927+00:00",
+  "bytes": 42594,
+  "expectedParentStt": "73c44fd0181d4282e9bcec56e0b50810",
+  "inferenceByCollector": 0,
+  "localCase": {
+    "at": "2026-10-22T08:13:47.212786+00:00",
+    "audio": {
+      "bytes": 30764,
+      "path": "/home/developer/projects/aurora/thesis/campaigns/c12-mixed-local-http-900-v2426/provider/cases/0042/AUDIO-desktop-local.wav",
+      "sha256": "3240633fe9e52a25149bd3b6fcef15e9cb86f97a7905a26ff3cccb069c2049d2"
+    },
+    "case": {
+      "condition": "production_local_bus_userinput_and_response_stt_assistant_tts",
+      "correctness": {
+        "all_expected": true,
+        "assistant_reply_matches_expected_words": true,
+        "transcript_matches_reference_words": true
+      },
+      "flow_duration_ms": 13986.431724,
+      "flow_ended_monotonic_ns": 412362194944401,
+      "flow_started_monotonic_ns": 412348208512677,
+      "input_channels": 1,
+      "input_frames": 109875,
+      "input_sample_rate": 22050,
+      "input_wav_bytes": 219794,
+      "input_wav_sha256": "da0ecc4ad0885746ab6e716585473917ab2b543a505bf0db09ebacfaa7943cbb",
+      "local_case_ids": {
+        "correlation_id": "c12-v2426-22707024a5544f86a22ec73af8bd215f",
+        "request_id": "c12-request-5d01f50cdc934b2fbd7f8d45ec0b6668",
+        "session_id": "c12-session-6471d1e0c53e4bb3af8c8abd2389712b"
+      },
+      "schema": "aurora.distributed_k3_case.v1",
+      "stages": {
+        "assistant": {
+          "adapter_duration_ms": 5641.284759,
+          "bus_correlation_id": "c12-v2426-22707024a5544f86a22ec73af8bd215f",
+          "correlation_id_matches": true,
+          "duration_ms": 5641.294478,
+          "end_monotonic_ns": 412360120991461,
+          "metadata_error": false,
+          "reported_model": "Qwen3.5-0.8B-Q4_0.gguf",
+          "reported_provider": "llama_cpp",
+          "request_id_matches": true,
+          "response_chars": 5,
+          "response_sha256": "5dd272b4f316b776a7b8e3d0894b37e1e42be3d5d3b204b8a5836cc50597a6b1",
+          "route_class": "production_local_bus",
+          "server_tts_status": null,
+          "session_id_matches": true,
+          "start_monotonic_ns": 412354479696983,
+          "status": "completed",
+          "tts_suppression_basis": "frozen_config_false_plus_native_call_accounting"
+        },
+        "stt": {
+          "adapter_duration_ms": 6270.354415,
+          "bus_correlation_id": "c12-v2426-22707024a5544f86a22ec73af8bd215f",
+          "duration_ms": 6271.110996,
+          "duration_ms_reported_by_service": 4982.993197278912,
+          "end_monotonic_ns": 412354479632761,
+          "language": "en",
+          "model_used": "accurate",
+          "route_class": "production_local_bus",
+          "start_monotonic_ns": 412348208521765,
+          "status": "completed",
+          "transcript_chars": 62,
+          "transcript_sha256": "34b681e385feb3500c9e9849d30f5bac982716c4e4938cdb04c5fdc617cff624"
+        },
+        "tts": {
+          "adapter_duration_ms": 2073.614205,
+          "audio_bytes": 30764,
+          "audio_sha256": "3240633fe9e52a25149bd3b6fcef15e9cb86f97a7905a26ff3cccb069c2049d2",
+          "bus_correlation_id": "c12-v2426-22707024a5544f86a22ec73af8bd215f",
+          "channels": 1,
+          "duration_ms": 2073.63823,
+          "duration_ms_reported_by_service": 696.5986394557823,
+          "end_monotonic_ns": 412362194709884,
+          "format": "wav",
+          "frames": 15360,
+          "route_class": "production_local_bus",
+          "sample_rate": 22050,
+          "start_monotonic_ns": 412360121071654,
+          "status": "completed",
+          "text_matches_assistant": true
+        }
+      }
+    },
+    "condition": "C12-mixed-local-plus-Orca-relayed-HTTP-K3-concurrency2",
+    "correlation_id": "c12-v2426-22707024a5544f86a22ec73af8bd215f",
+    "duration_ms": 14136.948678,
+    "eligible_measured": true,
+    "end_monotonic_ns": 412362314841832,
+    "manifest_sha256": "316d4cc09adc44d0104dca8ac1f2a966347588ffef37bc2fa809ec14fd5efff8",
+    "ordinal": 42,
+    "parent_remote_stt_correlation_id": "73c44fd0181d4282e9bcec56e0b50810",
+    "phase": "measured",
+    "phase_index": 41,
+    "request_cap_seconds": 180,
+    "schema": "aurora.c12.paired_case.v1",
+    "start_monotonic_ns": 412348177894266,
+    "status": "completed_correct",
+    "stream": "desktop-local"
+  },
+  "manifestSha256": "316d4cc09adc44d0104dca8ac1f2a966347588ffef37bc2fa809ec14fd5efff8",
+  "members": {
+    "local/AUDIO.wav": {
+      "bytes": 30764,
+      "sha256": "3240633fe9e52a25149bd3b6fcef15e9cb86f97a7905a26ff3cccb069c2049d2"
+    },
+    "local/CASE.json": {
+      "bytes": 3959,
+      "sha256": "b645293aa483a7bf6bd41a0fe89b1357a06245d5f65be34aeb7b69af8c0dbe01"
+    },
+    "local/STARTED.json": {
+      "bytes": 580,
+      "sha256": "da92a3e52bfd7af458e784b0936eace8a167dd33bc10e5ac0a0bfe9fa5c66a5d"
+    },
+    "pair-metadata.json": {
+      "bytes": 268,
+      "sha256": "54c30ae18e77c0cde4e23740e775bbd4f00fefbd4f19d00eb53d4aed9b82768c"
+    },
+    "queue-observer-binding.json": {
+      "bytes": 146,
+      "sha256": "fc7fd388e5f76f0df6a8b2a3ae0adc47cb0550f872d947f8af71d1026afef0d3"
+    },
+    "raw/actual-provider-bindings.jsonl": {
+      "bytes": 1506,
+      "sha256": "c0ecb4cda087eca3f96824706b4d25dfa3bd7a1377d23195b0b7b69d83c1c0b5"
+    },
+    "raw/bus-queue-observations.jsonl": {
+      "bytes": 2354,
+      "sha256": "230ce40d18ee770a83d7a104340922898e4c8fa519b1b91cef8bcc05a8ee3d1d"
+    },
+    "raw/resources.jsonl": {
+      "bytes": 166022,
+      "sha256": "2c8e29cfd69462d1dcb746dbfe05e0bd92647b59b58a6933e2863e1dda53e186"
+    },
+    "raw/voice-stages.jsonl": {
+      "bytes": 33288,
+      "sha256": "71a57c7d73e3337d86b3c8104f7c825c8e689fda75e56187e7a67129e26b35c7"
+    }
+  },
+  "offsets": {
+    "actual-provider-bindings.jsonl": {
+      "begin": 63939,
+      "bytes": 1506,
+      "end": 65445,
+      "sha256": "c0ecb4cda087eca3f96824706b4d25dfa3bd7a1377d23195b0b7b69d83c1c0b5"
+    },
+    "bus-queue-observations.jsonl": {
+      "begin": 96446,
+      "bytes": 2354,
+      "end": 98800,
+      "sha256": "230ce40d18ee770a83d7a104340922898e4c8fa519b1b91cef8bcc05a8ee3d1d"
+    },
+    "resources.jsonl": {
+      "begin": 7362935,
+      "bytes": 166022,
+      "end": 7528957,
+      "sha256": "2c8e29cfd69462d1dcb746dbfe05e0bd92647b59b58a6933e2863e1dda53e186"
+    },
+    "voice-stages.jsonl": {
+      "begin": 1364808,
+      "bytes": 33288,
+      "end": 1398096,
+      "sha256": "71a57c7d73e3337d86b3c8104f7c825c8e689fda75e56187e7a67129e26b35c7"
+    }
+  },
+  "ordinal": 42,
+  "phase": "measured",
+  "sha256": "c3a8c7137e62f252b7a643d8607c8ae5f246dce4ec0d1ed4fbe695cd1d453c66",
+  "timingScope": "Copy/control occurs after the measured HTTP flow; its time is retained separately in offered/completed rate history"
+}

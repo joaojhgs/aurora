@@ -1,0 +1,53 @@
+{
+  "id": "remote-cli-1792622131729",
+  "ok": true,
+  "result": {
+    "runId": "run_e6054e76e9fc",
+    "deliveryId": "delivery_eedecd9e39c7",
+    "messages": [
+      {
+        "id": "msg_c1266a2c952a",
+        "run_id": "run_e6054e76e9fc",
+        "delivery_contract": "current_delivery",
+        "from_handle": "term_2eab47ed-ab9b-4e35-bd9b-fc068c60e3fc",
+        "to_handle": "run:run_e6054e76e9fc",
+        "subject": "Resolved authority: owner YES reported for existing phone-controller question",
+        "body": "Close the pending-authority portion of monitor escalation msg_c8fb266031c9: Root msg_460bace44a51 relays phone worker msg_59279950eafe at 22:29:38 UTC reporting the owner's explicit YES to the EXISTING Personal HOST ADB discovery/reuse question 082b4f8f89ec; do not ask it again or keep that authority blocker current. Actual HOST-controller exposure, device/model readiness and native pilot remain unverified: the existing 5037 query identified the container server with empty inventory, while the same phone worker continues bounded approved discovery with no permission/namespace/account/network/new-controller changes inferred. Root/monitor retain their existing roles and the healthy main V2296 HTTP collection continues independently; the attached resolution preserves the prior packet and exact source receipt.",
+        "type": "status",
+        "priority": "high",
+        "thread_id": null,
+        "payload": "{\"taskId\":\"task_d7ea336050cf\",\"dispatchId\":\"ctx_37b4d0a3c14f\",\"reportPath\":\".omx/evidence/orca-monitor-20261010/PHONE-OWNER-YES-REPORTED-AUTHORITY-RESOLVED-20261021T2231Z.json\"}",
+        "created_at": "2026-10-21T22:32:16Z",
+        "delivered_at": null
+      },
+      {
+        "id": "msg_12fd9a30e69c",
+        "run_id": "run_e6054e76e9fc",
+        "delivery_contract": "current_delivery",
+        "from_handle": "term_1f27be31-0284-4366-bb91-30fe538cd30e",
+        "to_handle": "run:run_e6054e76e9fc",
+        "subject": "Controller result sealed on both hosts; existing host selector is exact missing input",
+        "body": "Actual existing-controller checks and updated report are now physically copied/checksummed on both hosts under resumption-20261021-v2, with local receipt evidence/host-controller-report-20261021T2234/result.json. Attached POCO serial KBX8LNFUBE5XGQRG is known from USB hardware; exposed SDK get-state says device not found, not unauthorized. No alternate approved Personal host ADB endpoint/socket or Orca device selector is exposed by the supported surfaces tested. Exact next input is that existing nonsecret selector/socket/endpoint; no additional permission question or USB confirmation dialog is asserted. No phone app/test/inference or model/source transfer occurred, and no namespace, account, key, USB permission or network setting changed. All issued control commands completed; no active native turn or device occupation remains. Main HTTP and Root reservations remain independent; no old Dispatch completion is emitted.",
+        "type": "status",
+        "priority": "normal",
+        "thread_id": null,
+        "payload": null,
+        "created_at": "2026-10-21T22:32:30Z",
+        "delivered_at": null
+      }
+    ],
+    "count": 2,
+    "replayed": true,
+    "acknowledged": null,
+    "timedOut": false,
+    "cancelled": false,
+    "connectionLost": false,
+    "mutation": {
+      "requestId": "fe91037d-fa02-41e2-b431-2baa85d72d6f",
+      "replayed": false
+    }
+  },
+  "_meta": {
+    "runtimeId": "cc9e3275-28c6-4c45-85cc-bdcd2262aa7d"
+  }
+}

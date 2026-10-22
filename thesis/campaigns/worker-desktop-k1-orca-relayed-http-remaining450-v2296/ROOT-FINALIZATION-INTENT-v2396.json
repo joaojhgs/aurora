@@ -1,0 +1,88 @@
+{
+  "schema": "aurora.root.finalization-intent.v1",
+  "at": "2026-10-22T04:58:08.703144+00:00",
+  "phase": "MEASUREMENTS_FINISHED_FINALIZATION_PENDING",
+  "nativeGoal": {
+    "goal": {
+      "threadId": "01a112a5-d6bb-74e2-bf7c-ace73cb513b5",
+      "objective": "Complete the durable ultragoal plan in .omx/ultragoal/goals.json, including later accepted/appended stories, under the original brief constraints; use .omx/ultragoal/ledger.jsonl as the audit trail.",
+      "status": "active",
+      "tokensUsed": 245323821,
+      "timeUsedSeconds": 898264,
+      "createdAt": 1791314947,
+      "updatedAt": 1792644992
+    },
+    "remainingTokens": null,
+    "completionBudgetReport": null
+  },
+  "terminalObservation": {
+    "at": "2026-10-22T04:58:08.685605+00:00",
+    "classification": "RECONCILE_SAME_RUN",
+    "manifestSha256": "9adbf9ba3a7ec0948a087edad3655cf94ee344b3a2371a78d15f188f44150d42",
+    "actors": [
+      {
+        "pid": 3965950,
+        "expectedStartTicks": 139740362,
+        "state": "ABSENT"
+      },
+      {
+        "pid": 3965978,
+        "expectedStartTicks": 139740616,
+        "state": "ABSENT"
+      },
+      {
+        "pid": 3965951,
+        "expectedStartTicks": 139740363,
+        "state": "ABSENT"
+      }
+    ],
+    "epochMeasured": {
+      "attempted": 450,
+      "correct": 450,
+      "failed": 0,
+      "incorrect": 0,
+      "timeouts": 0,
+      "planned": 450
+    },
+    "conditionCountsOnly": {
+      "attempted": 900,
+      "correct": 899,
+      "failed": 1,
+      "incorrect": 0,
+      "unattempted": 0,
+      "planned": 900
+    },
+    "copier": {
+      "receipt": "thesis/campaigns/worker-desktop-k1-orca-relayed-http-remaining450-v2296/receipts/000432.json",
+      "sha256": "dc2cad8478fa01a4e0a33dd1e5c53234b79e1489e825c4f074038d3a8d7f9f87",
+      "cases": 465,
+      "WAV": 465,
+      "errors": [],
+      "freeBytes": 3050799104
+    },
+    "terminalSummaryPresent": true,
+    "observationOnly": true,
+    "newSutCalls": 0,
+    "processSignals": 0,
+    "measurementInputsNotModifiedByThisObserver": true
+  },
+  "terminalSummary": {
+    "path": "thesis/campaigns/worker-desktop-k1-orca-relayed-http-remaining450-v2296/TERMINAL-SUMMARY-v2396.json",
+    "bytes": 94264,
+    "sha256": "70a05a51293e243e34d09cb39388d3ee9964935dd948e279b77e3d674f1c7231"
+  },
+  "command": [
+    "/home/developer/projects/aurora/.git/aurora-handoff-import-20261006/cpu-audio-campaign-v491/env/bin/python",
+    "/home/developer/projects/aurora/thesis/harness/finish_k1_http_epoch_v2303.py"
+  ],
+  "preparedSourceHashes": {
+    "thesis/harness/provider_export_k1_http_prefix_v2301.py": "7db452cbb2f02e0639716b7a70e7e320133b3c0e1010001c6645c88e30371b5b",
+    "thesis/harness/transfer_k1_http_provider_prefix_v2302.py": "62323777240fd175542c1874310504ff0b557777c158930ee5759bfd91879315",
+    "thesis/harness/finish_k1_http_epoch_v2303.py": "e0e490c0b67e9e978b0f5098e054728811617ef4b5947351807229ed4a65b728"
+  },
+  "oneInvocationOnly": true,
+  "providerReservationHeld": true,
+  "ownerFull900SealReleaseNotice": "PENDING_NOT_TRIGGERED",
+  "full13AndFullMatrixStillOpen": true,
+  "priorWait2395Refused": "Guard correctly rejected VERIFIED_WAIT after the same run became terminal; no SUT restart or manifest/source mutation"
+}

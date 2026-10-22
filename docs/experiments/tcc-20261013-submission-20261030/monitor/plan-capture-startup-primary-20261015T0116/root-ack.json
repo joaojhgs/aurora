@@ -1,0 +1,14 @@
+{
+  "message": "msg_1966b408d9bd",
+  "at": "2026-10-15T01:19:20Z",
+  "delivery": "delivery_a58483e637bc",
+  "lines": 1566,
+  "section": "30.11",
+  "newLinesRead": 23,
+  "sha256": "765328ebc517ae28ac1d5bc13bc88b2413c54a4dba418f384104031cfb0c72c0",
+  "old1543PrefixUnchanged": true,
+  "diffSha256": "ac7fffd8838b2da1703d72fe6e0288a9807603f2a0675ac8772b96914f54f0f3",
+  "receiptRead": true,
+  "diffRead": true,
+  "rootAuthoritativePlanWrite": false
+}

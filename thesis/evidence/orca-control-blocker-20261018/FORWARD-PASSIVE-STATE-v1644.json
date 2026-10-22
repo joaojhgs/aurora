@@ -1,0 +1,38 @@
+{
+  "at": "2026-10-18T23:23:58.424501+00:00",
+  "localForwardPid": 421717,
+  "startTicks": 104535394,
+  "expectedStartTicks": 104535394,
+  "sameIncarnation": true,
+  "unit": {
+    "MainPID": "421717",
+    "NRestarts": "0",
+    "ExecMainCode": "0",
+    "ExecMainStatus": "0",
+    "LoadState": "loaded",
+    "ActiveState": "active",
+    "SubState": "running"
+  },
+  "boundedJournal": {
+    "command": [
+      "journalctl",
+      "--user",
+      "--unit=orca-network-aurora-tts.service",
+      "--since=2026-10-18 22:54:00 UTC",
+      "--until=2026-10-18 23:10:00 UTC",
+      "--lines=200",
+      "--output=json",
+      "--no-pager"
+    ],
+    "exitCode": 0,
+    "parsedRows": 0,
+    "matchedSafeClassesOnly": [],
+    "rawMessagesNotRetainedToAvoidCredentialExposure": true,
+    "absenceOfMatchedClassDoesNotProveRouteHealth": true
+  },
+  "newApplicationCalls": 0,
+  "newInference": 0,
+  "newForward": false,
+  "restartPerformed": false,
+  "providerLiveness": "UNKNOWN"
+}

@@ -1,0 +1,32 @@
+{
+  "stage": "real-Assistant-empty-think-boundary-regression",
+  "sourceCommit": "5782746afba213f6b36907db2f09f0017625e218",
+  "fileSha256": {
+    "app/services/orchestrator/service.py": "0b77092091946b94130945b3bfb670a922a209b846d5ffe30e23f75b52f982f3",
+    "tests/unit/orchestrator/test_session_persistence.py": "3e171573ddac0d2eaed0f244207bd4934fcd6efb74fbca1997c409f058624390"
+  },
+  "command": [
+    "flock",
+    "--nonblock",
+    "/tmp/aurora-global-build.lock",
+    "timeout",
+    "--signal=TERM",
+    "--kill-after=10s",
+    "120s",
+    "/home/developer/projects/aurora/.venv/bin/python",
+    "-m",
+    "pytest",
+    "tests/unit/orchestrator/test_session_persistence.py",
+    "-q",
+    "--no-cov",
+    "--junitxml=/home/developer/projects/aurora/.git/aurora-handoff-import-20261006/empty-think-check-v249/junit.xml",
+    "--basetemp=/tmp/aurora-empty-think-v249-c6t_opzj",
+    "-o",
+    "cache_dir=/home/developer/projects/aurora/.git/aurora-handoff-import-20261006/empty-think-check-v249/pytest-cache"
+  ],
+  "cwd": "/home/developer/projects/aurora",
+  "startedAt": "2026-10-14T00:58:58.240957+00:00",
+  "deadlineSeconds": 120,
+  "serialOwner": "existing Root",
+  "benchmarkRequests": 0
+}

@@ -1,0 +1,15 @@
+{
+  "id": "msg_a1f07b029e71",
+  "run_id": "run_e6054e76e9fc",
+  "delivery_contract": "current_delivery",
+  "from_handle": "term_2eab47ed-ab9b-4e35-bd9b-fc068c60e3fc",
+  "to_handle": "run:run_e6054e76e9fc",
+  "subject": "V1620 actual prefix guard and custody correction CLOSED; no further review gate",
+  "body": "The single V1620 correction review is CLOSED. Receipt: .omx/evidence/orca-monitor-20261010/V1620-GUARD-AND-CUSTODY-CORRECTION-CLOSURE-20261018T2236.json (hash/bytes in report). I inspected the actual new full lineage guard: positive count, prior+new<=900, first=prior+1 and last=prior+new, with other lineage/predicate checks preserved. Saved real old failure/new full-guard pass matches current f822386e draft; no extra predicate runs/tests. Thirteen source pins, ten operator source/copies and draft pins match; reader is namespace-only. Safe stage/code fields add no freeform error text. Copier fallback now maps the actual failed-preflight summary into a status the existing follow-loop terminal branch consumes, with bounded controller-starttick grace/final checkpoint; missing never-generated bindings/diagnostics stay pending, never native proof. Exact15.223255s startup charge makes used23594.129217333/cap57600; same deadline. Range717\u2013812 is96, remaining813\u2013900 is88, full900 and old716/two failures preserved. V1610 failure and my earlier guard miss remain recorded; this closes the correction, not runtime admission. Root alone reconcile exact v1622 staging/fresh resources and current fixed lifetime, then one guarded launch and ordinary15 excluded/45 native gate. No further source-review, collector qualification or old-test matrix required. Monitor native ACTIVE; zero Personal/model calls.",
+  "type": "status",
+  "priority": "normal",
+  "thread_id": null,
+  "payload": "{\"taskId\":\"task_d7ea336050cf\",\"dispatchId\":\"ctx_37b4d0a3c14f\"}",
+  "created_at": "2026-10-18T22:35:54Z",
+  "delivered_at": null
+}

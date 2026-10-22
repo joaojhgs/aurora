@@ -1,0 +1,12 @@
+{
+  "controlDeadline": "2026-10-22T08:10:00Z",
+  "explicitNewline": true,
+  "host": "ssh:ssh-sem-notebook-personal",
+  "incarnation": "328cd72f-c7ea-49ff-a2db-b9275b085037",
+  "remoteResult": "/home/developer/projects/aurora/thesis/phone-notebook/20261020/evidence/read-sdk-build-v223.json",
+  "rootAdmissionMessage": "v2398-read-existing-build-closure-before-Notebook-provider-no-duplicate-job",
+  "script": "scripts/read_sdk_build_v223.py",
+  "scriptSha256": "b32915c6f89710e9a6abc30b8a43348363bc822fb9e8d537ec540d8d506d6344",
+  "singleSend": true,
+  "terminal": "term_a2ed5feb-7c92-48e4-bd88-d1b0e6737989"
+}

@@ -1,0 +1,115 @@
+{
+  "at": "2026-10-20T05:05:39.183499+00:00",
+  "status": "DECLARED_PREACCEPT_FAILURE_RETAINED_NEXT_DISTINCT_INDICES_CONTINUED",
+  "globalIndex": 36,
+  "sourceCase": ".git/aurora-handoff-import-20261006/distributed-k1-mesh-cell-v1719/campaign/attempts/attempt-0031-measured.jsonl",
+  "sourceSha256": "2f181598cdbd7e2b452171f5648300c3bbf246b9dcc6bd29634d92bf7442ad88",
+  "failure": {
+    "code": "remote_mesh_preaccept_capability_changed",
+    "stage": "tts"
+  },
+  "correctness": {
+    "assistant_reply_matches_expected_words": true,
+    "transcript_matches_reference_words": true
+  },
+  "consecutivePreacceptRejections": 1,
+  "flowFailureObservedMs": 46287.652924,
+  "correlation": {
+    "correlation_id": "audio-campaign-dad84b9d1cc448bd996bac31afeeb4a5",
+    "request_id": "audio-request-7597538038c84120ac55ed5af8f3bf8a",
+    "session_id": "audio-session-ef0521dbf05a49679502ee33e2e809de"
+  },
+  "meshCalls": [
+    {
+      "correlation_id": "audio-campaign-dad84b9d1cc448bd996bac31afeeb4a5",
+      "event": "mesh_peer_call_start",
+      "monotonicNs": 1250954857542849,
+      "monotonic_start_ns": 1250954857539649,
+      "peer_id_sha256": "77421aa81ce7ae2e865455348e9aa5ae17013d8f5e1f72d38d71d09f110ef868",
+      "pid": 2360768,
+      "topic": "TTS.Synthesize"
+    },
+    {
+      "correlation_id": "audio-campaign-dad84b9d1cc448bd996bac31afeeb4a5",
+      "event": "mesh_peer_call_end",
+      "monotonicNs": 1250955132070566,
+      "monotonic_end_ns": 1250955132066646,
+      "monotonic_start_ns": 1250954857539649,
+      "outcome": "failed",
+      "peer_id_sha256": "77421aa81ce7ae2e865455348e9aa5ae17013d8f5e1f72d38d71d09f110ef868",
+      "pid": 2360768,
+      "topic": "TTS.Synthesize"
+    }
+  ],
+  "routeObservations": [
+    {
+      "address_data_redacted": true,
+      "after": {
+        "clock_domain": "python.monotonic_ns:pid:2360768",
+        "peer_connection_instance_sha256": "a7c4ad59373de9b709f295a16e649d0d923fa91e6519527fd817b2462d4bf0f7",
+        "peer_id_sha256": "77421aa81ce7ae2e865455348e9aa5ae17013d8f5e1f72d38d71d09f110ef868",
+        "pid": 2360768,
+        "sampled_monotonic_ns": 1250955132258807,
+        "selected_pairs": [
+          {
+            "component": 1,
+            "ice_transport_ordinal": 1,
+            "local_candidate_type": "host",
+            "local_protocol": "udp",
+            "nominated": true,
+            "pair_state": "succeeded",
+            "path_class": "direct",
+            "remote_candidate_type": "srflx",
+            "remote_protocol": "udp"
+          }
+        ],
+        "session_peer_id_sha256": "765b609287cd5739bf5cf5592207f1deee7378bc7b5f38faed5f1a645785e31b",
+        "status": "selected_nominated_pair_observed"
+      },
+      "before": {
+        "clock_domain": "python.monotonic_ns:pid:2360768",
+        "peer_connection_instance_sha256": "a7c4ad59373de9b709f295a16e649d0d923fa91e6519527fd817b2462d4bf0f7",
+        "peer_id_sha256": "77421aa81ce7ae2e865455348e9aa5ae17013d8f5e1f72d38d71d09f110ef868",
+        "pid": 2360768,
+        "sampled_monotonic_ns": 1250954857494288,
+        "selected_pairs": [
+          {
+            "component": 1,
+            "ice_transport_ordinal": 1,
+            "local_candidate_type": "host",
+            "local_protocol": "udp",
+            "nominated": true,
+            "pair_state": "succeeded",
+            "path_class": "direct",
+            "remote_candidate_type": "srflx",
+            "remote_protocol": "udp"
+          }
+        ],
+        "session_peer_id_sha256": "765b609287cd5739bf5cf5592207f1deee7378bc7b5f38faed5f1a645785e31b",
+        "status": "selected_nominated_pair_observed"
+      },
+      "correlation_id": "audio-campaign-dad84b9d1cc448bd996bac31afeeb4a5",
+      "request_monotonic_end_ns": 1250955132256807,
+      "request_monotonic_start_ns": 1250954857535889,
+      "request_outcome": "failed",
+      "requester_pid": 2360768,
+      "schema": "aurora.mesh_route_observation.v1",
+      "topic": "TTS.Synthesize"
+    }
+  ],
+  "subsequentCompletedIndices": [
+    37,
+    38,
+    39,
+    40,
+    41
+  ],
+  "sameController": 2360747,
+  "sameBackend": 2360768,
+  "failedRequestRetried": false,
+  "sourceChanged": false,
+  "newSutCallsByInvestigation": 0,
+  "errorResponseScope": "Frozensource classifier requires real result.ok exactlyFalse,data.accepted exactlyFalse,reason_code capability_changed and exactpeer start/end; category retained in case. Raw response JSON not separately saved by this frozen adapter; do not reconstruct it as a historical packet.",
+  "receiverValidationSubcheck": "UNKNOWN; no model quality/continuous-route claim inferred",
+  "nextAction": "Continue SAMEfrozen remaining880, retain all outcomes; hardstop3consecutive or otherdeclaredsystemfaults."
+}

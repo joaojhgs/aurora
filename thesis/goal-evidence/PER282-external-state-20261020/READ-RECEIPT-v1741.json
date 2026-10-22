@@ -1,0 +1,31 @@
+{
+  "at": "2026-10-20T06:45:01.679726+00:00",
+  "command": [
+    "multica",
+    "--workspace-id",
+    "8ba5e156-5ff4-4990-b201-7f5d435fdcef",
+    "issue",
+    "get",
+    "9e299a93-149e-46a9-bcf3-84d7c62b380d",
+    "--output",
+    "json"
+  ],
+  "scope": "Exact existing Personal Aurora PER-282 only",
+  "mutationsAuthorizedOrAttempted": false,
+  "newWorkersOrAgentStarts": 0,
+  "credentialAccountSecurityOrServiceChanges": false,
+  "timeoutSeconds": 30,
+  "binary": "/home/developer/.local/bin/multica",
+  "exitCode": 1,
+  "stdoutBytes": 0,
+  "stderrBytes": 172,
+  "stdoutSha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+  "stderrSha256": "06a6e4ef569e30d61ec17dec76008715fe0e5ab448e1e9043fbc2018e4ff2169",
+  "http502Present": false,
+  "authFailurePresent": false,
+  "currentTaskStatus": "UNKNOWN_READ_FAILED",
+  "exactPublicError": "The Multica service is temporarily unavailable (server error). Please try again later; if it persists, contact support. Re-run with --debug to see the raw server response.",
+  "currentHttpStatusCode": null,
+  "newDebugOrReadRetry": false,
+  "preparedCommentStatus": "RETAINS_OLD_UNSUBMITTED_NOTE_NO_MUTATION"
+}

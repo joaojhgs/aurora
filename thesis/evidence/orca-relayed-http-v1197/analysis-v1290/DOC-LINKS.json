@@ -1,0 +1,14 @@
+{
+  "status": "PASS_NEW_ANALYSIS_README_RELATIVE_LINKS",
+  "count": 6,
+  "links": [
+    "../analysis-v1240/SUMMARY.json",
+    "VALIDATION.json",
+    "SUMMARY.json",
+    "CASE-HISTORY.json",
+    "SOURCE-IDENTITIES.json",
+    "../provider-transfer-delta-v1261/COVERAGE-CHAIN.json"
+  ],
+  "fullRepoDocsKnownFailure": "thesis/validation/provider-delta-v1258/check-docs-v1268.json",
+  "sourceTestsOrBenchmarks": 0
+}

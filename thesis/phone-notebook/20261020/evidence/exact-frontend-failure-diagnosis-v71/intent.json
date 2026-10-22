@@ -1,0 +1,12 @@
+{
+  "controlDeadline": "2026-10-22T04:10:00Z",
+  "explicitNewline": true,
+  "host": "ssh:ssh-sem-notebook-personal",
+  "incarnation": "328cd72f-c7ea-49ff-a2db-b9275b085037",
+  "remoteResult": "/home/developer/projects/aurora/thesis/phone-notebook/20261020/evidence/exact-frontend-failure-diagnosis-v71.json",
+  "rootAdmissionMessage": "owner-real-build-first-failure-diagnosis",
+  "script": "scripts/diagnose_actual_frontend_failure_v71.py",
+  "scriptSha256": "c8a48e79cdb48b2e7e90325d65164c5cbc0d8815b408fc00e1357d95570be698",
+  "singleSend": true,
+  "terminal": "term_a2ed5feb-7c92-48e4-bd88-d1b0e6737989"
+}

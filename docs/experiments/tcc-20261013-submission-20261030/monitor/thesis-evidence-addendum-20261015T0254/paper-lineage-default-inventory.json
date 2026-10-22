@@ -1,0 +1,29 @@
+{
+  "receiptId": "8be95085-2996-4609-bc67-2da5c835a1b1",
+  "observedAt": "2026-10-15T03:00:03.835617+00:00",
+  "command": "orca terminal list --json",
+  "totalCount": 14,
+  "truncated": false,
+  "hostIds": [
+    "local",
+    "ssh:ssh-1786238480967-semdev",
+    "ssh:ssh-oci-coding-worker",
+    "ssh:ssh-sem-notebook-personal",
+    "ssh:ssh-sem-notebook-work"
+  ],
+  "omittedHostIds": [
+    "ssh:ssh-sem-notebook-university"
+  ],
+  "personalCoordinator": {
+    "terminal": "term_8109a3ac-570e-4c3f-a7ac-e68e36764b2b",
+    "incarnation": "468a0928-9867-4612-b5f2-e7631784582d",
+    "worktree": "9d7236b1-1a4a-4e02-a7ff-f8486c63ea91::/home/developer/Documents/Obsidian Vault Origin",
+    "host": "ssh:ssh-oci-coding-worker",
+    "connected": true
+  },
+  "personalUniversityClaudePaperSessionVerified": false,
+  "canonicalTCCWorkspaceRegisteredTerminalFoundInExposedScope": false,
+  "missingInventoryMeansStopped": false,
+  "companySessionContentsNotReadOrUsedForTCC": true,
+  "registryPreviewExcludedFromReport": true
+}

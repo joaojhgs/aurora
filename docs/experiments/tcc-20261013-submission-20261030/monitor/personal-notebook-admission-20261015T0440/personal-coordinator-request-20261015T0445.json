@@ -1,0 +1,48 @@
+{
+  "at": "2026-10-15T04:46:12Z",
+  "rootAuthority": "msg_e0d21e60cef3",
+  "recipient": {
+    "terminal": "term_8109a3ac-570e-4c3f-a7ac-e68e36764b2b",
+    "incarnation": "468a0928-9867-4612-b5f2-e7631784582d",
+    "workspace": "9d7236b1-1a4a-4e02-a7ff-f8486c63ea91::/home/developer/Documents/Obsidian Vault Origin",
+    "identityReceipt": "065b7693-3313-4289-844e-400ee95c4217"
+  },
+  "requestText": "At your next safe checkpoint: READ-ONLY Aurora personal-notebook inventory request from the EXISTING original Root, authorized in Orca msg_e0d21e60cef3 (reply to msg_60c9b1f12ae3). Preserve your current tasks/session; no adoption, new worker/session/Run/project, account/access/credential changes or TCC edits. Please use only your existing authorized PERSONAL/Orca-host inventory route to return current metadata for ssh:ssh-sem-notebook-personal: exact existing Aurora terminal+incarnation/workspace if registered; physical host/distrobox mapping (personal/work share hardware, NEVER access company data/account/session); country provenance, CPU/GPU/VRAM/RAM/storage/network/power/thermal capability and present resource reservations; existing app/source/model/backend/acceleration receipts if available. No builds/tests/model/device requests, recursive scans, weight hashing, paid providers or new connections/access; unknown is acceptable with reason. Coding-worker CLI cannot enumerate saved runtimes from SSH (forbidden), project314e7b89-8f19-4535-9443-22b342aedff7+personalhost setups returned[], scoped terminal inventory omits notebook; neither proves absence/exit. Known desktop2e93/inc9a6a is registered on semdev/ce8df, not verified as personal notebook. Report /home/developer/projects/aurora/docs/experiments/tcc-20261013-submission-20261030/monitor/personal-notebook-admission-20261015T0440/REPORT.md has exact receipts. Return actual source-backed metadata through existing Orca coordination to Rootterm_6a00d9ee-792a-4daf-8578-236290e33108 and/or monitorterm_2eab47ed-ab9b-4e35-bd9b-fc068c60e3fc, Runrun_e6054e76e9fc; monitorTasktask_d7ea336050cf/Dispatchctx_37b4d0a3c14f are lineage only, DO NOT adopt/settle them. This does NOT authorize execution or measured cross-device traffic: current individual GPU/CPU audio900campaigns continue, all required individual audio/surface seals remain barrier. No external/Telegram follow-up needed for this metadata request.",
+  "sendReceipt": {
+    "id": "a881354e-361c-4411-8de6-78fc29d20c04",
+    "ok": true,
+    "result": {
+      "send": {
+        "handle": "term_8109a3ac-570e-4c3f-a7ac-e68e36764b2b",
+        "accepted": true,
+        "bytesWritten": 1981,
+        "prompt": {
+          "requestId": "2a660776-7b9e-4c17-a4ca-a9407e76afd1",
+          "stages": [
+            "input_accepted"
+          ],
+          "provider": "unsupported",
+          "observation": "unsupported",
+          "processIncarnation": "468a0928-9867-4612-b5f2-e7631784582d",
+          "generation": 15,
+          "baselineWorkingSequence": 0
+        }
+      },
+      "mutation": {
+        "requestId": "2a660776-7b9e-4c17-a4ca-a9407e76afd1",
+        "replayed": false
+      },
+      "warnings": [
+        "input was accepted, but this provider cannot report delivery. Inspect the terminal before retrying."
+      ]
+    },
+    "_meta": {
+      "runtimeId": "5168da61-e878-402a-92a3-5ea447243a89"
+    }
+  },
+  "actualReadbackReceipt": "f0d362e4-384c-4fd7-96ad-cdfe74620584",
+  "actualReadback": "Same terminal running, visibly preparing Personal metadata-only receipt; no company/hostprobes/newconnections/tests/models/measurements/recursive scans, original baseline barrier retained",
+  "metadataCompleted": false,
+  "noDuplicateSend": true,
+  "noNewSessionOrLifecycleAdoption": true
+}

@@ -1,0 +1,100 @@
+{
+  "at": "2026-10-15T00:56:50.878751+00:00",
+  "sourceReviewSHA256": "44d7e50bd040f3403c795c07a6e125dff34e0476de837a9250cac2070fec892e",
+  "mainRegressionsAdded": 2,
+  "tests": "UI6PASS/worklet26PASS",
+  "typechecks": "voicewebPASS7.8656s/UI-finalPASS48.526733s",
+  "priorFailureRecordsPreserved": true,
+  "runtimeSuccessClaim": false,
+  "voice8CauseClaim": false,
+  "files": {
+    "IMPLEMENTATION.md": {
+      "bytes": 2641,
+      "sha256": "a3135aecf3883e849dc22c199e5a26fcb10a45868156fd41445d9fd744296ad8"
+    },
+    "SOL-REVIEW.md": {
+      "bytes": 5674,
+      "sha256": "44d7e50bd040f3403c795c07a6e125dff34e0476de837a9250cac2070fec892e"
+    },
+    "SOURCE.md": {
+      "bytes": 4466,
+      "sha256": "6c067130162d08b5121d6d149a90d6a0d65c2bad8794f2dcdd4e3ff1bf1b396b"
+    },
+    "candidate.patch": {
+      "bytes": 9379,
+      "sha256": "3738dc42a83fee6548d255c07b6160645c2f726e7d3ccc17e01b860d6ade0772"
+    },
+    "final-source/packages/aurora-ui/src/use-assistant-browser-capture.test.ts": {
+      "bytes": 12865,
+      "sha256": "599f004438d7fdd2f444cb40944e1a8769acb70e891b747798ebf9926430ab74"
+    },
+    "final-source/packages/aurora-ui/src/use-assistant-browser-capture.ts": {
+      "bytes": 20297,
+      "sha256": "cef59aa2f2ddbc0774099ebcce27e92159734d9028ad56e09bf3ecb8efe57fd5"
+    },
+    "final-source/packages/aurora-voice-web/src/audio-worklet-source.ts": {
+      "bytes": 26473,
+      "sha256": "af88cb9a88bdc8887ac6edfcd26f4dc6bb59d75bec84a5da3418c9453b6bc643"
+    },
+    "final-source/packages/aurora-voice-web/tests/audio-worklet-source.test.ts": {
+      "bytes": 29065,
+      "sha256": "53a3e4898f59606a736b572d77699fa4c8fdb9d8967d86eab8d9d7245e41c274"
+    },
+    "first-validation-failure.json": {
+      "bytes": 723,
+      "sha256": "43c36829f8eec31af699e189308b32320d00669992908ffe4eb457b08493bf72"
+    },
+    "integration-final.json": {
+      "bytes": 1327,
+      "sha256": "a0c768d809243b9e5d2a3fa303315c755f88d26ede4e153aa5d60b722e148620"
+    },
+    "integration.json": {
+      "bytes": 1138,
+      "sha256": "4894f5e610febeace2e11c9e96ca9f4c3857c6cc24d8ff3cca7bb743722a658d"
+    },
+    "ui-capture-tests-final.log": {
+      "bytes": 236,
+      "sha256": "cf0e096048970169ee8cb2fcec5ecffa9f1db6548f1784ad6efc8cc465d0d600"
+    },
+    "ui-typecheck-final.log": {
+      "bytes": 0,
+      "sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+    },
+    "validation-final.json": {
+      "bytes": 875,
+      "sha256": "76b90f5ffe9eacc36ec863689c7f7b3898a0c4edb1cee905ce8c7d02a7be3508"
+    },
+    "validation-run2/ui-capture-tests.log": {
+      "bytes": 235,
+      "sha256": "e81920db5c32b6f5f6dc94d6bf11269dfd88019039c80b9d2ac41031704cb72d"
+    },
+    "validation-run2/ui-typecheck.log": {
+      "bytes": 572,
+      "sha256": "76cfebd87652ef6ea594a20cadeaa5325cac0c04891b2bcaf8915c7f3a3c5a4b"
+    },
+    "validation-run2/validation.json": {
+      "bytes": 1706,
+      "sha256": "04904c00d5312b0e24c32d04a1b431eacc348b3755cfdf0a01861499f81194bc"
+    },
+    "validation-run2/voice-web-typecheck.log": {
+      "bytes": 0,
+      "sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+    },
+    "validation-run2/worklet-capture-tests.log": {
+      "bytes": 243,
+      "sha256": "41d17ec7cef30e2bd3c07024dcdea6ae9b37f1fd7a5090ffc54d9d1657a2df79"
+    },
+    "validation.json": {
+      "bytes": 1706,
+      "sha256": "04904c00d5312b0e24c32d04a1b431eacc348b3755cfdf0a01861499f81194bc"
+    },
+    "voice-web-typecheck.log": {
+      "bytes": 0,
+      "sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+    },
+    "worklet-capture-tests.log": {
+      "bytes": 243,
+      "sha256": "41d17ec7cef30e2bd3c07024dcdea6ae9b37f1fd7a5090ffc54d9d1657a2df79"
+    }
+  }
+}

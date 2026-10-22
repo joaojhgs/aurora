@@ -1,0 +1,21 @@
+{
+  "at": "2026-10-21T17:14:55.642078+00:00",
+  "status": "SAVED_ANALYSIS_ENTRYPOINT_READY_WITH_CLOSED_WARMUP_MAIN_FLOW_SMOKE",
+  "source": "thesis/analysis/analyze_k1_http_epoch_saved_v2242.py",
+  "sourceSha256": "a8c40fad5537af133b4212e63a1932a4f6242904c3996c988d83d578d742c04c",
+  "targetRuff": "PASS",
+  "python": "3.11.17 pinnedexistingSUTenvironment",
+  "actualSmoke": {
+    "source": "thesis/campaigns/worker-desktop-k1-orca-relayed-http-first270-v2224/saved-warmup-analysis-v2243/SUMMARY.json",
+    "sha256": "8c453237ed57496b865e95f0eab9b7f1a7867f673a9d7d4e9d91681be621a926",
+    "measured": 0,
+    "excludedWarmups": 15,
+    "nativeStageJoins": 45,
+    "positiveNativeGaps": [],
+    "providerResourcesAvailable": false
+  },
+  "newInferenceOrNetworkTraffic": 0,
+  "futureFullMeasuredAnalysis": "UNEXECUTED; waits naturalV2234 terminal plus immutable requester and completeprovider native/resources/custody; warmupsmoke is not measurementacceptance",
+  "activeExperimentSourceChanged": false,
+  "noNewReviewLoop": true
+}

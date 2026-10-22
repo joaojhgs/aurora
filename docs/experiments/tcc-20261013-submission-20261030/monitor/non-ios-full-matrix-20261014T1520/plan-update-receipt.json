@@ -1,0 +1,16 @@
+{
+  "observed_at": "2026-10-14T15:29:31.465600+00:00",
+  "plan_path": "/home/developer/Documents/Obsidian Vault Origin/5-full-notes/faculdade/tcc/future-work-test-requirements.md",
+  "before_sha256": "a2615d9a744f4f5413ab9fee70b0a6928266d203682b8d7814eb2b5798d440d5",
+  "after_sha256": "a8ffab9ed36f50fda0181df19f1f54b2ec1a44b34ac6e3535dd23d50379aa9ed",
+  "before_lines": 1116,
+  "after_lines": 1263,
+  "backup": "docs/experiments/tcc-20261013-submission-20261030/monitor/non-ios-full-matrix-20261014T1520/plan.before.md",
+  "reviewable_copy": "docs/experiments/tcc-20261013-submission-20261030/monitor/non-ios-full-matrix-20261014T1520/plan.after.md",
+  "diff": "docs/experiments/tcc-20261013-submission-20261030/monitor/non-ios-full-matrix-20261014T1520/plan.diff",
+  "root_scope_ack": "msg_e316c48f1b20",
+  "owner_cumulative_relay": "msg_2829bfde1e6e",
+  "owner_900_rule_relay": "msg_4ebcc94f9c09",
+  "new_execution_by_monitor": false,
+  "source_edit_by_monitor": false
+}

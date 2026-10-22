@@ -1,0 +1,12 @@
+{
+  "controlDeadline": "2026-10-22T04:30:00Z",
+  "explicitNewline": true,
+  "host": "ssh:ssh-sem-notebook-personal",
+  "incarnation": "328cd72f-c7ea-49ff-a2db-b9275b085037",
+  "remoteResult": "/home/developer/projects/aurora/thesis/phone-notebook/20261020/evidence/production-voice-workspace-build-v77.json",
+  "rootAdmissionMessage": "owner-scoped-exact-frontend-artifact-build",
+  "script": "scripts/launch_voice_web_workspace_v77.py",
+  "scriptSha256": "9e2bef7e74e599ad3cf258a5944fbc3ca18863a584ce23891c6e2fed2916feba",
+  "singleSend": true,
+  "terminal": "term_a2ed5feb-7c92-48e4-bd88-d1b0e6737989"
+}

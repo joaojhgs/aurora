@@ -1,0 +1,70 @@
+{
+  "at": "2026-10-21T03:03:49.333810+00:00",
+  "phase": "EXCLUDED_REAL_WARMUPS_IN_PROGRESS_NOT_MEASUREMENT_ADMITTED",
+  "sameNativeAggregateGoal": "ACTIVE original01a112a5-d6bb-74e2-bf7c-ace73cb513b5",
+  "actors": {
+    "controller": {
+      "pid": 3332811,
+      "startTicks": 132995693,
+      "state": "S"
+    },
+    "backend": {
+      "pid": 3332919,
+      "startTicks": 132996503,
+      "state": "S"
+    },
+    "copier": {
+      "pid": 3333678,
+      "startTicks": 133003703,
+      "state": "S"
+    },
+    "finalizer": {
+      "pid": 3333679,
+      "startTicks": 133003704,
+      "state": "S"
+    }
+  },
+  "manifestSha256": "d753203e4a53f12ed983a98d776a811d241d0d6bc6061b28e3c1480a077a17d3",
+  "warmups": {
+    "attempted": 6,
+    "correct": 6,
+    "failed": 0,
+    "targetCorrect": 15,
+    "maximumDistinctAttempts": 30
+  },
+  "epochMeasured": {
+    "attempted": 0,
+    "planned": 191,
+    "remaining": 191
+  },
+  "combinedK1Measured": {
+    "attempted": 709,
+    "correct": 697,
+    "failed": 12,
+    "planned": 900
+  },
+  "custody": {
+    "sequence": 5,
+    "cases": 5,
+    "wavFiles": 5,
+    "files": 72
+  },
+  "normalRoute": "existing_exact_peer_normal_catalogue_route_admitted",
+  "failedV2143Preserved": {
+    "warmups": 0,
+    "measured": 0,
+    "retired": true,
+    "reason": "legacy_unverifiable selector_service_missing"
+  },
+  "newWorkerSourceInventorySha256": "000202cdddb9803d503fc44f8aaf58eb469475890751a310193418330aa79937",
+  "applicationDelta": "Only speech_runtime.py uses existing current language-list bound; other399appfiles/inferencecode/modelweights/settings unchanged",
+  "sameProspectiveSessionHardDeadlineUtc": "2026-10-21T06:59:42.981693+00:00",
+  "newEpochOuterCapSeconds": 14307,
+  "newConditionCapSeconds": 14067,
+  "originalProspectiveAllocationSeconds": 15240,
+  "sourceCompatibilityAdmissionAttempts": 1,
+  "onAnotherAdmissionFailure": "Leave191OPEN and move actuallyeligibleK1OrcaHTTP720; no identicalstartup replay",
+  "phoneSeparate": true,
+  "nextRoutineCheckUtc": "2026-10-21T03:08:49.333810+00:00",
+  "sutCallsByObserver": 0
+}

@@ -1,0 +1,12 @@
+{
+  "controlDeadline": "2026-10-22T10:50:00Z",
+  "explicitNewline": true,
+  "host": "ssh:ssh-sem-notebook-personal",
+  "incarnation": "328cd72f-c7ea-49ff-a2db-b9275b085037",
+  "remoteResult": "/home/developer/projects/aurora/thesis/phone-notebook/20261020/evidence/restore-existing-auth-service-epoch-v292.json",
+  "rootAdmissionMessage": "existing-v2398 actual compiler closed, restore existing named canonical API key and retire ONLY task-owned v225 first",
+  "script": "scripts/restore_existing_auth_service_epoch_v292.py",
+  "scriptSha256": "ab781262d71f1e7ab1aed8ffb7d6a2c13af743d9a095df393cc4531382950ca1",
+  "singleSend": true,
+  "terminal": "term_a2ed5feb-7c92-48e4-bd88-d1b0e6737989"
+}

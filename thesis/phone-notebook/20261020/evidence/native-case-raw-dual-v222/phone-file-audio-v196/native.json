@@ -1,0 +1,19 @@
+{
+  "at": "2026-10-22T06:33:41.324Z",
+  "status": "NATIVE_FILE_AUDIO_SETUP_OR_FLOW_FAILED_PRESERVED",
+  "caseId": "phone-local-b3c9773f-2916-4170-9463-2b9ce6b90c16",
+  "measuredCases": 0,
+  "pilotCases": 0,
+  "route": "ALL_LOCAL_PHONE",
+  "adbRole": "setup/control/custody only; full timed pipeline executes inside phone without ADB round trips",
+  "calls": [
+    {
+      "command": "aurora_native_speech_pack_catalog",
+      "at": "2026-10-22T06:33:41.453Z",
+      "elapsedMsOnPhone": 19.600000023841858,
+      "ok": false
+    }
+  ],
+  "error": "aurora_native_speech_pack_catalog not allowed. Permissions associated with this command: aurora-native-voice",
+  "finishedAt": "2026-10-22T06:33:41.485Z"
+}

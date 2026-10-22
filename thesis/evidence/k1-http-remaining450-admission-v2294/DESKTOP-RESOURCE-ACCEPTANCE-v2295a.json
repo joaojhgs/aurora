@@ -1,0 +1,13 @@
+{
+  "at": "2026-10-21T21:18:27.207725+00:00",
+  "sendReceiptPath": ".git/aurora-handoff-import-20261006/k1-http-next450-desktop-resource-v2295a-SEND.json",
+  "send": {
+    "handle": "term_d5651d8d-58e2-4b38-85e2-51c668cc933c",
+    "accepted": true,
+    "bytesWritten": 3786
+  },
+  "resourceResultPath": "thesis/evidence/k1-http-remaining450-admission-v2294/DESKTOP-RESOURCE-READ-v2295a.json",
+  "completeCursor": "159341",
+  "maximumSends": 1,
+  "noSutCallsOrLifecycleChanges": true
+}

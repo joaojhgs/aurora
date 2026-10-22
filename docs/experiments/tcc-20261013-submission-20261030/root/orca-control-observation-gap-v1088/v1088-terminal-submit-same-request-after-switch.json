@@ -1,0 +1,28 @@
+{
+  "id": "58cd7e80-9f3d-426c-9bef-fabcd7f474af",
+  "ok": false,
+  "error": {
+    "code": "operation_unknown",
+    "message": "Terminal prompt 219e01dc-8616-42f6-90e6-6a5ce1590fea may have reached its exact terminal incarnation before restart. It will not be sent again. Terminal prompt request ID: 219e01dc-8616-42f6-90e6-6a5ce1590fea. Re-issue the exact command with --retry-request 219e01dc-8616-42f6-90e6-6a5ce1590fea --wait-submit <seconds>; do not retry it without that ID.",
+    "data": {
+      "requestId": "219e01dc-8616-42f6-90e6-6a5ce1590fea",
+      "orchestrationRequestId": "219e01dc-8616-42f6-90e6-6a5ce1590fea",
+      "originalCommand": [
+        "orca",
+        "terminal",
+        "send",
+        "--terminal",
+        "term_00a86bfb-1ede-4fbf-8b5e-72e2a2629f62",
+        "--text",
+        "/tmp/aurora-root-voice-primary-v426/env/bin/python - <<'AURORA_C06_STATUS1088'\nimport pathlib,datetime,json,os,base64,time\nP=pathlib.Path;root=P('/tmp/aurora-root-c06-app900-v1058/.artifacts/c06-app900-v1058');x={'at':datetime.datetime.now(datetime.timezone.utc).isoformat(),'host':os.uname().nodename,'owner':{'pid':3643548,'expectedStartTicks':'78738665','present':P('/proc/3643548').exists()}}\nif x['owner']['present']:x['owner']['actualStartTicks']=P('/proc/3643548/stat').read_text().rsplit(')',1)[1].split()[19]\nfor name in ['CONTROL.json','TERMINAL.json','warmup-gate.json','manifest.json']:\n q=root/name\n if q.exists():\n  for i in range(3):\n   try:x[name]=json.loads(q.read_text());break\n   except json.JSONDecodeError:\n    if i==2:x[name]={'observation':'concurrent_write_retry_needed'}\n    time.sleep(.05)\na=root/'attempts.jsonl'\nif a.exists():\n lines=a.read_text().splitlines()\n if lines:\n  try:x['lastAttempt']=json.loads(lines[-1]);x['attemptLines']=len(lines)\n  except json.JSONDecodeError:x['lastAttempt']={'observation':'concurrent_append'}\nq=P('/tmp/aurora-root-c06-app900-v1058/input/controller-launch-v1068.private.log')\nif q.exists():x['launchLogTail']=q.read_text(errors='replace')[-2000:]\nimport importlib.util\ncandidates=[P('/tmp/aurora-root-c06-current-source-v1019/source/apps/aurora-tauri/src-tauri/binaries/aurora-sidecar-x86_64-unknown-linux-gnu'),P('/home/developer/projects/aurora/apps/aurora-tauri/src-tauri/binaries/aurora-sidecar-x86_64-unknown-linux-gnu'),P('/home/developer/projects/aurora/dist/sidecars/local-vulkan/aurora-sidecar'),P('/home/developer/projects/aurora/dist/sidecars/local-vulkan/aurora-sidecar/aurora-sidecar')]\nmeta={'scope':'Read-only metadata for later product artifact build; no binary execution/hash/scan, no scientific admission gate','existingApprovedInterpreter':'/tmp/aurora-root-voice-primary-v426/env/bin/python','pyinstallerModulePresent':importlib.util.find_spec('PyInstaller') is not None,'candidates':[]}\nfor q in candidates:\n try:\n  stat=q.stat();meta['candidates'].append({'path':str(q),'exists':True,'isFile':q.is_file(),'bytes':stat.st_size,'mtimeNs':stat.st_mtime_ns})\n except FileNotFoundError:meta['candidates'].append({'path':str(q),'exists':False})\nx['futureNativeArtifactMetadata']=meta\nb=base64.b64encode(json.dumps(x).encode()).decode();a=[b[i:i+800] for i in range(0,len(b),800)]\nfor i,v in enumerate(a):print('AURORA_C06_STATUS_V1088 '+json.dumps({'seq':i,'total':len(a),'data':v}),flush=True)\nAURORA_C06_STATUS1088\n",
+        "--enter",
+        "--json",
+        "--wait-submit",
+        "10"
+      ]
+    }
+  },
+  "_meta": {
+    "runtimeId": "c056e640-4085-4377-83d5-c299190ee880"
+  }
+}

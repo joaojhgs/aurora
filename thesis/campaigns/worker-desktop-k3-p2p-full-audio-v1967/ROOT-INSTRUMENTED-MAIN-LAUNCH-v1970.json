@@ -1,0 +1,90 @@
+{
+  "at": "2026-10-20T22:23:02.038872+00:00",
+  "status": "INSTRUMENTED_K3_MAIN_ADMISSION_ACTUALLY_LAUNCHED",
+  "nativeGoalStatus": "active",
+  "nativeGoalThread": "01a112a5-d6bb-74e2-bf7c-ace73cb513b5",
+  "launch": {
+    "at": "2026-10-20T22:22:27.631759+00:00",
+    "status": "K3_REQUESTER_AND_BOUNDED_AUXILIARIES_STARTED",
+    "requester": {
+      "at": "2026-10-20T22:22:27.599575+00:00",
+      "conditionManifestSha256": "3d8a9c62e00d70f6dd6321d1a59c16a318489713f3cfd47903eaecb43ed83f9f",
+      "controllerPid": 3134379,
+      "controllerStartTicks": 131340819,
+      "excludedWarmups": 15,
+      "measurementAdmitted": false,
+      "newWorker": false,
+      "plannedMeasured": 900,
+      "provider": {
+        "pid": 251473,
+        "startTicks": 29038457,
+        "state": "S"
+      }
+    },
+    "auxiliaries": {
+      "copier": {
+        "pid": 3134380,
+        "startTicks": 131340822,
+        "state": "R",
+        "sourceSha256": "8743aae1c3a1259d24adc64f1123b83831ed1b013e1bd8e8fff62517c652ac50"
+      },
+      "warmup-finalizer": {
+        "pid": 3134381,
+        "startTicks": 131340822,
+        "state": "R",
+        "sourceSha256": "f8185bbd0008db2b07f1952477cf2b428ea25562b89613472e44a69648af8c7e"
+      }
+    },
+    "conditionManifestSha256": "3d8a9c62e00d70f6dd6321d1a59c16a318489713f3cfd47903eaecb43ed83f9f",
+    "measurementAdmitted": false,
+    "plannedMeasured": 900,
+    "excludedWarmups": 15,
+    "newOrcaWorker": false,
+    "provider": {
+      "pid": 251473,
+      "state": "S",
+      "startTicks": 29038457
+    }
+  },
+  "provider": {
+    "controller": {
+      "pid": 251472,
+      "state": "S",
+      "startTicks": 29038396
+    },
+    "receiver": {
+      "pid": 251473,
+      "state": "S",
+      "startTicks": 29038457
+    },
+    "manifestSha256": "716b893424f28ef19a1820820000c8a30fb6adbf87252c9f65e1bca30e717bb9",
+    "providerDeadlineUtc": "2026-10-21T12:41:24.961804+00:00"
+  },
+  "providerOutput": "thesis/campaigns/worker-desktop-k3-p2p-full-audio-v1965/provider",
+  "diagnosticOutput": "thesis/campaigns/worker-desktop-k3-p2p-full-audio-v1965/provider/binding-guard-diagnostic.jsonl",
+  "diagnosticSourceSha256": "4d69e3bfea807a5e87f0ff30f1f297716d4350100ca9c455842839e803e75175",
+  "diagnosticControllerSha256": "6d8cc38e24bda0ff32546845880e68479fa945e2fdd4e2e6fa21fa9b593b6e5b",
+  "authorityChecksAndReturnValuesUnchanged": true,
+  "diagnosticContentOrSecretsLogged": false,
+  "requesterRuntimeFilesUnchanged": 13,
+  "modelAudioSettingsCorrectnessUnchanged": true,
+  "originalConditionWallStartUtc": "2026-10-20T21:04:37.423478+00:00",
+  "originalCapSeconds": 57600,
+  "measuredAtLaunch": 0,
+  "plannedMeasured": 900,
+  "excludedWarmupTarget": 15,
+  "previousCohorts": [
+    "v1937:15correct/0measured; traceSTTrejected",
+    "v1949:12correct+1TTSpreaccept/0measured; tracescomplete",
+    "v1957:1STTpreaccept/0measured; freshattemptboundexhausted"
+  ],
+  "unchangedReplayPermitted": false,
+  "onFailure": "Retrieve exact binding diagnostic before choosing any new SUT action; no unchanged retries or policy weakening",
+  "oldProviderCustody": "thesis/evidence/k3-retired-provider-custody-v1964/CUSTODY.json",
+  "oldProviderArchiveFiles": 34,
+  "oldProviderRawBytes": 15282819,
+  "oldProviderArchiveBytes": 869207,
+  "rootPriority": "current K3/matrix, no Root phone/ADB/notebook work",
+  "phoneTask": "failed partial preparation, same designated terminal retained",
+  "personalControl": "RESERVED automatic finalizer; no competing sends until complete/failure"
+}

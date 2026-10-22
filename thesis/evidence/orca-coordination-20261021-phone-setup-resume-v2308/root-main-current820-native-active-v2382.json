@@ -1,0 +1,28 @@
+{
+  "id": "514ecd92-d485-4cde-be34-0756dcc79b60",
+  "ok": true,
+  "result": {
+    "message": {
+      "id": "msg_0453e308bedc",
+      "run_id": "run_e6054e76e9fc",
+      "delivery_contract": "current_delivery",
+      "from_handle": "term_6a00d9ee-792a-4daf-8578-236290e33108",
+      "to_handle": "dispatch:ctx_37b4d0a3c14f",
+      "subject": "Root VERIFIED_WAIT main820/900; same native ACTIVE, no phone hold",
+      "body": "Actual03:39:01.987642Z pinned V2296 requester3965950/start139740362,backend3965978/start139740616,copier3965951/start139740363 all matched live. Global820/900 attempts819correct1preservedearlierfailure80remaining; currentblock370/450 allcorrect0newfailures/timeouts. Frozenmanifest9adbf9ba3a7ec0948a087edad3655cf94ee344b3a2371a78d15f188f44150d42 unchanged;384physicalcase/WAV pairs0copyerrors3044786176Bfree. Originalnativegoal01a112a5 ACTIVEunbudgeted; same13/fullmatrix intact. Physical checkpoint thesis/campaigns/worker-desktop-k1-orca-relayed-http-remaining450-v2296/ROOT-VERIFIED-WAIT-v2382.json; CURRENT/ORCAcoord updated. Nextbound03:44:01Z/earlieractualterminal-failure-resourceguard. Originalfrozenrun continues, finalizer2303 only actualterminal+naturalWretirement, then exact900/seal/provider-release. K1ownercompletionnotification remains pending canonicaldedup until actualseal/release and Codingdelivery; no BIG completionatcounteralone. Phoneworker solely owns prep and monitorGPUattention consumed; Root no notebook/device reads/builds/sharedcopy or maindelay. No further review/gate requested.",
+      "type": "status",
+      "priority": "normal",
+      "thread_id": null,
+      "payload": null,
+      "created_at": "2026-10-22T03:39:06Z",
+      "delivered_at": null
+    },
+    "mutation": {
+      "requestId": "003fa319-251d-4c9e-a016-a20b80930ea0",
+      "replayed": false
+    }
+  },
+  "_meta": {
+    "runtimeId": "cc9e3275-28c6-4c45-85cc-bdcd2262aa7d"
+  }
+}

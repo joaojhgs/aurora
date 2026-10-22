@@ -1,0 +1,40 @@
+{
+  "at": "2026-10-22T14:36:08.568554+00:00",
+  "status": "SAVED_PILOT_INSTRUMENTATION_COVERAGE_NO_NEW_MODEL_CALL",
+  "savedData": "evidence/real-pilot-dual-v419/artifact.zip",
+  "sourceEpoch": "embedded-gguf-control-capacity-v431-v440",
+  "boundaries": {
+    "setupFixtureADB": "excluded from phone timer",
+    "excludedWarmups": 15,
+    "measuredAttemptTarget": 900,
+    "requesterEndToEnd": "phone WebView performance.now around installed production hook, input validation and ICE observations through received full WAV",
+    "requesterStages": "SDK wall duration includes dispatch/network/provider/return",
+    "providerNative": "Python process monotonic, same PID417363 exact STT/LLM/TTS correlation joins; nested spans not summed",
+    "crossHostClockSubtraction": "not performed",
+    "queueDispatch": "UNKNOWN; native model handler spans do not separate queue/network dispatch",
+    "llmTTFT": "UNKNOWN; full response only",
+    "ttsFirstAudio": "UNKNOWN; finite full WAV response, no streaming first audio",
+    "ttsFullAudio": "observed native Synthesize span1016.540481ms, nested model1016.162168ms, requester2608.2ms; no playback/acoustic claim"
+  },
+  "stageProviderMap": {
+    "stt": "Notebook faster-whisper CT2CPU, requested int8 actual int8_float32, exact pinned base",
+    "llm": "Notebook llama-cpp-python0.3.19 original engine embedded exact GGUF template, Vulkan25/25 layers observed",
+    "tts": "Notebook pinned Piper CLI CPU, useCudaFalse, exact voice+config; phone receives WAV"
+  },
+  "resources": {
+    "Notebook": "RAM available/disk/load observed before/after and passive provider samples; process CPU time/GPU utilization/VRAM UNKNOWN in saved pilot",
+    "Phone": "USB99% charging/battery temperature observed; CPU/RAM/GPU/network byte counters UNKNOWN in saved pilot",
+    "network": "Actual P2P same-peer authorized, selected host-host UDP getStats observed. LAN-vs-overlay selected-address match UNKNOWN until explicitly compared; not inferred from host candidate type. Wireless/USB ADB is control only.",
+    "GPU": "AMD660M and RTX3050 enumerated;25/25 layers offloaded observed; exact device buffer split/VRAM UNKNOWN, no RTX-only/CUDA claim",
+    "temperature": "observe only, no custom85C admission gate, OS protections unchanged"
+  },
+  "interpretationLimits": {
+    "referenceMatched": false,
+    "pureProtocolOrSpeedupClaim": false,
+    "localBaselineReplayed": false,
+    "HTTPQualified": false,
+    "K2HybridQualified": false,
+    "phoneProviderClaimed": false,
+    "unknownsImputedAsZero": false
+  }
+}

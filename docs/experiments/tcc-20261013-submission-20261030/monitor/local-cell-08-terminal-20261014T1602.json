@@ -1,0 +1,69 @@
+{
+  "observed_at": "2026-10-14T16:02:17.996646+00:00",
+  "cell": "08-local-only",
+  "terminal": {
+    "status": "completed",
+    "child_exit_code": 0,
+    "exit_code": 0,
+    "started_at": "2026-10-14T15:03:49.822615+00:00",
+    "finished_at": "2026-10-14T16:00:04.338141+00:00",
+    "elapsed_seconds": 3374.5153014989337,
+    "receipt_validation": {
+      "validated": true,
+      "failure_classes": [],
+      "expected_requests": 105,
+      "expected_provider_captures": 105,
+      "capture_join": "request_ordinal",
+      "raw_artifacts_retained": true
+    },
+    "detached_group_cleanup": []
+  },
+  "request_count": 105,
+  "measured_count": 100,
+  "warmup_count": 5,
+  "measured_outcomes": {
+    "correct_success": 100
+  },
+  "warmup_outcomes": {
+    "correct_success": 5
+  },
+  "all_predicates_passed": true,
+  "all_identifiers_nonempty": true,
+  "all_request_ids_unique": true,
+  "all_deadlines_180s": true,
+  "all_intervals_within_deadline": true,
+  "warmup_order_matches_plan": true,
+  "capture_count": 105,
+  "all_captured": true,
+  "all_three_hashes_match": true,
+  "capture_ordinal_complete": true,
+  "capture_request_ordinal_complete": true,
+  "quantile_method": "Hyndman-Fan Type 7",
+  "population": "success-only one loaded-host session; 5 warmups excluded; no pooled/causal/stable-tail claim",
+  "derived_ms": {
+    "p50": 31258.567861,
+    "p90": 36162.875667500004,
+    "p95": 38411.964143749996,
+    "p99": 41244.25049289001
+  },
+  "groups_distinct": 1,
+  "group": {
+    "config_sha256": "a189f849a08936565d57ddc28dba56bc131eef03cf9182afa969928a6857a6f7",
+    "host_id_pseudonym": "ba203a77fe18451d",
+    "model_id": "qwen3.5-0.8b-q4_0-gguf",
+    "model_sha256": "57d1997790d1744fba5b40a7317df71ea5e2acee28c47e78f0cce39c0703f8cf",
+    "route": "python_local_bus",
+    "session_id": "pilot-run-450237894ff340d092d7379ec6c21387",
+    "source_commit": "5782746afba213f6b36907db2f09f0017625e218",
+    "surface": "python-production-local",
+    "workload_id": "public-exact-answer-orbit-v1",
+    "workload_sha256": "0f3b83f8fbf0e55e7b7faf8a75e99f42fdad42128b908e7f7c18cd4d8faeed86"
+  },
+  "cleanup_status": "unverified; root receipt needed",
+  "request_sha256": "814346201324340f42485c623823276a24403ddc9c3886df6271a2068301aba2",
+  "result_sha256": "1c7762048b1b7ca45fca0e028154175c856c986c419baaf95835cee31c7f32aa",
+  "live_provider_capture_sha256": "fadc779e24b0adc04de7db6bc23581a321c8d7ee7636e6318ccb2adb1e5301af",
+  "next_cell_resources_exists": true,
+  "campaign_result_exists": false,
+  "independent_review": "pending"
+}

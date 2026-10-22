@@ -1,0 +1,46 @@
+{
+  "message": "msg_6e0777cf9321",
+  "at": "2026-10-15T03:47:06Z",
+  "desktop": {
+    "controllerPID": 2910571,
+    "childPID": 2910591,
+    "bothLive": true,
+    "progressObservedAt": "2026-10-15T03:46:24.146893Z",
+    "excludedWarmupsComplete": 15,
+    "measuredRecorded": 11,
+    "measuredPlanned": 900,
+    "unattempted": 889,
+    "lastOutcome": "completed_correct",
+    "allOutcomeStatusesAggregated": false,
+    "offload": "25/25",
+    "frozenConditionUntouched": true
+  },
+  "cpu486": {
+    "exactSTT": true,
+    "LLMReply": "Paris",
+    "TTSError": "tts_module_not_found_error",
+    "terminalAt": "2026-10-15T03:43:18.955065Z",
+    "elapsedSeconds": 60.701,
+    "attempts": 1,
+    "correct": 0,
+    "measured": 0,
+    "retiredAt": "2026-10-15T03:46:14.668865Z",
+    "missingImports": [
+      "RealtimeTTS",
+      "PyAudio"
+    ],
+    "PiperCLIHelpPassed": true,
+    "PyAudioARMUsableWheelFound": false
+  },
+  "cpuNext": {
+    "matchingDesktopRequirements": {
+      "RealtimeTTS": "0.4.47",
+      "PyAudio": "0.2.14",
+      "webrtcvad-wheels": "2.0.14"
+    },
+    "scope": "Private apt-get DOWNLOAD and dpkg-deb EXTRACT PortAudio headers/runtime, no system install/driver/security/account change, then matching private env",
+    "newModelOrWorker": false,
+    "actualNextPilotStartedVerified": false
+  },
+  "phase2MeasuredAllowed": false
+}

@@ -1,0 +1,16 @@
+{
+  "startedAt": "2026-10-18T18:03:50.131059+00:00",
+  "method": "GET",
+  "path": "/api/health",
+  "endpoint": "http://127.0.0.1:18000",
+  "proxyHandler": "Same as frozen stage adapter: empty, no environment proxy",
+  "timeoutSeconds": 20,
+  "modelRequests": 0,
+  "automaticRetry": false,
+  "credentialsCopiedOrLogged": false,
+  "status": 200,
+  "responseBytesRead": 126,
+  "durationMs": 6112.056541,
+  "at": "2026-10-18T18:03:56.243118+00:00",
+  "readinessMeaning": "One present transport observation only; does not prove delivery of historical failed request or remedy large-request path"
+}

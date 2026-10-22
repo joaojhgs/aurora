@@ -1,0 +1,62 @@
+{
+  "schema": "aurora.root.disjoint-readiness-resource-admission.v1",
+  "at": "2026-10-22T04:27:10.792177+00:00",
+  "state": "ADMITTED_NOT_LAUNCHED",
+  "run": "run_e6054e76e9fc",
+  "nativeRootGoal": "01a112a5-d6bb-74e2-bf7c-ace73cb513b5",
+  "worker": {
+    "task": "task_e35b809903c1",
+    "terminal": "term_1f27be31-0284-4366-bb91-30fe538cd30e",
+    "incarnation": "3bb8c5e5-3bed-4460-8906-9d06f0b3be71",
+    "settledDispatchMustRemainFenced": "ctx_104db5d889d2"
+  },
+  "requestMessages": [
+    "msg_3e4d2b87f067",
+    "msg_025bc70ea7ea"
+  ],
+  "physicalResources": [
+    "approved Personal notebook inference only",
+    "owner POCO phone KBX8LNFUBE5XGQRG, reversible readiness use only"
+  ],
+  "prerequisitesOwnedByExistingWorker": [
+    "Current isolated v96 build must finish and own compiler/Gradle activity close before inference",
+    "Fresh worker-owned available RAM >=8GiB and disk free >=2GiB; stop on actual guard breach",
+    "Preserve existing app/data/signing identities; isolated test package and its exact source/config/APK hashes recorded",
+    "Production pairing and feature consent must succeed through supported secure product flow",
+    "No worker/desktop application provider, measured GPU or W-D service route used by this pilot"
+  ],
+  "lease": {
+    "oneLaunchOnly": true,
+    "serviceBootMaxSeconds": 900,
+    "nativePilotCallsMax": 2,
+    "nativePilotTimeoutSecondsEach": 120,
+    "totalLeaseMaxSecondsIncludingBootAndCalls": 1140,
+    "maxCpuThreads": 2,
+    "buildInferenceOverlapForbidden": true,
+    "routePayloadMaxBytesEach": 3145728,
+    "maxCallsByRoute": {
+      "authenticatedHTTP": 1,
+      "samePairP2P": 1
+    },
+    "launchMustHaveImmutableIntentActualPidStartUtcAndReceipt": true,
+    "uncertainAcceptedLaunchMustBeReconciledNotRetried": true,
+    "noLeaseExtensionOrAdditionalModelCallsImplied": true
+  },
+  "methodology": [
+    "Pilot only, not measured900 or warmup campaign",
+    "Same exact fixed audio/model/runtime settings; requested n_gpu_layers100 unchanged, effective devices/backend/offloaded layers and loader outcome recorded honestly",
+    "Actual phone-notebook HTTP/P2P route recorded as direct or relayed; wireless/USB ADB is control only",
+    "Keep correctness, native stage/correlation/resource data and valid audio physically under worker-owned thesis/phone-notebook/20261020 paths on both hosts",
+    "Preserve every failure and source/package variant; CPU/zero-offload result is not GPU acceptance and not pooled with strict GPU comparisons"
+  ],
+  "rootBoundaries": {
+    "mainFrozenV2296Unaffected": true,
+    "rootKeepsMainSutBuildLockAndWaydroidReservation": true,
+    "noRootPhoneNotebookReadsOrNewWorkers": true,
+    "noCompanySecurityDriverCredentialBrokerOrAccessChanges": true,
+    "noSharedModelOrBinaryTransferFromWorkerDesktop": true,
+    "no900OrUnattendedPhoneOccupationBeforeLaterOwnerSleepStart": true,
+    "monitorRemainsSoleMethodologyPlanWriter": true
+  },
+  "returnRequirement": "At finite end retire only owned pilot service/processes through normal lifecycle, release notebook/phone reservation and provide actual receipt plus safe stop/return-phone command; no worker/agent stop/adoption"
+}

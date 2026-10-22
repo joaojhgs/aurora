@@ -1,0 +1,74 @@
+{
+  "objective": "tcc:20261013:submission-20261030",
+  "whole_flow_status": "passed_exact_reply_correlation_database_history_and_clean_shutdown",
+  "sampling": "one_cold_request_zero_warmups_loaded_host_functional_pilot_only",
+  "conditional_quantile_method": "Type7 h=(n-1)p; correct_success only; n1 descriptive; no imputation",
+  "request_history_byte_identical": true,
+  "files_sha256": {
+    "redis-stop-stdout.log": "1a5bf9dd188738f0e492c7eded350cd72367d5d541deb462ef1ebff6ed5026be",
+    "redis-start-stderr.log": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+    "redis-start-stdout.log": "6cef9e402ad9dd92296cf7126a25fb59f4671d38e209742eaaf1e710affba047",
+    "redis-stop-stderr.log": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+    "requests.jsonl.cleanup.json": "b13a0a8de67326742e163dff9d48157838956609dc2adaf35e2a2d4db4efe16d",
+    "requests.jsonl.manifest.json": "50766ea6443e3f09c50f82fc9d6e86f8c017a8f4053d5c5090ba26883c1429e0",
+    "assistant-result.json": "a72b8f8e3ba0c38007173d5c8571283c951e4d78a02fdc362a49e2cf6f31d1d9",
+    "assistant-stdout.log": "afb93a86e170bbe2069793ef48febabc2612accd1e99e18daf7d227dcccacc9b",
+    "root-manifest.json": "a18a04ccbef99629c679ea86615680c2518f984364ed64a416a523668567d636",
+    "requests.jsonl": "8205f3b80928811ab5e5bbe277175becf91bbaf5165e8b3865d9adca9b91b8f3",
+    "redis-stop-handle.json": "ae08aff78779f3da7b57996773891d6ee078ff6fc98daddbe1affdc99733b2ff",
+    "root-result.json": "e8c10238267d6d275c328b8cb230b8113d1a9f310e453fb563140eb011a45c6a",
+    "redis-readiness.json": "31d74e06262dadd4014f6b88d14ce81eef5481e50b25b39fa41a537de369e23b",
+    "redis-start-handle.json": "e9c701ccc34d5b0b03f3ac15727a983ebbb5af9e2238ff04ec201a9c81338876",
+    "assistant-handle.json": "fa48c83faff00e2c189820a607d3a2cf1709acd086911c5d4195333e43d726f6",
+    "gateway-only-route-readiness.json": "bdf761d4cbeb17737fddb00a394427803dca1b0b0913d10faa420df3424d8b1d",
+    "redis-stop-result.json": "a3bed31530c5302f5c0f9a9d042c22a8e16a1efa5501114214401c5c0bf0918c",
+    "redis-start-result.json": "df8e2aaa85c21ca1c2a6306d90d92d22be14eb3e7d962e28a39f8bbd835cb8da",
+    "assistant-stderr.log": "90f6f2d3458dc1c1baf4bd3a62fc5fa3fc65abd9a78ace026a7d32dca3be7d8c",
+    "source/app/services/supervisor.py": "4ac2b5578fa8b3759bf30e7dfe8c68364e3453eba5020663dc3be670b838a7d8",
+    "source/app/shared/services/process_launcher.py": "c6e102416d03b092d5ac33ef50caa5dc4f5448daf480606a0026f72e16a4eef3",
+    "source/app/services/gateway/fastapi_app.py": "319469ee90ab706eaf5066bcde9f3f65b69b2894a4054c4bfe07190b25f6e94b",
+    "source/app/services/orchestrator/service.py": "0b77092091946b94130945b3bfb670a922a209b846d5ffe30e23f75b52f982f3",
+    "source/scripts/experiments/assistant_local_api_pilot.py": "857730e1aee69c854718e5302da3bf010a9aa10ed9befd139437605b25356c3e",
+    "source/scripts/experiments/assistant_measurement_records.py": "2648b5579c487e15936bf2eafd70ae8b63db5567915ff4c1c1b318989da2a646",
+    "source/tests/unit/gateway/test_fastapi_dynamic_routes.py": "b614fa92186ee74d0979b23c05041930ff90f67a92c246171c1a9d094478f76b",
+    "conditional-latency-summary.json": "dcbab082139549de34eceab6fa6613b5d056dca47b72b27b83b77abfcc35639d"
+  },
+  "log_exports": {
+    "redis-stop-stdout.log": {
+      "private_original_sha256": "1a5bf9dd188738f0e492c7eded350cd72367d5d541deb462ef1ebff6ed5026be",
+      "export_sha256": "1a5bf9dd188738f0e492c7eded350cd72367d5d541deb462ef1ebff6ed5026be",
+      "credential_lines_withheld": 0,
+      "transformation": "conservative whole-line credential-marker redaction; original private"
+    },
+    "redis-start-stderr.log": {
+      "private_original_sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+      "export_sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+      "credential_lines_withheld": 0,
+      "transformation": "conservative whole-line credential-marker redaction; original private"
+    },
+    "redis-start-stdout.log": {
+      "private_original_sha256": "6cef9e402ad9dd92296cf7126a25fb59f4671d38e209742eaaf1e710affba047",
+      "export_sha256": "6cef9e402ad9dd92296cf7126a25fb59f4671d38e209742eaaf1e710affba047",
+      "credential_lines_withheld": 0,
+      "transformation": "conservative whole-line credential-marker redaction; original private"
+    },
+    "redis-stop-stderr.log": {
+      "private_original_sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+      "export_sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+      "credential_lines_withheld": 0,
+      "transformation": "conservative whole-line credential-marker redaction; original private"
+    },
+    "assistant-stdout.log": {
+      "private_original_sha256": "afb93a86e170bbe2069793ef48febabc2612accd1e99e18daf7d227dcccacc9b",
+      "export_sha256": "afb93a86e170bbe2069793ef48febabc2612accd1e99e18daf7d227dcccacc9b",
+      "credential_lines_withheld": 0,
+      "transformation": "conservative whole-line credential-marker redaction; original private"
+    },
+    "assistant-stderr.log": {
+      "private_original_sha256": "90f6f2d3458dc1c1baf4bd3a62fc5fa3fc65abd9a78ace026a7d32dca3be7d8c",
+      "export_sha256": "90f6f2d3458dc1c1baf4bd3a62fc5fa3fc65abd9a78ace026a7d32dca3be7d8c",
+      "credential_lines_withheld": 0,
+      "transformation": "conservative whole-line credential-marker redaction; original private"
+    }
+  }
+}

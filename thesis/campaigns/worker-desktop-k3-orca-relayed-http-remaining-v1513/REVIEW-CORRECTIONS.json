@@ -1,0 +1,32 @@
+{
+  "at": "2026-10-18T14:16:08.939843+00:00",
+  "reviewMessage": "msg_e108aa243160",
+  "status": "TWO_CONCRETE_REVIEW_ITEMS_FIXED_NOT_LAUNCHED",
+  "files": [
+    {
+      "path": "thesis/harness/distributed-k3-http-remaining-v1513/controller.py",
+      "bytes": 18976,
+      "sha256": "d7471a65b4eb834a187d51e4b52b0874dc1afe61e8490720694ebeed20cd977c",
+      "preservedBeforeReviewSha256": "94252f741f4df014fe882b4ad08d2b8ce3540ba3f4f85c3cb8c71cc05ab9c6e9"
+    },
+    {
+      "path": "thesis/harness/k3_remaining_root_v1513.py",
+      "bytes": 13782,
+      "sha256": "5b245a6905ef9e06bb1f21384e7635c899428323f407766ec5f39f6d4ff03aa0",
+      "preservedBeforeReviewSha256": "97f5beb7404d985f32f38a4cd5d40af13c6f73be2912016dab9f411d952562df"
+    },
+    {
+      "path": "thesis/harness/custody_k3_requester_v1513.py",
+      "bytes": 15739,
+      "sha256": "bba8f395b60a158420508eacd3e2c7664fd16b0f6ee7d2d1214932b8c7c9356b",
+      "preservedBeforeReviewSha256": "9a99ff7df27f344fa5edd31c793aa0063427fe99de6c082125b05abee21aec57"
+    }
+  ],
+  "lockFix": "Parent acquires actual global lock and passes same locked FD through Popen; controller verifies device/inode and adopts lease for its lifetime; parent closes without unlock. One separate-artifact OS handoff main-flow smoke passed.",
+  "custodyFix": "Copier incrementally retains backend/controller/operator/proof logs with raw-source hash/range and safe credential scan/redaction; runtime/process/launch records and changed summary/progress/control versions retained; one post-controller-retirement drain within60seconds. Root launch wires copier/finalizer once and preserves operator PID/start/source receipts.",
+  "earlierClosedV1481Gap": "6closed operational files48094B physically copied/checksummed,0credentialsredacted,source-processes absent,private originals unchanged. Receipt ../worker-desktop-k3-orca-relayed-http-v1481/terminal-v1506/closed-operational-logs-v1513/RECEIPT.json",
+  "newRuntimeRequests": 0,
+  "sourceCountOrScientificParametersChangedByReviewFix": false,
+  "controlRequestStillPending": "cdac7533-7309-4015-be6f-69bae4a8f0ee",
+  "resourceLifetimeFix": "Existing provider absolute deadline bounds actual controller cap minus180s shutdown margin; immutable inherited max does not renew reservation."
+}

@@ -1,0 +1,8 @@
+{
+  "status": "ONE_SAVED_FAILURE_METADATA_CHECK_PASSED",
+  "networkRequests": 0,
+  "modelRequests": 0,
+  "checks": "Nested error type/errno retained; synthetic exception text absent; no URL/body/header/key fields; no retry",
+  "artifact": "thesis/campaigns/worker-desktop-k3-orca-relayed-http-remaining-v1590/saved-diagnostic-check/transport-diagnostics.jsonl",
+  "sha256": "857959eaac9627f126e075372c04759fd672eab069367824d9b693522f1cb029"
+}

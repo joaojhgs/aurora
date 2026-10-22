@@ -1,0 +1,218 @@
+{
+  "analysisSourceSha256": "da45e6241a572c004a3d793bdb401d2402044731cf15357c7bb2eec25b14ab3b",
+  "at": "2026-10-18T13:39:36.484358+00:00",
+  "clockPolicy": "Recorded same-host Python monotonic timestamps only. No cross-host subtraction or interpolation.",
+  "measured": 513,
+  "newMeasurements": 0,
+  "outcomes": {
+    "completed_correct": 512,
+    "failed": 1
+  },
+  "quantileMethod": "Hyndman-Fan Type7, h=(n-1)*p, linear interpolation; resource units follow each field name, not latency milliseconds",
+  "resources": {
+    "provider": {
+      "networkScopes": [
+        "aggregate_interface_counters_not_per_request_attribution"
+      ],
+      "prefixEndByte": 83206086,
+      "retainedSamples": 18968,
+      "skipped": {},
+      "trailingUnterminatedBytesExcluded": 0
+    },
+    "requester": {
+      "networkScopes": [
+        "aggregate_interface_counters_not_per_request_attribution"
+      ],
+      "prefixEndByte": 20803454,
+      "retainedSamples": 16152,
+      "skipped": {},
+      "trailingUnterminatedBytesExcluded": 0
+    }
+  },
+  "schema": "aurora.k3.saved-resource-windows.v1",
+  "scope": "Samples inside actual case/model intervals, not exclusive per-request resource attribution. Parent receiver CPU excludes separately spawned Piper processes. Network counters are namespace-wide; interfaces are separate and must not be summed. GPU observations are per recorded DRM device. Missing/unsupported or unsampled fields stay null. Short model windows can have zero samples.",
+  "seconds": 3.19547554012388,
+  "sutCalls": 0,
+  "windows": {
+    "provider.llm_model": {
+      "casesWithNativeWindow": 513,
+      "casesWithSamples": 126,
+      "casesWithTwoSamples": 2,
+      "measuredCaseDenominator": 513,
+      "resourceQuantiles": {
+        "meanCpuCoresOverObservedSpan": {
+          "denominator": 2,
+          "p50": 1.0356864899485911,
+          "p90": 1.055599063076248,
+          "p95": 1.058088134717205,
+          "unit": "CPU cores"
+        },
+        "minimumHostAvailableMemoryBytes": {
+          "denominator": 126,
+          "p50": 24856862720.0,
+          "p90": 25153406976.0,
+          "p95": 25160735744.0,
+          "unit": "bytes"
+        },
+        "peakProcessVmRSS_kB": {
+          "denominator": 126,
+          "p50": 1238776.0,
+          "p90": 1244342.0,
+          "p95": 1246964.0,
+          "unit": "KiB"
+        },
+        "processCpuSecondsObserved": {
+          "denominator": 2,
+          "p50": 1.045,
+          "p90": 1.065,
+          "p95": 1.0675000000000001,
+          "unit": "s"
+        }
+      }
+    },
+    "provider.native_case_window": {
+      "casesWithNativeWindow": 513,
+      "casesWithSamples": 513,
+      "casesWithTwoSamples": 513,
+      "measuredCaseDenominator": 513,
+      "resourceQuantiles": {
+        "meanCpuCoresOverObservedSpan": {
+          "denominator": 513,
+          "p50": 0.36694963995541136,
+          "p90": 0.40772800333936204,
+          "p95": 0.416123409829224,
+          "unit": "CPU cores"
+        },
+        "minimumHostAvailableMemoryBytes": {
+          "denominator": 513,
+          "p50": 24703668224.0,
+          "p90": 25008621977.6,
+          "p95": 25038881587.2,
+          "unit": "bytes"
+        },
+        "peakProcessVmRSS_kB": {
+          "denominator": 513,
+          "p50": 1337400.0,
+          "p90": 1404400.0,
+          "p95": 1406256.8,
+          "unit": "KiB"
+        },
+        "processCpuSecondsObserved": {
+          "denominator": 513,
+          "p50": 8.05,
+          "p90": 9.166,
+          "p95": 9.31,
+          "unit": "s"
+        }
+      }
+    },
+    "provider.stt_model": {
+      "casesWithNativeWindow": 513,
+      "casesWithSamples": 513,
+      "casesWithTwoSamples": 513,
+      "measuredCaseDenominator": 513,
+      "resourceQuantiles": {
+        "meanCpuCoresOverObservedSpan": {
+          "denominator": 513,
+          "p50": 1.9100641331765853,
+          "p90": 2.0274950240491223,
+          "p95": 2.07990967544913,
+          "unit": "CPU cores"
+        },
+        "minimumHostAvailableMemoryBytes": {
+          "denominator": 513,
+          "p50": 24707276800.0,
+          "p90": 25009701683.2,
+          "p95": 25044058931.2,
+          "unit": "bytes"
+        },
+        "peakProcessVmRSS_kB": {
+          "denominator": 513,
+          "p50": 1337400.0,
+          "p90": 1404400.0,
+          "p95": 1406256.8,
+          "unit": "KiB"
+        },
+        "processCpuSecondsObserved": {
+          "denominator": 513,
+          "p50": 3.86,
+          "p90": 5.838,
+          "p95": 6.087999999999999,
+          "unit": "s"
+        }
+      }
+    },
+    "provider.tts_model": {
+      "casesWithNativeWindow": 512,
+      "casesWithSamples": 512,
+      "casesWithTwoSamples": 355,
+      "measuredCaseDenominator": 513,
+      "resourceQuantiles": {
+        "meanCpuCoresOverObservedSpan": {
+          "denominator": 355,
+          "p50": 0.02968876351821067,
+          "p90": 0.14469270789393596,
+          "p95": 0.3618338308947657,
+          "unit": "CPU cores"
+        },
+        "minimumHostAvailableMemoryBytes": {
+          "denominator": 512,
+          "p50": 24789032960.0,
+          "p90": 25089388544.0,
+          "p95": 25111542169.6,
+          "unit": "bytes"
+        },
+        "peakProcessVmRSS_kB": {
+          "denominator": 512,
+          "p50": 1238780.0,
+          "p90": 1243403.6,
+          "p95": 1245326.4,
+          "unit": "KiB"
+        },
+        "processCpuSecondsObserved": {
+          "denominator": 355,
+          "p50": 0.03,
+          "p90": 0.14600000000000024,
+          "p95": 0.37,
+          "unit": "s"
+        }
+      }
+    },
+    "requester.full_attempt": {
+      "casesWithNativeWindow": 513,
+      "casesWithSamples": 513,
+      "casesWithTwoSamples": 513,
+      "measuredCaseDenominator": 513,
+      "resourceQuantiles": {
+        "meanCpuCoresOverObservedSpan": {
+          "denominator": 513,
+          "p50": 0.09723742137145881,
+          "p90": 0.1019119877047894,
+          "p95": 0.10887729348489042,
+          "unit": "CPU cores"
+        },
+        "minimumHostAvailableMemoryBytes": {
+          "denominator": 513,
+          "p50": 4463542272.0,
+          "p90": 4719383347.2,
+          "p95": 4770393292.8,
+          "unit": "bytes"
+        },
+        "peakProcessVmRSS_kB": {
+          "denominator": 513,
+          "p50": 949708.0,
+          "p90": 958793.6,
+          "p95": 960564.0,
+          "unit": "KiB"
+        },
+        "processCpuSecondsObserved": {
+          "denominator": 513,
+          "p50": 2.86,
+          "p90": 3.0060000000000002,
+          "p95": 3.2439999999999998,
+          "unit": "s"
+        }
+      }
+    }
+  }
+}

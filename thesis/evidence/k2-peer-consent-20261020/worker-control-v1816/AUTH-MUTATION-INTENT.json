@@ -1,0 +1,18 @@
+{
+  "at": "2026-10-20T15:28:03.981588+00:00",
+  "authority": "owner30.56.1/RootACKmsg_142e2c492f54/monitorb067fb2256da",
+  "maximumMutationCalls": 1,
+  "method": "Auth.MeshUpdatePeerPermissions",
+  "newPermissions": [
+    "Gateway.GetRegistry",
+    "Gateway.GetMeshStatus",
+    "TTS.Synthesize",
+    "Orchestrator.use"
+  ],
+  "oldPermissions": [
+    "Gateway.GetRegistry",
+    "Gateway.GetMeshStatus",
+    "TTS.Synthesize"
+  ],
+  "peerId": "aurora-276bb04e1276201922851f6a222110de"
+}

@@ -1,0 +1,9 @@
+# Owner-authorized obsolete incremental cache cleanup
+
+Root alone removed only contents of `/home/developer/projects/aurora/rust/target/debug/incremental` and `/home/developer/projects/aurora/rust/target/wasm32-unknown-unknown/debug/incremental` under the direct same-thread owner instruction and original monitor message msg_a0263cd6eff1. Both original parent directories remain with the same device/inode, zero children.269+27=296 immediate cache children removed; exact paths/identities are in [deletion manifest](deletion-manifest.json). No other cleanup or new worker.
+
+Actual statvfs available bytes before=2268020736, after=13888069632, observed change=11620048896. Concurrent filesystem activity means this delta is not an exact sum of candidate allocated bytes. The owner inventory retained10,456,420,352 and1,197,056,000 allocated-byte estimates respectively.
+
+Fresh process-name/accessibility-bounded fd checks found no observed compiler or reference to either cache.171 process-access gaps are retained; this is not universal all-host proof. Original timeout1305953/start74126867, driver1305954/start74126867 and mesh07 child1571122/start76450668 remained live with matching identities immediately before and after. Current measured source hashes match all frozen campaign pins before/after. Preserved sibling dependency/build/release directories, model, Git and campaign directory identities remain unchanged. No service, model, source, current binary, report, worktree or campaign artifact was removed.
+
+The cleanup event occurred from 2026-10-14T14:07:55.821659+00:00 to 2026-10-14T14:07:57.603871+00:00 during the explicitly loaded campaign. Main1Hz resources remain authoritative; no quiet-host, causal-performance, sample replay, source mutation or extra test claim follows. Both closed first two epochs/600 independently reviewed measured replies remain retained.

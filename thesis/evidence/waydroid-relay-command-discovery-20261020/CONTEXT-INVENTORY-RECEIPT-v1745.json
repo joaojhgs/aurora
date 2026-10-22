@@ -1,0 +1,35 @@
+{
+  "schema": "aurora.android-control-context.v1",
+  "actualAt": "2026-10-20T07:31:44.056474+00:00",
+  "status": "CONTROL_CONTAINER_HAS_ADB_NATIVE_OBSERVER_CAPABILITY_STILL_UNPROVED",
+  "controlTerminal": "term_d5651d8d-58e2-4b38-85e2-51c668cc933c",
+  "incarnation": "034ff933-61a3-4c74-b5ad-98a75e8ac21c",
+  "observed": {
+    "adb": "/usr/bin/adb",
+    "waydroidInCurrentPath": null,
+    "containerMarker": true,
+    "hostMountMarker": true
+  },
+  "interpretation": "Existing Personal control is in a container with adb; current PATH has no waydroid. This does not prove host Waydroid or a device absent and does not explain the earlier empty host-spawn127. No further unchanged context/status probes.",
+  "requiredCapability": "Existing approved owning-Orca emulator execution-host observer/binding must return bounded original device state; coordinate original monitor/Coding, no direct serial guesses, new target, reset, service or access change.",
+  "deviceStatusCalls": 0,
+  "buildInferenceOrNetworkTests": 0,
+  "blocksCurrentK1OrNextK2": false,
+  "copies": [
+    {
+      "path": "thesis/evidence/waydroid-relay-command-discovery-20261020/android-context-v1745-RESULT.json",
+      "bytes": 655,
+      "sha256": "85486cf78e9bebb5909b5c0e01d723f6a8be878d8c6fd0a6fd9352b38f5373e4"
+    },
+    {
+      "path": "thesis/evidence/waydroid-relay-command-discovery-20261020/android-context-v1745-SEND.json",
+      "bytes": 290,
+      "sha256": "a524bc1c80ff05e65980587e002dc2cd74e485e3faf4dfc78d474f636011ad50"
+    },
+    {
+      "path": "thesis/evidence/waydroid-relay-command-discovery-20261020/android-context-v1745-SHOW-FENCE.json",
+      "bytes": 1311,
+      "sha256": "bf88170b2c5cba62b3b9887d10a97d090d02b7ba5ec4efd7c7494535ff6bdf64"
+    }
+  ]
+}

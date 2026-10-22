@@ -1,0 +1,13 @@
+{
+  "at": "2026-10-21T21:46:37.800917+00:00",
+  "status": "COMPLETE_AUTHORITATIVE_PLAN_PHYSICAL_REPO_MIRROR_VERIFIED",
+  "source": "/home/developer/Documents/Obsidian Vault Origin/5-full-notes/faculdade/tcc/future-work-test-requirements.md",
+  "destination": "thesis/methodology/owner-requirements-20261021-1f24fe5b.md",
+  "bytes": 827981,
+  "sha256": "1f24fe5b0b2429dcc97c29dd2d83c777bee952646cdbfa726065307c465b86fb",
+  "prior814831BytesUnchanged": true,
+  "newSection": "30.75",
+  "copyOnly": true,
+  "methodologyWriter": "original monitor only",
+  "activeSourceManifestChanged": false
+}

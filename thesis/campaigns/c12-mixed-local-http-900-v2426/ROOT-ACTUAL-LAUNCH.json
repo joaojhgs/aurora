@@ -1,0 +1,22 @@
+{
+  "at": "2026-10-22T07:46:10.818246+00:00",
+  "pid": 281887,
+  "startTicks": 143363140,
+  "manifestSha256": "316d4cc09adc44d0104dca8ac1f2a966347588ffef37bc2fa809ec14fd5efff8",
+  "providerController": {
+    "pid": 2555838,
+    "startTicks": 41063526,
+    "state": "S"
+  },
+  "providerReceiver": {
+    "pid": 2555839,
+    "startTicks": 41063588
+  },
+  "priorAcceptedWarmupPairs": 15,
+  "currentInstrumentationWarmupPairs": 1,
+  "currentMeasuredPairsTarget": 900,
+  "newMeasuredAdmitted": false,
+  "newWorker": false,
+  "originalRootDeadlineUtc": "2026-10-22T21:14:51.316179+00:00",
+  "status": "ACTUAL_CORRECTED_REQUESTER_LAUNCHED_NEW_QUEUE_GATE_PENDING"
+}

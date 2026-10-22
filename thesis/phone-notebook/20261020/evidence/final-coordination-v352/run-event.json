@@ -1,0 +1,28 @@
+{
+  "id": "eff62dd2-635a-4b9a-9ab9-7fdb011bc169",
+  "ok": true,
+  "result": {
+    "message": {
+      "id": "msg_fd1f9190f546",
+      "run_id": "run_e6054e76e9fc",
+      "delivery_contract": "current_delivery",
+      "from_handle": "term_1f27be31-0284-4366-bb91-30fe538cd30e",
+      "to_handle": "run:run_e6054e76e9fc",
+      "subject": "Final phone setup NOT_READY: window stopped, installation verified, dual custody complete",
+      "body": "Same resumed phone notebook lane reconciled all existing receipts: final normal same-signed replacement succeeded 11:52:55Z, APK ac043bd2f36071af8bc82c68de382d4e5cde495a612738d1ec78902d84fe8f72 installed hash verified, 13 observations without installer foreground and no userdata/security change. Local physical phone Qwen plus full STT LLM TTS WAV passed on its preserved earlier source epoch, secure same-peer pairing completed, but final K3 v341 failed android_file_audio_route_unavailable before audio/model submission and direct authenticated LAN HTTPS remains unqualified, so distributed setup NOT_READY and measured cases remain zero. Original 11:57:25Z hard stop preserved, both exact owned providers verified closed and normal HOME return verified, 61 raw files plus 41 public report/patch files and final validation receipts identical on both hosts; remaining technical work is post-update bootstrap/session and actual lease/remote WAV qualification in a future finite phone window, no repeat local pilots, no new lifecycle, Main or frozen source changes.",
+      "type": "status",
+      "priority": "high",
+      "thread_id": null,
+      "payload": "{\"reportPath\":\"thesis/phone-notebook/20261020/REPORT.md\"}",
+      "created_at": "2026-10-22T12:15:11Z",
+      "delivered_at": null
+    },
+    "mutation": {
+      "requestId": "2cd9d759-057b-42f5-80e6-4bf3067769b2",
+      "replayed": false
+    }
+  },
+  "_meta": {
+    "runtimeId": "cc9e3275-28c6-4c45-85cc-bdcd2262aa7d"
+  }
+}

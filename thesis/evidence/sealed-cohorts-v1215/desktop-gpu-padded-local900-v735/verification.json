@@ -1,0 +1,419 @@
+{
+  "archive": {
+    "bytes": 10064090,
+    "path": "/tmp/aurora-root-padded-local900-v735/export-v744/aurora-desktop-gpu-padded-local900-v735.zip",
+    "sha256": "1ef1dbd55dde983aea97852dadbeebd7f5540285655a0cbbd447b73b5784db33"
+  },
+  "archiveMembers": 604,
+  "at": "2026-10-15T22:54:14.673562+00:00",
+  "checkedOutputAudioFiles": 288,
+  "flowLatencyType7Ms": {
+    "completedIncludingIncorrect": {
+      "denominator": 273,
+      "method": "Hyndman-Fan Type7; h=(n-1)*p; linear interpolation",
+      "p50": 10130.421344,
+      "p90": 10441.4039382,
+      "p95": 10628.307639199998
+    },
+    "correctOnly": {
+      "denominator": 273,
+      "method": "Hyndman-Fan Type7; h=(n-1)*p; linear interpolation",
+      "p50": 10130.421344,
+      "p90": 10441.4039382,
+      "p95": 10628.307639199998
+    },
+    "observedAllAttemptsIncludingFailures": {
+      "denominator": 274,
+      "method": "Hyndman-Fan Type7; h=(n-1)*p; linear interpolation",
+      "p50": 10130.2120855,
+      "p90": 10439.913349299999,
+      "p95": 10625.743740049998
+    }
+  },
+  "frozenManifestSHA256": "be108882b3024b33545f1484da00a56dccc5993e5c441b3eb3854102e7f14ac5",
+  "fullMeasuredCountReached": false,
+  "host": "personal.skyron-server",
+  "nativeStageLatencyType7Ms": {
+    "llm": {
+      "attemptedCaseDenominator": 274,
+      "casesWithMultipleCompletedSpans": 0,
+      "casesWithNoCompletedSpan": 0,
+      "denominator": 274,
+      "method": "Hyndman-Fan Type7; h=(n-1)*p; linear interpolation",
+      "p50": 262.674202,
+      "p90": 275.75078790000003,
+      "p95": 289.1938640499999,
+      "scope": "one actual completed invocation per case; missing/multiple spans excluded explicitly, no sums"
+    },
+    "stt": {
+      "attemptedCaseDenominator": 274,
+      "casesWithMultipleCompletedSpans": 274,
+      "casesWithNoCompletedSpan": 0,
+      "denominator": 0,
+      "method": "Hyndman-Fan Type7; h=(n-1)*p; linear interpolation",
+      "p50": null,
+      "p90": null,
+      "p95": null,
+      "scope": "one actual completed invocation per case; missing/multiple spans excluded explicitly, no sums"
+    },
+    "tts": {
+      "attemptedCaseDenominator": 274,
+      "casesWithMultipleCompletedSpans": 274,
+      "casesWithNoCompletedSpan": 0,
+      "denominator": 0,
+      "method": "Hyndman-Fan Type7; h=(n-1)*p; linear interpolation",
+      "p50": null,
+      "p90": null,
+      "p95": null,
+      "scope": "one actual completed invocation per case; missing/multiple spans excluded explicitly, no sums"
+    }
+  },
+  "phaseDenominators": {
+    "measured": {
+      "attempted": 274,
+      "completed_correct": 273,
+      "completed_incorrect": 0,
+      "failed_or_interrupted": 1,
+      "planned": 900,
+      "timeouts": 0,
+      "unattempted": 626
+    },
+    "warmup_excluded": {
+      "attempted": 15,
+      "completed_correct": 15,
+      "completed_incorrect": 0,
+      "failed_or_interrupted": 0,
+      "planned": 15,
+      "timeouts": 0,
+      "unattempted": 0
+    }
+  },
+  "publication": {
+    "action": "preserve all temporary raw/archive; existing Orca chunk route can transfer to worker project docs; no cleanup/threshold reduction",
+    "archiveBytes": 10064090,
+    "archiveCapBytes": 40000000,
+    "projectFreeBytes": 51683328,
+    "projectReserveBytes": 80000000,
+    "publicationBytesIncludingMetadataAndReceiptBudget": 11956935,
+    "status": "project_storage_admission_unmet"
+  },
+  "rawOriginalsPreserved": true,
+  "rawOutcomeCounts": {
+    "completed_correct": 273,
+    "interrupted": 1
+  },
+  "retirement": {
+    "bytes": 605,
+    "path": "/tmp/aurora-root-padded-local900-v735/runtime/retirement.json",
+    "sha256": "f4494ea43b5475f724a26f58c48c7306c39b9fcc0f2a86c79598a1d164a85322"
+  },
+  "savedZipIntegrityHashesAndOutcomeAuditPassed": true,
+  "summaryStatus": "stopped_system_failure",
+  "summaryStopReason": "CancelledError",
+  "temporaryCustody": "/tmp/aurora-root-padded-local900-v735/export-v744",
+  "unknownMetrics": {
+    "TTFT": null,
+    "playback": null,
+    "queueWait": null,
+    "streamedFirstAudio": null
+  },
+  "unknownReason": "finite headless adapters expose no queue/token/streamed audio or playback boundary; no fake zero",
+  "warmupGate": {
+    "actualGpuProof": {
+      "backendLogPrefixBytes": 110737,
+      "backendLogPrefixSHA256": "13c2a34a503a128a3107e858c7ddf8804f7210841e3493861b6e0d1a0611b265",
+      "device": "AMD RX7600",
+      "offloadedLayers": "25/25"
+    },
+    "caseCount": 15,
+    "cases": [
+      {
+        "harness_case_id": "padded-audio-v689-0001",
+        "localBusStagesComplete": true,
+        "nativeOperationMetadataByStage": {
+          "llm": {
+            "attemptIdPresent": false,
+            "operationIdPresent": false
+          },
+          "stt": {
+            "attemptIdPresent": true,
+            "operationIdPresent": true
+          },
+          "tts": {
+            "attemptIdPresent": true,
+            "operationIdPresent": true
+          }
+        },
+        "nativeSpanStagesComplete": true
+      },
+      {
+        "harness_case_id": "padded-audio-v689-0002",
+        "localBusStagesComplete": true,
+        "nativeOperationMetadataByStage": {
+          "llm": {
+            "attemptIdPresent": false,
+            "operationIdPresent": false
+          },
+          "stt": {
+            "attemptIdPresent": true,
+            "operationIdPresent": true
+          },
+          "tts": {
+            "attemptIdPresent": true,
+            "operationIdPresent": true
+          }
+        },
+        "nativeSpanStagesComplete": true
+      },
+      {
+        "harness_case_id": "padded-audio-v689-0003",
+        "localBusStagesComplete": true,
+        "nativeOperationMetadataByStage": {
+          "llm": {
+            "attemptIdPresent": false,
+            "operationIdPresent": false
+          },
+          "stt": {
+            "attemptIdPresent": true,
+            "operationIdPresent": true
+          },
+          "tts": {
+            "attemptIdPresent": true,
+            "operationIdPresent": true
+          }
+        },
+        "nativeSpanStagesComplete": true
+      },
+      {
+        "harness_case_id": "padded-audio-v689-0004",
+        "localBusStagesComplete": true,
+        "nativeOperationMetadataByStage": {
+          "llm": {
+            "attemptIdPresent": false,
+            "operationIdPresent": false
+          },
+          "stt": {
+            "attemptIdPresent": true,
+            "operationIdPresent": true
+          },
+          "tts": {
+            "attemptIdPresent": true,
+            "operationIdPresent": true
+          }
+        },
+        "nativeSpanStagesComplete": true
+      },
+      {
+        "harness_case_id": "padded-audio-v689-0005",
+        "localBusStagesComplete": true,
+        "nativeOperationMetadataByStage": {
+          "llm": {
+            "attemptIdPresent": false,
+            "operationIdPresent": false
+          },
+          "stt": {
+            "attemptIdPresent": true,
+            "operationIdPresent": true
+          },
+          "tts": {
+            "attemptIdPresent": true,
+            "operationIdPresent": true
+          }
+        },
+        "nativeSpanStagesComplete": true
+      },
+      {
+        "harness_case_id": "padded-audio-v689-0006",
+        "localBusStagesComplete": true,
+        "nativeOperationMetadataByStage": {
+          "llm": {
+            "attemptIdPresent": false,
+            "operationIdPresent": false
+          },
+          "stt": {
+            "attemptIdPresent": true,
+            "operationIdPresent": true
+          },
+          "tts": {
+            "attemptIdPresent": true,
+            "operationIdPresent": true
+          }
+        },
+        "nativeSpanStagesComplete": true
+      },
+      {
+        "harness_case_id": "padded-audio-v689-0007",
+        "localBusStagesComplete": true,
+        "nativeOperationMetadataByStage": {
+          "llm": {
+            "attemptIdPresent": false,
+            "operationIdPresent": false
+          },
+          "stt": {
+            "attemptIdPresent": true,
+            "operationIdPresent": true
+          },
+          "tts": {
+            "attemptIdPresent": true,
+            "operationIdPresent": true
+          }
+        },
+        "nativeSpanStagesComplete": true
+      },
+      {
+        "harness_case_id": "padded-audio-v689-0008",
+        "localBusStagesComplete": true,
+        "nativeOperationMetadataByStage": {
+          "llm": {
+            "attemptIdPresent": false,
+            "operationIdPresent": false
+          },
+          "stt": {
+            "attemptIdPresent": true,
+            "operationIdPresent": true
+          },
+          "tts": {
+            "attemptIdPresent": true,
+            "operationIdPresent": true
+          }
+        },
+        "nativeSpanStagesComplete": true
+      },
+      {
+        "harness_case_id": "padded-audio-v689-0009",
+        "localBusStagesComplete": true,
+        "nativeOperationMetadataByStage": {
+          "llm": {
+            "attemptIdPresent": false,
+            "operationIdPresent": false
+          },
+          "stt": {
+            "attemptIdPresent": true,
+            "operationIdPresent": true
+          },
+          "tts": {
+            "attemptIdPresent": true,
+            "operationIdPresent": true
+          }
+        },
+        "nativeSpanStagesComplete": true
+      },
+      {
+        "harness_case_id": "padded-audio-v689-0010",
+        "localBusStagesComplete": true,
+        "nativeOperationMetadataByStage": {
+          "llm": {
+            "attemptIdPresent": false,
+            "operationIdPresent": false
+          },
+          "stt": {
+            "attemptIdPresent": true,
+            "operationIdPresent": true
+          },
+          "tts": {
+            "attemptIdPresent": true,
+            "operationIdPresent": true
+          }
+        },
+        "nativeSpanStagesComplete": true
+      },
+      {
+        "harness_case_id": "padded-audio-v689-0011",
+        "localBusStagesComplete": true,
+        "nativeOperationMetadataByStage": {
+          "llm": {
+            "attemptIdPresent": false,
+            "operationIdPresent": false
+          },
+          "stt": {
+            "attemptIdPresent": true,
+            "operationIdPresent": true
+          },
+          "tts": {
+            "attemptIdPresent": true,
+            "operationIdPresent": true
+          }
+        },
+        "nativeSpanStagesComplete": true
+      },
+      {
+        "harness_case_id": "padded-audio-v689-0012",
+        "localBusStagesComplete": true,
+        "nativeOperationMetadataByStage": {
+          "llm": {
+            "attemptIdPresent": false,
+            "operationIdPresent": false
+          },
+          "stt": {
+            "attemptIdPresent": true,
+            "operationIdPresent": true
+          },
+          "tts": {
+            "attemptIdPresent": true,
+            "operationIdPresent": true
+          }
+        },
+        "nativeSpanStagesComplete": true
+      },
+      {
+        "harness_case_id": "padded-audio-v689-0013",
+        "localBusStagesComplete": true,
+        "nativeOperationMetadataByStage": {
+          "llm": {
+            "attemptIdPresent": false,
+            "operationIdPresent": false
+          },
+          "stt": {
+            "attemptIdPresent": true,
+            "operationIdPresent": true
+          },
+          "tts": {
+            "attemptIdPresent": true,
+            "operationIdPresent": true
+          }
+        },
+        "nativeSpanStagesComplete": true
+      },
+      {
+        "harness_case_id": "padded-audio-v689-0014",
+        "localBusStagesComplete": true,
+        "nativeOperationMetadataByStage": {
+          "llm": {
+            "attemptIdPresent": false,
+            "operationIdPresent": false
+          },
+          "stt": {
+            "attemptIdPresent": true,
+            "operationIdPresent": true
+          },
+          "tts": {
+            "attemptIdPresent": true,
+            "operationIdPresent": true
+          }
+        },
+        "nativeSpanStagesComplete": true
+      },
+      {
+        "harness_case_id": "padded-audio-v689-0015",
+        "localBusStagesComplete": true,
+        "nativeOperationMetadataByStage": {
+          "llm": {
+            "attemptIdPresent": false,
+            "operationIdPresent": false
+          },
+          "stt": {
+            "attemptIdPresent": true,
+            "operationIdPresent": true
+          },
+          "tts": {
+            "attemptIdPresent": true,
+            "operationIdPresent": true
+          }
+        },
+        "nativeSpanStagesComplete": true
+      }
+    ],
+    "missingCases": [],
+    "plannedWarmups": 15
+  }
+}

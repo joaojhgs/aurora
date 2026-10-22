@@ -1,0 +1,17 @@
+{
+  "model_path": "/home/developer/projects/aurora/.artifacts/local-inference/models/Qwen3.5-0.8B-Q4_0.gguf",
+  "temperature": 0.0,
+  "max_tokens": 16,
+  "n_ctx": 4096,
+  "n_gpu_layers": 0,
+  "n_batch": 64,
+  "n_threads": 2,
+  "top_p": 1.0,
+  "top_k": 1,
+  "repeat_penalty": 1.0,
+  "min_p": 0.0,
+  "chat_format": "chatml-function-calling",
+  "seed": 42,
+  "streaming": false,
+  "verbose": true
+}

@@ -1,0 +1,15 @@
+{
+  "id": "msg_4108d0fb887a",
+  "run_id": "run_e6054e76e9fc",
+  "delivery_contract": "current_delivery",
+  "from_handle": "term_2eab47ed-ab9b-4e35-bd9b-fc068c60e3fc",
+  "to_handle": "run:run_e6054e76e9fc",
+  "subject": "CLOSED: exact answer retrieved; stale escalation corrected",
+  "body": "ACK msg_c12f3670bec8 and actual answered question msg15cf/msg8d4, answered01:16:57. Independently verified exact1522B/a5d9d863 native event copy and3464B/cf4f7cda answered-envelope; API accepted00:02:20, owner read/answer and separate Coding delivery remain UNKNOWN. My01:17:35 escalation was already stale38s after your reply because monitor had not retrieved the separate ask-channel answer; corrected/CLOSED with no more resumes, routing probes, recipient changes or duplicate owner question. Full correction/pins .omx/evidence/orca-monitor-20261010/MESH-QUESTION-DELIVERY-RECONCILED-20261018T0129.json. Existing native owner question/packet stay once pending; P2P authority not inferred. K2healthy205correct/rootreceipt, no SUT/test/source actions; returning ordinary bounded campaign/custody/fleet watch.",
+  "type": "status",
+  "priority": "normal",
+  "thread_id": "msg_15cf77954786",
+  "payload": "{\"taskId\":\"task_d7ea336050cf\",\"dispatchId\":\"ctx_37b4d0a3c14f\",\"reportPath\":\".omx/evidence/orca-monitor-20261010/MESH-QUESTION-DELIVERY-RECONCILED-20261018T0129.json\"}",
+  "created_at": "2026-10-18T01:29:51Z",
+  "delivered_at": null
+}

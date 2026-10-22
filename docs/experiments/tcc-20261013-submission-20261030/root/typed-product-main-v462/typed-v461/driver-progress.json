@@ -1,0 +1,17 @@
+{
+  "startedAt": "2026-10-15T00:37:40.916305+00:00",
+  "controllerPid": 2865885,
+  "capSeconds": 420,
+  "measurementStarted": false,
+  "acceptedMeasuredSamples": 0,
+  "sampleClass": "typedUI readiness NOT voice",
+  "globalVoiceLogicalFlowsUnchanged": 8,
+  "typedReadinessOrdinal": 3,
+  "microphoneUsed": false,
+  "STTUsed": false,
+  "childPid": 2865901,
+  "driverSHA256": "fd744d6aaffb9302c0c0e9b9c2b7607c456bffa1e56d8c86c3a5ecc3136a1bf9",
+  "webRuntimePid": 2865435,
+  "backendPid": 2865443,
+  "sourceRuntimeControllerPid": 2865415
+}

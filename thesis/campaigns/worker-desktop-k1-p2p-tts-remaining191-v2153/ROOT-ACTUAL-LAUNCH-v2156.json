@@ -1,0 +1,76 @@
+{
+  "at": "2026-10-21T03:01:57.727408+00:00",
+  "actors": {
+    "controller": {
+      "pid": 3332811,
+      "startTicks": 132995693,
+      "state": "S"
+    },
+    "backend": {
+      "pid": 3332919,
+      "startTicks": 132996503,
+      "state": "S"
+    },
+    "copier": {
+      "pid": 3333678,
+      "startTicks": 133003703,
+      "state": "S"
+    },
+    "finalizer": {
+      "pid": 3333679,
+      "startTicks": 133003704,
+      "state": "S"
+    }
+  },
+  "manifestSha256": "d753203e4a53f12ed983a98d776a811d241d0d6bc6061b28e3c1480a077a17d3",
+  "stage": "ordinary_excluded_warmup_admission",
+  "warmups": [
+    {
+      "ordinal": 2,
+      "status": "completed_correct",
+      "failure": null,
+      "durationMs": 47527.748867
+    },
+    {
+      "ordinal": 3,
+      "status": "completed_correct",
+      "failure": null,
+      "durationMs": 41522.11753
+    },
+    {
+      "ordinal": 1,
+      "status": "completed_correct",
+      "failure": null,
+      "durationMs": 56245.654839
+    }
+  ],
+  "newMeasured": 0,
+  "priorMeasured": {
+    "attempted": 709,
+    "correct": 697,
+    "failed": 12,
+    "timeouts": 1
+  },
+  "conditionTarget": 900,
+  "remainingNewTarget": 191,
+  "globalRange": [
+    710,
+    900
+  ],
+  "rootControlReservedFor": "V2153 same warmup finalizer; no parallel Personal reads",
+  "sameHardDeadlineUtc": "2026-10-21T06:59:42.981693+00:00",
+  "providerSameOriginal": {
+    "pid": 251473,
+    "startTicks": 29038457
+  },
+  "failedV2143": {
+    "warmups": 0,
+    "measured": 0,
+    "code": "legacy_unverifiable selector_service_missing",
+    "naturallyRetired": true,
+    "frozenManifestPreserved": "f14a3c823e3de0414b9184838c78b9746a3518320a651874ad6536fdb13e0cda"
+  },
+  "sourceCompat": "thesis/sources/k1-speech-contract-compat-v2151/worker/SOURCE-DELTA.json",
+  "newMeasuredAdmitted": false,
+  "newOrcaWorker": false
+}

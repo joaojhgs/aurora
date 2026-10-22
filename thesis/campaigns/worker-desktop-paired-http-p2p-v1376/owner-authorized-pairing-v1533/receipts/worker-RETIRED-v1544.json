@@ -1,0 +1,211 @@
+{
+  "at": "2026-10-18T16:38:12.300651+00:00",
+  "host": "code-worker",
+  "pid": 1307468,
+  "role": "worker",
+  "phase": "finite_control_window_complete",
+  "newModelRequests": 0,
+  "modelServicesStarted": [],
+  "httpListenerStarted": false,
+  "normalProductionContracts": true,
+  "sourceRoot": "/home/developer/projects/aurora/.git/aurora-handoff-import-20261006/cpu-full-audio-v490/source",
+  "diagnostic": {
+    "enabled": true,
+    "started": false,
+    "mesh_enabled": true,
+    "local_signaling_peer_id": null,
+    "local_mesh_peer_id": null,
+    "local_node_name": "aurora-tcc-pair-v1535-worker",
+    "require_auth": true,
+    "auth_timeout_seconds": 10.0,
+    "pairing_timeout_seconds": 300.0,
+    "app_layer_e2ee_enabled": true,
+    "signaling": {
+      "strategy": "",
+      "connected": false,
+      "encrypted_presence": false,
+      "app_id_configured": false,
+      "room_configured": false,
+      "broker_count": 0,
+      "public_broker_warning": false
+    },
+    "peers": [],
+    "connected_peer_count": 0,
+    "authenticated_peer_count": 0,
+    "pairing_peer_count": 0,
+    "pending_rpc_count": 0,
+    "recent_errors": [],
+    "secrets_redacted": true
+  },
+  "pending": [],
+  "trust": [],
+  "normalApprovalCount": 0,
+  "allowedPeerPermissions": [
+    "Gateway.GetRegistry",
+    "Gateway.GetMeshStatus",
+    "TTS.Synthesize"
+  ],
+  "startupErrors": [
+    {
+      "message": "Failed to connect to wss://broker.emqx.io:8084/mqtt: [Errno 111] Connection refused",
+      "exceptionCategory": null
+    },
+    {
+      "message": "Failed to start WebRTC client: MQTTSignaling: failed to connect to any of the 1 brokers: ['wss://broker.emqx.io:8084/mqtt']",
+      "exceptionCategory": "RuntimeError"
+    },
+    {
+      "message": "Mesh P2P requires WebRTC \u2014 scheduling transport recovery",
+      "exceptionCategory": null
+    },
+    {
+      "message": "Topic 'Tooling.GetMeshProjectionReadiness' is not registered in the contract registry.\n  Available topics: Config.CommitChangeSet, Config.Get, Config.GetPlugin, Config.GetSchemaMetadata, Config.GetVersionHistory, Config.PreviewDiff, Config.PreviewReloadImpact, Config.ReloadService, Config.Rollback, Config.Set",
+      "exceptionCategory": null
+    },
+    {
+      "message": "Tooling mesh activation remains fail-closed: Topic 'Tooling.GetMeshProjectionReadiness' is not registered in the contract registry.\n  Available topics: Config.CommitChangeSet, Config.Get, Config.GetPlugin, Config.GetSchemaMetadata, Config.GetVersionHistory, Config.PreviewDiff, Config.PreviewReloadImpact, Config.ReloadService, Config.Rollback, Config.Set",
+      "exceptionCategory": null
+    },
+    {
+      "message": "Topic 'Tooling.GetMeshProjectionReadiness' is not registered in the contract registry.\n  Available topics: Config.CommitChangeSet, Config.Get, Config.GetPlugin, Config.GetSchemaMetadata, Config.GetVersionHistory, Config.PreviewDiff, Config.PreviewReloadImpact, Config.ReloadService, Config.Rollback, Config.Set",
+      "exceptionCategory": null
+    },
+    {
+      "message": "Tooling mesh activation remains fail-closed: Topic 'Tooling.GetMeshProjectionReadiness' is not registered in the contract registry.\n  Available topics: Config.CommitChangeSet, Config.Get, Config.GetPlugin, Config.GetSchemaMetadata, Config.GetVersionHistory, Config.PreviewDiff, Config.PreviewReloadImpact, Config.ReloadService, Config.Rollback, Config.Set",
+      "exceptionCategory": null
+    },
+    {
+      "message": "Topic 'Tooling.GetMeshProjectionReadiness' is not registered in the contract registry.\n  Available topics: Config.CommitChangeSet, Config.Get, Config.GetPlugin, Config.GetSchemaMetadata, Config.GetVersionHistory, Config.PreviewDiff, Config.PreviewReloadImpact, Config.ReloadService, Config.Rollback, Config.Set",
+      "exceptionCategory": null
+    },
+    {
+      "message": "Tooling mesh activation remains fail-closed: Topic 'Tooling.GetMeshProjectionReadiness' is not registered in the contract registry.\n  Available topics: Config.CommitChangeSet, Config.Get, Config.GetPlugin, Config.GetSchemaMetadata, Config.GetVersionHistory, Config.PreviewDiff, Config.PreviewReloadImpact, Config.ReloadService, Config.Rollback, Config.Set",
+      "exceptionCategory": null
+    },
+    {
+      "message": "Failed to connect to wss://broker.emqx.io:8084/mqtt: [Errno 111] Connection refused",
+      "exceptionCategory": null
+    },
+    {
+      "message": "Failed to start WebRTC client: MQTTSignaling: failed to connect to any of the 1 brokers: ['wss://broker.emqx.io:8084/mqtt']",
+      "exceptionCategory": "RuntimeError"
+    },
+    {
+      "message": "Mesh retry could not start the WebRTC transport",
+      "exceptionCategory": null
+    },
+    {
+      "message": "Topic 'Tooling.GetMeshProjectionReadiness' is not registered in the contract registry.\n  Available topics: Config.CommitChangeSet, Config.Get, Config.GetPlugin, Config.GetSchemaMetadata, Config.GetVersionHistory, Config.PreviewDiff, Config.PreviewReloadImpact, Config.ReloadService, Config.Rollback, Config.Set",
+      "exceptionCategory": null
+    },
+    {
+      "message": "Tooling mesh activation remains fail-closed: Topic 'Tooling.GetMeshProjectionReadiness' is not registered in the contract registry.\n  Available topics: Config.CommitChangeSet, Config.Get, Config.GetPlugin, Config.GetSchemaMetadata, Config.GetVersionHistory, Config.PreviewDiff, Config.PreviewReloadImpact, Config.ReloadService, Config.Rollback, Config.Set",
+      "exceptionCategory": null
+    },
+    {
+      "message": "Failed to connect to wss://broker.emqx.io:8084/mqtt: [Errno 111] Connection refused",
+      "exceptionCategory": null
+    },
+    {
+      "message": "Failed to start WebRTC client: MQTTSignaling: failed to connect to any of the 1 brokers: ['wss://broker.emqx.io:8084/mqtt']",
+      "exceptionCategory": "RuntimeError"
+    },
+    {
+      "message": "Mesh retry could not start the WebRTC transport",
+      "exceptionCategory": null
+    },
+    {
+      "message": "Topic 'Tooling.GetMeshProjectionReadiness' is not registered in the contract registry.\n  Available topics: Config.CommitChangeSet, Config.Get, Config.GetPlugin, Config.GetSchemaMetadata, Config.GetVersionHistory, Config.PreviewDiff, Config.PreviewReloadImpact, Config.ReloadService, Config.Rollback, Config.Set",
+      "exceptionCategory": null
+    },
+    {
+      "message": "Tooling mesh activation remains fail-closed: Topic 'Tooling.GetMeshProjectionReadiness' is not registered in the contract registry.\n  Available topics: Config.CommitChangeSet, Config.Get, Config.GetPlugin, Config.GetSchemaMetadata, Config.GetVersionHistory, Config.PreviewDiff, Config.PreviewReloadImpact, Config.ReloadService, Config.Rollback, Config.Set",
+      "exceptionCategory": null
+    },
+    {
+      "message": "Failed to connect to wss://broker.emqx.io:8084/mqtt: [Errno 111] Connection refused",
+      "exceptionCategory": null
+    },
+    {
+      "message": "Failed to start WebRTC client: MQTTSignaling: failed to connect to any of the 1 brokers: ['wss://broker.emqx.io:8084/mqtt']",
+      "exceptionCategory": "RuntimeError"
+    },
+    {
+      "message": "Mesh retry could not start the WebRTC transport",
+      "exceptionCategory": null
+    },
+    {
+      "message": "Failed to connect to wss://broker.emqx.io:8084/mqtt: [Errno 111] Connection refused",
+      "exceptionCategory": null
+    },
+    {
+      "message": "Failed to start WebRTC client: MQTTSignaling: failed to connect to any of the 1 brokers: ['wss://broker.emqx.io:8084/mqtt']",
+      "exceptionCategory": "RuntimeError"
+    },
+    {
+      "message": "Mesh retry could not start the WebRTC transport",
+      "exceptionCategory": null
+    },
+    {
+      "message": "Failed to connect to wss://broker.emqx.io:8084/mqtt: [Errno 111] Connection refused",
+      "exceptionCategory": null
+    },
+    {
+      "message": "Failed to start WebRTC client: MQTTSignaling: failed to connect to any of the 1 brokers: ['wss://broker.emqx.io:8084/mqtt']",
+      "exceptionCategory": "RuntimeError"
+    },
+    {
+      "message": "Mesh retry could not start the WebRTC transport",
+      "exceptionCategory": null
+    },
+    {
+      "message": "Failed to connect to wss://broker.emqx.io:8084/mqtt: [Errno 111] Connection refused",
+      "exceptionCategory": null
+    },
+    {
+      "message": "Failed to start WebRTC client: MQTTSignaling: failed to connect to any of the 1 brokers: ['wss://broker.emqx.io:8084/mqtt']",
+      "exceptionCategory": "RuntimeError"
+    },
+    {
+      "message": "Mesh retry could not start the WebRTC transport",
+      "exceptionCategory": null
+    },
+    {
+      "message": "Failed to connect to wss://broker.emqx.io:8084/mqtt: [Errno 111] Connection refused",
+      "exceptionCategory": null
+    },
+    {
+      "message": "Failed to start WebRTC client: MQTTSignaling: failed to connect to any of the 1 brokers: ['wss://broker.emqx.io:8084/mqtt']",
+      "exceptionCategory": "RuntimeError"
+    },
+    {
+      "message": "Mesh retry could not start the WebRTC transport",
+      "exceptionCategory": null
+    },
+    {
+      "message": "Failed to connect to wss://broker.emqx.io:8084/mqtt: [Errno 111] Connection refused",
+      "exceptionCategory": null
+    },
+    {
+      "message": "Failed to start WebRTC client: MQTTSignaling: failed to connect to any of the 1 brokers: ['wss://broker.emqx.io:8084/mqtt']",
+      "exceptionCategory": "RuntimeError"
+    },
+    {
+      "message": "Mesh retry could not start the WebRTC transport",
+      "exceptionCategory": null
+    },
+    {
+      "message": "Failed to connect to wss://broker.emqx.io:8084/mqtt: [Errno 111] Connection refused",
+      "exceptionCategory": null
+    },
+    {
+      "message": "Failed to start WebRTC client: MQTTSignaling: failed to connect to any of the 1 brokers: ['wss://broker.emqx.io:8084/mqtt']",
+      "exceptionCategory": "RuntimeError"
+    },
+    {
+      "message": "Mesh retry could not start the WebRTC transport",
+      "exceptionCategory": null
+    }
+  ],
+  "ownRuntimeRetired": true
+}

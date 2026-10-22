@@ -1,0 +1,9 @@
+{
+  "originalSha256": "27a09e195d1a82f6dde770f60b15bcdcbf93f3743bf661c012405ae22eece5de",
+  "derivedSha256": "25658f36b4f3d3401a00c6a5e04f347d8a2ff707c8acf72b9e7e97accd04fe09",
+  "scope": "Only reference existing normalized config and empty env file in place; remove private config copy. Same lifecycle, bounds, locks, source/model/runtime/auth verification, sampling and receiver handling. No requester APP860 change.",
+  "credentialValuesCopied": false,
+  "settingsChanged": false,
+  "originalControllerEdited": false,
+  "actualNewLaunch": false
+}

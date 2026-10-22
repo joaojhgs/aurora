@@ -1,0 +1,82 @@
+{
+  "at": "2026-10-20T07:07:03.367546+00:00",
+  "status": "OFFLINE_PREPARATION_ATTEMPT_COMPLETE_REQUIRED_INPUT_ACQUISITION_NOT_ADMITTED",
+  "actualReadAt": "2026-10-20T06:55:47.650212+00:00",
+  "actualReadReceipt": "thesis/evidence/personal-notebook-readiness-20261020/offline-runtime-admission-v1742/notebook-offline-runtime-v1742-RESULT.json",
+  "receiptSha256": "a669bddcdf168be9da86617ce1bbe9151879131e3cb898d15c26a47c91e6d415",
+  "sameApprovedNotebook": {
+    "terminal": "term_f40f2bd6-0f71-4484-8347-ac221cf6ce9b",
+    "incarnation": "633939eb-60f4-4bc0-9a0c-5941dc6db36a",
+    "host": "ssh:ssh-sem-notebook-personal",
+    "worktree": "/home/developer/projects/aurora"
+  },
+  "offlineResolution": {
+    "command": [
+      "/home/developer/.asdf/shims/uv",
+      "--no-config",
+      "--offline",
+      "--cache-dir",
+      "/home/developer/.cache/uv",
+      "pip",
+      "install",
+      "--dry-run",
+      "--no-build",
+      "--no-deps",
+      "--python",
+      "/home/developer/projects/aurora/.venv/bin/python",
+      "llama-cpp-python==0.3.19"
+    ],
+    "exitCode": 1,
+    "error": "  \u00d7 No solution found when resolving dependencies:\n  \u2570\u2500\u25b6 Because llama-cpp-python was not found in the cache and you require\n      llama-cpp-python==0.3.19, we can conclude that your requirements are\n      unsatisfiable.\n\n      hint: Packages were unavailable because the network was disabled. When\n      the network is disabled, registry packages may only be read from the\n      cache.\n",
+    "sourceCacheMetadata": []
+  },
+  "matchedRuntimeRequirement": {
+    "llama-cpp-python": "0.3.19",
+    "otherFiveVersionsAlreadyObservedMatched": "Preserve previous metadata attribution; new backend/loaded GPU remains unproven"
+  },
+  "canonicalExistingAssetInputs": {
+    "llm": {
+      "bytes": 563036064,
+      "path": "/home/developer/projects/aurora/.artifacts/local-inference/models/Qwen3.5-0.8B-Q4_0.gguf",
+      "sha256": "57d1997790d1744fba5b40a7317df71ea5e2acee28c47e78f0cce39c0703f8cf"
+    },
+    "stt": {
+      "bytes": 145217532,
+      "path": "/home/developer/.cache/huggingface/hub/models--Systran--faster-whisper-base/blobs/d01c3014881c9c6f3133c182f3d2887eb6ca1c789a7538c5c007196857a0a6a9",
+      "sha256": "d01c3014881c9c6f3133c182f3d2887eb6ca1c789a7538c5c007196857a0a6a9"
+    },
+    "tts": {
+      "bytes": 63531379,
+      "path": "/home/developer/projects/aurora/.git/aurora-handoff-import-20261006/cpu-full-audio-v483/models/en_US-ljspeech-medium.onnx",
+      "sha256": "6f52a751e2349abe7a76735eb09dc1875298c77ea2342ffd2fef79ff81b87f22"
+    },
+    "tts_config": {
+      "bytes": 4972,
+      "path": "/home/developer/projects/aurora/.git/aurora-handoff-import-20261006/cpu-full-audio-v483/models/en_US-ljspeech-medium.onnx.json",
+      "sha256": "141d612cc0a95ed7efc1ca936b845c2364967f2e9217c5dbfcf69fc4d6c65860"
+    }
+  },
+  "models": {
+    "llm": "57d1997790d1744fba5b40a7317df71ea5e2acee28c47e78f0cce39c0703f8cf",
+    "stt": "d01c3014881c9c6f3133c182f3d2887eb6ca1c789a7538c5c007196857a0a6a9",
+    "tts": "6f52a751e2349abe7a76735eb09dc1875298c77ea2342ffd2fef79ff81b87f22",
+    "ttsConfig": "141d612cc0a95ed7efc1ca936b845c2364967f2e9217c5dbfcf69fc4d6c65860"
+  },
+  "audio": {
+    "channels": 1,
+    "sampleRate": 22050,
+    "sampleWidthBytes": 2,
+    "wavBytes": 219794,
+    "wavSha256": "da0ecc4ad0885746ab6e716585473917ab2b543a505bf0db09ebacfaa7943cbb"
+  },
+  "requiredSource": "Root qualified exact source snapshot and eventual K3 metadata fix version, never the notebook default OpenAI configuration",
+  "currentResourceConflict": "No matching cached wheel/source/build prerequisites in bounded checks. Download/transfer would require network use; N vs active W/D network/shared-proxy separation is not yet established. Source-input acquisition waits genuine non-interference admission or first natural serial resource window. This is not missing owner model permission.",
+  "coordinatorRequest": "Root msg current normal Orca root-n-offline-admission-result-20261020T0702; existing monitor/Coding only, exact approved hosts; no new worker or host-list retry",
+  "allowedNextEngineering": "Admit finite normal local dependency/asset preparation under existing identity after actual physical/network resource evidence. Preserve notebook repo/venv/user config/dirty work; prepare separate private runtime if needed, retain raw logs/hashes, prove actual backend/device and same effective workload in ordinary readiness. Do not rerun cache probe until inputs/tool capability changes.",
+  "sourceAcquisitionNotModelInfeasibility": true,
+  "newMeasurementsBuildsInstallsTransfersWorkersCredentialsOrDriverChanges": 0,
+  "nextSerialK2HeldForNotebook": false,
+  "applicableNotebookIndividualAndMultiproviderCoverageRetained": true,
+  "boundedNetworkComparison": "thesis/evidence/approved-node-network-admission-20261020/RESOURCE-ADMISSION-DECISION-v1743.json",
+  "nextAction": "First natural serial resource window for finite acquisition unless existing approved non-interference grouping arrives sooner; no unchanged cache/network proof loop and no N gate on K2."
+}

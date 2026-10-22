@@ -1,0 +1,26 @@
+{
+  "startedAt": "2026-10-15T03:47:16.844043+00:00",
+  "action": "download/extract Ubuntu runtime and development files privately; no system install",
+  "modelLoads": 0,
+  "measuredRequests": 0,
+  "systemConfigurationChanged": false,
+  "packages": [
+    {
+      "file": "libjack-jackd2-0_1.9.21~dfsg-3ubuntu3_arm64.deb",
+      "bytes": 285078,
+      "sha256": "29cf290a4d920a8dc71530d9c2410e5b540e84301a9409bea47fb0673954b12a"
+    },
+    {
+      "file": "libportaudio2_19.6.0-1.2build3_arm64.deb",
+      "bytes": 65400,
+      "sha256": "d1bc5b34e008d9d9ed12ae6f4980a97ec2bd47637d992f26c2dd20365cf30bb9"
+    },
+    {
+      "file": "portaudio19-dev_19.6.0-1.2build3_arm64.deb",
+      "bytes": 115474,
+      "sha256": "23e4a8b1ac8771532a77c6109bc48dc9048bde8a3d089f839c8a0a170a09e168"
+    }
+  ],
+  "downloadExitCode": 0,
+  "finishedAt": "2026-10-15T03:47:18.524825+00:00"
+}

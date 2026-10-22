@@ -1,0 +1,101 @@
+{
+  "at": "2026-10-22T14:04:47.367349+00:00",
+  "classification": "VERIFIED_WAIT",
+  "previousTurnClassification": "VERIFIED_WAIT: original requester directly confirmed live and completing cases",
+  "specificLiveHandle": {
+    "pid": 462924,
+    "startTicks": 144596371,
+    "state": "S"
+  },
+  "current": {
+    "at": "2026-10-22T14:04:22.355962+00:00",
+    "companion": {
+      "measured": {
+        "attempted": 232,
+        "correct": 232,
+        "failed": 0,
+        "harnessErrorsIncludedInFailed": 0,
+        "incorrectIncludedInFailed": 0,
+        "offered": 232,
+        "planned": 640,
+        "timeouts": 0,
+        "unstarted": 408
+      },
+      "warmup": {
+        "attempted": 15,
+        "correct": 15,
+        "failed": 0,
+        "harnessErrorsIncludedInFailed": 0,
+        "incorrectIncludedInFailed": 0,
+        "offered": 15,
+        "planned": 15,
+        "timeouts": 0,
+        "unstarted": 0
+      }
+    },
+    "completePairedCapsules": 247,
+    "elapsedSeconds": 10352.117266966,
+    "lastIndex": 232,
+    "lastNativeParent": "9ef7b31e6e47b612d4c8b1beda3cf74b",
+    "lastOrdinal": 247,
+    "manifestSha256": "3bfca19d2dd0a9eec3981eae256168a5badd9ac2bb58a270ff8a55df1d986cce",
+    "phase": "measured",
+    "pid": 462924,
+    "primary": {
+      "measured": {
+        "attempted": 232,
+        "correct": 232,
+        "failed": 0,
+        "harnessErrorsIncludedInFailed": 0,
+        "incorrectIncludedInFailed": 0,
+        "offered": 232,
+        "planned": 640,
+        "timeouts": 0,
+        "unstarted": 408
+      },
+      "warmup": {
+        "attempted": 15,
+        "correct": 15,
+        "failed": 0,
+        "harnessErrorsIncludedInFailed": 0,
+        "incorrectIncludedInFailed": 0,
+        "offered": 15,
+        "planned": 15,
+        "timeouts": 0,
+        "unstarted": 0
+      }
+    },
+    "status": "running"
+  },
+  "priorRetainedMeasuredPerStream": 260,
+  "conditionCorrectPerStream": {
+    "primary": 492,
+    "companion": 492
+  },
+  "terminalPresent": false,
+  "activeErrorPresent": false,
+  "freeBytes": 2205089792,
+  "diskFreeFloorBytes": 2147483648,
+  "mainSourceSettingsCountsClocksFloorChanged": false,
+  "newCompletedControlCustody": "control-link-receipts/20261022T140254.686729Z.json",
+  "newFilesLinked": 220,
+  "newBytesHashed": 1327110,
+  "oldFilesRehashed": 0,
+  "newPayloadAllocations": 0,
+  "newWorkersReviewsModelsBuildsOrDeviceCommands": 0,
+  "rootPhoneNotebookReads": 0,
+  "phoneOwner": "term_1f27be31-0284-4366-bb91-30fe538cd30e",
+  "sourceHandoff": "ebde+v2383 closed",
+  "jointWorkerStorageBudget": "JOINT-WORKER-STORAGE-BUDGET-v2470.json;420MiB outstanding reservation,348930048B capacity gap at13:33 baseline",
+  "sharedStorageAdmissionReplyPending": true,
+  "phoneMeasured900StorageAdmitted": false,
+  "independentNotebookReadinessNotBlanketHeld": true,
+  "originalMonitorMailbox": "Monitor msg_b85f9c60098d limited requester-side phone audio-to-audio pilot pass; exact provider three-stage joins and dual raw/WAV custody still pending, no Root phone reads or new tests requested; saved-budget answer still pending",
+  "exactUnusedWebpackCachePermission": "PENDING; no deletion/reask/implicit approval",
+  "nextSutAction": "Continue exact Main to full condition completion then EOF/audio/normal actor retirement/release and prepared mixed P2P actual capacity admission; same phone worker supplies exact incremental/peak custody budget before prospective900",
+  "nextMaximumObservationUtc": "2026-10-22T14:09:47.367349+00:00",
+  "jointAdditionalCapacityNeededNowBytes": 382795776,
+  "phoneTrialQualification": "Monitor-reported embedded-GGUF-template cohort referenceMatched900=false, requester valid31788B WAV at6836.2ms,0measured; not matched900 or provider-native acceptance",
+  "mailAck": "delivery_2bcf1942e857",
+  "headroomAboveFloorBytes": 57606144
+}

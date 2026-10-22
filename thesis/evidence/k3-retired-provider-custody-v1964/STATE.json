@@ -1,0 +1,272 @@
+{
+  "at": 1792534559.8140388,
+  "status": "COMPLETE_TWO_PHYSICAL_ARCHIVES_ALL_MEMBER_HASHES_VERIFIED",
+  "archives": [
+    {
+      "archive": "thesis/evidence/k3-retired-provider-custody-v1964/provider-1/provider.tar.gz",
+      "bytes": 457015,
+      "sha256": "7bd9662a1614660fd9a8acf38dae2a7a0a8587e7d7cb0e8e5abaaf8a00d86615",
+      "rawMembers": 17,
+      "rawBytes": 8093640,
+      "allRawMemberHashesVerified": true,
+      "sealOriginalSha256": "6fe7f695f0e5af08cdea3e2b338903d9099da8cbd16823f4b4266a7cb5289086",
+      "sealTrailingRepresentation": "'\\n'",
+      "metadataNote": "Original seal is valid JSON with a normal newline. Original archive/seal/raw member bytes remain unchanged; canonical seal copy contains the same parsed object.",
+      "files": [
+        {
+          "member": "ACTUAL-FILES-v1912.json",
+          "bytes": 2221,
+          "sha256": "989081631a65f5d5494a3d9b9e369d2bbb62f6bb8c14e53aa37e21d10d3fc368"
+        },
+        {
+          "member": "PREPARATION-v1912.json",
+          "bytes": 8840,
+          "sha256": "537b17bba18ef42a2bf73aab03e04614e3d3dd948b1cb354d4e50be4530696d0"
+        },
+        {
+          "member": "ROOT-ADMISSION-v1914.json",
+          "bytes": 8272,
+          "sha256": "239c310e8773661a04a505c6b64bd2df505f843fb7b2613bbae5554bcaf6b9be"
+        },
+        {
+          "member": "ROOT-LAUNCH-INTENT-v1914.json",
+          "bytes": 183,
+          "sha256": "7191ca082821d081b8e3c30f6b7567468b51e048eb88d9d5a97fe8fc0d670c0b"
+        },
+        {
+          "member": "ROOT-LAUNCH-v1914.json",
+          "bytes": 275,
+          "sha256": "2ccd20103416a7d25c3677064767dd53676f260ed71abcf19e14e00481a417eb"
+        },
+        {
+          "member": "STATUS.json",
+          "bytes": 161081,
+          "sha256": "f9eec249869dcbfa2b4f20bcef3fbba284443feda2d0bd719a7a808c58700bab"
+        },
+        {
+          "member": "actual-provider-bindings.jsonl",
+          "bytes": 819,
+          "sha256": "e98e3e508de67ffa5788a3f08dfafa19751f045bf5721a9bd1007ad4a405a49f"
+        },
+        {
+          "member": "assistant-identity.json",
+          "bytes": 1417,
+          "sha256": "6f1ad2702ddb4860ddf57d54566b8b4a5febfcfb117d750871c7d0e6c6be1554"
+        },
+        {
+          "member": "controller-launch.json",
+          "bytes": 300,
+          "sha256": "79ddd84d907dd7157775bf941ebcdb4e7fd01354e2acdcc3e3242681f4529fbb"
+        },
+        {
+          "member": "provider-manifest.json",
+          "bytes": 7138,
+          "sha256": "ff1d2edc13fe65e646dccad691f4c0a3f83f31b224b796ef5f752402ce298e69"
+        },
+        {
+          "member": "receiver-identity.json",
+          "bytes": 1372,
+          "sha256": "5f02bde5cc7867a42ed0c42f7c851b1c7744a57255e3cf4d3f785f91850400e4"
+        },
+        {
+          "member": "resources.jsonl",
+          "bytes": 7899549,
+          "sha256": "7e7dd7c04b9e2d6515d33036d9799e06980e4dbcb8dba6bb1535e693ecb6992d"
+        },
+        {
+          "member": "runtime-versions.json",
+          "bytes": 210,
+          "sha256": "078733593a3d1af44ffa754d8dafac30459e993b219da96295614854c1cd2e57"
+        },
+        {
+          "member": "stt-identity.json",
+          "bytes": 1399,
+          "sha256": "153f8a3da48253e0c936a6f40afef97e35cd98c54b221d8c0eee49af7f044a56"
+        },
+        {
+          "member": "terminal.json",
+          "bytes": 435,
+          "sha256": "4f691037cb48c0dff29f93335bfe31611288824097a5011dd9053835ec89dbef"
+        },
+        {
+          "member": "voice-stages.jsonl",
+          "bytes": 0,
+          "sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+        },
+        {
+          "member": "voice-stages.status.json",
+          "bytes": 129,
+          "sha256": "33092f425f332f5fd463fbc1b5a24197757503094adc77bc92d814f09735bb68"
+        }
+      ],
+      "pages": [
+        {
+          "offset": 0,
+          "bytes": 98304,
+          "sha256": "b05a0d4db723501f4239891b23e4f35d7e9d758392496204b97bacdd3d64c1a0"
+        },
+        {
+          "offset": 98304,
+          "bytes": 98304,
+          "sha256": "b01b1b322cdfd90fa1dce63b46d5542d7da090ba3a89a1f0d9ae252911f59e0b"
+        },
+        {
+          "offset": 196608,
+          "bytes": 98304,
+          "sha256": "a07e937f1f34c79d66ccaa082d2d84680148f7d3a71e6b62f2509da36eee15df"
+        },
+        {
+          "offset": 294912,
+          "bytes": 98304,
+          "sha256": "0b02626e6e0cc72c456f46053c004ba90f8f74709373fb5df787e3f380d083bb"
+        },
+        {
+          "offset": 393216,
+          "bytes": 63799,
+          "sha256": "a5e75160bceb187a9ab5da9370c0b30785bd2ae3491b8dd894740576ba976b24"
+        }
+      ],
+      "originalsPreserved": true,
+      "duplicateUncompressedRawBytes": 0,
+      "sealTrailingOrdinals": [
+        10
+      ],
+      "noteCorrectionReceipt": "NOTE-CORRECTION.json"
+    },
+    {
+      "archive": "thesis/evidence/k3-retired-provider-custody-v1964/provider-2/provider.tar.gz",
+      "bytes": 412192,
+      "sha256": "2c8729abfcaee0f1fdb033e3bb1d3050f0d66ca62323b3bf595ff85f24c2b6dd",
+      "rawMembers": 17,
+      "rawBytes": 7189179,
+      "allRawMemberHashesVerified": true,
+      "sealOriginalSha256": "120272910962253995485de2a46e7df94ed0521d74ed88517679320e7ee1fdda",
+      "sealTrailingRepresentation": "'\\n'",
+      "metadataNote": "Original seal is valid JSON with a normal newline. Original archive/seal/raw member bytes remain unchanged; canonical seal copy contains the same parsed object.",
+      "files": [
+        {
+          "member": "ACTUAL-FILES-v1935.json",
+          "bytes": 2221,
+          "sha256": "292868f1d4386c23a0011828e6aaef3a03c9fc1de2d516722dc7a0816573eaea"
+        },
+        {
+          "member": "PREPARATION-v1935.json",
+          "bytes": 9221,
+          "sha256": "e0315e7737c780b9bbb70f8d28b06a8d6067216058064e2de018fb02d4a5ff77"
+        },
+        {
+          "member": "ROOT-ADMISSION-v1936.json",
+          "bytes": 8462,
+          "sha256": "fced4808b8f1e92700742227f9fda695d8913a1bf60158e5be5573a6f0d17bd8"
+        },
+        {
+          "member": "ROOT-LAUNCH-INTENT-v1936.json",
+          "bytes": 183,
+          "sha256": "30caf9b8b2ff9e2685835ba276de9c3dfc29cb636e7b43906f9c58ffe12fba6a"
+        },
+        {
+          "member": "ROOT-LAUNCH-v1936.json",
+          "bytes": 275,
+          "sha256": "6f1475767376e68735c566939b90bb5aec20c430dc2357dc8508c3d5ba6d7f6f"
+        },
+        {
+          "member": "STATUS.json",
+          "bytes": 161092,
+          "sha256": "c707b051c133c285fe087c3a609a905126fa74065f7fd0f131444c7f38f8e7b0"
+        },
+        {
+          "member": "actual-provider-bindings.jsonl",
+          "bytes": 22466,
+          "sha256": "dc1349752b93a3dd0a350bb5b2cf0460d42898504f8d875e97f3f2841e4800f2"
+        },
+        {
+          "member": "assistant-identity.json",
+          "bytes": 1417,
+          "sha256": "d5c81ed53e1da4bfbde2a748e8fda5ee7447d1c4f1ba1c1b143c7932d8c5b61d"
+        },
+        {
+          "member": "controller-launch.json",
+          "bytes": 300,
+          "sha256": "85ad3c2a318a7ebad37403278e63cdce28fef623920b90605a307c97d970f9b8"
+        },
+        {
+          "member": "provider-manifest.json",
+          "bytes": 7320,
+          "sha256": "016d461363c4f1d3baa2fbb67bf7a85c0aa79df1a0ebb419fc7d3f166a4de629"
+        },
+        {
+          "member": "receiver-identity.json",
+          "bytes": 1372,
+          "sha256": "1c5978697b8e89471ca34f15574dd84c466d30c01afca6d754926d06b0cfb28d"
+        },
+        {
+          "member": "resources.jsonl",
+          "bytes": 6599356,
+          "sha256": "d36bcb9b97fe84b213caaf17b76e99db21feffc6121b84eb3c7c83ab92e6698e"
+        },
+        {
+          "member": "runtime-versions.json",
+          "bytes": 210,
+          "sha256": "1f497cc20227145e68a338084a561f540f21e34da47c459441b279a6f4c2a6f8"
+        },
+        {
+          "member": "stt-identity.json",
+          "bytes": 1399,
+          "sha256": "a1827ac1c251fcc0505f9a802f1ac53f7fbb042ca0291d00f2b91fa218760b2f"
+        },
+        {
+          "member": "terminal.json",
+          "bytes": 434,
+          "sha256": "3ec23b309023d6b1654bccf68eb7a1dae40fcb2d648c3b8619ff8702bcfc419c"
+        },
+        {
+          "member": "voice-stages.jsonl",
+          "bytes": 373315,
+          "sha256": "14469f770c7f01387c330a517eaad830a24d1b0b5766954aec1a518901637459"
+        },
+        {
+          "member": "voice-stages.status.json",
+          "bytes": 136,
+          "sha256": "0f11fbceca55da2f2d41204080441abafd856b1c68bfe304a7f8a7cb64954e1d"
+        }
+      ],
+      "pages": [
+        {
+          "offset": 0,
+          "bytes": 98304,
+          "sha256": "45cfe905c65075d5819b74e3eb7af1392da7bdf07486897dc852e13cf2a40db2"
+        },
+        {
+          "offset": 98304,
+          "bytes": 98304,
+          "sha256": "350d6b9af65d418070d7b67c838874b1b5335d5aa3da15c1208fbf406ba38ebf"
+        },
+        {
+          "offset": 196608,
+          "bytes": 98304,
+          "sha256": "5b4f24610b0c35cc259bd3faa6afcf19710585735805a68248e668c2e4382806"
+        },
+        {
+          "offset": 294912,
+          "bytes": 98304,
+          "sha256": "f2c37ccecdcf41745d0e40ab7dd33a77f90766a8349bad6dbe0ae685d2a833a7"
+        },
+        {
+          "offset": 393216,
+          "bytes": 18976,
+          "sha256": "689bf4f3fd0a6064ff2303dba8771f62d0ccb7f3cf52df011a581947f66f87a1"
+        }
+      ],
+      "originalsPreserved": true,
+      "duplicateUncompressedRawBytes": 0,
+      "sealTrailingOrdinals": [
+        10
+      ],
+      "noteCorrectionReceipt": "NOTE-CORRECTION.json"
+    }
+  ],
+  "sutCalls": 0,
+  "modelsCopied": 0,
+  "operation": null,
+  "finishedAt": 1792534605.0717857
+}

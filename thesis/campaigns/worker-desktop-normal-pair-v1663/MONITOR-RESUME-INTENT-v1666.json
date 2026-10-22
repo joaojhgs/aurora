@@ -1,0 +1,10 @@
+{
+  "at": "2026-10-20T00:16:46.045717+00:00",
+  "sameGoal": "01a123ff-19ba-7332-a2f7-346a722af79f",
+  "sameTerminal": "term_2eab47ed-ab9b-4e35-bd9b-fc068c60e3fc",
+  "sameIncarnation": "37e50d9c-6cf5-4e28-a63b-f2bc3eed5661",
+  "maximumSends": 1,
+  "command": "/goal resume",
+  "ownerGateComplete": "V1658 physical1794files/267MB/retiresource proof",
+  "rootAlreadyActive": "Actual native get_goal ACTIVE, Coding resume720f24e4; never duplicate Root"
+}

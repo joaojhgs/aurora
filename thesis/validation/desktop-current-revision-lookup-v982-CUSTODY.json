@@ -1,0 +1,16 @@
+{
+  "at": "2026-10-16T08:54:25.425902+00:00",
+  "source": ".git/aurora-handoff-import-20261006/v982-desktop-existing-commit-object-RESULT.json",
+  "canonical": "thesis/validation/desktop-current-revision-lookup-v982.json",
+  "bytes": 545,
+  "sha256": "381d9eddd3684821cfe702b0437bef4c8c2c5e92a555e7c0d0612c66ab91a6a3",
+  "sourceExistingHead": "2a7d0da4f6fb1054e6bdc0ad6cde83fdd954ca69",
+  "requestedWorkerHead": "cbac78fe3fb2b73100bfaa9dc198fb6bff689840",
+  "targetPresentInThisExistingGitStore": false,
+  "sourceWorktreeChanged": false,
+  "gitFetchCheckoutExportBuildOrTestExecuted": false,
+  "nextPlainCursor": 181439,
+  "sourceFollowup": "Current worker working-tree snapshot delivery and source/app binding required for later C06 build. Existing worker dirty SDK/UI changes plus3 owned app integration paths must be preserved; commit alone is insufficient.",
+  "firstSNHTTPGate": false,
+  "probeClosed": true
+}

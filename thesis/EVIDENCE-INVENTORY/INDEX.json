@@ -1,0 +1,128 @@
+{
+  "schema": "aurora.thesis.publication-inventory.v1",
+  "snapshot_utc": "2026-10-22T16:17:41.301135+00:00",
+  "repository": "https://github.com/joaojhgs/aurora",
+  "source_branch": "codex/aurora-native-speech-routing-20261007",
+  "source_commit": "ebde3a8acf6315f920d03593845f17a1fc65a733",
+  "inventory_scope": [
+    "thesis/",
+    "docs/experiments/tcc-20261013-submission-20261030/"
+  ],
+  "inventory_origin": "coding worker only; Personal desktop deferred by owner",
+  "file_count": 68289,
+  "bytes": 2802248499,
+  "disposition_counts": {
+    "git_citable_evidence": 28617,
+    "raw_release_deferred": 33735,
+    "raw_release_deferred_source_custody": 3125,
+    "excluded_regenerable_cache": 274,
+    "raw_release_deferred_embedded_payload": 2494,
+    "excluded_credential_like_field_or_copy": 13,
+    "raw_release_deferred_over_10_MB": 20,
+    "pending_live_or_recent": 9,
+    "pending_mutable_status": 2
+  },
+  "disposition_bytes": {
+    "git_citable_evidence": 632636892,
+    "raw_release_deferred": 1301274953,
+    "raw_release_deferred_source_custody": 51312732,
+    "excluded_regenerable_cache": 6724214,
+    "raw_release_deferred_embedded_payload": 68314155,
+    "excluded_credential_like_field_or_copy": 61261,
+    "raw_release_deferred_over_10_MB": 741215387,
+    "pending_live_or_recent": 528455,
+    "pending_mutable_status": 180450
+  },
+  "shards": [
+    {
+      "path": "thesis/EVIDENCE-INVENTORY/worker-0001.jsonl",
+      "bytes": 1272075,
+      "sha256": "da0f5b27493c099293e9601f1744008d7aebc51f249982f511822fb653ef82bf",
+      "records": 5000
+    },
+    {
+      "path": "thesis/EVIDENCE-INVENTORY/worker-0002.jsonl",
+      "bytes": 1204412,
+      "sha256": "2c10917ef653b00406f99927c1a1805a32f3b76772df20c0a7a166eeeeb1f2ee",
+      "records": 5000
+    },
+    {
+      "path": "thesis/EVIDENCE-INVENTORY/worker-0003.jsonl",
+      "bytes": 1287512,
+      "sha256": "4ca8261a27c26102986ba23bce2c5eb797edb54cfe879ed844173a927934a381",
+      "records": 5000
+    },
+    {
+      "path": "thesis/EVIDENCE-INVENTORY/worker-0004.jsonl",
+      "bytes": 1229686,
+      "sha256": "676b0a868adf7dc859aa33147837bbdcc4aeda93cb7d41267d244fc064f94a0e",
+      "records": 5000
+    },
+    {
+      "path": "thesis/EVIDENCE-INVENTORY/worker-0005.jsonl",
+      "bytes": 1342000,
+      "sha256": "f4c5fa3317808de4add457d54b3c14a1f7c926959f3daa089edef887893d0a6c",
+      "records": 5000
+    },
+    {
+      "path": "thesis/EVIDENCE-INVENTORY/worker-0006.jsonl",
+      "bytes": 1322457,
+      "sha256": "e8ca976ef6553558816243d550fe493c8c6a9f0b77b2a8b5fae3630e68028eb1",
+      "records": 5000
+    },
+    {
+      "path": "thesis/EVIDENCE-INVENTORY/worker-0007.jsonl",
+      "bytes": 1338137,
+      "sha256": "e4469a2e298ad6232ba50562078fd59f49d0889be32c5fe4ff0ad9d37d20f2ab",
+      "records": 5000
+    },
+    {
+      "path": "thesis/EVIDENCE-INVENTORY/worker-0008.jsonl",
+      "bytes": 1227266,
+      "sha256": "0d98ed5708e16f2ecbdfc3d8299b0d7c90bf1e257c543044edb12ecb28ecd6a0",
+      "records": 5000
+    },
+    {
+      "path": "thesis/EVIDENCE-INVENTORY/worker-0009.jsonl",
+      "bytes": 1335562,
+      "sha256": "45e9587c6290b342eba5245a2f339962b81e7271d3f6f0d2341f87347bbf9be1",
+      "records": 5000
+    },
+    {
+      "path": "thesis/EVIDENCE-INVENTORY/worker-0010.jsonl",
+      "bytes": 1381261,
+      "sha256": "ac7d1973e5184b0b429a71bde57e8796adbe1136cb728c843498579432d77c58",
+      "records": 5000
+    },
+    {
+      "path": "thesis/EVIDENCE-INVENTORY/worker-0011.jsonl",
+      "bytes": 1237642,
+      "sha256": "984db8508548b89a759fe3820d2248a04d9e8742414dceadc0147ecbe86a92f3",
+      "records": 5000
+    },
+    {
+      "path": "thesis/EVIDENCE-INVENTORY/worker-0012.jsonl",
+      "bytes": 1220905,
+      "sha256": "423a8bfbefb26f8464ef305c25c8dfef5fa34b26b0888296f3e9df8cf361fe22",
+      "records": 5000
+    },
+    {
+      "path": "thesis/EVIDENCE-INVENTORY/worker-0013.jsonl",
+      "bytes": 1115278,
+      "sha256": "88f713332504b19b0a031c78ccd29a7206efa9fc4fc85883b8513c008eac75d7",
+      "records": 5000
+    },
+    {
+      "path": "thesis/EVIDENCE-INVENTORY/worker-0014.jsonl",
+      "bytes": 779735,
+      "sha256": "fea4b0f8583155fa8211b502cf94f95f202433663aa21bd7781df2a8d92aa720",
+      "records": 3289
+    }
+  ],
+  "snapshot_limits": [
+    "Per-file hashes describe bounded reads, not an atomic whole-tree snapshot.",
+    "Files observed changing or under active/recent paths are inventoried but are not copied into Git.",
+    "Raw data are deferred; their inventory entries do not assert public availability or privacy approval.",
+    "Generated publication metadata and the later push receipt are not self-inventoried."
+  ]
+}

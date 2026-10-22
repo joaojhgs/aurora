@@ -1,0 +1,127 @@
+{
+  "objective": "tcc:20261013:submission-20261030",
+  "files": {
+    "requests.jsonl.cleanup.json": {
+      "private_original_sha256": "b520a0441c3f52026bcd3f44fdcd6bc0f737d8f220ed62460b82564c81af2c63",
+      "export_sha256": "b520a0441c3f52026bcd3f44fdcd6bc0f737d8f220ed62460b82564c81af2c63",
+      "credential_lines_withheld": 0,
+      "byte_identical": true
+    },
+    "requests.jsonl.manifest.json": {
+      "private_original_sha256": "ddfc729e949fd1665dc048a99da86ac1d9a901a3eb86ed79c1b140071bbab81e",
+      "export_sha256": "ddfc729e949fd1665dc048a99da86ac1d9a901a3eb86ed79c1b140071bbab81e",
+      "credential_lines_withheld": 0,
+      "byte_identical": true
+    },
+    "requests.jsonl.provider-inputs.jsonl": {
+      "private_original_sha256": "8709df009342e3f34d359f8634b3cacf07915d426595cbc4b33f5f06216c0868",
+      "export_sha256": "8709df009342e3f34d359f8634b3cacf07915d426595cbc4b33f5f06216c0868",
+      "credential_lines_withheld": 0,
+      "byte_identical": true
+    },
+    "root-manifest.json": {
+      "private_original_sha256": "0cfdce0cb0e3906cde2332f2158e1a4b999278ec65b1728b9d982714e42af11a",
+      "export_sha256": "0cfdce0cb0e3906cde2332f2158e1a4b999278ec65b1728b9d982714e42af11a",
+      "credential_lines_withheld": 0,
+      "byte_identical": true
+    },
+    "requests.jsonl": {
+      "private_original_sha256": "6733d650eedb70fdf6e728f354dbe9a845605682e85c945163a4c28c9a723b71",
+      "export_sha256": "6733d650eedb70fdf6e728f354dbe9a845605682e85c945163a4c28c9a723b71",
+      "credential_lines_withheld": 0,
+      "byte_identical": true
+    },
+    "stdout.log": {
+      "private_original_sha256": "18b3507537f05590d79dd8f7b9b25018f00429331c2f9e9a289df9896294547d",
+      "export_sha256": "1abcb2692ec05c9081e6e416864304116a3db18bda4b3767d56da51d5786f853",
+      "credential_lines_withheld": 4,
+      "byte_identical": false
+    },
+    "root-result.json": {
+      "private_original_sha256": "d924c3ca4d92bd6aac6b6d74290681d187317b648e61c96e441a1f876299e602",
+      "export_sha256": "d924c3ca4d92bd6aac6b6d74290681d187317b648e61c96e441a1f876299e602",
+      "credential_lines_withheld": 0,
+      "byte_identical": true
+    },
+    "conditional-latency-summary.json": {
+      "private_original_sha256": "4e276ef12c563d73885bf0c462539453e0860cc41ab40c8f2b94aaaaaaf37a6e",
+      "export_sha256": "4e276ef12c563d73885bf0c462539453e0860cc41ab40c8f2b94aaaaaaf37a6e",
+      "credential_lines_withheld": 0,
+      "byte_identical": true
+    },
+    "resources.jsonl": {
+      "private_original_sha256": "71a436588cc9f26220854526ef51b87b8400896e5834f97ac96884965a90c4db",
+      "export_sha256": "71a436588cc9f26220854526ef51b87b8400896e5834f97ac96884965a90c4db",
+      "credential_lines_withheld": 0,
+      "byte_identical": true
+    },
+    "live-handle.json": {
+      "private_original_sha256": "07c918459de3829b9225fe158f7226501f4240a862cab1bad61a0cca3da21b29",
+      "export_sha256": "07c918459de3829b9225fe158f7226501f4240a862cab1bad61a0cca3da21b29",
+      "credential_lines_withheld": 0,
+      "byte_identical": true
+    },
+    "stderr.log": {
+      "private_original_sha256": "06da480c61659bfcb6963117824f058a97a1be6422bc5547e4ce02bef01a8cc0",
+      "export_sha256": "06da480c61659bfcb6963117824f058a97a1be6422bc5547e4ce02bef01a8cc0",
+      "credential_lines_withheld": 0,
+      "byte_identical": true
+    },
+    "source/app/services/supervisor.py": {
+      "private_original_sha256": "4ac2b5578fa8b3759bf30e7dfe8c68364e3453eba5020663dc3be670b838a7d8",
+      "export_sha256": "4ac2b5578fa8b3759bf30e7dfe8c68364e3453eba5020663dc3be670b838a7d8",
+      "credential_lines_withheld": 0,
+      "byte_identical": true
+    },
+    "source/app/shared/services/process_launcher.py": {
+      "private_original_sha256": "c6e102416d03b092d5ac33ef50caa5dc4f5448daf480606a0026f72e16a4eef3",
+      "export_sha256": "c6e102416d03b092d5ac33ef50caa5dc4f5448daf480606a0026f72e16a4eef3",
+      "credential_lines_withheld": 0,
+      "byte_identical": true
+    },
+    "source/app/services/gateway/fastapi_app.py": {
+      "private_original_sha256": "319469ee90ab706eaf5066bcde9f3f65b69b2894a4054c4bfe07190b25f6e94b",
+      "export_sha256": "319469ee90ab706eaf5066bcde9f3f65b69b2894a4054c4bfe07190b25f6e94b",
+      "credential_lines_withheld": 0,
+      "byte_identical": true
+    },
+    "source/app/services/orchestrator/service.py": {
+      "private_original_sha256": "0b77092091946b94130945b3bfb670a922a209b846d5ffe30e23f75b52f982f3",
+      "export_sha256": "0b77092091946b94130945b3bfb670a922a209b846d5ffe30e23f75b52f982f3",
+      "credential_lines_withheld": 0,
+      "byte_identical": true
+    },
+    "source/app/services/orchestrator/chat_llama_cpp.py": {
+      "private_original_sha256": "bbb7a3d247af8b53f55ee0b15be81db520f02ab1a53a6aff49c1d2e523f0b55e",
+      "export_sha256": "bbb7a3d247af8b53f55ee0b15be81db520f02ab1a53a6aff49c1d2e523f0b55e",
+      "credential_lines_withheld": 0,
+      "byte_identical": true
+    },
+    "source/app/services/orchestrator/agents/chatbot.py": {
+      "private_original_sha256": "4e6d2b21a2eb672a47128340700a6d5f09adeabbab99980b6ba5d4e4e9e692ee",
+      "export_sha256": "4e6d2b21a2eb672a47128340700a6d5f09adeabbab99980b6ba5d4e4e9e692ee",
+      "credential_lines_withheld": 0,
+      "byte_identical": true
+    },
+    "source/scripts/experiments/assistant_local_api_pilot.py": {
+      "private_original_sha256": "de351707df153a38c0b8d0fb5a2df411895c5e63868b32ae1f3ab5864552c93c",
+      "export_sha256": "de351707df153a38c0b8d0fb5a2df411895c5e63868b32ae1f3ab5864552c93c",
+      "credential_lines_withheld": 0,
+      "byte_identical": true
+    },
+    "source/scripts/experiments/assistant_matched_input_hook.py": {
+      "private_original_sha256": "1e342abe17092ac6b237564f51c31344e60f84fde8c1d1636b8876bd33a1f622",
+      "export_sha256": "1e342abe17092ac6b237564f51c31344e60f84fde8c1d1636b8876bd33a1f622",
+      "credential_lines_withheld": 0,
+      "byte_identical": true
+    },
+    "source/scripts/experiments/assistant_measurement_records.py": {
+      "private_original_sha256": "2648b5579c487e15936bf2eafd70ae8b63db5567915ff4c1c1b318989da2a646",
+      "export_sha256": "2648b5579c487e15936bf2eafd70ae8b63db5567915ff4c1c1b318989da2a646",
+      "credential_lines_withheld": 0,
+      "byte_identical": true
+    }
+  },
+  "full_playwright_report_exported": false,
+  "raw_history_preserved": true
+}

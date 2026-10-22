@@ -1,0 +1,27 @@
+{
+  "reviewedAt": "2026-10-18T08:02:05Z",
+  "run": "run_e6054e76e9fc",
+  "task": "task_d7ea336050cf",
+  "dispatch": "ctx_37b4d0a3c14f",
+  "request": "msg_e369a857829d",
+  "verdict": "PASS_BOUNDED_CONTROLLER_DELTA_ONLY",
+  "source": "thesis/campaigns/worker-desktop-k3-orca-relayed-http-v1413/provider-runtime/controller.py",
+  "bytes": 24902,
+  "sha256": "25658f36b4f3d3401a00c6a5e04f347d8a2ff707c8acf72b9e7e97accd04fe09",
+  "baseline": "Previously reviewed original controller27a09e prefix; unchanged body not re-reviewed",
+  "delta": "thesis/campaigns/worker-desktop-k3-orca-relayed-http-v1413/provider-runtime/CONTROLLER-DELTA.diff",
+  "findings": [
+    "CONFIG/ENV_FILE now reference existing normalized private predecessor paths; changed code no longer writes a config copy.",
+    "Lines193-196 retain regular-file/non-symlink guards;254-263 retain exact config/env path,size,SHA bindings;264-283 retain existing in-process API-key and independently admitted endpoint/authority binding.",
+    "Runtime config reference is rehashed immediately before launch357-358, passed through AURORA_CONFIG_FILE/AURORA_ENV_FILE369-370; new runtime data/backups/logs stay isolated351-353/371-372.",
+    "Changed startup and unchanged viewed teardown do not delete/write predecessor config/env; Root must preserve referenced files through new runtime lifetime.",
+    "No models,endpoints,permissions,identity/grants,lock/lifecycle policy or cap changes in the supplied delta; no substantive correctness issue found in the requested change."
+  ],
+  "limits": [
+    "Source-delta review is not actual launch/admission evidence.",
+    "Root alone verifies actual manifest/config/model pins and available resources, retires exact owned predecessor SUT, waits copier final checkpoint/exit, and launches only after lifetime/locks/route/auth admission.",
+    "15 excluded ordinary warmups/45 native model-handler joins and900 measured remain required; no inference,config/env content read,tests,builds,source edits,agents or expanded review occurred.",
+    "Previous GitNexus context lookup unavailable; supplied current source/diff used directly."
+  ],
+  "recordedAt": "2026-10-18T08:03:21.348640+00:00"
+}

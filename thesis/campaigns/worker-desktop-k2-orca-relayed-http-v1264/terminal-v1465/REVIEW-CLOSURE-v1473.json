@@ -1,0 +1,15 @@
+{
+  "at": "2026-10-18T07:49:59.891442+00:00",
+  "status": "SOL_COMPUTATION_PROVENANCE_PASS_R1_EXACT_REPORT_FIX_APPLIED_REVIEW_CLOSED",
+  "reviewMessage": "msg_8162f95f723e",
+  "reviewPath": "thesis/campaigns/worker-desktop-k2-orca-relayed-http-v1264/terminal-v1465/SOL-RESOURCE-REVIEW-v1473.md",
+  "reviewSha256": "edfb4294d48f1d7d83d3b1ceadcea3b5fbb986c8a79dcfa9b259f173038097a9",
+  "oldReportBackup": "thesis/campaigns/worker-desktop-k2-orca-relayed-http-v1264/terminal-v1465/RESULTS-before-R1-v1473.md",
+  "oldReportSha256": "bcd42c0f4c9b0a2e72b837a8cf8e0e455aa4bf1f6df9e01d63d5908378b0edd4",
+  "reportPath": "thesis/campaigns/worker-desktop-k2-orca-relayed-http-v1264/terminal-v1465/RESULTS.md",
+  "newReportSha256": "10e8d4067c4e350c9e581150bb695695118ff655b06f9b424fe5b9d17b2b6c9b",
+  "replacement": "Recorded samples are present inside the requester\u2019s full-attempt interval for900/900 cases and inside the provider\u2019s native-span envelope for900/900 cases; these are separate same-host windows. Worker STT model windows contain samples for900/900 cases.",
+  "numericalOrSourceChanges": false,
+  "newSourceReviewRequired": false,
+  "newMeasurementsOrSutCalls": 0
+}

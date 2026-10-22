@@ -1,0 +1,27 @@
+{
+  "at": "2026-10-20T22:48:30.108146+00:00",
+  "status": "TERMINAL_ZERO_MEASURED_COLLECTOR_DEFECT",
+  "warmupAttempted": 18,
+  "warmupCorrect": 15,
+  "warmupFailedPreaccept": 3,
+  "measured": 0,
+  "unattemptedMeasured": 900,
+  "stopReason": "remote_stage_proof_deadline",
+  "collectorActualError": "ValueError: mesh_route_observation_row_invalid",
+  "specificDefect": "known rejected warmup route rows truthfully have request_outcome=failed;old parser required ok for every retained row",
+  "requesterActors": {
+    "3147698": "absent",
+    "3147864": "absent",
+    "3147699": "absent",
+    "3147700": "absent"
+  },
+  "providerReservationPreserved": true,
+  "custody": {
+    "sequence": 9,
+    "cases": 18,
+    "audioReferenced": 15,
+    "files": 95,
+    "errors": null
+  },
+  "nextAction": "one saved-data complete-native-proof analysis with fixed exact rejected-stage/correlation validation;no model calls;then new prospective frozen version only after prior actor retirement"
+}

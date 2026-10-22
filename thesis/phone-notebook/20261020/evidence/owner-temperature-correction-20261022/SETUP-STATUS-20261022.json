@@ -1,0 +1,87 @@
+{
+  "at": "2026-10-22T02:53:35.719163+00:00",
+  "state": "PINNED_PUBLIC_ASSETS_VERIFIED_USB_NOT_EXPOSED_BUILD_THERMAL_GUARD",
+  "phone": {
+    "serial": "KBX8LNFUBE5XGQRG",
+    "currentState": "device",
+    "inventory": [],
+    "observedAt": "2026-10-22T02:53:35.719163+00:00",
+    "controllerPid": 48127,
+    "controllerExecutable": "/usr/lib/android-sdk/platform-tools/adb",
+    "authorizationDialogObserved": false,
+    "currentSelectedState": "device",
+    "currentObservedAt": "2026-10-22T02:53:35.719163+00:00",
+    "currentInventory": [
+      "List of devices attached\nKBX8LNFUBE5XGQRG       device usb:3-1 product:rodin_global model:2412DPC0AG device:rodin transport_id:3\n\n"
+    ],
+    "currentUsbExposure": [
+      {
+        "node": "/dev/bus/usb/003/015",
+        "product": "POCO X7 Pro",
+        "read": true,
+        "sysfs": "3-1",
+        "write": true
+      }
+    ],
+    "adbAuthorizationState": "device"
+  },
+  "models": {
+    "allExactVerified": true,
+    "totalPublicBytes": 833499307,
+    "receipt": "ASSET-READINESS-20261022.json",
+    "workerDesktopControllerAssetTransfers": 0
+  },
+  "source": {
+    "sha": "ebde3a8acf6315f920d03593845f17a1fc65a733",
+    "remoteSha": null,
+    "sourceCopyBytes": 3913736,
+    "receiverPrepared": true,
+    "renewalRequest": "msg_f29918a89743",
+    "deltaBytes": 3913736,
+    "frames": 40,
+    "requestMessage": "msg_e667cdd018cc",
+    "sourceSha": "ebde3a8acf6315f920d03593845f17a1fc65a733",
+    "notebookAssembled": true,
+    "stagedSourcePath": "/home/developer/projects/aurora/thesis/phone-notebook/20261020/deployment/ebde3a8acf6315f920d03593845f17a1fc65a733/source-ebde3a8a-verified-v37",
+    "verifiedFiles": 1959,
+    "sourceInventorySha256": "88c7330effe93499e9c673921e9b12c90c54db53e572885f34bbd40644c8d47b",
+    "sourceCopyFrames": 43,
+    "sourceCopyElapsedSeconds": 70.80041577600059,
+    "sourceCopyOutcome": "SOURCE_FILES_RECEIVED_HASH_VERIFIED"
+  },
+  "cpuTemperatureC": 92.375,
+  "buildPilotStopC": 85,
+  "fileOnlyStopC": 95,
+  "modelCalls": 0,
+  "pilotCases": 0,
+  "overnightCases": 0,
+  "ownerStartUtc": null,
+  "ownerEndUtc": null,
+  "mainCampaignUntouched": true,
+  "updatedAtUtc": "2026-10-22T02:53:35.719163+00:00",
+  "latestState": "PHONE_USB_RESTORED_BUILD_PILOT_BLOCKED_THERMAL",
+  "modelsNowVerified": true,
+  "modelAssetReceipt": "ASSET-READINESS-20261022.json",
+  "exactPublicBytesVerified": 833499307,
+  "nativeReadiness": false,
+  "latestPhoneState": "device",
+  "latestPhoneStateAt": "2026-10-22T02:53:35.719163+00:00",
+  "buildStatus": "DEADLINE_STOPPED_PRESERVED_BEFORE_BUILD",
+  "buildThermalStopC": 85,
+  "currentMaxSensorC": 90.75,
+  "buildDeadlineUtc": "2026-10-22T01:33:02.372125+00:00",
+  "buildFinishedAt": "2026-10-22T01:33:02.372182+00:00",
+  "ownBuildChildrenActive": false,
+  "allOwnAcquisitionJobsClosed": true,
+  "status": "PHONE_USB_RESTORED_BUILD_PILOT_BLOCKED_THERMAL",
+  "currentSetup": "CURRENT-SETUP.json",
+  "latestOwnerUpdate": "LATEST-OWNER-UPDATE.json",
+  "phoneState": "device",
+  "phoneStateAt": "2026-10-22T02:53:35.719163+00:00",
+  "notebookTemperatureC": 90.75,
+  "notebookLoad": [
+    4.15478515625,
+    6.4833984375,
+    7.80078125
+  ]
+}

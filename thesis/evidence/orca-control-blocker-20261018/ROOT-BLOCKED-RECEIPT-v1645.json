@@ -1,0 +1,30 @@
+{
+  "at": "2026-10-18T23:26:02.796591+00:00",
+  "actualNativeGet": {
+    "goal": {
+      "threadId": "01a112a5-d6bb-74e2-bf7c-ace73cb513b5",
+      "objective": "Complete the durable ultragoal plan in .omx/ultragoal/goals.json, including later accepted/appended stories, under the original brief constraints; use .omx/ultragoal/ledger.jsonl as the audit trail.",
+      "status": "blocked",
+      "tokensUsed": 229303072,
+      "timeUsedSeconds": 739585,
+      "createdAt": 1791314947,
+      "updatedAt": 1792365929
+    },
+    "remainingTokens": null,
+    "completionBudgetReport": null
+  },
+  "audit": "thesis/evidence/orca-control-blocker-20261018/ROOT-BLOCKED-AUDIT-TURN3-v1645.json",
+  "nativeSnapshot": "thesis/evidence/orca-control-blocker-20261018/NATIVE-GOAL-BLOCKED-v1645.json",
+  "consecutiveGoalTurns": 3,
+  "requiredExternalCapability": {
+    "host": "ssh:ssh-1786238480967-semdev",
+    "terminal": "term_d5651d8d-58e2-4b38-85e2-51c668cc933c",
+    "incarnation": "034ff933-61a3-4c74-b5ad-98a75e8ac21c",
+    "action": "Owning Orca restore normal terminal.send routing while preserving existing PTY/provider/reservation. No supported worker-side public repair operation exposed."
+  },
+  "aggregateComplete": false,
+  "objectiveAndAll13Preserved": true,
+  "existingRootMonitorTaskRunPreserved": true,
+  "noStopsRestartsNewWorkersOrGoalResumes": true,
+  "nextActionAfterChangedCapability": "Reconcile exact original provider/process/results before rerunning anything; retrieve saved native/resource delta, then one ordinary approved existing-room MQTT/pair/task-consent check. No replay of closed baselines or measured indices."
+}

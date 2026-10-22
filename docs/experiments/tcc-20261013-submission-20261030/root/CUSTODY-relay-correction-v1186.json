@@ -1,0 +1,46 @@
+{
+  "at": "2026-10-17T18:26:06.287180+00:00",
+  "files": [
+    {
+      "path": "distributed-k1-recovery-v1139/RELAY-DISCOVERY-v1184.md",
+      "bytes": 4211,
+      "sha256": "7fef32db224e25f085b7375f33aa8ecc7f4d2f3835f9285e03e84ba44b3b7f99"
+    },
+    {
+      "path": "distributed-k1-recovery-v1139/relay-capability-disposition-v1184.json",
+      "bytes": 5490,
+      "sha256": "0f8eac73769e1027a67a1735cb24543c9eff6140c74a99e4cdbb7aa90c631249"
+    },
+    {
+      "path": "distributed-k1-recovery-v1139/listener-binding-v1178.json",
+      "bytes": 4340,
+      "sha256": "a340db137c0eba300a35fe968568b6121fadd055b8384d67fb5a710a1ee56c6e"
+    },
+    {
+      "path": "CURRENT.md",
+      "bytes": 7937,
+      "sha256": "1e8185c096911b4f59b231e51670ac169cb50d99de398881f75796bedaec5782"
+    },
+    {
+      "path": "HISTORY-v1176-before-relay-correction.md",
+      "bytes": 13973,
+      "sha256": "b65d20f43e65d6e3e049f5738e3f972bd90b7ffadfdcffa0573cce8f770ec3c1"
+    }
+  ],
+  "validation": {
+    "makeCheckDocsExit": 2,
+    "command": "UV_NO_SYNC=1 make check-docs",
+    "findingCount": 1229,
+    "brokenLinkFindings": [
+      "- docs/experiments/tcc-20261013-submission-20261030/root/matched-main-campaign-v319/runner-report.md:3: broken link -> campaign.py"
+    ],
+    "ownerRequiredRawReportPlacementConflicts": 1228,
+    "targetedCurrentAndRelayReportRelativeLinks": 15,
+    "targetedLinksMissing": 0,
+    "noCheckerWeakeningOrReportRelocation": true,
+    "logPath": "docs-check-v1185.log"
+  },
+  "nativeGoalStatus": "blocked",
+  "operationInvoked": false,
+  "privateConfigAndCredentialsExcluded": true
+}

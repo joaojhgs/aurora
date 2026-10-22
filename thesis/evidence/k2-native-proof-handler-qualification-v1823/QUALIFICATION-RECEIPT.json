@@ -1,0 +1,37 @@
+{
+  "at": "2026-10-20T15:45:03.625947+00:00",
+  "host": "personal.skyron-server",
+  "status": "SAVED_ALL15_STRICT_NATIVE_PROOF_QUALIFIED",
+  "modelCalls": 0,
+  "nativeModelJoins": 30,
+  "proofGeneratorSha256": "3bb4af79cf2579023c0f1ff2025f69367717d49db7d09831c682c1bf52fc441f",
+  "originalRawAndFrozenUnchanged": true,
+  "historicalOriginalNotAdmitted": true,
+  "physicalCopies": [
+    {
+      "path": "thesis/evidence/k2-native-proof-handler-qualification-v1823/qualified-proof.json",
+      "bytes": 66429,
+      "sha256": "c4cee34d96bd171b9f05e4558cbdc111a7adfe13b670e57412b8fc5449277f35"
+    },
+    {
+      "path": "thesis/evidence/k2-native-proof-handler-qualification-v1823/original-frozen-manifest.json",
+      "bytes": 9613,
+      "sha256": "60c71e3c9cc22c1d6cdf2c9267f5fbc9e8f38d295c289c80d9f3cea2491be62f"
+    },
+    {
+      "path": "thesis/evidence/k2-native-proof-handler-qualification-v1823/analysis-provenance.json",
+      "bytes": 534,
+      "sha256": "723b4382951a03d8116f312acd27b725bf1369e0d13e40fcd0a6e1bc24021b4b"
+    },
+    {
+      "path": "thesis/evidence/k2-native-proof-handler-qualification-v1823/actual-new-process-gpu.json",
+      "bytes": 3901,
+      "sha256": "29458db2ea650a8ea1ae0e9c595dc13eb7a31193966997a187c5ce537fd48813"
+    },
+    {
+      "path": "thesis/evidence/k2-native-proof-handler-qualification-v1823/original-native-voice-stages.jsonl",
+      "bytes": 73920,
+      "sha256": "548b55d2ce7f2ed4fd807d6aa3ffa6dc54926fb6bcdbdba16484aa57597cfbc4"
+    }
+  ]
+}

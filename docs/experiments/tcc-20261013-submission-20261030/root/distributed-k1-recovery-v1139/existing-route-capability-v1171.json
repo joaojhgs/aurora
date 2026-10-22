@@ -1,0 +1,27 @@
+{
+  "observedAt": "2026-10-17T18:03:03.054887+00:00",
+  "lineage": {
+    "runId": "run_e6054e76e9fc",
+    "taskId": "task_d7ea336050cf",
+    "dispatchId": "ctx_37b4d0a3c14f"
+  },
+  "command": "orca host list --json",
+  "exitCode": 1,
+  "hostInventoryResponse": {
+    "id": "local",
+    "ok": false,
+    "error": {
+      "code": "forbidden",
+      "message": "orca host list acts on the Orca host machine itself and cannot run from an SSH host. Run it on the Orca host."
+    },
+    "_meta": {
+      "runtimeId": null
+    }
+  },
+  "exposedOrcaRouteToolsCount": 0,
+  "limits": [
+    "One bounded read-only inventory; no connect/forward/tunnel, listener, account, grant or security change.",
+    "Mentioned URLs are not evidence of approved reachable authenticated origins.",
+    "No conclusion about absent/stopped hosts or grants; no global absence claim."
+  ]
+}

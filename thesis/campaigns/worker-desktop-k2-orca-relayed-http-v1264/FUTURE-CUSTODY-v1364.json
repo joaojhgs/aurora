@@ -1,0 +1,77 @@
+{
+  "schema": "aurora.k2.future_custody_preparation.v1",
+  "at": "2026-10-17T22:41:59.133024+00:00",
+  "state": "INERT_UNEXECUTED_SOURCE_ONLY",
+  "sourceFiles": [
+    {
+      "path": "thesis/harness/custody_k2_requester_v1364.py",
+      "bytes": 11961,
+      "sha256": "b739deee7a6e3c358e3fe67c48eb90029181b2306614786f9b1f79da7312545f",
+      "derivedFrom": "thesis/harness/custody_v1197.py",
+      "originalSourceSHA256": "1a72257b97be43d80361794b0d5bc23e28faef3b8e411d2fb94a176f873d93bf"
+    },
+    {
+      "path": "thesis/harness/custody_k2_provider_v1364.py",
+      "bytes": 8416,
+      "sha256": "1e7881f6d294a5a8ce00f29738a21236e18439a68965cf5107d520809f4c9a4c",
+      "derivedFrom": "thesis/harness/provider_custody_v1216.py",
+      "originalSourceSHA256": "073a0708db0e59c8091eb8e56e012372e0fdf1e63169f5a1b2c688eefbb1b3fb"
+    }
+  ],
+  "noCurrentK1Changes": true,
+  "newCopierProcesses": 0,
+  "newMeasurements": 0,
+  "newWarmups": 0,
+  "requiredBeforeLaunch": [
+    "K1 natural terminal, outcome seal and owned resource release",
+    "Root freezes new K2 requester and provider manifest; actual SHA256 supplied to each copier",
+    "Root creates only the new private operation/config/provider inputs and admits their actual source/runtime/GPU/auth/lifetime",
+    "Start only the new data copiers for the K2 cohort; copy first ordinary warmup completed case/audio and raw prefixes, no extra request"
+  ],
+  "requester": {
+    "sourceCell": ".git/aurora-handoff-import-20261006/distributed-k2-orca-relayed-http-cell-v1264",
+    "sourceOperation": ".git/aurora-handoff-import-20261006/distributed-k2-orca-relayed-launch-v1264",
+    "runtimePrivateConfig": "input/runtime-config.frozen.json",
+    "frozenManifest": "condition-frozen-v1264.json",
+    "destination": "thesis/campaigns/worker-desktop-k2-orca-relayed-http-v1264",
+    "requiredArgument": "--condition-sha256 <actual new frozen manifest SHA256>",
+    "harnessDifferences": [
+      "stage_adapter.py",
+      "k2_composition.py"
+    ],
+    "startupProgress": "awaiting_progress is copier-only; never infer a request count",
+    "missingPreWarmupProof": "pendingStatic; never a model/correctness failure"
+  },
+  "provider": {
+    "source": ".git/aurora-handoff-import-20261006/distributed-k2-http-provider-v1264",
+    "destination": "thesis/campaigns/worker-desktop-k2-orca-relayed-http-v1264/provider",
+    "requiredArgument": "--provider-manifest-sha256 <actual new provider manifest SHA256>",
+    "futureInputNames": [
+      "input/launch-config.json",
+      "input/provider-manifest.json",
+      "input/admission-v1264.json",
+      "input/source-inventory.json",
+      "input/actual-provider-files-v1264.json",
+      "input/runtime-full-package-inventory-v1264.json"
+    ]
+  },
+  "preservedSafety": [
+    "atomic/fsync/checksum physical copies",
+    "2GiB free-space floor",
+    "private values withheld/redacted",
+    "singleton lock per separate destination",
+    "completed immutable cases/audio only",
+    "append-log prefixes with inode/byte-watermark checks",
+    "no deletion, overwrite of source, model loads or application calls"
+  ],
+  "sourceReview": {
+    "status": "CLOSED_NO_BLOCKING_FINDINGS",
+    "receipt": "thesis/campaigns/worker-desktop-k2-orca-relayed-http-v1264/SOL-CUSTODY-SOURCE-REVIEW-v1367.json",
+    "bytes": 5042,
+    "sha256": "f97a7c18724641a9c3103bbc8208d22bcd0bc3989f4974258af41086aba67d78",
+    "scope": "one exact-source and diff review by original Sol monitor; no imports/execution or extra scenarios; APP856 unchanged"
+  },
+  "actualRuntimeAdmission": "NOT_ADMITTED",
+  "statusAtSourceClosure": "PREPARED_SOURCE_ONLY_NOT_RUNTIME_ADMITTED",
+  "fixedInputCustody": "INPUT-WAV-CUSTODY-v1364.json"
+}

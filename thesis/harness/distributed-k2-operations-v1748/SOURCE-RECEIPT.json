@@ -1,0 +1,145 @@
+{
+  "at": "2026-10-20T07:49:03.868720+00:00",
+  "status": "SOURCE_ONLY_NOT_LAUNCHED",
+  "parent": {
+    "path": "thesis/harness/custody_k1_mesh_requester_v1719.py",
+    "bytes": 17363,
+    "sha256": "ce6b06927bcf6f15e2ef43a5a0a54a29e4de43ef73797a37700b52797d97a6bf"
+  },
+  "candidate": {
+    "path": "thesis/harness/custody_k2_mesh_requester_v1748.py",
+    "bytes": 17478,
+    "sha256": "648c97916910c6152a0b07ef7a4a30d73163f470b9238147dff1f2b78c3da164"
+  },
+  "diff": {
+    "path": "thesis/harness/distributed-k2-operations-v1748/CUSTODY-ONLY.diff",
+    "bytes": 6905,
+    "sha256": "9dcf412a9d09edeb0bb914dd35c089760af47b88dc2cda4ea0adfc01ec64d078"
+  },
+  "mechanicalReplacementManifest": [
+    {
+      "old": "Copy only a future admitted K3 cohort; never call the system under test.",
+      "new": "Copy only a future admitted K2 P2P cohort; never call the system under test.",
+      "occurrences": 1
+    },
+    {
+      "old": "distributed-k1-mesh-cell-v1719",
+      "new": "distributed-k2-mesh-cell-v1748",
+      "occurrences": 1
+    },
+    {
+      "old": "distributed-k1-mesh-launch-v1719",
+      "new": "distributed-k2-mesh-launch-v1748",
+      "occurrences": 1
+    },
+    {
+      "old": "distributed-k1-mesh-requester-v1719",
+      "new": "distributed-k2-mesh-requester-v1748",
+      "occurrences": 1
+    },
+    {
+      "old": "worker-desktop-k1-p2p-tts-remaining880-v1719",
+      "new": "worker-desktop-k2-p2p-assistant-tts-v1748",
+      "occurrences": 1
+    },
+    {
+      "old": "condition-frozen-v1719.json",
+      "new": "condition-frozen-v1748.json",
+      "occurrences": 3
+    },
+    {
+      "old": "newly frozen K3 manifest",
+      "new": "newly frozen K2 manifest",
+      "occurrences": 1
+    },
+    {
+      "old": "K3 condition manifest",
+      "new": "K2 condition manifest",
+      "occurrences": 1
+    },
+    {
+      "old": "Future K3 manifest",
+      "new": "Future K2 manifest",
+      "occurrences": 1
+    },
+    {
+      "old": "campaign/receiver-warmup-proof.json",
+      "new": "campaign/remote-warmup-proof.json",
+      "occurrences": 1
+    },
+    {
+      "old": "admission/receiver-warmup-proof.json",
+      "new": "admission/remote-warmup-proof.json",
+      "occurrences": 1
+    },
+    {
+      "old": "\"tts_mesh_adapter.py\",",
+      "new": "\"mesh_stage_adapter.py\", \"k2_composition.py\",",
+      "occurrences": 1
+    },
+    {
+      "old": "requester-mesh-route-runtime-pins.json",
+      "new": "mesh-route-runtime-pins.json",
+      "occurrences": 1
+    },
+    {
+      "old": "requester-mesh-route-sink-status.json",
+      "new": "mesh-route-sink-status.json",
+      "occurrences": 1
+    },
+    {
+      "old": "requester-mesh-route-observations.jsonl",
+      "new": "mesh-route-observations.jsonl",
+      "occurrences": 1
+    },
+    {
+      "old": "Separate P2P TTS provider custody;",
+      "new": "Separate P2P Assistant+TTS provider custody;",
+      "occurrences": 1
+    },
+    {
+      "old": "time.monotonic() + 68600",
+      "new": "time.monotonic() + 58200",
+      "occurrences": 1
+    },
+    {
+      "old": "(CELL / \"campaign/mesh-route-admission.json\", \"mesh-route-admission.json\"),",
+      "new": "(CELL / \"campaign/mesh-route-admission.json\", \"mesh-route-admission.json\"),\n                         (CELL / \"campaign/mesh-route-admission-timing.json\", \"mesh-route-admission-timing.json\"),",
+      "occurrences": 1
+    }
+  ],
+  "unchangedCustodyPrimitives": [
+    "now",
+    "digest",
+    "atomic",
+    "encoded",
+    "private_values"
+  ],
+  "astParse": "PASS",
+  "newModelCalls": 0,
+  "newNetworkTraffic": 0,
+  "newWorkers": 0,
+  "newBuildOrRuntimeTests": 0,
+  "currentExperimentSourcesOrPathsChanged": false,
+  "futureConditions": "K2 uses new actual frozen manifest SHA, private operation/cell/requester paths v1748 and new physical thesis destination. Start only after K1 natural retirement/raw sealing/resource admission. Copies all failures and valid audio, native stages, model bindings, resources, exact-peer route data, setup timing and K2 composition. 60-second cadence and 2GiB free floor unchanged. New 58200s copier observation bound covers57840s requester outer cap with360s margin; no provider/request cap extension.",
+  "reviewScope": "One bounded mechanical path/artifact-map review only; no old classifier/model/protocol/source tests or new measurement gate.",
+  "boundedIndependentReview": {
+    "at": "2026-10-20T08:01:56.134818+00:00",
+    "verdict": "PASS_CLOSED_BOUNDED_MECHANICAL_ARTIFACT_MAP",
+    "source": ".omx/evidence/orca-monitor-20261010/P2P-K2-V1748-COPIER-ARTIFACT-MAP-REVIEW-20261020T0802.md",
+    "physicalCopy": "thesis/harness/distributed-k2-operations-v1748/review/P2P-K2-V1748-COPIER-ARTIFACT-MAP-REVIEW-20261020T0802.md",
+    "bytes": 5217,
+    "sha256": "db8f8887b83dbb8aff4bef88b04294a64f55f4e5002c0e326aca5952d4ef6d5c",
+    "reviewer": {
+      "run": "run_e6054e76e9fc",
+      "task": "task_d7ea336050cf",
+      "dispatch": "ctx_37b4d0a3c14f",
+      "terminal": "term_2eab47ed-ab9b-4e35-bd9b-fc068c60e3fc",
+      "model": "gpt-6.1-sol",
+      "effort": "xhigh"
+    },
+    "sourceSha256": "648c97916910c6152a0b07ef7a4a30d73163f470b9238147dff1f2b78c3da164",
+    "noRuntimeAdmissionClaim": true,
+    "noFurtherReviewGate": true
+  }
+}

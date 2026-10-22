@@ -1,0 +1,27 @@
+{
+  "objective": "tcc:20261013:submission-20261030",
+  "source_head": "5782746afba213f6b36907db2f09f0017625e218",
+  "source_sha256": {
+    "scripts/experiments/assistant_local_api_pilot.py": "165bfdcaea9048af2d25c2aef3db9abe9a101dc0e4733a586fed81990eeb5f22",
+    "scripts/experiments/assistant_measurement_records.py": "2648b5579c487e15936bf2eafd70ae8b63db5567915ff4c1c1b318989da2a646",
+    "app/services/orchestrator/service.py": "0b77092091946b94130945b3bfb670a922a209b846d5ffe30e23f75b52f982f3",
+    "app/services/supervisor.py": "ff18a13ae8d110f0372fdbb049b4da8b371879b491aaa5234354a26ea6e10a5c",
+    "app/shared/services/process_launcher.py": "8faeee1673a29a696999bc5bc2459c5db77cbe2a00dc63fe25fa822465bd9ed9"
+  },
+  "model_sha256": "57d1997790d1744fba5b40a7317df71ea5e2acee28c47e78f0cce39c0703f8cf",
+  "native_provider_version": "0.3.19",
+  "started_at": "2026-10-14T02:19:16.948921+00:00",
+  "redis_container": "aurora-redis-root-v265",
+  "redis_url": "redis://127.0.0.1:43523/0",
+  "serial_owner": "same original Aurora Root01a112a5",
+  "scope": "same-host actual independently spawned Config/DB/Auth/Orchestrator/Gateway text Assistant over Redis; API-key SYSTEM, Auth token validation not exercised; no mobile/voice/clean stable tails",
+  "architecture": "aarch64",
+  "logical_cpus": 2,
+  "load_avg": [
+    2.11474609375,
+    2.51611328125,
+    3.07275390625
+  ],
+  "warmups": 1,
+  "measured_requests_planned": 2
+}

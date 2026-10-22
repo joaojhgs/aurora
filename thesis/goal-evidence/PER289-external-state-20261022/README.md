@@ -1,0 +1,13 @@
+# PER-289 current delivery reconciliation —22October2026
+
+Status: Current bounded read. The archive/config Stage1 source remains technically accepted. G010 is not formally complete.
+
+The18 recorded archive paths are byte/mode-equivalent from archive head14df693f through current product PR177 headc0f4c001 and Rootebde3a8. The13 accepted configuration/native-policy paths also match both the current PR and Root. The retained V78 technical review, V102 local QA and following local architecture acceptance therefore remain applicable to these owned files. No source correction, repeated backend matrix, new capture test or new review was performed.
+
+Both prerequisite merge commits f50f46f and21da8d68 are verified ancestors of the actual GitHub main head2a7d0da4. GitHub now reports archive PR175 CLOSED/unmerged and product PR177 OPEN/DRAFT atc0f4c001, with no formal review entries. The archived package alone omitted scope5 configuration; the combined product contains the unchanged config slice. The closed archive's checks include26successes,25historical cancellations and1skip. Current product rollup includes42successes,5failures and2skips. These rollups do not expand the accepted archive scope or justify repeating closed tests.
+
+The named external QA acknowledgement, subsequent architect acknowledgement and actual current Multica issue/PR linkage remain unverified. Multica0.5.3 meets the retained skill's minimum version, but its existing auth status reports no usable authentication. The configured workspace matches8ba5e156-5ff4-4990-b201-7f5d435fdcef. No tokens/config values were exported, no login/account/security change was made and no private API bypass was used. The [Multica CLI skill](../../../.omx/task-intake/multica-cli-SKILL.md) says: “Stop and have the user authenticate”; only the dependent tracker branch is held, while the original main campaign continues. No new owner permission question or agent/review request was sent.
+
+GitHub read access works. Its response did not report OAuth scopes; workflow-write permission is UNKNOWN from this read. Do not restate the historical push rejection as a fresh permission test, and do not infer write permission from successful reads.
+
+This packet contains live PR metadata, source-continuity comparisons, actual prerequisite ancestry, safe auth-admission metadata and exact hashes. Cached tracker status is historical, not a current read. No PR/issue/status/comment/publication/merge/deployment mutation occurred. The main campaign remains independent and active; PER290 microphone/notification capture is not a PER289 archive prerequisite.

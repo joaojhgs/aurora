@@ -1,0 +1,146 @@
+{
+  "at": "2026-10-20T04:23:52.130053+00:00",
+  "status": "REQUESTER_TERMINAL_EOF_SEALED",
+  "conditionManifestSha256": "04872dbd3948c13a4b269a1eb116f8b92fb3c369a8b0026cbbf339a2257009c1",
+  "measurement": {
+    "planned": 900,
+    "attempted": 20,
+    "correct": 19,
+    "failed": 1,
+    "timeoutFlagged": 0,
+    "unattempted": 880
+  },
+  "excludedWarmups": {
+    "attempted": 15,
+    "correct": 15
+  },
+  "verifiedCases": 35,
+  "verifiedIndexedFiles": 316,
+  "verifiedIndexedBytes": 4511921,
+  "physicalWavs": 34,
+  "audioBytes": 1050072,
+  "correctFlowLatency": {
+    "n": 19,
+    "unit": "ms",
+    "estimator": "Hyndman-Fan Type7",
+    "p50": 43657.277037,
+    "p90": 48616.7359926,
+    "p95": 49321.44234509999
+  },
+  "failureObservedFlowMs": 43187.490318,
+  "stageCorrectOnlyMs": {
+    "stt": {
+      "n": 19,
+      "unit": "ms",
+      "estimator": "Hyndman-Fan Type7",
+      "p50": 8064.190874,
+      "p90": 10685.3932674,
+      "p95": 10961.8310135
+    },
+    "assistant": {
+      "n": 19,
+      "unit": "ms",
+      "estimator": "Hyndman-Fan Type7",
+      "p50": 31950.410841,
+      "p90": 36572.1233558,
+      "p95": 37311.72447139998
+    },
+    "tts": {
+      "n": 19,
+      "unit": "ms",
+      "estimator": "Hyndman-Fan Type7",
+      "p50": 2516.909624,
+      "p90": 3702.1984792,
+      "p95": 3825.3026292999994
+    }
+  },
+  "prefixes": {
+    "actual-provider-bindings.jsonl": {
+      "source": "/home/developer/projects/aurora/.git/aurora-handoff-import-20261006/distributed-k1-mesh-cell-v1711/actual-provider-bindings.jsonl",
+      "retainedPriorEndByte": 2143,
+      "finalSourceBytes": 2143,
+      "tailCopiedBytes": 0,
+      "terminalEOF": true,
+      "originalIncompleteFlagPreserved": true
+    },
+    "backend.private.log": {
+      "source": "/home/developer/projects/aurora/.git/aurora-handoff-import-20261006/distributed-k1-mesh-cell-v1711/backend.private.log",
+      "retainedPriorEndByte": 153118,
+      "finalSourceBytes": 153118,
+      "tailCopiedBytes": 0,
+      "terminalEOF": true,
+      "originalIncompleteFlagPreserved": true
+    },
+    "controller.private.log": {
+      "source": "/home/developer/projects/aurora/.git/aurora-handoff-import-20261006/distributed-k1-mesh-launch-v1711/requester-controller.private.log",
+      "retainedPriorEndByte": 0,
+      "finalSourceBytes": 0,
+      "tailCopiedBytes": 0,
+      "terminalEOF": true,
+      "originalIncompleteFlagPreserved": true
+    },
+    "proof-collection.private.log": {
+      "source": "/home/developer/projects/aurora/.git/aurora-handoff-import-20261006/distributed-k1-mesh-launch-v1711/proof-collection.private.log",
+      "retainedPriorEndByte": 149,
+      "finalSourceBytes": 149,
+      "tailCopiedBytes": 0,
+      "terminalEOF": true,
+      "originalIncompleteFlagPreserved": true
+    },
+    "requester-mesh-calls.jsonl": {
+      "source": "/home/developer/projects/aurora/.git/aurora-handoff-import-20261006/distributed-k1-mesh-cell-v1711/requester-mesh-calls.jsonl",
+      "retainedPriorEndByte": 23209,
+      "finalSourceBytes": 23209,
+      "tailCopiedBytes": 0,
+      "terminalEOF": true,
+      "originalIncompleteFlagPreserved": true
+    },
+    "requester-mesh-route-observations.jsonl": {
+      "source": "/home/developer/projects/aurora/.git/aurora-handoff-import-20261006/distributed-k1-mesh-cell-v1711/requester-mesh-route-observations.jsonl",
+      "retainedPriorEndByte": 57439,
+      "finalSourceBytes": 57439,
+      "tailCopiedBytes": 0,
+      "terminalEOF": true,
+      "originalIncompleteFlagPreserved": true
+    },
+    "requesterCopier.private.log": {
+      "source": "/home/developer/projects/aurora/.git/aurora-handoff-import-20261006/distributed-k1-mesh-launch-v1711/requesterCopier.private.log",
+      "retainedPriorEndByte": 13336,
+      "finalSourceBytes": 13336,
+      "tailCopiedBytes": 0,
+      "terminalEOF": true,
+      "originalIncompleteFlagPreserved": true
+    },
+    "resources.jsonl": {
+      "source": "/home/developer/projects/aurora/.git/aurora-handoff-import-20261006/distributed-k1-mesh-cell-v1711/resources.jsonl",
+      "retainedPriorEndByte": 2061787,
+      "finalSourceBytes": 2061787,
+      "tailCopiedBytes": 0,
+      "terminalEOF": true,
+      "originalIncompleteFlagPreserved": true
+    },
+    "voice-stages.jsonl": {
+      "source": "/home/developer/projects/aurora/.git/aurora-handoff-import-20261006/distributed-k1-mesh-cell-v1711/voice-stages.jsonl",
+      "retainedPriorEndByte": 411215,
+      "finalSourceBytes": 411215,
+      "tailCopiedBytes": 0,
+      "terminalEOF": true,
+      "originalIncompleteFlagPreserved": true
+    },
+    "warmupFinalizer.private.log": {
+      "source": "/home/developer/projects/aurora/.git/aurora-handoff-import-20261006/distributed-k1-mesh-launch-v1711/warmupFinalizer.private.log",
+      "retainedPriorEndByte": 195,
+      "finalSourceBytes": 195,
+      "tailCopiedBytes": 0,
+      "terminalEOF": true,
+      "originalIncompleteFlagPreserved": true
+    }
+  },
+  "finalTailCopies": [],
+  "sourceMutation": false,
+  "originalLiveIndexModified": false,
+  "sutCalls": 0,
+  "providerCustody": "Separate bounded prefix only; original provider remains live, not terminal EOF",
+  "scientificScope": "Partial first20 of900; preserve failure. No historical HTTP/source equivalence or whole-condition completion claim.",
+  "freeBytesAfter": 5195251712
+}

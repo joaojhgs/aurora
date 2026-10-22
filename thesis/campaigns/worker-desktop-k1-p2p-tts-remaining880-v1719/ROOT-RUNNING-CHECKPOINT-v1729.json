@@ -1,0 +1,56 @@
+{
+  "at": "2026-10-20T05:03:51.772166+00:00",
+  "status": "SAME_FROZEN_REMAINING880_MEASUREMENT_RUNNING",
+  "nativeGoal": "01a112a5-d6bb-74e2-bf7c-ace73cb513b5",
+  "nativeGoalStatus": "active",
+  "run": "run_e6054e76e9fc",
+  "originalMonitor": "task_d7ea336050cf/ctx_37b4d0a3c14f",
+  "actors": [
+    {
+      "pid": 2360747,
+      "present": true,
+      "state": "S",
+      "startTicks": 124937766
+    },
+    {
+      "pid": 2360768,
+      "present": true,
+      "state": "S",
+      "startTicks": 124937952
+    },
+    {
+      "pid": 2361201,
+      "present": true,
+      "state": "S",
+      "startTicks": 124942780
+    }
+  ],
+  "frozenConditionSha256": "120dd99a4de0a242c30ebe4bb46d854ca77313c482a0c74f024edb624829a6e8",
+  "newEpoch": {
+    "attempted": 19,
+    "correct": 18,
+    "incorrect": 0,
+    "failed": 1,
+    "planned": 880,
+    "unattempted": 861
+  },
+  "conditionCounts": {
+    "attempted": 39,
+    "correct": 37,
+    "incorrect": 0,
+    "failed": 2,
+    "planned": 900,
+    "unattempted": 861,
+    "excludedWarmups": 30
+  },
+  "nativeAdmission": "All15new excluded warmups +45native joins +15exactpeer/direct before-after route joins PASSED",
+  "originalProvider": "3194394/start22320527, no restart/extension/source/configuration intervention",
+  "firstNewMeasuredProof": "ROOT-MEASUREMENT-RESUMED-v1725.json",
+  "independentSolRuntimeVerification": "review/P2P-K1-REMAINING880-FIRST-MEASURED-OWNER-RESUMPTION-20261020T0454.json",
+  "firstEpochTerminalCustody": "thesis/campaigns/worker-desktop-k1-p2p-tts-v1711/terminal-v1716/seal/REQUESTER-SEAL.json",
+  "sourceReviewSmokeSavedDataReproduction": "PASS CLOSED; no further unchanged checks",
+  "androidReadiness": "UNKNOWN; ONE actual native host status via already-installed no-install bridge exited127 with empty stdout/stderr; no device absence inferred. Exact receipt thesis/evidence/waydroid-relay-command-discovery-20261020/ANDROID-READINESS-AND-COPY-RECEIPT-v1728.json; original monitor/Coding notified. Not a W/D measurement gate.",
+  "nextConditionSourceFacts": "NEXT-K2-SOURCE-ADMISSION-FACTS-v1723.json; source-only, no competing traffic",
+  "nextObservationUtc": "2026-10-20T05:08:51.772166+00:00",
+  "nextAction": "Observe SAMEcase pipeline at5min or failure/terminal. Finish900attempt target including preserved failures; then natural terminal custody/native/resource analysis, K2P2P successor. No baseline replays/newworkers/resumes or edge-case tests."
+}

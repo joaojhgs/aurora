@@ -1,0 +1,19 @@
+{
+  "at": "2026-10-21T02:56:00.422033+00:00",
+  "status": "PROSPECTIVE_EXISTING_CONTRACT_COMPATIBILITY_CANDIDATE",
+  "onlyChangedFile": "app/shared/contracts/models/speech_runtime.py",
+  "oldInventorySha256": "a38421a03ffafb73a4c469aa7c82fb299210eedd6fe97809beb3c508782883d4",
+  "newInventorySha256": "000202cdddb9803d503fc44f8aaf58eb469475890751a310193418330aa79937",
+  "sourceRoot": "/home/developer/projects/aurora/thesis/sources/k1-speech-contract-compat-v2151/worker/source",
+  "oldParserLanguageBound": 64,
+  "selectedContract": "Already-qualified current W/D SpeechStageCapabilityV1 max_length=MAX_SPEECH_CONSTRAINT_LANGUAGES",
+  "allOther399FilesByteIdentical": true,
+  "inferenceCodeModelsDecoderSettingsUnchanged": true,
+  "diagnosisScope": "V2143 actualroute rejects peer aslegacy_unverifiable; saved STATUS does not retain original rawmanifest. Larger currently-supported capability bound is a finite compatibility candidate, not a proven sole cause. Same-peer normal route admission must pass; no guard bypass.",
+  "failedAttemptPreserved": "thesis/campaigns/worker-desktop-k1-p2p-tts-remaining191-v2143",
+  "priorWarmups": 0,
+  "priorMeasured": 0,
+  "maximumNewCompatibilityAdmissionAttempts": 1,
+  "onFailure": "Preserve191open and moveactualeligibleK1OrcaHTTP720; no identicalstartup replay",
+  "sutCalls": 0
+}

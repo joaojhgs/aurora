@@ -1,0 +1,65 @@
+{
+  "caps": {
+    "max_deb_bytes": 67108864,
+    "max_owned_environment_bytes": 4294967296,
+    "wall_seconds": 240
+  },
+  "elapsed_seconds": 4.245837253052741,
+  "inference_started": false,
+  "kind": "aurora_root_gpu_user_owned_vulkan_toolchain",
+  "outcome": "toolchain_ready",
+  "packages": [
+    {
+      "bytes": 76032,
+      "filename": "glslc_2023.8-1build1_amd64.deb",
+      "sha256": "ee5f737e570b4b1713b4db9c8f9ead8258726af457391af00264350e59810bd4"
+    },
+    {
+      "bytes": 2423388,
+      "filename": "libshaderc1_2023.8-1build1_amd64.deb",
+      "sha256": "ebd699ab3feaf00676a7da0644dd74290f60cd1b34057256db90f60e126655b1"
+    },
+    {
+      "bytes": 1238904,
+      "filename": "libvulkan-dev_1.3.275.0-1build1_amd64.deb",
+      "sha256": "9577a2c5379372ca8231e700728390fa7d4991a0d8c6484ad83da849c728e76e"
+    }
+  ],
+  "recorded_at": "2026-10-14T16:20:38.701161+00:00",
+  "shader_compiler": {
+    "exit_code": 0,
+    "stderr": "",
+    "stdout": "shaderc 2023.8-1build1\nspirv-tools 2023.6~rc1-2\nglslang 14.0.0-2\n\nTarget: SPIR-V 1.0\n"
+  },
+  "source_changes": false,
+  "steps": [
+    {
+      "exit_code": 0,
+      "name": "download",
+      "stderr_tail": "",
+      "stdout_tail": "Get:1 http://archive.ubuntu.com/ubuntu noble/main amd64 libvulkan-dev amd64 1.3.275.0-1build1 [1239 kB]\nGet:2 http://archive.ubuntu.com/ubuntu noble/universe amd64 glslc amd64 2023.8-1build1 [76.0 kB]\nGet:3 http://archive.ubuntu.com/ubuntu noble/universe amd64 libshaderc1 amd64 2023.8-1build1 [2423 kB]\nFetched 3738 kB in 3s (1450 kB/s)\n"
+    },
+    {
+      "exit_code": 0,
+      "name": "extract_glslc_2023.8-1build1_amd64.deb",
+      "stderr_tail": ""
+    },
+    {
+      "exit_code": 0,
+      "name": "extract_libshaderc1_2023.8-1build1_amd64.deb",
+      "stderr_tail": ""
+    },
+    {
+      "exit_code": 0,
+      "name": "extract_libvulkan-dev_1.3.275.0-1build1_amd64.deb",
+      "stderr_tail": ""
+    }
+  ],
+  "system_packages_installed": false,
+  "target": "/tmp/aurora-root-gpu-primary-v409",
+  "vulkan_header_exists": true,
+  "vulkan_loader_candidates": [
+    "/usr/lib/x86_64-linux-gnu/libvulkan.so.1",
+    "/lib/x86_64-linux-gnu/libvulkan.so.1"
+  ]
+}

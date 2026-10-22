@@ -1,0 +1,21 @@
+{
+  "at": "2026-10-18T16:26:19.373266+00:00",
+  "host": "code-worker",
+  "pid": 1299825,
+  "role": "worker",
+  "phase": "control_plane_failed",
+  "newModelRequests": 0,
+  "modelServicesStarted": [],
+  "httpListenerStarted": false,
+  "normalProductionContracts": true,
+  "sourceRoot": "/home/developer/projects/aurora/.git/aurora-handoff-import-20261006/cpu-full-audio-v490/source",
+  "errorCategory": "AttributeError",
+  "errorLocation": [
+    {
+      "file": "mesh_pair_control_v1535.py",
+      "function": "run",
+      "line": 137
+    }
+  ],
+  "ownRuntimeRetired": true
+}

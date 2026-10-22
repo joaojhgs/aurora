@@ -1,0 +1,65 @@
+{
+  "at": "2026-10-20T08:04:56.858314+00:00",
+  "status": "SINGLE_SUPPORTED_RESUME_ACCEPTED_NATIVE_STATUS_PENDING",
+  "originalNativeGoalId": "01a123ff-19ba-7332-a2f7-346a722af79f",
+  "originalTask": "task_d7ea336050cf",
+  "dispatch": "ctx_37b4d0a3c14f",
+  "terminal": "term_2eab47ed-ab9b-4e35-bd9b-fc068c60e3fc",
+  "incarnation": "37e50d9c-6cf5-4e28-a63b-f2bc3eed5661",
+  "run": "run_e6054e76e9fc",
+  "modelAndEffort": "gpt-6.1-sol/xhigh unchanged; actual UI GPT-6.1-Sol xhigh",
+  "ordinaryContinuationRequestId": "95abcd94-9ede-4144-a447-dd6148b6ccad",
+  "ordinaryTurnSucceededAndReviewClosed": true,
+  "actualNativeBlockedObservedByMonitorAt": "2026-10-20T07:59:26Z",
+  "actualNativeBlockedReceiptMessage": "msg_ec4b7f7f5ebd",
+  "actualIdleBeforeResume": true,
+  "nativeResumeCommand": "/goal resume",
+  "nativeResumeRequestId": "46748383-5b38-4f43-8a26-35a3748408bb",
+  "nativeResumeObservedStages": [
+    "input_accepted",
+    "turn_started"
+  ],
+  "maximumResumeSends": 1,
+  "nativeActiveNotYetVerified": true,
+  "nativeRootStillActive": true,
+  "currentK1InterruptedOrChanged": false,
+  "newWorkersGoalsAccountsCredentialsOrModelSwitches": 0,
+  "next": "Read original monitor self actual get_goal confirmation through same Run. Accepted/started is not proof of native ACTIVE. Never resend this accepted command; preserve exact request/incarnation if observation fails.",
+  "copies": [
+    {
+      "path": "thesis/evidence/original-monitor-capacity-20261020/root-monitor-after-nudge-screen-v1748.json",
+      "bytes": 1653,
+      "sha256": "446ba68729ad04ac0fcd7643d9303b79aae7678442a24bb8611f7bceeb444791"
+    },
+    {
+      "path": "thesis/evidence/original-monitor-capacity-20261020/root-monitor-mail-v1749.json",
+      "bytes": 2612,
+      "sha256": "018e74d5d0fff5e83c46ed61e55563cc94140341af0957995f70838d17181a8d"
+    },
+    {
+      "path": "thesis/evidence/original-monitor-capacity-20261020/root-monitor-idle-final-v1749.json",
+      "bytes": 1579,
+      "sha256": "ff1bab35d993a5ba87aa0e5a793429e867cda7515b70f1f7459972e5730c8e6f"
+    },
+    {
+      "path": "thesis/evidence/original-monitor-capacity-20261020/root-monitor-native-resume-v1749-FENCE.json",
+      "bytes": 1388,
+      "sha256": "04aed0c26ee7e497260e4fad96ba4ee49d44c9d612e922da77d934a661dc3cc5"
+    },
+    {
+      "path": "thesis/evidence/original-monitor-capacity-20261020/root-monitor-native-resume-v1749-IDLE-SCREEN.json",
+      "bytes": 1579,
+      "sha256": "87ff79eaceff65792f10f42cbec1855d0fb9ca2fd19f96bf22208ae65c912189"
+    },
+    {
+      "path": "thesis/evidence/original-monitor-capacity-20261020/root-monitor-native-resume-v1749-INTENT.json",
+      "bytes": 707,
+      "sha256": "ec29366ac19742ee2fe43580caf0b0ed62c2d72eecc82c36435602a2e4f7b55a"
+    },
+    {
+      "path": "thesis/evidence/original-monitor-capacity-20261020/root-monitor-native-resume-v1749-SEND.json",
+      "bytes": 858,
+      "sha256": "73933c13e901e9a4d00d7c9639babf1eeef693e09e582800ad9bfceab841fb9d"
+    }
+  ]
+}

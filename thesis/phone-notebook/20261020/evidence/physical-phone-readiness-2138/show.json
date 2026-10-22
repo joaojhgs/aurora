@@ -1,0 +1,29 @@
+{
+  "_meta": {
+    "runtimeId": "cc9e3275-28c6-4c45-85cc-bdcd2262aa7d"
+  },
+  "id": "2e536f82-b1ab-4b4c-9e4d-a2d31260ea0a",
+  "ok": true,
+  "result": {
+    "terminal": {
+      "agentWait": null,
+      "branch": "refs/heads/feat/ui-multi-platform-integration",
+      "connected": true,
+      "executionHostId": "ssh:ssh-sem-notebook-personal",
+      "handle": "term_f40f2bd6-0f71-4484-8347-ac221cf6ce9b",
+      "incarnationId": "633939eb-60f4-4bc0-9a0c-5941dc6db36a",
+      "lastOutputAt": 1792532034882,
+      "leafId": "c17246d3-4a6b-4c65-b221-ba95d14240aa",
+      "orphaned": false,
+      "paneRuntimeId": -1,
+      "preview": "iOiAiNzEwMDAifV19Cg==\nAURORA_COPY_RECEIPT={\"path\": \"/home/developer/projects/aurora/thesis/phone-notebook/20261020/evidence/notebook-readiness-2135.json\", \"bytes\": 4462, \"sha256\": \"2b50c7d214675abc1aac1c41b30fb61a2864ea9aa0ffd9c9f57db1442f439482\"}\n\u279c  aurora git:(feat/ui-multi-platform-integration) \u2717",
+      "ptyId": "ssh:ssh-sem-notebook-personal@@pty2:922594b2-6958-4b97-b1b9-f337a2304f64:1",
+      "rendererGraphEpoch": 0,
+      "tabId": "27c1f189-f3bc-467f-a639-73475e9428a3",
+      "title": "..ojects/aurora",
+      "worktreeId": "03d8a475-d62e-43b3-8885-e382b313ab1b::/home/developer/projects/aurora",
+      "worktreePath": "/home/developer/projects/aurora",
+      "writable": true
+    }
+  }
+}

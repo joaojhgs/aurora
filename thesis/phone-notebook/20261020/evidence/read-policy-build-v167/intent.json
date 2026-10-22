@@ -1,0 +1,12 @@
+{
+  "controlDeadline": "2026-10-22T06:10:00Z",
+  "explicitNewline": true,
+  "host": "ssh:ssh-sem-notebook-personal",
+  "incarnation": "328cd72f-c7ea-49ff-a2db-b9275b085037",
+  "remoteResult": "/home/developer/projects/aurora/thesis/phone-notebook/20261020/evidence/read-policy-build-v167.json",
+  "rootAdmissionMessage": "bounded own policy unit/build status, no repeatnativeprobe before repairedAPK",
+  "script": "scripts/read_policy_build_v167.py",
+  "scriptSha256": "4fd0f9f800e605eede9c91816bdefcb05840f89b7a84947abe5df3e47443fe28",
+  "singleSend": true,
+  "terminal": "term_a2ed5feb-7c92-48e4-bd88-d1b0e6737989"
+}

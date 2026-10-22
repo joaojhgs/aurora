@@ -1,0 +1,83 @@
+{
+  "startedAt": "2026-10-16T13:05:50.230938+00:00",
+  "pid": 3631514,
+  "startTicks": "78425861",
+  "host": "personal.skyron-server",
+  "phase": "ACTUAL_FILE_AUDIO_MAIN",
+  "status": "NATIVE_FILE_AUDIO_MAIN_PASSED_ONE_EXCLUDED_READINESS_NOT_MEASURED",
+  "measuredRequests": 0,
+  "maximumFileAudioInvocations": 1,
+  "fileAudioInvocations": 1,
+  "scope": "Actual native Tauri runtime and SDK file-audio compute; no physical microphone, playback or normal Assistant UI/history claim",
+  "sourceRoot": "/tmp/aurora-root-c06-current-source-v1019/source",
+  "artifactPath": "/tmp/aurora-root-c06-current-source-v1019/.artifacts/native-target-v1031/x86_64-unknown-linux-gnu/debug/aurora-tauri",
+  "children": [
+    {
+      "name": "xvfb",
+      "pid": 3631534,
+      "startTicks": "78425920"
+    },
+    {
+      "name": "native-app",
+      "pid": 3631537,
+      "startTicks": "78425930"
+    }
+  ],
+  "deadlineSeconds": 480,
+  "resourcesBefore": {
+    "tmpFreeBytes": 2061438976,
+    "memAvailableBytes": 7341707264
+  },
+  "models": [
+    {
+      "path": "/tmp/aurora-root-gpu-primary-v409/models/Qwen3.5-0.8B-Q4_0.gguf",
+      "bytes": 563036064,
+      "sha256": "57d1997790d1744fba5b40a7317df71ea5e2acee28c47e78f0cce39c0703f8cf"
+    },
+    {
+      "path": "/tmp/aurora-root-voice-primary-v426/models-v427/piper-ljspeech/en_US-ljspeech-medium.onnx",
+      "bytes": 63531379,
+      "sha256": "6f52a751e2349abe7a76735eb09dc1875298c77ea2342ffd2fef79ff81b87f22"
+    },
+    {
+      "path": "/tmp/aurora-root-voice-primary-v426/models-v427/piper-ljspeech/en_US-ljspeech-medium.onnx.json",
+      "bytes": 4972,
+      "sha256": "141d612cc0a95ed7efc1ca936b845c2364967f2e9217c5dbfcf69fc4d6c65860"
+    },
+    {
+      "path": "/dev/shm/aurora-root-accurate-base-v443/model/model.bin",
+      "bytes": 145217532,
+      "sha256": "d01c3014881c9c6f3133c182f3d2887eb6ca1c789a7538c5c007196857a0a6a9"
+    }
+  ],
+  "gatewayBaseURL": "http://127.0.0.1:52939",
+  "webdriverBaseURL": "http://127.0.0.1:59437",
+  "effectiveSettingsUnchangedExceptPrivateDataAndPort": true,
+  "artifactSHA256": "e156c76b676bf6566765c769d211413243f8d7f48026275465e085f4fd21a3b6",
+  "lastProtocolOperation": "DELETE /session/147f9c11-267d-416a-9aca-2cda0683ef42",
+  "nativeWindowReady": {
+    "hook": true,
+    "href": "tauri://localhost",
+    "label": "main",
+    "native": true,
+    "readyState": "complete"
+  },
+  "sourceGuard": {
+    "pid": 3631759,
+    "actualSourceFile": "/tmp/aurora-root-c06-current-source-v1019/source/app/services/gateway/fastapi_app.py",
+    "sha256": "c90ade3dc52f1dfdf3840225894d24cefa530b063b2b32e1b289139772e65273",
+    "factoryCalledAndReturned": true
+  },
+  "resultStatus": "done",
+  "flowStatus": "passed",
+  "failureCode": null,
+  "finishedAt": "2026-10-16T13:06:24.838672+00:00",
+  "resourcesAfter": {
+    "tmpFreeBytes": 2055876608,
+    "memAvailableBytes": 5958078464
+  },
+  "childExitCodes": [
+    0,
+    -2
+  ]
+}

@@ -1,0 +1,178 @@
+{
+  "candidate_manifest": {
+    "expected_reply_words": [
+      "paris"
+    ],
+    "reference_transcript_sha256": "34b681e385feb3500c9e9849d30f5bac982716c4e4938cdb04c5fdc617cff624",
+    "wav_sha256": "139fa0c34b6d18600ad9608fd2d11c9389cae2f5f548ce0f4f23b735b176f0b3"
+  },
+  "correctness": {
+    "assistant_reply_matches_expected_words": false,
+    "transcript_matches_declared_task_words": true
+  },
+  "correlation": {
+    "correlation_id": "wav-flow-537ddb7b56a7406b9bf7281d0f61e34a",
+    "request_id": "wav-request-a369bef025614bf0b71c20b3148fedc0",
+    "scope": "one parent LocalBus flow; STT/TTS contracts themselves have no caller id fields",
+    "session_id": "wav-session-d3995752cb3245ba9b4b552108f09d22"
+  },
+  "denominators": {
+    "attempted": 1,
+    "correct": 0,
+    "failed": 1,
+    "measured": 0,
+    "timeout": 0,
+    "warmup": 0
+  },
+  "expected_reply_words": [
+    "paris"
+  ],
+  "failure": {
+    "code": "bus_query_failed",
+    "stage": "tts"
+  },
+  "finished_monotonic_ns": 814092955509972,
+  "flow_duration_ms_excluding_setup_and_shutdown": 13811.586477,
+  "flow_ended_monotonic_ns": 814092711116745,
+  "flow_started_monotonic_ns": 814078899530268,
+  "flow_type": "prerecorded_wav_stt_assistant_tts_synthesis",
+  "input": {
+    "bytes": 153644,
+    "channels": 1,
+    "format": "wav",
+    "frames": 76800,
+    "sample_rate": 22050,
+    "sample_width_bytes": 2,
+    "sha256": "139fa0c34b6d18600ad9608fd2d11c9389cae2f5f548ce0f4f23b735b176f0b3"
+  },
+  "missing_metrics": [
+    "first_token",
+    "first_audio",
+    "playback_start",
+    "playback_end"
+  ],
+  "physical_microphone": false,
+  "physical_playback_or_audibility": false,
+  "provider_bindings_after": {
+    "configured_llm": {
+      "model_file": "Qwen3.5-0.8B-Q4_0.gguf",
+      "provider": "llama_cpp",
+      "settings": {
+        "chat_format": "chatml-function-calling",
+        "max_tokens": 128,
+        "min_p": 0.0,
+        "n_batch": 64,
+        "n_ctx": 4096,
+        "n_gpu_layers": 0,
+        "n_threads": 2,
+        "repeat_penalty": 1.0,
+        "seed": 42,
+        "temperature": 0.0,
+        "top_k": 1,
+        "top_p": 1.0
+      }
+    },
+    "transcription": {
+      "configured_compute_type": "int8",
+      "configured_device": "cpu",
+      "configured_model": "ebe41f70d5b6dfa9166e2c581c45c9c0cfc57b66",
+      "default_sample_rate": 16000,
+      "enabled": true,
+      "model_ready": true,
+      "model_type": {
+        "class": "WhisperModel",
+        "module": "faster_whisper.transcribe"
+      },
+      "service": "TranscriptionService"
+    },
+    "tts": {
+      "executable_file": null,
+      "expected_sample_rate": null,
+      "model_config_file": null,
+      "model_file": null,
+      "provider_id": null,
+      "provider_type": null,
+      "service": "TTSService",
+      "voice_revision": 1
+    }
+  },
+  "provider_bindings_before": {
+    "configured_llm": {
+      "model_file": "Qwen3.5-0.8B-Q4_0.gguf",
+      "provider": "llama_cpp",
+      "settings": {
+        "chat_format": "chatml-function-calling",
+        "max_tokens": 128,
+        "min_p": 0.0,
+        "n_batch": 64,
+        "n_ctx": 4096,
+        "n_gpu_layers": 0,
+        "n_threads": 2,
+        "repeat_penalty": 1.0,
+        "seed": 42,
+        "temperature": 0.0,
+        "top_k": 1,
+        "top_p": 1.0
+      }
+    },
+    "transcription": {
+      "configured_compute_type": "int8",
+      "configured_device": "cpu",
+      "configured_model": "ebe41f70d5b6dfa9166e2c581c45c9c0cfc57b66",
+      "default_sample_rate": 16000,
+      "enabled": true,
+      "model_ready": true,
+      "model_type": {
+        "class": "WhisperModel",
+        "module": "faster_whisper.transcribe"
+      },
+      "service": "TranscriptionService"
+    },
+    "tts": {
+      "executable_file": null,
+      "expected_sample_rate": null,
+      "model_config_file": null,
+      "model_file": null,
+      "provider_id": null,
+      "provider_type": null,
+      "service": "TTSService",
+      "voice_revision": 1
+    }
+  },
+  "reference_transcript_sha256": "34b681e385feb3500c9e9849d30f5bac982716c4e4938cdb04c5fdc617cff624",
+  "schema_version": "aurora.headless_full_audio_pilot.v1",
+  "setup_duration_ms": 12294.006854,
+  "shutdown": "completed",
+  "stages": {
+    "assistant": {
+      "duration_ms": 169.137772,
+      "end_monotonic_ns": 814092707307636,
+      "metadata_error": false,
+      "response": "Error: Aurora could not complete this request.",
+      "returned_correlation_id_matches": true,
+      "returned_request_id_matches": true,
+      "returned_session_id_matches": true,
+      "start_monotonic_ns": 814092538169864,
+      "status": "completed"
+    },
+    "stt": {
+      "duration_ms": 13638.231113,
+      "duration_ms_reported_by_service": 3482.9931972789113,
+      "end_monotonic_ns": 814092538097463,
+      "language": "en",
+      "model_used": "accurate",
+      "start_monotonic_ns": 814078899866350,
+      "status": "completed",
+      "transcript": "What is the capital of France? Answer with only the city name."
+    },
+    "tts": {
+      "duration_ms": 3.610388,
+      "end_monotonic_ns": 814092710972424,
+      "error_class": "str",
+      "start_monotonic_ns": 814092707362036,
+      "status": "failed"
+    }
+  },
+  "status": "failed",
+  "tts_output_kind": "synthesized_wav_bytes_only"
+}

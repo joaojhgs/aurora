@@ -1,0 +1,47 @@
+{
+  "at": "2026-10-22T08:27:35.498393+00:00",
+  "requesterOriginalLive": true,
+  "http": {
+    "attempted": 60,
+    "correct": 60,
+    "failed": 0,
+    "harnessErrorsIncludedInFailed": 0,
+    "incorrectIncludedInFailed": 0,
+    "offered": 60,
+    "planned": 900,
+    "timeouts": 0,
+    "unstarted": 840
+  },
+  "local": {
+    "attempted": 60,
+    "correct": 60,
+    "failed": 0,
+    "harnessErrorsIncludedInFailed": 0,
+    "incorrectIncludedInFailed": 0,
+    "offered": 60,
+    "planned": 900,
+    "timeouts": 0,
+    "unstarted": 840
+  },
+  "capsules": 61,
+  "freeBytes": 2668351488,
+  "floorBytes": 2147483648,
+  "headroomBytes": 520867840,
+  "last10ClosedPairAllocatedBytes": [
+    643072,
+    647168,
+    638976,
+    630784,
+    630784,
+    647168,
+    630784,
+    647168,
+    638976,
+    647168
+  ],
+  "medianRecentPairAllocatedBytes": 641024.0,
+  "remainingPairs": 840,
+  "roughRemainingPairArtifactsBytes": 538460160.0,
+  "projectionLimitations": "Pair-file allocation only; excludes growing global resource logs, final EOF copy/control, unrelated filesystem writers and filesystem metadata. Projection is not an admission guarantee.",
+  "newInferenceOrDeletion": 0
+}

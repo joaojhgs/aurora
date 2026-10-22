@@ -1,0 +1,153 @@
+{
+  "at": "2026-10-17T21:35:44Z",
+  "configOrCredentialValuesCopied": false,
+  "controllerPredicate": {
+    "outputParentMustNotExist": true,
+    "outputParentParentMatchesStagedRootParent": true,
+    "source": "thesis/harness/distributed-k2-http-v852/controller.py",
+    "sourceSha256": "809bec19682eb717f016d2b9f62453b38945201c561f7d4f4ac72e242024050e"
+  },
+  "current1197Changed": false,
+  "currentProviderLifetimeSufficientForNext900": false,
+  "existingPreparation": {
+    "path": "thesis/campaigns/worker-desktop-k2-orca-relayed-http-v1264/ADMISSION-PREPARED.json",
+    "sha256": "d89717d31e32d70eecbacceef0af67108cb800b8595ae5e9067a3aad60b561d9"
+  },
+  "futureEnvironmentFacts": {
+    "AURORA_CANDIDATE_MANIFEST": "/home/developer/projects/aurora/.git/aurora-handoff-import-20261006/distributed-k2-requester-prep-v1282/candidate-manifest.json",
+    "AURORA_K2_ADAPTER_SHA256": "204ea4d6b48571ab7ba0add0310a3dadd87b5e1e2afdc172634185755c9bb02c",
+    "AURORA_K2_COMPOSITION_SHA256": "08be1fa730d6e49ccf4bd491539b4b8edb5b3476eb7f8f7db9656db5e7b3a053",
+    "AURORA_K2_CONTROLLER_SHA256": "809bec19682eb717f016d2b9f62453b38945201c561f7d4f4ac72e242024050e",
+    "AURORA_K2_REMOTE_ASSISTANT_ENDPOINT": "http://127.0.0.1:18000/api/Orchestrator/ExternalUserInput",
+    "AURORA_K2_REMOTE_TTS_ENDPOINT": "http://127.0.0.1:18000/api/TTS/Synthesize",
+    "AURORA_K2_RUNNER_SHA256": "1f869903b4a2c5167707891bd1d32294329c5673b7386c60b4f13400c4efba06",
+    "AURORA_OUTPUT_DIR": "/home/developer/projects/aurora/.git/aurora-handoff-import-20261006/distributed-k2-orca-relayed-http-cell-v1264/campaign"
+  },
+  "launched": false,
+  "layoutReason": "The approved controller requires a new output parent whose parent is the staged controller root parent; private cell and harness must be siblings. Keep service databases/private config/logs outside scientific custody; copy safe raw cases/audio/stage/resource prefixes into the distinct in-repo custody paths.",
+  "modelsCopiedOrLoaded": false,
+  "newMeasuredRequests": 0,
+  "originalOutputPathsAreCustodyIntentOnly": true,
+  "physicalSafeCustodyPaths": {
+    "attempts": "thesis/campaigns/worker-desktop-k2-orca-relayed-http-v1264/attempts",
+    "audio": "thesis/campaigns/worker-desktop-k2-orca-relayed-http-v1264/audio",
+    "copyMethod": "Future atomic incremental physical copies/checksums from start,2GiB free floor; actual copier admission remains unconfigured.",
+    "createdNow": [
+      "ADMISSION-PREPARED.json",
+      "INPUT-CUSTODY.json"
+    ],
+    "custody": "thesis/campaigns/worker-desktop-k2-orca-relayed-http-v1264/custody",
+    "inputs": "thesis/campaigns/worker-desktop-k2-orca-relayed-http-v1264/inputs",
+    "manifest": "thesis/campaigns/worker-desktop-k2-orca-relayed-http-v1264/condition-frozen.json",
+    "resources": "thesis/campaigns/worker-desktop-k2-orca-relayed-http-v1264/resources",
+    "reuseCurrent1197CopierOrPaths": false,
+    "stages": "thesis/campaigns/worker-desktop-k2-orca-relayed-http-v1264/stages"
+  },
+  "privateExecutionPaths": {
+    "attempts": "/home/developer/projects/aurora/.git/aurora-handoff-import-20261006/distributed-k2-orca-relayed-http-cell-v1264/campaign/attempts",
+    "audio": "/home/developer/projects/aurora/.git/aurora-handoff-import-20261006/distributed-k2-orca-relayed-http-cell-v1264/campaign/audio",
+    "campaign": "/home/developer/projects/aurora/.git/aurora-handoff-import-20261006/distributed-k2-orca-relayed-http-cell-v1264/campaign",
+    "cell": "/home/developer/projects/aurora/.git/aurora-handoff-import-20261006/distributed-k2-orca-relayed-http-cell-v1264",
+    "nativeStages": "/home/developer/projects/aurora/.git/aurora-handoff-import-20261006/distributed-k2-orca-relayed-http-cell-v1264/voice-stages.jsonl",
+    "resources": "/home/developer/projects/aurora/.git/aurora-handoff-import-20261006/distributed-k2-orca-relayed-http-cell-v1264/resources.jsonl"
+  },
+  "remaining": [
+    "Actual K1 terminal/outcome seal and owner/resource release",
+    "Actual next worker/provider source, effective settings/constructor, exact existing authorization and runtime/GPU admission",
+    "Freeze unique condition, expected assistant+TTS receiver identities and config with automatic TTS readback=false",
+    "Reserve condition-sized provider lifetime without altering current frozen run",
+    "Execute only the ordinary15excluded full-flow warmups; collect30remote native joins, then900measured"
+  ],
+  "schema": "aurora.k2_private_runtime_staging.v1",
+  "sourceBytes": 214091,
+  "sourceFiles": [
+    {
+      "bytes": 5049,
+      "canonical": "thesis/harness/distributed-k2-http-v852/README.md",
+      "sha256": "b54e4885f8a9200fb118716f62ff65fa08f1be074848941f81768b9ce6f554e1",
+      "staged": ".git/aurora-handoff-import-20261006/distributed-k2-requester-prep-v1282/README.md"
+    },
+    {
+      "bytes": 2114,
+      "canonical": "thesis/harness/distributed-k2-http-v852/REPORT.md",
+      "sha256": "623072d75f7aba873e9491eb737692f0a73d15a15fd6860dc3f570ef15dcf3de",
+      "staged": ".git/aurora-handoff-import-20261006/distributed-k2-requester-prep-v1282/REPORT.md"
+    },
+    {
+      "bytes": 11584,
+      "canonical": "thesis/harness/distributed-k2-http-v852/aurora_voice_telemetry_v430.py",
+      "sha256": "8129ffe7591a47a0107ede53b101aead9fc1f58b92f0c0c4203176cc7608325d",
+      "staged": ".git/aurora-handoff-import-20261006/distributed-k2-requester-prep-v1282/aurora_voice_telemetry_v430.py"
+    },
+    {
+      "bytes": 3230,
+      "canonical": "thesis/harness/distributed-k2-http-v852/bindings.py",
+      "sha256": "52182f956b34788ecbfbbb241c8243ff88baebe2874e3605791793777ed0dc91",
+      "staged": ".git/aurora-handoff-import-20261006/distributed-k2-requester-prep-v1282/bindings.py"
+    },
+    {
+      "bytes": 1950,
+      "canonical": "thesis/harness/distributed-k2-http-v852/bootstrap.py",
+      "sha256": "6a8d7827bc9f0939e63e4f911868a178f5ba4c73bcf3aa878d50cd74895ed531",
+      "staged": ".git/aurora-handoff-import-20261006/distributed-k2-requester-prep-v1282/bootstrap.py"
+    },
+    {
+      "bytes": 220,
+      "canonical": "thesis/harness/distributed-k2-http-v852/candidate-manifest.json",
+      "sha256": "ce75b965ee5879ebece6ea7dfe133441547d20ccf89ecd5d66ea510bd9645e60",
+      "staged": ".git/aurora-handoff-import-20261006/distributed-k2-requester-prep-v1282/candidate-manifest.json"
+    },
+    {
+      "bytes": 16504,
+      "canonical": "thesis/harness/distributed-k2-http-v852/controller.py",
+      "sha256": "809bec19682eb717f016d2b9f62453b38945201c561f7d4f4ac72e242024050e",
+      "staged": ".git/aurora-handoff-import-20261006/distributed-k2-requester-prep-v1282/controller.py"
+    },
+    {
+      "bytes": 14287,
+      "canonical": "thesis/harness/distributed-k2-http-v852/k2_composition.py",
+      "sha256": "08be1fa730d6e49ccf4bd491539b4b8edb5b3476eb7f8f7db9656db5e7b3a053",
+      "staged": ".git/aurora-handoff-import-20261006/distributed-k2-requester-prep-v1282/k2_composition.py"
+    },
+    {
+      "bytes": 11873,
+      "canonical": "thesis/harness/distributed-k2-http-v852/observer.py",
+      "sha256": "784cc4bffc0d6824bbe378d17a7f632d587ca0a315896b048b2ebef727082df5",
+      "staged": ".git/aurora-handoff-import-20261006/distributed-k2-requester-prep-v1282/observer.py"
+    },
+    {
+      "bytes": 13549,
+      "canonical": "thesis/harness/distributed-k2-http-v852/receiver_proof.py",
+      "sha256": "06c1bb4aeae3ba8f2de7441bd09ccfc39d426615defd5b8a38b807117df4d791",
+      "staged": ".git/aurora-handoff-import-20261006/distributed-k2-requester-prep-v1282/receiver_proof.py"
+    },
+    {
+      "bytes": 7475,
+      "canonical": "thesis/harness/distributed-k2-http-v852/resource_sample.py",
+      "sha256": "8f62ec378e74036d4539d9159e3caf29b8fd7a9115de1ab0f482dfd58b6e1857",
+      "staged": ".git/aurora-handoff-import-20261006/distributed-k2-requester-prep-v1282/resource_sample.py"
+    },
+    {
+      "bytes": 59239,
+      "canonical": "thesis/harness/distributed-k2-http-v852/runner.py",
+      "sha256": "1f869903b4a2c5167707891bd1d32294329c5673b7386c60b4f13400c4efba06",
+      "staged": ".git/aurora-handoff-import-20261006/distributed-k2-requester-prep-v1282/runner.py"
+    },
+    {
+      "bytes": 58216,
+      "canonical": "thesis/harness/distributed-k2-http-v852/source-inventory.json",
+      "sha256": "96ec8e3e14233520d4cd469c4177264a193d05cf26b4b512d91d98f16bbb7dee",
+      "staged": ".git/aurora-handoff-import-20261006/distributed-k2-requester-prep-v1282/source-inventory.json"
+    },
+    {
+      "bytes": 8801,
+      "canonical": "thesis/harness/distributed-k2-http-v852/stage_adapter.py",
+      "sha256": "204ea4d6b48571ab7ba0add0310a3dadd87b5e1e2afdc172634185755c9bb02c",
+      "staged": ".git/aurora-handoff-import-20261006/distributed-k2-requester-prep-v1282/stage_adapter.py"
+    }
+  ],
+  "sourceImportsOrTests": 0,
+  "sourceReviewSha256": "b1f4c531281240e08ff1f55541d59af3bc9d0c03299916b489875eae2f514faf",
+  "stageRoot": "/home/developer/projects/aurora/.git/aurora-handoff-import-20261006/distributed-k2-requester-prep-v1282",
+  "status": "SOURCE_STAGED_NO_RUNTIME_OR_MODEL_ADMISSION"
+}

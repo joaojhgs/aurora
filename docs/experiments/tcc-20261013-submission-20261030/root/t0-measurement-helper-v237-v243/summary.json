@@ -1,0 +1,15 @@
+{
+  "scope": "analysis helper only, no actual assistant requests/route/mobile/telemetry acceptance",
+  "independent_review": "APPROVE after two material schema/deadline corrections",
+  "initial_focused_result": "3 pass /1 failure: incorrect exact floating-point dictionary assertion",
+  "corrected_candidate_result": "4 pass /0 fail",
+  "integrated_import_style_only_result": "4 pass /0 fail",
+  "integrated_source_sha256": {
+    "scripts/experiments/assistant_measurement_records.py": "2648b5579c487e15936bf2eafd70ae8b63db5567915ff4c1c1b318989da2a646",
+    "tests/unit/tools/test_assistant_measurement_records.py": "d974dc5f6007807e2de5a74dc7152e296934fba58b7062cae474e4a5d8852181"
+  },
+  "routine_lint_format_fixes": "collections.abc imports and Ruff formatting only; statistical algorithm unchanged",
+  "quantile_method": "Type7 sorted correct-success latencies h=(n-1)p with interpolation; failures remain in separate denominator",
+  "no_source_commit": true,
+  "no_thesis_application": true
+}

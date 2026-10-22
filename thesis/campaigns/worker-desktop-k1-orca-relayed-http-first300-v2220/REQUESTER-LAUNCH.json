@@ -1,0 +1,21 @@
+{
+  "at": "2026-10-21T16:06:51.258836+00:00",
+  "controllerPid": 3728513,
+  "controllerStartTicks": 137727184,
+  "excludedWarmups": 15,
+  "firstGlobalIndex": 181,
+  "frozenManifestSha256": "620533a4cd2c5301f348fb1c72e961ba751e6465153e54d32d3c47990451c21d",
+  "lastGlobalIndex": 480,
+  "measuredObserved": 0,
+  "newWorker": false,
+  "plannedMeasured": 300,
+  "providerReceiver": {
+    "pid": 1440196,
+    "startTicks": 35427408,
+    "state": "S"
+  },
+  "sourceInventorySha256": "000202cdddb9803d503fc44f8aaf58eb469475890751a310193418330aa79937",
+  "sourceReadyIsNotMeasurement": true,
+  "status": "HTTP_FIRST300_REQUESTER_CONTROLLER_STARTED_NATIVE_ADMISSION_PENDING",
+  "warmupsObserved": 0
+}

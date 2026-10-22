@@ -1,0 +1,263 @@
+{
+  "purpose": "static source-literal hashes for private comparison with typed-error hash; no literal text stored",
+  "entries": [
+    {
+      "source": "packages/aurora-sdk/src/client.ts",
+      "line": 1327,
+      "category": "timeout",
+      "sha256": "801e8fb25bc46de434fa3113b09ee94263b8ffa822c21d3287f617042e6f06b8"
+    },
+    {
+      "source": "packages/aurora-sdk/src/webrtc/runtime.ts",
+      "line": 235,
+      "category": "transport_or_stream_lifecycle",
+      "sha256": "67eeee0d506b70399ca8f0d8e0c887a2398c8192b5decb39de66b7652b3451c3"
+    },
+    {
+      "source": "packages/aurora-sdk/src/webrtc/runtime.ts",
+      "line": 248,
+      "category": "transport_or_stream_lifecycle",
+      "sha256": "f51d20c493669633a4218e0b543a32e186c33620fd66c87de5510c6ebd14c9e9"
+    },
+    {
+      "source": "packages/aurora-sdk/src/webrtc/runtime.ts",
+      "line": 638,
+      "category": "transport_or_stream_lifecycle",
+      "sha256": "d063b3b256c1cc7d014ded457c0612d5edda4356730610e4740e521cebcc7830"
+    },
+    {
+      "source": "packages/aurora-sdk/src/webrtc/runtime.ts",
+      "line": 777,
+      "category": "transport_or_stream_lifecycle",
+      "sha256": "12fab3a64e64a76f84f1133cb6ba58aab4fdedb8f8a06c73965433cba25fc8e6"
+    },
+    {
+      "source": "packages/aurora-sdk/src/webrtc/runtime.ts",
+      "line": 1104,
+      "category": "transport_or_stream_lifecycle",
+      "sha256": "8c91e183d8be02c3bbb0dad22e4e748161489cebd3b3ff1d938d8cc3f0aef638"
+    },
+    {
+      "source": "packages/aurora-sdk/src/webrtc/runtime.ts",
+      "line": 1250,
+      "category": "transport_or_stream_lifecycle",
+      "sha256": "e56eb8b1d7adfdcd3727454ad5b981d179e98c6596aab8a7ad3eb74b28c73985"
+    },
+    {
+      "source": "packages/aurora-sdk/src/webrtc/runtime.ts",
+      "line": 1263,
+      "category": "transport_or_stream_lifecycle",
+      "sha256": "e770763ca05cfe171d98dfeb51155c3696111af12b1bc5ce8cbc01bc5786a787"
+    },
+    {
+      "source": "packages/aurora-sdk/src/webrtc/runtime.ts",
+      "line": 2191,
+      "category": "transport_or_stream_lifecycle",
+      "sha256": "3fbe926cc456cc5bd2c1643244d08cd921e825909c1bccba74c967a9ace90448"
+    },
+    {
+      "source": "packages/aurora-sdk/src/webrtc/runtime.ts",
+      "line": 2247,
+      "category": "transport_or_stream_lifecycle",
+      "sha256": "bf6dfefdadea48f5cefff6ea2d200fd1d157a7d1748228d77304c190d043469f"
+    },
+    {
+      "source": "packages/aurora-sdk/src/webrtc/runtime.ts",
+      "line": 2257,
+      "category": "transport_or_stream_lifecycle",
+      "sha256": "bf6dfefdadea48f5cefff6ea2d200fd1d157a7d1748228d77304c190d043469f"
+    },
+    {
+      "source": "packages/aurora-sdk/src/webrtc/mesh-peer-bridge.ts",
+      "line": 407,
+      "category": "transport_or_stream_lifecycle",
+      "sha256": "f4f911fe75a369e6333670b2c2ad80b856826340077a0ffbdc5f7852d80a2e92"
+    },
+    {
+      "source": "packages/aurora-sdk/src/webrtc/mesh-peer-bridge.ts",
+      "line": 418,
+      "category": "transport_or_stream_lifecycle",
+      "sha256": "83293144227ecf8f3b87c8406ca7acf130373974977afc6c4e1f77603cd83960"
+    },
+    {
+      "source": "packages/aurora-sdk/src/webrtc/mesh-peer-bridge.ts",
+      "line": 444,
+      "category": "timeout",
+      "sha256": "892409d399948407f72585ed71913c9908d377c20d91636f82ea35e121958a89"
+    },
+    {
+      "source": "packages/aurora-sdk/src/webrtc/mesh-peer-bridge.ts",
+      "line": 454,
+      "category": "timeout",
+      "sha256": "892409d399948407f72585ed71913c9908d377c20d91636f82ea35e121958a89"
+    },
+    {
+      "source": "packages/aurora-sdk/src/webrtc/mesh-peer-bridge.ts",
+      "line": 554,
+      "category": "timeout",
+      "sha256": "fbe831798ded3524c2d68ba367a6914537fa7710356cf28ede7c1395d0e70369"
+    },
+    {
+      "source": "packages/aurora-sdk/src/webrtc/mesh-peer-bridge.ts",
+      "line": 573,
+      "category": "transport_or_stream_lifecycle",
+      "sha256": "d809cc9149cc8261df9a88b9a9ff835f9d0802faeb72c610b042629e4cf36524"
+    },
+    {
+      "source": "packages/aurora-sdk/src/webrtc/mesh-peer-bridge.ts",
+      "line": 580,
+      "category": "transport_or_stream_lifecycle",
+      "sha256": "d809cc9149cc8261df9a88b9a9ff835f9d0802faeb72c610b042629e4cf36524"
+    },
+    {
+      "source": "packages/aurora-sdk/src/webrtc/mesh-peer-bridge.ts",
+      "line": 600,
+      "category": "transport_or_stream_lifecycle",
+      "sha256": "d809cc9149cc8261df9a88b9a9ff835f9d0802faeb72c610b042629e4cf36524"
+    },
+    {
+      "source": "packages/aurora-sdk/src/webrtc/mesh-peer-bridge.ts",
+      "line": 921,
+      "category": "transport_or_stream_lifecycle",
+      "sha256": "1ee76a95910fbc3ab532865e739ee2b02dec876a475916ba3f559aff9f3f2872"
+    },
+    {
+      "source": "packages/aurora-sdk/src/webrtc/mesh-peer-bridge.ts",
+      "line": 994,
+      "category": "transport_or_stream_lifecycle",
+      "sha256": "a09a3e642f26276efed649dd65a839cbc35fb8e190eb13e0d395f6a9b7176920"
+    },
+    {
+      "source": "packages/aurora-sdk/src/webrtc/mesh-peer-bridge.ts",
+      "line": 1059,
+      "category": "transport_or_stream_lifecycle",
+      "sha256": "4edf9b8a2e7887b4e7d6c5d45c536b3f061941da09dc717b2cb23cd34ccf7e3c"
+    },
+    {
+      "source": "packages/aurora-sdk/src/webrtc/mesh-peer-bridge.ts",
+      "line": 1060,
+      "category": "transport_or_stream_lifecycle",
+      "sha256": "f9efc40d59f25d67a9a32ac42b6fface06a855713852c749504ff2396f3ccd88"
+    },
+    {
+      "source": "packages/aurora-sdk/src/webrtc/mesh-peer-bridge.ts",
+      "line": 1061,
+      "category": "transport_or_stream_lifecycle",
+      "sha256": "fe3e9e0f6f950c07f4504ac95be9cd18f5c6f40ef8001ccf485b538338893e3a"
+    },
+    {
+      "source": "packages/aurora-sdk/src/webrtc/mesh-peer-bridge.ts",
+      "line": 1062,
+      "category": "transport_or_stream_lifecycle",
+      "sha256": "2afe06ee631a4a9ace64bc433bb7d09d84163bb439ecce9aaecd746d84aef8e2"
+    },
+    {
+      "source": "packages/aurora-sdk/src/webrtc/mesh-peer-bridge.ts",
+      "line": 1083,
+      "category": "transport_or_stream_lifecycle",
+      "sha256": "b6ef26a8f92a9b9c754353a762ed2e5866c7ac56b96b49dadc0e23b3c3e94786"
+    },
+    {
+      "source": "packages/aurora-sdk/src/webrtc/mesh-peer-bridge.ts",
+      "line": 1087,
+      "category": "transport_or_stream_lifecycle",
+      "sha256": "f9f24d69b9d27e18f41aef46bbfc73b4000f3cd0f1c75046853f2eca1ec1f1bd"
+    },
+    {
+      "source": "packages/aurora-sdk/src/webrtc/mesh-peer-bridge.ts",
+      "line": 1228,
+      "category": "timeout",
+      "sha256": "892409d399948407f72585ed71913c9908d377c20d91636f82ea35e121958a89"
+    },
+    {
+      "source": "packages/aurora-sdk/src/webrtc/mesh-peer-bridge.ts",
+      "line": 1353,
+      "category": "transport_or_stream_lifecycle",
+      "sha256": "2ff12231f8ad946b66f21489be27e4c4ccb47cb006cf87cbfe42e976589bf30d"
+    },
+    {
+      "source": "packages/aurora-sdk/src/webrtc/mesh-peer-bridge.ts",
+      "line": 1426,
+      "category": "transport_or_stream_lifecycle",
+      "sha256": "c4437eb676e94fbea77fd80079facd5747eb11c7f5685566ddc9ec69d55a39a6"
+    },
+    {
+      "source": "packages/aurora-sdk/src/webrtc/mesh-peer-bridge.ts",
+      "line": 1437,
+      "category": "transport_or_stream_lifecycle",
+      "sha256": "b7f3e9e09233713f1e235161da5985d87fbd3741dc0c99b12bc2bdb92105961f"
+    },
+    {
+      "source": "packages/aurora-sdk/src/webrtc/mesh-peer-bridge.ts",
+      "line": 1440,
+      "category": "transport_or_stream_lifecycle",
+      "sha256": "017c33280f4a0b80c37bd765a33b97ff89490b6d704a560a34da7d16a5e2cceb"
+    },
+    {
+      "source": "packages/aurora-sdk/src/webrtc/mesh-peer-bridge.ts",
+      "line": 1442,
+      "category": "transport_or_stream_lifecycle",
+      "sha256": "4e8f7970f8eab128e00e81b277aa2c95d2adfb7d263b121ca6ea1c3b8dff600d"
+    },
+    {
+      "source": "apps/aurora-web/app/aurora-client.ts",
+      "line": 111,
+      "category": "transport_or_stream_lifecycle",
+      "sha256": "93e4aa303c94f15cafd5f8a2f19d53d87b0b5404c338cd2e3a5e942af1f57261"
+    },
+    {
+      "source": "apps/aurora-web/app/aurora-client.ts",
+      "line": 297,
+      "category": "transport_or_stream_lifecycle",
+      "sha256": "efdcdd59546157a2c1a33a39c13b6e106216b40f0fda400ae936d1d80f1641d9"
+    },
+    {
+      "source": "apps/aurora-web/app/aurora-client.ts",
+      "line": 687,
+      "category": "transport_or_stream_lifecycle",
+      "sha256": "93d943c6903b463b3c14485370cc8a134290a18f39c0ed50dc2d125b70da227a"
+    },
+    {
+      "source": "apps/aurora-web/app/aurora-client.ts",
+      "line": 778,
+      "category": "transport_or_stream_lifecycle",
+      "sha256": "93d943c6903b463b3c14485370cc8a134290a18f39c0ed50dc2d125b70da227a"
+    },
+    {
+      "source": "apps/aurora-web/app/aurora-client.ts",
+      "line": 806,
+      "category": "transport_or_stream_lifecycle",
+      "sha256": "7446281d3b9309d3a5640957383a2c19f1fe0e2498acf3aabcad955bf9a954ac"
+    },
+    {
+      "source": "apps/aurora-web/app/browser-shell-runtime.tsx",
+      "line": 47,
+      "category": "transport_or_stream_lifecycle",
+      "sha256": "13d0a9cba49be90f8037ef3c7d155ca3d6655984594b54a24660f154784ae310"
+    },
+    {
+      "source": "apps/aurora-web/app/browser-shell-runtime.tsx",
+      "line": 92,
+      "category": "transport_or_stream_lifecycle",
+      "sha256": "2f319ea96c24d1be1132c26e7b8e36a65c61fd51faa52c7535ce4d46f83cbacd"
+    },
+    {
+      "source": "apps/aurora-web/app/browser-shell-runtime.tsx",
+      "line": 106,
+      "category": "transport_or_stream_lifecycle",
+      "sha256": "77a32ed7e2da0172334bda9350b0177667198e01327a1379a92a417630ddb3eb"
+    },
+    {
+      "source": "apps/aurora-web/app/browser-shell-runtime.tsx",
+      "line": 329,
+      "category": "transport_or_stream_lifecycle",
+      "sha256": "d6b0441f16a89f442d316630b5edc5cec702085a5bd8ae1a71f1b1873e9f8aa1"
+    },
+    {
+      "source": "apps/aurora-web/app/browser-shell-runtime.tsx",
+      "line": 520,
+      "category": "transport_or_stream_lifecycle",
+      "sha256": "ca13ae6909978fb731ddbcba3ded41c593a4c3754ea17dac6b1557088fef2e1d"
+    }
+  ]
+}

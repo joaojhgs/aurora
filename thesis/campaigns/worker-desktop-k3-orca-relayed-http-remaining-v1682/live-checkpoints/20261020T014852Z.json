@@ -1,0 +1,53 @@
+{
+  "at": "2026-10-20T01:48:52.965444+00:00",
+  "classification": "VERIFIED_WAIT",
+  "processes": [
+    {
+      "role": "controller",
+      "pid": 2202799,
+      "startTicks": 123551050,
+      "alive": true
+    },
+    {
+      "role": "backend",
+      "pid": 2202983,
+      "startTicks": 123552157,
+      "alive": true
+    },
+    {
+      "role": "copier",
+      "pid": 2202800,
+      "startTicks": 123551051,
+      "alive": true
+    }
+  ],
+  "newMeasured": 111,
+  "correct": 111,
+  "failed": 0,
+  "remaining": 49,
+  "lastGlobalIndex": 851,
+  "outcomes": {
+    "completed_correct": 111
+  },
+  "custodyCases": 125,
+  "custodyFiles": 473,
+  "custodyErrors": null,
+  "freeBytes": 5363007488,
+  "summaryExists": false,
+  "previousGoalTurnClassification": "VERIFIED_WAIT: same original live processes; only declared frozen cases and existing custody continue",
+  "nativeGoal": "01a112a5-d6bb-74e2-bf7c-ace73cb513b5",
+  "nativeGoalStatus": "active",
+  "countsOnly": {
+    "attempted": 851,
+    "correct": 836,
+    "failed": 15,
+    "remaining": 49,
+    "target": 900,
+    "prior740Preserved": true
+  },
+  "nextAction": "Continue same frozen K3 tail and existing custody. At natural terminal reconcile requester/provider EOF and exact missing indices, then next authorized condition. No duplicate traffic, source changes, new workers or goal resume.",
+  "nextProgressCheckAt": "2026-10-20T01:54:41.291519+00:00",
+  "noAdvanceNudgeAt": "2026-10-20T01:54:41.291537+00:00",
+  "frozenManifestSha256": "32c5ac87c8cd765f0117a0312b6941c8f69c7731dfe66987826311e74e34b506",
+  "providerDeadlineUtc": "2026-10-20T03:42:15.698294+00:00"
+}

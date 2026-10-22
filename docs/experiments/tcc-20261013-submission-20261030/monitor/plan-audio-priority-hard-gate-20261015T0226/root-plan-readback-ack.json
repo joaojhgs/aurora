@@ -1,0 +1,18 @@
+{
+  "message": "msg_220b63283244",
+  "created_at": "2026-10-15T02:31:47Z",
+  "delivery": "delivery_07afc59ceae0",
+  "from": "term_6a00d9ee-792a-4daf-8578-236290e33108",
+  "section": "30.13",
+  "fullLines": 1620,
+  "newLinesRead": 29,
+  "sha256": "3f1be78afb16c9fb7ecd2fed197ff3ec0cf5725af971037d1d0ba79b39370e8b",
+  "prior1591PrefixUnchanged": true,
+  "priorSHA256": "89dc0888a710ac6b52d0b85943c29565d404b2b8809c86252ff97f0d8cb6e32e",
+  "diffSHA256": "7ab011cbaa43bb77777fc2ef5e9f5fc3930dc0765e86ff0311633f5bd7cfe1fc",
+  "receiptRead": true,
+  "fullDiffRead": true,
+  "checklistRead": true,
+  "executionClaim": false,
+  "body": "Root FULLREAD new29lines through complete plan.diff, receipt and audio-priority-checklist. Actual fullafter1620 SHA3f1be78afb16c9fb7ecd2fed197ff3ec0cf5725af971037d1d0ba79b39370e8b; prior1591 prefix byte-identical SHA89dc0888a710ac6b52d0b85943c29565d404b2b8809c86252ff97f0d8cb6e32e; diff7ab011cbaa43bb77777fc2ef5e9f5fc3930dc0765e86ff0311633f5bd7cfe1fc. Accepted explicit fullaudio priority, complete unchanged fixedWAV, realcausalSTT/LLM/TTS, no injectedtranscript/reply, privatepassive actualengine bindings/offload, unknownmetricsNULL, 900perNEWcondition, separateCPU/GPU/surface gates and hardcrossdevicehold. This is actualreadback ACK, no executionclaim. Singleheadlesspilot source review finishing; receipt willfollow actuallaunch."
+}

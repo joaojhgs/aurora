@@ -1,0 +1,31 @@
+{
+  "at": "2026-10-20T03:30:52.748290+00:00",
+  "targetedTests": {
+    "command": "flock -n /tmp/aurora-global-build.lock .venv/bin/python -m pytest -q tests/unit/tts/test_runtime_speech_announcement.py tests/unit/gateway/test_registry_mesh_snapshot.py tests/unit/app/services/test_base_service_permission_enforcement.py --disable-warnings --maxfail=1",
+    "passed": 36,
+    "failed": 0,
+    "seconds": 39.21,
+    "warnings": 4
+  },
+  "ruffCheck": "passed",
+  "ruffFormatCheck": "4 files formatted",
+  "noBroadRepeat": true,
+  "files": {
+    "app/shared/services/base_service.py": {
+      "bytes": 69281,
+      "sha256": "39702090d31044081ecd4425c7f04858397337ae83b3425612766db783c560ec"
+    },
+    "app/services/tts/service.py": {
+      "bytes": 228651,
+      "sha256": "96f916131756a5ec2a27f606c719d4c360a9d6d52890a266b59ef3193f14b07e"
+    },
+    "app/services/gateway/registry_aggregator.py": {
+      "bytes": 27485,
+      "sha256": "10d555a1486fb2c804cbb97539878fcb8cf2a6c314e123ca9149215f3a66b98e"
+    },
+    "tests/unit/tts/test_runtime_speech_announcement.py": {
+      "bytes": 15103,
+      "sha256": "5cb4d99379ed9456aaa8028e8c367ae929404c1de4c7b6ce8075b3e03a0fac18"
+    }
+  }
+}

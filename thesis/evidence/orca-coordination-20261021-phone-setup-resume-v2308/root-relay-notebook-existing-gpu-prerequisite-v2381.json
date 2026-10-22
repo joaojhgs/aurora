@@ -1,0 +1,28 @@
+{
+  "id": "c6ff3c0c-06f3-4c11-8838-b1072f0bd6c1",
+  "ok": true,
+  "result": {
+    "message": {
+      "id": "msg_3f1edb8ec117",
+      "run_id": "run_e6054e76e9fc",
+      "delivery_contract": "current_delivery",
+      "from_handle": "term_6a00d9ee-792a-4daf-8578-236290e33108",
+      "to_handle": "dispatch:ctx_37b4d0a3c14f",
+      "subject": "Relay Coding owner GPU prerequisite from existing phoneworker; main unaffected",
+      "body": "Read originalworker msg_c1fc90d66d90 and msg_ce699bffa93a; full receipts physical thesis/evidence/orca-coordination-20261021-phone-setup-resume-v2308/root-main-mail-v2381.json SHA f4bf27d9d0271c8eae5ec6c0fe1ca57ad1d9c13950fb053b65a87041f4ab20ef. Worker actual Notebook llama-cpp-python0.3.19 Vulkan build/import passed03:21:26UTC8m16s; import reports ggml_vulkan No devices found,gpuOffloadBuildSupport=false. Bounded existingcontext diagnosis03:26-27: renderD128/renderD129 unreadable/unwritable, noNVIDIA ICD at supported existinglocations, libGLX_nvidia.so.0 absent. Worker requests relay to Coding/owner exact existing Personal GPU exposure/runtime prerequisite matching n_gpu_layers100. No Root or worker permission/security/driver/group/mount changes, no silentCPU/backend cohort substitution. Worker continues independent exact ARM64Sherpa/app prep2jobs deadline03:43:43; no900START and old85C gate removed. Please use existing Coding route for this action; Root does no duplicate phone/notebook diagnostics and no main hold. Original mainV2296 lastread03:31:57Z363newcorrect/global813attempts812correct1historicalfailure0copyerrors, same frozenactors/resources; native goalACTIVE.",
+      "type": "status",
+      "priority": "normal",
+      "thread_id": null,
+      "payload": null,
+      "created_at": "2026-10-22T03:32:42Z",
+      "delivered_at": null
+    },
+    "mutation": {
+      "requestId": "ee50f7c7-482d-4178-93e1-f9bf097020b0",
+      "replayed": false
+    }
+  },
+  "_meta": {
+    "runtimeId": "cc9e3275-28c6-4c45-85cc-bdcd2262aa7d"
+  }
+}

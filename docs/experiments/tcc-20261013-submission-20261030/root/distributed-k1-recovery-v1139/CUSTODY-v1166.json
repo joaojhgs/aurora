@@ -1,0 +1,32 @@
+{
+  "at": "2026-10-17T18:03:32.601955+00:00",
+  "files": [
+    {
+      "path": "provider-launch-v1157.json",
+      "bytes": 1641,
+      "sha256": "a6ccae5d908e43bb131c3fcff92e6f456279beb58187fe4fb67d2007ce1a461a"
+    },
+    {
+      "path": "provider-ready-v1160.json",
+      "bytes": 443,
+      "sha256": "60ce9ec1f01672ae45f5c91e29dacfa4598cba4327b13dba8074d26ec7958982"
+    },
+    {
+      "path": "worker-poststart-route-v1160.json",
+      "bytes": 566,
+      "sha256": "780acf89fe2604cdefc3483489cdd3f57019afb77e6027a05198bb8b28b4335f"
+    },
+    {
+      "path": "personal-local-health-v1161.json",
+      "bytes": 481,
+      "sha256": "66c169afcc0d270597d9c5d75293ba858b51f6488d17cfc7aab420a9715f7898"
+    },
+    {
+      "path": "UPDATE-v1166.md",
+      "bytes": 4500,
+      "sha256": "1fcb88c7b891a915fecb9230c8037f4f606bd502393e42a4e230dfba10d02d5d"
+    }
+  ],
+  "privateLogsAndCredentialValuesExcluded": true,
+  "modelCallsFromAdmissionProbes": 0
+}

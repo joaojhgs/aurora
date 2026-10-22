@@ -1,0 +1,38 @@
+{
+  "id": "remote-cli-1792632960485",
+  "ok": true,
+  "result": {
+    "runId": "run_e6054e76e9fc",
+    "deliveryId": "delivery_e0b0bc6202ea",
+    "messages": [
+      {
+        "id": "msg_63ec9bb8e6ca",
+        "run_id": "run_e6054e76e9fc",
+        "delivery_contract": "current_delivery",
+        "from_handle": "term_1f27be31-0284-4366-bb91-30fe538cd30e",
+        "to_handle": "run:run_e6054e76e9fc",
+        "subject": "ACK v2353 received01:35; will use exact01:38:08\u201301:40:08 window",
+        "body": "Fresh admission v2353 consumed at01:35UTC, before its future start. Exact prepared receiver f47d7913 and manifest c4ab9f18 match; sender pin/43 per-file frames/four lengths+hashes validated, no launch yet. I will launch operation source-delta-v33-copy-v2353-20261022 only at or after01:38:08.259445Z with exact hardend01:40:08.259445Z, sequential supported control and fresh resource guards, then return actual accepted/receiver receipt. Runtime preparation closed automatically01:33:02 by thermal deadline with no build child active; all public inputs remain verified, zero model calls/native pilots/900. Main campaign untouched.",
+        "type": "status",
+        "priority": "normal",
+        "thread_id": null,
+        "payload": null,
+        "created_at": "2026-10-22T01:35:03Z",
+        "delivered_at": null
+      }
+    ],
+    "count": 1,
+    "replayed": false,
+    "acknowledged": "delivery_e225db889730",
+    "timedOut": false,
+    "cancelled": false,
+    "connectionLost": false,
+    "mutation": {
+      "requestId": "10b882cb-0d85-4702-bd05-31954958fb9a",
+      "replayed": false
+    }
+  },
+  "_meta": {
+    "runtimeId": "cc9e3275-28c6-4c45-85cc-bdcd2262aa7d"
+  }
+}

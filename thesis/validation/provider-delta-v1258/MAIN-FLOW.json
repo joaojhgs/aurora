@@ -1,0 +1,25 @@
+{
+  "at": "2026-10-17T21:13:18Z",
+  "status": "PASS_SAVED_DATA_DELTA_COPY_MAIN_FLOW",
+  "source": "thesis/harness/provider_export_delta_v1258.py",
+  "sourceSha256": "b5298ba9a95d1226e776ccb671183d3d474f00eb4ead9af66dd62c409b948e8d",
+  "rawBytesCopied": 749,
+  "baselineRawRecopiedBytes": 0,
+  "sourceRecords": [
+    {
+      "member": "provider-raw/prefixes/actual-provider-bindings.jsonl/000000000000-000000021026.chunk",
+      "bytes": 21026,
+      "sha256": "b4e55f4e8dedff085684bc999689e0bb29b54151d4405b927555b5ec464e3373"
+    },
+    {
+      "member": "provider-raw/prefixes/actual-provider-bindings.jsonl/000000021026-000000021775.chunk",
+      "bytes": 749,
+      "sha256": "2a6164ffe1a691312d15a6911eef1cf1db6f3f98c2a37ce713ef4f312b3fb8df"
+    }
+  ],
+  "actualPersonalExportExecuted": false,
+  "newMeasuredRequests": 0,
+  "modelsLoaded": false,
+  "archiveSha256": "80287a3f4a8828f85cd01cc901eb89bf35dcfb64a509e26c3165fb988ad22929",
+  "note": "Auxiliary copy verification only; actual retained row bytes used, no generated measurements."
+}

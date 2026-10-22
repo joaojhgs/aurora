@@ -1,0 +1,12 @@
+{
+  "controlDeadline": "2026-10-22T06:15:00Z",
+  "explicitNewline": true,
+  "host": "ssh:ssh-sem-notebook-personal",
+  "incarnation": "328cd72f-c7ea-49ff-a2db-b9275b085037",
+  "remoteResult": "/home/developer/projects/aurora/thesis/phone-notebook/20261020/evidence/read-policy-update-v175.json",
+  "rootAdmissionMessage": "actual v2repair installer receipt and prompt observation before nativevalidation",
+  "script": "scripts/read_policy_update_v175.py",
+  "scriptSha256": "a666dfa9d30a0fe63c77fb814c1d588a3533a3aee62c6d97fe3f81500132db08",
+  "singleSend": true,
+  "terminal": "term_a2ed5feb-7c92-48e4-bd88-d1b0e6737989"
+}

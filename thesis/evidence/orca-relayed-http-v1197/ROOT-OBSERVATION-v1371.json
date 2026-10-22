@@ -1,0 +1,40 @@
+{
+  "at": "2026-10-17T22:56:38.226038+00:00",
+  "progress": {
+    "attempted": 195,
+    "measured_attempted": 180,
+    "planned_measured": 900,
+    "planned_warmups": 15,
+    "status": "stopped_system_failure",
+    "stop_reason": "remote_transport_error",
+    "unattempted_measured": 720,
+    "warmups_attempted": 15
+  },
+  "freeBytes": 6969729024,
+  "summaryExists": true,
+  "pids": {
+    "430655": {
+      "error": "[Errno 2] No such file or directory: '/proc/430655/stat'"
+    },
+    "430656": {
+      "error": "[Errno 2] No such file or directory: '/proc/430656/stat'"
+    },
+    "442775": {
+      "error": "[Errno 2] No such file or directory: '/proc/442775/stat'"
+    },
+    "421717": {
+      "same": true,
+      "startTicks": 104535394,
+      "state": "S"
+    }
+  },
+  "copiedCases": 195,
+  "copiedPhaseCounts": {
+    "warmup": 15,
+    "measured": 180
+  },
+  "copiedOutcomeCounts": {
+    "completed_correct": 194,
+    "failed": 1
+  }
+}

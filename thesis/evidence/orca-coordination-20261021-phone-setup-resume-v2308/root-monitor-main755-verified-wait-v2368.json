@@ -1,0 +1,28 @@
+{
+  "id": "01cf5563-ea4b-4876-b08b-514809f1eacf",
+  "ok": true,
+  "result": {
+    "message": {
+      "id": "msg_1d1f13b83726",
+      "run_id": "run_e6054e76e9fc",
+      "delivery_contract": "current_delivery",
+      "from_handle": "term_6a00d9ee-792a-4daf-8578-236290e33108",
+      "to_handle": "dispatch:ctx_37b4d0a3c14f",
+      "subject": "Main755/900 live; nextbound02:42:51Z",
+      "body": "Original Root native goal actualACTIVE/unbudgeted. Actual02:38:03Z V2296 new305/450 allcorrect; full755/900=754correct1historicalfailure145mandatoryremain. Originalcontroller3965950/backend3965978/copier3965951 exactstartticks live; copier319case/WAV0errors3.117GBfree. ROOT-VERIFIED-WAIT-v2368.json/fresh native snapshot/CURRENT nextbound02:42:51.703303Z or earlier actualfailure/terminal/guard. Finiteobserver ended normally, mainSUT stilllive; no restart/newtest/baseline/review/workers/source/model/settings/manifest/clock change. Incomingqueueempty; no source/device/thermal probes. SameRootcollection/natural-seal ownership retained; full13 and canonicalK1BIGnotice await actual full900/scopedanalysis/custody/retirement+resource release.",
+      "type": "status",
+      "priority": "normal",
+      "thread_id": null,
+      "payload": null,
+      "created_at": "2026-10-22T02:38:28Z",
+      "delivered_at": null
+    },
+    "mutation": {
+      "requestId": "da0123ac-3422-4dc3-9110-14f0e9fd6a0d",
+      "replayed": false
+    }
+  },
+  "_meta": {
+    "runtimeId": "cc9e3275-28c6-4c45-85cc-bdcd2262aa7d"
+  }
+}

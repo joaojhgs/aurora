@@ -1,0 +1,68 @@
+{
+  "at": "2026-10-20T21:58:28.569251+00:00",
+  "status": "K3_NEW_TRACE_VERSION_ACTUALLY_RUNNING_SAME_PROVIDER",
+  "nativeGoalStatus": "active",
+  "nativeGoalThread": "01a112a5-d6bb-74e2-bf7c-ace73cb513b5",
+  "head": "ebde3a8acf6315f920d03593845f17a1fc65a733",
+  "conditionSha256": "4ffe1f86fa652554123fd30b6cf18f6794ee8bfe9f08ae624e0304814e6258de",
+  "requester": {
+    "at": "2026-10-20T21:57:42.864066+00:00",
+    "conditionManifestSha256": "4ffe1f86fa652554123fd30b6cf18f6794ee8bfe9f08ae624e0304814e6258de",
+    "controllerPid": 3116126,
+    "controllerStartTicks": 131192345,
+    "excludedWarmups": 15,
+    "measurementAdmitted": false,
+    "newWorker": false,
+    "plannedMeasured": 900,
+    "provider": {
+      "pid": 212717,
+      "startTicks": 28836628,
+      "state": "S"
+    }
+  },
+  "auxiliaries": {
+    "copier": {
+      "pid": 3116127,
+      "startTicks": 131192351,
+      "state": "R",
+      "sourceSha256": "469a14d2bd2237c2b0bcf27b37aaa94ca540188ffc36d7582bb046229638897a"
+    },
+    "warmup-finalizer": {
+      "pid": 3116128,
+      "startTicks": 131192352,
+      "state": "R",
+      "sourceSha256": "e7288e95762b1fee4981a1a5448d8e4f468c21d765b2ab846d29e4c1c5cd01a8"
+    }
+  },
+  "provider": {
+    "controllerPid": 212716,
+    "controllerStartTicks": 28836566,
+    "receiverPid": 212717,
+    "receiverStartTicks": 28836628,
+    "manifestSha256": "016d461363c4f1d3baa2fbb67bf7a85c0aa79df1a0ebb419fc7d3f166a4de629",
+    "deadlineUtc": "2026-10-21T12:45:06.664473+00:00",
+    "sameProcessReused": true
+  },
+  "measuredAttempted": 0,
+  "measuredTarget": 900,
+  "excludedWarmupTarget": 15,
+  "priorWarmups": {
+    "cohort": "v1937",
+    "correct": 15,
+    "failed": 0,
+    "measured": 0,
+    "instrumentationFailure": "two-topic sink rejected STT rows; quota only two-stage",
+    "terminal": "thesis/campaigns/worker-desktop-k3-p2p-full-audio-v1937/INSTRUMENTATION-TERMINAL-v1948.json",
+    "allActorsNaturallyRetired": true
+  },
+  "onlyRuntimeChange": "route_observation_sink.py STT topic +2761 three-stage quota",
+  "onlyRuntimeChangeSha256": "08e6683e1f17e9e36d19c017ae7e108934c2abd8b52d655d6acb2b443dc8341a",
+  "regression": "thesis/evidence/k3-stt-sink-main-regression-v1948/RESULT.json",
+  "allOriginalSourcesCasesRawFailuresPreserved": true,
+  "modelAudioSettingsPredicatesUnchanged": true,
+  "originalConditionWallStartUtc": "2026-10-20T21:04:37.423478+00:00",
+  "originalCapSeconds": 57600,
+  "personalControl": "RESERVED new automatic warmup finalizer3116128; no competing sends",
+  "rootPriority": "main K3/matrix; phone only existing delegated setupworker",
+  "phoneGateAppliesToK3": false
+}

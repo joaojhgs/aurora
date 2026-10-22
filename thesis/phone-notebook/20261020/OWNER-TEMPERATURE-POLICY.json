@@ -1,0 +1,19 @@
+{
+  "schema": "aurora.phone_notebook.owner_thermal_override.v1",
+  "at": "2026-10-22T03:11:46.836118+00:00",
+  "authority": "Direct owner correction: ignore the temperature; remove custom85C notebook setup admission gate",
+  "scope": "THIS Personal notebook setup/runtime/app build/initial bounded pilot",
+  "notebookTemperaturePolicy": "observe_only",
+  "notebookTemperatureAdmissionC": null,
+  "osFirmwareThermalProtections": "unchanged",
+  "resourceGuards": [
+    "bounded2jobs",
+    "1200second runtime deadline",
+    "disk>=2GiB",
+    "availableRAM>=8GiB",
+    "owned build RSS<=4GiB",
+    "actual process failures/OOM/critical battery preserved"
+  ],
+  "full900Authorized": false,
+  "newDownloads": false
+}

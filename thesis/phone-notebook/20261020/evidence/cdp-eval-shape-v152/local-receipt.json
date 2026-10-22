@@ -1,0 +1,8 @@
+{
+  "bytes": 834,
+  "copyOnly": true,
+  "custody": "Notebook result persisted and fsynced before relay; remote receipt in same output",
+  "localPath": "/home/developer/projects/aurora/thesis/phone-notebook/20261020/evidence/cdp-eval-shape-v152/result.json",
+  "remotePath": "/home/developer/projects/aurora/thesis/phone-notebook/20261020/evidence/cdp-eval-shape-v152.json",
+  "sha256": "d4b318b5618ddfa40187bbf152e3715f5a34b79248679f3111ba49d45e81b21c"
+}

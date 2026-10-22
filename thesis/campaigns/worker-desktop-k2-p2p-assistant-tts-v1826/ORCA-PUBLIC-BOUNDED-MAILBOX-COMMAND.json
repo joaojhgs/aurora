@@ -1,0 +1,36 @@
+{
+  "command": "orchestration check",
+  "path": [
+    "orchestration",
+    "check"
+  ],
+  "aliases": [],
+  "argumentMode": "parsed",
+  "summary": "Check this agent's messages",
+  "usage": "orca orchestration check [--terminal <handle>] [--run <run_id>] [--ack <delivery_id>] [--unread | --peek | --all] [--types <type,...>] [--format] [--wait] [--timeout-ms <n>] [--retry-request <id>] [--json]\n  default: return the bound Run's oldest unacknowledged FIFO batch.\n  --ack: acknowledge the prior whole batch before checking/waiting.\n  --peek: return only unread messages without marking them read.\n  --all: return every message for the handle; does not mark read.\n  --wait: block until a matching message arrives or --timeout-ms expires.\n          Emits JSON keepalive lines to stderr every 15s so the caller can\n          tell the process is alive. `_keepalive` is unrelated to heartbeat\n          messages; `_heartbeat` remains as a deprecated compatibility alias.\n          Filter with `jq \"select(._keepalive|not)\"` when merging streams.",
+  "flags": [
+    "help",
+    "json",
+    "pairing-code",
+    "environment",
+    "terminal",
+    "run",
+    "ack",
+    "unread",
+    "peek",
+    "all",
+    "types",
+    "format",
+    "wait",
+    "timeout-ms",
+    "retry-request"
+  ],
+  "positionalArgs": [],
+  "examples": [],
+  "notes": [
+    "On Windows PowerShell, quote comma-separated type filters, e.g. --types \"worker_done,escalation\".",
+    "--types is the wake condition for --wait; a returned Delivery is always the whole FIFO batch, so it is never filtered by type. Without --wait it has no effect on consuming checks. Only --peek and --all filter their rows.",
+    "--format renders the returned rows as local text only; it never writes to another terminal.",
+    "A bound Run replays the same Delivery until --ack or all its messages are marked read, even with --types; process every message before acknowledging."
+  ]
+}

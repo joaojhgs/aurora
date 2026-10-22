@@ -1,0 +1,328 @@
+--- v905/controller.py
++++ v1731/controller.py
+@@ -139,7 +139,7 @@
+             or cohort.get("meshAssistantPeerIdSha256") != hashlib.sha256(assistant_peer.encode()).hexdigest()
+             or cohort.get("meshTtsPeerIdSha256") != hashlib.sha256(tts_peer.encode()).hexdigest()
+             or cohort.get("meshAuthorityBinding") != "existing_authorized_peer_session"
+-            or cohort.get("sourceClosure", {}).get("equivalenceVerified") is not True
++            or cohort.get("sourceClosure", {}).get("snapshotVerified") is not True
+             or cohort.get("sourceClosure", {}).get("cpuSourceInventorySha256") != digest(inventory_path)
+             or cohort.get("sourceClosure", {}).get("cpuSourceRoot") != str(source_root)
+             or candidate.get("wavSHA256") != cohort.get("audio", {}).get("wavSha256")
+@@ -200,10 +200,19 @@
+     output.parent.mkdir(mode=0o700, parents=False, exist_ok=False)
+     if shutil.disk_usage(output.parent).free < DISK_FLOOR:
+         raise ValueError("run_volume_resource_floor_not_met")
+-    (output.parent / "data").mkdir(mode=0o700)
++    # Reuse only the already-approved task profile. A fresh data directory
++    # would create another peer identity and discard its existing authorization.
++    admitted_profile = cohort.get("existingAuthorizedTaskProfile", {})
++    profile_root = pathlib.Path(str(admitted_profile.get("path", "")))
++    expected_profile = private_parent / "mesh-pair-control-v1535" / "worker-node-v1538"
++    if (profile_root != expected_profile or profile_root.is_symlink()
++            or not profile_root.is_dir() or not (profile_root / "data").is_dir()
++            or admitted_profile.get("expectedLocalPeerId") != "aurora-03a910366bf721d72a9ef481d2e08fbd"):
++        raise ValueError("existing_authorized_task_profile_required")
++    existing_env = profile_root / ".env"
++    if existing_env.exists() and (not existing_env.is_file() or existing_env.is_symlink()):
++        raise ValueError("existing_profile_env_invalid")
+     (output.parent / "backups").mkdir(mode=0o700)
+-    absent_env = output.parent / "absent.env"
+-    absent_env.touch(mode=0o600, exist_ok=False)
+     lock = pathlib.Path("/tmp/aurora-global-build.lock").open("a")
+     fcntl.flock(lock, fcntl.LOCK_EX | fcntl.LOCK_NB)
+     env = os.environ.copy()
+@@ -237,8 +246,8 @@
+         "AURORA_CANDIDATE_MANIFEST": str(candidate_path),
+         "AURORA_OUTPUT_DIR": str(output),
+         "AURORA_K2_REMOTE_WARMUP_PROOF": str(output / "remote-warmup-proof.json"),
+-        "AURORA_ENV_FILE": str(absent_env),
+-        "AURORA_DATA_DIR": str(output.parent / "data"),
++        "AURORA_ENV_FILE": str(existing_env),
++        "AURORA_DATA_DIR": str(profile_root / "data"),
+         "AURORA_BACKUP_DIR": str(output.parent / "backups"),
+         "AURORA_ARCHITECTURE_MODE": "threads",
+         "HF_HUB_OFFLINE": "1",
+--- v905/runner.py
++++ v1731/runner.py
+@@ -169,7 +169,7 @@
+ 
+ def _local_stt_warmup_gate(attempts_dir: Path, stage_output: Path, wav_hash: str,
+                            candidate_hash: str, config: dict[str, Any], *,
+-                           case_prefix: str = "audio-campaign-v894") -> dict[str, Any]:
++                           case_prefix: str = "audio-campaign-v1731") -> dict[str, Any]:
+     """Require correct warmups and actual local STT; K2's LLM is remote."""
+     ended: dict[str, dict[str, list[dict[str, Any]]]] = {}
+     try:
+@@ -292,7 +292,7 @@
+         raise CampaignFailure("warmup_gate", "remote_stage_proof_outside_private_output", stop=True)
+     local_gate = _local_stt_warmup_gate(
+         attempts_dir, stage_output, _load_frozen_manifest()[0]["wav_sha256"],
+-        candidate_hash, config, case_prefix="audio-campaign-v894",
++        candidate_hash, config, case_prefix="audio-campaign-v1731",
+     )
+     proof_deadline = min(condition_deadline, time.monotonic() + REQUEST_CAP_SECONDS)
+     while not proof_path.is_file():
+@@ -330,7 +330,7 @@
+ 
+     expected_calls: dict[tuple[str, str], dict[str, Any]] = {}
+     for ordinal in range(1, WARMUP_COUNT + 1):
+-        case_id = f"audio-campaign-v894-{ordinal:04d}"
++        case_id = f"audio-campaign-v1731-{ordinal:04d}"
+         try:
+             attempt = json.loads((attempts_dir / f"attempt-{ordinal:04d}-warmup.jsonl").read_text())
+         except Exception:
+@@ -610,7 +610,7 @@
+         source_inventory_hash = _sha256(source_inventory.read_bytes())
+     except OSError:
+         raise CampaignFailure("preflight", "cpu_source_inventory_unavailable", stop=True) from None
+-    if (source_closure.get("equivalenceVerified") is not True
++    if (source_closure.get("snapshotVerified") is not True
+             or source_inventory_hash != source_closure.get("cpuSourceInventorySha256")):
+         raise CampaignFailure("preflight", "full_source_equivalence_not_frozen", stop=True)
+     wav_path = Path(os.environ.get("AURORA_VOICE_FIXTURE_WAV", "")).resolve(strict=True)
+@@ -658,8 +658,13 @@
+         "schema_version": "aurora.full_audio_campaign.v1",
+         "status": status,
+         "condition": "worker_local_stt_remote_mesh_assistant_tts",
++        "setup_started_monotonic_ns": setup_started_ns,
++        "setup_completed": False,
++        "mesh_route_admission_timing": {"status": "not_started", "clock_domain": "python_process_monotonic",
++            "started_monotonic_ns": None, "ended_monotonic_ns": None, "duration_ms": None},
+         "planned_warmups": WARMUP_COUNT,
+         "planned_measured": MEASURED_COUNT,
++        "failure_policy": {"known_structured_preaccept_capability_changed": "count_failed_then_next_distinct_measured_index", "consecutive_rejection_hard_stop": 3, "retry_or_fallback": False, "warmup_failure": "hard_stop", "all_other_system_failures": "hard_stop"},
+         "request_cap_seconds": REQUEST_CAP_SECONDS,
+         "condition_cap_seconds": CONDITION_CAP_SECONDS,
+         "input": wav_facts,
+@@ -722,15 +727,89 @@
+         config = config_after
+         config_hash = config_after_hash
+         summary["config_sha256"] = config_hash
+-        summary["setup_duration_ms"] = (time.monotonic_ns() - setup_started_ns) / 1_000_000
++        # Resolve both real routes before the ordinary warmups. These are
++        # metadata requests only; no model, grant, fallback or retry is invoked.
++        from app.shared.contracts.models.gateway import (
++            GatewayMethods, CapabilityCatalogRequest, CapabilityCatalogResponse,
++            RouteExplainRequest, RouteExplainResponse, RouteExplainSpeechConstraints,
++        )
++        from app.shared.contracts.models.mesh import MeshAddressSelector
++        from app.shared.contracts.models.orchestrator import OrchestratorMethods
++        from app.shared.contracts.models.tts import TTSMethods
++        from app.messaging.mesh_bus import MeshBus
++        admission_started_ns = time.monotonic_ns()
++        admission_end = time.monotonic() + 120
++        admission_status = "waiting"
++        admission_error_class = None
++        last_admission = {}
++        try:
++            while time.monotonic() < admission_end:
++                if isinstance(supervisor.bus, MeshBus):
++                    cat_raw = await supervisor.bus.request(
++                        GatewayMethods.GET_CAPABILITY_CATALOG,
++                        CapabilityCatalogRequest(modules=["Orchestrator", "TTS"], include_schemas=False), timeout=10)
++                    if cat_raw.ok:
++                        cat = CapabilityCatalogResponse.model_validate(cat_raw.data)
++                        admitted = cat.local_peer_id == cohort_manifest["existingAuthorizedTaskProfile"]["expectedLocalPeerId"]
++                        routes = {}
++                        for name, topic, peer, speech in (
++                            ("assistant", OrchestratorMethods.EXTERNAL_USER_INPUT, assistant_peer, None),
++                            ("tts", TTSMethods.SYNTHESIZE, tts_peer, RouteExplainSpeechConstraints()),
++                        ):
++                            route_raw = await supervisor.bus.request(
++                                GatewayMethods.EXPLAIN_ROUTE,
++                                RouteExplainRequest(topic=topic, speech=speech,
++                                    selector=MeshAddressSelector(peer_id=peer.peer_id)), timeout=10)
++                            if not route_raw.ok:
++                                admitted = False
++                                continue
++                            route = RouteExplainResponse.model_validate(route_raw.data)
++                            routes[name] = route.model_dump(mode="json")
++                            admitted = admitted and (route.selector_valid and route.selected_peer_id == peer.peer_id
++                                and not route.blockers and not route.security_privacy_blockers
++                                and any(p.peer_id == peer.peer_id and p.eligible for p in cat.providers))
++                        last_admission = {"at_monotonic_ns": time.monotonic_ns(), "catalogue": cat.model_dump(mode="json"),
++                            "routes": routes, "model_requests_for_admission": 0}
++                        if admitted and set(routes) == {"assistant", "tts"}:
++                            admission_status = "admitted"
++                            last_admission["status"] = "existing_exact_peers_both_normal_routes_admitted"
++                            _atomic_progress(output / "mesh-route-admission.json", last_admission)
++                            break
++                await asyncio.sleep(2)
++            else:
++                admission_status = "deadline"
++                last_admission["status"] = "normal_catalogue_or_exact_peer_admission_deadline"
++                _atomic_progress(output / "mesh-route-admission.json", last_admission)
++                raise CampaignFailure("startup", "normal_catalogue_or_exact_peers_not_admitted", stop=True)
++        except BaseException as exc:
++            if admission_status == "waiting":
++                admission_status = "interrupted" if isinstance(exc, (KeyboardInterrupt, asyncio.CancelledError)) else "failed"
++            admission_error_class = type(exc).__name__
++            raise
++        finally:
++            admission_ended_ns = time.monotonic_ns()
++            admission_timing = {
++                "clock_domain": "python_process_monotonic", "process_id": os.getpid(),
++                "status": admission_status, "error_class": admission_error_class,
++                "started_monotonic_ns": admission_started_ns,
++                "ended_monotonic_ns": admission_ended_ns,
++                "duration_ms": (admission_ended_ns - admission_started_ns) / 1_000_000,
++                "model_requests": 0,
++            }
++            summary["mesh_route_admission_timing"] = admission_timing
++            _atomic_progress(output / "mesh-route-admission-timing.json", admission_timing)
+         bindings_before = _bindings(supervisor, config)
+         summary["provider_bindings_before"] = bindings_before
+         condition_started = time.monotonic()
+         condition_started_ns = time.monotonic_ns()
+         condition_deadline = condition_started + CONDITION_CAP_SECONDS
+         summary["condition_started_monotonic_ns"] = condition_started_ns
++        summary["setup_duration_ms"] = (condition_started_ns - setup_started_ns) / 1_000_000
++        summary["setup_ended_monotonic_ns"] = condition_started_ns
++        summary["setup_completed"] = True
+         status = "running"
+         total = WARMUP_COUNT + MEASURED_COUNT
++        consecutive_preaccept_rejections = 0
+ 
+         for ordinal in range(1, total + 1):
+             if time.monotonic() >= condition_deadline:
+@@ -755,7 +834,7 @@
+             correlation_id = f"audio-campaign-{uuid.uuid4().hex}"
+             session_id = f"audio-session-{uuid.uuid4().hex}"
+             request_id = f"audio-request-{uuid.uuid4().hex}"
+-            harness_case_id = f"audio-campaign-v894-{ordinal:04d}"
++            harness_case_id = f"audio-campaign-v1731-{ordinal:04d}"
+             row: dict[str, Any] = {
+                 "schema_version": "aurora.full_audio_attempt.v1",
+                 "ordinal": ordinal, "phase": phase, "phase_index": attempt_index,
+@@ -800,7 +879,7 @@
+                     if row["partial_quality_incorrect"]:
+                         row["partial_failure_class"] = "quality_predicate_failed_before_full_flow_completion"
+                     raise CampaignFailure(
+-                        exc.stage, exc.category, stop=exc.stop_campaign
++                        exc.stage, exc.category, stop=exc.stop_campaign or phase == "warmup"
+                     ) from None
+                 row["stages"] = k2_record["stages"]
+                 row["correctness"] = k2_record["correctness"]
+@@ -877,6 +956,15 @@
+                 row["status"] = "system_failure"
+                 row["failure"] = {"stage": "provider_bindings", "code": "effective_bindings_changed"}
+                 abort_after_row = True
++            if phase == "measured":
++                if row.get("failure", {}).get("code") == "preaccept_capability_changed":
++                    consecutive_preaccept_rejections += 1
++                else:
++                    consecutive_preaccept_rejections = 0
++                row["consecutive_preaccept_rejections"] = consecutive_preaccept_rejections
++                if consecutive_preaccept_rejections >= 3:
++                    abort_after_row = True
++                    stop_reason = "three_consecutive_preaccept_capability_rejections"
+             row_name = f"attempt-{ordinal:04d}-{phase}.jsonl"
+             _write_once(attempts_dir / row_name, (json.dumps(row, sort_keys=True, ensure_ascii=False) + "\n").encode())
+             if row["status"] in ("completed_correct", "completed_incorrect"):
+@@ -968,6 +1056,10 @@
+             if condition_started_ns is not None else None
+         )
+         shutdown_started_ns = time.monotonic_ns()
++        if condition_started_ns is None:
++            summary["setup_duration_ms"] = (shutdown_started_ns - setup_started_ns) / 1_000_000
++            summary["setup_ended_monotonic_ns"] = shutdown_started_ns
++            summary["setup_completed"] = False
+         try:
+             await supervisor.shutdown()
+             shutdown_ok = True
+--- v905/receiver_proof.py
++++ v1731/receiver_proof.py
+@@ -171,7 +171,7 @@
+     seen_server: set[tuple[str, str]] = set()
+     pids: dict[str, int] = {}
+     for ordinal in range(1, 16):
+-        case_id = f"audio-campaign-v894-{ordinal:04d}"
++        case_id = f"audio-campaign-v1731-{ordinal:04d}"
+         attempt = json.loads(_read(attempts_dir / f"attempt-{ordinal:04d}-warmup.jsonl", 2 * 1024 * 1024))
+         local_id = attempt.get("correlation", {}).get("correlation_id")
+         if (attempt.get("harness_case_id") != case_id or attempt.get("phase") != "warmup"
+--- v905/mesh_stage_adapter.py
++++ v1731/mesh_stage_adapter.py
+@@ -30,12 +30,13 @@
+     """Finite safe failure category; never retains bus error text."""
+ 
+     def __init__(self, stage: str, category: str, *, duration_ms: float | None = None,
+-                 stop_campaign: bool = True):
++                 stop_campaign: bool = True, preaccept_response: dict[str, Any] | None = None):
+         super().__init__(category)
+         self.stage = stage
+         self.category = category
+         self.duration_ms = duration_ms
+         self.stop_campaign = stop_campaign
++        self.preaccept_response = preaccept_response
+ 
+ 
+ def _topic_for(stage: str) -> tuple[str, type[Any]]:
+@@ -193,6 +194,18 @@
+     route_row, route_status = _observed_exact_peer_call(
+         correlation_id, topic, peer_hash,
+     )
++    data = getattr(result, "data", None)
++    if (route_status == "exact_peer_call_failed"
++            and getattr(result, "ok", None) is False
++            and isinstance(data, dict) and data.get("accepted") is False
++            and data.get("reason_code") == "capability_changed"):
++        # Preserve only the real bounded response fields, not arbitrary errors
++        # or payloads. The observer already bound exact peer/topic/correlation.
++        response = {key: data[key] for key in ("accepted", "reason_code")}
++        response.update(method_topic=topic, peer_id_sha256=peer_hash,
++                        correlation_id=correlation_id, peer_call_pid=route_row["pid"])
++        raise MeshStageError(stage, "preaccept_capability_changed", duration_ms=elapsed_ms,
++                             stop_campaign=False, preaccept_response=response)
+     if route_status != "observed":
+         category = "exact_peer_call_timeout" if route_status == "exact_peer_call_failed" \
+             and isinstance(route_row, dict) and route_row.get("error_class") == "TimeoutError" \
+--- v905/k2_composition.py
++++ v1731/k2_composition.py
+@@ -125,7 +125,7 @@
+     started_ns = time.monotonic_ns()
+     record: dict[str, Any] = {
+         "schema": "aurora.distributed_k2_case.v1",
+-        "condition": "worker_local_stt_gateway_http_assistant_tts",
++        "condition": "worker_local_stt_remote_mesh_assistant_tts",
+         "local_case_ids": {
+             "session_id": session_id,
+             "request_id": request_id,
+@@ -141,7 +141,8 @@
+     }
+ 
+     def fail(stage: str, category: str, *, duration_ms: float | None = None,
+-             stop_campaign: bool = False, status: int | None = None) -> None:
++             stop_campaign: bool = False, status: int | None = None,
++             preaccept_response: dict[str, Any] | None = None) -> None:
+         record["status"] = "failed"
+         record["failure"] = {"stage": stage, "category": category,
+                              "http_status": status}
+@@ -149,6 +150,8 @@
+             record["stages"][stage] = {"status": "failed", "error_category": category}
+         if duration_ms is not None:
+             record["stages"][stage].setdefault("duration_ms", duration_ms)
++        if preaccept_response is not None:
++            record["stages"][stage]["preaccept_response"] = preaccept_response
+         raise K2CaseError(stage, category, duration_ms=duration_ms,
+                           stop_campaign=stop_campaign, status=status,
+                           partial_record=record)
+@@ -233,7 +236,7 @@
+         )
+     except MeshStageError as exc:
+         fail("assistant", exc.category, duration_ms=exc.duration_ms,
+-             stop_campaign=exc.stop_campaign)
++             stop_campaign=exc.stop_campaign, preaccept_response=exc.preaccept_response)
+     assistant_ended_ns = time.monotonic_ns()
+     assistant_ms = (assistant_ended_ns - assistant_started_ns) / 1_000_000
+     metadata = assistant.metadata if isinstance(assistant.metadata, dict) else {}
+@@ -283,7 +286,7 @@
+         )
+     except MeshStageError as exc:
+         fail("tts", exc.category, duration_ms=exc.duration_ms,
+-             stop_campaign=exc.stop_campaign)
++             stop_campaign=exc.stop_campaign, preaccept_response=exc.preaccept_response)
+     tts_ended_ns = time.monotonic_ns()
+     tts_ms = (tts_ended_ns - tts_started_ns) / 1_000_000
+     record["stages"]["tts"] = {

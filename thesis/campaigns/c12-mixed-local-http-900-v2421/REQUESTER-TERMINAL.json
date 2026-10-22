@@ -1,0 +1,58 @@
+{
+  "at": "2026-10-22T07:27:30.554635+00:00",
+  "companion": {
+    "measured": {
+      "attempted": 0,
+      "correct": 0,
+      "failed": 0,
+      "harnessErrorsIncludedInFailed": 0,
+      "incorrectIncludedInFailed": 0,
+      "offered": 0,
+      "planned": 900,
+      "timeouts": 0,
+      "unstarted": 900
+    },
+    "warmup": {
+      "attempted": 15,
+      "correct": 15,
+      "failed": 0,
+      "harnessErrorsIncludedInFailed": 0,
+      "incorrectIncludedInFailed": 0,
+      "offered": 15,
+      "planned": 15,
+      "timeouts": 0,
+      "unstarted": 0
+    }
+  },
+  "elapsedSeconds": 600.189273439,
+  "extraCompanionCalls": 0,
+  "extraPrimaryCalls": 0,
+  "failedOrPartialCasesRetained": true,
+  "fullAggregateGoalComplete": false,
+  "pid": 259717,
+  "primary": {
+    "measured": {
+      "attempted": 0,
+      "correct": 0,
+      "failed": 0,
+      "harnessErrorsIncludedInFailed": 0,
+      "incorrectIncludedInFailed": 0,
+      "offered": 0,
+      "planned": 900,
+      "timeouts": 0,
+      "unstarted": 900
+    },
+    "warmup": {
+      "attempted": 15,
+      "correct": 15,
+      "failed": 0,
+      "harnessErrorsIncludedInFailed": 0,
+      "incorrectIncludedInFailed": 0,
+      "offered": 15,
+      "planned": 15,
+      "timeouts": 0,
+      "unstarted": 0
+    }
+  },
+  "reason": "finite_or_policy_stop"
+}

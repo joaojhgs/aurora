@@ -1,0 +1,86 @@
+{
+  "at": "2026-10-21T06:07:18.329570+00:00",
+  "status": "EXISTING_ROUTE_ADMITTED_FOR_HEALTH_NEXT720_SOURCE_AND_RUNTIME_NOT_YET_ADMITTED",
+  "parent": {
+    "measured": 180,
+    "correct": 179,
+    "failed": 1,
+    "indices": [
+      1,
+      180
+    ],
+    "failed180NotRetried": true,
+    "manifestSha256": "6bc65cf5cc3c4eddb90b80b0764a01e6a9fc4afbed66f33c731e3ab58528e101",
+    "originalFrozenOperationalCapSeconds": 57600,
+    "exactPriorRuntimeChargeSeconds": 10027.780472365997,
+    "chargeFormula": "(condition_elapsed_ms_excluding_setup_and_shutdown +setup_duration_ms+shutdown_duration_ms)/1000",
+    "chargeSource": "thesis/evidence/orca-relayed-http-v1197/terminal-v1377/summary.json",
+    "chargeSourceSha256": "641c6fc03929cd7c455d4b9f6460dd9923925069e99da69023079ae88b37563b"
+  },
+  "target": {
+    "newMeasured": 720,
+    "globalFirst": 181,
+    "globalLast": 900,
+    "additionalExcludedWarmups": 15,
+    "requestCapSeconds": 180,
+    "sameAudioModelsDecodingStagePlacement": true,
+    "latencyStratifiedByExplicitSourceProviderContext": true
+  },
+  "existingSourceCandidate": {
+    "path": "thesis/harness/distributed-k1-http-remaining360-v1600",
+    "measured": 360,
+    "globalIndices": [
+      181,
+      540
+    ],
+    "outerCapSeconds": 28620,
+    "conditionCapSeconds": 28320,
+    "sessionCapSeconds": 28800,
+    "declaredDraftCumulativeCapSeconds": 72000,
+    "meaning": "Unlaunched candidate constants, not proof that parent57600 cap was72000; preserve both provenance records"
+  },
+  "capacity": {
+    "oldProviderDeadlineUtc": "2026-10-21T12:41:24.961804+00:00",
+    "oldProviderRemainingNowSeconds": 23646.632234,
+    "new720ConservativeForecastSeconds": 53669.319842807396,
+    "forecastBasis": "(15+720)*historical60.3053512957s*1.2 +300finalization +180request reserve",
+    "oldParentRemainingOperationalBudgetSeconds": 47572.219527634006,
+    "forecastExceedsOldProviderAndParentOperationalRemaining": true,
+    "authority": "Existing full900percondition owner directive and solemonitorplan30.72 allow explicit new condition-sized finite lifecycle/allocation with all oldcaps/charges preserved; no silent renewal of oldprovider or rewrite of oldmanifest"
+  },
+  "prospectiveExecutionParametersNotStarted": {
+    "new900TargetAccountingCapSeconds": 72000,
+    "proposedNewSessionAllInclusiveSeconds": 60000,
+    "priorPlusProspectiveSessionMaxSeconds": 70027.780472366,
+    "controllerOuterSeconds": 55800,
+    "conditionSeconds": 55200,
+    "providerAbsoluteCutoffReserveSeconds": 2400,
+    "sourcePreparationIsNotAStartedSutSession": true,
+    "actualStartDeadlineManifest": "Freeze actual absolute start/deadline prospectively before any provider retirement/start; no clock reset after launch",
+    "noNewNativeGoalBudget": true
+  },
+  "observedRoute": {
+    "routeId": "desktop-aurora-tts",
+    "loopback": "127.0.0.1:18000",
+    "destination": "Personal100.64.0.3:8000",
+    "healthStatus": 200,
+    "healthReportedStatus": "healthy",
+    "actualListenerPid": 251473,
+    "listenerStartTicks": 29038457,
+    "credentials": "existingkey in memory; no copy/output/change"
+  },
+  "nextActions": [
+    "Version existing360candidate into ONLYmissing720 mapping, preserveoldsource",
+    "Freeze explicit new prospective session allocation and source/config/harness provenance, preservingparent57600 anddraft72000 distinction",
+    "Under exact identity+idle+savedraw fence gracefully retire only existing idle SUT receiver using its supported SIGTERM handler; allowcontroller normalexit; no Orca worker/SSH/service stop",
+    "Record oldSUTretirement/raw EOF custody; stage same effective source/config/models/settings and approved identity refs in a separately bounded provider lifecycle",
+    "Start same existing forward/provider/auth/native/correctness admission and15excludedcorrelated full-flow warmups once; admit onlynewglobal181-900 after proof/capacity",
+    "Report actual new controller/receiver/copier/firstmeasurement; retain partial counts if anycap/error, no900replay or success topup"
+  ],
+  "signalsSent": 0,
+  "newProvidersLaunched": 0,
+  "newWarmups": 0,
+  "newMeasured": 0,
+  "nativeAggregate": "same original fullgoal ACTIVE; fullmatrix/full13 OPEN",
+  "monitorSoleMethodologyWriter": true
+}

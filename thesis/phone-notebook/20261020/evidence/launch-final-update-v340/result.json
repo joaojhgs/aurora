@@ -1,0 +1,1 @@
+{"at": "2026-10-22T11:51:53.996631+00:00", "controllerPid": 375169, "job": "sdk-update-v339", "normalReplacementAttemptsAllowed": 1, "maximumInstallerSeconds": 180, "sameVerifiedCertificateRequired": true, "noConfirmationAutomation": true, "buildJobWaitedWithoutRestart": "android-apk-build-v337"}

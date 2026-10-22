@@ -1,0 +1,8 @@
+{
+  "source_rtc_sha256": "d3a5ee5e02c976839d221ba7a4996a30f074b42a53fc25530b987879e7dc58b7",
+  "source_regression_sha256": "a9dfed7df2411d7434df10c17826ea2a9f69964819e0f5a4db48505641079664",
+  "Sol_report_sha256": "5065774fbf12e0d91ba6134ab6221c2b499b948f7d49b48583c6e50f306da0e5",
+  "targeted_checks": "3passed/37deselected/1.115s prior V315; not rerun",
+  "actual_main_acceptance": "matched-readiness-v315-mesh 2/2completeactualinputs; SolV316 independentclosure",
+  "protected_configuration": "unchanged verified by actual V315 receipt"
+}

@@ -1,0 +1,110 @@
+{
+  "at": "2026-10-18T22:49:00.593295+00:00",
+  "status": "ACTUAL_MEASUREMENT_ADMITTED_15_CORRECT_WARMUPS_45_NATIVE_JOINS_FIRST_MEASURED_CORRECT",
+  "frozenManifestSha256": "4f1a09e7ac7dedeaeae6c1bef5a364d4a007e9249aec74f20a0b63b6375a6279",
+  "ordinaryWarmupProof": {
+    "actualOffloadedLayers": 25,
+    "actualSttComputeType": "int8_float32",
+    "actualSttDevice": "cpu",
+    "actualTotalLayers": 25,
+    "at": "2026-10-18T22:45:29.995527+00:00",
+    "calls": 45,
+    "forecastWith20PercentMarginPlus300Seconds": 3821.4331168396798,
+    "measurementAdmission": "Unchanged reviewed runner must independently verify the published proof before measured1",
+    "modelCallsByFinalizer": 0,
+    "nativeProofHandlers": [
+      "stt.model_invoke",
+      "resolved_chat_model.astream",
+      "tts.model_invoke"
+    ],
+    "nextPersonalCursor": "57008",
+    "ordinaryWarmupP95MsType7": 30567.9958059,
+    "proofSha256": "ddba3b4c18f6ff576b28ca5c559eacc1f38e4c29a1774d2e5e4fec037e4ce025",
+    "providerDeadlineUtc": "2026-10-19T00:08:53.328388+00:00",
+    "providerReceiverPid": 1227894,
+    "providerRemainingSecondsAtCheck": 5020.224701,
+    "status": "K3_15_EXCLUDED_WARMUPS_45_NATIVE_JOINS_PROOF_PUBLISHED",
+    "warmupDurationsMs": [
+      29701.571007,
+      29702.684206,
+      29807.418927,
+      29834.338334,
+      29884.125581,
+      29891.744694,
+      29918.247526,
+      30111.256585,
+      30258.644246,
+      30258.771914,
+      30274.408484,
+      30413.1744,
+      30456.091848,
+      30496.678398,
+      30734.403091
+    ]
+  },
+  "actualNativeProofBinding": {
+    "cohortManifestMatches": true,
+    "calls": 45,
+    "sha256": "ddba3b4c18f6ff576b28ca5c559eacc1f38e4c29a1774d2e5e4fec037e4ce025"
+  },
+  "firstActualMeasured": {
+    "path": ".git/aurora-handoff-import-20261006/distributed-k3-orca-relayed-http-cell-v1620/campaign/attempts/attempt-0016-measured.jsonl",
+    "sha256": "d910f8852c0c28622825ff4ba8c3268f23dca7f8ababb055922c97095c5f36be",
+    "conditionIndex": 717,
+    "status": "completed_correct",
+    "outputAudio": {
+      "file": "audio/e562d674f15dc08a9760bb36c15e336f819ba83fc42beb19bc4849e51af4534d.wav",
+      "sha256": "e562d674f15dc08a9760bb36c15e336f819ba83fc42beb19bc4849e51af4534d"
+    },
+    "durationMs": 30010.737299
+  },
+  "currentProgress": {
+    "attempted": 21,
+    "last_attempt_file": "attempts/attempt-0021-measured.jsonl",
+    "last_attempt_status": "completed_correct",
+    "measured_attempted": 6,
+    "planned_measured": 96,
+    "planned_warmups": 15,
+    "status": "running",
+    "unattempted_measured": 90,
+    "warmups_attempted": 15
+  },
+  "processes": {
+    "controller": {
+      "pid": 1501375,
+      "startTicks": 114149321,
+      "state": "S",
+      "same": true
+    },
+    "backend": {
+      "pid": 1501420,
+      "startTicks": 114149815,
+      "state": "S",
+      "same": true
+    },
+    "copier": {
+      "pid": 1501376,
+      "startTicks": 114149322,
+      "state": "S",
+      "same": true
+    },
+    "finalizer": {
+      "pid": 1501377,
+      "present": false
+    }
+  },
+  "personalControl": {
+    "state": "RELEASED after actualfinalizer completion",
+    "nextCursor": "57008",
+    "competingWorkAllowed": "No model/build/network/Android traffic that perturbs current isolated measured flow"
+  },
+  "sameOriginalProviderAndForward": true,
+  "providerDeadlineUnchanged": "2026-10-19T00:08:53.328388+00:00",
+  "oldMeasuredAttempts": 716,
+  "oldCorrect": 714,
+  "oldFailures": 2,
+  "plannedWindow": 96,
+  "conditionTarget": 900,
+  "stillRequiredAfterFullWindow": 88,
+  "noPercentilePoolingOrNewSourceChanges": true
+}

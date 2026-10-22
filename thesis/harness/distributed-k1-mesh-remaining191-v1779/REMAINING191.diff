@@ -1,0 +1,120 @@
+--- thesis/harness/distributed-k1-mesh-remaining880-v1719/requester/runner.py
++++ thesis/harness/distributed-k1-mesh-remaining191-v1779/requester/runner.py
+@@ -22,9 +22,9 @@
+ os.umask(0o077)
+ sys.path.insert(0, str(Path(__file__).resolve().parent))
+ WARMUP_COUNT = 15
+-MEASURED_COUNT = 880
++MEASURED_COUNT = 191
+ REQUEST_CAP_SECONDS = 180.0
+-CONDITION_CAP_SECONDS = 68_000.0
++CONDITION_CAP_SECONDS = 15_000.0
+ PRIVATE_ROOT = Path(__file__).resolve().parents[1]
+ 
+ 
+@@ -150,7 +150,7 @@
+ def _cpu_warmup_gate(attempts_dir: Path, stage_output: Path, wav_hash: str,
+                      candidate_hash: str, config: dict[str, Any], *,
+                      require_local_tts: bool = True,
+-                     case_prefix: str = "audio-campaign-v1719") -> dict[str, Any]:
++                     case_prefix: str = "audio-campaign-v1779") -> dict[str, Any]:
+     """Require 15 correct local flows and actual local STT/LLM provider bindings."""
+     ended: dict[str, dict[str, list[dict[str, Any]]]] = {}
+     try:
+@@ -309,7 +309,7 @@
+         raise CampaignFailure("warmup_gate", "remote_tts_proof_outside_private_output", stop=True)
+     local_gate = _cpu_warmup_gate(
+         attempts_dir, stage_output, _load_frozen_manifest()[0]["wav_sha256"],
+-        candidate_hash, config, require_local_tts=False, case_prefix="audio-campaign-v1719",
++        candidate_hash, config, require_local_tts=False, case_prefix="audio-campaign-v1779",
+     )
+     proof_deadline = min(condition_deadline, time.monotonic() + REQUEST_CAP_SECONDS)
+     while not proof_path.is_file():
+@@ -363,7 +363,7 @@
+         raise CampaignFailure("warmup_gate", "remote_tts_receiver_warmup_count_mismatch", stop=True)
+     expected_by_case: dict[str, dict[str, Any]] = {}
+     for ordinal in range(1, WARMUP_COUNT + 1):
+-        case_id = f"audio-campaign-v1719-{ordinal:04d}"
++        case_id = f"audio-campaign-v1779-{ordinal:04d}"
+         try:
+             attempt = json.loads((attempts_dir / f"attempt-{ordinal:04d}-warmup.jsonl").read_text())
+         except Exception:
+@@ -619,9 +619,9 @@
+     )
+ 
+     epoch = cohort_manifest.get("epochContinuation", {})
+-    if (epoch.get("priorMeasuredAttempted") != 20 or epoch.get("plannedEpochMeasured") != MEASURED_COUNT
+-            or epoch.get("globalFirst") != 21 or epoch.get("globalLast") != 900
+-            or epoch.get("priorCorrect") != 19 or epoch.get("priorFailed") != 1):
++    if (epoch.get("priorMeasuredAttempted") != 709 or epoch.get("plannedEpochMeasured") != MEASURED_COUNT
++            or epoch.get("globalFirst") != 710 or epoch.get("globalLast") != 900
++            or epoch.get("priorCorrect") != 697 or epoch.get("priorFailed") != 12):
+         raise CampaignFailure("preflight", "wrong_remaining_epoch_mapping", stop=True)
+     supervisor = Supervisor()
+     setup_started_ns = time.monotonic_ns()
+@@ -640,7 +640,7 @@
+         "condition": "localbus_accurate_stt_assistant_remote_typed_mesh_tts",
+         "planned_warmups": WARMUP_COUNT,
+         "planned_measured": MEASURED_COUNT,
+-        "epoch_condition_measured_offset": 20,
++        "epoch_condition_measured_offset": 709,
+         "failure_policy": {"known_structured_preaccept_capability_changed": "count_failed_and_continue_next_distinct_measured_index", "retry_or_fallback": False, "warmup_failure": "stop", "consecutive_rejection_cap": 3, "all_other_system_failures": "stop"},
+         "request_cap_seconds": REQUEST_CAP_SECONDS,
+         "condition_cap_seconds": CONDITION_CAP_SECONDS,
+@@ -776,11 +776,11 @@
+             correlation_id = f"audio-campaign-{uuid.uuid4().hex}"
+             session_id = f"audio-session-{uuid.uuid4().hex}"
+             request_id = f"audio-request-{uuid.uuid4().hex}"
+-            harness_case_id = f"audio-campaign-v1719-{ordinal:04d}"
++            harness_case_id = f"audio-campaign-v1779-{ordinal:04d}"
+             row: dict[str, Any] = {
+                 "schema_version": "aurora.full_audio_attempt.v1",
+                 "ordinal": ordinal, "phase": phase, "phase_index": attempt_index,
+-                "condition_measured_index": None if phase == "warmup" else 20 + attempt_index,
++                "condition_measured_index": None if phase == "warmup" else 709 + attempt_index,
+                 "harness_case_id": harness_case_id,
+                 "status": "starting", "flow_started_monotonic_ns": attempt_started_ns,
+                 "correlation": {"correlation_id": correlation_id, "session_id": session_id, "request_id": request_id},
+--- thesis/harness/distributed-k1-mesh-remaining880-v1719/requester/controller.py
++++ thesis/harness/distributed-k1-mesh-remaining191-v1779/requester/controller.py
+@@ -29,7 +29,7 @@
+ CANDIDATE_SHA = "ce75b965ee5879ebece6ea7dfe133441547d20ccf89ecd5d66ea510bd9645e60"
+ WAV = ROOT / "candidate-input.wav"
+ WAV_SHA = "da0ecc4ad0885746ab6e716585473917ab2b543a505bf0db09ebacfaa7943cbb"
+-OUTER_CAP = 68_240
++OUTER_CAP = 15_240
+ RAM_FLOOR = 2_500_000_000
+ DISK_FLOOR = 2 * 1024**3
+ 
+@@ -129,7 +129,7 @@
+                 != digest(ROOT / "observer.py")
+             or cohort.get("implementation", {}).get("telemetrySha256")
+                 != digest(ROOT / "aurora_voice_telemetry_v430.py")
+-            or cohort.get("measurementPlan", {}).get("conditionOverallCapSeconds") != 68_000
++            or cohort.get("measurementPlan", {}).get("conditionOverallCapSeconds") != 15_000
+             or cohort.get("meshTtsPeerIdSha256") != hashlib.sha256(selected_peer_id.encode()).hexdigest()
+             or cohort.get("meshTtsAuthorityBinding") != "existing_authorized_peer_session"
+             or cohort.get("sourceClosure", {}).get("snapshotVerified") is not True
+@@ -269,9 +269,9 @@
+         "selected_peer_id_sha256": hashlib.sha256(selected_peer_id.encode()).hexdigest(),
+         "source_inventory_sha256": digest(source_inventory_path),
+         "planned_warmups": 15,
+-        "planned_measured": 880,
++        "planned_measured": 191,
+         "request_cap_seconds": 180,
+-        "condition_cap_seconds": 68_000,
++        "condition_cap_seconds": 15_000,
+         "surface": "code-worker LocalBus STT+LLM; exact-peer production Gateway MeshBus TTS; selected-pair before/after snapshots",
+         "route_observation_limit": "all_pc_ice_transports_no_pair_id_no_continuous_route_stability",
+     }
+--- thesis/harness/distributed-k1-mesh-remaining880-v1719/requester/receiver_proof.py
++++ thesis/harness/distributed-k1-mesh-remaining191-v1779/requester/receiver_proof.py
+@@ -182,7 +182,7 @@
+     used_ends: set[int] = set()
+     seen_server: set[str] = set()
+     for ordinal in range(1, 16):
+-        case_id = f"audio-campaign-v1719-{ordinal:04d}"
++        case_id = f"audio-campaign-v1779-{ordinal:04d}"
+         attempt_path = attempts_dir / f"attempt-{ordinal:04d}-warmup.jsonl"
+         attempt_data = _read_regular(attempt_path, 2 * 1024 * 1024)
+         attempt = json.loads(attempt_data)

@@ -1,0 +1,13 @@
+{
+  "created_at": "2026-10-14T15:39:51.443626+00:00",
+  "files": {
+    "owner-correction-receipt.json": {
+      "bytes": 4702,
+      "sha256": "5c10ff1dc9131e4929d3bf7c3d414af40eb40ae499446206f11f8a20abd79062"
+    },
+    "README.md": {
+      "bytes": 3768,
+      "sha256": "9faedce97aa80f330177b2cfc5a38e7121b0a6f6854c6c6bc89f537b58530bd9"
+    }
+  }
+}

@@ -1,0 +1,54 @@
+{
+  "at": "2026-10-21T19:11:28.896038+00:00",
+  "classification": "verified_wait",
+  "previousGoalTurnClassification": "verified_wait on directly observed original kernel process identities",
+  "status": "SAME_FROZEN_V2234_MEASURED_COLLECTION_RUNNING",
+  "actors": [
+    {
+      "pid": 3751414,
+      "state": "S",
+      "startTicks": 137933512,
+      "matches": true
+    },
+    {
+      "pid": 3751426,
+      "state": "S",
+      "startTicks": 137933748,
+      "matches": true
+    },
+    {
+      "pid": 3751415,
+      "state": "S",
+      "startTicks": 137933513,
+      "matches": true
+    }
+  ],
+  "newMeasured": {
+    "attempted": 158,
+    "correct": 158,
+    "failed": 0,
+    "planned": 270
+  },
+  "conditionCountsOnly": {
+    "attempted": 338,
+    "correct": 337,
+    "failed": 1,
+    "unattempted": 562,
+    "target": 900
+  },
+  "custody": {
+    "sequence": 150,
+    "at": "2026-10-21T19:10:43.372085+00:00",
+    "receipt": "thesis/campaigns/worker-desktop-k1-orca-relayed-http-first270-v2234/receipts/000150.json",
+    "receiptHashMatches": true,
+    "errors": [],
+    "cases": 172,
+    "audio": 172
+  },
+  "terminal": false,
+  "nextReadOnlyCheckAt": "2026-10-21T19:16:28.896038+00:00",
+  "sameOriginalGoal": "01a112a5-d6bb-74e2-bf7c-ace73cb513b5",
+  "nativeGoalStatus": "active",
+  "nextAction": "Continue existing frozen collection. Only after actual terminal and original controller/backend/copier retirement, execute prepared finish_k1_http_epoch_v2254.py once and reconcile accepted operation receipts.",
+  "phoneNotGate": true
+}

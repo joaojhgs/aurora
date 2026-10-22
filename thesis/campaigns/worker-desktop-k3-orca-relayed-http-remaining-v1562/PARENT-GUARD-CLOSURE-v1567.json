@@ -1,0 +1,12 @@
+{
+  "at": "2026-10-18T17:19:26.799242+00:00",
+  "finding": "msg_acabb7924051",
+  "status": "CORRECTED_ONE_PARENT_GUARD_NOT_LAUNCHED",
+  "previousControllerSha256": "5ceb2e7b95a5ece620673312301eeaccbdd22649b1fcf9377c891b35c766c242",
+  "newControllerSha256": "2be61b0212d90bce02d1023773aee0c0ff839442346b3be37df54817d4e82368",
+  "expectedImmediateParent": "b19c10d9aad4f9a2261d7eac5b52c258315eea94db256a411e66981e6a45d4a4",
+  "matchedStageAndCanonical": true,
+  "r2DraftAndSourcesPreserved": true,
+  "rootOperatorPinsRefreshed": "thesis/campaigns/worker-desktop-k3-orca-relayed-http-remaining-v1562/execution-sources-v1562-r3/MANIFEST.json",
+  "newModelsOrTestsOrPilots": 0
+}

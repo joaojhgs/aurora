@@ -1,0 +1,13 @@
+{
+  "sealedInitialManifestUnchanged": true,
+  "files": [
+    {
+      "name": "actual-progress-180229.json",
+      "sha256": "27634e46797e11ea74220cbe3d4d84b592599c61d1be3c2eb8fbeab7e9f74524"
+    },
+    {
+      "name": "original-monitor-launch-ack.json",
+      "sha256": "73768844f2bd52f181b811ef69b757fdfb8cf66a11ef8fa75df9eb5e00c4e825"
+    }
+  ]
+}

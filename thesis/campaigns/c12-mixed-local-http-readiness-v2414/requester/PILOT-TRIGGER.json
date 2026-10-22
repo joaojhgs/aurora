@@ -1,0 +1,8 @@
+{
+  "at": "2026-10-22T06:38:48.442566+00:00",
+  "releaseAtUtc": "2026-10-22T06:39:33.442586+00:00",
+  "readinessManifestSha256": "c0fc1aa69bd6abfdfeb5709d39cb07625d65389887c4b1026defe8f490d45565",
+  "maximumLocalFlows": 1,
+  "maximumRemoteFlows": 1,
+  "measured": 0
+}

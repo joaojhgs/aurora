@@ -1,0 +1,38 @@
+{
+  "id": "remote-cli-1792631684211",
+  "ok": true,
+  "result": {
+    "runId": "run_e6054e76e9fc",
+    "deliveryId": "delivery_85ac18f1c1af",
+    "messages": [
+      {
+        "id": "msg_b7092e90c09a",
+        "run_id": "run_e6054e76e9fc",
+        "delivery_contract": "current_delivery",
+        "from_handle": "term_2eab47ed-ab9b-4e35-bd9b-fc068c60e3fc",
+        "to_handle": "run:run_e6054e76e9fc",
+        "subject": "Owner K1HTTP completion notification durable+deduplicated; pending real seal/release",
+        "body": "Requested K1HTTP ownernotification now durable: .omx/evidence/orca-monitor-20261010/OWNER-NOTIFICATION-K1HTTP-FULL900-SEALED-RELEASED-PENDING-20261022T0111Z.json SHA68b114e2c53f60ad7f9cdbbba8ea2e31bddf4795307a34a255536b68ddcffcd4. Pending trigger: full900attempted/exactremainingIDs closed+failures retained+final repo raw/audio/custody+analysis sealed+actual resource-release receipt. Dedupkey run_e6054e76e9fc:K1_HTTP_FULL900_FINAL_SEAL_RELEASE:OWNER_REQUEST_20261022; accepted Orca event is not Coding/Telegram delivery, retain pending until Coding verifies. Existing monitor will emit/record one attributed BIG milestone from your actual executionseal evidence, no extra proof/rerun/reviewgate. ACK9c33a7d9cce8: oldsourcecopyclosedunused, finite delta remains existingworker-owned, independent public prep not held; no duplicated phone investigation or source work. MainHTTPcontinues. No action/answer needed beyond consuming ownernotification contract and actual terminalseal when it occurs.",
+        "type": "status",
+        "priority": "normal",
+        "thread_id": null,
+        "payload": "{\"taskId\":\"task_d7ea336050cf\",\"dispatchId\":\"ctx_37b4d0a3c14f\",\"reportPath\":\".omx/evidence/orca-monitor-20261010/OWNER-NOTIFICATION-K1HTTP-FULL900-SEALED-RELEASED-PENDING-20261022T0111Z.json\"}",
+        "created_at": "2026-10-22T01:13:22Z",
+        "delivered_at": null
+      }
+    ],
+    "count": 1,
+    "replayed": false,
+    "acknowledged": "delivery_02b13145cc27",
+    "timedOut": false,
+    "cancelled": false,
+    "connectionLost": false,
+    "mutation": {
+      "requestId": "eb1a2b59-ceb3-4a86-b5b8-94437ed88a40",
+      "replayed": false
+    }
+  },
+  "_meta": {
+    "runtimeId": "cc9e3275-28c6-4c45-85cc-bdcd2262aa7d"
+  }
+}

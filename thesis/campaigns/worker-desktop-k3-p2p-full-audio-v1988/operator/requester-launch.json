@@ -1,0 +1,16 @@
+{
+  "at": "2026-10-20T22:49:21.739091+00:00",
+  "conditionManifestSha256": "46003ef84b71fade94e1d9e3cbac0dcee8bb524680ca613a9f02df5878e4cd6b",
+  "controllerPid": 3154212,
+  "controllerStartTicks": 131502232,
+  "maximumDistinctExcludedWarmupAttempts": 30,
+  "measurementAdmitted": false,
+  "newWorker": false,
+  "plannedMeasured": 900,
+  "provider": {
+    "pid": 251473,
+    "startTicks": 29038457,
+    "state": "S"
+  },
+  "targetCorrectExcludedWarmups": 15
+}

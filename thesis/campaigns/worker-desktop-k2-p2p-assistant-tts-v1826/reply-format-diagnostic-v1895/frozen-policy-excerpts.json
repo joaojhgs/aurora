@@ -1,0 +1,54 @@
+[
+  {
+    "path": "thesis/harness/distributed-k2-mesh-v1826/runner.py",
+    "sha256": "8347fc103a11ca6c9d0c3686b442bd2e4236a4122c668a42bcc10944b7408285",
+    "excerpts": [
+      {
+        "startLine": 811,
+        "endLine": 818,
+        "text": "        total = WARMUP_COUNT + MEASURED_COUNT\n        consecutive_preaccept_rejections = 0\n\n        for ordinal in range(1, total + 1):\n            if time.monotonic() >= condition_deadline:\n                stop_reason = \"condition_deadline\"\n                break\n            if _sha256(manifest_path.read_bytes()) != manifest_hash:"
+      },
+      {
+        "startLine": 871,
+        "endLine": 883,
+        "text": "                except K2CaseError as exc:\n                    partial = exc.partial_record or {}\n                    row[\"stages\"] = partial.get(\"stages\", {})\n                    row[\"correctness\"] = partial.get(\"correctness\", {})\n                    row[\"partial_quality_incorrect\"] = any(\n                        partial.get(\"correctness\", {}).get(key) is False\n                        for key in (\"transcript_matches_reference_words\", \"assistant_reply_matches_expected_words\")\n                    )\n                    if row[\"partial_quality_incorrect\"]:\n                        row[\"partial_failure_class\"] = \"quality_predicate_failed_before_full_flow_completion\"\n                    raise CampaignFailure(\n                        exc.stage, exc.category, stop=exc.stop_campaign or phase == \"warmup\"\n                    ) from None"
+      },
+      {
+        "startLine": 908,
+        "endLine": 915,
+        "text": "            except CampaignFailure as exc:\n                row[\"status\"] = \"failed\"\n                row[\"failure\"] = {\"stage\": exc.stage, \"code\": exc.code}\n                row[\"timeout\"] = \"timeout\" in exc.code.lower() or \"deadline\" in exc.code.lower()\n                abort_after_row = exc.stop_campaign\n                row.setdefault(\"flow_ended_monotonic_ns\", time.monotonic_ns())\n                row.setdefault(\"flow_duration_ms\", (row[\"flow_ended_monotonic_ns\"] - attempt_started_ns) / 1_000_000)\n                row.setdefault(\"flow_end_point\", \"failure_observed\")"
+      },
+      {
+        "startLine": 959,
+        "endLine": 969,
+        "text": "            if phase == \"measured\":\n                if row.get(\"failure\", {}).get(\"code\") == \"preaccept_capability_changed\":\n                    consecutive_preaccept_rejections += 1\n                else:\n                    consecutive_preaccept_rejections = 0\n                row[\"consecutive_preaccept_rejections\"] = consecutive_preaccept_rejections\n                if consecutive_preaccept_rejections >= 3:\n                    abort_after_row = True\n                    stop_reason = \"three_consecutive_preaccept_capability_rejections\"\n            row_name = f\"attempt-{ordinal:04d}-{phase}.jsonl\"\n            _write_once(attempts_dir / row_name, (json.dumps(row, sort_keys=True, ensure_ascii=False) + \"\\n\").encode())"
+      },
+      {
+        "startLine": 1010,
+        "endLine": 1013,
+        "text": "            if abort_after_row:\n                stop_reason = stop_reason or row.get(\"failure\", {}).get(\"code\", \"system_failure\")\n                status = \"stopped_system_failure\"\n                break"
+      }
+    ]
+  },
+  {
+    "path": "thesis/harness/distributed-k2-mesh-v1826/k2_composition.py",
+    "sha256": "c9cbca5cc9f54f21a722fb2a5f9deed4325cce8e644a2af1f993f60f5b1bd883",
+    "excerpts": [
+      {
+        "startLine": 21,
+        "endLine": 33,
+        "text": "class K2CaseError(RuntimeError):\n    \"\"\"Sanitized stage failure for the caller's attempt record.\"\"\"\n\n    def __init__(self, stage: str, category: str, *, duration_ms: float | None = None,\n                 stop_campaign: bool = False, status: int | None = None,\n                 partial_record: dict[str, Any] | None = None):\n        super().__init__(category)\n        self.stage = stage\n        self.category = category\n        self.duration_ms = duration_ms\n        self.stop_campaign = stop_campaign\n        self.status = status\n        self.partial_record = partial_record"
+      },
+      {
+        "startLine": 143,
+        "endLine": 157,
+        "text": "    def fail(stage: str, category: str, *, duration_ms: float | None = None,\n             stop_campaign: bool = False, status: int | None = None,\n             preaccept_response: dict[str, Any] | None = None) -> None:\n        record[\"status\"] = \"failed\"\n        record[\"failure\"] = {\"stage\": stage, \"category\": category,\n                             \"http_status\": status}\n        if stage not in record[\"stages\"]:\n            record[\"stages\"][stage] = {\"status\": \"failed\", \"error_category\": category}\n        if duration_ms is not None:\n            record[\"stages\"][stage].setdefault(\"duration_ms\", duration_ms)\n        if preaccept_response is not None:\n            record[\"stages\"][stage][\"preaccept_response\"] = preaccept_response\n        raise K2CaseError(stage, category, duration_ms=duration_ms,\n                          stop_campaign=stop_campaign, status=status,\n                          partial_record=record)"
+      },
+      {
+        "startLine": 254,
+        "endLine": 277,
+        "text": "    if (metadata.get(\"provider\") != expected_remote_provider\n            or metadata.get(\"model\") != expected_remote_model):\n        fail(\"assistant\", \"remote_model_identity_mismatch\", duration_ms=assistant_ms,\n             stop_campaign=True)\n    assistant_matches = _normal_words(assistant.text).split() == [word.casefold() for word in expected_reply_words]\n    record[\"stages\"][\"assistant\"] = {\n        **assistant_meta,\n        \"status\": \"completed\",\n        \"start_monotonic_ns\": assistant_started_ns,\n        \"end_monotonic_ns\": assistant_ended_ns,\n        \"duration_ms\": assistant_ms,\n        \"session_id_matches\": True,\n        \"request_id_matches\": True,\n        \"correlation_id_matches\": True,\n        \"metadata_error\": False,\n        \"server_tts_status\": \"skipped\",\n        \"reported_provider\": expected_remote_provider,\n        \"reported_model\": expected_remote_model,\n        \"response_sha256\": hashlib.sha256(assistant.text.encode(\"utf-8\")).hexdigest(),\n        \"response_chars\": len(assistant.text),\n    }\n    record[\"correctness\"][\"assistant_reply_matches_expected_words\"] = assistant_matches\n    if not assistant_matches:\n        fail(\"assistant\", \"assistant_reply_predicate_failed\", duration_ms=assistant_ms)"
+      }
+    ]
+  }
+]

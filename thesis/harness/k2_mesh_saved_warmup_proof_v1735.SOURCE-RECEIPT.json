@@ -1,0 +1,25 @@
+{
+  "at": "2026-10-20T05:58:31.064802+00:00",
+  "path": "thesis/harness/k2_mesh_saved_warmup_proof_v1735.py",
+  "sha256": "5a8c4fdd50edc4c66c2f0e56ef552409b1132b1147c0e3e73075d75e5d2c27dd",
+  "bytes": 9113,
+  "status": "FUTURE_SOURCE_ONLY_NOT_EXECUTED",
+  "syntax": "AST_PASS",
+  "basedOn": "k2_existing_provider_remote_proof_v1384.py; scope_tts_warmup_bindings_v1724.py; unchanged strict K2 receiver_proof.py",
+  "scientificAdmission": false,
+  "runtimeImports": 0,
+  "modelCalls": 0,
+  "networkCalls": 0,
+  "builds": 0,
+  "currentK1Modified": false,
+  "requesterGatePublished": false,
+  "physicalOutputCustody": "Required new output under real repo thesis parent",
+  "configuredGpuBinding": "Explicit frozen100 plus unchanged actual constructor proof",
+  "reviewStatus": "BOUNDED_SAVED_DATA_SOURCE_PASS_NOT_EXECUTED",
+  "review": {
+    "path": "thesis/harness/distributed-k2-mesh-v1731/review/P2P-K2-V1735-COLLECTOR-BOUNDED-REVIEW-20261020T0602.md",
+    "bytes": 3759,
+    "sha256": "3d340bfebb42eaa064d3f3d0f72a6bdb1344f34d57a3f4ea3966e77dea0a7412"
+  },
+  "privateBackendCustody": "GPU original selected line text is retained; source byte/hash is provenance only, not a full private backend archive. Root existing safe custody retains important diagnostics separately. No credential log copy."
+}

@@ -1,0 +1,12 @@
+{
+  "controlDeadline": "2026-10-22T01:19:53.551756+00:00",
+  "explicitNewline": true,
+  "host": "ssh:ssh-sem-notebook-personal",
+  "incarnation": "328cd72f-c7ea-49ff-a2db-b9275b085037",
+  "remoteResult": "/home/developer/projects/aurora/thesis/phone-notebook/20261020/evidence/copy-public-status-20261022T010953.json",
+  "rootAdmissionMessage": "owner-setup-dual-custody-own-reports",
+  "script": "scripts/copy_public_status_v22.py",
+  "scriptSha256": "31eb4d4a53489803d48d0bf2ff6ab2abcac57be3f142d0c9136354d38da31a34",
+  "singleSend": true,
+  "terminal": "term_a2ed5feb-7c92-48e4-bd88-d1b0e6737989"
+}

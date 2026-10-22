@@ -1,0 +1,54 @@
+{
+  "at": "2026-10-20T21:59:20.210669+00:00",
+  "warmups": [
+    {
+      "file": "attempt-0001-warmup.jsonl",
+      "status": "completed_correct",
+      "flowDurationMs": 12458.62041
+    },
+    {
+      "file": "attempt-0002-warmup.jsonl",
+      "status": "completed_correct",
+      "flowDurationMs": 13876.544413
+    },
+    {
+      "file": "attempt-0003-warmup.jsonl",
+      "status": "completed_correct",
+      "flowDurationMs": 11776.568305
+    },
+    {
+      "file": "attempt-0004-warmup.jsonl",
+      "status": "completed_correct",
+      "flowDurationMs": 12658.39717
+    },
+    {
+      "file": "attempt-0005-warmup.jsonl",
+      "status": "completed_correct",
+      "flowDurationMs": 11950.406682
+    }
+  ],
+  "measured": 0,
+  "sinkStatus": {
+    "accepted_rows": 15,
+    "complete": false,
+    "dropped_rows": 0,
+    "invalid_rows": 0,
+    "max_row_bytes": 32768,
+    "max_rows": 2761,
+    "max_total_bytes": 67108864,
+    "oversize_rows": 0,
+    "queue_capacity": 256,
+    "quota_rows": 0,
+    "schema": "aurora.mesh_route_observation_sink.v1",
+    "state": "accepting",
+    "writer_error_class": null,
+    "written_bytes": 24745,
+    "written_rows": 15
+  },
+  "writtenTopics": {
+    "Transcription.Transcribe": 5,
+    "Orchestrator.ExternalUserInput": 5,
+    "TTS.Synthesize": 5
+  },
+  "backendPid": 3116250
+}

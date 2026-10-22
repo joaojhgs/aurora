@@ -1,0 +1,2375 @@
+{
+  "scope": "provisional direct raw attempt scan; initial HTTP K1 180 missing; monitor/root must verify authoritative lineage",
+  "conditions": {
+    "HTTP K1": {
+      "scanned_measured": 720,
+      "status_counts": {
+        "completed_correct": 720
+      },
+      "failure_codes": {},
+      "candidate_retry_count": 0,
+      "median_completed_seconds": 53.970829392499994,
+      "illustrative_retry_seconds_excluding_setup": 0.0,
+      "coverage_note": "Initial 180 HTTP K1 not scanned yet"
+    },
+    "HTTP K2": {
+      "scanned_measured": 900,
+      "status_counts": {
+        "completed_correct": 797,
+        "failed": 103
+      },
+      "failure_codes": {
+        "assistant_reply_predicate_failed": 103
+      },
+      "candidate_retry_count": 103,
+      "median_completed_seconds": 28.967940839,
+      "illustrative_retry_seconds_excluding_setup": 2983.697906417,
+      "coverage_note": "900 measured required; compare scanned count"
+    },
+    "HTTP K3": {
+      "scanned_measured": 900,
+      "status_counts": {
+        "completed_correct": 885,
+        "failed": 15
+      },
+      "failure_codes": {
+        "transport_ambiguous": 3,
+        "assistant_reply_predicate_failed": 12
+      },
+      "candidate_retry_count": 12,
+      "median_completed_seconds": 30.277170251,
+      "illustrative_retry_seconds_excluding_setup": 363.326043012,
+      "coverage_note": "900 measured required; compare scanned count"
+    },
+    "P2P K1": {
+      "scanned_measured": 900,
+      "status_counts": {
+        "completed_correct": 885,
+        "failed": 15
+      },
+      "failure_codes": {
+        "remote_mesh_exact_remote_peer_call_not_confirmed": 1,
+        "remote_mesh_preaccept_capability_changed": 13,
+        "remote_mesh_tts_timeout_ambiguous": 1
+      },
+      "candidate_retry_count": 0,
+      "median_completed_seconds": 44.945511113,
+      "illustrative_retry_seconds_excluding_setup": 0.0,
+      "coverage_note": "900 measured required; compare scanned count"
+    },
+    "P2P K2": {
+      "scanned_measured": 900,
+      "status_counts": {
+        "completed_correct": 774,
+        "failed": 126
+      },
+      "failure_codes": {
+        "preaccept_capability_changed": 11,
+        "assistant_reply_predicate_failed": 115
+      },
+      "candidate_retry_count": 115,
+      "median_completed_seconds": 16.5245190135,
+      "illustrative_retry_seconds_excluding_setup": 1900.3196865525001,
+      "coverage_note": "900 measured required; compare scanned count"
+    },
+    "P2P K3": {
+      "scanned_measured": 900,
+      "status_counts": {
+        "completed_correct": 773,
+        "failed": 127
+      },
+      "failure_codes": {
+        "preaccept_capability_changed": 71,
+        "mesh_request_timeout_ambiguous": 1,
+        "assistant_reply_predicate_failed": 55
+      },
+      "candidate_retry_count": 55,
+      "median_completed_seconds": 12.48277534,
+      "illustrative_retry_seconds_excluding_setup": 686.5526437,
+      "coverage_note": "900 measured required; compare scanned count"
+    }
+  },
+  "candidate_retry_count": 285,
+  "eligible_candidates": [
+    {
+      "path": "thesis/campaigns/worker-desktop-k2-orca-relayed-http-v1264/attempts/attempt-0813-measured.jsonl",
+      "id": "audio-campaign-v847-0813",
+      "ordinal": 813,
+      "phase_index": 798,
+      "code": "assistant_reply_predicate_failed",
+      "condition": "HTTP K2"
+    },
+    {
+      "path": "thesis/campaigns/worker-desktop-k2-orca-relayed-http-v1264/attempts/attempt-0814-measured.jsonl",
+      "id": "audio-campaign-v847-0814",
+      "ordinal": 814,
+      "phase_index": 799,
+      "code": "assistant_reply_predicate_failed",
+      "condition": "HTTP K2"
+    },
+    {
+      "path": "thesis/campaigns/worker-desktop-k2-orca-relayed-http-v1264/attempts/attempt-0815-measured.jsonl",
+      "id": "audio-campaign-v847-0815",
+      "ordinal": 815,
+      "phase_index": 800,
+      "code": "assistant_reply_predicate_failed",
+      "condition": "HTTP K2"
+    },
+    {
+      "path": "thesis/campaigns/worker-desktop-k2-orca-relayed-http-v1264/attempts/attempt-0816-measured.jsonl",
+      "id": "audio-campaign-v847-0816",
+      "ordinal": 816,
+      "phase_index": 801,
+      "code": "assistant_reply_predicate_failed",
+      "condition": "HTTP K2"
+    },
+    {
+      "path": "thesis/campaigns/worker-desktop-k2-orca-relayed-http-v1264/attempts/attempt-0817-measured.jsonl",
+      "id": "audio-campaign-v847-0817",
+      "ordinal": 817,
+      "phase_index": 802,
+      "code": "assistant_reply_predicate_failed",
+      "condition": "HTTP K2"
+    },
+    {
+      "path": "thesis/campaigns/worker-desktop-k2-orca-relayed-http-v1264/attempts/attempt-0818-measured.jsonl",
+      "id": "audio-campaign-v847-0818",
+      "ordinal": 818,
+      "phase_index": 803,
+      "code": "assistant_reply_predicate_failed",
+      "condition": "HTTP K2"
+    },
+    {
+      "path": "thesis/campaigns/worker-desktop-k2-orca-relayed-http-v1264/attempts/attempt-0819-measured.jsonl",
+      "id": "audio-campaign-v847-0819",
+      "ordinal": 819,
+      "phase_index": 804,
+      "code": "assistant_reply_predicate_failed",
+      "condition": "HTTP K2"
+    },
+    {
+      "path": "thesis/campaigns/worker-desktop-k2-orca-relayed-http-v1264/attempts/attempt-0820-measured.jsonl",
+      "id": "audio-campaign-v847-0820",
+      "ordinal": 820,
+      "phase_index": 805,
+      "code": "assistant_reply_predicate_failed",
+      "condition": "HTTP K2"
+    },
+    {
+      "path": "thesis/campaigns/worker-desktop-k2-orca-relayed-http-v1264/attempts/attempt-0821-measured.jsonl",
+      "id": "audio-campaign-v847-0821",
+      "ordinal": 821,
+      "phase_index": 806,
+      "code": "assistant_reply_predicate_failed",
+      "condition": "HTTP K2"
+    },
+    {
+      "path": "thesis/campaigns/worker-desktop-k2-orca-relayed-http-v1264/attempts/attempt-0822-measured.jsonl",
+      "id": "audio-campaign-v847-0822",
+      "ordinal": 822,
+      "phase_index": 807,
+      "code": "assistant_reply_predicate_failed",
+      "condition": "HTTP K2"
+    },
+    {
+      "path": "thesis/campaigns/worker-desktop-k2-orca-relayed-http-v1264/attempts/attempt-0823-measured.jsonl",
+      "id": "audio-campaign-v847-0823",
+      "ordinal": 823,
+      "phase_index": 808,
+      "code": "assistant_reply_predicate_failed",
+      "condition": "HTTP K2"
+    },
+    {
+      "path": "thesis/campaigns/worker-desktop-k2-orca-relayed-http-v1264/attempts/attempt-0824-measured.jsonl",
+      "id": "audio-campaign-v847-0824",
+      "ordinal": 824,
+      "phase_index": 809,
+      "code": "assistant_reply_predicate_failed",
+      "condition": "HTTP K2"
+    },
+    {
+      "path": "thesis/campaigns/worker-desktop-k2-orca-relayed-http-v1264/attempts/attempt-0825-measured.jsonl",
+      "id": "audio-campaign-v847-0825",
+      "ordinal": 825,
+      "phase_index": 810,
+      "code": "assistant_reply_predicate_failed",
+      "condition": "HTTP K2"
+    },
+    {
+      "path": "thesis/campaigns/worker-desktop-k2-orca-relayed-http-v1264/attempts/attempt-0826-measured.jsonl",
+      "id": "audio-campaign-v847-0826",
+      "ordinal": 826,
+      "phase_index": 811,
+      "code": "assistant_reply_predicate_failed",
+      "condition": "HTTP K2"
+    },
+    {
+      "path": "thesis/campaigns/worker-desktop-k2-orca-relayed-http-v1264/attempts/attempt-0827-measured.jsonl",
+      "id": "audio-campaign-v847-0827",
+      "ordinal": 827,
+      "phase_index": 812,
+      "code": "assistant_reply_predicate_failed",
+      "condition": "HTTP K2"
+    },
+    {
+      "path": "thesis/campaigns/worker-desktop-k2-orca-relayed-http-v1264/attempts/attempt-0828-measured.jsonl",
+      "id": "audio-campaign-v847-0828",
+      "ordinal": 828,
+      "phase_index": 813,
+      "code": "assistant_reply_predicate_failed",
+      "condition": "HTTP K2"
+    },
+    {
+      "path": "thesis/campaigns/worker-desktop-k2-orca-relayed-http-v1264/attempts/attempt-0829-measured.jsonl",
+      "id": "audio-campaign-v847-0829",
+      "ordinal": 829,
+      "phase_index": 814,
+      "code": "assistant_reply_predicate_failed",
+      "condition": "HTTP K2"
+    },
+    {
+      "path": "thesis/campaigns/worker-desktop-k2-orca-relayed-http-v1264/attempts/attempt-0830-measured.jsonl",
+      "id": "audio-campaign-v847-0830",
+      "ordinal": 830,
+      "phase_index": 815,
+      "code": "assistant_reply_predicate_failed",
+      "condition": "HTTP K2"
+    },
+    {
+      "path": "thesis/campaigns/worker-desktop-k2-orca-relayed-http-v1264/attempts/attempt-0831-measured.jsonl",
+      "id": "audio-campaign-v847-0831",
+      "ordinal": 831,
+      "phase_index": 816,
+      "code": "assistant_reply_predicate_failed",
+      "condition": "HTTP K2"
+    },
+    {
+      "path": "thesis/campaigns/worker-desktop-k2-orca-relayed-http-v1264/attempts/attempt-0832-measured.jsonl",
+      "id": "audio-campaign-v847-0832",
+      "ordinal": 832,
+      "phase_index": 817,
+      "code": "assistant_reply_predicate_failed",
+      "condition": "HTTP K2"
+    },
+    {
+      "path": "thesis/campaigns/worker-desktop-k2-orca-relayed-http-v1264/attempts/attempt-0833-measured.jsonl",
+      "id": "audio-campaign-v847-0833",
+      "ordinal": 833,
+      "phase_index": 818,
+      "code": "assistant_reply_predicate_failed",
+      "condition": "HTTP K2"
+    },
+    {
+      "path": "thesis/campaigns/worker-desktop-k2-orca-relayed-http-v1264/attempts/attempt-0834-measured.jsonl",
+      "id": "audio-campaign-v847-0834",
+      "ordinal": 834,
+      "phase_index": 819,
+      "code": "assistant_reply_predicate_failed",
+      "condition": "HTTP K2"
+    },
+    {
+      "path": "thesis/campaigns/worker-desktop-k2-orca-relayed-http-v1264/attempts/attempt-0835-measured.jsonl",
+      "id": "audio-campaign-v847-0835",
+      "ordinal": 835,
+      "phase_index": 820,
+      "code": "assistant_reply_predicate_failed",
+      "condition": "HTTP K2"
+    },
+    {
+      "path": "thesis/campaigns/worker-desktop-k2-orca-relayed-http-v1264/attempts/attempt-0836-measured.jsonl",
+      "id": "audio-campaign-v847-0836",
+      "ordinal": 836,
+      "phase_index": 821,
+      "code": "assistant_reply_predicate_failed",
+      "condition": "HTTP K2"
+    },
+    {
+      "path": "thesis/campaigns/worker-desktop-k2-orca-relayed-http-v1264/attempts/attempt-0837-measured.jsonl",
+      "id": "audio-campaign-v847-0837",
+      "ordinal": 837,
+      "phase_index": 822,
+      "code": "assistant_reply_predicate_failed",
+      "condition": "HTTP K2"
+    },
+    {
+      "path": "thesis/campaigns/worker-desktop-k2-orca-relayed-http-v1264/attempts/attempt-0838-measured.jsonl",
+      "id": "audio-campaign-v847-0838",
+      "ordinal": 838,
+      "phase_index": 823,
+      "code": "assistant_reply_predicate_failed",
+      "condition": "HTTP K2"
+    },
+    {
+      "path": "thesis/campaigns/worker-desktop-k2-orca-relayed-http-v1264/attempts/attempt-0839-measured.jsonl",
+      "id": "audio-campaign-v847-0839",
+      "ordinal": 839,
+      "phase_index": 824,
+      "code": "assistant_reply_predicate_failed",
+      "condition": "HTTP K2"
+    },
+    {
+      "path": "thesis/campaigns/worker-desktop-k2-orca-relayed-http-v1264/attempts/attempt-0840-measured.jsonl",
+      "id": "audio-campaign-v847-0840",
+      "ordinal": 840,
+      "phase_index": 825,
+      "code": "assistant_reply_predicate_failed",
+      "condition": "HTTP K2"
+    },
+    {
+      "path": "thesis/campaigns/worker-desktop-k2-orca-relayed-http-v1264/attempts/attempt-0841-measured.jsonl",
+      "id": "audio-campaign-v847-0841",
+      "ordinal": 841,
+      "phase_index": 826,
+      "code": "assistant_reply_predicate_failed",
+      "condition": "HTTP K2"
+    },
+    {
+      "path": "thesis/campaigns/worker-desktop-k2-orca-relayed-http-v1264/attempts/attempt-0842-measured.jsonl",
+      "id": "audio-campaign-v847-0842",
+      "ordinal": 842,
+      "phase_index": 827,
+      "code": "assistant_reply_predicate_failed",
+      "condition": "HTTP K2"
+    },
+    {
+      "path": "thesis/campaigns/worker-desktop-k2-orca-relayed-http-v1264/attempts/attempt-0843-measured.jsonl",
+      "id": "audio-campaign-v847-0843",
+      "ordinal": 843,
+      "phase_index": 828,
+      "code": "assistant_reply_predicate_failed",
+      "condition": "HTTP K2"
+    },
+    {
+      "path": "thesis/campaigns/worker-desktop-k2-orca-relayed-http-v1264/attempts/attempt-0844-measured.jsonl",
+      "id": "audio-campaign-v847-0844",
+      "ordinal": 844,
+      "phase_index": 829,
+      "code": "assistant_reply_predicate_failed",
+      "condition": "HTTP K2"
+    },
+    {
+      "path": "thesis/campaigns/worker-desktop-k2-orca-relayed-http-v1264/attempts/attempt-0845-measured.jsonl",
+      "id": "audio-campaign-v847-0845",
+      "ordinal": 845,
+      "phase_index": 830,
+      "code": "assistant_reply_predicate_failed",
+      "condition": "HTTP K2"
+    },
+    {
+      "path": "thesis/campaigns/worker-desktop-k2-orca-relayed-http-v1264/attempts/attempt-0846-measured.jsonl",
+      "id": "audio-campaign-v847-0846",
+      "ordinal": 846,
+      "phase_index": 831,
+      "code": "assistant_reply_predicate_failed",
+      "condition": "HTTP K2"
+    },
+    {
+      "path": "thesis/campaigns/worker-desktop-k2-orca-relayed-http-v1264/attempts/attempt-0847-measured.jsonl",
+      "id": "audio-campaign-v847-0847",
+      "ordinal": 847,
+      "phase_index": 832,
+      "code": "assistant_reply_predicate_failed",
+      "condition": "HTTP K2"
+    },
+    {
+      "path": "thesis/campaigns/worker-desktop-k2-orca-relayed-http-v1264/attempts/attempt-0848-measured.jsonl",
+      "id": "audio-campaign-v847-0848",
+      "ordinal": 848,
+      "phase_index": 833,
+      "code": "assistant_reply_predicate_failed",
+      "condition": "HTTP K2"
+    },
+    {
+      "path": "thesis/campaigns/worker-desktop-k2-orca-relayed-http-v1264/attempts/attempt-0849-measured.jsonl",
+      "id": "audio-campaign-v847-0849",
+      "ordinal": 849,
+      "phase_index": 834,
+      "code": "assistant_reply_predicate_failed",
+      "condition": "HTTP K2"
+    },
+    {
+      "path": "thesis/campaigns/worker-desktop-k2-orca-relayed-http-v1264/attempts/attempt-0850-measured.jsonl",
+      "id": "audio-campaign-v847-0850",
+      "ordinal": 850,
+      "phase_index": 835,
+      "code": "assistant_reply_predicate_failed",
+      "condition": "HTTP K2"
+    },
+    {
+      "path": "thesis/campaigns/worker-desktop-k2-orca-relayed-http-v1264/attempts/attempt-0851-measured.jsonl",
+      "id": "audio-campaign-v847-0851",
+      "ordinal": 851,
+      "phase_index": 836,
+      "code": "assistant_reply_predicate_failed",
+      "condition": "HTTP K2"
+    },
+    {
+      "path": "thesis/campaigns/worker-desktop-k2-orca-relayed-http-v1264/attempts/attempt-0852-measured.jsonl",
+      "id": "audio-campaign-v847-0852",
+      "ordinal": 852,
+      "phase_index": 837,
+      "code": "assistant_reply_predicate_failed",
+      "condition": "HTTP K2"
+    },
+    {
+      "path": "thesis/campaigns/worker-desktop-k2-orca-relayed-http-v1264/attempts/attempt-0853-measured.jsonl",
+      "id": "audio-campaign-v847-0853",
+      "ordinal": 853,
+      "phase_index": 838,
+      "code": "assistant_reply_predicate_failed",
+      "condition": "HTTP K2"
+    },
+    {
+      "path": "thesis/campaigns/worker-desktop-k2-orca-relayed-http-v1264/attempts/attempt-0854-measured.jsonl",
+      "id": "audio-campaign-v847-0854",
+      "ordinal": 854,
+      "phase_index": 839,
+      "code": "assistant_reply_predicate_failed",
+      "condition": "HTTP K2"
+    },
+    {
+      "path": "thesis/campaigns/worker-desktop-k2-orca-relayed-http-v1264/attempts/attempt-0855-measured.jsonl",
+      "id": "audio-campaign-v847-0855",
+      "ordinal": 855,
+      "phase_index": 840,
+      "code": "assistant_reply_predicate_failed",
+      "condition": "HTTP K2"
+    },
+    {
+      "path": "thesis/campaigns/worker-desktop-k2-orca-relayed-http-v1264/attempts/attempt-0856-measured.jsonl",
+      "id": "audio-campaign-v847-0856",
+      "ordinal": 856,
+      "phase_index": 841,
+      "code": "assistant_reply_predicate_failed",
+      "condition": "HTTP K2"
+    },
+    {
+      "path": "thesis/campaigns/worker-desktop-k2-orca-relayed-http-v1264/attempts/attempt-0857-measured.jsonl",
+      "id": "audio-campaign-v847-0857",
+      "ordinal": 857,
+      "phase_index": 842,
+      "code": "assistant_reply_predicate_failed",
+      "condition": "HTTP K2"
+    },
+    {
+      "path": "thesis/campaigns/worker-desktop-k2-orca-relayed-http-v1264/attempts/attempt-0858-measured.jsonl",
+      "id": "audio-campaign-v847-0858",
+      "ordinal": 858,
+      "phase_index": 843,
+      "code": "assistant_reply_predicate_failed",
+      "condition": "HTTP K2"
+    },
+    {
+      "path": "thesis/campaigns/worker-desktop-k2-orca-relayed-http-v1264/attempts/attempt-0859-measured.jsonl",
+      "id": "audio-campaign-v847-0859",
+      "ordinal": 859,
+      "phase_index": 844,
+      "code": "assistant_reply_predicate_failed",
+      "condition": "HTTP K2"
+    },
+    {
+      "path": "thesis/campaigns/worker-desktop-k2-orca-relayed-http-v1264/attempts/attempt-0860-measured.jsonl",
+      "id": "audio-campaign-v847-0860",
+      "ordinal": 860,
+      "phase_index": 845,
+      "code": "assistant_reply_predicate_failed",
+      "condition": "HTTP K2"
+    },
+    {
+      "path": "thesis/campaigns/worker-desktop-k2-orca-relayed-http-v1264/attempts/attempt-0861-measured.jsonl",
+      "id": "audio-campaign-v847-0861",
+      "ordinal": 861,
+      "phase_index": 846,
+      "code": "assistant_reply_predicate_failed",
+      "condition": "HTTP K2"
+    },
+    {
+      "path": "thesis/campaigns/worker-desktop-k2-orca-relayed-http-v1264/attempts/attempt-0862-measured.jsonl",
+      "id": "audio-campaign-v847-0862",
+      "ordinal": 862,
+      "phase_index": 847,
+      "code": "assistant_reply_predicate_failed",
+      "condition": "HTTP K2"
+    },
+    {
+      "path": "thesis/campaigns/worker-desktop-k2-orca-relayed-http-v1264/attempts/attempt-0863-measured.jsonl",
+      "id": "audio-campaign-v847-0863",
+      "ordinal": 863,
+      "phase_index": 848,
+      "code": "assistant_reply_predicate_failed",
+      "condition": "HTTP K2"
+    },
+    {
+      "path": "thesis/campaigns/worker-desktop-k2-orca-relayed-http-v1264/attempts/attempt-0864-measured.jsonl",
+      "id": "audio-campaign-v847-0864",
+      "ordinal": 864,
+      "phase_index": 849,
+      "code": "assistant_reply_predicate_failed",
+      "condition": "HTTP K2"
+    },
+    {
+      "path": "thesis/campaigns/worker-desktop-k2-orca-relayed-http-v1264/attempts/attempt-0865-measured.jsonl",
+      "id": "audio-campaign-v847-0865",
+      "ordinal": 865,
+      "phase_index": 850,
+      "code": "assistant_reply_predicate_failed",
+      "condition": "HTTP K2"
+    },
+    {
+      "path": "thesis/campaigns/worker-desktop-k2-orca-relayed-http-v1264/attempts/attempt-0866-measured.jsonl",
+      "id": "audio-campaign-v847-0866",
+      "ordinal": 866,
+      "phase_index": 851,
+      "code": "assistant_reply_predicate_failed",
+      "condition": "HTTP K2"
+    },
+    {
+      "path": "thesis/campaigns/worker-desktop-k2-orca-relayed-http-v1264/attempts/attempt-0867-measured.jsonl",
+      "id": "audio-campaign-v847-0867",
+      "ordinal": 867,
+      "phase_index": 852,
+      "code": "assistant_reply_predicate_failed",
+      "condition": "HTTP K2"
+    },
+    {
+      "path": "thesis/campaigns/worker-desktop-k2-orca-relayed-http-v1264/attempts/attempt-0868-measured.jsonl",
+      "id": "audio-campaign-v847-0868",
+      "ordinal": 868,
+      "phase_index": 853,
+      "code": "assistant_reply_predicate_failed",
+      "condition": "HTTP K2"
+    },
+    {
+      "path": "thesis/campaigns/worker-desktop-k2-orca-relayed-http-v1264/attempts/attempt-0869-measured.jsonl",
+      "id": "audio-campaign-v847-0869",
+      "ordinal": 869,
+      "phase_index": 854,
+      "code": "assistant_reply_predicate_failed",
+      "condition": "HTTP K2"
+    },
+    {
+      "path": "thesis/campaigns/worker-desktop-k2-orca-relayed-http-v1264/attempts/attempt-0870-measured.jsonl",
+      "id": "audio-campaign-v847-0870",
+      "ordinal": 870,
+      "phase_index": 855,
+      "code": "assistant_reply_predicate_failed",
+      "condition": "HTTP K2"
+    },
+    {
+      "path": "thesis/campaigns/worker-desktop-k2-orca-relayed-http-v1264/attempts/attempt-0871-measured.jsonl",
+      "id": "audio-campaign-v847-0871",
+      "ordinal": 871,
+      "phase_index": 856,
+      "code": "assistant_reply_predicate_failed",
+      "condition": "HTTP K2"
+    },
+    {
+      "path": "thesis/campaigns/worker-desktop-k2-orca-relayed-http-v1264/attempts/attempt-0872-measured.jsonl",
+      "id": "audio-campaign-v847-0872",
+      "ordinal": 872,
+      "phase_index": 857,
+      "code": "assistant_reply_predicate_failed",
+      "condition": "HTTP K2"
+    },
+    {
+      "path": "thesis/campaigns/worker-desktop-k2-orca-relayed-http-v1264/attempts/attempt-0873-measured.jsonl",
+      "id": "audio-campaign-v847-0873",
+      "ordinal": 873,
+      "phase_index": 858,
+      "code": "assistant_reply_predicate_failed",
+      "condition": "HTTP K2"
+    },
+    {
+      "path": "thesis/campaigns/worker-desktop-k2-orca-relayed-http-v1264/attempts/attempt-0874-measured.jsonl",
+      "id": "audio-campaign-v847-0874",
+      "ordinal": 874,
+      "phase_index": 859,
+      "code": "assistant_reply_predicate_failed",
+      "condition": "HTTP K2"
+    },
+    {
+      "path": "thesis/campaigns/worker-desktop-k2-orca-relayed-http-v1264/attempts/attempt-0875-measured.jsonl",
+      "id": "audio-campaign-v847-0875",
+      "ordinal": 875,
+      "phase_index": 860,
+      "code": "assistant_reply_predicate_failed",
+      "condition": "HTTP K2"
+    },
+    {
+      "path": "thesis/campaigns/worker-desktop-k2-orca-relayed-http-v1264/attempts/attempt-0876-measured.jsonl",
+      "id": "audio-campaign-v847-0876",
+      "ordinal": 876,
+      "phase_index": 861,
+      "code": "assistant_reply_predicate_failed",
+      "condition": "HTTP K2"
+    },
+    {
+      "path": "thesis/campaigns/worker-desktop-k2-orca-relayed-http-v1264/attempts/attempt-0877-measured.jsonl",
+      "id": "audio-campaign-v847-0877",
+      "ordinal": 877,
+      "phase_index": 862,
+      "code": "assistant_reply_predicate_failed",
+      "condition": "HTTP K2"
+    },
+    {
+      "path": "thesis/campaigns/worker-desktop-k2-orca-relayed-http-v1264/attempts/attempt-0878-measured.jsonl",
+      "id": "audio-campaign-v847-0878",
+      "ordinal": 878,
+      "phase_index": 863,
+      "code": "assistant_reply_predicate_failed",
+      "condition": "HTTP K2"
+    },
+    {
+      "path": "thesis/campaigns/worker-desktop-k2-orca-relayed-http-v1264/attempts/attempt-0879-measured.jsonl",
+      "id": "audio-campaign-v847-0879",
+      "ordinal": 879,
+      "phase_index": 864,
+      "code": "assistant_reply_predicate_failed",
+      "condition": "HTTP K2"
+    },
+    {
+      "path": "thesis/campaigns/worker-desktop-k2-orca-relayed-http-v1264/attempts/attempt-0880-measured.jsonl",
+      "id": "audio-campaign-v847-0880",
+      "ordinal": 880,
+      "phase_index": 865,
+      "code": "assistant_reply_predicate_failed",
+      "condition": "HTTP K2"
+    },
+    {
+      "path": "thesis/campaigns/worker-desktop-k2-orca-relayed-http-v1264/attempts/attempt-0881-measured.jsonl",
+      "id": "audio-campaign-v847-0881",
+      "ordinal": 881,
+      "phase_index": 866,
+      "code": "assistant_reply_predicate_failed",
+      "condition": "HTTP K2"
+    },
+    {
+      "path": "thesis/campaigns/worker-desktop-k2-orca-relayed-http-v1264/attempts/attempt-0882-measured.jsonl",
+      "id": "audio-campaign-v847-0882",
+      "ordinal": 882,
+      "phase_index": 867,
+      "code": "assistant_reply_predicate_failed",
+      "condition": "HTTP K2"
+    },
+    {
+      "path": "thesis/campaigns/worker-desktop-k2-orca-relayed-http-v1264/attempts/attempt-0883-measured.jsonl",
+      "id": "audio-campaign-v847-0883",
+      "ordinal": 883,
+      "phase_index": 868,
+      "code": "assistant_reply_predicate_failed",
+      "condition": "HTTP K2"
+    },
+    {
+      "path": "thesis/campaigns/worker-desktop-k2-orca-relayed-http-v1264/attempts/attempt-0884-measured.jsonl",
+      "id": "audio-campaign-v847-0884",
+      "ordinal": 884,
+      "phase_index": 869,
+      "code": "assistant_reply_predicate_failed",
+      "condition": "HTTP K2"
+    },
+    {
+      "path": "thesis/campaigns/worker-desktop-k2-orca-relayed-http-v1264/attempts/attempt-0885-measured.jsonl",
+      "id": "audio-campaign-v847-0885",
+      "ordinal": 885,
+      "phase_index": 870,
+      "code": "assistant_reply_predicate_failed",
+      "condition": "HTTP K2"
+    },
+    {
+      "path": "thesis/campaigns/worker-desktop-k2-orca-relayed-http-v1264/attempts/attempt-0886-measured.jsonl",
+      "id": "audio-campaign-v847-0886",
+      "ordinal": 886,
+      "phase_index": 871,
+      "code": "assistant_reply_predicate_failed",
+      "condition": "HTTP K2"
+    },
+    {
+      "path": "thesis/campaigns/worker-desktop-k2-orca-relayed-http-v1264/attempts/attempt-0887-measured.jsonl",
+      "id": "audio-campaign-v847-0887",
+      "ordinal": 887,
+      "phase_index": 872,
+      "code": "assistant_reply_predicate_failed",
+      "condition": "HTTP K2"
+    },
+    {
+      "path": "thesis/campaigns/worker-desktop-k2-orca-relayed-http-v1264/attempts/attempt-0888-measured.jsonl",
+      "id": "audio-campaign-v847-0888",
+      "ordinal": 888,
+      "phase_index": 873,
+      "code": "assistant_reply_predicate_failed",
+      "condition": "HTTP K2"
+    },
+    {
+      "path": "thesis/campaigns/worker-desktop-k2-orca-relayed-http-v1264/attempts/attempt-0889-measured.jsonl",
+      "id": "audio-campaign-v847-0889",
+      "ordinal": 889,
+      "phase_index": 874,
+      "code": "assistant_reply_predicate_failed",
+      "condition": "HTTP K2"
+    },
+    {
+      "path": "thesis/campaigns/worker-desktop-k2-orca-relayed-http-v1264/attempts/attempt-0890-measured.jsonl",
+      "id": "audio-campaign-v847-0890",
+      "ordinal": 890,
+      "phase_index": 875,
+      "code": "assistant_reply_predicate_failed",
+      "condition": "HTTP K2"
+    },
+    {
+      "path": "thesis/campaigns/worker-desktop-k2-orca-relayed-http-v1264/attempts/attempt-0891-measured.jsonl",
+      "id": "audio-campaign-v847-0891",
+      "ordinal": 891,
+      "phase_index": 876,
+      "code": "assistant_reply_predicate_failed",
+      "condition": "HTTP K2"
+    },
+    {
+      "path": "thesis/campaigns/worker-desktop-k2-orca-relayed-http-v1264/attempts/attempt-0892-measured.jsonl",
+      "id": "audio-campaign-v847-0892",
+      "ordinal": 892,
+      "phase_index": 877,
+      "code": "assistant_reply_predicate_failed",
+      "condition": "HTTP K2"
+    },
+    {
+      "path": "thesis/campaigns/worker-desktop-k2-orca-relayed-http-v1264/attempts/attempt-0893-measured.jsonl",
+      "id": "audio-campaign-v847-0893",
+      "ordinal": 893,
+      "phase_index": 878,
+      "code": "assistant_reply_predicate_failed",
+      "condition": "HTTP K2"
+    },
+    {
+      "path": "thesis/campaigns/worker-desktop-k2-orca-relayed-http-v1264/attempts/attempt-0894-measured.jsonl",
+      "id": "audio-campaign-v847-0894",
+      "ordinal": 894,
+      "phase_index": 879,
+      "code": "assistant_reply_predicate_failed",
+      "condition": "HTTP K2"
+    },
+    {
+      "path": "thesis/campaigns/worker-desktop-k2-orca-relayed-http-v1264/attempts/attempt-0895-measured.jsonl",
+      "id": "audio-campaign-v847-0895",
+      "ordinal": 895,
+      "phase_index": 880,
+      "code": "assistant_reply_predicate_failed",
+      "condition": "HTTP K2"
+    },
+    {
+      "path": "thesis/campaigns/worker-desktop-k2-orca-relayed-http-v1264/attempts/attempt-0896-measured.jsonl",
+      "id": "audio-campaign-v847-0896",
+      "ordinal": 896,
+      "phase_index": 881,
+      "code": "assistant_reply_predicate_failed",
+      "condition": "HTTP K2"
+    },
+    {
+      "path": "thesis/campaigns/worker-desktop-k2-orca-relayed-http-v1264/attempts/attempt-0897-measured.jsonl",
+      "id": "audio-campaign-v847-0897",
+      "ordinal": 897,
+      "phase_index": 882,
+      "code": "assistant_reply_predicate_failed",
+      "condition": "HTTP K2"
+    },
+    {
+      "path": "thesis/campaigns/worker-desktop-k2-orca-relayed-http-v1264/attempts/attempt-0898-measured.jsonl",
+      "id": "audio-campaign-v847-0898",
+      "ordinal": 898,
+      "phase_index": 883,
+      "code": "assistant_reply_predicate_failed",
+      "condition": "HTTP K2"
+    },
+    {
+      "path": "thesis/campaigns/worker-desktop-k2-orca-relayed-http-v1264/attempts/attempt-0899-measured.jsonl",
+      "id": "audio-campaign-v847-0899",
+      "ordinal": 899,
+      "phase_index": 884,
+      "code": "assistant_reply_predicate_failed",
+      "condition": "HTTP K2"
+    },
+    {
+      "path": "thesis/campaigns/worker-desktop-k2-orca-relayed-http-v1264/attempts/attempt-0900-measured.jsonl",
+      "id": "audio-campaign-v847-0900",
+      "ordinal": 900,
+      "phase_index": 885,
+      "code": "assistant_reply_predicate_failed",
+      "condition": "HTTP K2"
+    },
+    {
+      "path": "thesis/campaigns/worker-desktop-k2-orca-relayed-http-v1264/attempts/attempt-0901-measured.jsonl",
+      "id": "audio-campaign-v847-0901",
+      "ordinal": 901,
+      "phase_index": 886,
+      "code": "assistant_reply_predicate_failed",
+      "condition": "HTTP K2"
+    },
+    {
+      "path": "thesis/campaigns/worker-desktop-k2-orca-relayed-http-v1264/attempts/attempt-0902-measured.jsonl",
+      "id": "audio-campaign-v847-0902",
+      "ordinal": 902,
+      "phase_index": 887,
+      "code": "assistant_reply_predicate_failed",
+      "condition": "HTTP K2"
+    },
+    {
+      "path": "thesis/campaigns/worker-desktop-k2-orca-relayed-http-v1264/attempts/attempt-0903-measured.jsonl",
+      "id": "audio-campaign-v847-0903",
+      "ordinal": 903,
+      "phase_index": 888,
+      "code": "assistant_reply_predicate_failed",
+      "condition": "HTTP K2"
+    },
+    {
+      "path": "thesis/campaigns/worker-desktop-k2-orca-relayed-http-v1264/attempts/attempt-0904-measured.jsonl",
+      "id": "audio-campaign-v847-0904",
+      "ordinal": 904,
+      "phase_index": 889,
+      "code": "assistant_reply_predicate_failed",
+      "condition": "HTTP K2"
+    },
+    {
+      "path": "thesis/campaigns/worker-desktop-k2-orca-relayed-http-v1264/attempts/attempt-0905-measured.jsonl",
+      "id": "audio-campaign-v847-0905",
+      "ordinal": 905,
+      "phase_index": 890,
+      "code": "assistant_reply_predicate_failed",
+      "condition": "HTTP K2"
+    },
+    {
+      "path": "thesis/campaigns/worker-desktop-k2-orca-relayed-http-v1264/attempts/attempt-0906-measured.jsonl",
+      "id": "audio-campaign-v847-0906",
+      "ordinal": 906,
+      "phase_index": 891,
+      "code": "assistant_reply_predicate_failed",
+      "condition": "HTTP K2"
+    },
+    {
+      "path": "thesis/campaigns/worker-desktop-k2-orca-relayed-http-v1264/attempts/attempt-0907-measured.jsonl",
+      "id": "audio-campaign-v847-0907",
+      "ordinal": 907,
+      "phase_index": 892,
+      "code": "assistant_reply_predicate_failed",
+      "condition": "HTTP K2"
+    },
+    {
+      "path": "thesis/campaigns/worker-desktop-k2-orca-relayed-http-v1264/attempts/attempt-0908-measured.jsonl",
+      "id": "audio-campaign-v847-0908",
+      "ordinal": 908,
+      "phase_index": 893,
+      "code": "assistant_reply_predicate_failed",
+      "condition": "HTTP K2"
+    },
+    {
+      "path": "thesis/campaigns/worker-desktop-k2-orca-relayed-http-v1264/attempts/attempt-0909-measured.jsonl",
+      "id": "audio-campaign-v847-0909",
+      "ordinal": 909,
+      "phase_index": 894,
+      "code": "assistant_reply_predicate_failed",
+      "condition": "HTTP K2"
+    },
+    {
+      "path": "thesis/campaigns/worker-desktop-k2-orca-relayed-http-v1264/attempts/attempt-0910-measured.jsonl",
+      "id": "audio-campaign-v847-0910",
+      "ordinal": 910,
+      "phase_index": 895,
+      "code": "assistant_reply_predicate_failed",
+      "condition": "HTTP K2"
+    },
+    {
+      "path": "thesis/campaigns/worker-desktop-k2-orca-relayed-http-v1264/attempts/attempt-0911-measured.jsonl",
+      "id": "audio-campaign-v847-0911",
+      "ordinal": 911,
+      "phase_index": 896,
+      "code": "assistant_reply_predicate_failed",
+      "condition": "HTTP K2"
+    },
+    {
+      "path": "thesis/campaigns/worker-desktop-k2-orca-relayed-http-v1264/attempts/attempt-0912-measured.jsonl",
+      "id": "audio-campaign-v847-0912",
+      "ordinal": 912,
+      "phase_index": 897,
+      "code": "assistant_reply_predicate_failed",
+      "condition": "HTTP K2"
+    },
+    {
+      "path": "thesis/campaigns/worker-desktop-k2-orca-relayed-http-v1264/attempts/attempt-0913-measured.jsonl",
+      "id": "audio-campaign-v847-0913",
+      "ordinal": 913,
+      "phase_index": 898,
+      "code": "assistant_reply_predicate_failed",
+      "condition": "HTTP K2"
+    },
+    {
+      "path": "thesis/campaigns/worker-desktop-k2-orca-relayed-http-v1264/attempts/attempt-0914-measured.jsonl",
+      "id": "audio-campaign-v847-0914",
+      "ordinal": 914,
+      "phase_index": 899,
+      "code": "assistant_reply_predicate_failed",
+      "condition": "HTTP K2"
+    },
+    {
+      "path": "thesis/campaigns/worker-desktop-k2-orca-relayed-http-v1264/attempts/attempt-0915-measured.jsonl",
+      "id": "audio-campaign-v847-0915",
+      "ordinal": 915,
+      "phase_index": 900,
+      "code": "assistant_reply_predicate_failed",
+      "condition": "HTTP K2"
+    },
+    {
+      "path": "thesis/campaigns/worker-desktop-k3-orca-relayed-http-remaining-v1620/attempts/attempt-0027-measured.jsonl",
+      "id": "audio-campaign-v1620-0027",
+      "ordinal": 27,
+      "phase_index": 12,
+      "code": "assistant_reply_predicate_failed",
+      "condition": "HTTP K3"
+    },
+    {
+      "path": "thesis/campaigns/worker-desktop-k3-orca-relayed-http-remaining-v1620/attempts/attempt-0028-measured.jsonl",
+      "id": "audio-campaign-v1620-0028",
+      "ordinal": 28,
+      "phase_index": 13,
+      "code": "assistant_reply_predicate_failed",
+      "condition": "HTTP K3"
+    },
+    {
+      "path": "thesis/campaigns/worker-desktop-k3-orca-relayed-http-remaining-v1620/attempts/attempt-0029-measured.jsonl",
+      "id": "audio-campaign-v1620-0029",
+      "ordinal": 29,
+      "phase_index": 14,
+      "code": "assistant_reply_predicate_failed",
+      "condition": "HTTP K3"
+    },
+    {
+      "path": "thesis/campaigns/worker-desktop-k3-orca-relayed-http-remaining-v1620/attempts/attempt-0030-measured.jsonl",
+      "id": "audio-campaign-v1620-0030",
+      "ordinal": 30,
+      "phase_index": 15,
+      "code": "assistant_reply_predicate_failed",
+      "condition": "HTTP K3"
+    },
+    {
+      "path": "thesis/campaigns/worker-desktop-k3-orca-relayed-http-remaining-v1620/attempts/attempt-0031-measured.jsonl",
+      "id": "audio-campaign-v1620-0031",
+      "ordinal": 31,
+      "phase_index": 16,
+      "code": "assistant_reply_predicate_failed",
+      "condition": "HTTP K3"
+    },
+    {
+      "path": "thesis/campaigns/worker-desktop-k3-orca-relayed-http-remaining-v1620/attempts/attempt-0032-measured.jsonl",
+      "id": "audio-campaign-v1620-0032",
+      "ordinal": 32,
+      "phase_index": 17,
+      "code": "assistant_reply_predicate_failed",
+      "condition": "HTTP K3"
+    },
+    {
+      "path": "thesis/campaigns/worker-desktop-k3-orca-relayed-http-remaining-v1620/attempts/attempt-0033-measured.jsonl",
+      "id": "audio-campaign-v1620-0033",
+      "ordinal": 33,
+      "phase_index": 18,
+      "code": "assistant_reply_predicate_failed",
+      "condition": "HTTP K3"
+    },
+    {
+      "path": "thesis/campaigns/worker-desktop-k3-orca-relayed-http-remaining-v1620/attempts/attempt-0034-measured.jsonl",
+      "id": "audio-campaign-v1620-0034",
+      "ordinal": 34,
+      "phase_index": 19,
+      "code": "assistant_reply_predicate_failed",
+      "condition": "HTTP K3"
+    },
+    {
+      "path": "thesis/campaigns/worker-desktop-k3-orca-relayed-http-remaining-v1620/attempts/attempt-0035-measured.jsonl",
+      "id": "audio-campaign-v1620-0035",
+      "ordinal": 35,
+      "phase_index": 20,
+      "code": "assistant_reply_predicate_failed",
+      "condition": "HTTP K3"
+    },
+    {
+      "path": "thesis/campaigns/worker-desktop-k3-orca-relayed-http-remaining-v1620/attempts/attempt-0036-measured.jsonl",
+      "id": "audio-campaign-v1620-0036",
+      "ordinal": 36,
+      "phase_index": 21,
+      "code": "assistant_reply_predicate_failed",
+      "condition": "HTTP K3"
+    },
+    {
+      "path": "thesis/campaigns/worker-desktop-k3-orca-relayed-http-remaining-v1620/attempts/attempt-0037-measured.jsonl",
+      "id": "audio-campaign-v1620-0037",
+      "ordinal": 37,
+      "phase_index": 22,
+      "code": "assistant_reply_predicate_failed",
+      "condition": "HTTP K3"
+    },
+    {
+      "path": "thesis/campaigns/worker-desktop-k3-orca-relayed-http-remaining-v1620/attempts/attempt-0038-measured.jsonl",
+      "id": "audio-campaign-v1620-0038",
+      "ordinal": 38,
+      "phase_index": 23,
+      "code": "assistant_reply_predicate_failed",
+      "condition": "HTTP K3"
+    },
+    {
+      "path": "thesis/campaigns/worker-desktop-k2-p2p-assistant-tts-v1826/attempts/attempt-0801-measured.jsonl",
+      "id": "audio-campaign-v1731-0801",
+      "ordinal": 801,
+      "phase_index": 786,
+      "code": "assistant_reply_predicate_failed",
+      "condition": "P2P K2"
+    },
+    {
+      "path": "thesis/campaigns/worker-desktop-k2-p2p-assistant-tts-v1826/attempts/attempt-0802-measured.jsonl",
+      "id": "audio-campaign-v1731-0802",
+      "ordinal": 802,
+      "phase_index": 787,
+      "code": "assistant_reply_predicate_failed",
+      "condition": "P2P K2"
+    },
+    {
+      "path": "thesis/campaigns/worker-desktop-k2-p2p-assistant-tts-v1826/attempts/attempt-0803-measured.jsonl",
+      "id": "audio-campaign-v1731-0803",
+      "ordinal": 803,
+      "phase_index": 788,
+      "code": "assistant_reply_predicate_failed",
+      "condition": "P2P K2"
+    },
+    {
+      "path": "thesis/campaigns/worker-desktop-k2-p2p-assistant-tts-v1826/attempts/attempt-0804-measured.jsonl",
+      "id": "audio-campaign-v1731-0804",
+      "ordinal": 804,
+      "phase_index": 789,
+      "code": "assistant_reply_predicate_failed",
+      "condition": "P2P K2"
+    },
+    {
+      "path": "thesis/campaigns/worker-desktop-k2-p2p-assistant-tts-v1826/attempts/attempt-0805-measured.jsonl",
+      "id": "audio-campaign-v1731-0805",
+      "ordinal": 805,
+      "phase_index": 790,
+      "code": "assistant_reply_predicate_failed",
+      "condition": "P2P K2"
+    },
+    {
+      "path": "thesis/campaigns/worker-desktop-k2-p2p-assistant-tts-v1826/attempts/attempt-0806-measured.jsonl",
+      "id": "audio-campaign-v1731-0806",
+      "ordinal": 806,
+      "phase_index": 791,
+      "code": "assistant_reply_predicate_failed",
+      "condition": "P2P K2"
+    },
+    {
+      "path": "thesis/campaigns/worker-desktop-k2-p2p-assistant-tts-v1826/attempts/attempt-0807-measured.jsonl",
+      "id": "audio-campaign-v1731-0807",
+      "ordinal": 807,
+      "phase_index": 792,
+      "code": "assistant_reply_predicate_failed",
+      "condition": "P2P K2"
+    },
+    {
+      "path": "thesis/campaigns/worker-desktop-k2-p2p-assistant-tts-v1826/attempts/attempt-0808-measured.jsonl",
+      "id": "audio-campaign-v1731-0808",
+      "ordinal": 808,
+      "phase_index": 793,
+      "code": "assistant_reply_predicate_failed",
+      "condition": "P2P K2"
+    },
+    {
+      "path": "thesis/campaigns/worker-desktop-k2-p2p-assistant-tts-v1826/attempts/attempt-0809-measured.jsonl",
+      "id": "audio-campaign-v1731-0809",
+      "ordinal": 809,
+      "phase_index": 794,
+      "code": "assistant_reply_predicate_failed",
+      "condition": "P2P K2"
+    },
+    {
+      "path": "thesis/campaigns/worker-desktop-k2-p2p-assistant-tts-v1826/attempts/attempt-0810-measured.jsonl",
+      "id": "audio-campaign-v1731-0810",
+      "ordinal": 810,
+      "phase_index": 795,
+      "code": "assistant_reply_predicate_failed",
+      "condition": "P2P K2"
+    },
+    {
+      "path": "thesis/campaigns/worker-desktop-k2-p2p-assistant-tts-v1826/attempts/attempt-0811-measured.jsonl",
+      "id": "audio-campaign-v1731-0811",
+      "ordinal": 811,
+      "phase_index": 796,
+      "code": "assistant_reply_predicate_failed",
+      "condition": "P2P K2"
+    },
+    {
+      "path": "thesis/campaigns/worker-desktop-k2-p2p-assistant-tts-v1826/attempts/attempt-0812-measured.jsonl",
+      "id": "audio-campaign-v1731-0812",
+      "ordinal": 812,
+      "phase_index": 797,
+      "code": "assistant_reply_predicate_failed",
+      "condition": "P2P K2"
+    },
+    {
+      "path": "thesis/campaigns/worker-desktop-k2-p2p-assistant-tts-v1826/attempts/attempt-0813-measured.jsonl",
+      "id": "audio-campaign-v1731-0813",
+      "ordinal": 813,
+      "phase_index": 798,
+      "code": "assistant_reply_predicate_failed",
+      "condition": "P2P K2"
+    },
+    {
+      "path": "thesis/campaigns/worker-desktop-k2-p2p-assistant-tts-v1826/attempts/attempt-0814-measured.jsonl",
+      "id": "audio-campaign-v1731-0814",
+      "ordinal": 814,
+      "phase_index": 799,
+      "code": "assistant_reply_predicate_failed",
+      "condition": "P2P K2"
+    },
+    {
+      "path": "thesis/campaigns/worker-desktop-k2-p2p-assistant-tts-v1826/attempts/attempt-0815-measured.jsonl",
+      "id": "audio-campaign-v1731-0815",
+      "ordinal": 815,
+      "phase_index": 800,
+      "code": "assistant_reply_predicate_failed",
+      "condition": "P2P K2"
+    },
+    {
+      "path": "thesis/campaigns/worker-desktop-k2-p2p-assistant-tts-v1826/attempts/attempt-0816-measured.jsonl",
+      "id": "audio-campaign-v1731-0816",
+      "ordinal": 816,
+      "phase_index": 801,
+      "code": "assistant_reply_predicate_failed",
+      "condition": "P2P K2"
+    },
+    {
+      "path": "thesis/campaigns/worker-desktop-k2-p2p-assistant-tts-v1826/attempts/attempt-0817-measured.jsonl",
+      "id": "audio-campaign-v1731-0817",
+      "ordinal": 817,
+      "phase_index": 802,
+      "code": "assistant_reply_predicate_failed",
+      "condition": "P2P K2"
+    },
+    {
+      "path": "thesis/campaigns/worker-desktop-k2-p2p-assistant-tts-v1826/attempts/attempt-0818-measured.jsonl",
+      "id": "audio-campaign-v1731-0818",
+      "ordinal": 818,
+      "phase_index": 803,
+      "code": "assistant_reply_predicate_failed",
+      "condition": "P2P K2"
+    },
+    {
+      "path": "thesis/campaigns/worker-desktop-k2-p2p-assistant-tts-v1826/attempts/attempt-0819-measured.jsonl",
+      "id": "audio-campaign-v1731-0819",
+      "ordinal": 819,
+      "phase_index": 804,
+      "code": "assistant_reply_predicate_failed",
+      "condition": "P2P K2"
+    },
+    {
+      "path": "thesis/campaigns/worker-desktop-k2-p2p-assistant-tts-v1826/attempts/attempt-0820-measured.jsonl",
+      "id": "audio-campaign-v1731-0820",
+      "ordinal": 820,
+      "phase_index": 805,
+      "code": "assistant_reply_predicate_failed",
+      "condition": "P2P K2"
+    },
+    {
+      "path": "thesis/campaigns/worker-desktop-k2-p2p-assistant-tts-v1826/attempts/attempt-0821-measured.jsonl",
+      "id": "audio-campaign-v1731-0821",
+      "ordinal": 821,
+      "phase_index": 806,
+      "code": "assistant_reply_predicate_failed",
+      "condition": "P2P K2"
+    },
+    {
+      "path": "thesis/campaigns/worker-desktop-k2-p2p-assistant-tts-v1826/attempts/attempt-0822-measured.jsonl",
+      "id": "audio-campaign-v1731-0822",
+      "ordinal": 822,
+      "phase_index": 807,
+      "code": "assistant_reply_predicate_failed",
+      "condition": "P2P K2"
+    },
+    {
+      "path": "thesis/campaigns/worker-desktop-k2-p2p-assistant-tts-v1826/attempts/attempt-0823-measured.jsonl",
+      "id": "audio-campaign-v1731-0823",
+      "ordinal": 823,
+      "phase_index": 808,
+      "code": "assistant_reply_predicate_failed",
+      "condition": "P2P K2"
+    },
+    {
+      "path": "thesis/campaigns/worker-desktop-k2-p2p-assistant-tts-v1826/attempts/attempt-0824-measured.jsonl",
+      "id": "audio-campaign-v1731-0824",
+      "ordinal": 824,
+      "phase_index": 809,
+      "code": "assistant_reply_predicate_failed",
+      "condition": "P2P K2"
+    },
+    {
+      "path": "thesis/campaigns/worker-desktop-k2-p2p-assistant-tts-v1826/attempts/attempt-0825-measured.jsonl",
+      "id": "audio-campaign-v1731-0825",
+      "ordinal": 825,
+      "phase_index": 810,
+      "code": "assistant_reply_predicate_failed",
+      "condition": "P2P K2"
+    },
+    {
+      "path": "thesis/campaigns/worker-desktop-k2-p2p-assistant-tts-v1826/attempts/attempt-0826-measured.jsonl",
+      "id": "audio-campaign-v1731-0826",
+      "ordinal": 826,
+      "phase_index": 811,
+      "code": "assistant_reply_predicate_failed",
+      "condition": "P2P K2"
+    },
+    {
+      "path": "thesis/campaigns/worker-desktop-k2-p2p-assistant-tts-v1826/attempts/attempt-0827-measured.jsonl",
+      "id": "audio-campaign-v1731-0827",
+      "ordinal": 827,
+      "phase_index": 812,
+      "code": "assistant_reply_predicate_failed",
+      "condition": "P2P K2"
+    },
+    {
+      "path": "thesis/campaigns/worker-desktop-k2-p2p-assistant-tts-v1826/attempts/attempt-0828-measured.jsonl",
+      "id": "audio-campaign-v1731-0828",
+      "ordinal": 828,
+      "phase_index": 813,
+      "code": "assistant_reply_predicate_failed",
+      "condition": "P2P K2"
+    },
+    {
+      "path": "thesis/campaigns/worker-desktop-k2-p2p-assistant-tts-v1826/attempts/attempt-0829-measured.jsonl",
+      "id": "audio-campaign-v1731-0829",
+      "ordinal": 829,
+      "phase_index": 814,
+      "code": "assistant_reply_predicate_failed",
+      "condition": "P2P K2"
+    },
+    {
+      "path": "thesis/campaigns/worker-desktop-k2-p2p-assistant-tts-v1826/attempts/attempt-0830-measured.jsonl",
+      "id": "audio-campaign-v1731-0830",
+      "ordinal": 830,
+      "phase_index": 815,
+      "code": "assistant_reply_predicate_failed",
+      "condition": "P2P K2"
+    },
+    {
+      "path": "thesis/campaigns/worker-desktop-k2-p2p-assistant-tts-v1826/attempts/attempt-0831-measured.jsonl",
+      "id": "audio-campaign-v1731-0831",
+      "ordinal": 831,
+      "phase_index": 816,
+      "code": "assistant_reply_predicate_failed",
+      "condition": "P2P K2"
+    },
+    {
+      "path": "thesis/campaigns/worker-desktop-k2-p2p-assistant-tts-v1826/attempts/attempt-0832-measured.jsonl",
+      "id": "audio-campaign-v1731-0832",
+      "ordinal": 832,
+      "phase_index": 817,
+      "code": "assistant_reply_predicate_failed",
+      "condition": "P2P K2"
+    },
+    {
+      "path": "thesis/campaigns/worker-desktop-k2-p2p-assistant-tts-v1826/attempts/attempt-0833-measured.jsonl",
+      "id": "audio-campaign-v1731-0833",
+      "ordinal": 833,
+      "phase_index": 818,
+      "code": "assistant_reply_predicate_failed",
+      "condition": "P2P K2"
+    },
+    {
+      "path": "thesis/campaigns/worker-desktop-k2-p2p-assistant-tts-v1826/attempts/attempt-0834-measured.jsonl",
+      "id": "audio-campaign-v1731-0834",
+      "ordinal": 834,
+      "phase_index": 819,
+      "code": "assistant_reply_predicate_failed",
+      "condition": "P2P K2"
+    },
+    {
+      "path": "thesis/campaigns/worker-desktop-k2-p2p-assistant-tts-v1826/attempts/attempt-0835-measured.jsonl",
+      "id": "audio-campaign-v1731-0835",
+      "ordinal": 835,
+      "phase_index": 820,
+      "code": "assistant_reply_predicate_failed",
+      "condition": "P2P K2"
+    },
+    {
+      "path": "thesis/campaigns/worker-desktop-k2-p2p-assistant-tts-v1826/attempts/attempt-0836-measured.jsonl",
+      "id": "audio-campaign-v1731-0836",
+      "ordinal": 836,
+      "phase_index": 821,
+      "code": "assistant_reply_predicate_failed",
+      "condition": "P2P K2"
+    },
+    {
+      "path": "thesis/campaigns/worker-desktop-k2-p2p-assistant-tts-v1826/attempts/attempt-0837-measured.jsonl",
+      "id": "audio-campaign-v1731-0837",
+      "ordinal": 837,
+      "phase_index": 822,
+      "code": "assistant_reply_predicate_failed",
+      "condition": "P2P K2"
+    },
+    {
+      "path": "thesis/campaigns/worker-desktop-k2-p2p-assistant-tts-v1826/attempts/attempt-0838-measured.jsonl",
+      "id": "audio-campaign-v1731-0838",
+      "ordinal": 838,
+      "phase_index": 823,
+      "code": "assistant_reply_predicate_failed",
+      "condition": "P2P K2"
+    },
+    {
+      "path": "thesis/campaigns/worker-desktop-k2-p2p-assistant-tts-v1826/attempts/attempt-0839-measured.jsonl",
+      "id": "audio-campaign-v1731-0839",
+      "ordinal": 839,
+      "phase_index": 824,
+      "code": "assistant_reply_predicate_failed",
+      "condition": "P2P K2"
+    },
+    {
+      "path": "thesis/campaigns/worker-desktop-k2-p2p-assistant-tts-v1826/attempts/attempt-0840-measured.jsonl",
+      "id": "audio-campaign-v1731-0840",
+      "ordinal": 840,
+      "phase_index": 825,
+      "code": "assistant_reply_predicate_failed",
+      "condition": "P2P K2"
+    },
+    {
+      "path": "thesis/campaigns/worker-desktop-k2-p2p-assistant-tts-v1826/attempts/attempt-0841-measured.jsonl",
+      "id": "audio-campaign-v1731-0841",
+      "ordinal": 841,
+      "phase_index": 826,
+      "code": "assistant_reply_predicate_failed",
+      "condition": "P2P K2"
+    },
+    {
+      "path": "thesis/campaigns/worker-desktop-k2-p2p-assistant-tts-v1826/attempts/attempt-0842-measured.jsonl",
+      "id": "audio-campaign-v1731-0842",
+      "ordinal": 842,
+      "phase_index": 827,
+      "code": "assistant_reply_predicate_failed",
+      "condition": "P2P K2"
+    },
+    {
+      "path": "thesis/campaigns/worker-desktop-k2-p2p-assistant-tts-v1826/attempts/attempt-0843-measured.jsonl",
+      "id": "audio-campaign-v1731-0843",
+      "ordinal": 843,
+      "phase_index": 828,
+      "code": "assistant_reply_predicate_failed",
+      "condition": "P2P K2"
+    },
+    {
+      "path": "thesis/campaigns/worker-desktop-k2-p2p-assistant-tts-v1826/attempts/attempt-0844-measured.jsonl",
+      "id": "audio-campaign-v1731-0844",
+      "ordinal": 844,
+      "phase_index": 829,
+      "code": "assistant_reply_predicate_failed",
+      "condition": "P2P K2"
+    },
+    {
+      "path": "thesis/campaigns/worker-desktop-k2-p2p-assistant-tts-v1826/attempts/attempt-0845-measured.jsonl",
+      "id": "audio-campaign-v1731-0845",
+      "ordinal": 845,
+      "phase_index": 830,
+      "code": "assistant_reply_predicate_failed",
+      "condition": "P2P K2"
+    },
+    {
+      "path": "thesis/campaigns/worker-desktop-k2-p2p-assistant-tts-v1826/attempts/attempt-0846-measured.jsonl",
+      "id": "audio-campaign-v1731-0846",
+      "ordinal": 846,
+      "phase_index": 831,
+      "code": "assistant_reply_predicate_failed",
+      "condition": "P2P K2"
+    },
+    {
+      "path": "thesis/campaigns/worker-desktop-k2-p2p-assistant-tts-v1826/attempts/attempt-0847-measured.jsonl",
+      "id": "audio-campaign-v1731-0847",
+      "ordinal": 847,
+      "phase_index": 832,
+      "code": "assistant_reply_predicate_failed",
+      "condition": "P2P K2"
+    },
+    {
+      "path": "thesis/campaigns/worker-desktop-k2-p2p-assistant-tts-v1826/attempts/attempt-0848-measured.jsonl",
+      "id": "audio-campaign-v1731-0848",
+      "ordinal": 848,
+      "phase_index": 833,
+      "code": "assistant_reply_predicate_failed",
+      "condition": "P2P K2"
+    },
+    {
+      "path": "thesis/campaigns/worker-desktop-k2-p2p-assistant-tts-v1826/attempts/attempt-0849-measured.jsonl",
+      "id": "audio-campaign-v1731-0849",
+      "ordinal": 849,
+      "phase_index": 834,
+      "code": "assistant_reply_predicate_failed",
+      "condition": "P2P K2"
+    },
+    {
+      "path": "thesis/campaigns/worker-desktop-k2-p2p-assistant-tts-v1826/attempts/attempt-0850-measured.jsonl",
+      "id": "audio-campaign-v1731-0850",
+      "ordinal": 850,
+      "phase_index": 835,
+      "code": "assistant_reply_predicate_failed",
+      "condition": "P2P K2"
+    },
+    {
+      "path": "thesis/campaigns/worker-desktop-k2-p2p-assistant-tts-v1826/attempts/attempt-0851-measured.jsonl",
+      "id": "audio-campaign-v1731-0851",
+      "ordinal": 851,
+      "phase_index": 836,
+      "code": "assistant_reply_predicate_failed",
+      "condition": "P2P K2"
+    },
+    {
+      "path": "thesis/campaigns/worker-desktop-k2-p2p-assistant-tts-v1826/attempts/attempt-0852-measured.jsonl",
+      "id": "audio-campaign-v1731-0852",
+      "ordinal": 852,
+      "phase_index": 837,
+      "code": "assistant_reply_predicate_failed",
+      "condition": "P2P K2"
+    },
+    {
+      "path": "thesis/campaigns/worker-desktop-k2-p2p-assistant-tts-v1826/attempts/attempt-0853-measured.jsonl",
+      "id": "audio-campaign-v1731-0853",
+      "ordinal": 853,
+      "phase_index": 838,
+      "code": "assistant_reply_predicate_failed",
+      "condition": "P2P K2"
+    },
+    {
+      "path": "thesis/campaigns/worker-desktop-k2-p2p-assistant-tts-v1826/attempts/attempt-0854-measured.jsonl",
+      "id": "audio-campaign-v1731-0854",
+      "ordinal": 854,
+      "phase_index": 839,
+      "code": "assistant_reply_predicate_failed",
+      "condition": "P2P K2"
+    },
+    {
+      "path": "thesis/campaigns/worker-desktop-k2-p2p-assistant-tts-v1826/attempts/attempt-0855-measured.jsonl",
+      "id": "audio-campaign-v1731-0855",
+      "ordinal": 855,
+      "phase_index": 840,
+      "code": "assistant_reply_predicate_failed",
+      "condition": "P2P K2"
+    },
+    {
+      "path": "thesis/campaigns/worker-desktop-k2-p2p-assistant-tts-v1826/attempts/attempt-0856-measured.jsonl",
+      "id": "audio-campaign-v1731-0856",
+      "ordinal": 856,
+      "phase_index": 841,
+      "code": "assistant_reply_predicate_failed",
+      "condition": "P2P K2"
+    },
+    {
+      "path": "thesis/campaigns/worker-desktop-k2-p2p-assistant-tts-v1826/attempts/attempt-0857-measured.jsonl",
+      "id": "audio-campaign-v1731-0857",
+      "ordinal": 857,
+      "phase_index": 842,
+      "code": "assistant_reply_predicate_failed",
+      "condition": "P2P K2"
+    },
+    {
+      "path": "thesis/campaigns/worker-desktop-k2-p2p-assistant-tts-v1826/attempts/attempt-0858-measured.jsonl",
+      "id": "audio-campaign-v1731-0858",
+      "ordinal": 858,
+      "phase_index": 843,
+      "code": "assistant_reply_predicate_failed",
+      "condition": "P2P K2"
+    },
+    {
+      "path": "thesis/campaigns/worker-desktop-k2-p2p-assistant-tts-v1826/attempts/attempt-0859-measured.jsonl",
+      "id": "audio-campaign-v1731-0859",
+      "ordinal": 859,
+      "phase_index": 844,
+      "code": "assistant_reply_predicate_failed",
+      "condition": "P2P K2"
+    },
+    {
+      "path": "thesis/campaigns/worker-desktop-k2-p2p-assistant-tts-v1826/attempts/attempt-0860-measured.jsonl",
+      "id": "audio-campaign-v1731-0860",
+      "ordinal": 860,
+      "phase_index": 845,
+      "code": "assistant_reply_predicate_failed",
+      "condition": "P2P K2"
+    },
+    {
+      "path": "thesis/campaigns/worker-desktop-k2-p2p-assistant-tts-v1826/attempts/attempt-0861-measured.jsonl",
+      "id": "audio-campaign-v1731-0861",
+      "ordinal": 861,
+      "phase_index": 846,
+      "code": "assistant_reply_predicate_failed",
+      "condition": "P2P K2"
+    },
+    {
+      "path": "thesis/campaigns/worker-desktop-k2-p2p-assistant-tts-v1826/attempts/attempt-0862-measured.jsonl",
+      "id": "audio-campaign-v1731-0862",
+      "ordinal": 862,
+      "phase_index": 847,
+      "code": "assistant_reply_predicate_failed",
+      "condition": "P2P K2"
+    },
+    {
+      "path": "thesis/campaigns/worker-desktop-k2-p2p-assistant-tts-v1826/attempts/attempt-0863-measured.jsonl",
+      "id": "audio-campaign-v1731-0863",
+      "ordinal": 863,
+      "phase_index": 848,
+      "code": "assistant_reply_predicate_failed",
+      "condition": "P2P K2"
+    },
+    {
+      "path": "thesis/campaigns/worker-desktop-k2-p2p-assistant-tts-v1826/attempts/attempt-0864-measured.jsonl",
+      "id": "audio-campaign-v1731-0864",
+      "ordinal": 864,
+      "phase_index": 849,
+      "code": "assistant_reply_predicate_failed",
+      "condition": "P2P K2"
+    },
+    {
+      "path": "thesis/campaigns/worker-desktop-k2-p2p-assistant-tts-v1826/attempts/attempt-0865-measured.jsonl",
+      "id": "audio-campaign-v1731-0865",
+      "ordinal": 865,
+      "phase_index": 850,
+      "code": "assistant_reply_predicate_failed",
+      "condition": "P2P K2"
+    },
+    {
+      "path": "thesis/campaigns/worker-desktop-k2-p2p-assistant-tts-v1826/attempts/attempt-0866-measured.jsonl",
+      "id": "audio-campaign-v1731-0866",
+      "ordinal": 866,
+      "phase_index": 851,
+      "code": "assistant_reply_predicate_failed",
+      "condition": "P2P K2"
+    },
+    {
+      "path": "thesis/campaigns/worker-desktop-k2-p2p-assistant-tts-v1826/attempts/attempt-0867-measured.jsonl",
+      "id": "audio-campaign-v1731-0867",
+      "ordinal": 867,
+      "phase_index": 852,
+      "code": "assistant_reply_predicate_failed",
+      "condition": "P2P K2"
+    },
+    {
+      "path": "thesis/campaigns/worker-desktop-k2-p2p-assistant-tts-v1826/attempts/attempt-0868-measured.jsonl",
+      "id": "audio-campaign-v1731-0868",
+      "ordinal": 868,
+      "phase_index": 853,
+      "code": "assistant_reply_predicate_failed",
+      "condition": "P2P K2"
+    },
+    {
+      "path": "thesis/campaigns/worker-desktop-k2-p2p-assistant-tts-v1826/attempts/attempt-0869-measured.jsonl",
+      "id": "audio-campaign-v1731-0869",
+      "ordinal": 869,
+      "phase_index": 854,
+      "code": "assistant_reply_predicate_failed",
+      "condition": "P2P K2"
+    },
+    {
+      "path": "thesis/campaigns/worker-desktop-k2-p2p-assistant-tts-v1826/attempts/attempt-0870-measured.jsonl",
+      "id": "audio-campaign-v1731-0870",
+      "ordinal": 870,
+      "phase_index": 855,
+      "code": "assistant_reply_predicate_failed",
+      "condition": "P2P K2"
+    },
+    {
+      "path": "thesis/campaigns/worker-desktop-k2-p2p-assistant-tts-v1826/attempts/attempt-0871-measured.jsonl",
+      "id": "audio-campaign-v1731-0871",
+      "ordinal": 871,
+      "phase_index": 856,
+      "code": "assistant_reply_predicate_failed",
+      "condition": "P2P K2"
+    },
+    {
+      "path": "thesis/campaigns/worker-desktop-k2-p2p-assistant-tts-v1826/attempts/attempt-0872-measured.jsonl",
+      "id": "audio-campaign-v1731-0872",
+      "ordinal": 872,
+      "phase_index": 857,
+      "code": "assistant_reply_predicate_failed",
+      "condition": "P2P K2"
+    },
+    {
+      "path": "thesis/campaigns/worker-desktop-k2-p2p-assistant-tts-v1826/attempts/attempt-0873-measured.jsonl",
+      "id": "audio-campaign-v1731-0873",
+      "ordinal": 873,
+      "phase_index": 858,
+      "code": "assistant_reply_predicate_failed",
+      "condition": "P2P K2"
+    },
+    {
+      "path": "thesis/campaigns/worker-desktop-k2-p2p-assistant-tts-v1826/attempts/attempt-0874-measured.jsonl",
+      "id": "audio-campaign-v1731-0874",
+      "ordinal": 874,
+      "phase_index": 859,
+      "code": "assistant_reply_predicate_failed",
+      "condition": "P2P K2"
+    },
+    {
+      "path": "thesis/campaigns/worker-desktop-k2-p2p-assistant-tts-v1826/attempts/attempt-0875-measured.jsonl",
+      "id": "audio-campaign-v1731-0875",
+      "ordinal": 875,
+      "phase_index": 860,
+      "code": "assistant_reply_predicate_failed",
+      "condition": "P2P K2"
+    },
+    {
+      "path": "thesis/campaigns/worker-desktop-k2-p2p-assistant-tts-v1826/attempts/attempt-0876-measured.jsonl",
+      "id": "audio-campaign-v1731-0876",
+      "ordinal": 876,
+      "phase_index": 861,
+      "code": "assistant_reply_predicate_failed",
+      "condition": "P2P K2"
+    },
+    {
+      "path": "thesis/campaigns/worker-desktop-k2-p2p-assistant-tts-v1826/attempts/attempt-0877-measured.jsonl",
+      "id": "audio-campaign-v1731-0877",
+      "ordinal": 877,
+      "phase_index": 862,
+      "code": "assistant_reply_predicate_failed",
+      "condition": "P2P K2"
+    },
+    {
+      "path": "thesis/campaigns/worker-desktop-k2-p2p-assistant-tts-v1826/attempts/attempt-0878-measured.jsonl",
+      "id": "audio-campaign-v1731-0878",
+      "ordinal": 878,
+      "phase_index": 863,
+      "code": "assistant_reply_predicate_failed",
+      "condition": "P2P K2"
+    },
+    {
+      "path": "thesis/campaigns/worker-desktop-k2-p2p-assistant-tts-v1826/attempts/attempt-0879-measured.jsonl",
+      "id": "audio-campaign-v1731-0879",
+      "ordinal": 879,
+      "phase_index": 864,
+      "code": "assistant_reply_predicate_failed",
+      "condition": "P2P K2"
+    },
+    {
+      "path": "thesis/campaigns/worker-desktop-k2-p2p-assistant-tts-v1826/attempts/attempt-0880-measured.jsonl",
+      "id": "audio-campaign-v1731-0880",
+      "ordinal": 880,
+      "phase_index": 865,
+      "code": "assistant_reply_predicate_failed",
+      "condition": "P2P K2"
+    },
+    {
+      "path": "thesis/campaigns/worker-desktop-k2-p2p-assistant-tts-v1826/attempts/attempt-0881-measured.jsonl",
+      "id": "audio-campaign-v1731-0881",
+      "ordinal": 881,
+      "phase_index": 866,
+      "code": "assistant_reply_predicate_failed",
+      "condition": "P2P K2"
+    },
+    {
+      "path": "thesis/campaigns/worker-desktop-k2-p2p-assistant-tts-v1826/attempts/attempt-0882-measured.jsonl",
+      "id": "audio-campaign-v1731-0882",
+      "ordinal": 882,
+      "phase_index": 867,
+      "code": "assistant_reply_predicate_failed",
+      "condition": "P2P K2"
+    },
+    {
+      "path": "thesis/campaigns/worker-desktop-k2-p2p-assistant-tts-v1826/attempts/attempt-0883-measured.jsonl",
+      "id": "audio-campaign-v1731-0883",
+      "ordinal": 883,
+      "phase_index": 868,
+      "code": "assistant_reply_predicate_failed",
+      "condition": "P2P K2"
+    },
+    {
+      "path": "thesis/campaigns/worker-desktop-k2-p2p-assistant-tts-v1826/attempts/attempt-0884-measured.jsonl",
+      "id": "audio-campaign-v1731-0884",
+      "ordinal": 884,
+      "phase_index": 869,
+      "code": "assistant_reply_predicate_failed",
+      "condition": "P2P K2"
+    },
+    {
+      "path": "thesis/campaigns/worker-desktop-k2-p2p-assistant-tts-v1826/attempts/attempt-0885-measured.jsonl",
+      "id": "audio-campaign-v1731-0885",
+      "ordinal": 885,
+      "phase_index": 870,
+      "code": "assistant_reply_predicate_failed",
+      "condition": "P2P K2"
+    },
+    {
+      "path": "thesis/campaigns/worker-desktop-k2-p2p-assistant-tts-v1826/attempts/attempt-0886-measured.jsonl",
+      "id": "audio-campaign-v1731-0886",
+      "ordinal": 886,
+      "phase_index": 871,
+      "code": "assistant_reply_predicate_failed",
+      "condition": "P2P K2"
+    },
+    {
+      "path": "thesis/campaigns/worker-desktop-k2-p2p-assistant-tts-v1826/attempts/attempt-0887-measured.jsonl",
+      "id": "audio-campaign-v1731-0887",
+      "ordinal": 887,
+      "phase_index": 872,
+      "code": "assistant_reply_predicate_failed",
+      "condition": "P2P K2"
+    },
+    {
+      "path": "thesis/campaigns/worker-desktop-k2-p2p-assistant-tts-v1826/attempts/attempt-0888-measured.jsonl",
+      "id": "audio-campaign-v1731-0888",
+      "ordinal": 888,
+      "phase_index": 873,
+      "code": "assistant_reply_predicate_failed",
+      "condition": "P2P K2"
+    },
+    {
+      "path": "thesis/campaigns/worker-desktop-k2-p2p-assistant-tts-v1826/attempts/attempt-0889-measured.jsonl",
+      "id": "audio-campaign-v1731-0889",
+      "ordinal": 889,
+      "phase_index": 874,
+      "code": "assistant_reply_predicate_failed",
+      "condition": "P2P K2"
+    },
+    {
+      "path": "thesis/campaigns/worker-desktop-k2-p2p-assistant-tts-v1826/attempts/attempt-0890-measured.jsonl",
+      "id": "audio-campaign-v1731-0890",
+      "ordinal": 890,
+      "phase_index": 875,
+      "code": "assistant_reply_predicate_failed",
+      "condition": "P2P K2"
+    },
+    {
+      "path": "thesis/campaigns/worker-desktop-k2-p2p-assistant-tts-v1826/attempts/attempt-0891-measured.jsonl",
+      "id": "audio-campaign-v1731-0891",
+      "ordinal": 891,
+      "phase_index": 876,
+      "code": "assistant_reply_predicate_failed",
+      "condition": "P2P K2"
+    },
+    {
+      "path": "thesis/campaigns/worker-desktop-k2-p2p-assistant-tts-v1826/attempts/attempt-0892-measured.jsonl",
+      "id": "audio-campaign-v1731-0892",
+      "ordinal": 892,
+      "phase_index": 877,
+      "code": "assistant_reply_predicate_failed",
+      "condition": "P2P K2"
+    },
+    {
+      "path": "thesis/campaigns/worker-desktop-k2-p2p-assistant-tts-v1826/attempts/attempt-0893-measured.jsonl",
+      "id": "audio-campaign-v1731-0893",
+      "ordinal": 893,
+      "phase_index": 878,
+      "code": "assistant_reply_predicate_failed",
+      "condition": "P2P K2"
+    },
+    {
+      "path": "thesis/campaigns/worker-desktop-k2-p2p-assistant-tts-v1826/attempts/attempt-0894-measured.jsonl",
+      "id": "audio-campaign-v1731-0894",
+      "ordinal": 894,
+      "phase_index": 879,
+      "code": "assistant_reply_predicate_failed",
+      "condition": "P2P K2"
+    },
+    {
+      "path": "thesis/campaigns/worker-desktop-k2-p2p-assistant-tts-v1826/attempts/attempt-0895-measured.jsonl",
+      "id": "audio-campaign-v1731-0895",
+      "ordinal": 895,
+      "phase_index": 880,
+      "code": "assistant_reply_predicate_failed",
+      "condition": "P2P K2"
+    },
+    {
+      "path": "thesis/campaigns/worker-desktop-k2-p2p-assistant-tts-v1826/attempts/attempt-0896-measured.jsonl",
+      "id": "audio-campaign-v1731-0896",
+      "ordinal": 896,
+      "phase_index": 881,
+      "code": "assistant_reply_predicate_failed",
+      "condition": "P2P K2"
+    },
+    {
+      "path": "thesis/campaigns/worker-desktop-k2-p2p-assistant-tts-v1826/attempts/attempt-0897-measured.jsonl",
+      "id": "audio-campaign-v1731-0897",
+      "ordinal": 897,
+      "phase_index": 882,
+      "code": "assistant_reply_predicate_failed",
+      "condition": "P2P K2"
+    },
+    {
+      "path": "thesis/campaigns/worker-desktop-k2-p2p-assistant-tts-v1826/attempts/attempt-0898-measured.jsonl",
+      "id": "audio-campaign-v1731-0898",
+      "ordinal": 898,
+      "phase_index": 883,
+      "code": "assistant_reply_predicate_failed",
+      "condition": "P2P K2"
+    },
+    {
+      "path": "thesis/campaigns/worker-desktop-k2-p2p-assistant-tts-v1826/attempts/attempt-0899-measured.jsonl",
+      "id": "audio-campaign-v1731-0899",
+      "ordinal": 899,
+      "phase_index": 884,
+      "code": "assistant_reply_predicate_failed",
+      "condition": "P2P K2"
+    },
+    {
+      "path": "thesis/campaigns/worker-desktop-k2-p2p-assistant-tts-v1826/attempts/attempt-0900-measured.jsonl",
+      "id": "audio-campaign-v1731-0900",
+      "ordinal": 900,
+      "phase_index": 885,
+      "code": "assistant_reply_predicate_failed",
+      "condition": "P2P K2"
+    },
+    {
+      "path": "thesis/campaigns/worker-desktop-k2-p2p-assistant-tts-v1826/attempts/attempt-0901-measured.jsonl",
+      "id": "audio-campaign-v1731-0901",
+      "ordinal": 901,
+      "phase_index": 886,
+      "code": "assistant_reply_predicate_failed",
+      "condition": "P2P K2"
+    },
+    {
+      "path": "thesis/campaigns/worker-desktop-k2-p2p-assistant-tts-v1826/attempts/attempt-0902-measured.jsonl",
+      "id": "audio-campaign-v1731-0902",
+      "ordinal": 902,
+      "phase_index": 887,
+      "code": "assistant_reply_predicate_failed",
+      "condition": "P2P K2"
+    },
+    {
+      "path": "thesis/campaigns/worker-desktop-k2-p2p-assistant-tts-v1826/attempts/attempt-0903-measured.jsonl",
+      "id": "audio-campaign-v1731-0903",
+      "ordinal": 903,
+      "phase_index": 888,
+      "code": "assistant_reply_predicate_failed",
+      "condition": "P2P K2"
+    },
+    {
+      "path": "thesis/campaigns/worker-desktop-k2-p2p-assistant-tts-v1826/attempts/attempt-0904-measured.jsonl",
+      "id": "audio-campaign-v1731-0904",
+      "ordinal": 904,
+      "phase_index": 889,
+      "code": "assistant_reply_predicate_failed",
+      "condition": "P2P K2"
+    },
+    {
+      "path": "thesis/campaigns/worker-desktop-k2-p2p-assistant-tts-v1826/attempts/attempt-0905-measured.jsonl",
+      "id": "audio-campaign-v1731-0905",
+      "ordinal": 905,
+      "phase_index": 890,
+      "code": "assistant_reply_predicate_failed",
+      "condition": "P2P K2"
+    },
+    {
+      "path": "thesis/campaigns/worker-desktop-k2-p2p-assistant-tts-v1826/attempts/attempt-0906-measured.jsonl",
+      "id": "audio-campaign-v1731-0906",
+      "ordinal": 906,
+      "phase_index": 891,
+      "code": "assistant_reply_predicate_failed",
+      "condition": "P2P K2"
+    },
+    {
+      "path": "thesis/campaigns/worker-desktop-k2-p2p-assistant-tts-v1826/attempts/attempt-0907-measured.jsonl",
+      "id": "audio-campaign-v1731-0907",
+      "ordinal": 907,
+      "phase_index": 892,
+      "code": "assistant_reply_predicate_failed",
+      "condition": "P2P K2"
+    },
+    {
+      "path": "thesis/campaigns/worker-desktop-k2-p2p-assistant-tts-v1826/attempts/attempt-0908-measured.jsonl",
+      "id": "audio-campaign-v1731-0908",
+      "ordinal": 908,
+      "phase_index": 893,
+      "code": "assistant_reply_predicate_failed",
+      "condition": "P2P K2"
+    },
+    {
+      "path": "thesis/campaigns/worker-desktop-k2-p2p-assistant-tts-v1826/attempts/attempt-0909-measured.jsonl",
+      "id": "audio-campaign-v1731-0909",
+      "ordinal": 909,
+      "phase_index": 894,
+      "code": "assistant_reply_predicate_failed",
+      "condition": "P2P K2"
+    },
+    {
+      "path": "thesis/campaigns/worker-desktop-k2-p2p-assistant-tts-v1826/attempts/attempt-0910-measured.jsonl",
+      "id": "audio-campaign-v1731-0910",
+      "ordinal": 910,
+      "phase_index": 895,
+      "code": "assistant_reply_predicate_failed",
+      "condition": "P2P K2"
+    },
+    {
+      "path": "thesis/campaigns/worker-desktop-k2-p2p-assistant-tts-v1826/attempts/attempt-0911-measured.jsonl",
+      "id": "audio-campaign-v1731-0911",
+      "ordinal": 911,
+      "phase_index": 896,
+      "code": "assistant_reply_predicate_failed",
+      "condition": "P2P K2"
+    },
+    {
+      "path": "thesis/campaigns/worker-desktop-k2-p2p-assistant-tts-v1826/attempts/attempt-0912-measured.jsonl",
+      "id": "audio-campaign-v1731-0912",
+      "ordinal": 912,
+      "phase_index": 897,
+      "code": "assistant_reply_predicate_failed",
+      "condition": "P2P K2"
+    },
+    {
+      "path": "thesis/campaigns/worker-desktop-k2-p2p-assistant-tts-v1826/attempts/attempt-0913-measured.jsonl",
+      "id": "audio-campaign-v1731-0913",
+      "ordinal": 913,
+      "phase_index": 898,
+      "code": "assistant_reply_predicate_failed",
+      "condition": "P2P K2"
+    },
+    {
+      "path": "thesis/campaigns/worker-desktop-k2-p2p-assistant-tts-v1826/attempts/attempt-0914-measured.jsonl",
+      "id": "audio-campaign-v1731-0914",
+      "ordinal": 914,
+      "phase_index": 899,
+      "code": "assistant_reply_predicate_failed",
+      "condition": "P2P K2"
+    },
+    {
+      "path": "thesis/campaigns/worker-desktop-k2-p2p-assistant-tts-v1826/attempts/attempt-0915-measured.jsonl",
+      "id": "audio-campaign-v1731-0915",
+      "ordinal": 915,
+      "phase_index": 900,
+      "code": "assistant_reply_predicate_failed",
+      "condition": "P2P K2"
+    },
+    {
+      "path": "thesis/campaigns/worker-desktop-k3-p2p-full-audio-v2043/attempts/attempt-0586-measured.jsonl",
+      "id": "audio-campaign-v1910-0586",
+      "ordinal": 586,
+      "phase_index": 568,
+      "code": "assistant_reply_predicate_failed",
+      "condition": "P2P K3"
+    },
+    {
+      "path": "thesis/campaigns/worker-desktop-k3-p2p-full-audio-v2043/attempts/attempt-0587-measured.jsonl",
+      "id": "audio-campaign-v1910-0587",
+      "ordinal": 587,
+      "phase_index": 569,
+      "code": "assistant_reply_predicate_failed",
+      "condition": "P2P K3"
+    },
+    {
+      "path": "thesis/campaigns/worker-desktop-k3-p2p-full-audio-v2043/attempts/attempt-0588-measured.jsonl",
+      "id": "audio-campaign-v1910-0588",
+      "ordinal": 588,
+      "phase_index": 570,
+      "code": "assistant_reply_predicate_failed",
+      "condition": "P2P K3"
+    },
+    {
+      "path": "thesis/campaigns/worker-desktop-k3-p2p-full-audio-v2043/attempts/attempt-0589-measured.jsonl",
+      "id": "audio-campaign-v1910-0589",
+      "ordinal": 589,
+      "phase_index": 571,
+      "code": "assistant_reply_predicate_failed",
+      "condition": "P2P K3"
+    },
+    {
+      "path": "thesis/campaigns/worker-desktop-k3-p2p-full-audio-v2043/attempts/attempt-0590-measured.jsonl",
+      "id": "audio-campaign-v1910-0590",
+      "ordinal": 590,
+      "phase_index": 572,
+      "code": "assistant_reply_predicate_failed",
+      "condition": "P2P K3"
+    },
+    {
+      "path": "thesis/campaigns/worker-desktop-k3-p2p-full-audio-v2043/attempts/attempt-0591-measured.jsonl",
+      "id": "audio-campaign-v1910-0591",
+      "ordinal": 591,
+      "phase_index": 573,
+      "code": "assistant_reply_predicate_failed",
+      "condition": "P2P K3"
+    },
+    {
+      "path": "thesis/campaigns/worker-desktop-k3-p2p-full-audio-v2043/attempts/attempt-0592-measured.jsonl",
+      "id": "audio-campaign-v1910-0592",
+      "ordinal": 592,
+      "phase_index": 574,
+      "code": "assistant_reply_predicate_failed",
+      "condition": "P2P K3"
+    },
+    {
+      "path": "thesis/campaigns/worker-desktop-k3-p2p-full-audio-v2043/attempts/attempt-0593-measured.jsonl",
+      "id": "audio-campaign-v1910-0593",
+      "ordinal": 593,
+      "phase_index": 575,
+      "code": "assistant_reply_predicate_failed",
+      "condition": "P2P K3"
+    },
+    {
+      "path": "thesis/campaigns/worker-desktop-k3-p2p-full-audio-v2043/attempts/attempt-0594-measured.jsonl",
+      "id": "audio-campaign-v1910-0594",
+      "ordinal": 594,
+      "phase_index": 576,
+      "code": "assistant_reply_predicate_failed",
+      "condition": "P2P K3"
+    },
+    {
+      "path": "thesis/campaigns/worker-desktop-k3-p2p-full-audio-v2043/attempts/attempt-0595-measured.jsonl",
+      "id": "audio-campaign-v1910-0595",
+      "ordinal": 595,
+      "phase_index": 577,
+      "code": "assistant_reply_predicate_failed",
+      "condition": "P2P K3"
+    },
+    {
+      "path": "thesis/campaigns/worker-desktop-k3-p2p-full-audio-v2043/attempts/attempt-0596-measured.jsonl",
+      "id": "audio-campaign-v1910-0596",
+      "ordinal": 596,
+      "phase_index": 578,
+      "code": "assistant_reply_predicate_failed",
+      "condition": "P2P K3"
+    },
+    {
+      "path": "thesis/campaigns/worker-desktop-k3-p2p-full-audio-v2043/attempts/attempt-0597-measured.jsonl",
+      "id": "audio-campaign-v1910-0597",
+      "ordinal": 597,
+      "phase_index": 579,
+      "code": "assistant_reply_predicate_failed",
+      "condition": "P2P K3"
+    },
+    {
+      "path": "thesis/campaigns/worker-desktop-k3-p2p-full-audio-v2043/attempts/attempt-0598-measured.jsonl",
+      "id": "audio-campaign-v1910-0598",
+      "ordinal": 598,
+      "phase_index": 580,
+      "code": "assistant_reply_predicate_failed",
+      "condition": "P2P K3"
+    },
+    {
+      "path": "thesis/campaigns/worker-desktop-k3-p2p-full-audio-v2043/attempts/attempt-0599-measured.jsonl",
+      "id": "audio-campaign-v1910-0599",
+      "ordinal": 599,
+      "phase_index": 581,
+      "code": "assistant_reply_predicate_failed",
+      "condition": "P2P K3"
+    },
+    {
+      "path": "thesis/campaigns/worker-desktop-k3-p2p-full-audio-v2043/attempts/attempt-0600-measured.jsonl",
+      "id": "audio-campaign-v1910-0600",
+      "ordinal": 600,
+      "phase_index": 582,
+      "code": "assistant_reply_predicate_failed",
+      "condition": "P2P K3"
+    },
+    {
+      "path": "thesis/campaigns/worker-desktop-k3-p2p-full-audio-v2043/attempts/attempt-0601-measured.jsonl",
+      "id": "audio-campaign-v1910-0601",
+      "ordinal": 601,
+      "phase_index": 583,
+      "code": "assistant_reply_predicate_failed",
+      "condition": "P2P K3"
+    },
+    {
+      "path": "thesis/campaigns/worker-desktop-k3-p2p-full-audio-v2043/attempts/attempt-0602-measured.jsonl",
+      "id": "audio-campaign-v1910-0602",
+      "ordinal": 602,
+      "phase_index": 584,
+      "code": "assistant_reply_predicate_failed",
+      "condition": "P2P K3"
+    },
+    {
+      "path": "thesis/campaigns/worker-desktop-k3-p2p-full-audio-v2043/attempts/attempt-0603-measured.jsonl",
+      "id": "audio-campaign-v1910-0603",
+      "ordinal": 603,
+      "phase_index": 585,
+      "code": "assistant_reply_predicate_failed",
+      "condition": "P2P K3"
+    },
+    {
+      "path": "thesis/campaigns/worker-desktop-k3-p2p-full-audio-v2043/attempts/attempt-0604-measured.jsonl",
+      "id": "audio-campaign-v1910-0604",
+      "ordinal": 604,
+      "phase_index": 586,
+      "code": "assistant_reply_predicate_failed",
+      "condition": "P2P K3"
+    },
+    {
+      "path": "thesis/campaigns/worker-desktop-k3-p2p-full-audio-v2043/attempts/attempt-0605-measured.jsonl",
+      "id": "audio-campaign-v1910-0605",
+      "ordinal": 605,
+      "phase_index": 587,
+      "code": "assistant_reply_predicate_failed",
+      "condition": "P2P K3"
+    },
+    {
+      "path": "thesis/campaigns/worker-desktop-k3-p2p-full-audio-v2043/attempts/attempt-0606-measured.jsonl",
+      "id": "audio-campaign-v1910-0606",
+      "ordinal": 606,
+      "phase_index": 588,
+      "code": "assistant_reply_predicate_failed",
+      "condition": "P2P K3"
+    },
+    {
+      "path": "thesis/campaigns/worker-desktop-k3-p2p-full-audio-v2043/attempts/attempt-0607-measured.jsonl",
+      "id": "audio-campaign-v1910-0607",
+      "ordinal": 607,
+      "phase_index": 589,
+      "code": "assistant_reply_predicate_failed",
+      "condition": "P2P K3"
+    },
+    {
+      "path": "thesis/campaigns/worker-desktop-k3-p2p-full-audio-v2043/attempts/attempt-0608-measured.jsonl",
+      "id": "audio-campaign-v1910-0608",
+      "ordinal": 608,
+      "phase_index": 590,
+      "code": "assistant_reply_predicate_failed",
+      "condition": "P2P K3"
+    },
+    {
+      "path": "thesis/campaigns/worker-desktop-k3-p2p-full-audio-v2043/attempts/attempt-0609-measured.jsonl",
+      "id": "audio-campaign-v1910-0609",
+      "ordinal": 609,
+      "phase_index": 591,
+      "code": "assistant_reply_predicate_failed",
+      "condition": "P2P K3"
+    },
+    {
+      "path": "thesis/campaigns/worker-desktop-k3-p2p-full-audio-v2043/attempts/attempt-0610-measured.jsonl",
+      "id": "audio-campaign-v1910-0610",
+      "ordinal": 610,
+      "phase_index": 592,
+      "code": "assistant_reply_predicate_failed",
+      "condition": "P2P K3"
+    },
+    {
+      "path": "thesis/campaigns/worker-desktop-k3-p2p-full-audio-v2043/attempts/attempt-0611-measured.jsonl",
+      "id": "audio-campaign-v1910-0611",
+      "ordinal": 611,
+      "phase_index": 593,
+      "code": "assistant_reply_predicate_failed",
+      "condition": "P2P K3"
+    },
+    {
+      "path": "thesis/campaigns/worker-desktop-k3-p2p-full-audio-v2043/attempts/attempt-0612-measured.jsonl",
+      "id": "audio-campaign-v1910-0612",
+      "ordinal": 612,
+      "phase_index": 594,
+      "code": "assistant_reply_predicate_failed",
+      "condition": "P2P K3"
+    },
+    {
+      "path": "thesis/campaigns/worker-desktop-k3-p2p-full-audio-v2043/attempts/attempt-0614-measured.jsonl",
+      "id": "audio-campaign-v1910-0614",
+      "ordinal": 614,
+      "phase_index": 596,
+      "code": "assistant_reply_predicate_failed",
+      "condition": "P2P K3"
+    },
+    {
+      "path": "thesis/campaigns/worker-desktop-k3-p2p-full-audio-v2043/attempts/attempt-0615-measured.jsonl",
+      "id": "audio-campaign-v1910-0615",
+      "ordinal": 615,
+      "phase_index": 597,
+      "code": "assistant_reply_predicate_failed",
+      "condition": "P2P K3"
+    },
+    {
+      "path": "thesis/campaigns/worker-desktop-k3-p2p-full-audio-v2043/attempts/attempt-0616-measured.jsonl",
+      "id": "audio-campaign-v1910-0616",
+      "ordinal": 616,
+      "phase_index": 598,
+      "code": "assistant_reply_predicate_failed",
+      "condition": "P2P K3"
+    },
+    {
+      "path": "thesis/campaigns/worker-desktop-k3-p2p-full-audio-v2043/attempts/attempt-0617-measured.jsonl",
+      "id": "audio-campaign-v1910-0617",
+      "ordinal": 617,
+      "phase_index": 599,
+      "code": "assistant_reply_predicate_failed",
+      "condition": "P2P K3"
+    },
+    {
+      "path": "thesis/campaigns/worker-desktop-k3-p2p-full-audio-v2043/attempts/attempt-0618-measured.jsonl",
+      "id": "audio-campaign-v1910-0618",
+      "ordinal": 618,
+      "phase_index": 600,
+      "code": "assistant_reply_predicate_failed",
+      "condition": "P2P K3"
+    },
+    {
+      "path": "thesis/campaigns/worker-desktop-k3-p2p-full-audio-v2043/attempts/attempt-0619-measured.jsonl",
+      "id": "audio-campaign-v1910-0619",
+      "ordinal": 619,
+      "phase_index": 601,
+      "code": "assistant_reply_predicate_failed",
+      "condition": "P2P K3"
+    },
+    {
+      "path": "thesis/campaigns/worker-desktop-k3-p2p-full-audio-v2043/attempts/attempt-0620-measured.jsonl",
+      "id": "audio-campaign-v1910-0620",
+      "ordinal": 620,
+      "phase_index": 602,
+      "code": "assistant_reply_predicate_failed",
+      "condition": "P2P K3"
+    },
+    {
+      "path": "thesis/campaigns/worker-desktop-k3-p2p-full-audio-v2043/attempts/attempt-0621-measured.jsonl",
+      "id": "audio-campaign-v1910-0621",
+      "ordinal": 621,
+      "phase_index": 603,
+      "code": "assistant_reply_predicate_failed",
+      "condition": "P2P K3"
+    },
+    {
+      "path": "thesis/campaigns/worker-desktop-k3-p2p-full-audio-v2043/attempts/attempt-0622-measured.jsonl",
+      "id": "audio-campaign-v1910-0622",
+      "ordinal": 622,
+      "phase_index": 604,
+      "code": "assistant_reply_predicate_failed",
+      "condition": "P2P K3"
+    },
+    {
+      "path": "thesis/campaigns/worker-desktop-k3-p2p-full-audio-v2043/attempts/attempt-0623-measured.jsonl",
+      "id": "audio-campaign-v1910-0623",
+      "ordinal": 623,
+      "phase_index": 605,
+      "code": "assistant_reply_predicate_failed",
+      "condition": "P2P K3"
+    },
+    {
+      "path": "thesis/campaigns/worker-desktop-k3-p2p-full-audio-v2043/attempts/attempt-0624-measured.jsonl",
+      "id": "audio-campaign-v1910-0624",
+      "ordinal": 624,
+      "phase_index": 606,
+      "code": "assistant_reply_predicate_failed",
+      "condition": "P2P K3"
+    },
+    {
+      "path": "thesis/campaigns/worker-desktop-k3-p2p-full-audio-v2043/attempts/attempt-0625-measured.jsonl",
+      "id": "audio-campaign-v1910-0625",
+      "ordinal": 625,
+      "phase_index": 607,
+      "code": "assistant_reply_predicate_failed",
+      "condition": "P2P K3"
+    },
+    {
+      "path": "thesis/campaigns/worker-desktop-k3-p2p-full-audio-v2043/attempts/attempt-0626-measured.jsonl",
+      "id": "audio-campaign-v1910-0626",
+      "ordinal": 626,
+      "phase_index": 608,
+      "code": "assistant_reply_predicate_failed",
+      "condition": "P2P K3"
+    },
+    {
+      "path": "thesis/campaigns/worker-desktop-k3-p2p-full-audio-v2043/attempts/attempt-0627-measured.jsonl",
+      "id": "audio-campaign-v1910-0627",
+      "ordinal": 627,
+      "phase_index": 609,
+      "code": "assistant_reply_predicate_failed",
+      "condition": "P2P K3"
+    },
+    {
+      "path": "thesis/campaigns/worker-desktop-k3-p2p-full-audio-v2043/attempts/attempt-0628-measured.jsonl",
+      "id": "audio-campaign-v1910-0628",
+      "ordinal": 628,
+      "phase_index": 610,
+      "code": "assistant_reply_predicate_failed",
+      "condition": "P2P K3"
+    },
+    {
+      "path": "thesis/campaigns/worker-desktop-k3-p2p-full-audio-v2043/attempts/attempt-0629-measured.jsonl",
+      "id": "audio-campaign-v1910-0629",
+      "ordinal": 629,
+      "phase_index": 611,
+      "code": "assistant_reply_predicate_failed",
+      "condition": "P2P K3"
+    },
+    {
+      "path": "thesis/campaigns/worker-desktop-k3-p2p-full-audio-v2043/attempts/attempt-0630-measured.jsonl",
+      "id": "audio-campaign-v1910-0630",
+      "ordinal": 630,
+      "phase_index": 612,
+      "code": "assistant_reply_predicate_failed",
+      "condition": "P2P K3"
+    },
+    {
+      "path": "thesis/campaigns/worker-desktop-k3-p2p-full-audio-v2043/attempts/attempt-0631-measured.jsonl",
+      "id": "audio-campaign-v1910-0631",
+      "ordinal": 631,
+      "phase_index": 613,
+      "code": "assistant_reply_predicate_failed",
+      "condition": "P2P K3"
+    },
+    {
+      "path": "thesis/campaigns/worker-desktop-k3-p2p-full-audio-v2043/attempts/attempt-0632-measured.jsonl",
+      "id": "audio-campaign-v1910-0632",
+      "ordinal": 632,
+      "phase_index": 614,
+      "code": "assistant_reply_predicate_failed",
+      "condition": "P2P K3"
+    },
+    {
+      "path": "thesis/campaigns/worker-desktop-k3-p2p-full-audio-v2043/attempts/attempt-0633-measured.jsonl",
+      "id": "audio-campaign-v1910-0633",
+      "ordinal": 633,
+      "phase_index": 615,
+      "code": "assistant_reply_predicate_failed",
+      "condition": "P2P K3"
+    },
+    {
+      "path": "thesis/campaigns/worker-desktop-k3-p2p-full-audio-v2043/attempts/attempt-0635-measured.jsonl",
+      "id": "audio-campaign-v1910-0635",
+      "ordinal": 635,
+      "phase_index": 617,
+      "code": "assistant_reply_predicate_failed",
+      "condition": "P2P K3"
+    },
+    {
+      "path": "thesis/campaigns/worker-desktop-k3-p2p-full-audio-v2043/attempts/attempt-0636-measured.jsonl",
+      "id": "audio-campaign-v1910-0636",
+      "ordinal": 636,
+      "phase_index": 618,
+      "code": "assistant_reply_predicate_failed",
+      "condition": "P2P K3"
+    },
+    {
+      "path": "thesis/campaigns/worker-desktop-k3-p2p-full-audio-v2043/attempts/attempt-0637-measured.jsonl",
+      "id": "audio-campaign-v1910-0637",
+      "ordinal": 637,
+      "phase_index": 619,
+      "code": "assistant_reply_predicate_failed",
+      "condition": "P2P K3"
+    },
+    {
+      "path": "thesis/campaigns/worker-desktop-k3-p2p-full-audio-v2043/attempts/attempt-0638-measured.jsonl",
+      "id": "audio-campaign-v1910-0638",
+      "ordinal": 638,
+      "phase_index": 620,
+      "code": "assistant_reply_predicate_failed",
+      "condition": "P2P K3"
+    },
+    {
+      "path": "thesis/campaigns/worker-desktop-k3-p2p-full-audio-v2043/attempts/attempt-0639-measured.jsonl",
+      "id": "audio-campaign-v1910-0639",
+      "ordinal": 639,
+      "phase_index": 621,
+      "code": "assistant_reply_predicate_failed",
+      "condition": "P2P K3"
+    },
+    {
+      "path": "thesis/campaigns/worker-desktop-k3-p2p-full-audio-v2043/attempts/attempt-0640-measured.jsonl",
+      "id": "audio-campaign-v1910-0640",
+      "ordinal": 640,
+      "phase_index": 622,
+      "code": "assistant_reply_predicate_failed",
+      "condition": "P2P K3"
+    },
+    {
+      "path": "thesis/campaigns/worker-desktop-k3-p2p-full-audio-v2043/attempts/attempt-0641-measured.jsonl",
+      "id": "audio-campaign-v1910-0641",
+      "ordinal": 641,
+      "phase_index": 623,
+      "code": "assistant_reply_predicate_failed",
+      "condition": "P2P K3"
+    },
+    {
+      "path": "thesis/campaigns/worker-desktop-k3-p2p-full-audio-v2043/attempts/attempt-0642-measured.jsonl",
+      "id": "audio-campaign-v1910-0642",
+      "ordinal": 642,
+      "phase_index": 624,
+      "code": "assistant_reply_predicate_failed",
+      "condition": "P2P K3"
+    }
+  ]
+}

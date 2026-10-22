@@ -1,0 +1,46 @@
+{
+  "at": "2026-10-21T16:19:16.919362+00:00",
+  "status": "AFFECTED_STARTUP_AUTH_FIX_NEW_VERSION_READY",
+  "parentFailedWarmup": "V2220",
+  "parentWarmups": 1,
+  "parentWarmupsFailed": 1,
+  "parentNewMeasured": 0,
+  "oldControllerNaturallyAbsent": true,
+  "sameProviderReceiver": {
+    "pid": 1440196,
+    "startTicks": 35427408
+  },
+  "newProvider": false,
+  "newOrcaWorker": false,
+  "approvedExistingBearerProtectedRead": "thesis/evidence/k1-http-remaining720-admission-v2204/PROTECTED-HTTP-AUTH-v2223.json",
+  "authorizationOrCredentialChanges": false,
+  "newMeasuredPlanned": 270,
+  "globalFirst": 181,
+  "globalLast": 450,
+  "target": 900,
+  "stillUnattemptedBeforeLaunch": 720,
+  "rootDeadlineUtc": "2026-10-21T23:36:07.231887+00:00",
+  "clockReset": false,
+  "configSemanticSTTLLMMatchesLatestP2P": true,
+  "configOnlyPriorStartupTokenSecretPersisted": true,
+  "newConfigReferenceSha256": "2b8cc043fc75c8978e2528379badb9fff7cd2ad2bc82729e61c560d35bbd1cc1",
+  "sameModelAudioDecodingCorrectness": true,
+  "newSourceFiles": [
+    {
+      "path": "thesis/harness/k1_http_partial270_root_v2224.py",
+      "sha256": "d1d9d74374eeeaa73d80a9d084b020ddc7201359083479be682ab439a1c4d352"
+    },
+    {
+      "path": "thesis/harness/k1_http_warmup_finalize_v2224.py",
+      "sha256": "a7d8d51e1e712ae176648856db434038ad3685337ec21ebffee33cbdfce566ab"
+    },
+    {
+      "path": "thesis/harness/custody_k1_http_requester_v2224.py",
+      "sha256": "efc18c7954b0a02c4db41a34a36f3f3919665f4626d942fe6b8a0712cad91b18"
+    },
+    {
+      "path": "thesis/harness/existing_worker_desktop_http_bearer_v2223.py",
+      "sha256": "bf039ffb73f6234f7cd7425e93ae92355f8c17c9e2803eedb20c6e4631a304e8"
+    }
+  ]
+}

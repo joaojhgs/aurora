@@ -1,0 +1,104 @@
+{
+  "diskAfter": {
+    "free": 4218052608,
+    "total": 109128826880,
+    "used": 104893997056
+  },
+  "diskBefore": {
+    "free": 4218052608,
+    "total": 109128826880,
+    "used": 104893997056
+  },
+  "errors": [],
+  "expectedConditionSha256": "5fe805df6e328fb3159ad3da65c62bfb4b73f7e70d138842eb7f00f5072e19ba",
+  "finishedAt": "2026-10-20T22:06:56.762007+00:00",
+  "newFiles": [],
+  "pendingStatic": [
+    "/home/developer/projects/aurora/.git/aurora-handoff-import-20261006/distributed-k3-mesh-launch-v1957/warmup-finalizer-result.json",
+    "/home/developer/projects/aurora/.git/aurora-handoff-import-20261006/distributed-k3-mesh-cell-v1957/campaign/remote-warmup-proof.json",
+    "/home/developer/projects/aurora/.git/aurora-handoff-import-20261006/distributed-k3-mesh-launch-v1957/operator-launch.json",
+    "/home/developer/projects/aurora/.git/aurora-handoff-import-20261006/distributed-k3-mesh-launch-v1957/requesterCopier-launch.json",
+    "/home/developer/projects/aurora/.git/aurora-handoff-import-20261006/distributed-k3-mesh-launch-v1957/warmupFinalizer-launch.json",
+    "/home/developer/projects/aurora/.git/aurora-handoff-import-20261006/distributed-k3-mesh-launch-v1957/proof-collection-request.json",
+    "/home/developer/projects/aurora/.git/aurora-handoff-import-20261006/distributed-k3-mesh-cell-v1957/actual-provider-bindings.jsonl"
+  ],
+  "physicalPayloadBytes": 662564,
+  "possibleConfound": "Concurrent custody reads/writes; keep all affected measurements.",
+  "prefixes": {
+    "backend.private.log": {
+      "chunks": [
+        "thesis/campaigns/worker-desktop-k3-p2p-full-audio-v1957/prefixes/backend.private.log/000000000000-000000036934.chunk"
+      ],
+      "endByte": 36934,
+      "incomplete": true,
+      "inode": 2112783,
+      "observedAt": "2026-10-20T22:06:56.761925+00:00",
+      "sourceObservedBytes": 36934
+    },
+    "controller.private.log": {
+      "chunks": [],
+      "endByte": 0,
+      "incomplete": true,
+      "inode": 2112776,
+      "observedAt": "2026-10-20T22:06:56.761944+00:00",
+      "sourceObservedBytes": 0
+    },
+    "mesh-route-observations.jsonl": {
+      "chunks": [
+        "thesis/campaigns/worker-desktop-k3-p2p-full-audio-v1957/prefixes/mesh-route-observations.jsonl/000000000000-000000001655.chunk"
+      ],
+      "endByte": 1655,
+      "incomplete": true,
+      "inode": 2112787,
+      "observedAt": "2026-10-20T22:06:56.761906+00:00",
+      "sourceObservedBytes": 1655
+    },
+    "requester-mesh-calls.jsonl": {
+      "chunks": [
+        "thesis/campaigns/worker-desktop-k3-p2p-full-audio-v1957/prefixes/requester-mesh-calls.jsonl/000000000000-000000000687.chunk"
+      ],
+      "endByte": 687,
+      "incomplete": true,
+      "inode": 2190736,
+      "observedAt": "2026-10-20T22:06:56.761878+00:00",
+      "sourceObservedBytes": 687
+    },
+    "resources.jsonl": {
+      "chunks": [
+        "thesis/campaigns/worker-desktop-k3-p2p-full-audio-v1957/prefixes/resources.jsonl/000000000000-000000032110.chunk"
+      ],
+      "endByte": 32110,
+      "incomplete": true,
+      "inode": 2112784,
+      "observedAt": "2026-10-20T22:06:56.761850+00:00",
+      "sourceObservedBytes": 32110
+    },
+    "voice-stages.jsonl": {
+      "chunks": [],
+      "endByte": 0,
+      "incomplete": true,
+      "inode": 2112789,
+      "observedAt": "2026-10-20T22:06:56.761802+00:00",
+      "sourceObservedBytes": 0
+    }
+  },
+  "previousReceipt": "thesis/campaigns/worker-desktop-k3-p2p-full-audio-v1957/receipts/000002.json",
+  "progressObservation": {
+    "attempted": 1,
+    "measured_attempted": 0,
+    "planned_measured": 900,
+    "planned_warmups": 15,
+    "status": "stopped_system_failure",
+    "stop_reason": "preaccept_capability_changed",
+    "unattempted_measured": 900,
+    "warmups_attempted": 1
+  },
+  "providerCoverage": "Separate P2P Assistant+TTS provider custody; actual per-host prefix coverage must be joined explicitly.",
+  "reservedFreeBytes": 2147483648,
+  "retainedAudioBlobs": 0,
+  "retainedCases": 1,
+  "schema": "aurora.physical-custody-checkpoint.v1",
+  "sequence": 3,
+  "startedAt": "2026-10-20T22:06:56.759031+00:00",
+  "sutCalls": 0
+}

@@ -1,0 +1,230 @@
+{
+  "observedAt": "2026-10-15T01:55:47.679652+00:00",
+  "rootMessage": "msg_4175985fd2ac",
+  "package": "docs/experiments/tcc-20261013-submission-20261030/root/retained-history-main-v471",
+  "manifestSha256": "f806f8764c69bab0ef90bc97c80cf5ab5234257656c2800f5b80b159a36db9d8",
+  "listedMembers": 43,
+  "withManifest": 44,
+  "READMEIncluded": true,
+  "allMembersPass": true,
+  "checks": [
+    {
+      "path": "README.md",
+      "bytes": 3504,
+      "sha256": "242845d943b97fdb3ee0591f70e3cb28d179051b2b9701a05f7e5eb85331d334"
+    },
+    {
+      "path": "admission/preflight.json",
+      "bytes": 1229,
+      "sha256": "6fe9259af0d7cf96d88b4f17c5801427e48219896ebb151f605d2912f57a82df"
+    },
+    {
+      "path": "admission/retained-copy.json",
+      "bytes": 781,
+      "sha256": "0eae193b411fe5333d2256fc597268a4fbd8414f6d7725f4e3fb1d322db4feda"
+    },
+    {
+      "path": "admission/retained-session-and-source-compatibility.json",
+      "bytes": 1105,
+      "sha256": "cb95e2716b926a679c46642d6e9d054eb771bc717e74c112764b0a6ed8f79cde"
+    },
+    {
+      "path": "raw/history-v471/driver-progress.json",
+      "bytes": 527,
+      "sha256": "de600ffc8c97b36887a1b31088a9fc109cd9fcd1496536d22df0286f320caf7f"
+    },
+    {
+      "path": "raw/history-v471/driver-spawn.json",
+      "bytes": 184,
+      "sha256": "605bd02d17274e915e05bc442cb2155510f901ccccd96153429c41ed2e69421a"
+    },
+    {
+      "path": "raw/history-v471/driver-terminal.json",
+      "bytes": 636,
+      "sha256": "a9840d0ad01177ef1a7f0042966c82221bacedc9d3a4f618b03dc0ee2cc998e6"
+    },
+    {
+      "path": "raw/history-v471/final-sources.json",
+      "bytes": 1088,
+      "sha256": "127409cf488772cf64ea2b35d91012da081a9c03c0eef032e319f71c79b36891"
+    },
+    {
+      "path": "raw/history-v471/progress.json",
+      "bytes": 1137,
+      "sha256": "da19e1bd277e13cd6ab2f6db82a1ab1457e354bfd8e13d0f2a80d4f4ef6b8560"
+    },
+    {
+      "path": "raw/history-v471/ready.json",
+      "bytes": 1916,
+      "sha256": "88623ccc7bb5fe9ed50ea19efe6d49a0f5317b5dfb035827527b7736c8fab833"
+    },
+    {
+      "path": "raw/history-v471/result-observation.json",
+      "bytes": 4479,
+      "sha256": "411e8659d94a0bf233879458ce7562d2858dc3c872f7550710db5c82185c5bcb"
+    },
+    {
+      "path": "raw/history-v471/retirement.json",
+      "bytes": 555,
+      "sha256": "f2bff7d8ff58ca86a540fe2d8dc446ff86a8498fdfa40e59829bdf624f1412ef"
+    },
+    {
+      "path": "raw/history-v471/runtime/launch.json",
+      "bytes": 1783,
+      "sha256": "909bf39204565a6653d3bf8bd8f468a4ade2f08c8904a95aa36bb2d763f19816"
+    },
+    {
+      "path": "raw/history-v471/runtime/terminal.json",
+      "bytes": 1992,
+      "sha256": "c2dfa23a1acec53635b113f51296fe216829d67e23ed87d538658ffe44129991"
+    },
+    {
+      "path": "raw/history-v471/runtime/voice-stages.installed.json",
+      "bytes": 121,
+      "sha256": "715f62c1b5d2a03166f66ac60bf8fe4889c7c73d5acd7ad27edaa06c876953dd"
+    },
+    {
+      "path": "raw/history-v471/runtime/voice-stages.jsonl",
+      "bytes": 2286,
+      "sha256": "ee2c8f075672485096bda47a8eca8441cd212106f230a9ba72b75cab0b1bb282"
+    },
+    {
+      "path": "raw/history-v471/runtime/voice-stages.status.json",
+      "bytes": 132,
+      "sha256": "1e366543f29a7e627d5fc2ad406df9817b554c0540881c6aa2cdbf142034900f"
+    },
+    {
+      "path": "raw/history-v471/source-guard.json",
+      "bytes": 455,
+      "sha256": "1514f489d66e8a654709c17f0314d92f4e3adb71957a1ac19b862d4a81f5270a"
+    },
+    {
+      "path": "raw/history-v471/spawn.json",
+      "bytes": 583,
+      "sha256": "c99274ff2d706b93344f1a51548d29078d3289767cdcc7a0d6b01aac538ae6a7"
+    },
+    {
+      "path": "raw/history-v471/terminal.json",
+      "bytes": 2194,
+      "sha256": "941f1500cbafc1af4fa592cc484a36ad141ebc234bba07de547e9bf5f140bd91"
+    },
+    {
+      "path": "raw/history-v471/ui-case/private/history-reopened.png",
+      "bytes": 94050,
+      "sha256": "21a5234e4003b70a58db009bcf079aab399064a37a1c6931add05d39e16a8c87"
+    },
+    {
+      "path": "raw/history-v471/ui-case/private/session-network.json",
+      "bytes": 14580,
+      "sha256": "8aee90109f4f1ceccd9821af81c002da58ea6669f2f2614328537d258f81a619"
+    },
+    {
+      "path": "raw/history-v471/ui-case/result.json",
+      "bytes": 588,
+      "sha256": "ca16e68cf2686da3d7a381285361bc5e36d50e89ce7be022c4d9b7f3f0fc4313"
+    },
+    {
+      "path": "raw/history-v471/web-server.json",
+      "bytes": 435,
+      "sha256": "7da541fd59bb5c38707cc221f909e6f436a6e10ad4037addbaba15bc01a9289a"
+    },
+    {
+      "path": "raw/manifest.json",
+      "bytes": 4586,
+      "sha256": "4b27b42e96910c63a9b2312db48c35ac6961837f6e229535665b323bd66825ae"
+    },
+    {
+      "path": "raw/setup-failed-v470/retirement.json",
+      "bytes": 689,
+      "sha256": "28d9137724de924d8b2263357f26e68236dab461421a339fa3111a1158595e1e"
+    },
+    {
+      "path": "raw/setup-failed-v470/runtime/launch.json",
+      "bytes": 1783,
+      "sha256": "3b3a57a66825b4f113aaef62e1e63036d08b00033912a9f5b5ff4f0c335f2e90"
+    },
+    {
+      "path": "raw/setup-failed-v470/runtime/terminal.json",
+      "bytes": 1993,
+      "sha256": "f3a13c36a8f67dbcf6fd6682ae786f560668afd287542c6289cd3837e121185e"
+    },
+    {
+      "path": "raw/setup-failed-v470/spawn.json",
+      "bytes": 436,
+      "sha256": "35d78be92484f6941fde550ad854da9818b99fd66976d7042fd9efeacb86103e"
+    },
+    {
+      "path": "raw/setup-failed-v470/terminal.json",
+      "bytes": 1442,
+      "sha256": "b25db378f197a68bfe07af4698c860e7f5f459e93ecf2d505b1a747458693f7e"
+    },
+    {
+      "path": "source/history-v471/IMPLEMENTATION.md",
+      "bytes": 2575,
+      "sha256": "f7b230683491c918d792480c472fc38bac19db822a80f1c4ddee3733db807ff0"
+    },
+    {
+      "path": "source/history-v471/REVIEW-CLOSURE.md",
+      "bytes": 1109,
+      "sha256": "4aaa1fbab01282cbe0677945899186319a17c3ddff21631be9b6dac965d1a916"
+    },
+    {
+      "path": "source/history-v471/REVIEW.md",
+      "bytes": 2387,
+      "sha256": "b1e6b81516cf8a5c2694f7345c34cc0375a4b8c166de312d47697a2e274886b2"
+    },
+    {
+      "path": "source/history-v471/backend-controller.py",
+      "bytes": 6269,
+      "sha256": "1d4aaf81daca69be86e5dec1bf1e5e061bbee27491bf0ee217cdab05d5187b49"
+    },
+    {
+      "path": "source/history-v471/driver-controller.py",
+      "bytes": 2825,
+      "sha256": "84ae38f013141aec20f44b7ade4e67e9fa3991521e643331b8056b2b937bce2f"
+    },
+    {
+      "path": "source/history-v471/driver.py",
+      "bytes": 20277,
+      "sha256": "b5326644fc505e74d710e3aac040b5a757a09daa716da474db858fb87d0685cf"
+    },
+    {
+      "path": "source/history-v471/final-sources.json",
+      "bytes": 1088,
+      "sha256": "127409cf488772cf64ea2b35d91012da081a9c03c0eef032e319f71c79b36891"
+    },
+    {
+      "path": "source/history-v471/source_guard_v455.py",
+      "bytes": 1590,
+      "sha256": "b48425c9b50e8f0d1d4dd5b8f58b6852baffe592794b804753be6e593427eefe"
+    },
+    {
+      "path": "source/history-v471/supervisor.py",
+      "bytes": 7869,
+      "sha256": "fda6b543babca154cad4508ba50f787d343fe1cab9c124c02335e8f032f13ae1"
+    },
+    {
+      "path": "source/setup-failed-v470/REVIEW.md",
+      "bytes": 4040,
+      "sha256": "8e2911d30ee7e5fd5962e3a18d3e70a82630246a932cb015272262a7691b15cd"
+    },
+    {
+      "path": "source/setup-failed-v470/backend-controller.py",
+      "bytes": 5422,
+      "sha256": "45f40bc968bf3828b8535028f68ad5a83bfa924dc8e2852087b198181b770a04"
+    },
+    {
+      "path": "source/setup-failed-v470/final-sources.json",
+      "bytes": 818,
+      "sha256": "1e45a7fe902348854c008180b2ebbd1baa9a956f08d854944640049301128897"
+    },
+    {
+      "path": "source/setup-failed-v470/supervisor.py",
+      "bytes": 8049,
+      "sha256": "44553ae23d5932abb3ac9ec2da24455b3b6cccab402f71cff7965d85b3be52ef"
+    }
+  ],
+  "readmeReadSha256": "242845d943b97fdb3ee0591f70e3cb28d179051b2b9701a05f7e5eb85331d334",
+  "verification": "One hash/size/README receipt verification, no tests/models/imports/exporter/analyzer/device/source edits/newreviewmatrix",
+  "scope": "Single history readiness PASS/n1excluded; browser no generation/STT/TTS writes; separately startupTTS.Request0.839018ms/providerNULL beforebrowser notsynthesis/inferenceabsence/benchmark; no V469TTSdeployment/fullvoice/fullGPU/phase2 acceptance"
+}

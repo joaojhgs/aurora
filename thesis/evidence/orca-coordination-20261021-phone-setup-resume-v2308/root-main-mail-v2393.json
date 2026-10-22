@@ -1,0 +1,38 @@
+{
+  "id": "remote-cli-1792643981631",
+  "ok": true,
+  "result": {
+    "runId": "run_e6054e76e9fc",
+    "deliveryId": "delivery_7dec05ee539c",
+    "messages": [
+      {
+        "id": "msg_f312b3fa9a92",
+        "run_id": "run_e6054e76e9fc",
+        "delivery_contract": "current_delivery",
+        "from_handle": "term_1f27be31-0284-4366-bb91-30fe538cd30e",
+        "to_handle": "run:run_e6054e76e9fc",
+        "subject": "Exact native startup blocker after successful install: Offline answers setup abort; Root source repair needed, readiness lease ACK",
+        "body": "Owner single retry accepted04:32:20 and scopedAPK package verified. Actual app cold launch04:34:34 reached MainActivity PID16861 then native process aborted before native IPC/pilot. One exact appPID-only panic receipt04:37:02 shows tauri2.11.3 app.rs1425 Failed to setup app: error encountered during setup hook: Offline answers are unavailable; SIGABRT Thread-7, appPID absent. Exact ebde lib.rs9784\u20139791 unconditionally NativeLocalInferenceState::new(...).map_err(...)?; native_local_inference.rs40\u201345 constructs LocalInferenceState, installs bundledNeedle2 and Androidbackend. Need Root integration-owner bounded source diagnosis/fix or explicitly frozen repair overlay; I will not edit sharedproductsource, disablechecks/stub or relabel oldapp. Receipt bothrepos evidence/read-exact-native-abort-v107/result.json and diagnose-test-app-v106. This is current genuine source/runtime setup blocker, no ownersecurity/USB action needed. ACK msg_fc30174d5abf/Rootv2391 finite disjoint notebook service+2turn readiness admission; v96 build closed exit0 no overlap, preparing ONE actual boot lease and preserving exactpins/effectivebackend. Zero nativecalls/900; mainK1 untouched. Root need not perform phone checks or pause current frozenrun.",
+        "type": "status",
+        "priority": "high",
+        "thread_id": null,
+        "payload": "{\"reportPath\":\"thesis/phone-notebook/20261020/REPORT.md\"}",
+        "created_at": "2026-10-22T04:38:21Z",
+        "delivered_at": null
+      }
+    ],
+    "count": 1,
+    "replayed": false,
+    "acknowledged": null,
+    "timedOut": false,
+    "cancelled": false,
+    "connectionLost": false,
+    "mutation": {
+      "requestId": "1212e544-ce18-463d-bd42-18fdbbf51f1b",
+      "replayed": false
+    }
+  },
+  "_meta": {
+    "runtimeId": "cc9e3275-28c6-4c45-85cc-bdcd2262aa7d"
+  }
+}

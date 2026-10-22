@@ -1,0 +1,38 @@
+{
+  "at": "2026-10-21T06:26:36.716568+00:00",
+  "status": "EXACT_CURRENT_K1_P2P_SOURCE_REUSED_FOR_HTTP720",
+  "sourceRoot": "/home/developer/projects/aurora/thesis/sources/k1-speech-contract-compat-v2151/worker/source",
+  "inventorySha256": "000202cdddb9803d503fc44f8aaf58eb469475890751a310193418330aa79937",
+  "sourceFiles": 400,
+  "comparisonAnchor": "thesis/campaigns/worker-desktop-k1-p2p-tts-remaining191-v2153/condition-frozen.json",
+  "parentHttpSourceInventory": "thesis/evidence/orca-relayed-http-v1197/harness/source-inventory.json",
+  "parentHttpSourceInventorySha256": "96ec8e3e14233520d4cd469c4177264a193d05cf26b4b512d91d98f16bbb7dee",
+  "parentHttpSourceDelta": [
+    {
+      "path": "app/services/gateway/registry_aggregator.py",
+      "old": "306f731721f9f0daf309cc4c3ee1bc60dd4ad3f747b7e604523258e81ddab1de",
+      "current": "10d555a1486fb2c804cbb97539878fcb8cf2a6c314e123ca9149215f3a66b98e"
+    },
+    {
+      "path": "app/services/tts/service.py",
+      "old": "6e4386aaf219ca5f5488ed007c03519be64f8de56aa2cc17956b5140218f234e",
+      "current": "96f916131756a5ec2a27f606c719d4c360a9d6d52890a266b59ef3193f14b07e"
+    },
+    {
+      "path": "app/shared/contracts/models/speech_runtime.py",
+      "old": "1f7ea66c9a4619439130a6a200647b49a1df5b5b8cd17490c5aab0a371e88d94",
+      "current": "60113749d6cb874a478cd0551b4d39c7a024b02a3e99c0f0af4a2d2e095db9c7"
+    },
+    {
+      "path": "app/shared/services/base_service.py",
+      "old": "580c691214761fcd6edef1c199731065151466c29be4aeccd7c096ac397778d6",
+      "current": "39702090d31044081ecd4425c7f04858397337ae83b3425612766db783c560ec"
+    }
+  ],
+  "scope": "Exact currentP2P app source reused; parentHTTP180 source history remains explicit and later latency strata stay separate. Existing four model/audio/decoding/task predicates stay fixed; no whole-source identity claim to oldHTTP. Native localSTT/LLM and remoteTTS admission still required.",
+  "stageRoot": "/home/developer/projects/aurora/.git/aurora-handoff-import-20261006/distributed-k1-http-requester-v2207",
+  "newWarmups": 0,
+  "newMeasured": 0,
+  "newProvider": false,
+  "preparationCorrection": "Original staged inventory metadata was oldHTTP; preserved as source-inventory.legacy-http.json, current400file inventory now bound. Earlier prelaunch path/duplicatefile errors produced0runtime/0inference."
+}

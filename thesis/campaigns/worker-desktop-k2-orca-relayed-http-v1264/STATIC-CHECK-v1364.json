@@ -1,0 +1,22 @@
+{
+  "at": "2026-10-17T22:43:16.897431+00:00",
+  "command": [
+    "uv",
+    "run",
+    "--no-sync",
+    "ruff",
+    "check",
+    "--select",
+    "F,E9",
+    "thesis/harness/custody_k2_requester_v1364.py",
+    "thesis/harness/custody_k2_provider_v1364.py"
+  ],
+  "exitCode": 0,
+  "stdout": "All checks passed!\n",
+  "stderr": "",
+  "ASTParsedWithoutImport": true,
+  "actualCopierExecutions": 0,
+  "applicationRequests": 0,
+  "modelLoads": 0,
+  "extraTestCases": 0
+}

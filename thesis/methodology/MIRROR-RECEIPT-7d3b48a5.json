@@ -1,0 +1,14 @@
+{
+  "at": "2026-10-20T05:46:19.186631+00:00",
+  "source": ".omx/evidence/orca-monitor-20261010/PLAN-AFTER-K2-PROSPECTIVE-20261020T0531.md",
+  "destination": "thesis/methodology/owner-requirements-20261020-7d3b48a5.md",
+  "bytes": 671800,
+  "sha256": "7d3b48a58cc6125c00d0fdf4adde1c17c5deb03bed178c5aaca98c915b04b69c",
+  "priorBytes": 662114,
+  "exactPriorPrefix": true,
+  "appendBytes": 9686,
+  "completeCanonicalMirror": true,
+  "methodologyWriter": "Original monitor only",
+  "rootCopyOnly": true,
+  "sutCalls": 0
+}

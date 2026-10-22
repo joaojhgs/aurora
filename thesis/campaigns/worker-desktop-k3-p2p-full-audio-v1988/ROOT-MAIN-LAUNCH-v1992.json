@@ -1,0 +1,65 @@
+{
+  "at": "2026-10-20T22:49:56.637005+00:00",
+  "status": "K3_MAIN_CORRECTED_SAVED_PROOF_ACTUALLY_LAUNCHED",
+  "nativeGoalThreadId": "01a112a5-d6bb-74e2-bf7c-ace73cb513b5",
+  "nativeGoalStatus": "active",
+  "launch": {
+    "at": "2026-10-20T22:49:21.784666+00:00",
+    "status": "K3_REQUESTER_AND_BOUNDED_AUXILIARIES_STARTED",
+    "requester": {
+      "at": "2026-10-20T22:49:21.739091+00:00",
+      "conditionManifestSha256": "46003ef84b71fade94e1d9e3cbac0dcee8bb524680ca613a9f02df5878e4cd6b",
+      "controllerPid": 3154212,
+      "controllerStartTicks": 131502232,
+      "maximumDistinctExcludedWarmupAttempts": 30,
+      "measurementAdmitted": false,
+      "newWorker": false,
+      "plannedMeasured": 900,
+      "provider": {
+        "pid": 251473,
+        "startTicks": 29038457,
+        "state": "S"
+      },
+      "targetCorrectExcludedWarmups": 15
+    },
+    "auxiliaries": {
+      "copier": {
+        "pid": 3154213,
+        "startTicks": 131502236,
+        "state": "R",
+        "sourceSha256": "f5c52308a4c1620a6ac222181a448b53cfb213273b64bdef9d3cc02d132a5e8a"
+      },
+      "warmup-finalizer": {
+        "pid": 3154214,
+        "startTicks": 131502237,
+        "state": "R",
+        "sourceSha256": "199738713baaa3825f2b06eda086a14739f46df1073e0f463b5be4ad95f32dee"
+      }
+    },
+    "conditionManifestSha256": "46003ef84b71fade94e1d9e3cbac0dcee8bb524680ca613a9f02df5878e4cd6b",
+    "measurementAdmitted": false,
+    "plannedMeasured": 900,
+    "excludedWarmups": 15,
+    "newOrcaWorker": false,
+    "provider": {
+      "pid": 251473,
+      "state": "S",
+      "startTicks": 29038457
+    }
+  },
+  "measuredAtLaunch": 0,
+  "targetMeasured": 900,
+  "sameProviderReused": true,
+  "parentV1975": {
+    "warmupAttempts": 18,
+    "correct": 15,
+    "failed": 3,
+    "measured": 0,
+    "all4ActorsNaturallyAbsent": true,
+    "all18Cases15AudioPhysicallyRetained": true
+  },
+  "priorSavedFullProof": "thesis/campaigns/worker-desktop-k3-p2p-full-audio-v1975/saved-proof-diagnostic-v1987/RESULT.json",
+  "savedProofScope": "complete45native/45selectedroute/48allroute/90selectedmesh/96allmesh;analysisnewsourcepinexplicit;nohistoricalgate",
+  "onlyNewRuntimeChange": "receiver_proof validates failed only at exact knownrejected stage+correlation;selectedpositive unchanged",
+  "phoneTaskSeparate": true
+}

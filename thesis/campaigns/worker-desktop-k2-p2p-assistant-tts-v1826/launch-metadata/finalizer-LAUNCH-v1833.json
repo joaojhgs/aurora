@@ -1,0 +1,10 @@
+{
+  "at": "2026-10-20T16:02:08.942226+00:00",
+  "pid": 2831977,
+  "startTicks": 129058953,
+  "source": "thesis/harness/k2_mesh_warmup_finalize_v1829.py",
+  "sourceSha256": "7a65b52ff5cb6f964fb205ab0f24d992b292bcfa42e40448cc8f4be05b5dea49",
+  "reviewMessage": "msg_c0c88fb7b9eb",
+  "same1826CollectionNamespace": "new never-sent operation",
+  "personalControlReservedOnlyThisHelper": true
+}

@@ -1,0 +1,10 @@
+{
+  "at": "2026-10-15T23:14:42.297246+00:00",
+  "source": ".git/aurora-handoff-import-20261006/full13-existing-evidence-map-v748/REPORT.md",
+  "sourceBytes": 9108,
+  "sourceSHA256": "c185006800bc8ca4ce87fc27f20aa0f11cc92b2bafdc764120b0d2b2d9a2a51e",
+  "canonicalReport": "docs/experiments/tcc-20261013-submission-20261030/root/full13-evidence-map-v748/REPORT.md",
+  "newTests": 0,
+  "goalStatusChanges": 0,
+  "externalTrackerChanges": 0
+}

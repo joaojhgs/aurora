@@ -1,0 +1,94 @@
+{
+  "at": "2026-10-22T07:48:59.746133+00:00",
+  "status": "ACTUAL_FIRST_MEASURED_PAIR_COMPLETE_CORRECT_CUSTODY_VERIFIED",
+  "phase": "measured",
+  "caseIndex": 1,
+  "primary": "completed_correct",
+  "companion": "completed_correct",
+  "requesterActor": {
+    "pid": 281887,
+    "startTicks": 143363140,
+    "state": "S"
+  },
+  "providerController": {
+    "pid": 2555838,
+    "startTicks": 41063526,
+    "state": "S"
+  },
+  "providerReceiver": {
+    "pid": 2555839,
+    "startTicks": 41063588
+  },
+  "manifestSha256": "316d4cc09adc44d0104dca8ac1f2a966347588ffef37bc2fa809ec14fd5efff8",
+  "gateSha256": "2890014da0767ca17ced4c0b17517c8772400ada639914a52e4e9d81932ddb94",
+  "currentCounters": {
+    "at": "2026-10-22T07:48:24.039284+00:00",
+    "companion": {
+      "measured": {
+        "attempted": 2,
+        "correct": 2,
+        "failed": 0,
+        "harnessErrorsIncludedInFailed": 0,
+        "incorrectIncludedInFailed": 0,
+        "offered": 2,
+        "planned": 900,
+        "timeouts": 0,
+        "unstarted": 898
+      },
+      "warmup": {
+        "attempted": 1,
+        "correct": 1,
+        "failed": 0,
+        "harnessErrorsIncludedInFailed": 0,
+        "incorrectIncludedInFailed": 0,
+        "offered": 1,
+        "planned": 1,
+        "timeouts": 0,
+        "unstarted": 0
+      }
+    },
+    "completePairedCapsules": 3,
+    "elapsedSeconds": 126.668621361,
+    "lastIndex": 2,
+    "lastNativeParent": "8d8efdf84f74ddc63d748b78fbe19a4d",
+    "lastOrdinal": 3,
+    "manifestSha256": "316d4cc09adc44d0104dca8ac1f2a966347588ffef37bc2fa809ec14fd5efff8",
+    "phase": "measured",
+    "pid": 281887,
+    "primary": {
+      "measured": {
+        "attempted": 2,
+        "correct": 2,
+        "failed": 0,
+        "harnessErrorsIncludedInFailed": 0,
+        "incorrectIncludedInFailed": 0,
+        "offered": 2,
+        "planned": 900,
+        "timeouts": 0,
+        "unstarted": 898
+      },
+      "warmup": {
+        "attempted": 1,
+        "correct": 1,
+        "failed": 0,
+        "harnessErrorsIncludedInFailed": 0,
+        "incorrectIncludedInFailed": 0,
+        "offered": 1,
+        "planned": 1,
+        "timeouts": 0,
+        "unstarted": 0
+      }
+    },
+    "status": "running"
+  },
+  "physicalProviderCapsule": "/home/developer/projects/aurora/thesis/campaigns/c12-mixed-local-http-900-v2426/provider-custody/0002/provider-pair.tar.gz",
+  "capsuleSha256": "12b21d896b7c1055d624fefe551b5d52cded946dea4b2ce78694e8347a845788",
+  "custodyStatus": "COMPLETE_EVERY_CAPSULE_MEMBER_SHA256_VERIFIED",
+  "previousWarmups15Preserved": true,
+  "currentAdditionalWarmupPairs": 1,
+  "totalExcludedPairs": 16,
+  "oldQueueDataInvented": false,
+  "originalMasterDeadlineUtc": "2026-10-22T21:14:51.316179+00:00",
+  "nativeGoal": "01a112a5-d6bb-74e2-bf7c-ace73cb513b5 ACTIVE/unbudgeted",
+  "goalComplete": false
+}

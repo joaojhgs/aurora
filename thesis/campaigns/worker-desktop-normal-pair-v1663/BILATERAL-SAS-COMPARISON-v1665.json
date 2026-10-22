@@ -1,0 +1,16 @@
+{
+  "at": "2026-10-20T00:15:47.877846+00:00",
+  "workerPeerId": "aurora-03a910366bf721d72a9ef481d2e08fbd",
+  "personalPeerId": "aurora-276bb04e1276201922851f6a222110de",
+  "pairingSessionSha256": "f82f7d323c21d029df46e03d377464b33124720f3d557fc9e412ac8cf83c0556",
+  "verificationCodeSha256": "49fb3ef2de2b133f8d0b46ce7614196867a005cda798727f2a7e7d667e4de953",
+  "bothEndpointsSasComparedEqual": true,
+  "normalApprovedPermissions": [
+    "Gateway.GetRegistry",
+    "Gateway.GetMeshStatus",
+    "TTS.Synthesize"
+  ],
+  "normalAuthBusMethod": "Auth.PairingApprove",
+  "syntheticTrustTableWrites": false,
+  "newModelCalls": 0
+}

@@ -1,0 +1,13 @@
+{
+  "at": "2026-10-20T22:00:51.937444+00:00",
+  "warmups": 12,
+  "correctWarmups": 12,
+  "measured": 0,
+  "correctMeasured": 0,
+  "trace": {
+    "accepted_rows": 37,
+    "written_rows": 37,
+    "invalid_rows": 0,
+    "dropped_rows": 0
+  }
+}

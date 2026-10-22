@@ -1,0 +1,103 @@
+{
+  "at": "2026-10-20T14:52:43.490234+00:00",
+  "status": "K2_CORRECTED_REQUESTER_BACKEND_ACTUALLY_LAUNCHED_WARMUP_ADMISSION_PENDING",
+  "nativeGoalStatus": "active",
+  "conditionManifestSha256": "f7855f282bef3ab878545edec04ffdb2628bb63808349c6ca3b98e0f32c44838",
+  "rootLaunch": {
+    "at": "2026-10-20T14:51:44.862681+00:00",
+    "conditionManifestSha256": "f7855f282bef3ab878545edec04ffdb2628bb63808349c6ca3b98e0f32c44838",
+    "controllerPid": 2783084,
+    "controllerStartTicks": 128636545,
+    "excludedWarmups": 15,
+    "measurementAdmitted": false,
+    "newWorker": false,
+    "plannedMeasured": 900,
+    "provider": {
+      "pid": 3904779,
+      "startTicks": 26303135,
+      "state": "S"
+    }
+  },
+  "actors": [
+    {
+      "pid": 2783084,
+      "exists": true,
+      "startTicks": 128636545,
+      "state": "S"
+    },
+    {
+      "pid": 2783109,
+      "exists": true,
+      "startTicks": 128636663,
+      "state": "S"
+    },
+    {
+      "pid": 2783217,
+      "exists": true,
+      "startTicks": 128637830,
+      "state": "S"
+    },
+    {
+      "pid": 2783218,
+      "exists": true,
+      "startTicks": 128637830,
+      "state": "S"
+    }
+  ],
+  "priorPreflight": {
+    "version": "V1748",
+    "warmups": 0,
+    "measured": 0,
+    "actualCause": "virtualenv alias vs canonical prefix",
+    "fixedWithoutInterpreterPackageOrModelChanges": true
+  },
+  "counts": {
+    "warmups": "observe live campaign progress",
+    "measured": 0,
+    "plannedMeasured": 900,
+    "plannedExcludedWarmups": 15
+  },
+  "controlReservation": "Personal original plain shell reserved only for existing finalizer2783218; no competing remote commands until exact result/cursor released",
+  "K1": {
+    "attempted": 709,
+    "correct": 697,
+    "failed": 12,
+    "unattempted": 191,
+    "status": "OPEN_PARTIAL_SEALED"
+  },
+  "K1ProviderCustody": {
+    "status": "COMPLETE_VERIFIED_RAW_ARCHIVE",
+    "path": "thesis/campaigns/worker-desktop-k1-p2p-tts-v1710/provider-transfer-terminal-v1788/CUSTODY.json",
+    "rawBytes": 171335796,
+    "rawFiles": 11,
+    "archiveBytes": 8886577,
+    "sha256": "361889ce2239cda99f14ae12102f52746c01307c49cbb20c91093bd4473baa99"
+  },
+  "receipts": {
+    "thesis/campaigns/worker-desktop-k2-p2p-assistant-tts-v1796/launch-metadata/requester-launch.json": {
+      "bytes": 400,
+      "sha256": "653a78b22e29f064af754c843fe8cc2ac59bf9f4c4a91afb06cbb958b8713701"
+    },
+    "thesis/campaigns/worker-desktop-k2-p2p-assistant-tts-v1796/launch-metadata/custody-finalizer-LAUNCH-v1798.json": {
+      "bytes": 316,
+      "sha256": "7914c96f35a052c9e319eba81c2a7d9080f3adc83b73825f553954d76d2fde9a"
+    },
+    "thesis/campaigns/worker-desktop-k2-p2p-assistant-tts-v1796/launch-metadata/provider-admission.json": {
+      "bytes": 6750,
+      "sha256": "848d99b8738db9a4fe711d35d3b3450e843ef9d9f75bb6f48c9bdd604fb9c5ec"
+    },
+    "thesis/campaigns/worker-desktop-k2-p2p-assistant-tts-v1796/launch-metadata/k2-provider-prepare-v1792-RESULT.json": {
+      "bytes": 7213,
+      "sha256": "6987bc7affc66961e5c903acad126881f84e990fc06a11588d7cdd33ed923561"
+    },
+    "thesis/campaigns/worker-desktop-k2-p2p-assistant-tts-v1796/launch-metadata/k2-provider-launch-v1793-RESULT.json": {
+      "bytes": 528,
+      "sha256": "143643651870f402411dee40196dcf988ecee4a321af19d0b295ed9e7ccc37a6"
+    },
+    "thesis/campaigns/worker-desktop-k2-p2p-assistant-tts-v1796/launch-metadata/ZERO-REQUEST-FAILURE-AND-CORRECTION-v1796.json": {
+      "bytes": 1055,
+      "sha256": "35907414e67776edbaa1ed62ab223c5900ae5a40f3460bd22810593045344ea1"
+    }
+  },
+  "next": "Same frozen15ordinary correct warmups, local STT plus30remote exact native/peer/route joins and actual new-process Vulkan25/25; forecast margin; unchanged runner independently admits measured1. No new source/test/review/baseline/resume."
+}

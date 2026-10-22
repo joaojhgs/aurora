@@ -1,0 +1,48 @@
+{
+  "actual_provider_files": {
+    "config": {
+      "bytes": 4972,
+      "canonical_path": "/home/developer/projects/aurora/.git/aurora-handoff-import-20261006/piper-asset-recovery-v1109/models/en_US-ljspeech-medium.onnx.json",
+      "sha256": "141d612cc0a95ed7efc1ca936b845c2364967f2e9217c5dbfcf69fc4d6c65860"
+    },
+    "model": {
+      "bytes": 63531379,
+      "canonical_path": "/home/developer/projects/aurora/.git/aurora-handoff-import-20261006/piper-asset-recovery-v1109/models/en_US-ljspeech-medium.onnx",
+      "sha256": "6f52a751e2349abe7a76735eb09dc1875298c77ea2342ffd2fef79ff81b87f22"
+    }
+  },
+  "at": "2026-10-17T17:54:36.035683+00:00",
+  "expected_class_is_not_loaded_proof": true,
+  "hardware": {
+    "cpuModel": "AMD Ryzen 5 3400G with Radeon Vega Graphics",
+    "gpuPci": [
+      {
+        "device": "0x7480",
+        "path": "/sys/class/drm/card1",
+        "vendor": "0x1002"
+      },
+      {
+        "device": "0x15d8",
+        "path": "/sys/class/drm/card2",
+        "vendor": "0x1002"
+      }
+    ],
+    "memTotalBytes": 31480397824,
+    "uname": [
+      "Linux",
+      "7.0.0-38-generic",
+      "#38~24.04.4-Ubuntu SMP PREEMPT_DYNAMIC Mon Sep 14 16:37:11 UTC 2",
+      "x86_64"
+    ]
+  },
+  "hardware_fingerprint_sha256": "d5e5c8c5f35f4b5e98fce3fe328dd006aae23ebebe99e822a703b2a7cd38d957",
+  "runtime_versions": {
+    "ctranslate2": "4.7.1",
+    "faster-whisper": "1.1.1",
+    "llama-cpp-python": "0.3.19",
+    "numpy": "2.2.6",
+    "onnxruntime": "1.20.1",
+    "piper-tts": "1.2.0"
+  },
+  "source_inventory_sha256": "bcc9ec8765616093b0b0b4dd2bf35847a6653f242e09f809e93ee5199f409848"
+}

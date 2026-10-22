@@ -1,0 +1,53 @@
+{
+  "id": "remote-cli-1792620790836",
+  "ok": true,
+  "result": {
+    "runId": "run_e6054e76e9fc",
+    "deliveryId": "delivery_a39949fdf46b",
+    "messages": [
+      {
+        "id": "msg_c80a7c834639",
+        "run_id": "run_e6054e76e9fc",
+        "delivery_contract": "current_delivery",
+        "from_handle": "term_1f27be31-0284-4366-bb91-30fe538cd30e",
+        "to_handle": "run:run_e6054e76e9fc",
+        "subject": "First actual USB result: notebook ADB inventory empty, not unauthorized",
+        "body": "Fresh USB-only execution at22:10:22UTC on skyron-notebook completed and is physically saved on both hosts at thesis/phone-notebook/20261020/evidence/usb-readiness-20261021T2211. Existing Personal ADB devices -l returned no attached devices, so there is no USB serial or unauthorized dialog state to report yet; old wireless endpoint was not called. I am independently checking only USB interface/device-node visibility to distinguish missing attachment from Personal container exposure/permissions, with no permission, driver, namespace or key changes. Notebook source remains df23fd6e with existing dirty paths preserved and101.2GBfree/load0.78; no deployment or app/model activity. Current HTTP campaign remains untouched; no Root phone action requested.",
+        "type": "status",
+        "priority": "normal",
+        "thread_id": null,
+        "payload": null,
+        "created_at": "2026-10-21T22:11:47Z",
+        "delivered_at": null
+      },
+      {
+        "id": "msg_63baff695c81",
+        "run_id": "run_e6054e76e9fc",
+        "delivery_contract": "current_delivery",
+        "from_handle": "term_1f27be31-0284-4366-bb91-30fe538cd30e",
+        "to_handle": "run:run_e6054e76e9fc",
+        "subject": "Physical USB phone found: POCO X7 Pro; Personal device-node access denied",
+        "body": "Actual USB sysfs metadata at22:11:59UTC identifies Xiaomi POCO X7 Pro, vendor2717/productff08, ADB Interface FF/42/01 at USB3-1, with /dev/bus/usb/003/010 present. Personal Podman UID1001/GID1002 sees that node owned65534:65534 modecrw-rw---- and os.access reports read=false/write=false, explaining empty ADB USB inventory; phone USB serial, ABI and authorization dialog remain UNKNOWN. This is fresh physical attachment evidence and replaces the old wireless blocker. I am checking the approved Orca device proxy after restoring notebook connectivity; no chmod, udev, group, privilege, key, account, host-namespace or network changes. No Root routine phone checks requested and current HTTP campaign is untouched. If no approved controller is exposed, the exact remaining boundary is Personal USB access/approved controller authority, not pairing or a phone code.",
+        "type": "status",
+        "priority": "normal",
+        "thread_id": null,
+        "payload": null,
+        "created_at": "2026-10-21T22:12:47Z",
+        "delivered_at": null
+      }
+    ],
+    "count": 2,
+    "replayed": false,
+    "acknowledged": "delivery_f43ba2c27906",
+    "timedOut": false,
+    "cancelled": false,
+    "connectionLost": false,
+    "mutation": {
+      "requestId": "994a608c-d29c-4f22-8498-517f5f499a3c",
+      "replayed": false
+    }
+  },
+  "_meta": {
+    "runtimeId": "cc9e3275-28c6-4c45-85cc-bdcd2262aa7d"
+  }
+}

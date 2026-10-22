@@ -1,0 +1,41 @@
+{
+  "at": "2026-10-18T17:56:24.920238+00:00",
+  "nativeGoal": "01a112a5-d6bb-74e2-bf7c-ace73cb513b5",
+  "nativeGoalStatus": "active",
+  "status": "V1562_RETIRED_UNADMITTED_COLLECTOR_FIX_QUALIFIED_V1573_NOT_LAUNCHED",
+  "priorMeasured": {
+    "attempted": 716,
+    "correct": 714,
+    "failed": 2
+  },
+  "unadmittedSetup": {
+    "cohort": "V1562",
+    "correctExcludedWarmups": 15,
+    "measured": 0,
+    "nativeJoinsRecovered": 45,
+    "allFourProcessesNaturallyRetired": true,
+    "failure": "Obsolete proof helper hash literal; natural proof deadline",
+    "setupChargeSeconds": 652.5055120009999
+  },
+  "next": {
+    "cohort": "V1573",
+    "measuredRange": [
+      717,
+      900
+    ],
+    "plannedMeasured": 184,
+    "status": "PREPARED_NARROW_REVIEW_PENDING_NOT_LAUNCHED",
+    "newProcessExcludedWarmups": 15,
+    "nativeJoinsRequired": 45,
+    "newWarmupReason": "Prior requester/backend naturally exited. Same saved15/45 prove the collector correction, not the identity and execution of the new process. Standard process-specific excluded warmup/native gate remains unchanged."
+  },
+  "collectorQualification": "ACTUAL-CORRECTED-COLLECTOR-SAVED-QUALIFICATION-v1577.json",
+  "freshProviderReadmissionSha256": "e91dae24dcba2a4851b9f9ccfa4e097ad89b1e6e4e84fe6f2336ac85aea845ac",
+  "sameProvider": true,
+  "providerRestarted": false,
+  "measurementReplays": 0,
+  "newModelRequestsForCollectorQualification": 0,
+  "personalControlCursor": "56929",
+  "originalMonitorReviewRequest": "msg_d9d13431aea3",
+  "physicalCustody": "thesis/campaigns/worker-desktop-k3-orca-relayed-http-remaining-v1573"
+}

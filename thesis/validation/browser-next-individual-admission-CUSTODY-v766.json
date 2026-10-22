@@ -1,0 +1,12 @@
+{
+  "schema": "aurora.source-metadata-custody.v1",
+  "at": "2026-10-16T00:39:03.849177+00:00",
+  "source": ".git/aurora-handoff-import-20261006/browser-next-individual-admission-v765/REPORT.md",
+  "destination": "thesis/validation/browser-next-individual-admission-v765.md",
+  "bytes": 7737,
+  "sha256": "06dac0689830025f25b4665f3de574aa6dd1a55b81dfe94bab1ef1e7198bed67",
+  "readOnlyAnalysis": true,
+  "runtimeLaunched": false,
+  "currentPrelaunchDelta": "Later privateV768 controller source needs actualV735+V745 predecessor lineage instead of obsoleteV689; no new condition/model/setting/measurement",
+  "scope": "source facts only; live counts in report historical; fresh postV745 retirement admission mandatory"
+}

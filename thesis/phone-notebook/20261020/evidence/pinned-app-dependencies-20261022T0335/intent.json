@@ -1,0 +1,12 @@
+{
+  "controlDeadline": "2026-10-22T04:10:00Z",
+  "explicitNewline": true,
+  "host": "ssh:ssh-sem-notebook-personal",
+  "incarnation": "328cd72f-c7ea-49ff-a2db-b9275b085037",
+  "remoteResult": "/home/developer/projects/aurora/thesis/phone-notebook/20261020/evidence/pinned-app-dependencies-20261022T0335.json",
+  "rootAdmissionMessage": "owner-scoped-exact-app-build-dependencies",
+  "script": "scripts/launch_pinned_app_dependencies_v63.py",
+  "scriptSha256": "1f00d35e175a2b9f1f34e0e888d54549c30f83cb195ae3a2125ce1b8e39d89f0",
+  "singleSend": true,
+  "terminal": "term_a2ed5feb-7c92-48e4-bd88-d1b0e6737989"
+}

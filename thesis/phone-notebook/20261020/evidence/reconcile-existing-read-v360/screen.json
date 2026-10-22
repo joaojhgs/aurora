@@ -1,0 +1,36 @@
+{
+  "id": "ec00213d-a58d-42b7-8ca5-96cfa3cbfcda",
+  "ok": true,
+  "result": {
+    "terminal": {
+      "handle": "term_a2ed5feb-7c92-48e4-bd88-d1b0e6737989",
+      "status": "running",
+      "tail": [
+        "LCdhY3R1YWxDb21wdXRlVHlwZScsJ2FjdHVhbEFyZ3VtZW50cycsJ2VuZ2luZScsJ3JldHVybmVkJ119IGZvciB4IGluIHJvd3NbLTU6XV0KcT1wLydwcm9k",
+        "dWN0aW9uLXJlZGFjdGVkLmxvZyc7bGluZXM9cS5yZWFkX3RleHQoZXJyb3JzPSdyZXBsYWNlJykuc3BsaXRsaW5lcygpO3JbJ2dwdUxvZ09ic2VydmF0aW9u",
+        "cyddPVt4WzoyODBdIGZvciB4IGluIGxpbmVzIGlmIHJlLnNlYXJjaChyJ2dnbWxfdnVsa2FufG9mZmxvYWRlZHxvZmZsb2FkaW5nfFZ1bGthbiBkZXZpY2Un",
+        "LHgscmUuSSkgYW5kIG5vdCByZS5zZWFyY2gocidwYXNzd29yZHx0b2tlbnxzZWNyZXR8Y3JlZGVudGlhbHxwYWlyaW5nfHZlcmlmaWNhdGlvbicseCxyZS5J",
+        "KV1bLTg6XQpwcmludChqc29uLmR1bXBzKHIpKQo='\"'\"'); buf=io.StringIO(); ctx=contextlib.redirect_stdout(buf); ctx.__enter__();",
+        " exec(compile(code,'\"'\"'approved-notebook-script'\"'\"','\"'\"'exec'\"'\"'),{'\"'\"'__name__'\"'\"':'\"'\"'__main__'\"'\"'}); ctx.__ex",
+        "it__(None,None,None); raw=buf.getvalue().encode(); assert len(raw)<49152,'\"'\"'bounded result exceeded'\"'\"'; dest=pathlib",
+        ".Path('\"'\"'/home/developer/projects/aurora/thesis/phone-notebook/20261020/evidence/read-first-continuation-pilot-v360.js",
+        "on'\"'\"'); dest.parent.mkdir(parents=True,exist_ok=True); assert not dest.exists(),'\"'\"'immutable result exists'\"'\"'; tmp",
+        "=dest.with_suffix('\"'\"'.partial'\"'\"'); f=tmp.open('\"'\"'xb'\"'\"'); f.write(raw); f.flush(); os.fsync(f.fileno()); f.close(",
+        "); os.link(tmp,dest); tmp.unlink(); receipt={'\"'\"'path'\"'\"':str(dest),'\"'\"'bytes'\"'\"':len(raw),'\"'\"'sha256'\"'\"':hashlib.",
+        "sha256(raw).hexdigest()}; rp=dest.with_suffix('\"'\"'.receipt.json'\"'\"'); rf=rp.open('\"'\"'x'\"'\"'); json.dump(receipt,rf);",
+        "rf.flush(); os.fsync(rf.fileno()); rf.close(); print('\"'\"'AURORA_NOTEBOOK_read-first-continuation-pilot-v360='\"'\"'+base6",
+        "4.b64encode(raw).decode()); print('\"'\"'AURORA_COPY_RECEIPT='\"'\"'+json.dumps(receipt))'^M"
+      ],
+      "truncated": true,
+      "limited": true,
+      "oldestCursor": "1651",
+      "nextCursor": "1750",
+      "latestCursor": "1750",
+      "returnedLineCount": 14,
+      "source": "screen"
+    }
+  },
+  "_meta": {
+    "runtimeId": "cc9e3275-28c6-4c45-85cc-bdcd2262aa7d"
+  }
+}

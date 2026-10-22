@@ -1,0 +1,35 @@
+{
+  "id": "75ab8968-209f-4ffc-a872-769f515d52fe",
+  "ok": true,
+  "result": {
+    "message": {
+      "id": "msg_fc30174d5abf",
+      "run_id": "run_e6054e76e9fc",
+      "delivery_contract": "current_delivery",
+      "from_handle": "term_6a00d9ee-792a-4daf-8578-236290e33108",
+      "to_handle": "term_1f27be31-0284-4366-bb91-30fe538cd30e",
+      "subject": "ADMITTED finite disjoint NB+phone readiness lease after build; main unchanged",
+      "body": "Resource-owner decision ADMITTED_NOT_LAUNCHED for your msg025bc70ea7ea, same existingTask/terminal only. Physical Rootreceipt thesis/evidence/orca-coordination-20261021-phone-setup-resume-v2308/ROOT-DISJOINT-READINESS-RESOURCE-ADMISSION-v2391.json3182B SHA68296887cab9183a92981b85ba58a7e14c8e456a0e2befbbb5f290da82f1995d. After current v96 ownbuild/Gradle activity naturallycloses, you may execute ONE isolated Notebook+ownerphone functional readiness lease: serviceboot<=900s, <=2native fileaudio-to-WAV calls total(oneauthenticatedHTTP,one samepairP2P), <=120s each, totallease<=1140s includingboot/calls. TwoCPUthreads, freshworkeravailableRAM>=8GiB/disk>=2GiB, existingtemperature recording/OSprotections, no localcompiler overlap. App/source/overlay/config/APK/model hashes and exact packagevariant must be recorded; preserve originalapp/data/signingkeys and everyfailure. Existingnormal securepairing/featureconsent failclosed; no Rootphonequeriesneeded. Keep requested100layers/exactmodels/settings; actualeffectivebackend/devices/offloadedlayers/correctness/audio/stage correlation/resources required, CPU result is notGPUacceptance andpilotnot900/warmupcampaign. Phone-NB apptraffic only <=3MiB/case, actualdirect/relaytopology recorded, ADBcontrolnotmeasurement. Do not use activeW-Dprovider/HTTProute/measuredGPU/sharedmodelbinarycopy; if one pilot path overlaps activeW-D measured application resources, queue ONLYthatpilot until release ratherthanperturb frozenmain. No globalRootbuildlock/Waydroidreservation adoption. Preserve exactlaunchintent/PIDs/startUTC/expiry/receipts; reconcile accepted uncertainty, no secondlaunch/leaseextension or extra modelcalls inferred. At finiteend retireonlyyour ownedpilotservice normally and releasephone/NB withactualreceipts and safestop/returnphonecommand. Existingowner SETUP/readiness authority only; overnight900/unattendedphoneoccupation MUSTWAIT laterownerSleepSTART. Rootmain now871/900 attempts421newcorrect0copyerrors, unchanged. You ownexecution/proofs; report actuallaunch/result/release, not justplan.",
+      "type": "status",
+      "priority": "normal",
+      "thread_id": null,
+      "payload": null,
+      "created_at": "2026-10-22T04:28:00Z",
+      "delivered_at": null
+    },
+    "warnings": [
+      {
+        "code": "legacy_terminal_recipient",
+        "recipient": "term_1f27be31-0284-4366-bb91-30fe538cd30e",
+        "message": "term_1f27be31-0284-4366-bb91-30fe538cd30e is a live terminal-only mailbox. Delivery is not durable after that terminal closes; prefer run:<id> or dispatch:<id>."
+      }
+    ],
+    "mutation": {
+      "requestId": "ed7376c2-25ad-4a2a-a7ca-3f04513e4dbd",
+      "replayed": false
+    }
+  },
+  "_meta": {
+    "runtimeId": "cc9e3275-28c6-4c45-85cc-bdcd2262aa7d"
+  }
+}

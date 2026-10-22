@@ -1,0 +1,15 @@
+{
+  "memAvailable": {
+    "maxBytes": 11961417728,
+    "minBytes": 10203992064
+  },
+  "rootFree": {
+    "maxBytes": 136159232,
+    "minBytes": 135827456
+  },
+  "sampleCount": 49,
+  "shmFree": {
+    "maxBytes": 3044438016,
+    "minBytes": 2956627968
+  }
+}

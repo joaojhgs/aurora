@@ -1,0 +1,17 @@
+{
+  "sourceHashes": {
+    "local_composition.py": "aaf9585ad24429c44ea5ed78b00a7ad49369f324528f901ac46a56eae9b22ba0",
+    "stage_adapter.py": "f678712c75a50146194ccb34331fab8d995f057461e565be99be8d69c2b364a6",
+    "provider_controller.py": "82413b36c2de85cc09d1661e17c8de5c70817062fd67f8e62b0a851c34cdf6aa",
+    "paired_case.py": "f682f17a02c9a998e963fbaade53494883a3bf9e25011f6be8740f00dd10816f",
+    "k3_composition.py": "777bfb6abf34a1485a38c1076c86a06776de4017f1f27715b326403aba15effa",
+    "prepare_and_launch.py": "f71f4d4f029c090ab8315697083eb3f707e3206e09b0e95affeb0040cd57eef3",
+    "worker_driver.py": "87881819ce0a7b838acbfe6c76fbf88b78ed73c38f11fefb003a3016bc1f5919"
+  },
+  "priorFailedCandidate": "v2407",
+  "strictTranscriptAndAnswerAndValidAudioPredicatesChanged": false,
+  "localEntryCorrection": "Production internal UserInput + actual Response event; no fabricated external caller identity or token",
+  "localTtsStatus": "Response event precedes tts_status; suppression proved by unchanged config false AND actual native TTS accounting, never fabricated status",
+  "contentionInterlock": "Begin local flow only on actual arriving remote STT native span",
+  "oldPhysicalCustody": "thesis/campaigns/c12-mixed-local-http-readiness-v2407/terminal-v2411/CUSTODY.json"
+}

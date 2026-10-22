@@ -1,0 +1,17 @@
+{
+  "at": "2026-10-22T03:20:28.045015+00:00",
+  "source": "/home/developer/Documents/Obsidian Vault Origin/5-full-notes/faculdade/tcc/future-work-test-requirements.md",
+  "completeMirror": "thesis/methodology/owner-requirements-20261022-f50c4a5a.md",
+  "bytes": 839824,
+  "sha256": "f50c4a5ae646c053d17abc7433edc2d77105ca91fbddeacd485a5175418d02c4",
+  "priorCompleteMirrorPreserved": "thesis/methodology/owner-requirements-20261022-6c2ec6dc.md",
+  "priorBytes": 835292,
+  "priorPreservedByteForByteAsPrefix": true,
+  "monitorAuthorityMessage": "msg_1ec93afd99a8",
+  "originalOwnerRelay": "msg_395d799c4e8b",
+  "originalRootAck": "msg_3c104d5c5135",
+  "originalRootOwnerPacket": "thesis/evidence/orca-coordination-20261021-phone-setup-resume-v2308/OWNER-NOTEBOOK-CUSTOM85C-GATE-REMOVED-v2376.json",
+  "monitorSoleAuthoritativePlanWriter": true,
+  "notABuildOrMeasurementGate": true,
+  "rootFrozenMainUnchanged": true
+}

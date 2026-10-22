@@ -1,0 +1,15 @@
+{
+  "at": "2026-10-16T15:43:47.155986+00:00",
+  "fileAudioDevHookAbsent": true,
+  "nativePackageCapabilityStringPresentIn": [
+    "assets/index-D4ArKVlY.js"
+  ],
+  "archive": ".git/aurora-handoff-import-20261006/desktop-local-frontend-v1096/frontend-production-v1096.tar.gz",
+  "archiveBytes": 2095970,
+  "archiveSha256": "5bf007ceb99c5b6e746f744869bc56fd8b76c945907d7cc2d658730056ccf1a0",
+  "files": 78,
+  "totalAssetBytes": 6847611,
+  "buildLeaderRetired": true,
+  "replacesCandidateOnly": "desktop-local-frontend-v1087",
+  "scope": "Production frontend candidate only; no native package/runtime or benchmark acceptance"
+}

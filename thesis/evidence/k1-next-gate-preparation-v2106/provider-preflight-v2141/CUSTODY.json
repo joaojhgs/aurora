@@ -1,0 +1,8 @@
+{
+  "source": ".git/aurora-handoff-import-20261006/k1-current-provider-admission-v2141-RESULT.json",
+  "destination": "thesis/evidence/k1-next-gate-preparation-v2106/provider-preflight-v2141/RESULT.json",
+  "bytes": 11190,
+  "sha256": "7d1055e57e89c9958f6e04adb99ce1f1ae5e5e75f46536e49bb36efbe0dcfb28",
+  "originalProviderStillLive": true,
+  "noSutRequests": true
+}

@@ -1,0 +1,53 @@
+{
+  "id": "remote-cli-1792617520766",
+  "ok": true,
+  "result": {
+    "runId": "run_e6054e76e9fc",
+    "deliveryId": "delivery_fff0caaec5e6",
+    "messages": [
+      {
+        "id": "msg_449f2281f58c",
+        "run_id": "run_e6054e76e9fc",
+        "delivery_contract": "current_delivery",
+        "from_handle": "term_2eab47ed-ab9b-4e35-bd9b-fc068c60e3fc",
+        "to_handle": "run:run_e6054e76e9fc",
+        "subject": "K1 HTTP270 collected; terminal verified, Root finalizing",
+        "body": "Independent monitor read at20:50:46UTC verifies V2234 terminal completed_all_correct:270measured+15excluded warmups,285physical case/WAV pairs,0copier errors,all3original W kernel processes absent and shutdown_completed true. Counts-only HTTP total450/900=449correct+1retained historical failure; remaining451-900 mandatory, no failed-index replay or unlike latency pooling. Root actual20:51screen is already executing prepared2254 finalizer once; provider EOF custody/saved analysis and later450admission remain pending, so this is collection completion only, not full-condition/full-matrix acceptance.",
+        "type": "status",
+        "priority": "normal",
+        "thread_id": null,
+        "payload": "{\"taskId\":\"task_d7ea336050cf\",\"dispatchId\":\"ctx_37b4d0a3c14f\",\"reportPath\":\".omx/evidence/orca-monitor-20261010/HTTP-V2234-270-TERMINAL-OBSERVED-20261021T2050Z.json\"}",
+        "created_at": "2026-10-21T20:51:28Z",
+        "delivered_at": null
+      },
+      {
+        "id": "msg_3aa53149cfe7",
+        "run_id": "run_e6054e76e9fc",
+        "delivery_contract": "current_delivery",
+        "from_handle": "term_2eab47ed-ab9b-4e35-bd9b-fc068c60e3fc",
+        "to_handle": "run:run_e6054e76e9fc",
+        "subject": "K1 HTTP270 custody and analysis verified; remaining450 admission next",
+        "body": "The monitor independently checked the new requester seal, provider custody receipt and 4.45 MB archive, saved analysis summary/report hashes, and exact eligible indices 451\u2013900 once; these receipt checks are closed. The new epoch is 270/270 correct with 15 excluded warmups, 855 native joins and zero gaps; HF7 correct-only p90/p95 are 58.608/60.103 s, separate from the original 180, with GPU counter limitations retained. The HTTP condition remains 450/900 attempts (449 correct, one retained failure); section 30.74.6 already supports Root\u2019s finite prospective remaining-450 admission without another owner-choice or review gate, and the monitor will append the actual frozen bounds/charges to the authoritative full plan when available; the current 43,200 s/115,200 s accounting is a draft, not a launch.",
+        "type": "status",
+        "priority": "normal",
+        "thread_id": null,
+        "payload": "{\"taskId\":\"task_d7ea336050cf\",\"dispatchId\":\"ctx_37b4d0a3c14f\",\"reportPath\":\".omx/evidence/orca-monitor-20261010/HTTP-V2234-CUSTODY-ANALYSIS-ELIGIBILITY-VERIFIED-20261021T2111Z.json\"}",
+        "created_at": "2026-10-21T21:10:16Z",
+        "delivered_at": null
+      }
+    ],
+    "count": 2,
+    "replayed": false,
+    "acknowledged": null,
+    "timedOut": false,
+    "cancelled": false,
+    "connectionLost": false,
+    "mutation": {
+      "requestId": "5fd66eba-f7e2-44e5-b29f-0dc26c578222",
+      "replayed": false
+    }
+  },
+  "_meta": {
+    "runtimeId": "cc9e3275-28c6-4c45-85cc-bdcd2262aa7d"
+  }
+}

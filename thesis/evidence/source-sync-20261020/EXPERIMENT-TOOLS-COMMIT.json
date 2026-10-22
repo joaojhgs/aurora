@@ -1,0 +1,12 @@
+{
+  "at": "2026-10-20T21:41:26.240040+00:00",
+  "commit": "ebde3a8acf6315f920d03593845f17a1fc65a733",
+  "files": [
+    "scripts/experiments/assistant_local_api_pilot.py",
+    "scripts/experiments/assistant_matched_input_hook.py",
+    "scripts/experiments/assistant_measurement_records.py",
+    "tests/unit/tools/test_assistant_measurement_records.py"
+  ],
+  "stagedDiffSha256": "da7bbdbe8af6559db2d84078179a44bb28d16d872bc0f7b19850e7f2f5db6c53",
+  "rootOnlyGitWriter": true
+}

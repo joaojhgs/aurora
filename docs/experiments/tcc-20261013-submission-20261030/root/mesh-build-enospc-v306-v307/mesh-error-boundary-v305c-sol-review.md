@@ -1,0 +1,21 @@
+# V305c final bounded observer source review
+
+2026-10-14 UTC. **APPROVE, source-only**, for the frozen final observer candidate. No additional fields or capture matrix are requested. V305/V305b source verdicts do not supply a runtime cause or accept this candidate by themselves.
+
+Exact anchors: actual canonical base bridge `213de9ff068097abb3b54cc643409f2873ab6a10c56195ae915025cafec094eb`; V305c candidate `241aadf4e9cc740be7d7366b1701282e3ef43191de1527d7ab26191b2feffdcc`; patch `8def83dfd4dd6070858f91dce80045939ae1e1f46251b7946db747b125884c50`; REPORT.txt `132fa0d3e46fc463d4fbe65e269ad5e282b6da3ce87f8cb7e85db2053917d6f9`. Independently hashed and read exact added seams plus actual public types/methods. No tests/compiler/build/services/models/network/browser/device/source/index/goals/ledger/vault changes, commits or agents. Only this private report is written.
+
+## Final important checks
+
+The max-three cause chain, cycle guard, fixed error-class labels, finite code/reason states, integer100..599 status and message SHA256/null remain bounded and content-free. Each level's detail adds only the same finite code/reason/status projection, never arbitrary detail objects, messages, stacks, payloads or identifiers. Unknown fields/types are narrowed before operations and unmatched strings are withheld. The previously required typeof-number narrowing is present. No new concrete type blocker is apparent; no compiler pass is claimed.
+
+Actual AuroraBrowserRuntime extends BrowserWebThinRuntime, whose peer is the public BrowserWebRtcPeerController. web-thin-runtime.ts supplies snapshot() with BrowserWebRtcSnapshot (extends PeerConnectionSnapshot and adds finite status), and roster() with MeshPeerRosterSnapshot|null; SDK roster entries expose snapshot.state. The candidate therefore uses real supported synchronous public methods, not a fabricated property or private transport access. State/status allowlists map other values to other/unavailable; expected peer ID is reduced to presence only; roster output contains counts only. lastRedactedError contributes only an allowlisted code/state, never its redacted message or method/peer identifiers. Snapshot errors return finite unavailable fields.
+
+The before-dispatch snapshot is retained in the final return `{...result, peerBeforeDispatch}` even when success/error branches replace result. Typed-error and successful terminal branches retain actual terminal snapshots; finite details do not modify route, model, auth, consent, SDK request or success predicates. Elapsed time is captured before terminal snapshot/hash work in the typed-error path, preserving its observed-error boundary. Exact completed|fallback ORBIT/IDs/one-completion/deadline criteria and the existing two-request main are unchanged. Installation remains hosted-test-gated, not production telemetry/G8.
+
+## Evidence limits and bounded handoff
+
+The unexpected thrown-exception catch replaces result without peerAtTerminal, and the final null-only backfill does not fill an undefined field. Thus that catch path may omit the terminal snapshot; consumers must treat absence as unavailable, not infer peer health. The grounded typed-error path under review retains its actual snapshot. This limitation does not weaken fatal outcomes or authorize an extra field/case loop.
+
+Output consumers must use errorChain[0].messageHash for the outer hash and only the projected detail/peer codes; a generic product-safe message still does not establish the underlying reason. lastRedactedError is a snapshot's last diagnostic, not proven causal attribution for the current request. No IDs are newly exposed by these peer/cause additions; existing request/result IDs remain unchanged. Depth/count bounds are not hard WebCrypto timeouts; Root retains the real case/process cap.
+
+Root owns final typing/integration and one actual frozen two-request observer flow under600s/original serial resources. V302/V296 failure facts remain unchanged and MAIN remains held until real correctness/count/hash eligibility. No speculative transport/security/product fix, broader audit, unit/matrix or replay of closed local/API/full-history checks is requested. This is actual independent native source review for Root's original Orca relay.

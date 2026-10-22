@@ -1,0 +1,23 @@
+{
+  "at": "2026-10-22T06:49:08.517618+00:00",
+  "status": "NEXT_MAIN_MEASURED_HARNESS_AND_MANIFEST_PREPARATION",
+  "nativeGoal": "01a112a5-d6bb-74e2-bf7c-ace73cb513b5 ACTIVE",
+  "condition": "C12 mixed local user + worker Orca-relayed HTTP K3 on same D provider",
+  "workingSource": "thesis/harness/c12-mixed-local-http-readiness-v2414",
+  "targetPrimaryMeasured": 900,
+  "companionPopulation": "Separate local user stream, prespecify exact900 pair counts and failures/unattempted; never pool latency",
+  "excludedWarmupPairsPlanned": 15,
+  "newMeasuredAdmitted": 0,
+  "newSourceRequired": "Replace one-shot readiness control with finite request-ID/indexed paired campaign loop and incremental native-arrival reader, including queue/resource/rate observations; no production model/config change",
+  "actualNextSutAction": "After source/count/cap/native instrumentation freeze and current release proof, start new finite C12 lifecycle, run15 real excluded paired warmups and admit measured index1 only upon actual audio/native/resource gate",
+  "constraints": [
+    "No closed CPU/local/HTTP/K1-K3 baseline rerun",
+    "No phone/notebook investigation or N load",
+    "No new worker or review loop",
+    "No new forward, permission, driver, security or credential change",
+    "No live source/manifest edits or clock reuse/extension",
+    "No same-stage native parallelism or pure queue-duration claim from this pilot"
+  ],
+  "readinessReceipt": "READINESS-PASSED-v2416.json",
+  "mainScopeStillOpen": true
+}

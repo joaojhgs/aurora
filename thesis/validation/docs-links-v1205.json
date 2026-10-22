@@ -1,0 +1,11 @@
+{
+  "makeCheckDocsExit": 2,
+  "findings": 1243,
+  "rawReportPlacement": 1242,
+  "brokenLinks": [
+    "- docs/experiments/tcc-20261013-submission-20261030/root/matched-main-campaign-v319/runner-report.md:3: broken link -> campaign.py"
+  ],
+  "newCurrentReportAndThesisLinksPassed": 48,
+  "noMissingNewLinks": true,
+  "remainingDocsPolicyKnownOwnerRequiredRawPlacement": true
+}

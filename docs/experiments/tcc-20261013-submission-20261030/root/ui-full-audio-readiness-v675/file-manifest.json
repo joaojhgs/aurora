@@ -1,0 +1,99 @@
+{
+  "files": {
+    "REPORT.md": {
+      "bytes": 3263,
+      "sha256": "55cb15ddfb8d990e1a6983929ee77a08a88bb8b81c4dbfcd4a8458d9066c72af"
+    },
+    "actual-provider-bindings.jsonl": {
+      "bytes": 1690,
+      "sha256": "4c861f161b916d47ffac6c63df177f94eb2906d1107fd17bcf387327a1e2f1cf"
+    },
+    "asset-check-summary.json": {
+      "bytes": 674,
+      "sha256": "99ce32d1395c9bcca1ffc1fda86ddddfaee4c4f4f33b522189bc3e93db124ba2"
+    },
+    "candidate-input.wav": {
+      "bytes": 219794,
+      "sha256": "da0ecc4ad0885746ab6e716585473917ab2b543a505bf0db09ebacfaa7943cbb"
+    },
+    "personal-raw-custody.json": {
+      "bytes": 7146,
+      "sha256": "d16f2bad00dc3b7b1ff8f542c521b4ea4b22c3d747d79e7ba6e402ff1215ea7d"
+    },
+    "qualified-manifest.json": {
+      "bytes": 12832,
+      "sha256": "b36d6585b8f7fb4b87b54dceda813eaa42b0bd03c62ee3209bed1e0755a26ae3"
+    },
+    "raw/pilot-manifest.json": {
+      "bytes": 155436,
+      "sha256": "35d56a4e833d8d385b0a20252c45b983a8d03bfbe8cbafcefa854e8b5f4b226f"
+    },
+    "raw/resources.jsonl": {
+      "bytes": 5292,
+      "sha256": "0edceb8b7c22672a46f4eba1109882c6b5a31df92605a58778bb6fd3a02b6c68"
+    },
+    "raw/retirement.json": {
+      "bytes": 757,
+      "sha256": "f42f356c184e765d51f9062ca2939d05f4d38bbc31562e88c37cb23e5f8e61f1"
+    },
+    "raw/runtime/actual-provider-bindings.jsonl": {
+      "bytes": 2549,
+      "sha256": "aeca9007000c39830379fac4d6189b630a3508b5941c273d03d2f7dcd466c449"
+    },
+    "raw/runtime/runtime-versions.json": {
+      "bytes": 177,
+      "sha256": "e3ea9bcf8c8fc8544b290dd0ed4e63a6633e2e9644102001a2d0004a14ad2917"
+    },
+    "raw/runtime/source-guard.json": {
+      "bytes": 344,
+      "sha256": "e2642122241ad2e788a34f3cbac06e3492f5762c3a89faec05f55f5e200f0780"
+    },
+    "raw/runtime/voice-stages.jsonl": {
+      "bytes": 18651,
+      "sha256": "d32879097ebe3645f5f928a32901d19744ec0bafd340787e260d43c8eeeb3feb"
+    },
+    "raw/terminal.json": {
+      "bytes": 1625,
+      "sha256": "d4efe15c7007e1c7342dc8f014862a8e051f29f058ab918266b6db2c056e46d8"
+    },
+    "raw/ui-case/voice-flow.json": {
+      "bytes": 6001,
+      "sha256": "096d142e087227f4c99762466b4e6a7e2c780e94455534ce11cedfa415bc1de0"
+    },
+    "read-aloud.wav": {
+      "bytes": 31788,
+      "sha256": "2a84df0b3e9a7d0c463789c9d2b082a46a1f6734c89f017c2065fe82b043ce5d"
+    },
+    "resources-summary.json": {
+      "bytes": 255,
+      "sha256": "d560aaf15b76cf9318815e07b998a8f7fa3ef41443a82f926286c51690e6688c"
+    },
+    "retirement-summary.json": {
+      "bytes": 718,
+      "sha256": "9a79bd10c275bfcaba161a886e28a95381cbab9cbcb4c9fe523fcec64f0dca01"
+    },
+    "runtime-versions.json": {
+      "bytes": 287,
+      "sha256": "cf50e3c0168c2438d8ca2eaeca3bb62ecbb2fe6e4f1f742915c7c5084d85a038"
+    },
+    "source-guard-summary.json": {
+      "bytes": 299,
+      "sha256": "7d127f05b100a28fe689face5718288d192e0774f805772ec79ebcee2274ca35"
+    },
+    "terminal-summary.json": {
+      "bytes": 1096,
+      "sha256": "06d2e3942e247539fafab8964a096930f739d43deb1cc5430e7711bbcbcd5b81"
+    },
+    "voice-flow.json": {
+      "bytes": 2476,
+      "sha256": "0402d9a50c805f1f03a2f8127248a1d2a4d78c4fba29beaf0b78d0dedcd7a50a"
+    },
+    "voice-stages.jsonl": {
+      "bytes": 1272,
+      "sha256": "0f2bc4e389306587e56a81857a420915dc07329f1da9480fbbf7a69e42626d73"
+    }
+  },
+  "noConfigDatabaseCredentialsIncluded": true,
+  "personalRawCustody": "personal-raw-custody.json",
+  "schema": "aurora-qualified-ui-readiness-inventory-v681"
+}

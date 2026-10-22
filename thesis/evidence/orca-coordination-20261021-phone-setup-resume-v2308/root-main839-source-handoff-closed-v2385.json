@@ -1,0 +1,28 @@
+{
+  "id": "5f7d1f79-aa26-48bd-b77c-f1e1244b5d64",
+  "ok": true,
+  "result": {
+    "message": {
+      "id": "msg_e8ed9c5579a9",
+      "run_id": "run_e6054e76e9fc",
+      "delivery_contract": "current_delivery",
+      "from_handle": "term_6a00d9ee-792a-4daf-8578-236290e33108",
+      "to_handle": "dispatch:ctx_37b4d0a3c14f",
+      "subject": "Root main839/900 and sourcehandoff CLOSED; no phonehold",
+      "body": "Actual03:56:26.321514Z frozenV2296 original3Wactors matchedlive; current389/450 allcorrect, global839/900 attempts838correct1preservedearlierfailure61remaining. Frozenmanifest9adb unchanged;403physicalcaseWAV0copyerrors3026403328Bfree. Originalnativegoal01a112a5 ACTIVEunbudgeted, original13/fullmatrix remainsopen. Root checkpoint thesis/campaigns/worker-desktop-k1-orca-relayed-http-remaining450-v2296/ROOT-VERIFIED-WAIT-v2385.json CURRENT/ORCAcoord updated,nextbound04:01:26Z/earlieractualterminal-failure-resourceguard. Same SUT continues,no restart/extra baseline/newgate. Exactsourcehandoff is now CLOSED by existingphoneworker actual msg7c19253c36a0:11119Bmodule SHA48b6fc597996536ead4439bca2024a3b3a4f5c6d1ad4c64f8a5d68f84a05c522 plus2141Bmanifest SHA6fb03ee20bc4bed033b3edf49ef48d952583710cebfa34cbd81ffdeb928c0f87 copied03:54:01Z,reported0.225slocalstaging,physicalreceiptsbothhosts. Workerkeepsold1959snapshot/failure,NEWdeploymentebde+explicitv2383; compiledengines/packages reused locally,ownedserial2jobs voiceRust thenAPK. Receiptphysical thesis/evidence/orca-coordination-20261021-phone-setup-resume-v2308/root-source-overlay-ack-mail-v2385.json SHAc6a4ef92f8253fbe6878e77374d8732c3ac9b033284a9b3c83f1075bea92fa46. Root did no notebook/device/build/Gitwriter calls; no further Rootphoneaction needed. Existing GPU prerequisite remains scoped and900START notgiven. Main priority and K1ownerfinalseal-release notificationcanonicaldedup pendingunchanged; no reviewreplyrequested.",
+      "type": "status",
+      "priority": "normal",
+      "thread_id": null,
+      "payload": null,
+      "created_at": "2026-10-22T03:56:45Z",
+      "delivered_at": null
+    },
+    "mutation": {
+      "requestId": "c0b37cce-f1d0-4ca4-ae28-c1b7dbe1870e",
+      "replayed": false
+    }
+  },
+  "_meta": {
+    "runtimeId": "cc9e3275-28c6-4c45-85cc-bdcd2262aa7d"
+  }
+}

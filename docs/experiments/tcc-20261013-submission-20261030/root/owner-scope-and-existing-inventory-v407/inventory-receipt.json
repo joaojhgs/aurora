@@ -1,0 +1,106 @@
+{
+  "observed_at": "2026-10-14T15:23:03.197367+00:00",
+  "scope_amendment_message_id": "msg_bb31f4d08581",
+  "delivery_ack": "delivery_dd55668f8f41",
+  "root_explicit_ack_message_id": "msg_e316c48f1b20",
+  "native_thread": "01a112a5-d6bb-74e2-bf7c-ace73cb513b5",
+  "same_aggregate_preserved": true,
+  "ios_active_scope": "excluded_by_owner_amendment_historical_evidence_preserved",
+  "authoritative_plan": {
+    "path": "/home/developer/Documents/Obsidian Vault Origin/5-full-notes/faculdade/tcc/future-work-test-requirements.md",
+    "observed_sha256": "a2615d9a744f4f5413ab9fee70b0a6928266d203682b8d7814eb2b5798d440d5",
+    "last_section_at_read": 25,
+    "new_amendment_writer": "original_monitor_only",
+    "new_plan_sha": "pending_monitor_update"
+  },
+  "artifacts": {
+    ".git/aurora-handoff-import-20261006/ORCA-V234-HOSTS.json": {
+      "sha256": "4ecf8a996cc076db3abbc2afe0737e2610025ffe9901008a211490cfc53f795c",
+      "bytes": 245
+    },
+    ".git/aurora-handoff-import-20261006/ORCA-V205-DEVICE-INVENTORY.json": {
+      "sha256": "143bfd09ec9ab0094601264cb3603e2ea39cec612d5a9aa2ca01ac3f30fceabb",
+      "bytes": 437
+    },
+    "docs/experiments/tcc-20261013-submission-20261030/root/platform-next-main-v320/android-route-readonly-v330.json": {
+      "sha256": "5ce7d81d76398de0ec3c2143e5d86f3c0c754df06c89c00e249663e2220cde2a",
+      "bytes": 1147
+    },
+    "docs/experiments/tcc-20261013-submission-20261030/root/platform-next-main-v320/android-route-correction-v322.md": {
+      "sha256": "3c2209ea57dbac3af907cb29092eb339c5ed1eeb48926dc3b1987dd528d098c6",
+      "bytes": 858
+    },
+    "docs/experiments/tcc-20261013-submission-20261030/monitor/mesh-readiness-and-android-route-20261014T0659.md": {
+      "sha256": "c073495c731c5ed1464a681950033ef2de8ecb4aa10ab3ba8275e4c9d3f83636",
+      "bytes": 8531
+    },
+    "docs/experiments/tcc-20261013-submission-20261030/root/t0-measurement-helper-v237-v243/README.md": {
+      "sha256": "ed0b93a1d12b12f5c951ecc015ff11d4467cb7cecab8f43daa06598eb2d9b294",
+      "bytes": 1123
+    },
+    "docs/experiments/tcc-20261013-submission-20261030/root/matched-main-campaign-v319/README.md": {
+      "sha256": "005046b957b06ffa82dfae2863609872fb9485891b654f007da202c21fc4ff75",
+      "bytes": 2609
+    },
+    "scripts/experiments/assistant_measurement_records.py": {
+      "sha256": "2648b5579c487e15936bf2eafd70ae8b63db5567915ff4c1c1b318989da2a646",
+      "bytes": 14209
+    },
+    "scripts/experiments/assistant_local_api_pilot.py": {
+      "sha256": "6b51c6d51a44f05e865259aa7af4f8301d9927435c28f1890378e9c4a9f49439",
+      "bytes": 52521
+    },
+    "scripts/experiments/assistant_matched_input_hook.py": {
+      "sha256": "1e342abe17092ac6b237564f51c31344e60f84fde8c1d1636b8876bd33a1f622",
+      "bytes": 4373
+    }
+  },
+  "host_lookup": {
+    "path": ".git/aurora-handoff-import-20261006/ORCA-V234-HOSTS.json",
+    "outcome": "forbidden",
+    "message": "orca host list acts on the Orca host machine itself and cannot run from an SSH host. Run it on the Orca host.",
+    "no_absence_inference": true
+  },
+  "device_inventory": {
+    "path": ".git/aurora-handoff-import-20261006/ORCA-V205-DEVICE-INVENTORY.json",
+    "retained_count": 1,
+    "device_class": "Waydroid",
+    "state_at_retained_observation": "booted",
+    "host_ref": "ssh-1786238480967-semdev / personal-distrobox",
+    "current_native_app_acceptance": "unverified"
+  },
+  "current_campaign_scope": "same-worker local-only, loopback API and hosted browser mesh; not deployed/cross-device acceptance",
+  "existing_record_fields": [
+    "request_id",
+    "start_monotonic_ns",
+    "end_monotonic_ns",
+    "deadline_ms",
+    "warmup",
+    "outcome",
+    "predicate_id",
+    "predicate_passed",
+    "error_category",
+    "exclusion_predeclared",
+    "exclusion_reason"
+  ],
+  "existing_resource_fields": [
+    "monotonic_ns",
+    "observed_at",
+    "cpu_ticks_raw",
+    "memory",
+    "load_avg",
+    "free_artifact_disk_bytes",
+    "host_network_rx_bytes_sum",
+    "host_network_tx_bytes_sum"
+  ],
+  "capability_gaps": [
+    "Independent BR/PT/US geographical evidence and explicit US VPS to registered worker mapping not established by existing plan Section13 or denied host lookup",
+    "Current non-iOS requester/provider source/app/model/workload eligibility, reservation and deployed API/mesh endpoint readiness not established for cross-device cells",
+    "Current packaged Android APK/source identity and approved owning-host SDK/install route unverified; emulator access itself established",
+    "Eligible physical-phone identity/capabilities/consent/country/network and permitted sensors unverified; retain conditional row, no substitute physical-device claims",
+    "Full correlated requester/provider stage spans, clock-domain uncertainty, queue/inference/render/history decomposition, TTFT/audio and selected ICE direct/relay plus direction-specific network/process resources not retained by current benchmark artifacts; audit existing implementation before new cohorts",
+    "Non-iOS voice/offload, W-FIT/W-HEAVY feasibility, bounded concurrency/recovery/privacy cross-device results still incomplete; no unchanged passing reruns"
+  ],
+  "new_runtime_or_network_probes": false,
+  "source_or_goal_recreation": false
+}

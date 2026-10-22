@@ -1,0 +1,18 @@
+{
+  "at": "2026-10-17T22:33:13.421810+00:00",
+  "section": "30.52.1",
+  "path": "/home/developer/Documents/Obsidian Vault Origin/5-full-notes/faculdade/tcc/future-work-test-requirements.md",
+  "bytes": 524442,
+  "sha256": "487c70b1d5beb7887ebbc1cff99dae24ecb448bbb192103ee58e3761e247c1ea",
+  "priorBytes": 521342,
+  "priorSHA256": "7fac1bc3ef131352662abf2da3f17b761fe9236033b36b05ed954bc596984157",
+  "unchangedPriorPrefix": true,
+  "appendedBytes": 3100,
+  "backup": ".omx/evidence/orca-monitor-20261010/authoritative-plan-before-30.52.1-20261017T223313.md",
+  "patch": ".omx/evidence/orca-monitor-20261010/authoritative-plan-30.52.1-20261017T223313.patch",
+  "rootAcceptance": "thesis/evidence/auditor-dispatch-20261017/ROOT-FINAL-ACCEPTANCE-v1352.json",
+  "rootMessage": "msg_f552398a8908",
+  "workerDone": "msg_3e098587ba28",
+  "independentWorkerRead": "fcb1f8e0-b755-4a7e-a84a-6b8e65e85bd5",
+  "scope": "Accepted saved-data audit closure only; no repeated analysis or changed experiment/ownership. Root to mirror complete plan."
+}

@@ -1,0 +1,111 @@
+{
+  "at": "2026-10-15T01:04:26.425731+00:00",
+  "host": "personal.skyron-server",
+  "sampleClass": "corrected voice setup failure before listening/STT; no ninth logical voice flow and no model request",
+  "globalVoiceLogicalFlowsUnchanged": 8,
+  "voiceMeasuredSamples": 0,
+  "phase2Allowed": false,
+  "omitted": "fixture credentials/config/DB/full private backend logs/auth bodies; earlier unobserved list bodies not invented; originals retained",
+  "files": {
+    "retirement-v464.json": {
+      "bytes": 768,
+      "sha256": "fd2adbe6880a6e1a409745c6e910a7ea00feda01c49425f59b30ad67c39cc52a"
+    },
+    "voice-v464/driver-progress.json": {
+      "bytes": 511,
+      "sha256": "7870ec8feb835c0e57c186f4c72e6b2c5fbed1400aba9a24ea6956e68fef18f8"
+    },
+    "voice-v464/driver-spawn.json": {
+      "bytes": 289,
+      "sha256": "b08fd303c38275b34ecfdcb4d9c9de888d947022849d99ea2a7e67d84e2b74f0"
+    },
+    "voice-v464/driver-terminal.json": {
+      "bytes": 619,
+      "sha256": "1870ca9f9af4f3a961b5e5907076385c125ed9e2ab31e9fd867315d0d499cc47"
+    },
+    "voice-v464/manifest.json": {
+      "bytes": 1254,
+      "sha256": "129640c3e343fcb94b4e332d105e9b69e42d594542196d163a840c8d1e2ff443"
+    },
+    "voice-v464/ready.json": {
+      "bytes": 1915,
+      "sha256": "588e226b16da48007fbf0eac3eb5514cef5fefe3794e9ca4f4239b935f11fed5"
+    },
+    "voice-v464/runtime/launch.json": {
+      "bytes": 1812,
+      "sha256": "27922ecc78a0e34e3a55f55fedb22154d07dc968138962d5a9edd50b4e3cd789"
+    },
+    "voice-v464/runtime/terminal.json": {
+      "bytes": 2022,
+      "sha256": "429ed788bed55d22c4cd1ac875819e0f5756f3d3479832d4de335259902c2b8e"
+    },
+    "voice-v464/runtime/voice-stages.installed.json": {
+      "bytes": 121,
+      "sha256": "1e5e2ee4c4e990e1e92bb6079ee8af81b62da560a72577cb6e79deed267f021c"
+    },
+    "voice-v464/runtime/voice-stages.jsonl": {
+      "bytes": 2286,
+      "sha256": "e7bded2608262efd6cb0ed1270aa88010fda6cdf95c5c94a6254d6fad7a420f3"
+    },
+    "voice-v464/runtime/voice-stages.status.json": {
+      "bytes": 132,
+      "sha256": "1e366543f29a7e627d5fc2ad406df9817b554c0540881c6aa2cdbf142034900f"
+    },
+    "voice-v464/source-guard.json": {
+      "bytes": 455,
+      "sha256": "037bb4124917bddffb8af60f5e6ce06fc5d91a679f2f41d81e9e58a7ec51e91f"
+    },
+    "voice-v464/spawn.json": {
+      "bytes": 515,
+      "sha256": "4f00a99b273f9e20d8748d4ba5d8b30e077835dca0a9b03245a15911c48f48d0"
+    },
+    "voice-v464/terminal.json": {
+      "bytes": 2194,
+      "sha256": "3ac838f9c19d5c2744cc517ff7172ed82224afcb57ef6fa54a7c49eea26bcad3"
+    },
+    "voice-v464/ui-case/private/driver-error.txt": {
+      "bytes": 1803,
+      "sha256": "ded458900cc313c807eb5c67218ab5dc235658f695b342bfc3e917328e57f2c8"
+    },
+    "voice-v464/ui-case/private/network-events.jsonl": {
+      "bytes": 42349,
+      "sha256": "2cc6879e4ff4225ef79afd093c4f32f1357c5c1fa60d18b7af6f96361a09c6e1"
+    },
+    "voice-v464/ui-case/result.json": {
+      "bytes": 1112,
+      "sha256": "6b785fff1bc5a1b4de050e279f5bc6ac67c65cf1c6387f1cbcc6b33bf2ec95a1"
+    },
+    "voice-v464/ui-case/safe-projection.json": {
+      "bytes": 49279,
+      "sha256": "df81e9637cb2dde97f9a639b2cd9dbbe4e4429b6d15540d8b0ab95506397fb4c"
+    },
+    "web-build-v463/packet.json": {
+      "bytes": 719,
+      "sha256": "d5b62915d9549912a53d184ac8c41089fd6dc908e183be1b053dbef8698528d1"
+    },
+    "web-build-v463/production-web.log": {
+      "bytes": 2215,
+      "sha256": "c11c3ad2d33d584120b594313db8102924789ce8ad1bd3ec3b6c21364d279622"
+    },
+    "web-build-v463/progress.json": {
+      "bytes": 1547,
+      "sha256": "43bdbc2572175953115f2c8a526fe330b97e2f333b83abbfdb3464f115b5d5c0"
+    },
+    "web-build-v463/spawn.json": {
+      "bytes": 761,
+      "sha256": "8538bbcd63bf52ff56f5f81b7bc939f8858b890117040f74158891322aef5376"
+    },
+    "web-build-v463/terminal.json": {
+      "bytes": 2181,
+      "sha256": "977ff7f96413243651632902ee4c201c0e3ea673253e450fc75747e4b6e6d4b6"
+    },
+    "web-build-v463/voice-typescript.log": {
+      "bytes": 0,
+      "sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+    },
+    "web-build-v463/voice-worker-existing-wasm.log": {
+      "bytes": 0,
+      "sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+    }
+  }
+}

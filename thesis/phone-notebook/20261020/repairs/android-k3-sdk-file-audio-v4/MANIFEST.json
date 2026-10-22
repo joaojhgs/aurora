@@ -1,0 +1,55 @@
+{
+  "schema": "aurora.android.k3.file_audio.overlay.v1",
+  "at": "2026-10-22T07:20:34.180390+00:00",
+  "baseSourceSha": "ebde3a8acf6315f920d03593845f17a1fc65a733",
+  "desktopFixtureBase": "Root source-closure-overlay-v2383 approved48b6fc59",
+  "sourceEpoch": "android-k3-sdk-file-audio-v4",
+  "files": [
+    {
+      "path": "apps/aurora-tauri/src/tauri-app.tsx",
+      "baseSha256": "1b7637e5359e4c02cf1df52f968b799f50947ad0c9607d1fdf84e3252824db65",
+      "bytes": 114077,
+      "sha256": "b8b0cd58c1def964a616b7a73d0c76cca14124d5c2837d8a67d5f16b54044fc5"
+    },
+    {
+      "path": "apps/aurora-tauri/src/vite-env.d.ts",
+      "baseSha256": "90bd48f78c1b0df2f700fbb6c95ca2729dd0e166f38b4c9ceb5b2af4b49f482c",
+      "bytes": 682,
+      "sha256": "7e93d75729f4aec3b7ac08fb1650285220a54f0fa420d43a6c9e1037d5b39997"
+    },
+    {
+      "path": "apps/aurora-tauri/scripts/prepare-android-client-bundle.mjs",
+      "baseSha256": "2fc0b29372891a2bb56cd34fdc07e6fd4a4a9390065d2e6a045609aef2da7a56",
+      "bytes": 3198,
+      "sha256": "9735468797f55eaf7fdf18ab99905f026225d6f79f4311c1f638176ac85e23fb"
+    },
+    {
+      "path": "apps/aurora-tauri/src/desktop-file-audio-e2e.ts",
+      "baseSha256": "48b6fc597996536ead4439bca2024a3b3a4f5c6d1ad4c64f8a5d68f84a05c522",
+      "bytes": 11468,
+      "sha256": "08b3f10b333a2ad2aa1ae872815d40218d5f99693ee94cb434b8522419a29e87"
+    },
+    {
+      "path": "apps/aurora-tauri/src/android-file-audio-e2e.ts",
+      "baseSha256": null,
+      "bytes": 4472,
+      "sha256": "002628b915e1ed100160504a917ba5c8d54e293318eff0bedbef7eb10004ba4c"
+    },
+    {
+      "path": "apps/aurora-tauri/src/android-file-audio-e2e.test.ts",
+      "baseSha256": null,
+      "bytes": 2778,
+      "sha256": "3820152b7189d0e881a5f716e88d69b173f44a928bf50de6cfa8aade9945ce9e"
+    }
+  ],
+  "patchSha256": "12644898f589c9bbeaf4ddc5e8db2a799b267148f032a939bb93963c33152b70",
+  "scope": "K3 only. Existing desktop gate preserved; Android surface from central profile, dedicated debug build flag and actual native debug command permission; exact authorized HTTP/mesh-only mode and peer/origin gate, no HTTP fallback or grant/pairing changes",
+  "testClaims": "Not built, not installed, no route or inference acceptance yet; requires actual authenticated same-pair pilot/provider correlation",
+  "productionSourcesOrGitMutated": false,
+  "verificationPlan": [
+    "4 narrow route/surface gate unit regressions; no inference claims",
+    "TypeScript typecheck of isolated app",
+    "actual voice-live-test APK build/install",
+    "real production same-pair SDK file-audio pilot and provider correlation before any900"
+  ]
+}

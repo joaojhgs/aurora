@@ -1,0 +1,40 @@
+{
+  "at": "2026-10-15T01:34:35.987696+00:00",
+  "host": "personal.skyron-server",
+  "retainedRoot": "/home/developer/projects/aurora/.git/aurora-real-ui-typed-v461",
+  "fixturePresent": true,
+  "runtimeTerminal": true,
+  "builds": [
+    {
+      "root": "/home/developer/projects/aurora/.git/aurora-web-product-v450",
+      "terminalPresent": true,
+      "exitCode": 0,
+      "buildId": "UBSgEGgCRuvqTsFtR7xbp",
+      "sourcePresent": false
+    },
+    {
+      "root": "/home/developer/projects/aurora/.git/aurora-web-capture-v463",
+      "terminalPresent": true,
+      "exitCode": 0,
+      "buildId": "CujxufTIY73eYYc6iXAj1",
+      "sourcePresent": true
+    }
+  ],
+  "dataFiles": [
+    {
+      "relativePath": "data/aurora.db",
+      "bytes": 548864,
+      "sha256": "1e9cddbf311bc9b43c7fa9afefc6f8315e2a8f75ae9e35a89540faeb5c113ae7"
+    }
+  ],
+  "retainedFixtureLoginPairPresent": true,
+  "retainedFixtureContainsSavedToken": false,
+  "fixtureSHA256": "22efa4676773d986abf71582daab357112408041ce393e10a0e4b56093d71d48",
+  "dbPathSettings": {},
+  "sourceConfigSHA256": "134effa8000da4dd6959137d84e305a4b39fbbf4fa4580d36b1e67b0f1aeb35c",
+  "free": {
+    "home": 390856704,
+    "shm": 589979648
+  },
+  "globalLockAvailable": true
+}

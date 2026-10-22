@@ -1,0 +1,56 @@
+{
+  "at": "2026-10-20T21:57:29.565241+00:00",
+  "status": "TERMINAL_ZERO_MEASURED_INSTRUMENTATION_ADMISSION_FAILURE",
+  "warmupsCorrect": 15,
+  "warmupsFailed": 0,
+  "measuredAttempted": 0,
+  "measuredUnattempted": 900,
+  "stopReason": "remote_stage_proof_deadline",
+  "routeSink": {
+    "accepted_rows": 30,
+    "complete": false,
+    "dropped_rows": 0,
+    "invalid_rows": 15,
+    "max_row_bytes": 32768,
+    "max_rows": 1846,
+    "max_total_bytes": 67108864,
+    "oversize_rows": 0,
+    "queue_capacity": 256,
+    "quota_rows": 0,
+    "schema": "aurora.mesh_route_observation_sink.v1",
+    "state": "drain_incomplete",
+    "writer_error_class": null,
+    "written_bytes": 49470,
+    "written_rows": 30
+  },
+  "cause": "Old two-topic sink rejected all15STT route records; no historical STT route samples fabricated/reconstructed",
+  "actors": [
+    {
+      "pid": 3107331,
+      "absent": true
+    },
+    {
+      "pid": 3107584,
+      "absent": true
+    },
+    {
+      "pid": 3107332,
+      "absent": true
+    },
+    {
+      "pid": 3107333,
+      "absent": true
+    }
+  ],
+  "allFrozenSourcesRawCasesAudioPreserved": true,
+  "replacement": "thesis/campaigns/worker-desktop-k3-p2p-full-audio-v1949/",
+  "runtimeDelta": "Only sink STT topic allowlist and declared three-stage quota; no model/audio/settings/predicate/service source change",
+  "custodyCurrent": {
+    "sequence": 9,
+    "completedCases": 15,
+    "files": 92,
+    "lastReceipt": "thesis/campaigns/worker-desktop-k3-p2p-full-audio-v1937/receipts/000009.json",
+    "lastReceiptSha256": "4c1822bd2a5010085402638e9dc22c6eda134003d27aa9ae361f38c0239f3100"
+  },
+  "savedRegression": "thesis/evidence/k3-stt-sink-main-regression-v1948/RESULT.json"
+}

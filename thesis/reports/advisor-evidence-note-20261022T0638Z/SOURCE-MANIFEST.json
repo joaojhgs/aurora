@@ -1,0 +1,174 @@
+{
+  "draftOnly": true,
+  "submissionReady": false,
+  "recordedAt": "2026-10-22T06:41:52.962025+00:00",
+  "cutoffUtc": "2026-10-22T06:30:00Z",
+  "scope": "Existing six W-D conditions; full matrix remains open",
+  "run": "run_e6054e76e9fc",
+  "task": "task_d7ea336050cf",
+  "dispatch": "ctx_37b4d0a3c14f",
+  "humanVerification": "pending",
+  "sourceReadScope": "Saved aggregate summaries and exact receipt artifacts only; no raw-case audit/recompute",
+  "sources": [
+    {
+      "id": "E001",
+      "path": "thesis/results/worker-desktop-k1-http-full900-v2403/FULL900-SUMMARY.json",
+      "kind": "K1 HTTP final outcome/epoch/statistics/release index",
+      "bytes": 10109,
+      "sha256": "cc803a992a86d9b15c41e2c6b5f01f6e4400360f0ad61a5f54f4b1dff041dbdc",
+      "agentOpened": true,
+      "humanVerification": "pending",
+      "sourceLocator": "named JSON fields or dated plan sections"
+    },
+    {
+      "id": "E002",
+      "path": "thesis/campaigns/worker-desktop-k1-p2p-tts-remaining191-v2153/CONDITION-CLOSURE-v2201.json",
+      "kind": "K1 P2P outcome, failures and epoch quantiles",
+      "bytes": 4766,
+      "sha256": "50bc75b43b8dd7c1071de2380dab383306f935b6c9ba8bf0dbd2413382d9d5a0",
+      "agentOpened": true,
+      "humanVerification": "pending",
+      "sourceLocator": "named JSON fields or dated plan sections"
+    },
+    {
+      "id": "E003",
+      "path": "thesis/campaigns/worker-desktop-k2-orca-relayed-http-v1264/terminal-v1465/FINAL-VALIDATION-v1472.json",
+      "kind": "K2 HTTP final outcome, native/resource scope and unknown metrics",
+      "bytes": 4389,
+      "sha256": "910992937bdd8235d01d953eb9ac771df2c5409466ad2f075230bf020f64b8d4",
+      "agentOpened": true,
+      "humanVerification": "pending",
+      "sourceLocator": "named JSON fields or dated plan sections"
+    },
+    {
+      "id": "E004",
+      "path": "thesis/campaigns/worker-desktop-k2-orca-relayed-http-v1264/terminal-v1465/analysis-v1469/SUMMARY.json",
+      "kind": "K2 HTTP retained latency/source analysis",
+      "bytes": 107912,
+      "sha256": "f1b1231416c5a0996b940b7f6103839965eba1479b7b137f25b3251d6f747c7f",
+      "agentOpened": true,
+      "humanVerification": "pending",
+      "sourceLocator": "named JSON fields or dated plan sections"
+    },
+    {
+      "id": "E005",
+      "path": "thesis/campaigns/worker-desktop-k2-p2p-assistant-tts-v1826/CONDITION-CLOSURE-v1906.json",
+      "kind": "K2 P2P outcome and failure classes",
+      "bytes": 2262,
+      "sha256": "050cd4d9d698696900f7c7189537cb810320ed33bbf668d2d6c996eea8352eb3",
+      "agentOpened": true,
+      "humanVerification": "pending",
+      "sourceLocator": "named JSON fields or dated plan sections"
+    },
+    {
+      "id": "E006",
+      "path": "thesis/campaigns/worker-desktop-k2-p2p-assistant-tts-v1826/analysis-v1904/SUMMARY.json",
+      "kind": "K2 P2P latency/model/input/route/resource record",
+      "bytes": 7150,
+      "sha256": "797a2347c7e3a72936a595720c710dc14f091498ddfbac12bde4d26a7ff2c222",
+      "agentOpened": true,
+      "humanVerification": "pending",
+      "sourceLocator": "named JSON fields or dated plan sections"
+    },
+    {
+      "id": "E007",
+      "path": "thesis/campaigns/worker-desktop-k3-orca-relayed-http-remaining-v1682/condition-900-analysis/SUMMARY.json",
+      "kind": "K3 HTTP outcomes, matched-epoch quantiles and comparability policy",
+      "bytes": 7307,
+      "sha256": "d0442026536ce0582e1b7ff87307e05ff125be3b6f468848e7867fc6ab67886b",
+      "agentOpened": true,
+      "humanVerification": "pending",
+      "sourceLocator": "named JSON fields or dated plan sections"
+    },
+    {
+      "id": "E008",
+      "path": "thesis/campaigns/worker-desktop-k3-p2p-full-audio-v2043/CONDITION-CLOSURE-v2134.json",
+      "kind": "K3 P2P outcome and failures",
+      "bytes": 5938,
+      "sha256": "3a3346861985651388c067dc604b26a635bfa7bbb24215fcf972f89f47a272b4",
+      "agentOpened": true,
+      "humanVerification": "pending",
+      "sourceLocator": "named JSON fields or dated plan sections"
+    },
+    {
+      "id": "E009",
+      "path": "thesis/campaigns/worker-desktop-k3-p2p-full-audio-v2043/analysis-v2130/RESULT.json",
+      "kind": "K3 P2P correct-only and failure-time quantiles",
+      "bytes": 7367,
+      "sha256": "0c87ed8ab8ac34fcf021fa2fb490df476eca877d22638f20e2eb2be9dae9870f",
+      "agentOpened": true,
+      "humanVerification": "pending",
+      "sourceLocator": "named JSON fields or dated plan sections"
+    },
+    {
+      "id": "E010",
+      "path": "thesis/phone-notebook/20261020/PHONE-LOCAL-LLM-QUALIFIED-20261022.json",
+      "kind": "PHONE local LLM qualification; zero measured/full audio/routes unqualified",
+      "bytes": 1784,
+      "sha256": "baff2d8e0c308a1266f73be1cbab58e28cfa044ab8051e6e50474601522ce463",
+      "agentOpened": true,
+      "humanVerification": "pending",
+      "sourceLocator": "named JSON fields or dated plan sections"
+    },
+    {
+      "id": "E011",
+      "path": "thesis/phone-notebook/20261020/evidence/read-phone-llm-v177/result.json",
+      "kind": "PHONE actual native calls/model/cancellation/close receipt",
+      "bytes": 4222,
+      "sha256": "f5ecd48d58b01d397ad9bc3c2458d20212d00b2964401d783dd27ea63dc291ba",
+      "agentOpened": true,
+      "humanVerification": "pending",
+      "sourceLocator": "named JSON fields or dated plan sections"
+    },
+    {
+      "id": "E012",
+      "path": "thesis/evidence/main-waydroid-admission-v2406/RESULT.json",
+      "kind": "Bounded unresolved Waydroid binding result",
+      "bytes": 1158,
+      "sha256": "58898b0c195087832278063f23512d2605d74ddf8d0c1c4f96d887d7aaba89dc",
+      "agentOpened": true,
+      "humanVerification": "pending",
+      "sourceLocator": "named JSON fields or dated plan sections"
+    },
+    {
+      "id": "E013",
+      "path": "thesis/campaigns/c12-mixed-local-http-readiness-v2407/ROOT-ACTUAL-PAIRED-PILOT-LAUNCH-v2409.json",
+      "kind": "One excluded C12 paired pilot launch; not a measured campaign",
+      "bytes": 2238,
+      "sha256": "389977fe84cc1c83b1c52e3df4cfd386f78c490a5bebeab8f84a446b93f89924",
+      "agentOpened": true,
+      "humanVerification": "pending",
+      "sourceLocator": "named JSON fields or dated plan sections"
+    },
+    {
+      "id": "E014",
+      "path": "thesis/methodology/owner-requirements-20261022-d81f2cf2.md",
+      "kind": "Complete authoritative plan mirror through section30.80",
+      "bytes": 862521,
+      "sha256": "d81f2cf237a0d0404ccb2a3f29420b3062afb22980059de3c54a51137af3d845",
+      "agentOpened": true,
+      "humanVerification": "pending",
+      "sourceLocator": "named JSON fields or dated plan sections"
+    },
+    {
+      "id": "E015",
+      "path": "thesis/results/worker-desktop-k1-http-full900-v2403/RESOURCE-RELEASE.json",
+      "kind": "K1 actual runtime/collector and cohort allocation release",
+      "bytes": 2264,
+      "sha256": "92422e2c83f0358873813d57e4a51806bdfd6dc7ba2f3634633df8ab0c8cfe37",
+      "agentOpened": true,
+      "humanVerification": "pending",
+      "sourceLocator": "named JSON fields or dated plan sections"
+    },
+    {
+      "id": "E016",
+      "path": "thesis/results/worker-desktop-core-v2231/inventory.json",
+      "kind": "Older saved-results discovery index; K1 HTTP count is superseded by E001",
+      "bytes": 13650,
+      "sha256": "fffc6558068b9625315a4d407787de030f3913af13017bb847ed806dde8263e5",
+      "agentOpened": true,
+      "humanVerification": "pending",
+      "sourceLocator": "named JSON fields or dated plan sections"
+    }
+  ]
+}

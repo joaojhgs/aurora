@@ -1,0 +1,19 @@
+{
+  "at": "2026-10-16T15:41:54.967868+00:00",
+  "startedAt": "2026-10-16T15:41:42.689809+00:00",
+  "command": [
+    "pnpm",
+    "--filter",
+    "@aurora/tauri-ui",
+    "exec",
+    "vitest",
+    "run",
+    "--environment",
+    "jsdom",
+    "--no-file-parallelism",
+    "src/offline-profile-main.test.ts"
+  ],
+  "exitCode": 0,
+  "error": null,
+  "scope": "Affected saved-profile reuse tests and Tauri types only. Existing stored language representation is canonical lowercase; no product normalization change or unrelated replay."
+}

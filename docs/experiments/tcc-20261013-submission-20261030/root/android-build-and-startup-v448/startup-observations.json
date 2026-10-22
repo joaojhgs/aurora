@@ -1,0 +1,49 @@
+{
+  "screenshot": {
+    "width": 1280,
+    "height": 768,
+    "bytes": 8245,
+    "sha256": "a6b821d79535ded5d93a2ca6aec30fe27fa6be35970668316d3890562d9df41d",
+    "observed": "black app content, status/navigation bars visible"
+  },
+  "accessibilityTree": {
+    "class": "android.webkit.WebView",
+    "enabled": true,
+    "children": 0,
+    "bounds": [
+      0,
+      0,
+      1280,
+      768
+    ]
+  },
+  "webview": "com.android.webview 146.0.7680.153 targetSDK36",
+  "rawPrimaryLogs": [
+    {
+      "bytes": 32422,
+      "sha256": "703a35dfdaef0265be7ab7188415d8e160d92bb317a5c20df50070bbdab95614"
+    },
+    {
+      "bytes": 31121,
+      "sha256": "9618829ed9e0e69db6b3aec1a14e4301e2ec6456a1d10e7ab3439c20375baabb"
+    }
+  ],
+  "profileValidationCode": "profile_canonical_validation_failed",
+  "profileErrorCausedBlackScreen": "not established; detached setup + caught frontend bootstrap rejection",
+  "sourceMapSHA256": "41310a3de6407a24d96a42acbfe216394c78cda7086531f153eb9f55f4e12103",
+  "fiveRelevantSourceFilesMatchArtifactBase": true,
+  "sourceContinuitySHA256": "0828649eb8af506dfe9c3517f2a4d79cc2dd0e0a0a0c026edc2526e57d63ec87",
+  "boundedInspection": {
+    "start": "2026-10-14T23:17:19.699Z",
+    "finish": "2026-10-14T23:17:28.978Z",
+    "resultBytes": 628,
+    "rawResultSHA256": "29ae1659903feae3d6bc7e46191eb2a74c387409a99fe763136df4dabf704375",
+    "reason": "inspection_failed",
+    "error": "Error: Android WebView CDP connection failed: flattened browser session: Android WebView CDP command timed out: Runtime.enable; nested browser session: Android WebView CDP command timed out: Runtime.enable; direct page session: Android WebView CDP command timed out: Runtime.enable",
+    "temporaryOwnedLoopbackForwardRemoved": true,
+    "reloads": 0,
+    "modelRequests": 0,
+    "domObserved": false
+  },
+  "cause": "unclassified, WebView runtime inspection did not respond; no speculative profile patch/rebuild/relaunch"
+}

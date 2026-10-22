@@ -1,0 +1,63 @@
+{
+  "at": "2026-10-22T10:58:27.811277+00:00",
+  "nativeGoalThread": "01a112a5-d6bb-74e2-bf7c-ace73cb513b5",
+  "nativeGoalStatus": "active",
+  "requesterOriginalPid": 281887,
+  "requesterOriginalStartTicks": 143363140,
+  "requesterAbsent": true,
+  "httpMeasured": {
+    "attempted": 260,
+    "correct": 260,
+    "failed": 0,
+    "unstarted": 640
+  },
+  "localReceiptMeasured": {
+    "attempted": 260,
+    "correct": 260,
+    "failed": 0,
+    "lastReceiptOrdinal": 261,
+    "lastCaseStatus": "completed_correct",
+    "lastAudioSha256": "a7b14d0883f1405132f5ee5f5f4edb4b0437169ae7b0129a10717d6ccaf05dfc",
+    "lastCapsuleFullPhysicalCopyStillPending": true
+  },
+  "failureClass": "accepted_copy_control_output_unobserved",
+  "originalFailurePreserved": "/home/developer/projects/aurora/thesis/campaigns/c12-mixed-local-http-900-v2426/REQUESTER-EXCEPTION.json",
+  "providerReservation": "RETAINED_PENDING_ACTUAL_ACTOR_RECONCILIATION",
+  "oldRunningCurrentIsStale": true,
+  "modelQualityInference": false,
+  "inferenceReplayed": 0,
+  "sourceSettingsClockChanged": false,
+  "nextAction": "single read-only sealed missing-page export and exact actor status through original plain control; no blind resend",
+  "copiedControlReceipts": [
+    {
+      "path": "thesis/campaigns/c12-mixed-local-http-900-v2426/recovery-v2448/root-c12-copy-failure-monitor-v2448.json",
+      "bytes": 1820,
+      "sha256": "89e7c4363359c6b22744e14bd98cf915a575dc82f2dffa1b2c0f1779b038ff66"
+    },
+    {
+      "path": "thesis/campaigns/c12-mixed-local-http-900-v2426/recovery-v2448/root-c12-desktop-show-v2448.json",
+      "bytes": 1318,
+      "sha256": "e4b23aa176a86a82146505a367058e17c11231b2bceb0a33b1a831eb5ba2fbd4"
+    },
+    {
+      "path": "thesis/campaigns/c12-mixed-local-http-900-v2426/recovery-v2448/root-c12-desktop-screen-v2448.json",
+      "bytes": 2469,
+      "sha256": "27d53993815245ea2c356d4649ed27939bc5af5a675440034bbc0c2865161746"
+    },
+    {
+      "path": "thesis/campaigns/c12-mixed-local-http-900-v2426/recovery-v2448/c12-v2426-pair-0261-page-01-SEND.json",
+      "bytes": 289,
+      "sha256": "e7c6947e6998f4b55821445ba99c88b2ab103a1fdfd80c19963db423b83c41a6"
+    },
+    {
+      "path": "thesis/campaigns/c12-mixed-local-http-900-v2426/recovery-v2448/c12-v2426-pair-0261-page-01-SEND-INTENT.json",
+      "bytes": 59,
+      "sha256": "37f9d9f49a877b0afeda9e335b5a8549cdfb4066af3553e8e5965ff3d3d3f70a"
+    },
+    {
+      "path": "thesis/campaigns/c12-mixed-local-http-900-v2426/recovery-v2448/c12-v2426-pair-0261-page-00-RESULT.json",
+      "bytes": 49671,
+      "sha256": "538fc3c5c13319a7c02b68e70734e77930b67f8627ce4d6a2f9081b18a581399"
+    }
+  ]
+}

@@ -1,0 +1,33 @@
+{
+  "schema": "aurora.thesis.default-execution-guard.v747",
+  "at": "2026-10-15T23:11:48.762675+00:00",
+  "python": "3.11.17 (main, Oct  3 2026, 01:03:29) [Clang 22.1.3 ]",
+  "scope": "Actual default invocations refuse before model/bootstrap/Supervisor execution; not a real runtime/setup/inference validation. Explicit execution env removed for these two invocations.",
+  "explicitOptInEnvUnset": "AURORA_THESIS_EXECUTE",
+  "newMeasuredRequests": 0,
+  "modelsOrServicesLoaded": false,
+  "results": [
+    {
+      "source": "thesis/harness/python-cpu-v1/runner.py",
+      "sourceSHA256": "7a4b01b357e235fdc70c8ad6d80f5254d854b145d529b3e464759da2b498146d",
+      "command": [
+        "/home/developer/projects/aurora/.venv/bin/python",
+        "thesis/harness/python-cpu-v1/runner.py"
+      ],
+      "exitCode": 1,
+      "durationSeconds": 0.1293903390178457,
+      "stderr": "Use the manual launcher with explicit measurement opt-in."
+    },
+    {
+      "source": "thesis/harness/python-cpu-v1/bootstrap.py",
+      "sourceSHA256": "f5427da01815047ea886cf867147bd0175a187d1dda2c2bbc0fc905209d755d7",
+      "command": [
+        "/home/developer/projects/aurora/.venv/bin/python",
+        "thesis/harness/python-cpu-v1/bootstrap.py"
+      ],
+      "exitCode": 1,
+      "durationSeconds": 0.13986901799216866,
+      "stderr": "Use the manual launcher with explicit measurement opt-in."
+    }
+  ]
+}

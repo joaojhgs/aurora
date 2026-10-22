@@ -1,0 +1,39 @@
+{
+  "recordedAt": "2026-10-22T06:41:52.962025+00:00",
+  "status": "REVIEWABLE_STANDALONE_UNCOMPRESSED_ADVISOR_DRAFT_COMPLETE",
+  "outcomeRows": 6,
+  "latencyRows": 10,
+  "claimCount": 33,
+  "sourceCount": 16,
+  "consistency": "Displayed saved aggregate values, populations, units and claim/source links reconciled once",
+  "freeBytesBefore": 2785169408,
+  "files": [
+    {
+      "path": ".omx/evidence/orca-monitor-20261010/advisor-evidence-note-20261022T0638Z/REVIEW-DRAFT.md",
+      "bytes": 18134,
+      "sha256": "40e76e7537f469fde7e130958677fa058c0f48fb9319bf7ee1e9b1faabd946b3"
+    },
+    {
+      "path": ".omx/evidence/orca-monitor-20261010/advisor-evidence-note-20261022T0638Z/SOURCE-MANIFEST.json",
+      "bytes": 7483,
+      "sha256": "5816c6d6fe02a8f94b209c43fc509a71aebe1176cfbba6d6b77f684a2ca74d60"
+    },
+    {
+      "path": ".omx/evidence/orca-monitor-20261010/advisor-evidence-note-20261022T0638Z/NUMERIC-EXTRACT.json",
+      "bytes": 2366,
+      "sha256": "67d00333a6a855917ed7b72593b608a5b9dd33a991dcba594c96783bdd51b966"
+    },
+    {
+      "path": ".omx/evidence/orca-monitor-20261010/advisor-evidence-note-20261022T0638Z/CLAIMS.csv",
+      "bytes": 3511,
+      "sha256": "633d48a84d227e16f88a41bed8f9cc377ca750338d38fd79143121b34a604940"
+    }
+  ],
+  "newTestsModelsDevicesNetworkBenchmarks": 0,
+  "sourceOrGitWrites": 0,
+  "canonicalTccEdits": 0,
+  "humanApproval": "pending",
+  "rootCanonicalThesisCopy": "pending safe checkpoint; no SUT gate",
+  "personalTelegramDelivery": "not sent/unverified",
+  "skill": "local scientific-writing v2.1; no unverified external references"
+}

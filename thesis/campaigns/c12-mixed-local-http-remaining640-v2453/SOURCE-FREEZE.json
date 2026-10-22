@@ -1,0 +1,79 @@
+{
+  "at": "2026-10-22T11:08:01.630806+00:00",
+  "helperPath": "thesis/harness/orca_copy_control_compact_v2453.py",
+  "helperSha256": "3f3483a72de51b4597d6bebcc29f0bb23a19d05afb4e65118582259cd95819ea",
+  "newWarmups": 15,
+  "priorRelease": {
+    "at": "2026-10-22T11:04:53.773299+00:00",
+    "campaignManifestSha256": "316d4cc09adc44d0104dca8ac1f2a966347588ffef37bc2fa809ec14fd5efff8",
+    "cohortAllocationReleased": true,
+    "correctPerStream": 260,
+    "failedPerStream": 0,
+    "fullAggregateGoalComplete": false,
+    "httpMeasured": 260,
+    "localMeasured": 260,
+    "originalFailurePreserved": true,
+    "originalMasterClocksUnchanged": true,
+    "originalProviderActorsAbsent": true,
+    "originalRequesterAbsent": true,
+    "physicalProviderAudioCases": 261,
+    "physicalRequestAudioCases": 261,
+    "positiveFlowEvidenceGaps": 0,
+    "priorWarmupPairsExcludedSeparately": 15,
+    "providerEofArchiveBytes": 210361,
+    "providerEofArchiveSha256": "e974b9d707d3887a258a4241d1a8927a4f502b1a2d67beb36d77366ca2b832db",
+    "rawAndAudioCustodyVerified": true,
+    "rawEof": {
+      "at": "2026-10-22T11:02:48.421131+00:00",
+      "newInference": 0,
+      "prefixCapsules": 261,
+      "rawDuplicatedOnDisk": false,
+      "status": "ALL_FOUR_SAVED_RAW_PREFIXES_PLUS_EOF_MATCH_SEALED_MANIFEST",
+      "streams": {
+        "actual-provider-bindings.jsonl": {
+          "bytes": 395259,
+          "sha256": "a8fa46f4fd65d6587e4add8d8cdd938bf91577ad8e7c6ea461e42c015635ab36"
+        },
+        "bus-queue-observations.jsonl": {
+          "bytes": 616722,
+          "sha256": "f0f002b4ebeb928a60bbae576d5d1ed4625a0bac528d36d1480c69dadfd9362c"
+        },
+        "resources.jsonl": {
+          "bytes": 50616414,
+          "sha256": "f444ada6be0934617f29ec9bfb04b02f8c71831ccf3a36f4ca2d8212302bdaeb"
+        },
+        "voice-stages.jsonl": {
+          "bytes": 8688168,
+          "sha256": "f05020291b86dc2d5ca735cc38defa44a0bc5510e44f0d8ab8286b85f2b97f32"
+        }
+      }
+    },
+    "remainingGlobalIndices": [
+      261,
+      900
+    ],
+    "remainingPerStream": 640,
+    "rootSchedulingBuildLockWaydroidOwnership": "RETAINED_ORIGINAL_ROOT",
+    "sourceSettingsUnchanged": true,
+    "status": "INTERRUPTED_260_PER_STREAM_SEALED_RECONCILED_640_REMAINING",
+    "summary": "thesis/results/c12-mixed-local-http-260partial-v2452/SUMMARY.json",
+    "summarySha256": "ffe05ce69df3890df1f082e4b38a64648cd813d689dc3b2482a6aebb877a7469",
+    "warmupPairsInThisEpochExcluded": 1
+  },
+  "remainingMeasuredPerStream": 640,
+  "runtimeMutations": 0,
+  "sourceHashes": {
+    "campaign.py": "869090e10d905852dfbdfe626bbe2256c01f71ab5cd89148690cfecc02a4e366",
+    "collect_pair.py": "f7efcd8d6bddb41a5322c9e5039a6ef4274d4cd386354dc1545ba0320035f38d",
+    "k3_composition.py": "777bfb6abf34a1485a38c1076c86a06776de4017f1f27715b326403aba15effa",
+    "local_composition.py": "aaf9585ad24429c44ea5ed78b00a7ad49369f324528f901ac46a56eae9b22ba0",
+    "local_producer.py": "05b97cb34a0caa0695c160ef2fe954a8e2adb8f6f51e057229f8b633f5f9e762",
+    "paired_case.py": "0aa71849448d2f046a18defe59a805de6973b8df56d0fc22e3626cd5ed1d7da6",
+    "prepare_and_launch.py": "3e6ed76441ff60a8d37149e27866a1af6a4c2a9bc84df4cb7322e99529fcc0d0",
+    "provider_controller.py": "fa94acde611d40061d4aa0dcd647c5e66f1c5315ca0129d615c3ff585dee87b5",
+    "queue_observer.py": "a57ef99e9c48bd7442068d5ea8f8bee016141fbc5f4efd8f9a7e78a1a5631afb",
+    "requester_controller.py": "95f2b7f33e18d33532538cb8e7087e27809bb88cfc511ca4f2fb66f3d3e47a53",
+    "stage_adapter.py": "f678712c75a50146194ccb34331fab8d995f057461e565be99be8d69c2b364a6",
+    "warmup_gate.py": "98d8998a11ebf56f5e110c6c4185e1ec3dbe1f1b37f77b875a27d7a9ff422746"
+  }
+}

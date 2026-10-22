@@ -1,0 +1,7 @@
+{
+  "bodyText": "Aurora\nAurora thin client\nASSISTANT\nAssistant\nMemory & Knowledge\nTools & Plugins\nMesh\nCONFIGURE\nModels\nSettings\nME\nmember\nLimited access\nAurora is running on this computer\nHealthy\nMember\nv1.0.0\n\u00b7 connected\n\nText chat with Aurora\nConnection and model status for this conversation.\nSelected model\nConfigured default\nModel state\nconfigured\nAnswers from\nLocal\nOn this device\nStarting Aurora on this computer\nConnection\nOn this computer\nRecent chats\n\nNew conversation\nNo conversations yet.\nStart with a promptAurora will show responses here after it finishes answering.\nScroll to end\n\nUSING\nthis device\n\nMODEL\nConfigured default\nPrompt\nAttachment context status\n0 ready, 0 blocked\n\nAllow connected voice\n\nPush to talk\n\nActivity\nLive\nAurora ready\nPages and actions are available\nnow\nAurora is running on this computer\nConnected to Aurora\nlive\nPrivacy guard active\nSensitive details stay hidden\nlive\nDevice connection\nAurora thin client is connected\nready\nDevice features\nAurora is running on this computer\nlimited",
+  "hook": true,
+  "href": "tauri://localhost",
+  "native": true,
+  "title": "Aurora"
+}

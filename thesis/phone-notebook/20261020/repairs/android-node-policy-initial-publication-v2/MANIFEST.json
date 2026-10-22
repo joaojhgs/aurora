@@ -1,0 +1,24 @@
+{
+  "at": "2026-10-22T05:44:58.076047+00:00",
+  "authority": "owner phone issues implementation expansion",
+  "sourceIdentity": "ebde+v2383+android-bundled-model-rename-v1+android-node-policy-initial-publication-v2",
+  "baseSourceSha": "ebde3a8acf6315f920d03593845f17a1fc65a733",
+  "path": "rust/crates/aurora-voice-native/src/node_config_file.rs",
+  "baseSha256": "915c62e4937b561adfabc2c67e3502a7ee1ab670ad19d256c0ac80264645b84c",
+  "baseBytes": 34552,
+  "sha256": "96b18b4df00e21e8ae40c805a750cde0dc91805e35cd0b17009980f77864ff41",
+  "bytes": 37061,
+  "patchSha256": "d4b2babfbdd4e62fc6b488a519fb5c9d8337bb2c213bc58915f2fa986a661082",
+  "actualFailureReceipt": "evidence/diagnose-phone-policy-v164/result.json",
+  "atomicityBoundary": "documented in-process sole NodeConfigOperationOwner; no cross-process lock or no-replace primitive claimed",
+  "checksPreserved": [
+    "existing target/symlink preserved",
+    "synced staging bytes",
+    "directory fsync",
+    "CAS and quarantine",
+    "all non-Android behavior"
+  ],
+  "newDependencies": false,
+  "unsafeCode": false,
+  "sharedSourceOrGitMutated": false
+}

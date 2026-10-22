@@ -1,0 +1,93 @@
+{
+  "observedAtUtc": "2026-10-14T18:02:29.215707+00:00",
+  "controller": {
+    "kind": "desktop_gpu_typed_primary_controller",
+    "pid": 2707431,
+    "host": "personal.skyron-server",
+    "startedAtUtc": "2026-10-14T17:56:39.837483+00:00",
+    "overallCapSeconds": 20160,
+    "epochCapSeconds": 3300,
+    "plannedMeasuredPerCondition": 900,
+    "plannedWarmupsPerCondition": 15,
+    "plan": [
+      {
+        "route": "local-only",
+        "epoch": 1
+      },
+      {
+        "route": "local-only",
+        "epoch": 2
+      },
+      {
+        "route": "local-only",
+        "epoch": 3
+      },
+      {
+        "route": "api",
+        "epoch": 1
+      },
+      {
+        "route": "api",
+        "epoch": 2
+      },
+      {
+        "route": "api",
+        "epoch": 3
+      }
+    ],
+    "attemptedEpochs": [
+      {
+        "route": "local-only",
+        "epoch": 1,
+        "launcherPid": 2707432,
+        "startedAtUtc": "2026-10-14T17:56:39.838821+00:00",
+        "status": "running"
+      }
+    ],
+    "conditions": {},
+    "status": "running",
+    "scope": "typed Assistant local/API only; full voice and other applicable surfaces remain required",
+    "GPUWholeIndividualFinishedSealed": false,
+    "crossDeviceMeasuredAllowed": false
+  },
+  "activeEpochLaunch": {
+    "kind": "actual_desktop_gpu_primary_epoch_launch",
+    "startedAtUtc": "2026-10-14T17:56:39.900723+00:00",
+    "pid": 2707433,
+    "startTicks": "62890835",
+    "parentPid": 2707432,
+    "host": "personal.skyron-server",
+    "sourceRoot": "/home/developer/projects/aurora/.git/aurora-root-gpu-primary-v408/source-v409",
+    "sourceCommit": "c0f4c0013cea5bb11ef81297194d0dc142a47bc4",
+    "output": "/home/developer/projects/aurora/.git/aurora-handoff-import-20261006/desktop-gpu-primary-v415/local-only/epoch-1",
+    "requestCapSeconds": 3300,
+    "outerCapSeconds": 3350,
+    "epochIndex": 1,
+    "route": "local-only",
+    "requestsPlanned": 305,
+    "warmupRequestsPlanned": 5,
+    "measuredRequestsPlanned": 300,
+    "conditionMeasuredRequestsPlanned": 900,
+    "capBasis": "excluded readiness cold6.474s/warm5.450s; 305*6.474*1.5+120=3082s rounded3300s",
+    "GPUReservation": "exclusive original Root desktop GPU baseline flock",
+    "selectedVulkanPhysicalDevice": "1",
+    "diagnosticOnlyVerbosity": true,
+    "runnerSha256": "12a8a67a0cb0407aa4c2294b33f15518271db41376c4d7619eeb6feea760777d",
+    "primaryEpochStarted": true,
+    "crossDeviceMeasuredAllowed": false
+  },
+  "warmupRows": 5,
+  "measuredRows": 58,
+  "outcomes": {
+    "correct_success": 63
+  },
+  "lastRow": {
+    "request_id": "bd04b29d-2ea2-46a5-82a5-ce17e0fdb4da",
+    "outcome": "correct_success",
+    "warmup": false,
+    "start_monotonic_ns": 629250049121483,
+    "end_monotonic_ns": 629255390813564
+  },
+  "controllerPidPresent": true,
+  "runnerPidPresent": true
+}

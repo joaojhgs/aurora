@@ -1,0 +1,70 @@
+{
+  "architecture_mode": "processes",
+  "auth_token_validation_exercised": false,
+  "cleanup_status": "shutdown_pending",
+  "config_sha256": "1c9eaee581f660274e79390c1c8b72eabe1fec0a5b88d7cdd17fd50f5f485107",
+  "deadline_ms": 180000,
+  "driver_sha256": "857730e1aee69c854718e5302da3bf010a9aa10ed9befd139437605b25356c3e",
+  "failure_type": null,
+  "gateway_authentication": "api_key_system_identity",
+  "gateway_route_readiness": {
+    "external_user_input_announced": true,
+    "first_missing_boundary": null,
+    "generated_path_method": "POST",
+    "orchestrator_present": true,
+    "post_route_generated": true,
+    "ready": true,
+    "routes_snapshot_status": "observed",
+    "schema_version": "aurora.assistant.gateway_route_readiness.v1",
+    "service_snapshot_status": "observed"
+  },
+  "generation_settings": {
+    "chat_format": "chatml-function-calling",
+    "max_tokens": 128,
+    "min_p": 0.0,
+    "n_batch": 64,
+    "n_ctx": 4096,
+    "n_gpu_layers": 0,
+    "n_threads": 2,
+    "repeat_penalty": 1.0,
+    "seed": 42,
+    "temperature": 0.0,
+    "top_k": 1,
+    "top_p": 1.0
+  },
+  "manifest_phase": "pre_shutdown",
+  "measured_requests_per_route": 1,
+  "metric_definition": "reply latency; exact answer and persisted history gate correctness, DB readback time excluded",
+  "model_id": "qwen3.5-0.8b-q4_0-gguf",
+  "model_sha256": "57d1997790d1744fba5b40a7317df71ea5e2acee28c47e78f0cce39c0703f8cf",
+  "process_children_stopped": null,
+  "process_core_service_pids": {
+    "AuthService": 1121093,
+    "ConfigService": 1121082,
+    "DBService": 1121091,
+    "GatewayService": 1121114,
+    "OrchestratorService": 1121110
+  },
+  "process_core_services_live_before_shutdown": true,
+  "process_parent_pid": 1121046,
+  "record_helper_sha256": "2648b5579c487e15936bf2eafd70ae8b63db5567915ff4c1c1b318989da2a646",
+  "request_count": 1,
+  "request_flow_status_before_shutdown": "completed",
+  "request_jsonl_sha256": "8205f3b80928811ab5e5bbe277175becf91bbaf5165e8b3865d9adca9b91b8f3",
+  "routes": [
+    "python_gateway_api"
+  ],
+  "run_mode": "gateway_only_process_diagnostic",
+  "run_status": "awaiting_shutdown",
+  "schema_version": "aurora.assistant.local_api_pilot_manifest.v1",
+  "scope_limit": "one cold same-host Python Gateway API request using API-key SYSTEM identity; Auth token validation is not exercised",
+  "source_commit": "5782746afba213f6b36907db2f09f0017625e218",
+  "study_session_id": "pilot-run-31ea0b132cd943558ce5c1e108bb1f55",
+  "warmups_per_run": 0,
+  "workload": {
+    "expected_sha256": "46d27380af82d6d618e163346c67dd7bc617d40836551d082e0aa6582b8bc934",
+    "predicate_id": "exact-answer-v1",
+    "prompt_sha256": "dcf0bf9982b7155c68f792031bd3a1e8e8e42a08a79fc4dd1136df8c602a6121"
+  },
+  "workload_id": "public-exact-answer-orbit-v1"
+}

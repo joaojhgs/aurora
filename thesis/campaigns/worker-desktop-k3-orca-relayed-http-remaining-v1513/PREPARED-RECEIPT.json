@@ -1,0 +1,65 @@
+{
+  "at": "2026-10-18T14:05:32.128947+00:00",
+  "status": "MATCHED387_PREPARED_TWO_REVIEW_ITEMS_FIXED_NO_LAUNCH_CONTROL_PENDING",
+  "nativeGoal": "01a112a5-d6bb-74e2-bf7c-ace73cb513b5",
+  "rootRun": "run_e6054e76e9fc",
+  "originalParent": "V1481",
+  "originalAttempted": 513,
+  "originalOutcomes": {
+    "completed_correct": 512,
+    "failed": 1
+  },
+  "plannedNewMeasured": 387,
+  "plannedFreshExcludedWarmups": 15,
+  "conditionTargetMeasured": 900,
+  "newRequests": 0,
+  "providerRestarted": false,
+  "files": [
+    {
+      "path": "thesis/campaigns/worker-desktop-k3-orca-relayed-http-remaining-v1513/EPOCH-LINEAGE.json",
+      "bytes": 1418,
+      "sha256": "a915ed2af9658ebea141e2dd04ff8dc740d3734efac20c6db6e26cd2e469519e"
+    },
+    {
+      "path": "thesis/campaigns/worker-desktop-k3-orca-relayed-http-remaining-v1513/PREPARATION.json",
+      "bytes": 3777,
+      "sha256": "ecd932c13efa0700e2e81ae22c6f3c100471b39b203e75d45fdb720749ddb5bb"
+    },
+    {
+      "path": "thesis/campaigns/worker-desktop-k3-orca-relayed-http-remaining-v1513/condition-draft-v1513.json",
+      "bytes": 17037,
+      "sha256": "7e76c2d4e6e55e613efbb9503795000861efdcfd1527242f636b6f4093ce0f6e"
+    },
+    {
+      "path": "thesis/campaigns/worker-desktop-k3-orca-relayed-http-remaining-v1513/SOURCE-DELTA.diff",
+      "bytes": 8774,
+      "sha256": "8a10fd91a1946e651a2aeb63b1a66330e5a73e091b1417edaf139356ff72e5cb"
+    },
+    {
+      "path": "thesis/campaigns/worker-desktop-k3-orca-relayed-http-remaining-v1513/ADMISSION-UTILITY-SOURCES.json",
+      "bytes": 865,
+      "sha256": "5ef50fd5bcbb46443449798e390b8d8b17db21bfca061b49854b42a896f3bf13"
+    },
+    {
+      "path": "thesis/campaigns/worker-desktop-k3-orca-relayed-http-remaining-v1513/PRELAUNCH-STATIC-CHECKS.json",
+      "bytes": 237,
+      "sha256": "a968490ace93436aaeeae0066aecab04b3c39a314b8f46dcb39d30c38213c9f4"
+    },
+    {
+      "path": "thesis/campaigns/worker-desktop-k3-orca-relayed-http-remaining-v1513/provider-readmission/PENDING-RECEIPT.json",
+      "bytes": 1719,
+      "sha256": "bc64ca86bde48eef6670cbbfe90baf7ff592638d8728ef138b00462496cf0438"
+    },
+    {
+      "path": "thesis/harness/k3_remaining_root_v1513.py",
+      "bytes": 13782,
+      "sha256": "5b245a6905ef9e06bb1f21384e7635c899428323f407766ec5f39f6d4ff03aa0",
+      "initialDraftSha256": "ac9c24a39de001e5024a33eb8f1dc10dd8f629c5f0126715745bf206519c4f4b",
+      "beforeAnyExecutionCorrection": "Use X-API-Key for health, matching the unchanged admitted stage adapter."
+    }
+  ],
+  "controlBlocker": "Exact terminal.send request cdac7533-7309-4015-be6f-69bae4a8f0ee PENDING; one supported same-ID retry returned operation_unknown; no stream output. Original monitor/Coding reconciliation requested.",
+  "review": "Monitor found counts/statistics sound and two operational items; fixes recorded in REVIEW-CORRECTIONS.json, bounded delta verification requested.",
+  "nextAction": "Recover SAME pending request/control result through supported existing Orca route, then fresh same-provider metadata, authenticated health and ordinary15warmup45nativejoin gate before387; no old900 replay.",
+  "reviewCorrections": "REVIEW-CORRECTIONS.json"
+}

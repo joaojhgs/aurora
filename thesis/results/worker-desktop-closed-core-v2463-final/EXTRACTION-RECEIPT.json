@@ -1,0 +1,130 @@
+{
+  "at": "2026-10-22T13:00:24.528399+00:00",
+  "status": "SAVED_DATA_EXTRACTION_PASSED",
+  "inputs": 11,
+  "physicalInputBytes": 184090,
+  "closedConditions": 6,
+  "measuredAttemptsPerCondition": 900,
+  "measurementStatusNotProductAcceptance": true,
+  "expectedCounts": {
+    "K1 HTTP": [
+      900,
+      899,
+      1,
+      0
+    ],
+    "K1 P2P": [
+      900,
+      885,
+      15,
+      1
+    ],
+    "K2 HTTP": [
+      900,
+      797,
+      103,
+      0
+    ],
+    "K2 P2P": [
+      900,
+      774,
+      126,
+      0
+    ],
+    "K3 HTTP": [
+      900,
+      885,
+      15,
+      0
+    ],
+    "K3 P2P": [
+      900,
+      773,
+      127,
+      1
+    ]
+  },
+  "validation": [
+    "Python compilation PASS",
+    "Fatal Ruff PASS",
+    "Real saved-data extraction PASS with all input hashes and count identities",
+    "Pinned-input reproduction PASS: all11source hashes and all6condition rows identical",
+    "Read-back table matches retained Type7 estimator declarations; final prose clarifies K1 strata versus upstream population policy"
+  ],
+  "newQuantileComputations": 0,
+  "newModelOrNetworkCalls": 0,
+  "historicalVersionsPreserved": true,
+  "currentFrozenCampaignChanged": false,
+  "files": [
+    {
+      "path": "thesis/results/worker-desktop-closed-core-v2463-final/INDEX-SOURCE-AS-EXECUTED.py",
+      "bytes": 8181,
+      "sha256": "0741fa2bbc770a467c9f361d585b800b510705e57edc7767cd5d126a39359a46"
+    },
+    {
+      "path": "thesis/results/worker-desktop-closed-core-v2463-final/README.md",
+      "bytes": 3259,
+      "sha256": "4d41b331b2ffcf2c72e5c18019f233ec1fc23b990f4762f078f68a3f6e66c25e"
+    },
+    {
+      "path": "thesis/results/worker-desktop-closed-core-v2463-final/inputs/050cd4d9d698696900f7c7189537cb810320ed33bbf668d2d6c996eea8352eb3.json",
+      "bytes": 2262,
+      "sha256": "050cd4d9d698696900f7c7189537cb810320ed33bbf668d2d6c996eea8352eb3"
+    },
+    {
+      "path": "thesis/results/worker-desktop-closed-core-v2463-final/inputs/0c87ed8ab8ac34fcf021fa2fb490df476eca877d22638f20e2eb2be9dae9870f.json",
+      "bytes": 7367,
+      "sha256": "0c87ed8ab8ac34fcf021fa2fb490df476eca877d22638f20e2eb2be9dae9870f"
+    },
+    {
+      "path": "thesis/results/worker-desktop-closed-core-v2463-final/inputs/1313a46e3319a22ad86ada92a0f76ad0e754031c6d6cc4a44b659ea5f6da3f3b.json",
+      "bytes": 13240,
+      "sha256": "1313a46e3319a22ad86ada92a0f76ad0e754031c6d6cc4a44b659ea5f6da3f3b"
+    },
+    {
+      "path": "thesis/results/worker-desktop-closed-core-v2463-final/inputs/3a3346861985651388c067dc604b26a635bfa7bbb24215fcf972f89f47a272b4.json",
+      "bytes": 5938,
+      "sha256": "3a3346861985651388c067dc604b26a635bfa7bbb24215fcf972f89f47a272b4"
+    },
+    {
+      "path": "thesis/results/worker-desktop-closed-core-v2463-final/inputs/50bc75b43b8dd7c1071de2380dab383306f935b6c9ba8bf0dbd2413382d9d5a0.json",
+      "bytes": 4766,
+      "sha256": "50bc75b43b8dd7c1071de2380dab383306f935b6c9ba8bf0dbd2413382d9d5a0"
+    },
+    {
+      "path": "thesis/results/worker-desktop-closed-core-v2463-final/inputs/797a2347c7e3a72936a595720c710dc14f091498ddfbac12bde4d26a7ff2c222.json",
+      "bytes": 7150,
+      "sha256": "797a2347c7e3a72936a595720c710dc14f091498ddfbac12bde4d26a7ff2c222"
+    },
+    {
+      "path": "thesis/results/worker-desktop-closed-core-v2463-final/inputs/910992937bdd8235d01d953eb9ac771df2c5409466ad2f075230bf020f64b8d4.json",
+      "bytes": 4389,
+      "sha256": "910992937bdd8235d01d953eb9ac771df2c5409466ad2f075230bf020f64b8d4"
+    },
+    {
+      "path": "thesis/results/worker-desktop-closed-core-v2463-final/inputs/cc803a992a86d9b15c41e2c6b5f01f6e4400360f0ad61a5f54f4b1dff041dbdc.json",
+      "bytes": 10109,
+      "sha256": "cc803a992a86d9b15c41e2c6b5f01f6e4400360f0ad61a5f54f4b1dff041dbdc"
+    },
+    {
+      "path": "thesis/results/worker-desktop-closed-core-v2463-final/inputs/d0442026536ce0582e1b7ff87307e05ff125be3b6f468848e7867fc6ab67886b.json",
+      "bytes": 7307,
+      "sha256": "d0442026536ce0582e1b7ff87307e05ff125be3b6f468848e7867fc6ab67886b"
+    },
+    {
+      "path": "thesis/results/worker-desktop-closed-core-v2463-final/inputs/f1b1231416c5a0996b940b7f6103839965eba1479b7b137f25b3251d6f747c7f.json",
+      "bytes": 107912,
+      "sha256": "f1b1231416c5a0996b940b7f6103839965eba1479b7b137f25b3251d6f747c7f"
+    },
+    {
+      "path": "thesis/results/worker-desktop-closed-core-v2463-final/inputs/fffc6558068b9625315a4d407787de030f3913af13017bb847ed806dde8263e5.json",
+      "bytes": 13650,
+      "sha256": "fffc6558068b9625315a4d407787de030f3913af13017bb847ed806dde8263e5"
+    },
+    {
+      "path": "thesis/results/worker-desktop-closed-core-v2463-final/inventory.json",
+      "bytes": 13778,
+      "sha256": "009e71c20899bf87043b620c5aa0e7ea1d08cead9e5be29d8f6dba978e50af74"
+    }
+  ]
+}

@@ -1,0 +1,35 @@
+{
+  "at": "2026-10-20T03:32:11.081141+00:00",
+  "sourceRoot": "/home/developer/projects/aurora/thesis/sources/python-audio-p2p-tts-wiring-v1706/source",
+  "inventoryPath": "/home/developer/projects/aurora/thesis/sources/python-audio-p2p-tts-wiring-v1706/source-inventory.json",
+  "inventorySha256": "a38421a03ffafb73a4c469aa7c82fb299210eedd6fe97809beb3c508782883d4",
+  "files": 400,
+  "bytes": 6711338,
+  "changes": [
+    {
+      "path": "app/services/gateway/registry_aggregator.py",
+      "oldSha256": "306f731721f9f0daf309cc4c3ee1bc60dd4ad3f747b7e604523258e81ddab1de",
+      "newSha256": "10d555a1486fb2c804cbb97539878fcb8cf2a6c314e123ca9149215f3a66b98e",
+      "bytes": 27485
+    },
+    {
+      "path": "app/services/tts/service.py",
+      "oldSha256": "6e4386aaf219ca5f5488ed007c03519be64f8de56aa2cc17956b5140218f234e",
+      "newSha256": "96f916131756a5ec2a27f606c719d4c360a9d6d52890a266b59ef3193f14b07e",
+      "bytes": 228651
+    },
+    {
+      "path": "app/shared/services/base_service.py",
+      "oldSha256": "580c691214761fcd6edef1c199731065151466c29be4aeccd7c096ac397778d6",
+      "newSha256": "39702090d31044081ecd4425c7f04858397337ae83b3425612766db783c560ec",
+      "bytes": 69281
+    }
+  ],
+  "priorSource": "/home/developer/projects/aurora/.git/aurora-handoff-import-20261006/cpu-full-audio-v490/source",
+  "priorInventorySha256": "96ec8e3e14233520d4cd469c4177264a193d05cf26b4b512d91d98f16bbb7dee",
+  "onlyDeclaredThreeFilesChanged": true,
+  "historicalCpuHttpByteIdentity": false,
+  "scope": "Runtime TTS route metadata only; model/audio/decoding/e2e correctness unchanged; old source/results retained",
+  "activeSourceModified": false,
+  "newModelCalls": 0
+}

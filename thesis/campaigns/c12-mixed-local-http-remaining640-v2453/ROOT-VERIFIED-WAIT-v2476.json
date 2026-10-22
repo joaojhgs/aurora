@@ -1,0 +1,103 @@
+{
+  "at": "2026-10-22T14:11:26.446128+00:00",
+  "classification": "VERIFIED_WAIT",
+  "previousTurnClassification": "VERIFIED_WAIT: same original requester directly confirmed live and completing cases",
+  "specificLiveHandle": {
+    "pid": 462924,
+    "startTicks": 144596371,
+    "state": "S"
+  },
+  "current": {
+    "at": "2026-10-22T14:11:19.151591+00:00",
+    "companion": {
+      "measured": {
+        "attempted": 242,
+        "correct": 242,
+        "failed": 0,
+        "harnessErrorsIncludedInFailed": 0,
+        "incorrectIncludedInFailed": 0,
+        "offered": 242,
+        "planned": 640,
+        "timeouts": 0,
+        "unstarted": 398
+      },
+      "warmup": {
+        "attempted": 15,
+        "correct": 15,
+        "failed": 0,
+        "harnessErrorsIncludedInFailed": 0,
+        "incorrectIncludedInFailed": 0,
+        "offered": 15,
+        "planned": 15,
+        "timeouts": 0,
+        "unstarted": 0
+      }
+    },
+    "completePairedCapsules": 257,
+    "elapsedSeconds": 10768.912872778,
+    "lastIndex": 242,
+    "lastNativeParent": "bcd493da7a4f2ec9d73f6f55a1000ffd",
+    "lastOrdinal": 257,
+    "manifestSha256": "3bfca19d2dd0a9eec3981eae256168a5badd9ac2bb58a270ff8a55df1d986cce",
+    "phase": "measured",
+    "pid": 462924,
+    "primary": {
+      "measured": {
+        "attempted": 242,
+        "correct": 242,
+        "failed": 0,
+        "harnessErrorsIncludedInFailed": 0,
+        "incorrectIncludedInFailed": 0,
+        "offered": 242,
+        "planned": 640,
+        "timeouts": 0,
+        "unstarted": 398
+      },
+      "warmup": {
+        "attempted": 15,
+        "correct": 15,
+        "failed": 0,
+        "harnessErrorsIncludedInFailed": 0,
+        "incorrectIncludedInFailed": 0,
+        "offered": 15,
+        "planned": 15,
+        "timeouts": 0,
+        "unstarted": 0
+      }
+    },
+    "status": "running"
+  },
+  "priorRetainedMeasuredPerStream": 260,
+  "conditionCorrectPerStream": {
+    "primary": 502,
+    "companion": 502
+  },
+  "terminalPresent": false,
+  "activeErrorPresent": false,
+  "freeBytes": 2198061056,
+  "diskFreeFloorBytes": 2147483648,
+  "mainSourceSettingsCountsClocksFloorChanged": false,
+  "newCompletedControlCustody": "control-link-receipts/20261022T141001.082392Z.json",
+  "newFilesLinked": 242,
+  "newBytesHashed": 1461378,
+  "oldFilesRehashed": 0,
+  "newPayloadAllocations": 0,
+  "newWorkersReviewsModelsBuildsOrDeviceCommands": 0,
+  "rootPhoneNotebookReads": 0,
+  "phoneOwner": "term_1f27be31-0284-4366-bb91-30fe538cd30e",
+  "sourceHandoff": "ebde+v2383 closed",
+  "jointWorkerStorageBudget": "JOINT-WORKER-STORAGE-BUDGET-v2470.json;420MiB outstanding reservation,348930048B capacity gap at13:33 baseline",
+  "sharedStorageAdmissionReplyPending": true,
+  "phoneMeasured900StorageAdmitted": false,
+  "independentNotebookReadinessNotBlanketHeld": true,
+  "originalMonitorMailbox": "No new directive/budget reply. Changed resource event sent once to original monitor msg_1295c6d3b496 and same worker msg_d54462974343, accepted; no worker exit or writer cause inferred.",
+  "exactUnusedWebpackCachePermission": "PENDING; no deletion/reask/implicit approval",
+  "nextSutAction": "Continue exact Main to full condition completion then EOF/audio/normal actor retirement/release and prepared mixed P2P actual capacity admission; same phone worker supplies exact incremental/peak custody budget before prospective900",
+  "nextMaximumObservationUtc": "2026-10-22T14:16:26.446128+00:00",
+  "jointAdditionalCapacityNeededNowBytes": 389824512,
+  "phoneTrialQualification": "Monitor-reported embedded-GGUF-template cohort referenceMatched900=false, requester valid31788B WAV at6836.2ms,0measured; not matched900 or provider-native acceptance",
+  "mailAck": "delivery_2bcf1942e857",
+  "headroomAboveFloorBytes": 50577408,
+  "capacityObservation": "CAPACITY-DELTA-v2476.json:13,651,968B decline14:04:47->14:06:28, then10,657,792B rebound by14:08:08; volatile peak cause UNATTRIBUTED, no Root deletion or experiment changes",
+  "storageOperationGuidance": "Avoid NEW unadmitted bulk transfer/ZIP/base64/extract peaks; retain existing raw/audio physically on approved repo paths, no worker/provider/session stop; prospective900 remains unadmitted by joint reserve"
+}

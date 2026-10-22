@@ -1,0 +1,1190 @@
+{
+  "at": "2026-10-22T11:59:25.797787+00:00",
+  "scope": "Existing PR read only; no push, CI dispatch, review request, merge or auth change",
+  "results": [
+    {
+      "pr": 175,
+      "exitCode": 0,
+      "url": "https://github.com/joaojhgs/aurora/pull/175",
+      "state": "CLOSED",
+      "draft": true,
+      "head": "14df693f0d3f00aa7468ec7be8f64438fec014da",
+      "headBranch": "codex/aurora-per289-delivery-20261010",
+      "baseBranch": "codex/aurora-frontend-delivery-20261010",
+      "mergeCommit": null,
+      "mergedAt": null,
+      "reviewDecision": "",
+      "reviews": [],
+      "checks": [
+        {
+          "name": "SDK, shared UI, and web app",
+          "status": "COMPLETED",
+          "conclusion": "CANCELLED",
+          "url": "https://github.com/joaojhgs/aurora/actions/runs/38102561068/job/114361340605"
+        },
+        {
+          "name": "Generate inventory and validate SDK contract fixtures",
+          "status": "COMPLETED",
+          "conclusion": "CANCELLED",
+          "url": "https://github.com/joaojhgs/aurora/actions/runs/38102561129/job/114361341009"
+        },
+        {
+          "name": "Android client APK/AAB build and emulator smoke",
+          "status": "COMPLETED",
+          "conclusion": "CANCELLED",
+          "url": "https://github.com/joaojhgs/aurora/actions/runs/38102561097/job/114361340927"
+        },
+        {
+          "name": "Patched Sherpa runtime (Linux x64)",
+          "status": "COMPLETED",
+          "conclusion": "CANCELLED",
+          "url": "https://github.com/joaojhgs/aurora/actions/runs/38102561114/job/114361341089"
+        },
+        {
+          "name": "macOS Xcode Tauri iOS init and build",
+          "status": "COMPLETED",
+          "conclusion": "CANCELLED",
+          "url": "https://github.com/joaojhgs/aurora/actions/runs/38102561067/job/114361340638"
+        },
+        {
+          "name": "iOS manifest and UI policy",
+          "status": "COMPLETED",
+          "conclusion": "CANCELLED",
+          "url": "https://github.com/joaojhgs/aurora/actions/runs/38102561102/job/114361340738"
+        },
+        {
+          "name": "Hosted peer and cross-engine network paths",
+          "status": "COMPLETED",
+          "conclusion": "CANCELLED",
+          "url": "https://github.com/joaojhgs/aurora/actions/runs/38102561120/job/114361341249"
+        },
+        {
+          "name": "SDK, shared UI, and web app",
+          "status": "COMPLETED",
+          "conclusion": "SUCCESS",
+          "url": "https://github.com/joaojhgs/aurora/actions/runs/38102561672/job/114361344402"
+        },
+        {
+          "name": "Generate inventory and validate SDK contract fixtures",
+          "status": "COMPLETED",
+          "conclusion": "SUCCESS",
+          "url": "https://github.com/joaojhgs/aurora/actions/runs/38102561722/job/114361344488"
+        },
+        {
+          "name": "Android client APK/AAB build and emulator smoke",
+          "status": "COMPLETED",
+          "conclusion": "SUCCESS",
+          "url": "https://github.com/joaojhgs/aurora/actions/runs/38102561690/job/114361343617"
+        },
+        {
+          "name": "Patched Sherpa runtime (Linux x64)",
+          "status": "COMPLETED",
+          "conclusion": "SUCCESS",
+          "url": "https://github.com/joaojhgs/aurora/actions/runs/38102561622/job/114361346771"
+        },
+        {
+          "name": "macOS Xcode Tauri iOS init and build",
+          "status": "COMPLETED",
+          "conclusion": "SUCCESS",
+          "url": "https://github.com/joaojhgs/aurora/actions/runs/38102561658/job/114361343869"
+        },
+        {
+          "name": "iOS manifest and UI policy",
+          "status": "COMPLETED",
+          "conclusion": "SUCCESS",
+          "url": "https://github.com/joaojhgs/aurora/actions/runs/38102561734/job/114361344549"
+        },
+        {
+          "name": "Hosted peer and cross-engine network paths",
+          "status": "COMPLETED",
+          "conclusion": "SUCCESS",
+          "url": "https://github.com/joaojhgs/aurora/actions/runs/38102561664/job/114361344464"
+        },
+        {
+          "name": "Patched Sherpa runtime (macOS arm64)",
+          "status": "COMPLETED",
+          "conclusion": "CANCELLED",
+          "url": "https://github.com/joaojhgs/aurora/actions/runs/38102561114/job/114361341024"
+        },
+        {
+          "name": "Patched Sherpa runtime (macOS arm64)",
+          "status": "COMPLETED",
+          "conclusion": "SUCCESS",
+          "url": "https://github.com/joaojhgs/aurora/actions/runs/38102561622/job/114361346662"
+        },
+        {
+          "name": "Patched Sherpa runtime (Windows x64)",
+          "status": "COMPLETED",
+          "conclusion": "CANCELLED",
+          "url": "https://github.com/joaojhgs/aurora/actions/runs/38102561114/job/114361340963"
+        },
+        {
+          "name": "Patched Sherpa runtime (Windows x64)",
+          "status": "COMPLETED",
+          "conclusion": "SUCCESS",
+          "url": "https://github.com/joaojhgs/aurora/actions/runs/38102561622/job/114361346768"
+        },
+        {
+          "name": "Sidecar profile staging (desktop-local-minimal)",
+          "status": "COMPLETED",
+          "conclusion": "CANCELLED",
+          "url": "https://github.com/joaojhgs/aurora/actions/runs/38102561114/job/114361341095"
+        },
+        {
+          "name": "macOS Xcode iOS preflight",
+          "status": "COMPLETED",
+          "conclusion": "CANCELLED",
+          "url": "https://github.com/joaojhgs/aurora/actions/runs/38102561102/job/114361344018"
+        },
+        {
+          "name": "Native webrtc-rs transport interop",
+          "status": "COMPLETED",
+          "conclusion": "CANCELLED",
+          "url": "https://github.com/joaojhgs/aurora/actions/runs/38102561120/job/114361341225"
+        },
+        {
+          "name": "macOS Xcode iOS preflight",
+          "status": "COMPLETED",
+          "conclusion": "SKIPPED",
+          "url": "https://github.com/joaojhgs/aurora/actions/runs/38102561734/job/114362109566"
+        },
+        {
+          "name": "Sidecar profile staging (desktop-local-minimal)",
+          "status": "COMPLETED",
+          "conclusion": "SUCCESS",
+          "url": "https://github.com/joaojhgs/aurora/actions/runs/38102561622/job/114361346776"
+        },
+        {
+          "name": "Native webrtc-rs transport interop",
+          "status": "COMPLETED",
+          "conclusion": "SUCCESS",
+          "url": "https://github.com/joaojhgs/aurora/actions/runs/38102561664/job/114361344381"
+        },
+        {
+          "name": "Sidecar profile staging (local-cpu)",
+          "status": "COMPLETED",
+          "conclusion": "CANCELLED",
+          "url": "https://github.com/joaojhgs/aurora/actions/runs/38102561114/job/114361341059"
+        },
+        {
+          "name": "Sidecar profile staging (local-cpu)",
+          "status": "COMPLETED",
+          "conclusion": "SUCCESS",
+          "url": "https://github.com/joaojhgs/aurora/actions/runs/38102561622/job/114361346918"
+        },
+        {
+          "name": "Sidecar profile staging (local-cuda)",
+          "status": "COMPLETED",
+          "conclusion": "CANCELLED",
+          "url": "https://github.com/joaojhgs/aurora/actions/runs/38102561114/job/114361341127"
+        },
+        {
+          "name": "Sidecar profile staging (local-cuda)",
+          "status": "COMPLETED",
+          "conclusion": "SUCCESS",
+          "url": "https://github.com/joaojhgs/aurora/actions/runs/38102561622/job/114361346756"
+        },
+        {
+          "name": "Sidecar profile staging (local-rocm)",
+          "status": "COMPLETED",
+          "conclusion": "CANCELLED",
+          "url": "https://github.com/joaojhgs/aurora/actions/runs/38102561114/job/114361341157"
+        },
+        {
+          "name": "Sidecar profile staging (local-rocm)",
+          "status": "COMPLETED",
+          "conclusion": "SUCCESS",
+          "url": "https://github.com/joaojhgs/aurora/actions/runs/38102561622/job/114361346825"
+        },
+        {
+          "name": "Sidecar profile staging (local-metal)",
+          "status": "COMPLETED",
+          "conclusion": "CANCELLED",
+          "url": "https://github.com/joaojhgs/aurora/actions/runs/38102561114/job/114361341206"
+        },
+        {
+          "name": "Sidecar profile staging (local-metal)",
+          "status": "COMPLETED",
+          "conclusion": "SUCCESS",
+          "url": "https://github.com/joaojhgs/aurora/actions/runs/38102561622/job/114361346883"
+        },
+        {
+          "name": "Sidecar profile staging (local-vulkan)",
+          "status": "COMPLETED",
+          "conclusion": "CANCELLED",
+          "url": "https://github.com/joaojhgs/aurora/actions/runs/38102561114/job/114361341175"
+        },
+        {
+          "name": "Sidecar profile staging (local-vulkan)",
+          "status": "COMPLETED",
+          "conclusion": "SUCCESS",
+          "url": "https://github.com/joaojhgs/aurora/actions/runs/38102561622/job/114361346899"
+        },
+        {
+          "name": "Sidecar profile staging (local-sycl)",
+          "status": "COMPLETED",
+          "conclusion": "CANCELLED",
+          "url": "https://github.com/joaojhgs/aurora/actions/runs/38102561114/job/114361341165"
+        },
+        {
+          "name": "Sidecar profile staging (local-sycl)",
+          "status": "COMPLETED",
+          "conclusion": "SUCCESS",
+          "url": "https://github.com/joaojhgs/aurora/actions/runs/38102561622/job/114361346783"
+        },
+        {
+          "name": "Sidecar profile staging (local-rpc)",
+          "status": "COMPLETED",
+          "conclusion": "CANCELLED",
+          "url": "https://github.com/joaojhgs/aurora/actions/runs/38102561114/job/114361341253"
+        },
+        {
+          "name": "Sidecar profile staging (local-rpc)",
+          "status": "COMPLETED",
+          "conclusion": "SUCCESS",
+          "url": "https://github.com/joaojhgs/aurora/actions/runs/38102561622/job/114361346856"
+        },
+        {
+          "name": "Sidecar profile staging (full)",
+          "status": "COMPLETED",
+          "conclusion": "CANCELLED",
+          "url": "https://github.com/joaojhgs/aurora/actions/runs/38102561114/job/114361341195"
+        },
+        {
+          "name": "Sidecar profile staging (full)",
+          "status": "COMPLETED",
+          "conclusion": "SUCCESS",
+          "url": "https://github.com/joaojhgs/aurora/actions/runs/38102561622/job/114361346818"
+        },
+        {
+          "name": "Desktop Tauri bundle (${{ matrix.bundle_mode }})",
+          "status": "COMPLETED",
+          "conclusion": "CANCELLED",
+          "url": "https://github.com/joaojhgs/aurora/actions/runs/38102561114/job/114361346098"
+        },
+        {
+          "name": "Android native webrtc-rs transport interop",
+          "status": "COMPLETED",
+          "conclusion": "CANCELLED",
+          "url": "https://github.com/joaojhgs/aurora/actions/runs/38102561120/job/114361340997"
+        },
+        {
+          "name": "Desktop Tauri bundle (desktop-local)",
+          "status": "COMPLETED",
+          "conclusion": "SUCCESS",
+          "url": "https://github.com/joaojhgs/aurora/actions/runs/38102561622/job/114365479633"
+        },
+        {
+          "name": "Android native webrtc-rs transport interop",
+          "status": "COMPLETED",
+          "conclusion": "SUCCESS",
+          "url": "https://github.com/joaojhgs/aurora/actions/runs/38102561664/job/114361344410"
+        },
+        {
+          "name": "Desktop Tauri bundle (desktop-client)",
+          "status": "COMPLETED",
+          "conclusion": "SUCCESS",
+          "url": "https://github.com/joaojhgs/aurora/actions/runs/38102561622/job/114365479624"
+        },
+        {
+          "name": "Desktop client live Python-peer E2E",
+          "status": "COMPLETED",
+          "conclusion": "CANCELLED",
+          "url": "https://github.com/joaojhgs/aurora/actions/runs/38102561114/job/114361346290"
+        },
+        {
+          "name": "Desktop client live Python-peer E2E",
+          "status": "COMPLETED",
+          "conclusion": "SUCCESS",
+          "url": "https://github.com/joaojhgs/aurora/actions/runs/38102561622/job/114365479601"
+        },
+        {
+          "name": "macOS desktop client live Python-peer STUN E2E",
+          "status": "COMPLETED",
+          "conclusion": "CANCELLED",
+          "url": "https://github.com/joaojhgs/aurora/actions/runs/38102561114/job/114361346119"
+        },
+        {
+          "name": "macOS desktop client live Python-peer STUN E2E",
+          "status": "COMPLETED",
+          "conclusion": "SUCCESS",
+          "url": "https://github.com/joaojhgs/aurora/actions/runs/38102561622/job/114365479535"
+        },
+        {
+          "name": "Desktop client package (${{ matrix.platform }})",
+          "status": "COMPLETED",
+          "conclusion": "CANCELLED",
+          "url": "https://github.com/joaojhgs/aurora/actions/runs/38102561114/job/114361346066"
+        },
+        {
+          "name": "Desktop client package (macOS)",
+          "status": "COMPLETED",
+          "conclusion": "SUCCESS",
+          "url": "https://github.com/joaojhgs/aurora/actions/runs/38102561622/job/114365479550"
+        },
+        {
+          "name": "Desktop client package (Windows)",
+          "status": "COMPLETED",
+          "conclusion": "SUCCESS",
+          "url": "https://github.com/joaojhgs/aurora/actions/runs/38102561622/job/114365479564"
+        }
+      ]
+    },
+    {
+      "pr": 177,
+      "exitCode": 0,
+      "url": "https://github.com/joaojhgs/aurora/pull/177",
+      "state": "OPEN",
+      "draft": true,
+      "head": "c0f4c0013cea5bb11ef81297194d0dc142a47bc4",
+      "headBranch": "codex/aurora-product-review-20261010",
+      "baseBranch": "main",
+      "mergeCommit": null,
+      "mergedAt": null,
+      "reviewDecision": "",
+      "reviews": [],
+      "checks": [
+        {
+          "name": "Unit, integration, and E2E tests",
+          "status": "COMPLETED",
+          "conclusion": "FAILURE",
+          "url": "https://github.com/joaojhgs/aurora/actions/runs/38181244700/job/114594072746"
+        },
+        {
+          "name": "\ud83e\uddea Test Process Mode",
+          "status": "COMPLETED",
+          "conclusion": "FAILURE",
+          "url": "https://github.com/joaojhgs/aurora/actions/runs/38181244676/job/114594072988"
+        },
+        {
+          "name": "Android client APK/AAB build and emulator smoke",
+          "status": "COMPLETED",
+          "conclusion": "FAILURE",
+          "url": "https://github.com/joaojhgs/aurora/actions/runs/38181244731/job/114594073141"
+        },
+        {
+          "name": "Validate process-mode Compose config",
+          "status": "COMPLETED",
+          "conclusion": "SUCCESS",
+          "url": "https://github.com/joaojhgs/aurora/actions/runs/38181244689/job/114594072889"
+        },
+        {
+          "name": "SDK, shared UI, and web app",
+          "status": "COMPLETED",
+          "conclusion": "SUCCESS",
+          "url": "https://github.com/joaojhgs/aurora/actions/runs/38181244738/job/114594073025"
+        },
+        {
+          "name": "Python lint, format, and generated config",
+          "status": "COMPLETED",
+          "conclusion": "SUCCESS",
+          "url": "https://github.com/joaojhgs/aurora/actions/runs/38181244680/job/114594072929"
+        },
+        {
+          "name": "Rust 1.88 native and browser WASM checks",
+          "status": "COMPLETED",
+          "conclusion": "SUCCESS",
+          "url": "https://github.com/joaojhgs/aurora/actions/runs/38181244679/job/114594072796"
+        },
+        {
+          "name": "Generate inventory and validate SDK contract fixtures",
+          "status": "COMPLETED",
+          "conclusion": "SUCCESS",
+          "url": "https://github.com/joaojhgs/aurora/actions/runs/38181244690/job/114594072943"
+        },
+        {
+          "name": "Patched Sherpa runtime (Linux x64)",
+          "status": "COMPLETED",
+          "conclusion": "SUCCESS",
+          "url": "https://github.com/joaojhgs/aurora/actions/runs/38181244702/job/114594072932"
+        },
+        {
+          "name": "macOS Xcode Tauri iOS init and build",
+          "status": "COMPLETED",
+          "conclusion": "SUCCESS",
+          "url": "https://github.com/joaojhgs/aurora/actions/runs/38181244730/job/114594073207"
+        },
+        {
+          "name": "iOS manifest and UI policy",
+          "status": "COMPLETED",
+          "conclusion": "SUCCESS",
+          "url": "https://github.com/joaojhgs/aurora/actions/runs/38181244716/job/114594072970"
+        },
+        {
+          "name": "Hosted peer and cross-engine network paths",
+          "status": "COMPLETED",
+          "conclusion": "SUCCESS",
+          "url": "https://github.com/joaojhgs/aurora/actions/runs/38181244709/job/114594072923"
+        },
+        {
+          "name": "Patched Sherpa runtime (macOS arm64)",
+          "status": "COMPLETED",
+          "conclusion": "SUCCESS",
+          "url": "https://github.com/joaojhgs/aurora/actions/runs/38181244702/job/114594072786"
+        },
+        {
+          "name": "Patched Sherpa runtime (Windows x64)",
+          "status": "COMPLETED",
+          "conclusion": "SUCCESS",
+          "url": "https://github.com/joaojhgs/aurora/actions/runs/38181244702/job/114594072879"
+        },
+        {
+          "name": "macOS Xcode iOS preflight",
+          "status": "COMPLETED",
+          "conclusion": "SKIPPED",
+          "url": "https://github.com/joaojhgs/aurora/actions/runs/38181244716/job/114595063916"
+        },
+        {
+          "name": "Validate auth (latest)",
+          "status": "COMPLETED",
+          "conclusion": "SUCCESS",
+          "url": "https://github.com/joaojhgs/aurora/actions/runs/38181244689/job/114594100381"
+        },
+        {
+          "name": "Workspace typecheck and package metadata",
+          "status": "COMPLETED",
+          "conclusion": "SUCCESS",
+          "url": "https://github.com/joaojhgs/aurora/actions/runs/38181244680/job/114594072807"
+        },
+        {
+          "name": "lint (3.11)",
+          "status": "COMPLETED",
+          "conclusion": "SUCCESS",
+          "url": "https://github.com/joaojhgs/aurora/actions/runs/38181244676/job/114594072949"
+        },
+        {
+          "name": "Sidecar profile staging (desktop-local-minimal)",
+          "status": "COMPLETED",
+          "conclusion": "SUCCESS",
+          "url": "https://github.com/joaojhgs/aurora/actions/runs/38181244702/job/114594073111"
+        },
+        {
+          "name": "Native webrtc-rs transport interop",
+          "status": "COMPLETED",
+          "conclusion": "SUCCESS",
+          "url": "https://github.com/joaojhgs/aurora/actions/runs/38181244709/job/114594072998"
+        },
+        {
+          "name": "Validate config (latest)",
+          "status": "COMPLETED",
+          "conclusion": "SUCCESS",
+          "url": "https://github.com/joaojhgs/aurora/actions/runs/38181244689/job/114594100422"
+        },
+        {
+          "name": "Sidecar profile staging (local-cpu)",
+          "status": "COMPLETED",
+          "conclusion": "SUCCESS",
+          "url": "https://github.com/joaojhgs/aurora/actions/runs/38181244702/job/114594073069"
+        },
+        {
+          "name": "Validate db (openai)",
+          "status": "COMPLETED",
+          "conclusion": "SUCCESS",
+          "url": "https://github.com/joaojhgs/aurora/actions/runs/38181244689/job/114594100339"
+        },
+        {
+          "name": "Sidecar profile staging (local-cuda)",
+          "status": "COMPLETED",
+          "conclusion": "SUCCESS",
+          "url": "https://github.com/joaojhgs/aurora/actions/runs/38181244702/job/114594072960"
+        },
+        {
+          "name": "Validate db (local-cpu)",
+          "status": "COMPLETED",
+          "conclusion": "SUCCESS",
+          "url": "https://github.com/joaojhgs/aurora/actions/runs/38181244689/job/114594100341"
+        },
+        {
+          "name": "Sidecar profile staging (local-rocm)",
+          "status": "COMPLETED",
+          "conclusion": "SUCCESS",
+          "url": "https://github.com/joaojhgs/aurora/actions/runs/38181244702/job/114594072941"
+        },
+        {
+          "name": "Validate gateway (latest)",
+          "status": "COMPLETED",
+          "conclusion": "SUCCESS",
+          "url": "https://github.com/joaojhgs/aurora/actions/runs/38181244689/job/114594100310"
+        },
+        {
+          "name": "Sidecar profile staging (local-metal)",
+          "status": "COMPLETED",
+          "conclusion": "SUCCESS",
+          "url": "https://github.com/joaojhgs/aurora/actions/runs/38181244702/job/114594072937"
+        },
+        {
+          "name": "Validate orchestrator (openai)",
+          "status": "COMPLETED",
+          "conclusion": "SUCCESS",
+          "url": "https://github.com/joaojhgs/aurora/actions/runs/38181244689/job/114594100360"
+        },
+        {
+          "name": "Sidecar profile staging (local-vulkan)",
+          "status": "COMPLETED",
+          "conclusion": "SUCCESS",
+          "url": "https://github.com/joaojhgs/aurora/actions/runs/38181244702/job/114594072984"
+        },
+        {
+          "name": "Validate orchestrator (llama-cpp-cpu)",
+          "status": "COMPLETED",
+          "conclusion": "SUCCESS",
+          "url": "https://github.com/joaojhgs/aurora/actions/runs/38181244689/job/114594100418"
+        },
+        {
+          "name": "Sidecar profile staging (local-sycl)",
+          "status": "COMPLETED",
+          "conclusion": "SUCCESS",
+          "url": "https://github.com/joaojhgs/aurora/actions/runs/38181244702/job/114594073003"
+        },
+        {
+          "name": "Validate scheduler (latest)",
+          "status": "COMPLETED",
+          "conclusion": "SUCCESS",
+          "url": "https://github.com/joaojhgs/aurora/actions/runs/38181244689/job/114594100457"
+        },
+        {
+          "name": "Sidecar profile staging (local-rpc)",
+          "status": "COMPLETED",
+          "conclusion": "SUCCESS",
+          "url": "https://github.com/joaojhgs/aurora/actions/runs/38181244702/job/114594073054"
+        },
+        {
+          "name": "Validate tooling (latest)",
+          "status": "COMPLETED",
+          "conclusion": "SUCCESS",
+          "url": "https://github.com/joaojhgs/aurora/actions/runs/38181244689/job/114594100363"
+        },
+        {
+          "name": "Sidecar profile staging (full)",
+          "status": "COMPLETED",
+          "conclusion": "SUCCESS",
+          "url": "https://github.com/joaojhgs/aurora/actions/runs/38181244702/job/114594073137"
+        },
+        {
+          "name": "Validate tts (cpu)",
+          "status": "COMPLETED",
+          "conclusion": "SUCCESS",
+          "url": "https://github.com/joaojhgs/aurora/actions/runs/38181244689/job/114594100419"
+        },
+        {
+          "name": "Validate stt-coordinator (latest)",
+          "status": "COMPLETED",
+          "conclusion": "SUCCESS",
+          "url": "https://github.com/joaojhgs/aurora/actions/runs/38181244689/job/114594100359"
+        },
+        {
+          "name": "Validate stt-transcription (cpu)",
+          "status": "COMPLETED",
+          "conclusion": "SUCCESS",
+          "url": "https://github.com/joaojhgs/aurora/actions/runs/38181244689/job/114594100444"
+        },
+        {
+          "name": "Validate stt-wakeword (cpu)",
+          "status": "COMPLETED",
+          "conclusion": "SUCCESS",
+          "url": "https://github.com/joaojhgs/aurora/actions/runs/38181244689/job/114594100437"
+        },
+        {
+          "name": "unit_integration_test (ubuntu-latest, 3.11.11)",
+          "status": "COMPLETED",
+          "conclusion": "FAILURE",
+          "url": "https://github.com/joaojhgs/aurora/actions/runs/38181244676/job/114594072680"
+        },
+        {
+          "name": "Publish ${{ matrix.service }} (${{ matrix.variant }})",
+          "status": "COMPLETED",
+          "conclusion": "SKIPPED",
+          "url": "https://github.com/joaojhgs/aurora/actions/runs/38181244689/job/114594195800"
+        },
+        {
+          "name": "Desktop Tauri bundle (desktop-local)",
+          "status": "COMPLETED",
+          "conclusion": "SUCCESS",
+          "url": "https://github.com/joaojhgs/aurora/actions/runs/38181244702/job/114594291773"
+        },
+        {
+          "name": "Android native webrtc-rs transport interop",
+          "status": "COMPLETED",
+          "conclusion": "SUCCESS",
+          "url": "https://github.com/joaojhgs/aurora/actions/runs/38181244709/job/114594073130"
+        },
+        {
+          "name": "Desktop Tauri bundle (desktop-client)",
+          "status": "COMPLETED",
+          "conclusion": "SUCCESS",
+          "url": "https://github.com/joaojhgs/aurora/actions/runs/38181244702/job/114594291809"
+        },
+        {
+          "name": "Desktop client live Python-peer E2E",
+          "status": "COMPLETED",
+          "conclusion": "SUCCESS",
+          "url": "https://github.com/joaojhgs/aurora/actions/runs/38181244702/job/114594291839"
+        },
+        {
+          "name": "macOS desktop client live Python-peer STUN E2E",
+          "status": "COMPLETED",
+          "conclusion": "FAILURE",
+          "url": "https://github.com/joaojhgs/aurora/actions/runs/38181244702/job/114594291715"
+        },
+        {
+          "name": "Desktop client package (macOS)",
+          "status": "COMPLETED",
+          "conclusion": "SUCCESS",
+          "url": "https://github.com/joaojhgs/aurora/actions/runs/38181244702/job/114594291726"
+        },
+        {
+          "name": "Desktop client package (Windows)",
+          "status": "COMPLETED",
+          "conclusion": "SUCCESS",
+          "url": "https://github.com/joaojhgs/aurora/actions/runs/38181244702/job/114594291824"
+        }
+      ]
+    },
+    {
+      "pr": 172,
+      "exitCode": 0,
+      "url": "https://github.com/joaojhgs/aurora/pull/172",
+      "state": "MERGED",
+      "draft": false,
+      "head": "52113abcdb6bbbfc904daec8d4b63a74f6ee5d09",
+      "headBranch": "multica/PER-286-native-speech-routing",
+      "baseBranch": "main",
+      "mergeCommit": {
+        "oid": "f50f46f57a815156f30cb86cea8bdd2599eb4dad"
+      },
+      "mergedAt": "2026-09-12T03:01:15Z",
+      "reviewDecision": "",
+      "reviews": [
+        {
+          "author": "copilot-pull-request-reviewer",
+          "state": "COMMENTED",
+          "submittedAt": "2026-09-10T23:58:47Z",
+          "commit": {
+            "oid": "1560a011a4d9fee5c2beae75987875b0c37c11e1"
+          }
+        }
+      ],
+      "checks": [
+        {
+          "name": "Validate process-mode Compose config",
+          "status": "COMPLETED",
+          "conclusion": "SUCCESS",
+          "url": "https://github.com/joaojhgs/aurora/actions/runs/34621671412/job/103336899098"
+        },
+        {
+          "name": "SDK, shared UI, and web app",
+          "status": "COMPLETED",
+          "conclusion": "SUCCESS",
+          "url": "https://github.com/joaojhgs/aurora/actions/runs/34621671364/job/103336899391"
+        },
+        {
+          "name": "Unit, integration, and E2E tests",
+          "status": "COMPLETED",
+          "conclusion": "SUCCESS",
+          "url": "https://github.com/joaojhgs/aurora/actions/runs/34621671234/job/103336899986"
+        },
+        {
+          "name": "Python lint, format, and generated config",
+          "status": "COMPLETED",
+          "conclusion": "SUCCESS",
+          "url": "https://github.com/joaojhgs/aurora/actions/runs/34621671405/job/103336899471"
+        },
+        {
+          "name": "\ud83e\uddea Test Process Mode",
+          "status": "COMPLETED",
+          "conclusion": "SUCCESS",
+          "url": "https://github.com/joaojhgs/aurora/actions/runs/34621671168/job/103336899343"
+        },
+        {
+          "name": "Rust 1.88 native and browser WASM checks",
+          "status": "COMPLETED",
+          "conclusion": "SUCCESS",
+          "url": "https://github.com/joaojhgs/aurora/actions/runs/34621671182/job/103336898973"
+        },
+        {
+          "name": "Generate inventory and validate SDK contract fixtures",
+          "status": "COMPLETED",
+          "conclusion": "SUCCESS",
+          "url": "https://github.com/joaojhgs/aurora/actions/runs/34621671346/job/103336898644"
+        },
+        {
+          "name": "Android client APK/AAB build and emulator smoke",
+          "status": "COMPLETED",
+          "conclusion": "SUCCESS",
+          "url": "https://github.com/joaojhgs/aurora/actions/runs/34621671176/job/103336898098"
+        },
+        {
+          "name": "Patched Sherpa runtime (Linux x64)",
+          "status": "COMPLETED",
+          "conclusion": "SUCCESS",
+          "url": "https://github.com/joaojhgs/aurora/actions/runs/34621671172/job/103336898951"
+        },
+        {
+          "name": "macOS Xcode Tauri iOS init and build",
+          "status": "COMPLETED",
+          "conclusion": "SUCCESS",
+          "url": "https://github.com/joaojhgs/aurora/actions/runs/34621671356/job/103336899216"
+        },
+        {
+          "name": "iOS manifest and UI policy",
+          "status": "COMPLETED",
+          "conclusion": "SUCCESS",
+          "url": "https://github.com/joaojhgs/aurora/actions/runs/34621671312/job/103336898741"
+        },
+        {
+          "name": "Hosted peer and cross-engine network paths",
+          "status": "COMPLETED",
+          "conclusion": "SUCCESS",
+          "url": "https://github.com/joaojhgs/aurora/actions/runs/34621671173/job/103336898497"
+        },
+        {
+          "name": "Patched Sherpa runtime (macOS arm64)",
+          "status": "COMPLETED",
+          "conclusion": "SUCCESS",
+          "url": "https://github.com/joaojhgs/aurora/actions/runs/34621671172/job/103336898590"
+        },
+        {
+          "name": "Patched Sherpa runtime (Windows x64)",
+          "status": "COMPLETED",
+          "conclusion": "SUCCESS",
+          "url": "https://github.com/joaojhgs/aurora/actions/runs/34621671172/job/103336898853"
+        },
+        {
+          "name": "macOS Xcode iOS preflight",
+          "status": "COMPLETED",
+          "conclusion": "SKIPPED",
+          "url": "https://github.com/joaojhgs/aurora/actions/runs/34621671312/job/103338269786"
+        },
+        {
+          "name": "Validate auth (latest)",
+          "status": "COMPLETED",
+          "conclusion": "SUCCESS",
+          "url": "https://github.com/joaojhgs/aurora/actions/runs/34621671412/job/103336973876"
+        },
+        {
+          "name": "Workspace typecheck and package metadata",
+          "status": "COMPLETED",
+          "conclusion": "SUCCESS",
+          "url": "https://github.com/joaojhgs/aurora/actions/runs/34621671405/job/103336899791"
+        },
+        {
+          "name": "lint (3.11)",
+          "status": "COMPLETED",
+          "conclusion": "SUCCESS",
+          "url": "https://github.com/joaojhgs/aurora/actions/runs/34621671168/job/103336899473"
+        },
+        {
+          "name": "Sidecar profile staging (desktop-local-minimal)",
+          "status": "COMPLETED",
+          "conclusion": "SUCCESS",
+          "url": "https://github.com/joaojhgs/aurora/actions/runs/34621671172/job/103336899241"
+        },
+        {
+          "name": "Native webrtc-rs transport interop",
+          "status": "COMPLETED",
+          "conclusion": "SUCCESS",
+          "url": "https://github.com/joaojhgs/aurora/actions/runs/34621671173/job/103336898526"
+        },
+        {
+          "name": "Validate config (latest)",
+          "status": "COMPLETED",
+          "conclusion": "SUCCESS",
+          "url": "https://github.com/joaojhgs/aurora/actions/runs/34621671412/job/103336973820"
+        },
+        {
+          "name": "Sidecar profile staging (local-cpu)",
+          "status": "COMPLETED",
+          "conclusion": "SUCCESS",
+          "url": "https://github.com/joaojhgs/aurora/actions/runs/34621671172/job/103336899323"
+        },
+        {
+          "name": "Validate db (openai)",
+          "status": "COMPLETED",
+          "conclusion": "SUCCESS",
+          "url": "https://github.com/joaojhgs/aurora/actions/runs/34621671412/job/103336973957"
+        },
+        {
+          "name": "Sidecar profile staging (local-cuda)",
+          "status": "COMPLETED",
+          "conclusion": "SUCCESS",
+          "url": "https://github.com/joaojhgs/aurora/actions/runs/34621671172/job/103336899194"
+        },
+        {
+          "name": "Validate db (local-cpu)",
+          "status": "COMPLETED",
+          "conclusion": "SUCCESS",
+          "url": "https://github.com/joaojhgs/aurora/actions/runs/34621671412/job/103336973813"
+        },
+        {
+          "name": "Sidecar profile staging (local-rocm)",
+          "status": "COMPLETED",
+          "conclusion": "SUCCESS",
+          "url": "https://github.com/joaojhgs/aurora/actions/runs/34621671172/job/103336898902"
+        },
+        {
+          "name": "Validate gateway (latest)",
+          "status": "COMPLETED",
+          "conclusion": "SUCCESS",
+          "url": "https://github.com/joaojhgs/aurora/actions/runs/34621671412/job/103336973870"
+        },
+        {
+          "name": "Sidecar profile staging (local-metal)",
+          "status": "COMPLETED",
+          "conclusion": "SUCCESS",
+          "url": "https://github.com/joaojhgs/aurora/actions/runs/34621671172/job/103336899185"
+        },
+        {
+          "name": "Validate orchestrator (openai)",
+          "status": "COMPLETED",
+          "conclusion": "SUCCESS",
+          "url": "https://github.com/joaojhgs/aurora/actions/runs/34621671412/job/103336973869"
+        },
+        {
+          "name": "Sidecar profile staging (local-vulkan)",
+          "status": "COMPLETED",
+          "conclusion": "SUCCESS",
+          "url": "https://github.com/joaojhgs/aurora/actions/runs/34621671172/job/103336899050"
+        },
+        {
+          "name": "Validate orchestrator (llama-cpp-cpu)",
+          "status": "COMPLETED",
+          "conclusion": "SUCCESS",
+          "url": "https://github.com/joaojhgs/aurora/actions/runs/34621671412/job/103336974215"
+        },
+        {
+          "name": "Sidecar profile staging (local-sycl)",
+          "status": "COMPLETED",
+          "conclusion": "SUCCESS",
+          "url": "https://github.com/joaojhgs/aurora/actions/runs/34621671172/job/103336899272"
+        },
+        {
+          "name": "Validate scheduler (latest)",
+          "status": "COMPLETED",
+          "conclusion": "SUCCESS",
+          "url": "https://github.com/joaojhgs/aurora/actions/runs/34621671412/job/103336973925"
+        },
+        {
+          "name": "Sidecar profile staging (local-rpc)",
+          "status": "COMPLETED",
+          "conclusion": "SUCCESS",
+          "url": "https://github.com/joaojhgs/aurora/actions/runs/34621671172/job/103336899440"
+        },
+        {
+          "name": "Validate tooling (latest)",
+          "status": "COMPLETED",
+          "conclusion": "SUCCESS",
+          "url": "https://github.com/joaojhgs/aurora/actions/runs/34621671412/job/103336973899"
+        },
+        {
+          "name": "Sidecar profile staging (full)",
+          "status": "COMPLETED",
+          "conclusion": "SUCCESS",
+          "url": "https://github.com/joaojhgs/aurora/actions/runs/34621671172/job/103336899139"
+        },
+        {
+          "name": "Validate tts (cpu)",
+          "status": "COMPLETED",
+          "conclusion": "SUCCESS",
+          "url": "https://github.com/joaojhgs/aurora/actions/runs/34621671412/job/103336974084"
+        },
+        {
+          "name": "Validate stt-coordinator (latest)",
+          "status": "COMPLETED",
+          "conclusion": "SUCCESS",
+          "url": "https://github.com/joaojhgs/aurora/actions/runs/34621671412/job/103336974026"
+        },
+        {
+          "name": "Validate stt-transcription (cpu)",
+          "status": "COMPLETED",
+          "conclusion": "SUCCESS",
+          "url": "https://github.com/joaojhgs/aurora/actions/runs/34621671412/job/103336974070"
+        },
+        {
+          "name": "Validate stt-wakeword (cpu)",
+          "status": "COMPLETED",
+          "conclusion": "SUCCESS",
+          "url": "https://github.com/joaojhgs/aurora/actions/runs/34621671412/job/103336974108"
+        },
+        {
+          "name": "Publish ${{ matrix.service }} (${{ matrix.variant }})",
+          "status": "COMPLETED",
+          "conclusion": "SKIPPED",
+          "url": "https://github.com/joaojhgs/aurora/actions/runs/34621671412/job/103337149381"
+        },
+        {
+          "name": "unit_integration_test (ubuntu-latest, 3.11.11)",
+          "status": "COMPLETED",
+          "conclusion": "SUCCESS",
+          "url": "https://github.com/joaojhgs/aurora/actions/runs/34621671168/job/103336899133"
+        },
+        {
+          "name": "Desktop Tauri bundle (desktop-local)",
+          "status": "COMPLETED",
+          "conclusion": "SUCCESS",
+          "url": "https://github.com/joaojhgs/aurora/actions/runs/34621671172/job/103337245492"
+        },
+        {
+          "name": "Android native webrtc-rs transport interop",
+          "status": "COMPLETED",
+          "conclusion": "SUCCESS",
+          "url": "https://github.com/joaojhgs/aurora/actions/runs/34621671173/job/103336898126"
+        },
+        {
+          "name": "Desktop Tauri bundle (desktop-client)",
+          "status": "COMPLETED",
+          "conclusion": "SUCCESS",
+          "url": "https://github.com/joaojhgs/aurora/actions/runs/34621671172/job/103337245507"
+        },
+        {
+          "name": "Desktop client live Python-peer E2E",
+          "status": "COMPLETED",
+          "conclusion": "SUCCESS",
+          "url": "https://github.com/joaojhgs/aurora/actions/runs/34621671172/job/103337245486"
+        },
+        {
+          "name": "macOS desktop client live Python-peer STUN E2E",
+          "status": "COMPLETED",
+          "conclusion": "SUCCESS",
+          "url": "https://github.com/joaojhgs/aurora/actions/runs/34621671172/job/103337245490"
+        },
+        {
+          "name": "Desktop client package (macOS)",
+          "status": "COMPLETED",
+          "conclusion": "SUCCESS",
+          "url": "https://github.com/joaojhgs/aurora/actions/runs/34621671172/job/103337245550"
+        },
+        {
+          "name": "Desktop client package (Windows)",
+          "status": "COMPLETED",
+          "conclusion": "SUCCESS",
+          "url": "https://github.com/joaojhgs/aurora/actions/runs/34621671172/job/103337245565"
+        }
+      ]
+    },
+    {
+      "pr": 171,
+      "exitCode": 0,
+      "url": "https://github.com/joaojhgs/aurora/pull/171",
+      "state": "MERGED",
+      "draft": false,
+      "head": "37b0ddb74c23bd7ace165eb1eb89e38cad15b46a",
+      "headBranch": "multica/PER-280-node-config-fixes",
+      "baseBranch": "main",
+      "mergeCommit": {
+        "oid": "21da8d6830a3f4a586790a7883f2601aab48563e"
+      },
+      "mergedAt": "2026-09-14T12:32:56Z",
+      "reviewDecision": "",
+      "reviews": [
+        {
+          "author": "copilot-pull-request-reviewer",
+          "state": "COMMENTED",
+          "submittedAt": "2026-09-05T04:13:32Z",
+          "commit": {
+            "oid": "21f259904ac9922fa1444f472abd2bb5a33ddc6f"
+          }
+        }
+      ],
+      "checks": [
+        {
+          "name": "SDK, shared UI, and web app",
+          "status": "COMPLETED",
+          "conclusion": "SUCCESS",
+          "url": "https://github.com/joaojhgs/aurora/actions/runs/34836990890/job/103952942134"
+        },
+        {
+          "name": "Unit, integration, and E2E tests",
+          "status": "COMPLETED",
+          "conclusion": "SUCCESS",
+          "url": "https://github.com/joaojhgs/aurora/actions/runs/34836991017/job/103952942861"
+        },
+        {
+          "name": "Python lint, format, and generated config",
+          "status": "COMPLETED",
+          "conclusion": "SUCCESS",
+          "url": "https://github.com/joaojhgs/aurora/actions/runs/34836990900/job/103952942272"
+        },
+        {
+          "name": "\ud83e\uddea Test Process Mode",
+          "status": "COMPLETED",
+          "conclusion": "SUCCESS",
+          "url": "https://github.com/joaojhgs/aurora/actions/runs/34836990923/job/103952942187"
+        },
+        {
+          "name": "Generate inventory and validate SDK contract fixtures",
+          "status": "COMPLETED",
+          "conclusion": "SUCCESS",
+          "url": "https://github.com/joaojhgs/aurora/actions/runs/34836990909/job/103952942574"
+        },
+        {
+          "name": "Android client APK/AAB build and emulator smoke",
+          "status": "COMPLETED",
+          "conclusion": "SUCCESS",
+          "url": "https://github.com/joaojhgs/aurora/actions/runs/34836990888/job/103952941909"
+        },
+        {
+          "name": "Patched Sherpa runtime (Linux x64)",
+          "status": "COMPLETED",
+          "conclusion": "SUCCESS",
+          "url": "https://github.com/joaojhgs/aurora/actions/runs/34836990936/job/103952942143"
+        },
+        {
+          "name": "macOS Xcode Tauri iOS init and build",
+          "status": "COMPLETED",
+          "conclusion": "SUCCESS",
+          "url": "https://github.com/joaojhgs/aurora/actions/runs/34836990914/job/103952942370"
+        },
+        {
+          "name": "iOS manifest and UI policy",
+          "status": "COMPLETED",
+          "conclusion": "SUCCESS",
+          "url": "https://github.com/joaojhgs/aurora/actions/runs/34836990894/job/103952942330"
+        },
+        {
+          "name": "Hosted peer and cross-engine network paths",
+          "status": "COMPLETED",
+          "conclusion": "SUCCESS",
+          "url": "https://github.com/joaojhgs/aurora/actions/runs/34836991032/job/103952942921"
+        },
+        {
+          "name": "Patched Sherpa runtime (macOS arm64)",
+          "status": "COMPLETED",
+          "conclusion": "SUCCESS",
+          "url": "https://github.com/joaojhgs/aurora/actions/runs/34836990936/job/103952942291"
+        },
+        {
+          "name": "Patched Sherpa runtime (Windows x64)",
+          "status": "COMPLETED",
+          "conclusion": "SUCCESS",
+          "url": "https://github.com/joaojhgs/aurora/actions/runs/34836990936/job/103952942376"
+        },
+        {
+          "name": "macOS Xcode iOS preflight",
+          "status": "COMPLETED",
+          "conclusion": "SKIPPED",
+          "url": "https://github.com/joaojhgs/aurora/actions/runs/34836990894/job/103954259221"
+        },
+        {
+          "name": "Workspace typecheck and package metadata",
+          "status": "COMPLETED",
+          "conclusion": "SUCCESS",
+          "url": "https://github.com/joaojhgs/aurora/actions/runs/34836990900/job/103952942541"
+        },
+        {
+          "name": "lint (3.11)",
+          "status": "COMPLETED",
+          "conclusion": "SUCCESS",
+          "url": "https://github.com/joaojhgs/aurora/actions/runs/34836990923/job/103952942468"
+        },
+        {
+          "name": "Sidecar profile staging (desktop-local-minimal)",
+          "status": "COMPLETED",
+          "conclusion": "SUCCESS",
+          "url": "https://github.com/joaojhgs/aurora/actions/runs/34836990936/job/103952942276"
+        },
+        {
+          "name": "Native webrtc-rs transport interop",
+          "status": "COMPLETED",
+          "conclusion": "SUCCESS",
+          "url": "https://github.com/joaojhgs/aurora/actions/runs/34836991032/job/103952943172"
+        },
+        {
+          "name": "Sidecar profile staging (local-cpu)",
+          "status": "COMPLETED",
+          "conclusion": "SUCCESS",
+          "url": "https://github.com/joaojhgs/aurora/actions/runs/34836990936/job/103952942312"
+        },
+        {
+          "name": "Sidecar profile staging (local-cuda)",
+          "status": "COMPLETED",
+          "conclusion": "SUCCESS",
+          "url": "https://github.com/joaojhgs/aurora/actions/runs/34836990936/job/103952942257"
+        },
+        {
+          "name": "Sidecar profile staging (local-rocm)",
+          "status": "COMPLETED",
+          "conclusion": "SUCCESS",
+          "url": "https://github.com/joaojhgs/aurora/actions/runs/34836990936/job/103952942197"
+        },
+        {
+          "name": "Sidecar profile staging (local-metal)",
+          "status": "COMPLETED",
+          "conclusion": "SUCCESS",
+          "url": "https://github.com/joaojhgs/aurora/actions/runs/34836990936/job/103952942259"
+        },
+        {
+          "name": "Sidecar profile staging (local-vulkan)",
+          "status": "COMPLETED",
+          "conclusion": "SUCCESS",
+          "url": "https://github.com/joaojhgs/aurora/actions/runs/34836990936/job/103952942177"
+        },
+        {
+          "name": "Sidecar profile staging (local-sycl)",
+          "status": "COMPLETED",
+          "conclusion": "SUCCESS",
+          "url": "https://github.com/joaojhgs/aurora/actions/runs/34836990936/job/103952942260"
+        },
+        {
+          "name": "Sidecar profile staging (local-rpc)",
+          "status": "COMPLETED",
+          "conclusion": "SUCCESS",
+          "url": "https://github.com/joaojhgs/aurora/actions/runs/34836990936/job/103952942320"
+        },
+        {
+          "name": "Sidecar profile staging (full)",
+          "status": "COMPLETED",
+          "conclusion": "SUCCESS",
+          "url": "https://github.com/joaojhgs/aurora/actions/runs/34836990936/job/103952942273"
+        },
+        {
+          "name": "unit_integration_test (ubuntu-latest, 3.11.11)",
+          "status": "COMPLETED",
+          "conclusion": "SUCCESS",
+          "url": "https://github.com/joaojhgs/aurora/actions/runs/34836990923/job/103952942444"
+        },
+        {
+          "name": "Desktop Tauri bundle (desktop-local)",
+          "status": "COMPLETED",
+          "conclusion": "SUCCESS",
+          "url": "https://github.com/joaojhgs/aurora/actions/runs/34836990936/job/103953324377"
+        },
+        {
+          "name": "Android native webrtc-rs transport interop",
+          "status": "COMPLETED",
+          "conclusion": "SUCCESS",
+          "url": "https://github.com/joaojhgs/aurora/actions/runs/34836991032/job/103952943071"
+        },
+        {
+          "name": "Desktop Tauri bundle (desktop-client)",
+          "status": "COMPLETED",
+          "conclusion": "SUCCESS",
+          "url": "https://github.com/joaojhgs/aurora/actions/runs/34836990936/job/103953324333"
+        },
+        {
+          "name": "Desktop client live Python-peer E2E",
+          "status": "COMPLETED",
+          "conclusion": "SUCCESS",
+          "url": "https://github.com/joaojhgs/aurora/actions/runs/34836990936/job/103953324328"
+        },
+        {
+          "name": "macOS desktop client live Python-peer STUN E2E",
+          "status": "COMPLETED",
+          "conclusion": "SUCCESS",
+          "url": "https://github.com/joaojhgs/aurora/actions/runs/34836990936/job/103953324426"
+        },
+        {
+          "name": "Desktop client package (macOS)",
+          "status": "COMPLETED",
+          "conclusion": "SUCCESS",
+          "url": "https://github.com/joaojhgs/aurora/actions/runs/34836990936/job/103953324335"
+        },
+        {
+          "name": "Desktop client package (Windows)",
+          "status": "COMPLETED",
+          "conclusion": "SUCCESS",
+          "url": "https://github.com/joaojhgs/aurora/actions/runs/34836990936/job/103953324400"
+        }
+      ]
+    }
+  ]
+}

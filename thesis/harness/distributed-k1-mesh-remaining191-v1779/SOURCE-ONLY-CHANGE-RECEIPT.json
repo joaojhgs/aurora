@@ -1,0 +1,104 @@
+{
+  "status": "SOURCE_ONLY_NOT_LAUNCHED",
+  "parent": "distributed-k1-mesh-remaining880-v1719",
+  "priorAttempted": 709,
+  "priorCorrect": 697,
+  "priorFailed": 12,
+  "plannedNewMeasured": 191,
+  "globalIndices": [
+    710,
+    900
+  ],
+  "warmups": 15,
+  "requestCapSeconds": 180,
+  "conditionCapSeconds": 15000,
+  "outerCapSeconds": 15240,
+  "originalGlobalCapSeconds": 72000,
+  "actualPriorRecoveryWallClockAndProviderExpiryAdmission": "REQUIRED_BEFORE_LAUNCH",
+  "sameWorkloadModelsSettingsPredicatesFailurePolicy": true,
+  "newModelCalls": 0,
+  "diffSha256": "6b079b538e56e887d7c462ee7fc67905fa6bbfaf947be478570a4fe858047ccd",
+  "files": [
+    {
+      "file": "runner.py",
+      "beforeSha256": "c55f5f394a22b2cf64a76e7819d31c3a731ae97000236b4ab3f03434291050b1",
+      "afterSha256": "938cc82848c628ededb64cf53fbaddba8a2166b1076f97b1e408aff5066428d8",
+      "changes": [
+        {
+          "before": "v1719",
+          "after": "v1779",
+          "occurrences": 4
+        },
+        {
+          "before": "MEASURED_COUNT = 880",
+          "after": "MEASURED_COUNT = 191",
+          "occurrences": 1
+        },
+        {
+          "before": "CONDITION_CAP_SECONDS = 68_000.0",
+          "after": "CONDITION_CAP_SECONDS = 15_000.0",
+          "occurrences": 1
+        },
+        {
+          "before": "epoch.get(\"priorMeasuredAttempted\") != 20",
+          "after": "epoch.get(\"priorMeasuredAttempted\") != 709",
+          "occurrences": 1
+        },
+        {
+          "before": "epoch.get(\"globalFirst\") != 21",
+          "after": "epoch.get(\"globalFirst\") != 710",
+          "occurrences": 1
+        },
+        {
+          "before": "epoch.get(\"priorCorrect\") != 19 or epoch.get(\"priorFailed\") != 1",
+          "after": "epoch.get(\"priorCorrect\") != 697 or epoch.get(\"priorFailed\") != 12",
+          "occurrences": 1
+        },
+        {
+          "before": "\"epoch_condition_measured_offset\": 20",
+          "after": "\"epoch_condition_measured_offset\": 709",
+          "occurrences": 1
+        },
+        {
+          "before": "else 20 + attempt_index",
+          "after": "else 709 + attempt_index",
+          "occurrences": 1
+        }
+      ]
+    },
+    {
+      "file": "controller.py",
+      "beforeSha256": "2a782c273a283ed45b266ad854bf36a6e5ab1ccfcdd9a8c0be9e0ae1762de530",
+      "afterSha256": "bd92aebebff2d7467966413bf2e67f62a934f7923008f9999c8493880cdd8b8d",
+      "changes": [
+        {
+          "before": "OUTER_CAP = 68_240",
+          "after": "OUTER_CAP = 15_240",
+          "occurrences": 1
+        },
+        {
+          "before": "68_000",
+          "after": "15_000",
+          "occurrences": 2
+        },
+        {
+          "before": "\"planned_measured\": 880",
+          "after": "\"planned_measured\": 191",
+          "occurrences": 1
+        }
+      ]
+    },
+    {
+      "file": "receiver_proof.py",
+      "beforeSha256": "4357fb4809eb3c5d6042eb5ceb215b4662b2cd449c79c0fe9b2322cf892c1c4d",
+      "afterSha256": "c5a7ddbb04d7ce76dc7162d59d2f9d65442b30e044f5db3f63589ea782c05275",
+      "changes": [
+        {
+          "before": "audio-campaign-v1719",
+          "after": "audio-campaign-v1779",
+          "occurrences": 1
+        }
+      ]
+    }
+  ]
+}

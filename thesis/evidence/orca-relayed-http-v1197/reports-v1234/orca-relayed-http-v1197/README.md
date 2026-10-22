@@ -1,0 +1,25 @@
+# V1197 physical evidence custody
+
+The existing Orca-relayed HTTP condition is running. All15 excluded warmups and the correlated receiver-native gate passed at2026-10-17T20:20:35.435950UTC. This is incomplete scientific data, not a sealed900-case result. The original input, models, frozen manifest, allocation and process ownership remain unchanged.
+
+The [owner-amendment receipt](STORAGE-AMENDMENT-v1217.json) records real copies, byte counts, before/after disk space, copy budgets and gaps. The [live manifest](CURRENT.json) identifies every retained immutable file with its SHA256 and the latest completed-case/audio count. Its referenced immutable `receipts/` retain each copy checkpoint and errors. The [worker copier launch](copier-launch.json) pins PID/start ticks, source hash and finite bounds; it launches no SUT requests, model executions or agents. Concurrent custody IO is a recorded possible confound; all affected measured cases remain in their original population.
+
+Actual payloads are stored here:
+
+- `attempts/`: completed raw outcome JSONL rows, with per-case phase/status and audio references in the live manifest. Failed/incorrect outcomes are retained too.
+- `audio/`: actual output WAV blobs, verified against the case SHA256 and decoded for a nonempty WAV header. Hashes alone do not count as audio retention.
+- `harness/`: exact executed requester/controller/adapter sources, candidate manifest and actual fixed input WAV.
+- `frozen/condition.json`: unchanged condition manifest SHA256 `6bc65cf5cc3c4eddb90b80b0764a01e6a9fc4afbed66f33c731e3ab58528e101`.
+- `prefixes/`: contiguous immutable byte chunks of requester native stages, bindings and resource logs. Each generation is an incomplete exact prefix, with source inode, observed byte count and committed byte watermark. Append-only sources stay in their original paths.
+- `admission/`, `launch-and-admission/` and `provider-warmups/`: actual gate, launch, health, earlier failure and transferred original15-warmup receiver evidence.
+- [Secret-free settings](settings/settings.redacted.json): a separately identified derivative with the original private-config fingerprint. Credentials and private databases are excluded.
+
+The [provider receipt](provider-copy-receipt-v1216.json) proves actual Personal repository copies at `/home/developer/projects/aurora/thesis/evidence/orca-relayed-http-v1197/provider`, including40,157,195bytes at the first checkpoint and the original resource prefix0..39,835,040. That data copier started only after the original proof finalizer released the existing control terminal. Its PID/start ticks are429068/2450245. The worker also holds [fixed checkpoint12](provider-transfer-v1232/CUSTODY.json), actually transferred and extracted at2026-10-17T20:44:43.330226UTC:56raw files/43,117,024bytes through20:40:55.137447UTC. All raw file sizes/SHA256 matched on export and worker extraction. Actual worker prefix watermarks are189,206native-stage bytes,30,763binding bytes and42,722,823resource bytes. The archive is2,597,567bytes/SHA256 `80b8d8a35b546a2da8758f131937905163a8fc5a069b03701c96c483b3beb00c`. Newer provider tails stay physically copied on Personal and require subsequent bounded transfer. No full-cohort seal is claimed.
+
+For requester logs, concatenate the files named by `prefixes[LOG].chunks` in `CURRENT.json`, in order. Resolve these repository-relative paths from the repository root; verify each chunk's hash/byte range using `files` first. The concatenated length must equal `endByte`. Do not append a later live source tail or label this prefix complete. Provider manifests use provider-relative chunk names and must be resolved from the Personal provider custody directory. Copies can be resumed only after proving the recorded copier absent and acquiring its singleton lock; do not launch a second copier beside a live one.
+
+All [seven frozen assets](../../models/retained-v1212/CUSTODY.json) have actual verified repository bytes. Six copies occupy211,419,292bytes; the existing563,036,064-byte LLM object is verified in `.artifacts/local-inference/models/`. The original weight-lock metadata remains preserved.
+
+The [sealed archive custody](../sealed-cohorts-v1215/CUSTODY.json) contains five byte-verified prior raw ZIPs and their original outcome reports, totaling143,571,171bytes of copied cohort files. ZIP audio/attempt counts came from central directories; prior scientific audits were preserved, without another benchmark or redundant per-audio audit.
+
+Known recovery gaps remain explicit: V799 has6copied metadata files/24,753bytes and zero recovered raw/audio; its original130,072,923-byte archive is UNKNOWN/unrecovered. C06 has21copied metadata/source files/147,368bytes, with final outcome/denominator/raw case count/audio/bytes UNKNOWN. Its historical272completed/273attempted snapshot is not a final count or a lost-file estimate. The [bounded monitor audit](../sealed-cohorts-v1215/monitor/KNOWN-REPO-CUSTODY-AUDIT-20261017T2021.json) covers known repo locations only, with no global-loss claim or rerun hiding a gap.

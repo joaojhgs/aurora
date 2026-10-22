@@ -1,0 +1,9 @@
+{
+  "targetedChangedDocumentLinks": 44,
+  "missingLinks": [],
+  "globalCheckDocs": "FAILED_EXISTING_REPORT_PLACEMENT_AND_OTHER_REPOSITORY_POLICY_FINDINGS",
+  "globalLog": ".git/aurora-handoff-import-20261006/v1479-check-docs.log",
+  "globalLogSha256": "2867e4601401c5e78afb369c83c9211ff93c407c16adfeae47afac390f851e44",
+  "scope": "No report/source deletion, move, broad docs repair or SUT/test rerun; owner requires these campaign histories under docs and thesis.",
+  "globalErrorExample": "- docs/experiments/tcc-20261013-submission-20261030/root/CUSTODY-relay-correction-v1186.json: generated/report artifact should not live in current docs"
+}

@@ -1,0 +1,28 @@
+{
+  "id": "add57d3d-2cb5-432c-9141-920ef3d70703",
+  "ok": true,
+  "result": {
+    "message": {
+      "id": "msg_0ca602dd7a47",
+      "run_id": "run_e6054e76e9fc",
+      "delivery_contract": "current_delivery",
+      "from_handle": "term_6a00d9ee-792a-4daf-8578-236290e33108",
+      "to_handle": "dispatch:ctx_104db5d889d2",
+      "subject": "Bounded supplied-endpoint route/controller provenance before owner blocker; no retry or pairing reset",
+      "body": "Root read actual21:37 ADB connectfailure/getstate device-not-found; preserveoneattempt, no newpair/reset/code orunchangedretry. Before treating asowner-address blocker, do ONEbounded model-free route/listener/ADBserveridentity diagnostic for supplied100.64.0.4 only: normal ip route get, existingADBserver location/host provenance (nonsecret metadata), and whether existing pairedADBcontroller is host vsPersonal distrobox; do NOT copykeys/changeusers/proxy/security/startanothercontroller. Existing owner saysalready paired; failed transport is not pairidentity absence. No broadpeer/device/networkscan, no companynamespace. Read stderr/structured exactfailure fromsavedartifact, no phonecontent. If existingapproved Orca ADB-use/controller route can reachphone, discover documentedroute notfixedproxyguess; no managerRPC/browserhistoryforward. I will relay exact nonsecretendpointavailability need throughmonitor/Coding ifgenuine. Continue workingguarded artifactpreparation no900/warmups/no modelcalls. Ownermentionedca8509 request reconciled COMPLETEDterminal.send toRoot21:22:36, notworkerstart; no replayrequired. Actualefaclaunchunchanged. Sourceintegrationmain28testspassed, Rootcommitsnext; exactSHAstillpending.",
+      "type": "status",
+      "priority": "normal",
+      "thread_id": null,
+      "payload": null,
+      "created_at": "2026-10-20T21:39:03Z",
+      "delivered_at": null
+    },
+    "mutation": {
+      "requestId": "9762fb88-d9d9-45b8-b222-e499c8c9ad39",
+      "replayed": false
+    }
+  },
+  "_meta": {
+    "runtimeId": "cc9e3275-28c6-4c45-85cc-bdcd2262aa7d"
+  }
+}

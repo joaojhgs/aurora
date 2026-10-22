@@ -1,0 +1,583 @@
+{
+  "attempted": 35,
+  "attempts": [
+    {
+      "file": "attempts/attempt-0001-warmup.jsonl",
+      "ordinal": 1,
+      "phase": "warmup",
+      "status": "completed_correct",
+      "timeout": false
+    },
+    {
+      "file": "attempts/attempt-0002-warmup.jsonl",
+      "ordinal": 2,
+      "phase": "warmup",
+      "status": "completed_correct",
+      "timeout": false
+    },
+    {
+      "file": "attempts/attempt-0003-warmup.jsonl",
+      "ordinal": 3,
+      "phase": "warmup",
+      "status": "completed_correct",
+      "timeout": false
+    },
+    {
+      "file": "attempts/attempt-0004-warmup.jsonl",
+      "ordinal": 4,
+      "phase": "warmup",
+      "status": "completed_correct",
+      "timeout": false
+    },
+    {
+      "file": "attempts/attempt-0005-warmup.jsonl",
+      "ordinal": 5,
+      "phase": "warmup",
+      "status": "completed_correct",
+      "timeout": false
+    },
+    {
+      "file": "attempts/attempt-0006-warmup.jsonl",
+      "ordinal": 6,
+      "phase": "warmup",
+      "status": "completed_correct",
+      "timeout": false
+    },
+    {
+      "file": "attempts/attempt-0007-warmup.jsonl",
+      "ordinal": 7,
+      "phase": "warmup",
+      "status": "completed_correct",
+      "timeout": false
+    },
+    {
+      "file": "attempts/attempt-0008-warmup.jsonl",
+      "ordinal": 8,
+      "phase": "warmup",
+      "status": "completed_correct",
+      "timeout": false
+    },
+    {
+      "file": "attempts/attempt-0009-warmup.jsonl",
+      "ordinal": 9,
+      "phase": "warmup",
+      "status": "completed_correct",
+      "timeout": false
+    },
+    {
+      "file": "attempts/attempt-0010-warmup.jsonl",
+      "ordinal": 10,
+      "phase": "warmup",
+      "status": "completed_correct",
+      "timeout": false
+    },
+    {
+      "file": "attempts/attempt-0011-warmup.jsonl",
+      "ordinal": 11,
+      "phase": "warmup",
+      "status": "completed_correct",
+      "timeout": false
+    },
+    {
+      "file": "attempts/attempt-0012-warmup.jsonl",
+      "ordinal": 12,
+      "phase": "warmup",
+      "status": "completed_correct",
+      "timeout": false
+    },
+    {
+      "file": "attempts/attempt-0013-warmup.jsonl",
+      "ordinal": 13,
+      "phase": "warmup",
+      "status": "completed_correct",
+      "timeout": false
+    },
+    {
+      "file": "attempts/attempt-0014-warmup.jsonl",
+      "ordinal": 14,
+      "phase": "warmup",
+      "status": "completed_correct",
+      "timeout": false
+    },
+    {
+      "file": "attempts/attempt-0015-warmup.jsonl",
+      "ordinal": 15,
+      "phase": "warmup",
+      "status": "completed_correct",
+      "timeout": false
+    },
+    {
+      "file": "attempts/attempt-0016-measured.jsonl",
+      "ordinal": 16,
+      "phase": "measured",
+      "status": "completed_correct",
+      "timeout": false
+    },
+    {
+      "file": "attempts/attempt-0017-measured.jsonl",
+      "ordinal": 17,
+      "phase": "measured",
+      "status": "completed_correct",
+      "timeout": false
+    },
+    {
+      "file": "attempts/attempt-0018-measured.jsonl",
+      "ordinal": 18,
+      "phase": "measured",
+      "status": "completed_correct",
+      "timeout": false
+    },
+    {
+      "file": "attempts/attempt-0019-measured.jsonl",
+      "ordinal": 19,
+      "phase": "measured",
+      "status": "completed_correct",
+      "timeout": false
+    },
+    {
+      "file": "attempts/attempt-0020-measured.jsonl",
+      "ordinal": 20,
+      "phase": "measured",
+      "status": "completed_correct",
+      "timeout": false
+    },
+    {
+      "file": "attempts/attempt-0021-measured.jsonl",
+      "ordinal": 21,
+      "phase": "measured",
+      "status": "completed_correct",
+      "timeout": false
+    },
+    {
+      "file": "attempts/attempt-0022-measured.jsonl",
+      "ordinal": 22,
+      "phase": "measured",
+      "status": "completed_correct",
+      "timeout": false
+    },
+    {
+      "file": "attempts/attempt-0023-measured.jsonl",
+      "ordinal": 23,
+      "phase": "measured",
+      "status": "completed_correct",
+      "timeout": false
+    },
+    {
+      "file": "attempts/attempt-0024-measured.jsonl",
+      "ordinal": 24,
+      "phase": "measured",
+      "status": "completed_correct",
+      "timeout": false
+    },
+    {
+      "file": "attempts/attempt-0025-measured.jsonl",
+      "ordinal": 25,
+      "phase": "measured",
+      "status": "completed_correct",
+      "timeout": false
+    },
+    {
+      "file": "attempts/attempt-0026-measured.jsonl",
+      "ordinal": 26,
+      "phase": "measured",
+      "status": "completed_correct",
+      "timeout": false
+    },
+    {
+      "file": "attempts/attempt-0027-measured.jsonl",
+      "ordinal": 27,
+      "phase": "measured",
+      "status": "completed_correct",
+      "timeout": false
+    },
+    {
+      "file": "attempts/attempt-0028-measured.jsonl",
+      "ordinal": 28,
+      "phase": "measured",
+      "status": "completed_correct",
+      "timeout": false
+    },
+    {
+      "file": "attempts/attempt-0029-measured.jsonl",
+      "ordinal": 29,
+      "phase": "measured",
+      "status": "completed_correct",
+      "timeout": false
+    },
+    {
+      "file": "attempts/attempt-0030-measured.jsonl",
+      "ordinal": 30,
+      "phase": "measured",
+      "status": "completed_correct",
+      "timeout": false
+    },
+    {
+      "file": "attempts/attempt-0031-measured.jsonl",
+      "ordinal": 31,
+      "phase": "measured",
+      "status": "completed_correct",
+      "timeout": false
+    },
+    {
+      "file": "attempts/attempt-0032-measured.jsonl",
+      "ordinal": 32,
+      "phase": "measured",
+      "status": "completed_correct",
+      "timeout": false
+    },
+    {
+      "file": "attempts/attempt-0033-measured.jsonl",
+      "ordinal": 33,
+      "phase": "measured",
+      "status": "completed_correct",
+      "timeout": false
+    },
+    {
+      "file": "attempts/attempt-0034-measured.jsonl",
+      "ordinal": 34,
+      "phase": "measured",
+      "status": "completed_correct",
+      "timeout": false
+    },
+    {
+      "file": "attempts/attempt-0035-measured.jsonl",
+      "ordinal": 35,
+      "phase": "measured",
+      "status": "failed",
+      "timeout": false
+    }
+  ],
+  "candidate_manifest_reference_sha256": "34b681e385feb3500c9e9849d30f5bac982716c4e4938cdb04c5fdc617cff624",
+  "candidate_manifest_role": "exact_three_key_pilot_input_manifest",
+  "candidate_manifest_sha256": "ce75b965ee5879ebece6ea7dfe133441547d20ccf89ecd5d66ea510bd9645e60",
+  "completed_flow_count_including_incorrect": 19,
+  "completed_flow_latency_ms_r7_including_incorrect": {
+    "p50": 43657.277037,
+    "p90": 48616.7359926,
+    "p95": 49321.44234510001
+  },
+  "condition": "localbus_accurate_stt_assistant_remote_typed_mesh_tts",
+  "condition_cap_seconds": 72000.0,
+  "condition_elapsed_ms_excluding_setup_and_shutdown": 1564013.163626,
+  "condition_ended_monotonic_ns": 1247991371825021,
+  "condition_started_monotonic_ns": 1246427358661395,
+  "config_raw_sha256_after_startup": "53e3402f4017a9b8127cbde2e0e8eb586ce6b50e61f94b598c36d960f2c83d16",
+  "config_raw_sha256_before_startup": "1eb28726375e71314687b91170d9360a34317ea03a6cef18b3b29be533876855",
+  "config_sha256": "53e3402f4017a9b8127cbde2e0e8eb586ce6b50e61f94b598c36d960f2c83d16",
+  "config_startup_changed_key_paths": [
+    "services.gateway.api.token_secret",
+    "services.gateway.webrtc.password"
+  ],
+  "config_startup_changed_values_redacted": true,
+  "config_startup_semantics_verified": true,
+  "correct": 19,
+  "correctness_denominator": {
+    "measured_attempted": 20,
+    "measured_correct": 19,
+    "measured_failed_or_interrupted": 1,
+    "measured_incorrect_completed": 0,
+    "measured_planned": 900,
+    "unattempted_measured": 880,
+    "warmup_attempted_excluded": 15,
+    "warmup_failed_or_interrupted_excluded": 0,
+    "warmup_planned_excluded": 15
+  },
+  "expected_reply_words": [
+    "paris"
+  ],
+  "failed": 1,
+  "finished_monotonic_ns": 1247992218275696,
+  "flow_end_point": "valid_non_silent_pcm16_tts_wav_received_decoded_and_checked_before_artifact_write",
+  "frozen_cohort_manifest_name": "condition-frozen-v1711.json",
+  "frozen_cohort_manifest_sha256": "04872dbd3948c13a4b269a1eb116f8b92fb3c369a8b0026cbbf339a2257009c1",
+  "input": {
+    "bytes": 219794,
+    "channels": 1,
+    "frames": 109875,
+    "sample_rate": 22050,
+    "sample_width_bytes": 2,
+    "sha256": "da0ecc4ad0885746ab6e716585473917ab2b543a505bf0db09ebacfaa7943cbb"
+  },
+  "measured_requests": 20,
+  "mesh_authority_binding": "existing_authorized_peer_session",
+  "mesh_route_observation": "actual_peerbridge_call_target_and_receiver_native_span_join",
+  "mesh_tts_peer_id_sha256": "77421aa81ce7ae2e865455348e9aa5ae17013d8f5e1f72d38d71d09f110ef868",
+  "missing_metrics": {
+    "first_audio": "no playback path in this pilot",
+    "first_token": "not exposed by this caller boundary",
+    "playback_end": "no playback path in this pilot",
+    "playback_start": "no playback path in this pilot"
+  },
+  "observed_measured_attempt_latency_ms_r7_including_failures": {
+    "p50": 43556.4724185,
+    "p90": 48590.7107258,
+    "p95": 49073.19023605
+  },
+  "phase_denominators": {
+    "all": {
+      "attempted": 35,
+      "completed_correct": 34,
+      "completed_incorrect": 0,
+      "failed_or_interrupted": 1,
+      "planned": 915,
+      "timeouts": 0,
+      "unattempted": 880
+    },
+    "measured": {
+      "attempted": 20,
+      "completed_correct": 19,
+      "completed_incorrect": 0,
+      "failed_or_interrupted": 1,
+      "planned": 900,
+      "timeouts": 0,
+      "unattempted": 880
+    },
+    "warmup_excluded": {
+      "attempted": 15,
+      "completed_correct": 15,
+      "completed_incorrect": 0,
+      "failed_or_interrupted": 0,
+      "planned": 15,
+      "timeouts": 0,
+      "unattempted": 0
+    }
+  },
+  "physical_microphone": false,
+  "physical_playback_or_audibility": false,
+  "planned_measured": 900,
+  "planned_warmups": 15,
+  "provider_bindings_after": {
+    "configured_llm": {
+      "model_file": "Qwen3.5-0.8B-Q4_0.gguf",
+      "provider": "llama_cpp",
+      "settings": {
+        "chat_format": "chatml-function-calling",
+        "max_tokens": 128,
+        "min_p": 0.0,
+        "n_batch": 64,
+        "n_ctx": 4096,
+        "n_gpu_layers": 0,
+        "n_threads": 2,
+        "repeat_penalty": 1.0,
+        "seed": 42,
+        "temperature": 0.0,
+        "top_k": 1,
+        "top_p": 1.0
+      }
+    },
+    "transcription": {
+      "configured_compute_type": "int8",
+      "configured_device": "cpu",
+      "configured_model": "ebe41f70d5b6dfa9166e2c581c45c9c0cfc57b66",
+      "enabled": true,
+      "model_ready": true,
+      "model_type": {
+        "class": "WhisperModel",
+        "module": "faster_whisper.transcribe"
+      },
+      "service": "TranscriptionService"
+    },
+    "tts": {
+      "executable_file": "piper",
+      "expected_sample_rate": 22050,
+      "model_config_file": "en_US-ljspeech-medium.onnx.json",
+      "model_file": "en_US-ljspeech-medium.onnx",
+      "provider_id": "piper",
+      "provider_type": {
+        "class": "PiperTTSProvider",
+        "module": "app.services.tts.providers.piper"
+      },
+      "service": "TTSService"
+    }
+  },
+  "provider_bindings_before": {
+    "configured_llm": {
+      "model_file": "Qwen3.5-0.8B-Q4_0.gguf",
+      "provider": "llama_cpp",
+      "settings": {
+        "chat_format": "chatml-function-calling",
+        "max_tokens": 128,
+        "min_p": 0.0,
+        "n_batch": 64,
+        "n_ctx": 4096,
+        "n_gpu_layers": 0,
+        "n_threads": 2,
+        "repeat_penalty": 1.0,
+        "seed": 42,
+        "temperature": 0.0,
+        "top_k": 1,
+        "top_p": 1.0
+      }
+    },
+    "transcription": {
+      "configured_compute_type": "int8",
+      "configured_device": "cpu",
+      "configured_model": "ebe41f70d5b6dfa9166e2c581c45c9c0cfc57b66",
+      "enabled": true,
+      "model_ready": true,
+      "model_type": {
+        "class": "WhisperModel",
+        "module": "faster_whisper.transcribe"
+      },
+      "service": "TranscriptionService"
+    },
+    "tts": {
+      "executable_file": "piper",
+      "expected_sample_rate": 22050,
+      "model_config_file": "en_US-ljspeech-medium.onnx.json",
+      "model_file": "en_US-ljspeech-medium.onnx",
+      "provider_id": "piper",
+      "provider_type": {
+        "class": "PiperTTSProvider",
+        "module": "app.services.tts.providers.piper"
+      },
+      "service": "TTSService"
+    }
+  },
+  "request_cap_seconds": 180.0,
+  "schema_version": "aurora.full_audio_campaign.v1",
+  "selected_ice_pair": {
+    "reason": "not_exposed_by_typed_requester_call_boundary",
+    "value": null
+  },
+  "setup_duration_ms": 14772.523839,
+  "shutdown_completed": true,
+  "shutdown_duration_ms": 846.328515,
+  "status": "stopped_system_failure",
+  "stop_reason": "remote_mesh_exact_remote_peer_call_not_confirmed",
+  "successful_correct_count": 19,
+  "successful_correct_latency_ms_r7": {
+    "p50": 43657.277037,
+    "p90": 48616.7359926,
+    "p95": 49321.44234510001,
+    "p99": 52896.27271542
+  },
+  "timeouts": 0,
+  "unattempted_measured": 880,
+  "warmup_instrumentation_gate": {
+    "local_stt_llm_gate": {
+      "actual_llm_cpu_binding": true,
+      "actual_piper_cpu_binding": false,
+      "actual_provider_record_sha256": "aed68b9a4cb3a46458d8e7e223258b217ebe4c8d7eefeecd67537380947f7b04",
+      "actual_stt_cpu_binding": true,
+      "all_expected_predicates": true,
+      "native_stt_llm_spans": true,
+      "planned_and_correct_warmups": 15,
+      "status": "passed",
+      "warmup_cases": [
+        {
+          "correctness_complete": true,
+          "correlation_id": "audio-campaign-9b95bcf826f7415b8aaac8ff1e26fc94",
+          "harness_case_id": "audio-campaign-v1711-0001",
+          "local_bus_stages_complete": true,
+          "native_spans_complete": true
+        },
+        {
+          "correctness_complete": true,
+          "correlation_id": "audio-campaign-cfaf4964893c496182a97dee7c977946",
+          "harness_case_id": "audio-campaign-v1711-0002",
+          "local_bus_stages_complete": true,
+          "native_spans_complete": true
+        },
+        {
+          "correctness_complete": true,
+          "correlation_id": "audio-campaign-90ab13fb314b4deba33a00cfb32b9b2b",
+          "harness_case_id": "audio-campaign-v1711-0003",
+          "local_bus_stages_complete": true,
+          "native_spans_complete": true
+        },
+        {
+          "correctness_complete": true,
+          "correlation_id": "audio-campaign-2158c520d1fd498aa087234d7b66918e",
+          "harness_case_id": "audio-campaign-v1711-0004",
+          "local_bus_stages_complete": true,
+          "native_spans_complete": true
+        },
+        {
+          "correctness_complete": true,
+          "correlation_id": "audio-campaign-39dc0997aabe410fba6a3a207fe6da53",
+          "harness_case_id": "audio-campaign-v1711-0005",
+          "local_bus_stages_complete": true,
+          "native_spans_complete": true
+        },
+        {
+          "correctness_complete": true,
+          "correlation_id": "audio-campaign-64daacf3073e4174800efe4fbcd4ef3c",
+          "harness_case_id": "audio-campaign-v1711-0006",
+          "local_bus_stages_complete": true,
+          "native_spans_complete": true
+        },
+        {
+          "correctness_complete": true,
+          "correlation_id": "audio-campaign-e3b40bc796804f18bf02172277900dbd",
+          "harness_case_id": "audio-campaign-v1711-0007",
+          "local_bus_stages_complete": true,
+          "native_spans_complete": true
+        },
+        {
+          "correctness_complete": true,
+          "correlation_id": "audio-campaign-ccd3c6f628054fb4bd80b3826a576655",
+          "harness_case_id": "audio-campaign-v1711-0008",
+          "local_bus_stages_complete": true,
+          "native_spans_complete": true
+        },
+        {
+          "correctness_complete": true,
+          "correlation_id": "audio-campaign-51adba7518184a9a854815cac731a1a4",
+          "harness_case_id": "audio-campaign-v1711-0009",
+          "local_bus_stages_complete": true,
+          "native_spans_complete": true
+        },
+        {
+          "correctness_complete": true,
+          "correlation_id": "audio-campaign-acb3653501e646e4b9c8ed8109e33a47",
+          "harness_case_id": "audio-campaign-v1711-0010",
+          "local_bus_stages_complete": true,
+          "native_spans_complete": true
+        },
+        {
+          "correctness_complete": true,
+          "correlation_id": "audio-campaign-c27e882c1e444523967c6f1d27a0cc82",
+          "harness_case_id": "audio-campaign-v1711-0011",
+          "local_bus_stages_complete": true,
+          "native_spans_complete": true
+        },
+        {
+          "correctness_complete": true,
+          "correlation_id": "audio-campaign-6b86cc55fcf141bf840cba1c91c6a5cf",
+          "harness_case_id": "audio-campaign-v1711-0012",
+          "local_bus_stages_complete": true,
+          "native_spans_complete": true
+        },
+        {
+          "correctness_complete": true,
+          "correlation_id": "audio-campaign-e01790052ec24fd89657aee852cc0348",
+          "harness_case_id": "audio-campaign-v1711-0013",
+          "local_bus_stages_complete": true,
+          "native_spans_complete": true
+        },
+        {
+          "correctness_complete": true,
+          "correlation_id": "audio-campaign-97290cead09c4620a58311dbe22caaa3",
+          "harness_case_id": "audio-campaign-v1711-0014",
+          "local_bus_stages_complete": true,
+          "native_spans_complete": true
+        },
+        {
+          "correctness_complete": true,
+          "correlation_id": "audio-campaign-a1572aa490074d29823a0b90d30f0e1e",
+          "harness_case_id": "audio-campaign-v1711-0015",
+          "local_bus_stages_complete": true,
+          "native_spans_complete": true
+        }
+      ]
+    },
+    "planned_and_correct_warmups": 15,
+    "receiver_id": "personal-k1-mesh-tts-v1710",
+    "remote_mesh_correlations_joined": 15,
+    "remote_tts_proof_sha256": "905adcab330721d38e242f4deb26ade98b96459fd30922e5aaf41a71065ae2d1",
+    "remote_tts_receiver_gate": true,
+    "status": "passed"
+  },
+  "warmup_requests": 15
+}

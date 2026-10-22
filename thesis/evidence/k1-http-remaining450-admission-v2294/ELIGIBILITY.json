@@ -1,0 +1,145 @@
+{
+  "at": "2026-10-21T21:07:19.940725+00:00",
+  "status": "EXACT_UNATTEMPTED451_900_RECONCILED_NOT_LAUNCHED",
+  "conditionTargetMeasured": 900,
+  "completedMeasured": 450,
+  "completedCorrect": 449,
+  "completedFailed": 1,
+  "completedTimeouts": 0,
+  "completedCohorts": [
+    {
+      "cohort": "V1197",
+      "attempted": 180,
+      "firstIndex": 1,
+      "lastIndex": 180,
+      "outcomes": {
+        "completed_correct": 179,
+        "failed": 1
+      },
+      "caseSnapshotPath": "thesis/evidence/orca-relayed-http-v1197/terminal-v1377/REQUESTER-CURRENT.snapshot.json",
+      "caseSnapshotSha256": "03160c705d78bd5bcd8e2c54672cdc71cf259b236450722b2765489d9223299a",
+      "allRetainedAttemptFilesReconciled": true,
+      "seal": {
+        "source": "thesis/evidence/orca-relayed-http-v1197/terminal-v1377/SEAL.json",
+        "copy": "thesis/evidence/k1-http-remaining450-admission-v2294/inputs/V1197-SEAL.json",
+        "bytes": 2900,
+        "sha256": "613158562e914f5d952f009b87c3d6438b350d4809d6a97f9bf82ed301918829"
+      }
+    },
+    {
+      "cohort": "V2234",
+      "attempted": 270,
+      "firstIndex": 181,
+      "lastIndex": 450,
+      "outcomes": {
+        "completed_correct": 270
+      },
+      "caseSnapshotPath": "thesis/campaigns/worker-desktop-k1-orca-relayed-http-first270-v2234/terminal-v2251/REQUESTER-CURRENT.snapshot.json",
+      "caseSnapshotSha256": "b71d9e43a06c5e92101df9c0685e841318b4931e95ad527b19a93fcb8c104450",
+      "allRetainedAttemptFilesReconciled": true,
+      "seal": {
+        "source": "thesis/campaigns/worker-desktop-k1-orca-relayed-http-first270-v2234/terminal-v2251/REQUESTER-SEAL.json",
+        "copy": "thesis/evidence/k1-http-remaining450-admission-v2294/inputs/V2234-SEAL.json",
+        "bytes": 1741,
+        "sha256": "736694b7b16b9ad24993e804174b59f7cba66cd57fd894a766e30f71e2ca703c"
+      }
+    }
+  ],
+  "zeroMeasuredStartupCohorts": [
+    {
+      "cohort": "V2220",
+      "measured": 0,
+      "warmups": 1,
+      "retainedWarmupOutcomes": {
+        "failed": 1
+      },
+      "status": "stopped_system_failure",
+      "stopReason": "remote_http_status",
+      "shutdownCompleted": true,
+      "summary": {
+        "source": "thesis/campaigns/worker-desktop-k1-orca-relayed-http-first300-v2220/snapshots/summary.json/5afa3c558e5c3bd34db21e41fab7fb8e2a44fff0d86ffe9d520ba4db71788a5b.json",
+        "copy": "thesis/evidence/k1-http-remaining450-admission-v2294/inputs/V2220-STARTUP-SUMMARY.json",
+        "bytes": 7221,
+        "sha256": "5afa3c558e5c3bd34db21e41fab7fb8e2a44fff0d86ffe9d520ba4db71788a5b"
+      }
+    },
+    {
+      "cohort": "V2224",
+      "measured": 0,
+      "warmups": 15,
+      "retainedWarmupOutcomes": {
+        "completed_correct": 15
+      },
+      "status": "stopped_system_failure",
+      "stopReason": "remote_tts_receiver_manifest_invalid",
+      "shutdownCompleted": true,
+      "summary": {
+        "source": "thesis/campaigns/worker-desktop-k1-orca-relayed-http-first270-v2224/snapshots/summary.json/26d7da3e2be29cb38bd856fadaaadbbfae74dd1fbf82033d673e3f00d0c2277f.json",
+        "copy": "thesis/evidence/k1-http-remaining450-admission-v2294/inputs/V2224-STARTUP-SUMMARY.json",
+        "bytes": 9765,
+        "sha256": "26d7da3e2be29cb38bd856fadaaadbbfae74dd1fbf82033d673e3f00d0c2277f"
+      }
+    }
+  ],
+  "failureRetainedAndNotEligible": {
+    "conditionIndex": 180,
+    "cohort": "V1197",
+    "caseId": "audio-campaign-v802-0195",
+    "status": "failed",
+    "timeout": false,
+    "casePath": "thesis/evidence/orca-relayed-http-v1197/attempts/attempt-0195-measured.jsonl",
+    "caseSha256": "14de56c396a4e83154d628a4cac8c70a98760e515ed301631472d21a08de5955"
+  },
+  "eligibleCount": 450,
+  "firstEligible": 451,
+  "lastEligible": 900,
+  "eligibleIndicesPath": "thesis/evidence/k1-http-remaining450-admission-v2294/ELIGIBLE-INDICES.json",
+  "eligibleIndicesSha256": "1a9c494a3f01bf4eb8ebd35bb675d03bb9a14d80fc1f8a636c96ad47651c897d",
+  "historyPath": "thesis/evidence/k1-http-remaining450-admission-v2294/COMPLETED-INDEX-HISTORY.jsonl",
+  "historySha256": "2b2d3c7b89228644f4c5675c61c5e7697b0a4c6a39de4084e1c62d44d7da6dd5",
+  "parentManifestSha256": "11bbea3fc1e45e65da1ecb7b501aee77739870cb087d792e5bc5197f9b1027be",
+  "parentSealSha256": "736694b7b16b9ad24993e804174b59f7cba66cd57fd894a766e30f71e2ca703c",
+  "originalManifestSha256": "6bc65cf5cc3c4eddb90b80b0764a01e6a9fc4afbed66f33c731e3ab58528e101",
+  "noOtherStartedMeasuredIndexFoundInNamedSealedAttemptHistory": true,
+  "scope": "Named original/current sealed histories and zero-measurement startup cohorts only; failure180 remains in900 denominator. Original raw cases remain physically at their canonical repo thesis paths. This is eligibility reconciliation, not a launch/admission or cross-epoch latency pooling.",
+  "inputs": [
+    {
+      "source": "thesis/evidence/orca-relayed-http-v1197/terminal-v1377/SEAL.json",
+      "copy": "thesis/evidence/k1-http-remaining450-admission-v2294/inputs/V1197-SEAL.json",
+      "bytes": 2900,
+      "sha256": "613158562e914f5d952f009b87c3d6438b350d4809d6a97f9bf82ed301918829"
+    },
+    {
+      "source": "thesis/evidence/orca-relayed-http-v1197/terminal-v1377/summary.json",
+      "copy": "thesis/evidence/k1-http-remaining450-admission-v2294/inputs/V1197-SUMMARY.json",
+      "bytes": 45803,
+      "sha256": "641c6fc03929cd7c455d4b9f6460dd9923925069e99da69023079ae88b37563b"
+    },
+    {
+      "source": "thesis/campaigns/worker-desktop-k1-orca-relayed-http-first270-v2234/terminal-v2251/REQUESTER-SEAL.json",
+      "copy": "thesis/evidence/k1-http-remaining450-admission-v2294/inputs/V2234-SEAL.json",
+      "bytes": 1741,
+      "sha256": "736694b7b16b9ad24993e804174b59f7cba66cd57fd894a766e30f71e2ca703c"
+    },
+    {
+      "source": "thesis/campaigns/worker-desktop-k1-orca-relayed-http-first270-v2234/analysis-v2254/SUMMARY.json",
+      "copy": "thesis/evidence/k1-http-remaining450-admission-v2294/inputs/V2234-SUMMARY.json",
+      "bytes": 4259,
+      "sha256": "c7f4e401c59be2e73e81593c0d0c989b4fa64a3103b3d6d81d505ed652916f1f"
+    },
+    {
+      "source": "thesis/campaigns/worker-desktop-k1-orca-relayed-http-first300-v2220/snapshots/summary.json/5afa3c558e5c3bd34db21e41fab7fb8e2a44fff0d86ffe9d520ba4db71788a5b.json",
+      "copy": "thesis/evidence/k1-http-remaining450-admission-v2294/inputs/V2220-STARTUP-SUMMARY.json",
+      "bytes": 7221,
+      "sha256": "5afa3c558e5c3bd34db21e41fab7fb8e2a44fff0d86ffe9d520ba4db71788a5b"
+    },
+    {
+      "source": "thesis/campaigns/worker-desktop-k1-orca-relayed-http-first270-v2224/snapshots/summary.json/26d7da3e2be29cb38bd856fadaaadbbfae74dd1fbf82033d673e3f00d0c2277f.json",
+      "copy": "thesis/evidence/k1-http-remaining450-admission-v2294/inputs/V2224-STARTUP-SUMMARY.json",
+      "bytes": 9765,
+      "sha256": "26d7da3e2be29cb38bd856fadaaadbbfae74dd1fbf82033d673e3f00d0c2277f"
+    }
+  ],
+  "newInference": 0,
+  "newWorkers": 0
+}

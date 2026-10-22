@@ -1,0 +1,10 @@
+{
+  "command": [
+    "make",
+    "check-docs"
+  ],
+  "status": "completed",
+  "exitCode": 2,
+  "durationSeconds": 2.279864759068005,
+  "capSeconds": 120
+}

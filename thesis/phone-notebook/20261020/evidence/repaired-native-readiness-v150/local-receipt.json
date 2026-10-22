@@ -1,0 +1,8 @@
+{
+  "bytes": 1091,
+  "copyOnly": true,
+  "custody": "Notebook result persisted and fsynced before relay; remote receipt in same output",
+  "localPath": "/home/developer/projects/aurora/thesis/phone-notebook/20261020/evidence/repaired-native-readiness-v150/result.json",
+  "remotePath": "/home/developer/projects/aurora/thesis/phone-notebook/20261020/evidence/repaired-native-readiness-v150.json",
+  "sha256": "8159bd45438aa5fe2b85d82c8ea8856d9d517aedd912e2cb90555e89ea33d090"
+}

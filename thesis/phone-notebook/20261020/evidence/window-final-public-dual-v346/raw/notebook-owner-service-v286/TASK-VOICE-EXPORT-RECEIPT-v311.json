@@ -1,0 +1,179 @@
+{
+  "at": "2026-10-22T11:05:45.417521+00:00",
+  "normalPublicConfigSet": [
+    {
+      "module": "Transcription",
+      "path": "services.stt.transcription.mesh_sharing",
+      "before": {
+        "share": false,
+        "max_concurrent": 10,
+        "unshared_method_ids": []
+      },
+      "requested": {
+        "share": true,
+        "max_concurrent": 1,
+        "unshared_method_ids": [
+          "Transcription.Control",
+          "Transcription.ProcessAudio",
+          "Transcription.StreamCancel",
+          "Transcription.StreamChunk",
+          "Transcription.StreamEnd",
+          "Transcription.StreamResult",
+          "Transcription.StreamStart",
+          "Transcription.StreamStatus"
+        ]
+      },
+      "success": true,
+      "actualReadback": {
+        "share": true,
+        "max_concurrent": 1,
+        "unshared_method_ids": [
+          "Transcription.Control",
+          "Transcription.ProcessAudio",
+          "Transcription.StreamCancel",
+          "Transcription.StreamChunk",
+          "Transcription.StreamEnd",
+          "Transcription.StreamResult",
+          "Transcription.StreamStart",
+          "Transcription.StreamStatus"
+        ]
+      }
+    },
+    {
+      "module": "Orchestrator",
+      "path": "services.orchestrator.mesh_sharing",
+      "before": {
+        "share": false,
+        "max_concurrent": 10,
+        "unshared_method_ids": []
+      },
+      "requested": {
+        "share": true,
+        "max_concurrent": 1,
+        "unshared_method_ids": [
+          "Orchestrator.BenchmarkModel",
+          "Orchestrator.DownloadModel",
+          "Orchestrator.GetModelCatalog",
+          "Orchestrator.GetModelOperation",
+          "Orchestrator.GetModelRuntime",
+          "Orchestrator.ImportModel",
+          "Orchestrator.InferChat",
+          "Orchestrator.IngestContext",
+          "Orchestrator.Interrupt",
+          "Orchestrator.ListPendingToolApprovals",
+          "Orchestrator.ResumeToolApproval",
+          "Orchestrator.StreamInferChat",
+          "Orchestrator.ToolResult",
+          "Orchestrator.UserInput"
+        ]
+      },
+      "success": true,
+      "actualReadback": {
+        "share": true,
+        "max_concurrent": 1,
+        "unshared_method_ids": [
+          "Orchestrator.BenchmarkModel",
+          "Orchestrator.DownloadModel",
+          "Orchestrator.GetModelCatalog",
+          "Orchestrator.GetModelOperation",
+          "Orchestrator.GetModelRuntime",
+          "Orchestrator.ImportModel",
+          "Orchestrator.InferChat",
+          "Orchestrator.IngestContext",
+          "Orchestrator.Interrupt",
+          "Orchestrator.ListPendingToolApprovals",
+          "Orchestrator.ResumeToolApproval",
+          "Orchestrator.StreamInferChat",
+          "Orchestrator.ToolResult",
+          "Orchestrator.UserInput"
+        ]
+      }
+    },
+    {
+      "module": "TTS",
+      "path": "services.tts.mesh_sharing",
+      "before": {
+        "share": false,
+        "max_concurrent": 10,
+        "unshared_method_ids": []
+      },
+      "requested": {
+        "share": true,
+        "max_concurrent": 1,
+        "unshared_method_ids": [
+          "TTS.CreateVoiceProfile",
+          "TTS.DeleteVoiceProfile",
+          "TTS.ExportVoiceProfile",
+          "TTS.GetCapabilities",
+          "TTS.GetVoiceProfile",
+          "TTS.ImportVoiceProfile",
+          "TTS.InstallVoiceProfile",
+          "TTS.ListLanguagePacks",
+          "TTS.ListVoiceProfiles",
+          "TTS.ListVoices",
+          "TTS.Pause",
+          "TTS.RemoveVoiceProfile",
+          "TTS.Request",
+          "TTS.Resume",
+          "TTS.SetDefaultVoice",
+          "TTS.Stop",
+          "TTS.StreamCancel",
+          "TTS.StreamChunk",
+          "TTS.StreamEnd",
+          "TTS.StreamPrepareV1",
+          "TTS.StreamResult",
+          "TTS.StreamStart",
+          "TTS.StreamStatus",
+          "TTS.UpdateVoiceProfile",
+          "TTS.VoiceImportAbort",
+          "TTS.VoiceImportChunk",
+          "TTS.VoiceImportEnd",
+          "TTS.VoiceImportStart"
+        ]
+      },
+      "success": true,
+      "actualReadback": {
+        "share": true,
+        "max_concurrent": 1,
+        "unshared_method_ids": [
+          "TTS.CreateVoiceProfile",
+          "TTS.DeleteVoiceProfile",
+          "TTS.ExportVoiceProfile",
+          "TTS.GetCapabilities",
+          "TTS.GetVoiceProfile",
+          "TTS.ImportVoiceProfile",
+          "TTS.InstallVoiceProfile",
+          "TTS.ListLanguagePacks",
+          "TTS.ListVoiceProfiles",
+          "TTS.ListVoices",
+          "TTS.Pause",
+          "TTS.RemoveVoiceProfile",
+          "TTS.Request",
+          "TTS.Resume",
+          "TTS.SetDefaultVoice",
+          "TTS.Stop",
+          "TTS.StreamCancel",
+          "TTS.StreamChunk",
+          "TTS.StreamEnd",
+          "TTS.StreamPrepareV1",
+          "TTS.StreamResult",
+          "TTS.StreamStart",
+          "TTS.StreamStatus",
+          "TTS.UpdateVoiceProfile",
+          "TTS.VoiceImportAbort",
+          "TTS.VoiceImportChunk",
+          "TTS.VoiceImportEnd",
+          "TTS.VoiceImportStart"
+        ]
+      }
+    }
+  ],
+  "normalAdminActionDraftConfirmUsed": true,
+  "freshExistingAdminKeyAuthenticated": true,
+  "onlyExistingOwnedInstanceModified": true,
+  "newCredentialsOrAccounts": false,
+  "brokerRoomIdentityModelsUnchanged": true,
+  "phoneServicesShared": 0,
+  "configSha256": "196d7e7ad31087629b41ffa58cb6d4e9d74655e11d9a33a7211bce08ef50e39b",
+  "modelCalls": 0
+}

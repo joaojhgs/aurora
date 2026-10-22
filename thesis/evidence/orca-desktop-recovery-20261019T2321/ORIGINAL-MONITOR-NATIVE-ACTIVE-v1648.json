@@ -1,0 +1,59 @@
+{
+  "at": "2026-10-19T23:24:19Z",
+  "run": "run_e6054e76e9fc",
+  "task": "task_d7ea336050cf",
+  "dispatch": "ctx_37b4d0a3c14f",
+  "rootTerminal": "term_6a00d9ee-792a-4daf-8578-236290e33108",
+  "monitorTerminal": "term_2eab47ed-ab9b-4e35-bd9b-fc068c60e3fc",
+  "monitorIncarnation": "37e50d9c-6cf5-4e28-a63b-f2bc3eed5661",
+  "actualNativeGet": {
+    "goal": {
+      "threadId": "01a123ff-19ba-7332-a2f7-346a722af79f",
+      "objective": "Monitor the existing Aurora aggregate goal and all of its Orca workers, including Root, until completed/cancelled; prevent excessive edge-case testing, repeated unchanged checks, stalls and resource conflicts using Orca bounded timeouts and evidence-backed nudges.",
+      "status": "active",
+      "tokensUsed": 46824453,
+      "timeUsedSeconds": 481004,
+      "createdAt": 1791605305,
+      "updatedAt": 1792452261
+    },
+    "remainingTokens": null,
+    "completionBudgetReport": null
+  },
+  "resumeProvenByActualNativeState": true,
+  "noReplacementGoal": true,
+  "noAdditionalResumeByMonitor": true,
+  "rootSingleResumeReceipt": "PENDING Root reply; fresh ACTIVE status is already actual native evidence",
+  "actualPersonalCommand": {
+    "request": "d390101e-3f12-4e05-9427-58ab54839a6e",
+    "status": "REJECTED terminal_not_writable, NOTexecuted, no resend",
+    "receipt": "thesis/evidence/orca-desktop-recovery-20261019T2321/ACTUAL-SEND-REJECTED.json",
+    "sha256": "ea1a509fcf8232659cebab41c0ba9fd2c9436f758038089104e33bff353d7f42"
+  },
+  "execution": "No model/test/MQTT pairing has resumed; provider deadline2026-10-19T00:08:53.328388Z expired, original provider current state UNKNOWN, no reservation renewal or silent extension",
+  "counters": {
+    "K3Attempted": 740,
+    "K3Correct": 725,
+    "K3Failed": 15,
+    "K3Remaining": 160,
+    "K1Remaining": 720,
+    "K2": "complete900; retained closed"
+  },
+  "freshBlockedAudit": {
+    "reset": true,
+    "firstResumedTurn": 1,
+    "previousThreeTurnAuditsHistorical": true,
+    "currentBlocker": "Same actual Personal writer refusal despite metadata; next execution requires owning-Orca control capability change",
+    "noImmediateBlockedMutation": true
+  },
+  "safeNext": "Receive exact one monitor resume receipt, verify Root currentindex update/physical error custody, then bounded existing mailbox event wait. No repeat Personal/network/catalog probes or new preparatory review/test matrix.",
+  "fleet": "Full130 rows inspected23:21:56, ownership/state unchanged;1live monitor,76unverifiable,53exited; unknown not exit",
+  "preserved": {
+    "RootOwnership": true,
+    "taskDispatchOpen": true,
+    "workerDone": false,
+    "productSourceEdits": 0,
+    "newWorkers": 0,
+    "newModelCalls": 0,
+    "securityChanges": 0
+  }
+}

@@ -1,0 +1,541 @@
+{
+  "full_report_retained_private": true,
+  "original_private_report_bytes": 181016,
+  "original_private_report_sha256": "5063f5ce308111f3d7cf2256b4184e2d34e89e4071f64abcb49d4aeff5226441",
+  "report_stats": {
+    "duration": 3772382.359,
+    "expected": 1,
+    "flaky": 0,
+    "skipped": 0,
+    "startTime": "2026-10-14T11:45:33.609Z",
+    "unexpected": 0
+  },
+  "selected_attachment_count": 105,
+  "selected_attachments_sha256": [
+    {
+      "ordinal": 1,
+      "payload_sha256": "dd578015a4addaf92f48adba8a10eddba54dc273bcc144b984a3d4411626cb21",
+      "type": "warmup"
+    },
+    {
+      "ordinal": 2,
+      "payload_sha256": "56e4f4cc21151fa5a03801af58113f5fc3fba471c0801e20736f439c635af895",
+      "type": "warmup"
+    },
+    {
+      "ordinal": 3,
+      "payload_sha256": "76a2f0fbcb8e15f7044d0016621c6e5320c2b6e01b43650e9e3c08a46cb3b201",
+      "type": "warmup"
+    },
+    {
+      "ordinal": 4,
+      "payload_sha256": "cae4731d42175c7a37f8c3b5bd343b7c8328ceedbd5caeac4b0a3c39b7cbeecf",
+      "type": "warmup"
+    },
+    {
+      "ordinal": 5,
+      "payload_sha256": "db3572ce470a9dadbdcc26ea51adc26960880b112b76c37b2faed229b6d91e84",
+      "type": "warmup"
+    },
+    {
+      "ordinal": 6,
+      "payload_sha256": "f489f1c3fee6248438f94498e10cc14aeb5dcc4a6dade1f138e79884af166721",
+      "type": "measured"
+    },
+    {
+      "ordinal": 7,
+      "payload_sha256": "292e4be16efd040c84b3d1c8e69003315a8813986e56cc24eaed9e20748069d4",
+      "type": "measured"
+    },
+    {
+      "ordinal": 8,
+      "payload_sha256": "da4d2fc2a55faf25a6bbd44949734bef40813c4b1ce8bdbc322d24f4493d0ff2",
+      "type": "measured"
+    },
+    {
+      "ordinal": 9,
+      "payload_sha256": "6b45f9d98eb9c255997becb4abca9b108dbea1a7445abef86c308b6c5c025f3d",
+      "type": "measured"
+    },
+    {
+      "ordinal": 10,
+      "payload_sha256": "8d2e7c1b4a7872bacd5d8851a44b6ee61d00a77fba926af2498f9cfacb05b3bd",
+      "type": "measured"
+    },
+    {
+      "ordinal": 11,
+      "payload_sha256": "5fa0196eaec6916fcc9bc467a244170b52976c88ba40c2efdd68f1df0275496d",
+      "type": "measured"
+    },
+    {
+      "ordinal": 12,
+      "payload_sha256": "45f088556b67036c491ba7a94c4e6bd667f60c82afb36fd5bf42de4b0f7591c8",
+      "type": "measured"
+    },
+    {
+      "ordinal": 13,
+      "payload_sha256": "c9770ea7001fd42094755f76747e1d619f5d842bf9d89d48f81525ff7e91389b",
+      "type": "measured"
+    },
+    {
+      "ordinal": 14,
+      "payload_sha256": "947451c00af55d81c12cc3c453b6dc16c71738b8205ce6c7a29d627b8eb7ec2c",
+      "type": "measured"
+    },
+    {
+      "ordinal": 15,
+      "payload_sha256": "927a2590e04528668229c87fccf9c10dabf106545b40a72b4f1b1d38c87d046f",
+      "type": "measured"
+    },
+    {
+      "ordinal": 16,
+      "payload_sha256": "5653126f56ff46fadd419798ba90fe8a382d328317b3220f4ea8426dcb238773",
+      "type": "measured"
+    },
+    {
+      "ordinal": 17,
+      "payload_sha256": "f6eab8faba5d6c466262936dd4ad7216c019b9c1306212bc39c3111a7fbd9643",
+      "type": "measured"
+    },
+    {
+      "ordinal": 18,
+      "payload_sha256": "09667b3a8a299e30226ccbbd9925afa819c2890432eb97c6b10c9c95ec8bada8",
+      "type": "measured"
+    },
+    {
+      "ordinal": 19,
+      "payload_sha256": "3850e85c1c0957de4eb31c4f7d8ba9c7332189ae1b783673119b9e7d5051d058",
+      "type": "measured"
+    },
+    {
+      "ordinal": 20,
+      "payload_sha256": "a9299421681db19c2f94fbaffd42c26ee3f93f87b578583f106487e56d926440",
+      "type": "measured"
+    },
+    {
+      "ordinal": 21,
+      "payload_sha256": "f3020f2b3227edf638e26412a84b51aab8822d33eaa7d0e1f8f89f77a7492da4",
+      "type": "measured"
+    },
+    {
+      "ordinal": 22,
+      "payload_sha256": "2f7357a54340ee228e50762bf84ea29feec1f901be6245c08d261ce711329178",
+      "type": "measured"
+    },
+    {
+      "ordinal": 23,
+      "payload_sha256": "a17ebd1dac3102fe9882c0d940d580695fee576b1673e57954be13076861f157",
+      "type": "measured"
+    },
+    {
+      "ordinal": 24,
+      "payload_sha256": "e6a2def4fd73833e3e57cb259014eed8cb7d0a293b32b630be5aa6c0c2b092de",
+      "type": "measured"
+    },
+    {
+      "ordinal": 25,
+      "payload_sha256": "75016de7a9420c3f26c8ecc3837b7fd9aaae45ef80907b0f0ddff174d6679b16",
+      "type": "measured"
+    },
+    {
+      "ordinal": 26,
+      "payload_sha256": "10b4bb64d30b595991022d8381854591be57bd4161b6661050dc853324906dc6",
+      "type": "measured"
+    },
+    {
+      "ordinal": 27,
+      "payload_sha256": "287a4e7b81bb537aef04ece9560183ff5cc14a156181f0aa0bef7c1f4ca0f8b8",
+      "type": "measured"
+    },
+    {
+      "ordinal": 28,
+      "payload_sha256": "451c2bce5a1c99364bbcb96df4645f1bd58983044572d5985c16e5ce67398d27",
+      "type": "measured"
+    },
+    {
+      "ordinal": 29,
+      "payload_sha256": "2e4466ac947c3d586f301dff069a4a3420900b82a1a21814ed99dba727630ac0",
+      "type": "measured"
+    },
+    {
+      "ordinal": 30,
+      "payload_sha256": "c416ae1ade55d723f57c2227f26167fd6a517b5046cd341f69c48f91251be50d",
+      "type": "measured"
+    },
+    {
+      "ordinal": 31,
+      "payload_sha256": "b9fe55514bb577f88c06e813bd83b01f6a8fb9a4b57eb0145b34f3e41b1c4061",
+      "type": "measured"
+    },
+    {
+      "ordinal": 32,
+      "payload_sha256": "4b23970cb5caacbbdc34f1f810bfd8d701ddedd9163e988597067e5643e23068",
+      "type": "measured"
+    },
+    {
+      "ordinal": 33,
+      "payload_sha256": "3a3f931e884520cc73ffdfabcb099a8dfda42a3f496098a0a4081bcc5a7651ac",
+      "type": "measured"
+    },
+    {
+      "ordinal": 34,
+      "payload_sha256": "7c6918f5869db546b357f453bde261373b0002443b8da90a43de61abe2a97434",
+      "type": "measured"
+    },
+    {
+      "ordinal": 35,
+      "payload_sha256": "b99360454d74a91f953d14c450edd49aedacea53a0e63c9f181e98dce254b960",
+      "type": "measured"
+    },
+    {
+      "ordinal": 36,
+      "payload_sha256": "eb582497aacd17efa4f533a16da60ea421583ff06e5e9ae600c48321da862ac0",
+      "type": "measured"
+    },
+    {
+      "ordinal": 37,
+      "payload_sha256": "da9757eba90eb42b2c9ec8f3e2ac93cfe0e996829d91cb8dbeadc5b0e183e384",
+      "type": "measured"
+    },
+    {
+      "ordinal": 38,
+      "payload_sha256": "3c0c9c6811fb980be4d399a057d3d51a46cdc0be61feb9bffea625a1b0a6478b",
+      "type": "measured"
+    },
+    {
+      "ordinal": 39,
+      "payload_sha256": "7542b568357c4ffd598155ff21941a9bfc99a8c136589ffbd605d37033ea0079",
+      "type": "measured"
+    },
+    {
+      "ordinal": 40,
+      "payload_sha256": "e17b1501cd73aa901e17127088ec1949b06c93b40841c221839ebf7aed968727",
+      "type": "measured"
+    },
+    {
+      "ordinal": 41,
+      "payload_sha256": "10c7799039fb487c4be160c5329d0962f6f9ea762c98e6538380bc18e694f965",
+      "type": "measured"
+    },
+    {
+      "ordinal": 42,
+      "payload_sha256": "ad9ea28d598e969bd6cd658c551cb15e2323dd141f88ad10482bcdfce2de294a",
+      "type": "measured"
+    },
+    {
+      "ordinal": 43,
+      "payload_sha256": "6918a17a088ce398f404175c5e17dbb5533a3663b3d2233dbf93e1118eaeeea8",
+      "type": "measured"
+    },
+    {
+      "ordinal": 44,
+      "payload_sha256": "4c0cf0f0f0a02e20451cbec6ef687a5138f744f5b756ae2f774519d515315529",
+      "type": "measured"
+    },
+    {
+      "ordinal": 45,
+      "payload_sha256": "521c96613cfc2a6b1343335228f86c38a417e957f100fda0dc9ea310bfb6c9ce",
+      "type": "measured"
+    },
+    {
+      "ordinal": 46,
+      "payload_sha256": "75df542f9a2dcc2496ac44a0b1ebd529dbc07b2088fd635aef6a4d047f1269c6",
+      "type": "measured"
+    },
+    {
+      "ordinal": 47,
+      "payload_sha256": "9242cb9f433c8b0bd1c4ce9a808b45e4ac3703387a560423071de4d0a92e06d4",
+      "type": "measured"
+    },
+    {
+      "ordinal": 48,
+      "payload_sha256": "04e77d9fc58f9c2c38603289bed3aab31da8328a3b0c108f4107dc45fde24732",
+      "type": "measured"
+    },
+    {
+      "ordinal": 49,
+      "payload_sha256": "11769fc6a61212513365b6e6ab3b5d959a2b53141b55ba39cf70d345ddd65e87",
+      "type": "measured"
+    },
+    {
+      "ordinal": 50,
+      "payload_sha256": "9f5413abae681ff2f59966016e4abb015d5762bdffb797834afc9c20ce9f628d",
+      "type": "measured"
+    },
+    {
+      "ordinal": 51,
+      "payload_sha256": "19d7345b4d22b159fb17df5e41ede8b1d8bce98dec062222d1dea0bc0e03d3a5",
+      "type": "measured"
+    },
+    {
+      "ordinal": 52,
+      "payload_sha256": "312ce013ac8eed19795797adb2c7589f65f8ffca8c87d49420f8bcf6b82baf7e",
+      "type": "measured"
+    },
+    {
+      "ordinal": 53,
+      "payload_sha256": "7f0f7e63eba68077fd8291c26e0df87cfb471b0c11a625a6fa2e68dd9c1ccfd9",
+      "type": "measured"
+    },
+    {
+      "ordinal": 54,
+      "payload_sha256": "700558741a0f94145c5d8691408cfa988633de688d8925bdfbd026b6eab49f85",
+      "type": "measured"
+    },
+    {
+      "ordinal": 55,
+      "payload_sha256": "dff31806a7200609e46656393ef0025c1c5f7bed397f41d8600b5a8d3ad29e88",
+      "type": "measured"
+    },
+    {
+      "ordinal": 56,
+      "payload_sha256": "1ab6ba6f4f2664864c8e85accd4f5fa2c5b4686b508abc7204b65d6fdbf68461",
+      "type": "measured"
+    },
+    {
+      "ordinal": 57,
+      "payload_sha256": "5516fc5672b3527579a125804950fe69ed3dbfacbd900f0cf79e6ee8c581878d",
+      "type": "measured"
+    },
+    {
+      "ordinal": 58,
+      "payload_sha256": "2c0b6b8e772c10200d6931bb221978c5f539fd657aa5f45c77fe0d01d2af1cec",
+      "type": "measured"
+    },
+    {
+      "ordinal": 59,
+      "payload_sha256": "67f4142775a3315c23e0831019666e07d1c41be97505e98a55e7f9b43bf77345",
+      "type": "measured"
+    },
+    {
+      "ordinal": 60,
+      "payload_sha256": "a307367be41df53f60e614499badda28b3bc4d75789074a57562ac77a990c719",
+      "type": "measured"
+    },
+    {
+      "ordinal": 61,
+      "payload_sha256": "fbb8275a240d4798c3209daff1caf85185f702dc8fe6a4aef07cfe191f1a39ec",
+      "type": "measured"
+    },
+    {
+      "ordinal": 62,
+      "payload_sha256": "4c155e995c4148e8fea8c78b4cd09b794b0fc8e7b52cfb0801d6e0ae2130c4ae",
+      "type": "measured"
+    },
+    {
+      "ordinal": 63,
+      "payload_sha256": "6be5ea29e85724322a1ab808c6f4f1890a9bd1d88111a2350140e33b22cc3c27",
+      "type": "measured"
+    },
+    {
+      "ordinal": 64,
+      "payload_sha256": "93571495a430463de4aa78c42067d705097560a45fc9f4b462ec457051dee866",
+      "type": "measured"
+    },
+    {
+      "ordinal": 65,
+      "payload_sha256": "6231f799f6d044a7cecb8271cf4e60a4f55f5bc42db1387b39219c96d63d0e57",
+      "type": "measured"
+    },
+    {
+      "ordinal": 66,
+      "payload_sha256": "e7a6c3d21b692ee0ee47ee7e821378852e096beb20462d3d67f21b605843edfb",
+      "type": "measured"
+    },
+    {
+      "ordinal": 67,
+      "payload_sha256": "26b8be1e69d89578e51ff5f57bcd562b055407a6f51a916af2f91e3291121551",
+      "type": "measured"
+    },
+    {
+      "ordinal": 68,
+      "payload_sha256": "c02a14cb8d1cfeefc31fdc58c50d4bcf8a8f82ec6e524300eb613d9bdb3f0de4",
+      "type": "measured"
+    },
+    {
+      "ordinal": 69,
+      "payload_sha256": "a609b88e50d8cd7435d798a4bf859db979ae3246e690292f3160c51fa640d4cc",
+      "type": "measured"
+    },
+    {
+      "ordinal": 70,
+      "payload_sha256": "38c4029c0d933edad109e9753b0ad2e37c1a8d47a9a563d5ef44053e52c322fb",
+      "type": "measured"
+    },
+    {
+      "ordinal": 71,
+      "payload_sha256": "4afc68e0f656a2c21d637246b950c6326b73ec643c39e88eedbb30bf7b7558f3",
+      "type": "measured"
+    },
+    {
+      "ordinal": 72,
+      "payload_sha256": "d5aa017d2653e409eabd8a6982dfed32a6f82df9747bac61f805c51fb4b4f57c",
+      "type": "measured"
+    },
+    {
+      "ordinal": 73,
+      "payload_sha256": "28ae44eaed85e59dd8485993e009b8aad40297e01d4c543922925c582f1e0f51",
+      "type": "measured"
+    },
+    {
+      "ordinal": 74,
+      "payload_sha256": "1a896decff3f2552e7cc9f0a38292f3bbe890860a7f8950f0546065263109e33",
+      "type": "measured"
+    },
+    {
+      "ordinal": 75,
+      "payload_sha256": "343f119e48e1dc47f2593d73d1a7f0f098cc37bf8f82a4dc63482eaca53c5857",
+      "type": "measured"
+    },
+    {
+      "ordinal": 76,
+      "payload_sha256": "345b5c796e9991f8ce59a95dd54fb37d6f8b7394933017e90c306ce570db1fb6",
+      "type": "measured"
+    },
+    {
+      "ordinal": 77,
+      "payload_sha256": "cc879c60b941da27365d3f69dfc4011fafc773205ebbcc3a2d369e380ca6de37",
+      "type": "measured"
+    },
+    {
+      "ordinal": 78,
+      "payload_sha256": "e062a4b5282491dc994ad8d8e964810e230f3b790c7d1c3c91d451f50dd858b1",
+      "type": "measured"
+    },
+    {
+      "ordinal": 79,
+      "payload_sha256": "6e3cdd9cddb5c5bf80234c1ef5c33b5202845571b7c2eab79f4c5d99ca9e76bc",
+      "type": "measured"
+    },
+    {
+      "ordinal": 80,
+      "payload_sha256": "eb620d6e452d35aa87e67aeef24c26396af25becb363f9219b28304d9a8cdb25",
+      "type": "measured"
+    },
+    {
+      "ordinal": 81,
+      "payload_sha256": "2fce32c3986cee1b93680521ee2d8376aba14a2e7eb672768e054ebe0cb72d98",
+      "type": "measured"
+    },
+    {
+      "ordinal": 82,
+      "payload_sha256": "9a8022690224a38af839163fe1e60e30b2ed5c2a50073d0a9f4dbf7f074bb4ff",
+      "type": "measured"
+    },
+    {
+      "ordinal": 83,
+      "payload_sha256": "51a7069248446ed291c9c19657d517cddc15dd91fafa1d173ffbf0bbc1503fcc",
+      "type": "measured"
+    },
+    {
+      "ordinal": 84,
+      "payload_sha256": "9b4f519e7d8675b9d2a6c39c3786158cbac25ddceecfd678c83705b547da3c35",
+      "type": "measured"
+    },
+    {
+      "ordinal": 85,
+      "payload_sha256": "106f89af30a9dd424c3c81d871585d36a27858bdd6b4a4b4f009f66f1070e3dd",
+      "type": "measured"
+    },
+    {
+      "ordinal": 86,
+      "payload_sha256": "df2de36c97155fbc632d8527e75d0c4fb296b61f2b8b33ecaf2f303680e21242",
+      "type": "measured"
+    },
+    {
+      "ordinal": 87,
+      "payload_sha256": "ba9562089c035833264b835273b0dacb26b2e4ed68ecf06037cc7c55572a6c8a",
+      "type": "measured"
+    },
+    {
+      "ordinal": 88,
+      "payload_sha256": "ed2ae095a4c1e1b5ba2f88417bd5b2302b3cc40bc9d0aac5f10448da25badff5",
+      "type": "measured"
+    },
+    {
+      "ordinal": 89,
+      "payload_sha256": "fcd80928493be92ec4f3aab1cfe904312917059b215ef583f6b58b85e5a6e906",
+      "type": "measured"
+    },
+    {
+      "ordinal": 90,
+      "payload_sha256": "a41f41694d5e252d8106cd7c15343c2005e5633894e60a92e0cb3500bfb2afc7",
+      "type": "measured"
+    },
+    {
+      "ordinal": 91,
+      "payload_sha256": "e39c198922790cdbb860a09ff7bec32fd04aa1fabdedf9873fb894b185e0e4c1",
+      "type": "measured"
+    },
+    {
+      "ordinal": 92,
+      "payload_sha256": "a69a281086a58ddf54be79816e03715621049c3a50fbf81ff0eb45c0dc7049ae",
+      "type": "measured"
+    },
+    {
+      "ordinal": 93,
+      "payload_sha256": "cd83e6cf780faca95acb24ed206c5de403d24f4ebd03a2f60f000e063079f5f0",
+      "type": "measured"
+    },
+    {
+      "ordinal": 94,
+      "payload_sha256": "afa16f02e0591a6e10576dc4ab2c35550596906358f0109c103c0cf2f19e6784",
+      "type": "measured"
+    },
+    {
+      "ordinal": 95,
+      "payload_sha256": "d481ba4c805fff44a22aa1e32313a592948d7dc285c670b3b031a82962d37249",
+      "type": "measured"
+    },
+    {
+      "ordinal": 96,
+      "payload_sha256": "745f76c94bc31d5596869ebaca6d82bdcc35dac0933de288b1c07b4d43f9e5a7",
+      "type": "measured"
+    },
+    {
+      "ordinal": 97,
+      "payload_sha256": "29c416741654b4cc4acc5315741bb9f6e5807ff30c124ef4f06987df70c8e9ab",
+      "type": "measured"
+    },
+    {
+      "ordinal": 98,
+      "payload_sha256": "15304402b50458e372609805e5a7747acdff0b89891f98179dace0828b2ee49c",
+      "type": "measured"
+    },
+    {
+      "ordinal": 99,
+      "payload_sha256": "b0a60d86e24e6b95454c2a61b52d025022953698e3060520c44cb20af5634b3d",
+      "type": "measured"
+    },
+    {
+      "ordinal": 100,
+      "payload_sha256": "dcc2286de21013f659dbc5206d51515fb1db2d913f8b97113872c4dd9dd9874b",
+      "type": "measured"
+    },
+    {
+      "ordinal": 101,
+      "payload_sha256": "165364d589e8d917227b2db28cce89e00d08228bfeec869b05d61e04793ace96",
+      "type": "measured"
+    },
+    {
+      "ordinal": 102,
+      "payload_sha256": "6181f89480799ee38ff96a87d00dc4e31e230336bed1d51ab40c24152b402a93",
+      "type": "measured"
+    },
+    {
+      "ordinal": 103,
+      "payload_sha256": "b4c0ed3e61bee2e06ed4b344c43a1804610db1c19c456145bf49034541215359",
+      "type": "measured"
+    },
+    {
+      "ordinal": 104,
+      "payload_sha256": "31500bb6735495b62f877d96603a780ab25d6c724ab6aee9d3be628c7886af35",
+      "type": "measured"
+    },
+    {
+      "ordinal": 105,
+      "payload_sha256": "3bbef1337dbce79f2a1b97740e37993181990cbde8487432a291c36ce437a68a",
+      "type": "measured"
+    }
+  ]
+}

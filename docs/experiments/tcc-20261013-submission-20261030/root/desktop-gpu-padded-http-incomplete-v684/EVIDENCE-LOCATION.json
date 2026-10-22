@@ -1,0 +1,9 @@
+{
+  "host": "personal.skyron-server",
+  "archivePath": "/home/developer/projects/aurora/docs/experiments/tcc-20261013-submission-20261030/root/desktop-gpu-padded-http-incomplete-v684/aurora-desktop-gpu-padded-http-incomplete-v684.zip",
+  "archiveSHA256": "53396a777a5f1edef786c48b2e5897bd05fc3b449c2ebe6999a87f7af86fa541",
+  "archiveBytes": 1759811,
+  "originalRawRoot": "/tmp/aurora-root-padded-http900-v684",
+  "localWorkerArchiveCopy": false,
+  "rawOriginalsPreserved": true
+}

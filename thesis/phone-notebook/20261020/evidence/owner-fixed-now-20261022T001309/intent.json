@@ -1,0 +1,12 @@
+{
+  "controlDeadline": "2026-10-22T00:23:09.631168+00:00",
+  "explicitNewline": true,
+  "host": "ssh:ssh-sem-notebook-personal",
+  "incarnation": "328cd72f-c7ea-49ff-a2db-b9275b085037",
+  "remoteResult": "/home/developer/projects/aurora/thesis/phone-notebook/20261020/evidence/owner-fixed-now-20261022T001309.json",
+  "rootAdmissionMessage": "owner-direct-continue-now-should-be-fixed-current-usb-recheck",
+  "script": "scripts/usb_fixed_check_v4.py",
+  "scriptSha256": "cdc8843b3d5cb332645f7332872af260f675b67da3823d3da269983b412d26a9",
+  "singleSend": true,
+  "terminal": "term_a2ed5feb-7c92-48e4-bd88-d1b0e6737989"
+}

@@ -1,0 +1,13 @@
+{
+  "message": "msg_aa9c0b86eb05",
+  "at": "2026-10-15T02:54:50Z",
+  "ownerAnswerReceived": false,
+  "rootNativeGoalActive": true,
+  "rootBlockedAuditConsecutiveTurns": 2,
+  "rootExecutableActive": false,
+  "newExecution": false,
+  "rootOwnerQuestionPending": true,
+  "aggregateCompleted": false,
+  "aggregateCancelled": false,
+  "monitorCompletionAllowed": false
+}

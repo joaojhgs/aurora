@@ -1,0 +1,12 @@
+{
+  "controlDeadline": "2026-10-22T00:06:17.418033+00:00",
+  "explicitNewline": true,
+  "host": "ssh:ssh-sem-notebook-personal",
+  "incarnation": "328cd72f-c7ea-49ff-a2db-b9275b085037",
+  "remoteResult": "/home/developer/projects/aurora/thesis/phone-notebook/20261020/evidence/notebook-offline-setup-20261021T235617.json",
+  "rootAdmissionMessage": "owner-finish-setup-local-only-root-msg_ada0dc77fde8-no-transfer-build",
+  "script": "scripts/notebook_offline_setup_v8.py",
+  "scriptSha256": "0086e257349898ee2d8aca73946965e9860a1ea8ede59e2b2e574daaabb3cff8",
+  "singleSend": true,
+  "terminal": "term_a2ed5feb-7c92-48e4-bd88-d1b0e6737989"
+}

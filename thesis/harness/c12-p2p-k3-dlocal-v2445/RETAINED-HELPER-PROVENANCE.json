@@ -1,0 +1,33 @@
+{
+  "at": "2026-10-22T10:01:02.612355+00:00",
+  "status": "STATIC_FUNCTION_EXTRACTION_NO_RUNTIME",
+  "helpers": [
+    {
+      "path": "runtime_pins.py",
+      "source": "/home/developer/projects/aurora/.git/aurora-handoff-import-20261006/distributed-k3-mesh-requester-v2043/bootstrap.py",
+      "qualifiedSourceSha256": "df9957c1880d45b5a1d059d7743b51a2d7fe34b3f5331e1331633eee5e8f45bc",
+      "functions": [
+        "_regular",
+        "_sha",
+        "_read_runtime_pins",
+        "_verify_loaded_modules",
+        "_expected_hash"
+      ],
+      "sourceSegmentsByteUnchanged": true,
+      "newSha256": "c3e71266eec5b59d1fe2b63d383c9a31e1c5b247692ab591710a4619f43c3162"
+    },
+    {
+      "path": "config_semantics.py",
+      "source": "/home/developer/projects/aurora/.git/aurora-handoff-import-20261006/distributed-k3-mesh-requester-v2043/runner.py",
+      "qualifiedSourceSha256": "77f5bba964721a3d6a26f1df7ca7148397aeed9a8eae6767a6016c26e6b321ba",
+      "functions": [
+        "_config_value",
+        "_enabled_flags",
+        "_active_config_semantics",
+        "_changed_config_paths"
+      ],
+      "sourceSegmentsByteUnchanged": true,
+      "newSha256": "076788a2239a11bfff3929a8a9a4cbe4f7f8d73f17cb963e39bb0e134eca8f15"
+    }
+  ]
+}

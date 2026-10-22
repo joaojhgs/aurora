@@ -1,0 +1,19 @@
+{
+  "at": "2026-10-15T02:43:15.016121+00:00",
+  "command": [
+    "uv",
+    "run",
+    "--no-sync",
+    "pytest",
+    "tests/unit/orchestrator/test_llama_configured_options_product.py::test_typed_llama_config_preserves_declared_execution_options",
+    "-q",
+    "--disable-warnings",
+    "--maxfail=1"
+  ],
+  "exitCode": 0,
+  "status": "completed",
+  "durationSeconds": 38.6354181880597,
+  "globalBuildLockHeld": true,
+  "capSeconds": 150,
+  "noRealModelLoaded": true
+}

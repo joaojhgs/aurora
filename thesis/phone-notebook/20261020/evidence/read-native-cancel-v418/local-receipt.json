@@ -1,0 +1,8 @@
+{
+  "bytes": 3779,
+  "copyOnly": true,
+  "custody": "Notebook result persisted and fsynced before relay; remote receipt in same output",
+  "localPath": "/home/developer/projects/aurora/thesis/phone-notebook/20261020/evidence/read-native-cancel-v418/result.json",
+  "remotePath": "/home/developer/projects/aurora/thesis/phone-notebook/20261020/evidence/read-native-cancel-v418.json",
+  "sha256": "005ddf43641562ec18d09bb363faa732cde78ea0a28b6e8329642c9efc5f48ff"
+}

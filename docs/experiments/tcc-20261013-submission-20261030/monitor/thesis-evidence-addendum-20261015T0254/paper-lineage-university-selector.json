@@ -1,0 +1,7 @@
+{
+  "observedAt": "2026-10-15T03:00:05.328199+00:00",
+  "command": "orca --host ssh:ssh-sem-notebook-university terminal list --json",
+  "exitCode": 1,
+  "scope": "One read-only inventory selector advertised by default census; no shell/session/content adoption",
+  "error": "{\n  \"id\": \"local\",\n  \"ok\": false,\n  \"error\": {\n    \"code\": \"invalid_argument\",\n    \"message\": \"Unknown flag --host for command: terminal list\",\n    \"data\": {\n      \"validFlags\": [\n        \"environment\",\n        \"help\",\n        \"include-visual-layouts\",\n        \"json\",\n        \"limit\",\n        \"pairing-code\",\n        \"worktree\"\n      ],\n      \"suggestions\": [\n        \"help\"\n      ],\n      \"nextSteps\": [\n        \"Did you mean: --help\",\n        \"Valid flags: --environment, --help, --include-visual-layouts, --json, --limit, --pairing-code, --worktree\"\n      ]\n    }\n  },\n  \"_meta\": {\n    \"runtimeId\": null\n  }\n}\n\n[relay-connect] Handshake OK at version=0.1.0+5cdca4731a41\n"
+}

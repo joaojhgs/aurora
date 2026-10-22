@@ -1,0 +1,20 @@
+{
+  "at": "2026-10-22T10:57:36.077631+00:00",
+  "operation": "root-c12-sealed-page1-read-v2448",
+  "originalAcceptedOperation": "c12-v2426-pair-0261-page-01",
+  "originalRequest": "684f6337-fda8-4a7f-97aa-377dbf4dcca6",
+  "notResend": true,
+  "desktopMutation": false,
+  "inference": 0,
+  "readOnlySealedArchive": "/home/developer/projects/aurora/thesis/campaigns/c12-mixed-local-http-900-v2426/provider/capsules/0261/provider-pair.tar.gz",
+  "expectedArchiveBytes": 43222,
+  "expectedArchiveSha256": "529f1adc89e0d6bcd302d1618a5c4983e2f5622dd8b293c3beb28885cf7d246c",
+  "range": [
+    32768,
+    43222
+  ],
+  "sameTerminal": "term_d5651d8d-58e2-4b38-85e2-51c668cc933c",
+  "maximumSends": 1,
+  "supportedEnterFlag": true,
+  "commandSha256": "a50a343de385b2c48e40c67010af21be97829b469b0aa660e5ce9eb1baceb583"
+}

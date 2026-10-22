@@ -1,0 +1,77 @@
+{
+  "schema_version": 1,
+  "immutable_originals_retained": true,
+  "files": [
+    {
+      "path": "t1-unit-v235/stdout.log",
+      "sha256": "d2a4b8848d524ef22609fb49ad53ee3f6028cb492f0b498d538b31d980e386be",
+      "originalSha256": "d2a4b8848d524ef22609fb49ad53ee3f6028cb492f0b498d538b31d980e386be",
+      "transform": "none"
+    },
+    {
+      "path": "t1-unit-v235/stderr.log",
+      "sha256": "6609f44399eec912fbcf675d5abe5bed8fa0e47300c5be9ed51dcdbbf8e2014b",
+      "originalSha256": "6609f44399eec912fbcf675d5abe5bed8fa0e47300c5be9ed51dcdbbf8e2014b",
+      "transform": "none"
+    },
+    {
+      "path": "t1-unit-v235/junit.xml",
+      "sha256": "a2f4a1640ad74c3810f3e7e853544440e9a83ab6985be0f7548d31ee5c048634",
+      "originalSha256": "a2f4a1640ad74c3810f3e7e853544440e9a83ab6985be0f7548d31ee5c048634",
+      "transform": "none"
+    },
+    {
+      "path": "t1-recovery-v236/stdout.log",
+      "sha256": "642b5c8fd6889faaaa0b6853cd7ce9e01b3792489cee5a2b48f434ef9fc5344e",
+      "originalSha256": "642b5c8fd6889faaaa0b6853cd7ce9e01b3792489cee5a2b48f434ef9fc5344e",
+      "transform": "none"
+    },
+    {
+      "path": "t1-recovery-v236/stderr.log",
+      "sha256": "6609f44399eec912fbcf675d5abe5bed8fa0e47300c5be9ed51dcdbbf8e2014b",
+      "originalSha256": "6609f44399eec912fbcf675d5abe5bed8fa0e47300c5be9ed51dcdbbf8e2014b",
+      "transform": "none"
+    },
+    {
+      "path": "t1-recovery-v236/junit.xml",
+      "sha256": "9ffe862e953aa1780607828aaaf2cf0efe506e072f334a0a7fc918bfb2471261",
+      "originalSha256": "9ffe862e953aa1780607828aaaf2cf0efe506e072f334a0a7fc918bfb2471261",
+      "transform": "none"
+    },
+    {
+      "path": "case-history.jsonl",
+      "sha256": "27583aa68f146c0f6479d9a86ca8a262cf8adc2e3745aeff742c9a9805189c8e",
+      "transform": "derived exact parsed metadata; original retained privately"
+    },
+    {
+      "path": "summary.json",
+      "sha256": "4a9880885a1da6732bbb1c7ca0179dc7b08081014751fef54359465d4033da8d",
+      "transform": "derived exact parsed metadata; original retained privately"
+    },
+    {
+      "path": "t1-recovery-v236/manifest.json",
+      "sha256": "859fe7c02c6415dc564d54da8131090bc6314f56586ef6db3ab63cbd59034b1f",
+      "transform": "derived exact parsed metadata; original retained privately"
+    },
+    {
+      "path": "t1-recovery-v236/result.json",
+      "sha256": "b80c92d550250f29595dce5060052e1b9f2dc9462498ec23b6313e73f8193e40",
+      "transform": "derived exact parsed metadata; original retained privately"
+    },
+    {
+      "path": "t1-unit-v235/manifest.json",
+      "sha256": "2419277a6cff2025640531872bb8df80cbe9996374db9ded76bb09fc975eb82b",
+      "transform": "derived exact parsed metadata; original retained privately"
+    },
+    {
+      "path": "t1-unit-v235/result.json",
+      "sha256": "4347e620e73a7892e61d244402ee50b5d48f91e9e9dfaa6c4847fdfeb24c6c57",
+      "transform": "derived exact parsed metadata; original retained privately"
+    },
+    {
+      "path": "README.md",
+      "sha256": "72202a0a2098864adbcd0137dcd931258fc36a9d1c8a1fed76efff5fd226f94a",
+      "transform": "derived methodology description"
+    }
+  ]
+}

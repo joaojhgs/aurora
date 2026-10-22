@@ -1,0 +1,13 @@
+{
+  "controlDeadline": "2026-10-22T12:42:48.009842+00:00",
+  "host": "ssh:ssh-sem-notebook-personal",
+  "incarnation": "328cd72f-c7ea-49ff-a2db-b9275b085037",
+  "remoteResult": "/home/developer/projects/aurora/thesis/phone-notebook/20261020/evidence/stage-observed-provider-v368.json",
+  "rootAdmissionMessage": "Owner six-hour continuation; close exact own idle v355 first, preserve source/model/settings, passive output-shape observer and finite HOME guard only; no compile/install/inference",
+  "script": "scripts/stage_observed_provider_v368.py",
+  "scriptSha256": "1990f3b642d84ef2bf3d7d89291a6fec349191d55edff615a81257d87281976b",
+  "singleSend": true,
+  "supportedEnter": true,
+  "terminal": "term_a2ed5feb-7c92-48e4-bd88-d1b0e6737989",
+  "textTrailingNewline": false
+}

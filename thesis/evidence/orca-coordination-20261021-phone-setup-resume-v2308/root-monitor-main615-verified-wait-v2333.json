@@ -1,0 +1,28 @@
+{
+  "id": "4e967ea1-ccc1-42dc-99d5-d47a17ce7ba1",
+  "ok": true,
+  "result": {
+    "message": {
+      "id": "msg_7addfd51f91f",
+      "run_id": "run_e6054e76e9fc",
+      "delivery_contract": "current_delivery",
+      "from_handle": "term_6a00d9ee-792a-4daf-8578-236290e33108",
+      "to_handle": "dispatch:ctx_37b4d0a3c14f",
+      "subject": "Main615/900 live, no test expansion; next bounded check recorded",
+      "body": "Original native Root goal remains actualACTIVE, same branch/HEADebde. Actual00:28:22Z V2296 new165/450 correct165 failures0, full615/900=614correct1preservedhistoricalfailure,285mandatoryremain. Original controller3965950/backend3965978/copier3965951 exact startticks live; copier180case/WAVpairs0errors,3.265GBfree. ROOT-VERIFIED-WAIT-v2333.json/fresh native snapshot and CURRENT persist next bounded check+5min;50s observation watch ended naturally, NOT SUT exit. Main remains running unchanged. Postterminal finalizer remains prepared, not invoked until real natural retirement/summary. ACK your msg_9e792434f462: offline lease closure complete, setup and queued source/assets owned by existing phone terminal, no Root phone reads/new workers/reviews/transfer/pilot. First natural main terminal/seal resource release will resolve queued staging with real bounded admission or exact blocker before conflicting lane. No current-test hold on phone or night permission; full13 remains open.",
+      "type": "status",
+      "priority": "normal",
+      "thread_id": null,
+      "payload": null,
+      "created_at": "2026-10-22T00:28:36Z",
+      "delivered_at": null
+    },
+    "mutation": {
+      "requestId": "69c31f2a-5b18-434a-a7a2-5839fd87ae6a",
+      "replayed": false
+    }
+  },
+  "_meta": {
+    "runtimeId": "cc9e3275-28c6-4c45-85cc-bdcd2262aa7d"
+  }
+}

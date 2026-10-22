@@ -1,0 +1,25 @@
+{
+  "schema": "aurora.cohort-replacement-registry.v1",
+  "at": "2026-10-15T03:57:38.621750+00:00",
+  "parentGpuReplacementRegistrySHA256": "cda9eb1931def2c1a177a13b69b6c8d6dd9a58e9a7135d50e51c43721c514cc5",
+  "records": [
+    {
+      "oldCohortId": null,
+      "oldCondition": "CPUnewaudio-readinessV483/V486/V488",
+      "disposition": "RUNTIME_READINESS_FAILURES_RETAINED",
+      "reason": "rootmetadata/backendprerequisite/consoleentry corrections; not modelquality",
+      "affectedCells": [
+        "workerCPUfullaudio-local-newsetup"
+      ],
+      "replacementCohortId": "aurora-full-audio-capital-v1-worker-cpu-local-20261015",
+      "replacementManifestPath": "/home/developer/projects/aurora/.git/aurora-handoff-import-20261006/cpu-full-audio-v490/frozen-manifest-v1.json",
+      "replacementManifestSHA256": "364832a627e2f45b4b1c2b80ca05739f809132a28ff26511f0eda5e30f89127a",
+      "replacementStatus": "correct_readiness_frozen_measurements_not_started"
+    },
+    {
+      "oldCohortId": "6ce98ae97d594d9fafcd1ff9ad4b9b1c",
+      "disposition": "retained_supplemental",
+      "reason": "originaltypedCPU900total immutable; notfullaudio/no pooling"
+    }
+  ]
+}

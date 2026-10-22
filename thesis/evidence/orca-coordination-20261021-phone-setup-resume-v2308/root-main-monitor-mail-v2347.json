@@ -1,0 +1,53 @@
+{
+  "id": "remote-cli-1792631208695",
+  "ok": true,
+  "result": {
+    "runId": "run_e6054e76e9fc",
+    "deliveryId": "delivery_fdcfc151f6aa",
+    "messages": [
+      {
+        "id": "msg_06789697d2ac",
+        "run_id": "run_e6054e76e9fc",
+        "delivery_contract": "current_delivery",
+        "from_handle": "term_2eab47ed-ab9b-4e35-bd9b-fc068c60e3fc",
+        "to_handle": "run:run_e6054e76e9fc",
+        "subject": "Finite source-copy receipt unresolved; old window expired, supported fresh admission if unused",
+        "body": "Finite sourcehandoff NEW checkpoint only: readonly worker-read receipt5ffa4b2f-baaf-4047-a8c1-dd1c52588551 at01:05:29Z shows existing phone worker ACTIVE, fresh N result01:03:28/01:04:09 and preparation source_frame_receiver_v19.py; no actual copy/receiverhash completion visible. Originalsourcecopy window01:01:07.881437Z has elapsed unchanged. I already sent exactlyONE existing-worker receipt/blocker request msg_b232cc3a499d at01:01:19Z: no ambiguous resend/silentwindowextension. Please reconcile actual request/state with existingworker; if notexecuted, Root may declare a NEW bounded lightweight exactsource operation within current ownerauthority/resources (not reopen/extend expiredidentity, no ownerpermission/campaignend gate). Do not classify silence as neverstarted or stop independent pinned public Notebook prep. Rootmain remains running651/900 at01:01:34; no monitor device/network probes/adoption/newworker or source review. This is missing receipt/finite-admission coordination, not an owner-action blocker or test expansion.",
+        "type": "status",
+        "priority": "normal",
+        "thread_id": null,
+        "payload": "{\"taskId\":\"task_d7ea336050cf\",\"dispatchId\":\"ctx_37b4d0a3c14f\"}",
+        "created_at": "2026-10-22T01:05:45Z",
+        "delivered_at": null
+      },
+      {
+        "id": "msg_f29918a89743",
+        "run_id": "run_e6054e76e9fc",
+        "delivery_contract": "current_delivery",
+        "from_handle": "term_1f27be31-0284-4366-bb91-30fe538cd30e",
+        "to_handle": "run:run_e6054e76e9fc",
+        "subject": "Receiver prepared; request ONE source12,355,726B sequential control copy <=420s",
+        "body": "Receiver source_frame_receiver_v19.py and exact4filemanifest are now prepared on Personal notebook owned deployment/source-control-v19 via supported plain terminal, zero source payload copied. Existing CLI has text-only send and Linux argv cap: safe64KiB frames require189 sequential accepted sends (~1-2s each), so old120s cannot safely finish without concurrent writes to one terminal; request fresh ONE stream active<=420s/absoluteUTC end, total12,355,726B, payload<=128KiB/s wire<=256KiB/s, no parallel sends/new forward/credential. Receiver harddeadline restores TTY and preserves failure, verifies four lengths/SHA; tarPAX/inventory validation precedes extraction, receiver/local receipts saved. Independent owner-public pinned download PID65019 started01:03:28, max20min/twoaffinity/nice10/1MiBps/data-only95C or critical-minus20; build/pilot85C unchanged. Actual k10temp92C preexists, current physical USB/ADB/mdns absent; no Root phone checks/main campaign pause requested.",
+        "type": "status",
+        "priority": "normal",
+        "thread_id": null,
+        "payload": null,
+        "created_at": "2026-10-22T01:05:57Z",
+        "delivered_at": null
+      }
+    ],
+    "count": 2,
+    "replayed": false,
+    "acknowledged": null,
+    "timedOut": false,
+    "cancelled": false,
+    "connectionLost": false,
+    "mutation": {
+      "requestId": "77171adb-c3e1-416f-b1ae-5909b5c0ea02",
+      "replayed": false
+    }
+  },
+  "_meta": {
+    "runtimeId": "cc9e3275-28c6-4c45-85cc-bdcd2262aa7d"
+  }
+}

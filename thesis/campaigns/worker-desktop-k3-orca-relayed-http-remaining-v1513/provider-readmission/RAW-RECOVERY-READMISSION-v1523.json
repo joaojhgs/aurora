@@ -1,0 +1,72 @@
+{
+  "at": "2026-10-18T14:39:47.758453+00:00",
+  "status": "RAW_SHELL_CONTROL_RECOVERED_SAME_PROVIDER_READMISSION_PASSED",
+  "metadata": {
+    "at": "2026-10-18T14:37:28.381795+00:00",
+    "host": "personal.skyron-server",
+    "status": "SAME_PROVIDER_PID_MANIFEST_CONFIG_RESOURCE_CHECK_PASSED",
+    "manifestSha256": "b4b95d579c29695832c05d96692f2f15fd51cf3258333b9175091ab357280887",
+    "configSha256": "aa03866778b9a57e71a47bcab1a87dcd9adfadad2ec0974c127b98f80b40fba6",
+    "processes": [
+      {
+        "pid": 1227847,
+        "startTicks": 6621440,
+        "state": "S"
+      },
+      {
+        "pid": 1227894,
+        "startTicks": 6621473,
+        "state": "S"
+      },
+      {
+        "pid": 1229873,
+        "startTicks": 6630651,
+        "state": "S"
+      }
+    ],
+    "freeBytes": 148215123968,
+    "memAvailableBytes": 24805007360,
+    "providerCustodyCheckpoint": 389,
+    "providerPayloadFiles": 952,
+    "providerPayloadBytes": 111498466,
+    "providerCustodyAt": "2026-10-18T14:36:43.210648+00:00",
+    "newModelRequests": 0,
+    "providerRestarted": false,
+    "settingsChanged": false,
+    "credentialsCopied": false,
+    "operationVersion": "v1523_post_verified_raw_recovery",
+    "purpose": "Fresh current provider readiness after actual raw-channel recovery",
+    "priorPromptOutcome": "cdac7533_UNKNOWN_NOT_RESENT"
+  },
+  "copies": [
+    {
+      "path": "thesis/campaigns/worker-desktop-k3-orca-relayed-http-remaining-v1513/provider-readmission/fresh-raw-v1523/RESULT.json",
+      "bytes": 1006,
+      "sha256": "6f5cea7fc0987a22041d2904a2917d6e18a7100a28791e33ae87bca762850884"
+    },
+    {
+      "path": "thesis/campaigns/worker-desktop-k3-orca-relayed-http-remaining-v1513/provider-readmission/fresh-raw-v1523/SHOW-FENCE.json",
+      "bytes": 1323,
+      "sha256": "905023bd7f764871453b92742436979a5353bc8a73f299a8d46ff1dc28e48254"
+    },
+    {
+      "path": "thesis/campaigns/worker-desktop-k3-orca-relayed-http-remaining-v1513/provider-readmission/fresh-raw-v1523/SEND-INTENT.json",
+      "bytes": 59,
+      "sha256": "37f9d9f49a877b0afeda9e335b5a8549cdfb4066af3553e8e5965ff3d3d3f70a"
+    },
+    {
+      "path": "thesis/campaigns/worker-desktop-k3-orca-relayed-http-remaining-v1513/provider-readmission/fresh-raw-v1523/SEND.json",
+      "bytes": 290,
+      "sha256": "009edd0fae015dc21ac4971c038eefb2600bcf76e3f6d6a83b7857774071e560"
+    },
+    {
+      "path": "thesis/campaigns/worker-desktop-k3-orca-relayed-http-remaining-v1513/provider-readmission/fresh-raw-v1523/READ-0.json",
+      "bytes": 1932,
+      "sha256": "6b5dbf17aee4ac16aabc0af9596acd6408357162869f5c9efc2c2c03b08d1280"
+    }
+  ],
+  "oldPromptRequest": "cdac7533-7309-4015-be6f-69bae4a8f0ee",
+  "oldPromptOutcome": "UNKNOWN_NOT_RESENT_NOT_CLAIMED_SETTLED",
+  "newModelRequests": 0,
+  "sourceModelsCredentialsLifecycleChanged": false
+}

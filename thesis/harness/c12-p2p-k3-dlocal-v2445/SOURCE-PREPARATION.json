@@ -1,0 +1,134 @@
+{
+  "at": "2026-10-22T09:38:58.811313+00:00",
+  "status": "STATIC_SOURCE_PREPARATION_ONLY_NOT_ADMITTED",
+  "conditionId": "C12-P2P-K3-DLOCAL",
+  "sourceOwner": "Original Root only",
+  "methodology": "thesis/methodology/owner-requirements-20261022-ca93e202.md \u00a730.84",
+  "retainedClosedP2PFrozenManifest": "/home/developer/projects/aurora/thesis/campaigns/worker-desktop-k3-p2p-full-audio-v2043/condition-frozen.json",
+  "retainedClosedP2PFrozenManifestSha256": "ac92f9ba1455c3778e378c6548f0e518fcf0115c6ea9ebf7624f8c30df14d2c5",
+  "currentHTTPSourceUntouched": true,
+  "copies": [
+    {
+      "path": "k3_composition.py",
+      "source": "/home/developer/projects/aurora/.git/aurora-handoff-import-20261006/distributed-k3-mesh-requester-v2043/k3_composition.py",
+      "sourceSha256": "09399c07cfc44cfbaaac969af5c928e9ae57fab2d6848f76f29950e7fdc314bf",
+      "newSha256": "09399c07cfc44cfbaaac969af5c928e9ae57fab2d6848f76f29950e7fdc314bf",
+      "change": "byte-identical qualified P2P reusable module"
+    },
+    {
+      "path": "mesh_stage_adapter.py",
+      "source": "/home/developer/projects/aurora/.git/aurora-handoff-import-20261006/distributed-k3-mesh-requester-v2043/mesh_stage_adapter.py",
+      "sourceSha256": "6e09f9d66a9178ff184f93395cd81b6bfe3828895a90003057eeeae6c1a0a719",
+      "newSha256": "6e09f9d66a9178ff184f93395cd81b6bfe3828895a90003057eeeae6c1a0a719",
+      "change": "byte-identical qualified P2P reusable module"
+    },
+    {
+      "path": "bindings.py",
+      "source": "/home/developer/projects/aurora/.git/aurora-handoff-import-20261006/distributed-k3-mesh-requester-v2043/bindings.py",
+      "sourceSha256": "79558452e6f61268ad246476ca848e060b8ea808e15091bc53a3c4e0e28b1647",
+      "newSha256": "79558452e6f61268ad246476ca848e060b8ea808e15091bc53a3c4e0e28b1647",
+      "change": "byte-identical qualified P2P reusable module"
+    },
+    {
+      "path": "mesh_route_observer.py",
+      "source": "/home/developer/projects/aurora/.git/aurora-handoff-import-20261006/distributed-k3-mesh-requester-v2043/mesh_route_observer.py",
+      "sourceSha256": "db390cdc4e05718e111037b3118573aab5ee9215c57b8e4398767a8b07e6ce7a",
+      "newSha256": "db390cdc4e05718e111037b3118573aab5ee9215c57b8e4398767a8b07e6ce7a",
+      "change": "byte-identical qualified P2P reusable module"
+    },
+    {
+      "path": "route_observation_sink.py",
+      "source": "/home/developer/projects/aurora/.git/aurora-handoff-import-20261006/distributed-k3-mesh-requester-v2043/route_observation_sink.py",
+      "sourceSha256": "d02cbff12f4bf88923cbbc8e6e990b1b140833b276fb112ca521dc21b40d1773",
+      "newSha256": "d02cbff12f4bf88923cbbc8e6e990b1b140833b276fb112ca521dc21b40d1773",
+      "change": "byte-identical qualified P2P reusable module"
+    },
+    {
+      "path": "route_runtime_pins.json",
+      "source": "/home/developer/projects/aurora/.git/aurora-handoff-import-20261006/distributed-k3-mesh-requester-v2043/route_runtime_pins.json",
+      "sourceSha256": "5d79681b500485fd7c4c9e3d562a39af957b261f0f75452d25ad9fcc59dbc1db",
+      "newSha256": "5d79681b500485fd7c4c9e3d562a39af957b261f0f75452d25ad9fcc59dbc1db",
+      "change": "byte-identical qualified P2P reusable module"
+    },
+    {
+      "path": "observer.py",
+      "source": "/home/developer/projects/aurora/.git/aurora-handoff-import-20261006/distributed-k3-mesh-requester-v2043/observer.py",
+      "sourceSha256": "784cc4bffc0d6824bbe378d17a7f632d587ca0a315896b048b2ebef727082df5",
+      "newSha256": "784cc4bffc0d6824bbe378d17a7f632d587ca0a315896b048b2ebef727082df5",
+      "change": "byte-identical qualified P2P reusable module"
+    },
+    {
+      "path": "aurora_voice_telemetry_v430.py",
+      "source": "/home/developer/projects/aurora/.git/aurora-handoff-import-20261006/distributed-k3-mesh-requester-v2043/aurora_voice_telemetry_v430.py",
+      "sourceSha256": "8129ffe7591a47a0107ede53b101aead9fc1f58b92f0c0c4203176cc7608325d",
+      "newSha256": "8129ffe7591a47a0107ede53b101aead9fc1f58b92f0c0c4203176cc7608325d",
+      "change": "byte-identical qualified P2P reusable module"
+    },
+    {
+      "path": "resource_sample.py",
+      "source": "/home/developer/projects/aurora/.git/aurora-handoff-import-20261006/distributed-k3-mesh-requester-v2043/resource_sample.py",
+      "sourceSha256": "8f62ec378e74036d4539d9159e3caf29b8fd7a9115de1ab0f482dfd58b6e1857",
+      "newSha256": "8f62ec378e74036d4539d9159e3caf29b8fd7a9115de1ab0f482dfd58b6e1857",
+      "change": "byte-identical qualified P2P reusable module"
+    },
+    {
+      "path": "local_composition.py",
+      "source": "/home/developer/projects/aurora/thesis/harness/c12-mixed-local-http-900-v2426/local_composition.py",
+      "sourceSha256": "aaf9585ad24429c44ea5ed78b00a7ad49369f324528f901ac46a56eae9b22ba0",
+      "newSha256": "aaf9585ad24429c44ea5ed78b00a7ad49369f324528f901ac46a56eae9b22ba0",
+      "change": "byte-identical current HTTP/local source"
+    },
+    {
+      "path": "stage_adapter.py",
+      "source": "/home/developer/projects/aurora/thesis/harness/c12-mixed-local-http-900-v2426/stage_adapter.py",
+      "sourceSha256": "f678712c75a50146194ccb34331fab8d995f057461e565be99be8d69c2b364a6",
+      "newSha256": "f678712c75a50146194ccb34331fab8d995f057461e565be99be8d69c2b364a6",
+      "change": "byte-identical current HTTP/local source"
+    },
+    {
+      "path": "campaign.py",
+      "source": "/home/developer/projects/aurora/thesis/harness/c12-mixed-local-http-900-v2426/campaign.py",
+      "sourceSha256": "82088501dda3e806a694711afad708b2d927269faec2ad143a101abf081d6d78",
+      "newSha256": "cdadf3e857fa4b39a22d7221653ab1b9d8174c2e4ccbaf322dbd5bff40a838df",
+      "change": "Prospective new-condition15excluded warmups; no clock allocated"
+    },
+    {
+      "path": "local_producer.py",
+      "source": "/home/developer/projects/aurora/thesis/harness/c12-mixed-local-http-900-v2426/local_producer.py",
+      "sourceSha256": "ffdc5482051e99d64b3761997c41ba41f9687ecd862adcc5996a4af02ba32b8f",
+      "newSha256": "fcb518cf6fb7ec7f773bc29c0e67d0ad235945e9036cf0198a745b1cfd8b59b4",
+      "change": "Trigger only actual primary P2P native STT prefix; local prefix excluded by construction"
+    },
+    {
+      "path": "collect_pair.py",
+      "source": "/home/developer/projects/aurora/thesis/harness/c12-mixed-local-http-900-v2426/collect_pair.py",
+      "sourceSha256": "556e46fac478146e690439eedbf26663af915f2f994fabe2e52d00318cde48ee",
+      "newSha256": "f7efcd8d6bddb41a5322c9e5039a6ef4274d4cd386354dc1545ba0320035f38d",
+      "change": "Use prospective15warmup boundary; same copy-only checksum/member/offset path"
+    },
+    {
+      "path": "queue_observer.py",
+      "source": "/home/developer/projects/aurora/thesis/harness/c12-mixed-local-http-900-v2426/queue_observer.py",
+      "sourceSha256": "a57ef99e9c48bd7442068d5ea8f8bee016141fbc5f4efd8f9a7e78a1a5631afb",
+      "newSha256": "a57ef99e9c48bd7442068d5ea8f8bee016141fbc5f4efd8f9a7e78a1a5631afb",
+      "change": "byte-identical current HTTP/local source"
+    },
+    {
+      "path": "local_case.py",
+      "source": "/home/developer/projects/aurora/thesis/harness/c12-mixed-local-http-900-v2426/paired_case.py",
+      "sourceSha256": "2bf99817e28b4ccb1cfe15a2f4fe472b5076fb17376ecf24a5b982028a31335b",
+      "newSha256": "3e8986463cf5090d393e2eab2eef063f6a6a26a23be61d53c6e2894d48781c2b",
+      "change": "Same real local UserInput/Response/audio path; require real local bus, separate companion prefix and declared condition label"
+    }
+  ],
+  "prospectiveCounts": {
+    "primaryMeasured": 900,
+    "companionMeasured": 900,
+    "excludedWarmupPairs": 15
+  },
+  "runtimeLifecycleAllocated": false,
+  "newClocksActorsOrReservation": false,
+  "inferenceNetworkDeviceOrBuildCalls": 0,
+  "remainingImplementation": "Primary case wrapper, requester Supervisor/bootstrap/paired controller, source/config/route mapping, ordinary warmup proof and current-cohort release guard; actual runtime checks only after current HTTP natural finish/seal/release.",
+  "noHistoricalSourceOrEvidenceModified": true
+}

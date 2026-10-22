@@ -1,0 +1,34 @@
+{
+  "observedAt": "2026-10-16T14:02:42.082571+00:00",
+  "host": "personal.skyron-server",
+  "owner": {
+    "pid": 3643548,
+    "expectedStartTicks": "78738665",
+    "present": true,
+    "actualStartTicks": "78738665"
+  },
+  "status": "RUNNING",
+  "phase": "MEASURED_COHORT",
+  "warmupsCompleted": 15,
+  "warmupsPlanned": 15,
+  "measuredAttempted": 10,
+  "measuredCompleted": 9,
+  "measuredPlanned": 900,
+  "inFlight": 1,
+  "manifestSha256": "88dabaffe8d5a9622753a7441a366ba0abf913fbd5d64282801170f4eaaa7cda",
+  "lastCase": {
+    "caseId": "c06-app900-v1058-measured-0009",
+    "outcome": "completed_correct",
+    "timeout": false,
+    "flowDurationMs": 10438.99999999997,
+    "nativeRecorderConsistentWithBackend": true
+  },
+  "p90Ms": null,
+  "p95Ms": null,
+  "reasonPercentilesAbsent": "Frozen cohort is still running; one final analysis after natural completion.",
+  "scope": "Actual native Tauri SDK file-audio compute; no normal UI/setup/history/physical capture/playback or other-surface acceptance.",
+  "runtimeProfileRoleFields": null,
+  "runtimeProfileRoleMissingReason": "The unchanged file-audio hook emits runtimeMode and transport, not nodeMode/runtimeTier/profile-setup state; do not infer role-specific product acceptance.",
+  "noClosedControlRepeat": true,
+  "nextObservation": "14:10UTC or earlier terminal; original monitor watchdog14:12UTC"
+}

@@ -1,0 +1,8 @@
+{
+  "bytes": 444,
+  "copyOnly": true,
+  "custody": "Notebook result persisted and fsynced before relay; remote receipt in same output",
+  "localPath": "/home/developer/projects/aurora/thesis/phone-notebook/20261020/evidence/stage-native-safe-observer-v376/result.json",
+  "remotePath": "/home/developer/projects/aurora/thesis/phone-notebook/20261020/evidence/stage-native-safe-observer-v376.json",
+  "sha256": "3ca8a35bbf954c93b7b9be519dbf8fa7f51e024de71397ade63a1fa92eb3df85"
+}

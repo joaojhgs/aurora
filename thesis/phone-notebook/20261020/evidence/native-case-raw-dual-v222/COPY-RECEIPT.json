@@ -1,0 +1,11 @@
+{
+  "copyOnly": true,
+  "bothHostsPhysicalRepositoryCustody": true,
+  "originalNotebookRawPreserved": true,
+  "bundleSha256": "2e67019411cbfcd9fb9ffdddfbd3a35efcee30f19d086bc5ce3e622463153c6b",
+  "filesVerified": 20,
+  "frameBytes": 4500,
+  "validWavSha256": "a75537d2acdf8eae8c743f90b3b7e3363f5c8ad71336d5d893c564f288ad27d7",
+  "source": "phone-file-audio-v213",
+  "noModelsApkOrPrivatePhoneContent": true
+}

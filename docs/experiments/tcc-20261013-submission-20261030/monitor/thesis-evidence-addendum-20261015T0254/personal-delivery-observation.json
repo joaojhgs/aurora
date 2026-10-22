@@ -1,0 +1,11 @@
+{
+  "at": "2026-10-15T03:19:17.952576+00:00",
+  "receipt": "c8f3dbb6-71bc-436e-8035-aa1e9dadd1c9",
+  "terminal": "term_8109a3ac-570e-4c3f-a7ac-e68e36764b2b",
+  "status": "running",
+  "matchingDeliveryLines": [
+    "    7f7250593e686c7836feb332ebdd928eb71a9ef0089fbeb1cd1c4dae9cb6ec9e                        │"
+  ],
+  "scope": "One bounded read of existing Personal delivery coordination, no repeatprompt/Telegram resend",
+  "providerDeliveryVerifiedByThisRead": false
+}

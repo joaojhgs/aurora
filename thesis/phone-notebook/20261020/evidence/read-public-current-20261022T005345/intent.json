@@ -1,0 +1,12 @@
+{
+  "controlDeadline": "2026-10-22T01:03:45.017362+00:00",
+  "explicitNewline": true,
+  "host": "ssh:ssh-sem-notebook-personal",
+  "incarnation": "328cd72f-c7ea-49ff-a2db-b9275b085037",
+  "remoteResult": "/home/developer/projects/aurora/thesis/phone-notebook/20261020/evidence/read-public-current-20261022T005345.json",
+  "rootAdmissionMessage": "owner-direct-public-pinned-download-current-progress",
+  "script": "scripts/read_current_public_job_v14.py",
+  "scriptSha256": "2132afb2fde8441cf1ecf8069719ff524bf95a0f6d8b6c5a7a5114b133493eb0",
+  "singleSend": true,
+  "terminal": "term_a2ed5feb-7c92-48e4-bd88-d1b0e6737989"
+}

@@ -1,0 +1,60 @@
+{
+  "at": "2026-10-20T14:38:26.037205+00:00",
+  "phase": "K1_PARTIAL_SEALED_PROVIDER_RETIRED_K2_LIFECYCLE_PREPARATION",
+  "nativeGoal": "01a112a5-d6bb-74e2-bf7c-ace73cb513b5",
+  "nativeStatus": "active",
+  "K1": {
+    "attempted": 709,
+    "correct": 697,
+    "failed": 12,
+    "unattempted": 191,
+    "excludedWarmupsAcrossEpochs": 33
+  },
+  "provider": {
+    "retiredAt": "2026-10-20T14:28:41.175344+00:00",
+    "exitCode": 0,
+    "actorsAbsent": [
+      3194385,
+      3194394
+    ],
+    "rawFiles": 11,
+    "rawBytes": 171335796,
+    "archiveBytes": 8886577,
+    "archiveSha256": "361889ce2239cda99f14ae12102f52746c01307c49cbb20c91093bd4473baa99"
+  },
+  "boundedDiagnosis": {
+    "actual": "Warmup3 STT and Paris correct; exact-peer direct route present; accepted=false capability_changed; no timeout/no valid audio",
+    "unknown": "Exact receiver validation predicate not recorded",
+    "sourceInferenceOnly": "20s lease renewal increments availability revision while receiver requires exact speech-route revision equality; possible in-flight race, not demonstrated historical cause",
+    "disposition": "No authorization guard or settings change. No identical failed warmup retry. Original monitor plan30.65 permits already-qualified K2 while K1 191 stay OPEN."
+  },
+  "K2": {
+    "phase": "NOT_LAUNCHED",
+    "plan": "15 excluded correct full-audio warmups then900 measured; worker STT, desktop actual Vulkan LLM and Piper",
+    "sourceReviews": "CLOSED_UNCHANGED",
+    "next": "Archive transfer on original control shell, then same-identity provider metadata/GPU resource admission and reviewed controller launch"
+  },
+  "receipts": {
+    "k1-provider-retire-v1783-RESULT.json": {
+      "bytes": 184,
+      "sha256": "d893bae11ab28a904ed008d08fa674b5284c60c34559edbe55d52886de7f74ca"
+    },
+    "k1-retire-reconcile-v1784-RESULT.json": {
+      "bytes": 1805,
+      "sha256": "891dddcbbea148246bbf3c09558b247e3cab2895424bee929a8ac6b9af394e10"
+    },
+    "k1-eof-inventory-v1784-RESULT.json": {
+      "bytes": 992,
+      "sha256": "4a8a8d8e3cadd610dd7e00d4d3c12e383101c68f0a8cc8c66a8ec7f29de0572b"
+    },
+    "k1-eof-seal-v1784-RESULT.json": {
+      "bytes": 588,
+      "sha256": "f1f71995f398621a79546c480be4fd1b0593c0d8188a483cf5450214a376245e"
+    }
+  },
+  "fullPlanMirror": {
+    "path": "thesis/methodology/owner-requirements-20261020-3b29fdda.md",
+    "bytes": 700489,
+    "sha256": "3b29fdda33145e395ea8cc853c3f5de9615d5e993f79f290a7be1b577f97223b"
+  }
+}

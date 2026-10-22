@@ -1,0 +1,29 @@
+{
+  "at": "2026-10-20T04:27:04.252447+00:00",
+  "status": "SOURCE_ONLY_CANDIDATE_NOT_LAUNCHED",
+  "prior": "thesis/harness/distributed-k1-mesh-v1711/requester",
+  "new": "thesis/harness/distributed-k1-mesh-remaining880-v1719/requester",
+  "changedFiles": [
+    "runner.py",
+    "controller.py",
+    "tts_mesh_adapter.py",
+    "receiver_proof.py"
+  ],
+  "measured": 880,
+  "globalIndices": [
+    21,
+    900
+  ],
+  "priorAttempted": 20,
+  "priorCorrect": 19,
+  "priorFailed": 1,
+  "sameProductionSource": true,
+  "sameProvider": true,
+  "prior900ConditionCapSeconds": 72000,
+  "epochCapSeconds": 68000,
+  "epochOuterCapSeconds": 68240,
+  "failurePolicy": "Only exact structured accepted=false capability_changed from the exact observed peer: record failed, next distinct measured index; no retry or fallback,3consecutive stop. Warmups/other failures remain hard stop. Correctness unchanged.",
+  "diffSha256": "63f613bba39ca2f9f9c13fa73451122a85445666f18fcc4b27deaa0efd86b03f",
+  "sutCalls": 0,
+  "proofChange": "Only case prefix v1711->v1719; strict receiver validation unchanged"
+}

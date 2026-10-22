@@ -1,0 +1,426 @@
+--- a/app/services/stt_transcription/service.py
++++ b/app/services/stt_transcription/service.py
+@@ -17,6 +17,7 @@
+ import base64
+ import hashlib
+ import io
++import json
+ import os
+ import threading
+ import time
+@@ -31,6 +32,7 @@
+ 
+ from app.helpers.aurora_logger import log_debug, log_error, log_info, log_warning
+ from app.helpers.getUseHardwareAcceleration import get_use_hardware_acceleration
++from app.messaging.bus import QueryResult
+ from app.messaging import (
+     AudioChunk,
+     AudioEncoding,
+@@ -47,7 +49,13 @@
+ from app.shared.config.keys import ConfigKeys
+ from app.shared.config.models import AccurateModel, RealtimeModel, Stt, System, Transcription
+ from app.shared.contracts.models.common import EmptyInput, EmptyOutput
+-from app.shared.contracts.models.speech_runtime import SpeechStreamLimitsV1
++from app.shared.contracts.models.gateway import GatewayMethods, GetMeshStatusResponse
++from app.shared.contracts.models.speech import SpeechMethodConstraints, normalize_exact_speech_language
++from app.shared.contracts.models.speech_runtime import (
++    SpeechStageCapabilityExportV1,
++    SpeechStageCapabilityV1,
++    SpeechStreamLimitsV1,
++)
+ from app.shared.contracts.models.stt import (
+     AudioSessionEvent,
+     AudioSessionMethods,
+@@ -112,7 +120,51 @@
+     """Create the optional Faster Whisper runtime when model loading starts."""
+     from faster_whisper import WhisperModel
+ 
+-    return WhisperModel(*args, **kwargs)
++    # Resolve through the same pinned Faster Whisper download helper once.
++    # Keep the actual constructor's weight-file provenance private; aliases and
++    # configured strings alone are not resident model identities.
++    if kwargs.get("files") is not None:
++        return WhisperModel(*args, **kwargs)
++    from faster_whisper.utils import download_model
++
++    positional = list(args)
++    options = dict(kwargs)
++    selected = positional[0] if positional else options["model_size_or_path"]
++    model_root = selected if os.path.isdir(selected) else download_model(
++        selected,
++        local_files_only=options.get("local_files_only", False),
++        cache_dir=options.get("download_root"),
++    )
++    weight = os.path.realpath(os.path.join(model_root, "model.bin"))
++    stat = os.stat(weight)
++    signature = (stat.st_dev, stat.st_ino, stat.st_size, stat.st_mtime_ns)
++    if positional:
++        positional[0] = model_root
++    else:
++        options["model_size_or_path"] = model_root
++    model = WhisperModel(*positional, **options)
++    model._aurora_resident_weight = (weight, signature)
++    return model
++
++
++def _resident_whisper_identity(model: Any) -> str | None:
++    """Hash the actual constructor-selected weight off the event-loop thread."""
++    provenance = getattr(model, "_aurora_resident_weight", None)
++    if not isinstance(provenance, tuple) or len(provenance) != 2:
++        return None
++    path, expected = provenance
++    def signature():
++        stat = os.stat(path)
++        return (stat.st_dev, stat.st_ino, stat.st_size, stat.st_mtime_ns)
++    if signature() != expected:
++        return None
++    digest = hashlib.sha256()
++    with open(path, "rb") as stream:
++        for block in iter(lambda: stream.read(1024 * 1024), b""):
++            digest.update(block)
++    if signature() != expected:
++        return None
++    return "faster-whisper:sha256:" + digest.hexdigest()
+ 
+ 
+ class VADMode(Enum):
+@@ -169,6 +221,9 @@
+         self._model_lock = threading.Lock()
+         # Local finite-work fence; distinct from BaseService lifecycle generation.
+         self._model_revision = 0
++        self._mesh_route_constraints: tuple[tuple[Any, ...], SpeechMethodConstraints] | None = None
++        self._mesh_resident_identities: dict[tuple[int, int], str] = {}
++        self._mesh_identity_revision = -1
+         # A timed-out worker keeps ownership of these model references until a
+         # fresh startup reaps the worker and commits replacement models.
+         self._retained_model_references = False
+@@ -230,6 +285,142 @@
+         # Statistics
+         self._chunks_received = 0
+         self._transcriptions_done = 0
++
++    def _mesh_speech_snapshot(self) -> tuple[Any, ...]:
++        """Identify the enabled, resident models without retaining old handles."""
++        return (
++            self._runtime_generation,
++            self._model_revision,
++            self._running,
++            self._realtime_enabled,
++            self._accurate_enabled,
++            id(self._realtime_model),
++            id(self._accurate_model),
++            self._model_ready("realtime"),
++            self._model_ready("accurate"),
++            self._retained_model_references,
++        )
++
++    async def _speech_stage_capabilities_for_announcement(
++        self,
++    ) -> list[SpeechStageCapabilityExportV1]:
++        """Export finite STT only from this service's actual ready models."""
++        snapshot = self._mesh_speech_snapshot()
++        constraints = None
++
++        def current() -> bool:
++            return (
++                self._mesh_speech_snapshot() == snapshot
++                and self._running
++                and not self._runtime_retirement_pending()
++                and not self._retained_model_references
++                and not self._processing_thread_is_retained()
++            )
++
++        try:
++            if not current():
++                return []
++            ready = [
++                (role, model)
++                for role, enabled, model in (
++                    ("realtime", self._realtime_enabled, self._realtime_model),
++                    ("accurate", self._accurate_enabled, self._accurate_model),
++                )
++                if enabled and model is not None and self._model_ready(role)
++            ]
++            if not ready:
++                return []
++            languages = None
++            identities = []
++            revision = self._model_revision
++            if self._mesh_identity_revision != revision:
++                self._mesh_resident_identities.clear()
++                self._mesh_identity_revision = revision
++            for role, model in ready:
++                actual_languages = {
++                    normalize_exact_speech_language(item) for item in model.supported_languages
++                }
++                if not actual_languages:
++                    return []
++                # This endpoint accepts either resident role. Advertise their
++                # common coverage instead of promising a union no one model has.
++                languages = actual_languages if languages is None else languages & actual_languages
++                key = (revision, id(model))
++                identity = self._mesh_resident_identities.get(key)
++                if identity is None:
++                    identity = await asyncio.to_thread(_resident_whisper_identity, model)
++                    if not current() or identity is None:
++                        return []
++                    self._mesh_resident_identities[key] = identity
++                identities.append((role, identity))
++            if not languages or not current():
++                return []
++            result = await asyncio.wait_for(
++                self.bus.request(
++                    GatewayMethods.GET_MESH_STATUS, EmptyInput(), timeout=2, origin="internal"
++                ),
++                timeout=2,
++            )
++            if not current() or not isinstance(result, QueryResult) or not result.ok:
++                return []
++            status = GetMeshStatusResponse.model_validate(result.data)
++            peer_id = status.local.peer_id
++            if not peer_id:
++                return []
++            resident_digest = hashlib.sha256(
++                json.dumps(identities, separators=(",", ":")).encode()
++            ).hexdigest()
++            can_detect = len(languages) >= 2
++            constraints = SpeechMethodConstraints(
++                exact_languages=sorted(languages),
++                supports_auto_detect=can_detect,
++                auto_detect_languages=sorted(languages) if can_detect else [],
++                resident_model_identity_digest=resident_digest,
++                speech_capability_revision=revision,
++            )
++            capability = SpeechStageCapabilityV1(
++                stage="stt",
++                method_ids=[TranscriptionMethods.TRANSCRIBE],
++                modes=["finite"],
++                implementation="python",
++                peer_id=peer_id,
++                resource_id=f"remote:{peer_id}:{TranscriptionModule.NAME}",
++                capability_revision=revision,
++                supported_formats=["raw", "wav"],
++                supported_languages=sorted(languages),
++                model_ids=sorted({identity for _, identity in identities}),
++                lifecycle=["foreground"],
++                readiness="ready",
++                required_permissions=[TranscriptionMethods.TRANSCRIBE],
++                audio_consent_required=True,
++                exported=True,
++            )
++            return [SpeechStageCapabilityExportV1(
++                capability=capability, requires_remote_audio_egress=True,
++            )]
++        except asyncio.CancelledError:
++            raise
++        except Exception:
++            return []
++        finally:
++            if self._mesh_speech_snapshot() == snapshot:
++                self._mesh_route_constraints = (snapshot, constraints) if constraints is not None else None
++
++    def _speech_method_constraints_for_topic(self, topic: str) -> SpeechMethodConstraints | None:
++        if topic != TranscriptionMethods.TRANSCRIBE:
++            return super()._speech_method_constraints_for_topic(topic)
++        current = self._mesh_route_constraints
++        if (
++            current is None
++            or current[0] != self._mesh_speech_snapshot()
++            or not self._running
++            or self._runtime_retirement_pending()
++            or self._retained_model_references
++            or self._processing_thread_is_retained()
++        ):
++            return None
++        return current[1].model_copy(deep=True)
++
+ 
+     async def on_start(self) -> None:
+         """Start the transcription service."""
+--- a/app/shared/contracts/models/speech_runtime.py
++++ b/app/shared/contracts/models/speech_runtime.py
+@@ -16,6 +16,7 @@
+ from app.shared.contracts.io_model import IOModel
+ from app.shared.contracts.models.speech import (
+     MAX_READY_VOICE_IDS,
++    MAX_SPEECH_CONSTRAINT_LANGUAGES,
+     LogicalVoiceId,
+     validate_logical_voice_id,
+ )
+@@ -121,7 +122,7 @@
+     supported_formats: list[str] = Field(default_factory=list, max_length=MAX_SPEECH_STAGE_LIST)
+     sample_rates: list[int] = Field(default_factory=list, max_length=MAX_SPEECH_STAGE_LIST)
+     channels: list[int] = Field(default_factory=list, max_length=8)
+-    supported_languages: list[str] = Field(default_factory=list, max_length=64)
++    supported_languages: list[str] = Field(default_factory=list, max_length=MAX_SPEECH_CONSTRAINT_LANGUAGES)
+     model_ids: list[str] = Field(default_factory=list, max_length=64)
+     lifecycle: list[SpeechLifecycle] = Field(min_length=1, max_length=2)
+     max_input_bytes: int = Field(
+--- a/packages/aurora-sdk/src/webrtc/manifest.ts
++++ b/packages/aurora-sdk/src/webrtc/manifest.ts
+@@ -329,7 +329,7 @@
+   const supportedFormats = requireUniqueSpeechStrings(capability.supported_formats, `${label}.supported_formats`, 16)
+   const sampleRates = requireUniqueSpeechIntegers(capability.sample_rates, `${label}.sample_rates`, 16, 1, Number.MAX_SAFE_INTEGER)
+   const channels = requireUniqueSpeechIntegers(capability.channels, `${label}.channels`, 8, 1, Number.MAX_SAFE_INTEGER)
+-  const supportedLanguages = requireUniqueSpeechStrings(capability.supported_languages, `${label}.supported_languages`, 64)
++  const supportedLanguages = requireUniqueSpeechStrings(capability.supported_languages, `${label}.supported_languages`, 1024)
+   const modelIds = requireUniqueSpeechStrings(capability.model_ids, `${label}.model_ids`, 64)
+   const lifecycle = requireStringArray(capability.lifecycle, `${label}.lifecycle`, 2) as Array<'foreground' | 'active_native_capture'>
+   if (lifecycle.length === 0 || lifecycle.some((item) => item !== 'foreground' && item !== 'active_native_capture')) {
+--- a/packages/aurora-sdk/tests/webrtc-manifest.test.ts
++++ b/packages/aurora-sdk/tests/webrtc-manifest.test.ts
+@@ -270,6 +270,42 @@
+     })
+   })
+ 
++  it('preserves a full multilingual STT capability through projection verification', () => {
++    const frame = speechProjectionFrame()
++    const service = frame.shared_services[1] as Record<string, unknown>
++    const wrapper = (service.speech_stage_capabilities as Record<string, unknown>[])[0]!
++    const capability = wrapper.capability as Record<string, unknown>
++    const languages = ["af", "am", "ar", "as", "az", "ba", "be", "bg", "bn", "bo", "br", "bs", "ca", "cs", "cy", "da", "de", "el", "en", "es", "et", "eu", "fa", "fi", "fo", "fr", "gl", "gu", "ha", "haw", "he", "hi", "hr", "ht", "hu", "hy", "id", "is", "it", "ja", "jw", "ka", "kk", "km", "kn", "ko", "la", "lb", "ln", "lo", "lt", "lv", "mg", "mi", "mk", "ml", "mn", "mr", "ms", "mt", "my", "ne", "nl", "nn", "no", "oc", "pa", "pl", "ps", "pt", "ro", "ru", "sa", "sd", "si", "sk", "sl", "sn", "so", "sq", "sr", "su", "sv", "sw", "ta", "te", "tg", "th", "tk", "tl", "tr", "tt", "uk", "ur", "uz", "vi", "yi", "yo", "zh", "yue"]
++    service.module = 'Transcription'
++    service.capabilities = ['audio_transcription']
++    capability.stage = 'stt'
++    capability.resource_id = 'remote:stable-peer-1:Transcription'
++    capability.method_ids = ['Transcription.Transcribe']
++    capability.required_permissions = ['Transcription.Transcribe']
++    capability.supported_languages = languages
++    capability.model_ids = ['faster-whisper:sha256:' + 'a'.repeat(64)]
++    capability.audio_consent_required = true
++    wrapper.voice_ids = []
++    const method = (service.methods as Record<string, unknown>[])[0]!
++    method.name = 'Transcribe'
++    method.bus_topic = 'Transcription.Transcribe'
++    method.required_perms = ['Transcription.Transcribe']
++    frame.shared_services.sort((left, right) => {
++      const a = (left as Record<string, unknown>).module as string
++      const b = (right as Record<string, unknown>).module as string
++      return a < b ? -1 : a > b ? 1 : 0
++    })
++    refreshProjectionDigests(frame)
++    const parsed = parseWebRtcMeshManifest(frame, 'stable-peer-1')
++    const parsedService = parsed.services?.find((item) => item.module === 'Transcription')
++    expect(parsedService).toMatchObject({
++      speechStageCapabilities: [{ capability: { supported_languages: languages } }]
++    })
++    expect(buildWebRtcManifestAck(parsed, { expectedRecipientPeerId: 'thin-consumer-1' })).toMatchObject({
++      compatible_services: ['Tooling', 'Transcription']
++    })
++  })
++
+   it.each(invalidSpeechWrapperCases)('rejects %s after valid projection digests are recomputed', (_label, mutate) => {
+     const frame = speechProjectionFrame()
+     const ttsService = frame.shared_services[1] as Record<string, unknown>
+--- /dev/null
++++ b/tests/unit/stt_transcription/test_runtime_speech_announcement.py
+@@ -0,0 +1,109 @@
++from __future__ import annotations
++
++import hashlib
++import json
++import sys
++from types import SimpleNamespace
++from unittest.mock import AsyncMock, Mock
++
++import pytest
++
++from app.messaging.bus import QueryResult
++from app.services.stt_transcription import service as stt_module
++from app.services.stt_transcription.service import TranscriptionService
++from app.shared.contracts.models.gateway import GetMeshStatusResponse, MeshLocalStatus
++from app.shared.contracts.models.speech import SpeechRouteBinding
++from app.shared.contracts.models.stt import TranscribeAudioRequest, TranscriptionMethods
++from app.shared.contracts.speech_routing import compute_speech_route_requirement_digest_for_payload
++
++
++LANGUAGES = ['af', 'am', 'ar', 'as', 'az', 'ba', 'be', 'bg', 'bn', 'bo', 'br', 'bs', 'ca', 'cs', 'cy', 'da', 'de', 'el', 'en', 'es', 'et', 'eu', 'fa', 'fi', 'fo', 'fr', 'gl', 'gu', 'ha', 'haw', 'he', 'hi', 'hr', 'ht', 'hu', 'hy', 'id', 'is', 'it', 'ja', 'jw', 'ka', 'kk', 'km', 'kn', 'ko', 'la', 'lb', 'ln', 'lo', 'lt', 'lv', 'mg', 'mi', 'mk', 'ml', 'mn', 'mr', 'ms', 'mt', 'my', 'ne', 'nl', 'nn', 'no', 'oc', 'pa', 'pl', 'ps', 'pt', 'ro', 'ru', 'sa', 'sd', 'si', 'sk', 'sl', 'sn', 'so', 'sq', 'sr', 'su', 'sv', 'sw', 'ta', 'te', 'tg', 'th', 'tk', 'tl', 'tr', 'tt', 'uk', 'ur', 'uz', 'vi', 'yi', 'yo', 'zh', 'yue']
++
++
++def ready_model(tmp_path, name, languages):
++    weight = tmp_path / name
++    weight.write_bytes(b"loaded weight " + name.encode())
++    stat = weight.stat()
++    return SimpleNamespace(
++        supported_languages=languages,
++        _aurora_resident_weight=(str(weight), (stat.st_dev, stat.st_ino, stat.st_size, stat.st_mtime_ns)),
++    )
++
++
++def ready_service(monkeypatch, tmp_path):
++    status = GetMeshStatusResponse(local=MeshLocalStatus(peer_id="mesh-stt-peer"))
++    bus = SimpleNamespace(request=AsyncMock(return_value=QueryResult(ok=True, data=status.model_dump(mode="json"))), publish=AsyncMock())
++    monkeypatch.setattr("app.shared.services.base_service.get_bus_singleton", lambda: bus)
++    service = TranscriptionService()
++    service._running = True
++    service._runtime_state = "active"
++    service._model_revision = 7
++    service._realtime_enabled = False
++    service._accurate_model = ready_model(tmp_path, "accurate.bin", LANGUAGES)
++    service._model_status["accurate"] = "ready"
++    return service, bus
++
++
++@pytest.mark.asyncio
++async def test_actual_multilingual_stt_projection_reaches_receiver_and_withdraws(monkeypatch, tmp_path):
++    service, bus = ready_service(monkeypatch, tmp_path)
++    await service._publish_service_announcement()
++    announcement = bus.publish.await_args.args[1]
++    method = next(m for m in announcement.methods if m.bus_topic == TranscriptionMethods.TRANSCRIBE)
++    assert len(LANGUAGES) > 64
++    assert method.speech_constraints.exact_languages == sorted(LANGUAGES)
++    assert method.speech_constraints.supports_auto_detect
++    assert method.speech_constraints.auto_detect_languages == sorted(LANGUAGES)
++    assert method.speech_constraints.speech_capability_revision == 7
++    exported = announcement.speech_stage_capabilities[0].capability
++    assert exported.supported_languages == sorted(LANGUAGES)
++    assert exported.modes == ["finite"]
++    assert exported.required_permissions == [TranscriptionMethods.TRANSCRIBE]
++    assert str(tmp_path) not in json.dumps(announcement.model_dump(mode="json"))
++    request = TranscribeAudioRequest(audio_data="AA==", language=None, model="accurate")
++    binding = SpeechRouteBinding(
++        service_instance_id="remote:mesh-stt-peer:Transcription",
++        projection_digest="a" * 64, projection_revision="projection-1",
++        provider_lease_epoch="lease-1", provider_lease_revision=1,
++        speech_capability_revision=7,
++        requirement_digest=compute_speech_route_requirement_digest_for_payload(TranscriptionMethods.TRANSCRIBE, request),
++    )
++    envelope = SimpleNamespace(identity_source="webrtc_rpc", speech_route_binding=binding)
++    assert service._envelope_speech_route_binding_valid(envelope, request, topic=TranscriptionMethods.TRANSCRIBE)
++    service._model_revision += 1
++    assert not service._envelope_speech_route_binding_valid(envelope, request, topic=TranscriptionMethods.TRANSCRIBE)
++    service._accurate_enabled = False
++    await service._publish_service_announcement()
++    withdrawn = bus.publish.await_args.args[1]
++    assert not withdrawn.speech_stage_capabilities
++    assert next(m for m in withdrawn.methods if m.bus_topic == TranscriptionMethods.TRANSCRIBE).speech_constraints is None
++
++
++@pytest.mark.asyncio
++async def test_two_ready_roles_advertise_only_their_common_language_coverage(monkeypatch, tmp_path):
++    service, _ = ready_service(monkeypatch, tmp_path)
++    service._realtime_enabled = True
++    service._realtime_model = ready_model(tmp_path, "english.bin", ["en"])
++    service._model_status["realtime"] = "ready"
++    exports = await service._speech_stage_capabilities_for_announcement()
++    assert len(exports) == 1
++    assert exports[0].capability.supported_languages == ["en"]
++    assert len(exports[0].capability.model_ids) == 2
++    constraints = service._speech_method_constraints_for_topic(TranscriptionMethods.TRANSCRIBE)
++    assert constraints.exact_languages == ["en"]
++    assert constraints.supports_auto_detect is False
++
++
++def test_named_model_identity_uses_the_actual_resolved_constructor_weight(monkeypatch, tmp_path):
++    model_root = tmp_path / "actual-loaded-root"
++    model_root.mkdir()
++    weight = model_root / "model.bin"
++    weight.write_bytes(b"specific local model content")
++    download = Mock(return_value=str(model_root))
++    constructor = Mock(return_value=SimpleNamespace(supported_languages=LANGUAGES))
++    monkeypatch.setitem(sys.modules, "faster_whisper", SimpleNamespace(WhisperModel=constructor))
++    monkeypatch.setitem(sys.modules, "faster_whisper.utils", SimpleNamespace(download_model=download))
++    model = stt_module._create_whisper_model("base", device="cpu", download_root=str(tmp_path))
++    download.assert_called_once_with("base", local_files_only=False, cache_dir=str(tmp_path))
++    assert constructor.call_args.args == (str(model_root),)
++    assert stt_module._resident_whisper_identity(model) == "faster-whisper:sha256:" + hashlib.sha256(weight.read_bytes()).hexdigest()

@@ -1,0 +1,53 @@
+{
+  "id": "remote-cli-1792639353489",
+  "ok": true,
+  "result": {
+    "runId": "run_e6054e76e9fc",
+    "deliveryId": "delivery_7ce633571a62",
+    "messages": [
+      {
+        "id": "msg_e4901a4611b2",
+        "run_id": "run_e6054e76e9fc",
+        "delivery_contract": "current_delivery",
+        "from_handle": "term_1f27be31-0284-4366-bb91-30fe538cd30e",
+        "to_handle": "run:run_e6054e76e9fc",
+        "subject": "Actual Android build prerequisite + public engine inputs verified; notebook compile continues",
+        "body": "Exact source Android wrapper ran in isolated copied workspace and exit1 requires AURORA_SHERPA_ONNX_ANDROID_ARM64_V8A_LIB_DIR; no notebook matching engine cached. I downloaded source-pinned Sherpa1.13.5 11448570B SHA99f520db... and ORT1.27.1 32785641B SHAdefade26... directly on notebook at512KiB/s/84.56s, both exact verified; original1959source/model assets untouched. Notebook llama0.3.19 Vulkan compile genuinely has ninja-j2/two cc1plus children, RSS577MB03:20 and deadline03:33; if Root already has a frozen matching ARM64patched-engine artifact, send its exact provenance/path and a disjoint boundedcopy admission, otherwise notebook-local engine preparation continues without waiting or main campaign interruption.",
+        "type": "status",
+        "priority": "normal",
+        "thread_id": null,
+        "payload": "{\"reportPath\":\"thesis/phone-notebook/20261020/REPORT.md\"}",
+        "created_at": "2026-10-22T03:21:32Z",
+        "delivered_at": null
+      },
+      {
+        "id": "msg_5083ae88edfe",
+        "run_id": "run_e6054e76e9fc",
+        "delivery_contract": "current_delivery",
+        "from_handle": "term_2eab47ed-ab9b-4e35-bd9b-fc068c60e3fc",
+        "to_handle": "run:run_e6054e76e9fc",
+        "subject": "CLOSED full-plan \u00a730.77 mirror; no extra review or gate",
+        "body": "CLOSED \u00a730.77 mirror: independently verified complete839824-byte repo mirror thesis/methodology/owner-requirements-20261022-f50c4a5a.md equals authoritative Vault SHA256 f50c4a5ae646c053d17abc7433edc2d77105ca91fbddeacd485a5175418d02c4 byte-for-byte and preserves835292-byte prior prefix. Closure .omx/evidence/orca-monitor-20261010/plan-update-20261022T031717Z-notebook-owner-thermal-correction/ROOT-ACK-MIRROR-CLOSED.json SHA256 ce1397b4b254957c1d1aee7fa3eb0d3af9c8b33b25cf0c96214999a0d5f1e5c7. No reply, guard re-review or execution hold needed. Old Notebook custom85\u00b0C/phone-absence attention is superseded; existing finite build remains launch-only until its real result. Main HTTP and canonical owner K1 full900 seal/release notification remain unchanged/pending. Monitor performs no build/device/model probes.",
+        "type": "status",
+        "priority": "normal",
+        "thread_id": null,
+        "payload": "{\"taskId\":\"task_d7ea336050cf\",\"dispatchId\":\"ctx_37b4d0a3c14f\",\"reportPath\":\".omx/evidence/orca-monitor-20261010/plan-update-20261022T031717Z-notebook-owner-thermal-correction/ROOT-ACK-MIRROR-CLOSED.json\"}",
+        "created_at": "2026-10-22T03:22:17Z",
+        "delivered_at": null
+      }
+    ],
+    "count": 2,
+    "replayed": false,
+    "acknowledged": null,
+    "timedOut": false,
+    "cancelled": false,
+    "connectionLost": false,
+    "mutation": {
+      "requestId": "ebe331bd-10b0-4fa4-9e36-846137356287",
+      "replayed": false
+    }
+  },
+  "_meta": {
+    "runtimeId": "cc9e3275-28c6-4c45-85cc-bdcd2262aa7d"
+  }
+}

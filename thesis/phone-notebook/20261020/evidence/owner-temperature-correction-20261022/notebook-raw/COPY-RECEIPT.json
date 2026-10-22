@@ -1,0 +1,32 @@
+{
+  "at": "2026-10-22T03:30:41.329868+00:00",
+  "sourceResult": "evidence/export-actual-runtime-receipts-20261022T0330/result.json",
+  "files": [
+    {
+      "bytes": 1714,
+      "path": "runtime-resume-20261022T031304Z/runtime-status.json",
+      "sha256": "951e55f874ab0d904b7a89a328afd8e04523997fb1059a3b54a5a7696a62c268"
+    },
+    {
+      "bytes": 245,
+      "path": "runtime-resume-20261022T031304Z/runtime-import-proof.log",
+      "sha256": "3d48e63efca7f7fb40a94e510057776df9f9f88ae4d9ca166feaeb5db9de7f2f"
+    },
+    {
+      "bytes": 685,
+      "path": "runtime-resume-20261022T031304Z/llama-vulkan-build.log",
+      "sha256": "773975906d958d36f7fae30cd7dbe8880230a75c79793737abf603d144cae23e"
+    },
+    {
+      "bytes": 2041,
+      "path": "android-native-inputs-v50/status.json",
+      "sha256": "db870857b6ebd945d125b884508ae1f53d978e4a963d9835c52a28c96c12b0e6"
+    },
+    {
+      "bytes": 3638,
+      "path": "android-native-inputs-v54/status.json",
+      "sha256": "12185564bf6243a2b228b942eec2c4a62799eb4294548a4a1fdbc063593d0e98"
+    }
+  ],
+  "copyOnly": true
+}

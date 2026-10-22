@@ -1,0 +1,54 @@
+{
+  "at": "2026-10-18T00:44:42.448454+00:00",
+  "classification": "VERIFIED_WAIT",
+  "progress": {
+    "attempted": 137,
+    "last_attempt_file": "attempts/attempt-0137-measured.jsonl",
+    "last_attempt_status": "completed_correct",
+    "measured_attempted": 122,
+    "planned_measured": 900,
+    "planned_warmups": 15,
+    "status": "running",
+    "unattempted_measured": 778,
+    "warmups_attempted": 15
+  },
+  "processes": {
+    "588011": {
+      "same": true,
+      "state": "S",
+      "startTicks": 105853078
+    },
+    "588053": {
+      "same": true,
+      "state": "S",
+      "startTicks": 105853326
+    },
+    "588276": {
+      "same": true,
+      "state": "S",
+      "startTicks": 105855021
+    },
+    "421717": {
+      "same": true,
+      "state": "S",
+      "startTicks": 104535394
+    }
+  },
+  "custody": {
+    "cases": 135,
+    "audio": 135,
+    "at": "2026-10-18T00:43:56.032513+00:00",
+    "outcomeCounts": {
+      "warmup": {
+        "completed_correct": 15
+      },
+      "measured": {
+        "completed_correct": 120
+      }
+    },
+    "errors": [],
+    "copierErrors": [],
+    "pendingStatic": [],
+    "receipt": "thesis/campaigns/worker-desktop-k2-orca-relayed-http-v1264/receipts/000070.json"
+  }
+}

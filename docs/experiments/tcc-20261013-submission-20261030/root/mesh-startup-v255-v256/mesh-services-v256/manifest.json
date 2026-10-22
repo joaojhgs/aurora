@@ -1,0 +1,18 @@
+{
+  "argv": [
+    "flock",
+    "--nonblock",
+    "/tmp/aurora-global-build.lock",
+    "timeout",
+    "--signal=INT",
+    "--kill-after=10s",
+    "180s",
+    "bash",
+    "scripts/webrtc_interop_services.sh",
+    "up"
+  ],
+  "compose_project": "aurora-mesh-root-v256",
+  "started_at": "2026-10-14T01:41:23.131167+00:00",
+  "deadline_seconds": 180,
+  "purpose": "Root-owned necessary MQTT/TURN test service startup after actual Podman short-name failure, no browser/model requests"
+}

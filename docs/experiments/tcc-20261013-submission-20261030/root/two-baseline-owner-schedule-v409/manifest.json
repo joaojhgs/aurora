@@ -1,0 +1,12 @@
+{
+  "files": {
+    "schedule-receipt.json": {
+      "sha256": "bef080b07a4778b7add0108fd87747cdfb340ab2b9d95f157319fde4454ee242",
+      "bytes": 1772
+    },
+    "README.md": {
+      "sha256": "27b84948ce6631178190e389ab2747832a7416d61983fbe2815f85dcf6df9bda",
+      "bytes": 1425
+    }
+  }
+}

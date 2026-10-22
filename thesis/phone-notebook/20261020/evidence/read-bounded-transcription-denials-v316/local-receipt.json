@@ -1,0 +1,8 @@
+{
+  "bytes": 836,
+  "copyOnly": true,
+  "custody": "Notebook result persisted and fsynced before relay; remote receipt in same output",
+  "localPath": "/home/developer/projects/aurora/thesis/phone-notebook/20261020/evidence/read-bounded-transcription-denials-v316/result.json",
+  "remotePath": "/home/developer/projects/aurora/thesis/phone-notebook/20261020/evidence/read-bounded-transcription-denials-v316.json",
+  "sha256": "87829d6703ec05967f7dbaade611e910b9596ab10c21b749c859d2e0ea31d36f"
+}

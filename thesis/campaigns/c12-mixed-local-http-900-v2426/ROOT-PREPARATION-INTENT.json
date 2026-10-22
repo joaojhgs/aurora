@@ -1,0 +1,9 @@
+{
+  "at": "2026-10-22T07:44:51.235194+00:00",
+  "maximumSends": 1,
+  "maximumPopen": 1,
+  "sourceSha256": "e0be36be88c418528fe0782856e1b7a8c96233d82262d960a94da5cbf6cda273",
+  "sameRootDeadline": "2026-10-22T21:14:51.316179+00:00",
+  "old15Preserved": true,
+  "currentExcludedPairOnly": 1
+}

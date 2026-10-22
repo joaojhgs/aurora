@@ -1,0 +1,32 @@
+{
+  "message": "msg_6f051def883b",
+  "createdAt": "2026-10-15T02:34:32Z",
+  "from": "term_6a00d9ee-792a-4daf-8578-236290e33108",
+  "controllerPID": 2894885,
+  "controllerStartedAt": "2026-10-15T02:33:58.278413Z",
+  "placement": "original approved Personal desktop, private .git/aurora-headless-full-audio-v476",
+  "sourcePrefixes": {
+    "controller": "85e9a4d",
+    "bootstrap": "782091f5",
+    "bindings": "4a5e406a",
+    "pilot": "8a2c2d1"
+  },
+  "sourceReview": "Sol final source APP15244fd4; AST and targeted Ruff pass",
+  "admissionManifestPrefix": "7b98fc80",
+  "wavSHA": "2f6361506708d0a3065a339d168c9db5412e343683dd9b4080471d8948bf82ae",
+  "models": {
+    "sttBaseSHA": "d01c3014881c9c6f3133c182f3d2887eb6ca1c789a7538c5c007196857a0a6a9",
+    "piperSHA": "6f52a751e2349abe7a76735eb09dc1875298c77ea2342ffd2fef79ff81b87f22",
+    "qwenSHA": "57d1997790d1744fba5b40a7317df71ea5e2acee28c47e78f0cce39c0703f8cf"
+  },
+  "pilotCapSeconds": 180,
+  "controllerCapSeconds": 240,
+  "controllerDeadline": "2026-10-15T02:37:58.278413Z",
+  "pilotCount": 1,
+  "nMeasured": 0,
+  "fullRequestStartVerified": false,
+  "fullRequestCompletedVerified": false,
+  "newRuntimeGPUOffloadVerified": false,
+  "phase2MeasuredAllowed": false,
+  "wholeGoalComplete": false
+}

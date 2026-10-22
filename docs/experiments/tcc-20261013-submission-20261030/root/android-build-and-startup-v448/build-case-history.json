@@ -1,0 +1,48 @@
+{
+  "cases": [
+    {
+      "ordinal": 1,
+      "outcome": "executed_fail",
+      "phase": "APK Rust link",
+      "exitCode": 1,
+      "finishedAt": "2026-10-14T22:31:23.560403+00:00",
+      "elapsedSeconds": 432.197921272018,
+      "error": "clang Bus error (core dumped); linker failed due to signal",
+      "literalENOSPC": false,
+      "storageCausality": "inference only",
+      "failedLogSHA256": "dc15f758a9abc1296d0bccae31e5e74440fe89fd9400eeaa30d441867ccd4f6e",
+      "artifactsProduced": 0
+    },
+    {
+      "ordinal": 2,
+      "outcome": "executed_fail",
+      "phase": "reduced-debug APK attempt",
+      "elapsedSeconds": 6.043525884975679,
+      "finishedAt": "2026-10-14T22:43:25.148262+00:00",
+      "error": "custom proc-macro2 build script Permission denied (os error13), data tmpfs noexec",
+      "artifactsProduced": 0
+    },
+    {
+      "ordinal": 3,
+      "outcome": "executed_pass",
+      "phase": "same failed APK step, split executable host/data-only Android output",
+      "steps": [
+        {
+          "name": "02-resume-failed-apk",
+          "pid": 2819778,
+          "exitCode": 0,
+          "finishedAt": "2026-10-14T23:02:28.212033+00:00",
+          "elapsedSeconds": 1053.0224965090165,
+          "resourceOrTimeCap": null
+        }
+      ],
+      "controllerFinishedAt": "2026-10-14T23:02:28.615177+00:00",
+      "apkSHA256": "e031b391a29740d00e4e6177d56e0e8ea34dc1abf5f9f01e60d2d572265f791e",
+      "apkBytes": 194968469,
+      "controllerAbsentAndOwnedGroupEmptyAt": "2026-10-14T23:05:59.451077+00:00",
+      "prerequisiteNativeWasmUiBuildsRepeated": false
+    }
+  ],
+  "allOldOutputsAndFailureHistoryRetained": true,
+  "buildMeasurementsAreNotVoiceSamples": true
+}

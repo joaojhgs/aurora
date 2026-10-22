@@ -1,0 +1,95 @@
+{
+  "schema": "aurora.saved-native-span-metrics.v2",
+  "cohort": "aurora-padded-local900-v735-partial",
+  "source": {
+    "path": "docs/experiments/tcc-20261013-submission-20261030/root/desktop-gpu-padded-local900-v735/NATIVE-STAGE-CASE-HISTORY.json",
+    "bytes": 668392,
+    "sha256": "3eaa2fb076ef6336844422075ea19ef23399c33a02adddda4a60b0494e41e5e8"
+  },
+  "analysisSourceSHA256": "b8fc433bae6e941bd8829df1fa65a5df42af94f2a45d1f3e7174aca8767a7932",
+  "population": "All declared attempted measured cases, including interrupted or incorrect cases; each exact handler reports its own completed-span denominator and missing/invalid cases.",
+  "measuredCases": 274,
+  "excludedWarmups": 15,
+  "method": "Hyndman-Fan Type 7: h=(n-1)*p, linear interpolation",
+  "boundary": "Saved same-process paired-span duration, grouped by exact stage and handler; wrapper and invocation metrics remain separate and are never summed",
+  "rawAuditReplayed": false,
+  "newMeasurements": 0,
+  "unknowns": {
+    "queue": null,
+    "TTFT": null,
+    "streamedFirstAudio": null,
+    "playback": null
+  },
+  "metrics": [
+    {
+      "stage": "llm",
+      "handler": "resolved_chat_model.astream",
+      "plannedMeasured": 274,
+      "denominator": 274,
+      "missingCases": 0,
+      "multipleRowCases": 0,
+      "invalidBoundaryCases": 0,
+      "missingNativeOperationId": 274,
+      "missingNativeAttemptId": 274,
+      "p50_ms": 262.674202,
+      "p90_ms": 275.75078790000003,
+      "p95_ms": 289.1938640499999
+    },
+    {
+      "stage": "stt",
+      "handler": "Transcription.Transcribe",
+      "plannedMeasured": 274,
+      "denominator": 274,
+      "missingCases": 0,
+      "multipleRowCases": 0,
+      "invalidBoundaryCases": 0,
+      "missingNativeOperationId": 274,
+      "missingNativeAttemptId": 274,
+      "p50_ms": 3279.7486639999997,
+      "p90_ms": 3382.5907134000004,
+      "p95_ms": 3469.7932462999993
+    },
+    {
+      "stage": "stt",
+      "handler": "stt.model_invoke",
+      "plannedMeasured": 274,
+      "denominator": 274,
+      "missingCases": 0,
+      "multipleRowCases": 0,
+      "invalidBoundaryCases": 0,
+      "missingNativeOperationId": 0,
+      "missingNativeAttemptId": 0,
+      "p50_ms": 3275.8173225,
+      "p90_ms": 3371.9605781,
+      "p95_ms": 3443.82581585
+    },
+    {
+      "stage": "tts",
+      "handler": "TTS.Synthesize",
+      "plannedMeasured": 274,
+      "denominator": 274,
+      "missingCases": 0,
+      "multipleRowCases": 0,
+      "invalidBoundaryCases": 0,
+      "missingNativeOperationId": 274,
+      "missingNativeAttemptId": 274,
+      "p50_ms": 1499.939355,
+      "p90_ms": 1677.2884401000001,
+      "p95_ms": 1765.2813635999998
+    },
+    {
+      "stage": "tts",
+      "handler": "tts.model_invoke",
+      "plannedMeasured": 274,
+      "denominator": 274,
+      "missingCases": 0,
+      "multipleRowCases": 0,
+      "invalidBoundaryCases": 0,
+      "missingNativeOperationId": 0,
+      "missingNativeAttemptId": 0,
+      "p50_ms": 1499.319499,
+      "p90_ms": 1676.4884798,
+      "p95_ms": 1764.5427720999999
+    }
+  ]
+}

@@ -1,0 +1,62 @@
+{
+  "objective": "tcc:20261013:submission-20261030",
+  "root_question": "msg_5c8fbb2af0bf",
+  "run": "run_e6054e76e9fc",
+  "task": "task_d7ea336050cf",
+  "dispatch": "ctx_37b4d0a3c14f",
+  "root_terminal": "term_6a00d9ee-792a-4daf-8578-236290e33108",
+  "state": "blocked_missing_retained_physical_toolchain_receiver_and_reservation_proof",
+  "personal_response": {
+    "source": "Personal native Bot Chat reply to same Root question",
+    "retained_placements_observedAt": 1791992544674,
+    "retained_session_inventory_observedAt": 1791992548449,
+    "notebook_receiver_identified": false,
+    "toolchain_cache_or_ownership_receipts_found": false,
+    "documentation_searches": "Personal reports zero matches in 1-rough-notes/aurora markdown, Personal scratch JSON and broader 1-rough-notes markdown for requested NDK/JDK/Rust/sherpa/build command/notebook alias/SDK environment paths",
+    "vault_sync": "Personal reports ready/inSync/initialSeedVerified",
+    "interpretation": "Historical logical placement only; all requested hardware/toolchain/cache/receiver/current-owner/reservation proofs remain UNKNOWN. No matching records does not establish host absent, session exited or build failure.",
+    "live_queries_or_changes": "None; no inventory/resources/desktop query, remote probes, denied-read retry, company inspection, build, transfer or device traffic"
+  },
+  "candidate": {
+    "source": "Historical successful personal-scoped placements observedAt1791992479315, not fresh hardware verification",
+    "host": "ssh:ssh-sem-notebook-personal",
+    "workspace": "03d8a475-d62e-43b3-8885-e382b313ab1b::/home/developer/projects/aurora",
+    "project": "github:joaojhgs/aurora",
+    "path": "/home/developer/projects/aurora",
+    "physical_alias": null,
+    "physically_disjoint_from_active_desktop_verified": false,
+    "architecture": null,
+    "terminal": null,
+    "incarnation": null,
+    "source_version": null,
+    "jdk17": null,
+    "android_sdk": null,
+    "ndk_27_0_12077973": null,
+    "rust_1_88_plus_android_targets": null,
+    "sherpa_native_cache": null,
+    "llama_native_cache": null,
+    "toolchain_observedAt": null,
+    "existing_build_owner_receipt": null,
+    "resource_reservation_receipt": null,
+    "approved_build_command_route": null
+  },
+  "documentation_check": {
+    "vault_sync": "readyForUse=true,inSyncWithHub=true,initialSeedVerified=true",
+    "scope": "/home/developer/Documents/Obsidian Vault Origin/5-full-notes/faculdade/tcc",
+    "file_glob": "*.md",
+    "patterns": "27.0.12077973, JAVA_HOME, ANDROID_NDK, sherpa cache, android:build:voice-live:apk:x86_64",
+    "matches": 0,
+    "limitation": "No matching scoped documentation evidence; not proof toolchain or host absent"
+  },
+  "personal_query": {
+    "status": "reply_received_missing_capability_evidence",
+    "delivery_id": "551ca89201676bea66f7ff978fc40bc41b891d4c3eda472c7d81c8b516a75231",
+    "process_id": "proc_60f994771527",
+    "queued_at": 1792001558,
+    "scope": "Already-existing Personal metadata/docs/receipts only, no host probes or denied-read retries"
+  },
+  "active_desktop": "Owner/Root reports typed GPU epoch running on personal.skyron-server/RX7600 through ce8df754; all desktop resources and services must remain untouched",
+  "build_authorized_by_this_request": false,
+  "actions": "Read existing own coordination metadata, checked local vault sync and searched scoped personal thesis markdown; sent metadata-only query to existing Personal; no remote probes, execution, transfer, installs or new sessions",
+  "constraints": "No company context; no personal/work distrobox physical-independence inference; original CPU unchanged; device GPU tests held; full cross-device waits both individual seals; Root solely schedules executable work"
+}

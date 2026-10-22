@@ -1,0 +1,49 @@
+{
+  "message": "msg_d364ab03758b",
+  "at": "2026-10-15T03:43:08Z",
+  "desktop": {
+    "version": "V485",
+    "controllerPID": 2910571,
+    "childPID": 2910591,
+    "bothLive": true,
+    "startedAt": "2026-10-15T03:41:25.686258Z",
+    "progressObservedAt": "2026-10-15T03:42:23.324445Z",
+    "nAttempted": 3,
+    "nWarmupExcluded": 3,
+    "nMeasured": 0,
+    "nUnattemptedMeasured": 900,
+    "lastOutcome": "completed_correct",
+    "allFrozenChecksPassed": 26,
+    "actualGPUOffloadedLayers": "25/25",
+    "nPlannedMeasured": 900,
+    "nPlannedExcludedWarmups": 15,
+    "conditionCapSeconds": 12600,
+    "outerCapSeconds": 12780,
+    "outerDeadline": "2026-10-15T07:14:25.686258Z",
+    "flowCapSeconds": 180,
+    "reservation": "Root exclusive desktop GPU/build lock",
+    "sourceReviewPrefix": "cf394862",
+    "noSemanticModelSourceWAVChanges": true
+  },
+  "cpu483": {
+    "terminalAfterSeconds": 37.791,
+    "transcriptExact": true,
+    "llmConstructorRan": false,
+    "cause": "missing source pyproject repo marker",
+    "ttsCauseJoined": false,
+    "nMeasured": 0,
+    "pidsAbsentAndLockFreeAt": "2026-10-15T03:41:46.109236Z"
+  },
+  "cpu486": {
+    "controllerPID": 2218352,
+    "startedAt": "2026-10-15T03:42:18.151602Z",
+    "outerDeadline": "2026-10-15T03:47:18.151602Z",
+    "flowCapSeconds": 180,
+    "outerCapSeconds": 300,
+    "pilotCount": 1,
+    "repair": "byte-exact existing pyproject marker c335d253 added to new source paths",
+    "sameEnvModelsAudioSettingsCPU0": true,
+    "noSharedGPU": true
+  },
+  "phase2MeasuredAllowed": false
+}

@@ -1,0 +1,20 @@
+{
+  "command": [
+    "flock",
+    "--nonblock",
+    "/tmp/aurora-global-build.lock",
+    "timeout",
+    "--signal=INT",
+    "--kill-after=10s",
+    "120s",
+    ".venv/bin/ruff",
+    "check",
+    "app/services/gateway/webrtc/rtc_client.py",
+    "tests/unit/gateway/test_rtc_client_lifecycle.py",
+    "--output-format",
+    "concise"
+  ],
+  "exit_code": 0,
+  "wall_time_seconds": 0.130573151,
+  "scope": "exact two changed source paths"
+}

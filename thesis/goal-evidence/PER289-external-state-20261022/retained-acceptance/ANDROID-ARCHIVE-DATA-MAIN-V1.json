@@ -1,0 +1,50 @@
+{
+  "status": "passed",
+  "scope": "one-synthetic-archive-data-persist-reopen-decrypt-delete-no-capture",
+  "apk": {
+    "path": "/home/developer/projects/aurora/.git/aurora-validation/receiving-20261010-2eae9800-v2/source/apps/aurora-tauri/src-tauri/gen/android/app/build/outputs/apk/universal/debug/app-universal-debug.apk",
+    "bytes": 311160903,
+    "sha256": "c077f316fd8103336b2c0a98b2d93d84416404b9052ad8f4bab99b42de855595",
+    "nativeEntrySha256": "2c3e5bb529652ecfdf0126bf6150fbca4ac566f098717d4c6fb13611ad957bec",
+    "liteRtNativeLibraries": [
+      "lib/x86_64/liblitertlm_jni.so"
+    ]
+  },
+  "sourceRootCommit": "9e42d312478fce543d01996120a5a0f83308296b",
+  "deviceClass": "Waydroid_x86_64",
+  "deviceSerial": "192.168.240.112:5555",
+  "startedAt": "2026-10-10T12:13:00.192449+00:00",
+  "androidUserId": 10,
+  "exitCode": 0,
+  "log": "/home/developer/projects/aurora/.git/aurora-validation/receiving-20261010-2eae9800-v2/android-archive-data-main-v1.log",
+  "archive": {
+    "outcome": "succeeded",
+    "provenance": "synthetic_archive_data_fixture_only",
+    "deviceSerial": "192.168.240.112:5555",
+    "appId": "dev.aurora.desktop",
+    "activeProfileId": "aurora-archive-data-v1-owned",
+    "localNodeId": "aurora-archive-data-v1-owned",
+    "freshLaunchReadbackAndDecryptMatched": true,
+    "ownedSessionDeleted": true,
+    "sessionId": "synthetic-per289-78698b70-b458-4c11-be87-ad7ee692e618",
+    "elapsedMs": 3888,
+    "error": null,
+    "cleanupErrors": [],
+    "acceptance": "bounded_data_path_preparation_only; no microphone, notification capture, or PER-289 acceptance claim"
+  },
+  "node": {
+    "status": "passed",
+    "scope": "one-PER-289-synthetic-archive-data-main-flow",
+    "startedAt": "2026-10-10T12:13:04.438Z",
+    "fixtureProfileCreatedFromEmptyState": true,
+    "profileSetupReadback": true,
+    "freshLaunchProfileReadback": true,
+    "provenance": "synthetic_archive_data_fixture_only",
+    "originalProfileRestored": true,
+    "privateRecoveryBackupRemovedAfterVerifiedRestore": true,
+    "completedAt": "2026-10-10T12:13:15.976Z"
+  },
+  "originalAndroidUserRestored": 0,
+  "elapsedSeconds": 19.29,
+  "completedAt": "2026-10-10T12:13:19.478197+00:00"
+}

@@ -1,0 +1,7 @@
+{
+  "status": "PASS_SYNTHETIC_SAVED_BYTE_SMOKE_ONLY",
+  "sourceSha256": "396b8b4fe74fab757753a0b0aefbf59fed1bdce265c2a79e330959a7fe852a1e",
+  "scientificCampaignResult": false,
+  "fourStreamsMatchIndependentExpectedBytes": true,
+  "inferenceOrRemoteOperations": 0
+}

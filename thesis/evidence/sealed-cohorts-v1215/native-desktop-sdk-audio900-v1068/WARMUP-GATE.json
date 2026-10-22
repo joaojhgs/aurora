@@ -1,0 +1,33 @@
+{
+  "actualProviderBindings": {
+    "actualProviderBindingsSha256": "0baea3aaecd4c61286b41e114bd3768bb52a6ce615c4d0e31094efc9b68dfb34",
+    "expectedBackendPid": 3643793,
+    "llmConstructorReturnedWithExactOptions": true,
+    "passed": true,
+    "piperCallsUsePinnedAssetsAndCpu": true,
+    "rows": 34,
+    "sttConstructorReturned": true
+  },
+  "gpu25of25Observed": true,
+  "measuredReleased": true,
+  "nativeStageRowsComplete": true,
+  "schema": "aurora.c06.native-file-audio-warmup-gate.v1058",
+  "status": "passed",
+  "warmupCaseIds": [
+    "c06-app900-v1058-warmup-0001",
+    "c06-app900-v1058-warmup-0002",
+    "c06-app900-v1058-warmup-0003",
+    "c06-app900-v1058-warmup-0004",
+    "c06-app900-v1058-warmup-0005",
+    "c06-app900-v1058-warmup-0006",
+    "c06-app900-v1058-warmup-0007",
+    "c06-app900-v1058-warmup-0008",
+    "c06-app900-v1058-warmup-0009",
+    "c06-app900-v1058-warmup-0010",
+    "c06-app900-v1058-warmup-0011",
+    "c06-app900-v1058-warmup-0012",
+    "c06-app900-v1058-warmup-0013",
+    "c06-app900-v1058-warmup-0014",
+    "c06-app900-v1058-warmup-0015"
+  ]
+}

@@ -1,0 +1,31 @@
+{
+  "at": "2026-10-15T21:38:06.770539+00:00",
+  "kind": "saved-data-analysis, not measurement or archive outcome audit",
+  "command": "uv run --no-sync python thesis/analysis/native_span_metrics.py --history docs/experiments/tcc-20261013-submission-20261030/root/desktop-gpu-padded-http900-v692/NATIVE-STAGE-CASE-HISTORY.json --output-dir docs/experiments/tcc-20261013-submission-20261030/root/desktop-gpu-padded-http900-v692 --cohort aurora-padded-http900-v692 --expected-measured 900 --excluded-warmups 15 --receiver-pid 3116892",
+  "exitCode": 0,
+  "durationSeconds": null,
+  "durationMissingReason": "Analysis invocation completed successfully; elapsed process duration was not separately captured. No inference latency is derived from the analysis runtime.",
+  "analysisSource": "thesis/analysis/native_span_metrics.py",
+  "analysisSourceSHA256": "38de2aa542f6c9a47c12f5c10a276daee2c273dc691347648d49b893c78c1d62",
+  "input": {
+    "path": "docs/experiments/tcc-20261013-submission-20261030/root/desktop-gpu-padded-http900-v692/NATIVE-STAGE-CASE-HISTORY.json",
+    "bytes": 2128044,
+    "sha256": "cc4aead5d0650ee8ae667e509b72bf01d6adbdf80de962cb47a1311ecb601158"
+  },
+  "outputs": [
+    {
+      "path": "docs/experiments/tcc-20261013-submission-20261030/root/desktop-gpu-padded-http900-v692/NATIVE-SPAN-METRICS-v733.json",
+      "bytes": 2961,
+      "sha256": "651d2834e914f526c77f70b26b8c50b334224fd847a7fea3b1882f7099583aa0"
+    },
+    {
+      "path": "docs/experiments/tcc-20261013-submission-20261030/root/desktop-gpu-padded-http900-v692/native-span-durations-v733.csv",
+      "bytes": 961770,
+      "sha256": "746c192f9eb35ef88d3c8ab6dca39896ad48e51b46e766d4b48d28835b057aef"
+    }
+  ],
+  "newMeasurements": 0,
+  "groups": 5,
+  "allGroupDenominators900": true,
+  "LLMMatchesOriginalSavedAuditP90P95": true
+}

@@ -1,0 +1,23 @@
+{
+  "route_denominators": {
+    "python_gateway_api": {
+      "attempts": 1,
+      "warmups": 0,
+      "measured_successes": 0,
+      "measured_failures": 1,
+      "timeouts": 0,
+      "successful_reply_ms": [],
+      "conditional_type7_ms": {
+        "p50": null,
+        "p90": null,
+        "p95": null
+      }
+    }
+  },
+  "quantile_method": "Type7 h=(n-1)p linear interpolation on correct_success measured replies only; warmups excluded; failures/timeouts retained separately",
+  "clean_baseline": false,
+  "stable_tail_claim": false,
+  "three_independent_sessions_n300_main_claim": false,
+  "full_run_exit_code": 1,
+  "auth_token_validation_exercised": false
+}

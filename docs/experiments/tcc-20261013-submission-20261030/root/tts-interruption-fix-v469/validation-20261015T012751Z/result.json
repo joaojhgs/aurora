@@ -1,0 +1,35 @@
+{
+  "steps": [
+    {
+      "name": "tts-interrupt-main",
+      "at": "2026-10-15T01:27:51.865195+00:00",
+      "command": [
+        "pnpm",
+        "exec",
+        "vitest",
+        "run",
+        "src/use-assistant-tts.test.ts",
+        "--maxWorkers=1"
+      ],
+      "exitCode": 0,
+      "elapsedSeconds": 3.5370790909510106,
+      "globalBuildLockHeld": true
+    },
+    {
+      "name": "ui-typecheck",
+      "at": "2026-10-15T01:27:55.402883+00:00",
+      "command": [
+        "pnpm",
+        "exec",
+        "tsc",
+        "--noEmit",
+        "--incremental",
+        "false"
+      ],
+      "exitCode": 0,
+      "elapsedSeconds": 49.50372236594558,
+      "globalBuildLockHeld": true
+    }
+  ],
+  "finished": true
+}

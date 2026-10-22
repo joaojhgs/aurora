@@ -1,0 +1,75 @@
+{
+  "schema": "aurora.finite_prospective_allocation.v2296",
+  "state": "CLOCK_FROZEN_BEFORE_ANY_LIFECYCLE_ACTION",
+  "authority": "Original owner900percondition and sole monitor plan30.74.6; no new choice/review gate",
+  "nativeGoalThread": "01a112a5-d6bb-74e2-bf7c-ace73cb513b5",
+  "nativeGoalStatus": "active",
+  "nativeGoalBudget": "unbudgeted unchanged",
+  "run": "run_e6054e76e9fc",
+  "rootTerminal": "term_6a00d9ee-792a-4daf-8578-236290e33108",
+  "rootIncarnation": "fe7e63c7-d260-465f-b37e-f6fc78f8a1af",
+  "startedAtUtc": "2026-10-21T21:39:28.033312+00:00",
+  "absoluteDeadlineUtc": "2026-10-22T09:39:28.033312+00:00",
+  "allInclusiveSeconds": 43200,
+  "globalFirst": 451,
+  "globalLast": 900,
+  "newMeasured": 450,
+  "freshExcludedWarmups": 15,
+  "conditionTarget": 900,
+  "priorAttempted": 450,
+  "priorCorrect": 449,
+  "priorFailed": 1,
+  "requestCapSeconds": 180,
+  "workerConditionCapSeconds": 39000,
+  "controllerOuterCapSeconds": 39600,
+  "providerNominalLifetimeSeconds": 39000,
+  "providerMaximumLifetimeSeconds": 40800,
+  "postprocessingReserveSeconds": 2400,
+  "setupReserveSeconds": 1200,
+  "prospective900AccountingCapSeconds": 115200,
+  "historicalOriginalCapSeconds": 57600,
+  "historicalOriginalActualChargeSeconds": 10027.780472366,
+  "historicalPriorAccountingCapSeconds": 72000,
+  "priorParentAllInclusiveCapSeconds": 60000,
+  "priorParentStartedAtUtc": "2026-10-21T06:56:07.231887+00:00",
+  "priorParentDeadlineUtcUnchanged": "2026-10-21T23:36:07.231887+00:00",
+  "priorProviderEffectiveDeadlineUtcUnchanged": "2026-10-21T22:45:52.468654+00:00",
+  "priorParentElapsedSecondsAtFreeze": 53000.801425,
+  "priorChargedTotalSecondsAtFreeze": 63028.581897366,
+  "chargePolicy": "Charge original actual10027.780472366 plus elapsed old enclosing parent through new freeze; subordinate overlapping W/D/requester/startups/warmups/recovery/finalization not added twice; old clocks/caps unchanged",
+  "workerConfigSha256AtFreeze": "2b8cc043fc75c8978e2528379badb9fff7cd2ad2bc82729e61c560d35bbd1cc1",
+  "sourceIndexSha256": "ea48c9f2041ca6620a7e9da4ca5e64d662799227ede3b94720df8bbeab7f0a14",
+  "eligibilitySha256": "cb4921776f101fe9569c73fc54f6f3efa9bff826fb204eb229dc16aeb8c884ae",
+  "eligibleIndicesSha256": "1a9c494a3f01bf4eb8ebd35bb675d03bb9a14d80fc1f8a636c96ad47651c897d",
+  "parentManifestSha256": "11bbea3fc1e45e65da1ecb7b501aee77739870cb087d792e5bc5197f9b1027be",
+  "scientificSetup": "Same frozen audio/400fileapp/models/quantization/decoding/threadsettings/placement/correctness/existingauthenticatedOrcarelay; no failure180retry/no pooling",
+  "resourceEvidence": {
+    "worker": {
+      "path": "thesis/evidence/k1-http-remaining450-admission-v2294/WORKER-RESOURCE-READ-v2296.json",
+      "sha256": "5c0675edabd3fda2855f63263faa630ed0da416dbdb49e87e50958cf945e6a98"
+    },
+    "desktop": {
+      "path": "thesis/evidence/k1-http-remaining450-admission-v2294/DESKTOP-RESOURCE-READ-v2296.json",
+      "sha256": "45ce5bce17445bb038d396853782b357a181a3c9219799573bd9ddfce9d529cc"
+    }
+  },
+  "resourceReservation": "Root sole global build/SUT execution and provider reservation; disjoint phone setup owned existing worker; no parallel SUT inference/build on measured W/D",
+  "floorFreeBytes": 2147483648,
+  "initialWorkerAdditionalDiskReserveBytes": 805306368,
+  "minimumWorkerAvailableMemoryBytes": 2500000000,
+  "minimumDesktopAvailableMemoryBytes": 4294967296,
+  "oldProviderActors": [
+    {
+      "pid": 1440195,
+      "startTicks": 35427348
+    },
+    {
+      "pid": 1440196,
+      "startTicks": 35427408
+    }
+  ],
+  "normalApplicationLifecycleOnly": true,
+  "newOrcaWorkers": 0,
+  "credentialCopies": 0,
+  "pastFailurePreserved": true
+}

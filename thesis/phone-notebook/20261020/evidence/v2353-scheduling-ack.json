@@ -1,0 +1,10 @@
+{
+  "at": "2026-10-22T01:36:57.550328+00:00",
+  "operationId": "source-delta-v33-copy-v2353-20261022",
+  "admission": "thesis/evidence/source-sync-ebde-runtime-v2340/SOURCE-DELTA-TRANSFER-ADMISSION-v2353.json",
+  "earliestStartUtc": "2026-10-22T01:38:08.259445+00:00",
+  "absoluteEndUtc": "2026-10-22T01:40:08.259445+00:00",
+  "acceptedAckMessage": "msg_63ec9bb8e6ca",
+  "sourceBytesTransferredSoFar": 0,
+  "preflightExactPinsAnd43FramesPassed": true
+}

@@ -1,0 +1,8 @@
+{
+  "bytes": 6423,
+  "copyOnly": true,
+  "custody": "Notebook result persisted and fsynced before relay; remote receipt in same output",
+  "localPath": "/home/developer/projects/aurora/thesis/phone-notebook/20261020/evidence/read-formatter-auto-branch-v389/result.json",
+  "remotePath": "/home/developer/projects/aurora/thesis/phone-notebook/20261020/evidence/read-formatter-auto-branch-v389.json",
+  "sha256": "6775c3145106bae19df1e96f5731ba19dd26156f54e30b4b0008fa66ca8da27c"
+}

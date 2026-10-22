@@ -1,0 +1,8 @@
+{
+  "bytes": 1743,
+  "copyOnly": true,
+  "custody": "Notebook result persisted and fsynced before relay; remote receipt in same output",
+  "localPath": "/home/developer/projects/aurora/thesis/phone-notebook/20261020/evidence/stage-test-chatml-compat-v390/result.json",
+  "remotePath": "/home/developer/projects/aurora/thesis/phone-notebook/20261020/evidence/stage-test-chatml-compat-v390.json",
+  "sha256": "08547f04c68cd2d80b2f569ca4e20827e5fe3391071a250381e8d5cc3e61e548"
+}

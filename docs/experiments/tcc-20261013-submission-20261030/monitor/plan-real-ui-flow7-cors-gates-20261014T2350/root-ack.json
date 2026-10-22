@@ -1,0 +1,12 @@
+{
+  "message": "msg_194bff9b0033",
+  "at": "2026-10-14T23:54:38Z",
+  "delivery": "delivery_cfdcdd34a4e6",
+  "lines": 1503,
+  "sha256": "2e3bdbc57c49a55b3c18cd14955376b4903ab55e667cbb062783206dea41e514",
+  "fullread_added_lines": 26,
+  "exact_before_prefix1477_hash5c4346": true,
+  "diff_sha256": "07a8c4944be0ae32a72bcd247899af0ef6d62f25a04c9dbd84b7b852fc8cc143",
+  "receipt_checks_verified": true,
+  "no_doc_triggered_tests": true
+}

@@ -1,0 +1,12 @@
+{
+  "controlDeadline": "2026-10-22T06:30:00Z",
+  "explicitNewline": true,
+  "host": "ssh:ssh-sem-notebook-personal",
+  "incarnation": "328cd72f-c7ea-49ff-a2db-b9275b085037",
+  "remoteResult": "/home/developer/projects/aurora/thesis/phone-notebook/20261020/evidence/read-speech-assets-v182.json",
+  "rootAdmissionMessage": "owner-direct-public-pinned-assets-actual-progress",
+  "script": "scripts/read_speech_assets_v182.py",
+  "scriptSha256": "258ed76de5a98c5e3a14d92b1e242d5e7d5d4800b7ff0fdf7182ccaea0db1edb",
+  "singleSend": true,
+  "terminal": "term_a2ed5feb-7c92-48e4-bd88-d1b0e6737989"
+}

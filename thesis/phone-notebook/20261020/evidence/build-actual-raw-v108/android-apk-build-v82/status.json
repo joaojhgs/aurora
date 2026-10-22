@@ -1,0 +1,41 @@
+{
+  "applicationSourceIdentity": "ebde3a8acf6315f920d03593845f17a1fc65a733 + source-closure-overlay-v2383",
+  "buildDeadlineUtc": "2026-10-22T04:14:57.548552+00:00",
+  "buildPid": 141163,
+  "buildStartedAt": "2026-10-22T03:54:57.548547+00:00",
+  "command": [
+    "node",
+    "apps/aurora-tauri/scripts/build-android-client-bundle.mjs",
+    "--kind",
+    "apk",
+    "--voice-live-test",
+    "--target",
+    "aarch64"
+  ],
+  "elapsedSeconds": 674.8988288229993,
+  "error": "RuntimeError",
+  "finishedAt": "2026-10-22T04:06:12.409535+00:00",
+  "log": "/home/developer/projects/aurora/thesis/phone-notebook/20261020/deployment/ebde3a8acf6315f920d03593845f17a1fc65a733/android-apk-build-v82/build.log",
+  "maxJobs": 2,
+  "modelCalls": 0,
+  "ownBuildChildrenActive": false,
+  "ownedBuildTreeRssBytes": 4778868736,
+  "peakOwnedBuildTreeRssBytes": 4778868736,
+  "pid": 141148,
+  "reason": "owned_build_RSS_guard",
+  "resources": {
+    "at": "2026-10-22T04:06:12.317819+00:00",
+    "diskFreeBytes": 83777945600,
+    "load": [
+      4.82958984375,
+      4.380859375,
+      3.70166015625
+    ],
+    "maxSensorC": 91.875,
+    "memAvailableBytes": 18184904704
+  },
+  "startTicks": "2188757",
+  "startedAt": "2026-10-22T03:54:57.511918+00:00",
+  "status": "FAILED_PRESERVED",
+  "temperaturePolicy": "observe_only_owner_correction"
+}

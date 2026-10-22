@@ -1,0 +1,47 @@
+{
+  "host": "personal.skyron-server",
+  "actors": [
+    {
+      "pid": 1440195,
+      "state": "S",
+      "startTicks": 35427348
+    },
+    {
+      "pid": 1440196,
+      "state": "S",
+      "startTicks": 35427408
+    }
+  ],
+  "configApiKeyHashes": [],
+  "configAuthEnabled": true,
+  "gatewayApiKeyHashes": [],
+  "environment": {},
+  "knownRequesterKeySha256": "31a57e5c47a06a2327840b9a624fe8274f0d536749cebf14a9aa9f0aca87e962",
+  "counts": {
+    "http401": 0,
+    "http200": 0,
+    "piperStarts": 0,
+    "piperEnds": 0
+  },
+  "logFacts": [],
+  "newInference": 0,
+  "credentialsCopied": false,
+  "at": "2026-10-21T16:13:31.722772+00:00",
+  "physicalFiles": [
+    {
+      "path": "thesis/campaigns/worker-desktop-k1-orca-relayed-http-first300-v2220/provider-failure-source-v2222/voice-stages.jsonl",
+      "bytes": 0,
+      "sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+    },
+    {
+      "path": "thesis/campaigns/worker-desktop-k1-orca-relayed-http-first300-v2220/provider-failure-source-v2222/actual-provider-bindings.jsonl",
+      "bytes": 821,
+      "sha256": "17686823ee4a9de73b217d603890e93c241e271b84b57ac606c95edd22c9e612"
+    },
+    {
+      "path": "thesis/campaigns/worker-desktop-k1-orca-relayed-http-first300-v2220/provider-failure-source-v2222/receiver-identity.json",
+      "bytes": 1373,
+      "sha256": "46cea26a99e5b8f9587363dcb7272be52c1a5e3dc922a0a76931c1886430c58d"
+    }
+  ]
+}

@@ -1,0 +1,43 @@
+{
+  "objective": "tcc:20261013:submission-20261030",
+  "root_request": "msg_e0d21e60cef3",
+  "reply_to": "msg_60c9b1f12ae3",
+  "run": "run_e6054e76e9fc",
+  "lineage_task": "task_d7ea336050cf",
+  "lineage_dispatch": "ctx_37b4d0a3c14f",
+  "lifecycle_adopted_or_settled": false,
+  "state": "placement_verified_no_callable_receiver_admission_proof",
+  "requested_host": "ssh:ssh-sem-notebook-personal",
+  "root_report_path": "/home/developer/projects/aurora/docs/experiments/tcc-20261013-submission-20261030/monitor/personal-notebook-admission-20261015T0440/REPORT.md",
+  "personal_handoff": {
+    "status": "reply_received",
+    "delivery_id": "0fa05d6ade15d267a7a5c4342f652a84c7810ee042594d361cda0b2b457fdfb2",
+    "process_id": "proc_b034d2165897",
+    "queued_at": 1792039538
+  },
+  "requested_evidence": "Registered Aurora terminal/incarnation/workspace; physical host/distrobox mapping; country provenance; CPU/GPU/VRAM/RAM/storage/network/power/thermal/reservations; existing app/source/model/backend/acceleration receipts",
+  "evidence": {
+    "source": "Personal native Bot Chat reply; exact receipt retained by Personal",
+    "receipt_path": "/home/developer/.hermes/profiles/personal/cache/scratch/tcc-notebook-inventory-msg_e0d21e60cef3.json",
+    "placements_observedAt": 1792039565683,
+    "workspace": "03d8a475-d62e-43b3-8885-e382b313ab1b::/home/developer/projects/aurora",
+    "project": "github:joaojhgs/aurora",
+    "kind": "git",
+    "scope_actor": "root",
+    "session_list_observedAt": 1792039558967,
+    "session_coverage": "registered-terminal-inventory; no truncation/nextOffset",
+    "notebook_terminal": null,
+    "notebook_incarnation": null,
+    "missing_route": "Registered placement but no exact callable notebook receiver/admission proof; not host absence/exit evidence",
+    "country": "UNKNOWN; Portugal is requested designation, not verified provenance",
+    "physical_mapping": "Personal reports shared Personal/Work hardware from supplied report only; no independent binding/company inspection",
+    "empty_setup_receipt": "d2e7dd58-c84d-4778-b97f-4bbaaf609cee",
+    "historical_resources": {"collectedAt": 1791992550051, "cpu_cores": 12, "load": 2.98, "cpu_percent": 11.016970239872599, "ram_total_bytes": 32792059904, "ram_available_bytes": 18275778560, "disk_available_bytes": 70237962240, "disk_used_percent": 88.45477705202728, "current_admission_or_reservation": false},
+    "unknowns": ["GPU", "VRAM", "network", "power", "thermal", "physical/distrobox binding", "country provenance", "current app/source/model/backend/acceleration", "reservation", "receiver route"],
+    "actions": "Existing Personal placements/session-list and locally accessible REPORT.md read only; no fresh resource/host probe, company inspection or denied-route retry"
+  },
+  "scope": "Existing authorized Personal inventory metadata only; no company access, host commands/probes, new connections, denied-Manager retries, execution, measurements, model/device traffic, builds/tests/recursive scans/weight hashes, credentials/security or TCC edits",
+  "prior_findings": "Notebook missing from earlier registered inventory; logical placement existed historically; missing inventory and empty setups do not prove absence/exit. Semdev desktop is not verified notebook.",
+  "execution_barrier": "Original individual CPU/GPU audio900 campaigns continue unchanged; all required individual audio/surface seals required before measured cross-device traffic",
+  "return_route": "Existing session durable receipt for Root/monitor; no Telegram or external followup"
+}

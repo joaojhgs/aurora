@@ -1,0 +1,267 @@
+{
+  "format": "aurora.receiving.per289.archive-foundation.v1",
+  "at": "2026-10-09T20:00:33.320020+00:00",
+  "integrated_head": "9857ee9740c37b3f6d202fa19956b5de9d070e96",
+  "branch": "codex/aurora-native-speech-routing-20261007",
+  "leader": {
+    "model": "gpt-6.1-sol",
+    "effort": "xhigh"
+  },
+  "sole_serial_validator": "Root",
+  "native_goal_snapshot": {
+    "goal": {
+      "threadId": "01a112a5-d6bb-74e2-bf7c-ace73cb513b5",
+      "objective": "Complete the durable ultragoal plan in .omx/ultragoal/goals.json, including later accepted/appended stories, under the original brief constraints; use .omx/ultragoal/ledger.jsonl as the audit trail.",
+      "status": "active",
+      "tokensUsed": 91550585,
+      "timeUsedSeconds": 233982,
+      "createdAt": 1791314947,
+      "updatedAt": 1791575968
+    },
+    "remainingTokens": null,
+    "completionBudgetReport": null
+  },
+  "commits": [
+    "da62278e3bacbd1b4c4c2cbd281701edcf826ed5",
+    "fd616737b707ea7dc02fa6bba594ba7ee4ee5b61",
+    "87070475709856f887daf12dab78495fba510e7a",
+    "9857ee9740c37b3f6d202fa19956b5de9d070e96"
+  ],
+  "source_paths": {
+    "apps/aurora-tauri/src-tauri/src/generated/local_data_migrations.rs": "0e2ef3b6af37176cc0631442fdb9dd67915b16397a30a9303f36027f9377c673",
+    "apps/aurora-tauri/src-tauri/src/local_data_native.rs": "0309c622eebcd6b5ffefa0bc73bc6ded9fece9b9e7b235d31ff5193d40109524",
+    "apps/aurora-tauri/src/local-data/tauri-local-data.test.ts": "a9999943bb20dc74920d797c89e7ee1fec62dbe68216b85bf8b556b6eb8f154a",
+    "apps/aurora-tauri/src/local-data/tauri-sqlite-backend.ts": "19ce8efbca010f54649ffd985ee9a8e122b6f2f65748abb3e03b643b04f290d6",
+    "apps/aurora-tauri/src/tauri-mesh-node-services.test.ts": "f053f1944c3825ae87c0a81cb4c14fae4d1ad5def4485ede94608feb52856b5a",
+    "docs/AMBIENT_TRANSCRIPTION.md": "9ac0e0e1099aa6927de693370fa95de92ad09d8497326e9edebfb00ceaf6cd99",
+    "docs/DOCS_INDEX.md": "4789e54d8da3f57b887bd0b03560be9cb3da9fa69b817bd6b8ec6162b3ccfba9",
+    "packages/aurora-sdk/src/background-transcription.ts": "33e9fc3ff6a5bec0487dbf368c0f2a6cfed5a73e49a109eabf9937e21078cc07",
+    "packages/aurora-sdk/src/index.ts": "9214a59f8ab49ca998460cc1ed4a9f0ab37a726e66cf07410420958b342119db",
+    "packages/aurora-sdk/src/local-data/export-v1.ts": "da10de8cd80bcf71f753a9fe62a9538078bb8eb0938db110ce21e7a1a29af9f3",
+    "packages/aurora-sdk/src/local-data/generated/local-data.schema.json": "585c869f0cae05a805eb728a8de4da3aa2bd0fa2eced13a6b2030864bcb7edbd",
+    "packages/aurora-sdk/src/local-data/memory-backend.ts": "4a252b0948bdb01bcb20668e380ff993182481f9bbe16061d7bf1684bc9d5b05",
+    "packages/aurora-sdk/src/local-data/migration-manifest.ts": "828e097024de66566db33f5d8733fe4cff355af782c0bee9eb1e5f58e4e9eb8e",
+    "packages/aurora-sdk/src/local-data/migrations/sqlite/0004_transcript_archive.sql": "5171dbaca12ca27e6dfea043f5a4ac0afdab66c18e528da3fd590c5cb7dae8ad",
+    "packages/aurora-sdk/src/local-data/migrations/sqlite/manifest.json": "efddf02f4cf67317004c2d68d004464f642b44bd2de5200bc305bb293fad2626",
+    "packages/aurora-sdk/src/local-data/records.zod.ts": "65b736dd3a1b1c3c5c7705364ce011a31f597e377b642a232c17fa037aae6c28",
+    "packages/aurora-sdk/src/local-data/repositories.ts": "6f766f4a513773e1308f1aa1add8153f0be042b09889b00f040bb33bfe2d8c4f",
+    "packages/aurora-sdk/src/local-data/schema-artifact.ts": "b7f3cf190745d582ae9236d952652f7570d6a8964bd266a50a26a64741bcbf1c",
+    "packages/aurora-sdk/src/local-data/search.ts": "4afac1daddbf7c3e5c7f994d5305deb1d80a7bc1b0f3823d6af54b7531a541d8",
+    "packages/aurora-sdk/src/local-data/validation.ts": "4d92acba10972540ea185eed3ccb2d7f1aa8b5be6f75e3d1f57bca825fddfce4",
+    "packages/aurora-sdk/src/node-config.ts": "fe9fda53066ba4b0c2f922b5f577d029aae29345f27a9b3c3393d3a9fa47400b",
+    "packages/aurora-sdk/tests/background-transcription.test.ts": "0be9a7d69647892aa554fe5e3947acbe3002bc3d04edfc7d44a9f0e2a0e88cee",
+    "packages/aurora-sdk/tests/local-data-export.test.ts": "d634d9e9b7688ad8a775939c9e2f1a36b0b56d990c24a0954bb680ec73734df2",
+    "packages/aurora-sdk/tests/local-data-migrations.test.ts": "0e0679e8dc23f68eb8a5446ccd3e68a3a348770d0fea28153c5bb350fb30df2b",
+    "packages/aurora-sdk/tests/local-data-product-transcripts.test.ts": "0281ae3b2f47c5d752794066c6b7445763208eef8bb665d0a0542c6586aedb8b",
+    "packages/aurora-ui/src/local-data/browser-backend-transfer.test.ts": "bea7a9ecd3e40e0e7a7df5f97ed903b131d1945d4884086deb57d9f9ee7fba02",
+    "packages/aurora-ui/src/local-data/browser-indexeddb.test.ts": "6daae1c9c80f16752fbac4e3828faa61e45a9bee6b64dbe328aea101caa4fc66",
+    "packages/aurora-ui/src/local-data/browser-indexeddb.ts": "97cddf48c42a13063715f01e58796edd4c0f2d6e8139ecfd9f676a4a8f3163af",
+    "packages/aurora-ui/src/local-data/browser-sqlite-worker-client.test.ts": "ffe70f5ceee32568abfb739e09db6cb127d2482b25fa52a98184a8764c48f2f1",
+    "packages/aurora-ui/src/local-data/browser-sqlite-worker-client.ts": "8947cc701596d22658645109f02fd494f72b1f0382aff899ea51b834a5c9889c",
+    "packages/aurora-ui/src/local-data/browser-sqlite-worker.test.ts": "520fc9d351d0143bd259de99ea86c05859d54cce61d54fe1b005e25bf69b069b",
+    "packages/aurora-ui/src/local-data/browser-sqlite-worker.ts": "aa2f677c80431862d290aabfc8fb33ec4a8048be9d45b4aff22a706d150a0591",
+    "packages/aurora-ui/src/local-data/clear-device-data.test.ts": "4e7574dbde7fc4a6356505c431c2fe53cf77f41cae770aaa2de73beb026b739d",
+    "packages/aurora-ui/src/local-data/local-data-ui.test.tsx": "84926722bb7a2d035e1753fd3f9e48661cc319593789cc2725fedba4d93e0411",
+    "rust/crates/aurora-voice-core/src/node_policy.rs": "78ecfd78ef257c516897ac02cf4195e4909b925cc8cdb88919ae4e68c39f42d0",
+    "rust/crates/aurora-voice-core/tests/fixtures/node_policy_v2_default.json": "cf0198f3e42b2b3e62c44ddfb00946c90852e2346982bc62d21a9b88c50281fe",
+    "rust/crates/aurora-voice-core/tests/node_policy.rs": "aa37a52694eb977e0a1141e9f4f16518990402c8e178b455fa6055dccf35e631"
+  },
+  "validation": {
+    "root_head": "fd616737b707ea7dc02fa6bba594ba7ee4ee5b61",
+    "sole_serial_validator": "root",
+    "steps": [
+      {
+        "name": "sdk-build",
+        "command": [
+          "pnpm",
+          "--filter",
+          "@aurora/client",
+          "build"
+        ],
+        "exit_code": 0,
+        "seconds": 12.47,
+        "log": "PER289-ADAPTERS-SERIAL-V5-sdk-build.log",
+        "log_sha256": "0709120929f450918ae0dfbf21b18436d72df2b8c705b4f2989f22322842efb5"
+      },
+      {
+        "name": "sdk-transcripts",
+        "command": [
+          "pnpm",
+          "--filter",
+          "@aurora/client",
+          "exec",
+          "vitest",
+          "run",
+          "--maxWorkers=1",
+          "tests/local-data-product-transcripts.test.ts",
+          "tests/local-data-export.test.ts",
+          "tests/local-data-migrations.test.ts"
+        ],
+        "exit_code": 0,
+        "seconds": 2.23,
+        "log": "PER289-ADAPTERS-SERIAL-V5-sdk-transcripts.log",
+        "log_sha256": "8b5c31a8a0d82e76f93a5def6263b51c0a7f467b737b9199ab43cc7875af6177"
+      },
+      {
+        "name": "ui-storage",
+        "command": [
+          "pnpm",
+          "--filter",
+          "@aurora/ui",
+          "exec",
+          "vitest",
+          "run",
+          "--environment",
+          "node",
+          "--maxWorkers=1",
+          "src/local-data/browser-indexeddb.test.ts",
+          "src/local-data/browser-sqlite-worker.test.ts",
+          "src/local-data/browser-sqlite-worker-client.test.ts",
+          "src/local-data/clear-device-data.test.ts",
+          "src/local-data/browser-backend-transfer.test.ts",
+          "src/local-data/local-data-ui.test.tsx"
+        ],
+        "exit_code": 0,
+        "seconds": 9.53,
+        "log": "PER289-ADAPTERS-SERIAL-V5-ui-storage.log",
+        "log_sha256": "6c20f7b88af08bf3ba4573899b16a2b16867eb8deaa3c675ea45e17cde7ce1fa"
+      },
+      {
+        "name": "tauri-adapter",
+        "command": [
+          "pnpm",
+          "--filter",
+          "@aurora/tauri-ui",
+          "exec",
+          "vitest",
+          "run",
+          "--environment",
+          "node",
+          "--maxWorkers=1",
+          "src/local-data/tauri-local-data.test.ts"
+        ],
+        "exit_code": 0,
+        "seconds": 1.63,
+        "log": "PER289-ADAPTERS-SERIAL-V5-tauri-adapter.log",
+        "log_sha256": "7557475f0069fceab6bba25fa031dac2e4b179ea33a49866be88bd12d4e43db1"
+      },
+      {
+        "name": "native-storage",
+        "command": [
+          "cargo",
+          "+1.88.0",
+          "test",
+          "--locked",
+          "--offline",
+          "--manifest-path",
+          "apps/aurora-tauri/src-tauri/Cargo.toml",
+          "--lib",
+          "local_data_native",
+          "--",
+          "--test-threads=1"
+        ],
+        "exit_code": 0,
+        "seconds": 150.81,
+        "log": "PER289-ADAPTERS-SERIAL-V5-native-storage.log",
+        "log_sha256": "80314daed06665df0c718487b4a65d996a308fae215032a7895327c58363051e"
+      },
+      {
+        "name": "diff",
+        "command": [
+          "git",
+          "diff",
+          "--check"
+        ],
+        "exit_code": 0,
+        "seconds": 0.13,
+        "log": "PER289-ADAPTERS-SERIAL-V5-diff.log",
+        "log_sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+      }
+    ],
+    "generated_restored_exactly": true,
+    "head_unchanged": true,
+    "index_unchanged": true,
+    "source_changed_paths": []
+  },
+  "additional_checks": {
+    "lint": "make lint exit0",
+    "docs": "make check-docs exit0 (77 markdown files)",
+    "tracked_artifacts": "make check-tracked-artifacts exit0",
+    "sdk_ui_tauri_typecheck": "FoundationV1 SDK and AdapterV2 UI / AdapterV3 Tauri exit0"
+  },
+  "independent_reviews": {
+    "PER289-FOUNDATION-SOL-V2": {
+      "review": "**APPROVE** \u2014 SDK/config/schema foundation slice only.\n\nThe single per-segment loop now performs authorized decryption for the last admitted record. The updated regression targets `maxScanRecords: 1` and asserts one scanned and one decrypted record.\n\nThe capability-reason change preserves unsupported ambient capture and foreground-only notification behavior. No new concrete blocker found.\n\nSource-only review; executable validation remains Root-owned. No native runtime or aggregate acceptance claimed.",
+      "model_verification": {
+        "actual_turn_context": {
+          "model": "gpt-6.1-sol",
+          "effort": "high"
+        },
+        "thread_id": "01a12211-1227-77a1-ad6f-ddb068ad43fa",
+        "input_sha256": "06ce7cb7df178134b1625d9ffb4ba37db8737d4f2ef9bc4c046f0ce6755eb65b",
+        "completed_item_types": [
+          "agent_message"
+        ],
+        "tool_execution_items": 0
+      }
+    },
+    "PER289-ADAPTERS-SOL-V2": {
+      "review": "APPROVE\n\nBoth prior blockers are repaired: native `create_session` returns the typed record, and SQLite savepoints support existing transactions. The populated IndexedDB upgrade preserves records; fractional confidence handling remains narrowly scoped. Registered migration 4 matches canonical `0004`.\n\nNo remaining concrete source blockers in the supplied V5 packet. Approval covers the archive/config foundation only.",
+      "model_verification": {
+        "actual_turn_context": {
+          "model": "gpt-6.1-sol",
+          "effort": "high"
+        },
+        "thread_id": "01a12217-9893-7911-8970-0d754a93a2f7",
+        "input_sha256": "3bd287b282e90084aae838cd745ddfda90fc9585a8dfafdfec9f88fb0b97a441",
+        "completed_item_types": [
+          "agent_message"
+        ],
+        "tool_execution_items": 0
+      }
+    },
+    "PER289-ADAPTERS-SOL-V3": {
+      "review": "APPROVE. The default now follows the canonical migration version while preserving explicit `options.schemaVersion`. No concrete blocker in this diff; prior approval stands.",
+      "model_verification": {
+        "actual_turn_context": {
+          "model": "gpt-6.1-sol",
+          "effort": "high"
+        },
+        "thread_id": "01a12217-9893-7911-8970-0d754a93a2f7",
+        "input_sha256": "3fa0cbd30fec350e71b28cab7d709c70c8007a99023c32eecd115f6c88351b29",
+        "completed_item_types": [
+          "agent_message"
+        ],
+        "tool_execution_items": 0
+      }
+    }
+  },
+  "preserved_namespace": "refs/aurora-handoff/20261006-8dde6260300f/",
+  "preserved_refs": {
+    "codex/aurora-backend-handoff-20261006": "d8f734cd191256523009f1f748ce84c947e959ea",
+    "codex/aurora-frontend-improvements": "7b3cf46a90e85abb6883dd5ecddab5e9714de216",
+    "codex/aurora-handoff-20261006": "38f1796528e73008d58a0455ffe558d7f235fee5",
+    "handoff/frontend-consolidated": "d7b79613b3e8bdc3eea7905128a7b639675af7ac",
+    "main": "2a7d0da4f6fb1054e6bdc0ad6cde83fdd954ca69",
+    "recovery/frontend-dirty": "b901253655f6c811875967705845e8d504252427",
+    "recovery/luna-per286-mesh": "1edbf17b519c1c0ad90470a5f1e391028c51b388",
+    "recovery/main-dirty": "ece8d9eddd533a80c32af2c3799b7a80ed4fb030",
+    "recovery/per277-after": "839481b574898127a74ced6ec55bbcd9cc651b47",
+    "recovery/per277-before": "93d229f3480c48027f47f4ad419ff5bda6cc28b9",
+    "recovery/per278-hello-repair": "827c9a12305e6e30941ae4a9238be48b4f9375d9",
+    "recovery/per286-canonical-recovery": "131866b57e0b9f9b907efb878fd5145d83c8af43",
+    "recovery/per286-ios": "a2e816da7414fc1e713f76764c94d60eb8d44449",
+    "recovery/per286-ios-ci": "ba5ad815a11a4127b9e9466e747c424cdc055276",
+    "recovery/per286-ios-finite": "e9929fc8319393a892f03a0ee1086265b892102c",
+    "recovery/per286-native-receipts": "21476061efb1813bc438be02356918a048846749",
+    "recovery/per286-runtime-announcements": "308c1186f41f04c46a915c9b2ca54646c2ff3bfa",
+    "recovery/per286-tts-runtime-announcement": "c01b77e3d43f5efd6dfce5a22a2be3e2b765e428"
+  },
+  "bundle_sha256_previously_verified": "39d4ba4b7f95e7ffdbded21265dd71948ca826f92f845d90d0438c93507152a3",
+  "limitations": [
+    "Native capture caller, Android notification/settings connection are the next slice; no production background claim from prepared archive handle",
+    "No new packaged Android/iOS runtime evidence; final Astra visual approval remains open",
+    "Formal aggregate acceptance unchanged; no push/merge/deploy"
+  ],
+  "next_work": "PER290: connect saved settings to one Android notification/service and STT-only encrypted archive writes. Root owns admission/storage/SDK integration; existing Luna lanes own UI and native source; focused serial validation only."
+}

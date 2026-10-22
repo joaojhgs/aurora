@@ -1,0 +1,57 @@
+{
+  "objective": "tcc:20261013:submission-20261030",
+  "run": "run_e6054e76e9fc",
+  "task": "task_d7ea336050cf",
+  "dispatch": "ctx_37b4d0a3c14f",
+  "root_request": "msg_e0d21e60cef3",
+  "reply_reference": "msg_60c9b1f12ae3",
+  "current_placement": {
+    "source": "current-profile orca_dispatch_read placements",
+    "observedAt": 1792039565683,
+    "nextOffset": null,
+    "host": "ssh:ssh-sem-notebook-personal",
+    "workspace": "03d8a475-d62e-43b3-8885-e382b313ab1b::/home/developer/projects/aurora",
+    "path": "/home/developer/projects/aurora",
+    "repo": "03d8a475-d62e-43b3-8885-e382b313ab1b",
+    "project": "github:joaojhgs/aurora",
+    "kind": "git",
+    "scope_actor": "root",
+    "physical_or_current_build_ownership_proof": false
+  },
+  "current_session_inventory": {
+    "source": "current-profile orca_dispatch_read session-list",
+    "observedAt": 1792039558967,
+    "coverage": "registered-terminal-inventory",
+    "truncated": false,
+    "nextOffset": null,
+    "notebook_terminal": null,
+    "notebook_incarnation": null,
+    "interpretation": "No matching notebook receiver registered in this result. Not proof host/session absent, stopped or exited. Desktop semdev terminals are not notebook evidence."
+  },
+  "report_read": "/home/developer/projects/aurora/docs/experiments/tcc-20261013-submission-20261030/monitor/personal-notebook-admission-20261015T0440/REPORT.md",
+  "report_evidence": {
+    "Portugal": "owner-requested designation only; country unverified",
+    "empty_setup_receipt": "d2e7dd58-c84d-4778-b97f-4bbaaf609cee",
+    "saved_runtime_enumeration": "previously forbidden; not retried",
+    "personal_work_shared_hardware": "stated in report, not independently mapped here"
+  },
+  "retained_resource_metadata_NOT_CURRENT": {
+    "collectedAt": 1791992550051,
+    "source": "prior Personal Orca resources result",
+    "logical_alias": "notebook-personal",
+    "cpuCoreCount": 12,
+    "cpuUsagePercent": 11.016970239872599,
+    "loadAverage1m": 2.98,
+    "totalMemory": 32792059904,
+    "availableMemory": 18275778560,
+    "diskTotal": 1088326557696,
+    "diskAvailable": 70237962240,
+    "diskUsagePercent": 88.45477705202728,
+    "reservation_or_admission_proof": false
+  },
+  "unknown_current": ["exact receiver terminal/incarnation/provider", "physical host/distrobox binding", "country provenance", "CPU/GPU/VRAM/RAM/storage/network/power/thermal admission", "reservation", "current app/source/model/backend/acceleration identities and hashes"],
+  "blocker": "Registered notebook placement exists, but exact notebook receiver and physical/resource/model/ownership admission receipts remain missing. Existing route supplies inventory metadata only.",
+  "actions_excluded": ["host/resource probes", "denied Manager reads or retries", "company access", "new connections/grants/credentials", "execution/build/test/model/device/transfer", "task/session adoption or lifecycle changes", "plan/thesis edits", "Telegram"],
+  "individual_campaigns": "untouched",
+  "cross_device_gate": "all required individual audio/surface seals; unchanged"
+}

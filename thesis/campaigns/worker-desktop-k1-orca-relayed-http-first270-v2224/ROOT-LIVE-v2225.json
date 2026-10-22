@@ -1,0 +1,52 @@
+{
+  "at": "2026-10-21T16:21:08.605417+00:00",
+  "status": "SAME_V2224_REQUESTER_OBSERVED",
+  "counts": {
+    "warmup": {
+      "attempted": 1,
+      "correct": 1,
+      "failed": 0
+    },
+    "measured": {
+      "attempted": 0,
+      "correct": 0,
+      "failed": 0
+    }
+  },
+  "actors": [
+    {
+      "pid": 3736705,
+      "state": "S",
+      "startTicks": 137801780,
+      "matches": true
+    },
+    {
+      "pid": 3736706,
+      "state": "S",
+      "startTicks": 137801781,
+      "matches": true
+    },
+    {
+      "pid": 3736707,
+      "state": "S",
+      "startTicks": 137801782,
+      "matches": true
+    }
+  ],
+  "goalThread": "01a112a5-d6bb-74e2-bf7c-ace73cb513b5",
+  "goalStatus": "active",
+  "manifestSha256": "40a606f2113708bbb5bf6cc528f038c00a35a8944ebfb1e424c93215dc922294",
+  "sameProviderReceiver": {
+    "pid": 1440196,
+    "startTicks": 35427408
+  },
+  "remainingK1HTTPBeforeNewMeasurement": 720,
+  "newPlanned": 270,
+  "globalFirst": 181,
+  "globalLast": 450,
+  "rootDeadlineUtc": "2026-10-21T23:36:07.231887+00:00",
+  "providerDeadlineUtc": "2026-10-21T22:45:52.468654+00:00",
+  "noClockReset": true,
+  "phoneNotGate": true,
+  "next": "Observe15 strict fullaudio warmups, saved native joins/capacity, then firstnew181; no extra tests"
+}

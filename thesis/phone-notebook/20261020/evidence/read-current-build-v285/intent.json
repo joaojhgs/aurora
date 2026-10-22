@@ -1,0 +1,12 @@
+{
+  "controlDeadline": "2026-10-22T10:40:00Z",
+  "explicitNewline": true,
+  "host": "ssh:ssh-sem-notebook-personal",
+  "incarnation": "328cd72f-c7ea-49ff-a2db-b9275b085037",
+  "remoteResult": "/home/developer/projects/aurora/thesis/phone-notebook/20261020/evidence/read-current-build-v285.json",
+  "rootAdmissionMessage": "existing-v2398 reconcile single isolated Android build, no duplicate launch",
+  "script": "scripts/read_current_build_v285.py",
+  "scriptSha256": "9a7211b08a6304552fea3606c09578c9283142e0a8d2fc6e4495e4dc26e50b36",
+  "singleSend": true,
+  "terminal": "term_a2ed5feb-7c92-48e4-bd88-d1b0e6737989"
+}

@@ -1,0 +1,42 @@
+{
+  "at": "2026-10-16T11:37:37.482971+00:00",
+  "schema": "aurora.desktop_frontend_build_custody.v1",
+  "status": "SDK_AND_FRONTEND_BUILD_PASS_NATIVE_RUNTIME_PENDING",
+  "files": [
+    {
+      "path": "BUILD-RECEIPT.json",
+      "bytes": 14530,
+      "sha256": "45c67a18dad37c14d9df067e1a7919fad0a364a440a381049f2969289d581f35"
+    },
+    {
+      "path": "ARCHIVE-MANIFEST.json",
+      "bytes": 567,
+      "sha256": "062b58724bda2a95d6df70e5d6711000c46af4d25ac0c70983fb68f33264036e"
+    },
+    {
+      "path": "step-0.log",
+      "bytes": 112,
+      "sha256": "0709120929f450918ae0dfbf21b18436d72df2b8c705b4f2989f22322842efb5"
+    },
+    {
+      "path": "step-1.log",
+      "bytes": 14239,
+      "sha256": "bbb8dd5c215fc030c2cf698476a7f5e4afd9b3785ddd6da88b00c7a3447ba24d"
+    }
+  ],
+  "effectiveBuildEnvironment": {
+    "NODE_ENV": "development",
+    "COREPACK_ENABLE_NETWORK": "0",
+    "VITE_AURORA_DESKTOP_FILE_AUDIO_E2E": "1"
+  },
+  "runtimeRoleSelectedByBuildEnvironment": false,
+  "oldGeneratedSDKOutputsPreserved": true,
+  "sourceManifestSHA256": "bf5fc09ce538505db36b992f737e47cc6955bb8011b4efa2f6e254bc614697fc",
+  "additionalRootVersionSHA256": "59854984853104df5c353e2f681a15fc7924742f9a2e468c29af248dce45ce03",
+  "scope": "SDK and frontend compilation only; no installed native app, actual model, stage telemetry,900 performance, normal Assistant UI or closed-window lifecycle acceptance",
+  "remaining": [
+    "finish existing source delivery and exact receiver binding",
+    "native dependency/cache/capacity admission and actual Tauri executable build",
+    "actual C06 file-audio main flow with matched models and stage telemetry"
+  ]
+}

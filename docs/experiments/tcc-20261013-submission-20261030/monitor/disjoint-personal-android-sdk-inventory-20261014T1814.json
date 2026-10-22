@@ -1,0 +1,87 @@
+{
+  "observed_at": "2026-10-14T18:15:37.241645+00:00",
+  "root_question": "msg_5c8fbb2af0bf",
+  "delivery_ack": "delivery_6aca8531b474",
+  "root_response": "msg_6e8c5d6b932c",
+  "worker_source": ".git/aurora-handoff-import-20261006/worker-android-sdk-readiness-actual-v415.json",
+  "worker_source_sha256": "16ed486120c2220b175fd0add498f44570e90320e54978441e0f0fa4aaedb30f",
+  "worker_actual_inventory": {
+    "host": "code-worker",
+    "architecture": "aarch64",
+    "tools": {
+      "java": null,
+      "adb": null,
+      "sdkmanager": null,
+      "rustc": "/home/developer/.local/bin/rustc",
+      "rustup": "/home/developer/.local/bin/rustup",
+      "node": "/usr/local/bin/node",
+      "pnpm": "/home/developer/.local/bin/pnpm"
+    },
+    "SDKPathVars": {
+      "ANDROID_HOME": null,
+      "ANDROID_SDK_ROOT": null,
+      "ANDROID_NDK_HOME": null,
+      "AURORA_SHERPA_ONNX_ANDROID_X86_64_LIB_DIR": null,
+      "AURORA_LLAMA_CPP_ANDROID_X86_64_LIB_DIR": null
+    },
+    "knownSdkPaths": {
+      "/opt/android-sdk": false,
+      "/home/developer/Android/Sdk": false,
+      "/home/developer/.local/share/android-sdk": false
+    },
+    "rustc --version": {
+      "exit": 0,
+      "output": "rustc 1.96.0 (ac68faa20 2026-05-25)\n"
+    },
+    "rustup target list --installed": {
+      "exit": 0,
+      "output": "aarch64-unknown-linux-gnu\n"
+    },
+    "node --version": {
+      "exit": 0,
+      "output": "v24.21.0\n"
+    },
+    "pnpm --version": {
+      "exit": 0,
+      "output": "10.25.0\n"
+    }
+  },
+  "inventory_limit": "tool lookup/env/3knownpaths only; not broadSDK/JDK absence or ADB relay failure",
+  "existing_personal_target": {
+    "terminal": "term_8109a3ac-570e-4c3f-a7ac-e68e36764b2b",
+    "incarnation": "468a0928-9867-4612-b5f2-e7631784582d",
+    "fresh_identity_receipt": "41e2359a-1f1b-480e-9b11-b90e5d3ce57e",
+    "connected": true,
+    "writable": true,
+    "request_id": "31b0623f-6d76-437d-810f-bad9dbe874b6",
+    "stage": "input_accepted only; response notverified"
+  },
+  "requested_capability": {
+    "placement": "existing approvedPERSONALphysicallydisjointx86_64 host/worktree/owner; source projectidentity preserved",
+    "jdk": "17",
+    "ndk": "27.0.12077973",
+    "rust": "1.88+Androidtargets",
+    "cache": "sherpa+llama x86_64 Androidnative library caches",
+    "later_root_build": "pnpm --filter @aurora/tauri-ui android:build:voice-live:apk:x86_64"
+  },
+  "actions_allowed_here": "existingPersonalinventory/documentation metadata only, no new host probes, company/deniedManager retry, installs/downloads/build/model/test/adb/device/networkgrant/newterminalworker/sourcewriter/externalfollowup",
+  "waydroid": "existing approveddesktoprelay available perRoot; buildtoolchain distinct fromdeviceaccess; physicalmicunknown",
+  "gpu_progress": {
+    "actual_source": ".git/aurora-handoff-import-20261006/desktop-actual-primary-progress3-v415.json",
+    "sha256": "b3e154635f1a0db9a642590fe139cb4bc3c573d10a18c34bf8dd00d6a7d4507a",
+    "at": "2026-10-14T18:11:31.435478Z",
+    "controller": 2707431,
+    "runner": 2707433,
+    "start_ticks": 62890835,
+    "local_epoch": 1,
+    "measured_correct": 158,
+    "excluded_warm": 5,
+    "pids_present": true,
+    "source_frozen": true
+  },
+  "full_individual_gpu_finished": false,
+  "dual_barrier_ready": false,
+  "run": "run_e6054e76e9fc",
+  "task": "task_d7ea336050cf",
+  "dispatch": "ctx_37b4d0a3c14f"
+}

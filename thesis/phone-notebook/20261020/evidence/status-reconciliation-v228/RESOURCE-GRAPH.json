@@ -1,0 +1,207 @@
+{
+  "schema": "aurora.phone_notebook.resource_graph.v1",
+  "nodes": [
+    {
+      "id": "phone",
+      "description": "OwnerPOCOX7Pro KBX8LNFUBE5XGQRG; authorized USB003/01503:13UTC, API36arm64; not occupied by app turn",
+      "owner": "phone/notebook lane",
+      "exclusiveDuringMeasuredWindow": true
+    },
+    {
+      "id": "notebook-hardware",
+      "description": "skyron-notebook physicalCPU/RAM/GPU/disk/thermal; Work/Personal may share",
+      "owner": "Root resource admission",
+      "quietLease": "UNPROVEN",
+      "temperatureAdmissionC": null,
+      "vulkanGpuUsable": true,
+      "actualGpuExposureReceipt": "evidence/owner-fixed-fresh-check-v90/result.json",
+      "gpuOffloadActuallyExercised": false
+    },
+    {
+      "id": "personal-namespace",
+      "description": "Approved PersonalPodman namespace only; no codingagent",
+      "owner": "phone/notebook lane"
+    },
+    {
+      "id": "wifi-uplink",
+      "description": "Actualnotebook192.168.1.250/24wlp4s0;phonesavedWiFi192.168.1.94/24wlan0enabled00:14UTC;bothroute selections areLAN,noHTTP/P2Pmeasurementyet",
+      "owner": "Root resource admission"
+    },
+    {
+      "id": "adb-control",
+      "description": "Existing Personal127.0.0.1:5037 authorized ownerUSB serial; control only, no daemon/key/security change",
+      "owner": "phone/notebook lane",
+      "measurementTransport": false
+    },
+    {
+      "id": "broker",
+      "description": "Existing approved private broker only; endpoint/profile/session not yet proven for this pair",
+      "owner": "Root existing authority"
+    },
+    {
+      "id": "worker-desktop-k3",
+      "description": "Existing Root-owned requester/provider/build/device/reservation/custody work; unchanged",
+      "owner": "Root",
+      "mayNotBePerturbed": true
+    },
+    {
+      "id": "worker-preparation",
+      "description": "At most100MiB new outputs and >=2GiB free; no heavybuild/download/inference",
+      "owner": "phone/notebook lane"
+    }
+  ],
+  "edges": [
+    {
+      "from": "personal-namespace",
+      "to": "notebook-hardware",
+      "reason": "CPU/RAM/GPU/disk/thermal shared with any Work namespace; aggregate metadata is not isolation"
+    },
+    {
+      "from": "phone",
+      "to": "notebook-hardware",
+      "reason": "All applicable measured cells use this physical pair"
+    },
+    {
+      "from": "phone",
+      "to": "wifi-uplink",
+      "reason": "Direct HTTP and selected ICE topology must be observed, not inferred from ADB"
+    },
+    {
+      "from": "personal-namespace",
+      "to": "wifi-uplink",
+      "reason": "Downloads/transfers/build assets and inference routes can contend"
+    },
+    {
+      "from": "phone",
+      "to": "broker",
+      "reason": "Actual P2P signaling and authorized identity/session required"
+    },
+    {
+      "from": "adb-control",
+      "to": "phone",
+      "reason": "Control/proxy only; never measured transport"
+    },
+    {
+      "from": "wifi-uplink",
+      "to": "worker-desktop-k3",
+      "reason": "Possible uplink/provider contention; Root must admit disjoint window"
+    },
+    {
+      "from": "worker-preparation",
+      "to": "worker-desktop-k3",
+      "reason": "Shared workerCPU/RAM/disk; tiny preparation only"
+    }
+  ],
+  "reservationOwner": "Root only",
+  "noIndependentGlobalLock": true,
+  "collectionOrder": "one same-pair cell at a time; finite feasibility before any900",
+  "at": "2026-10-22T06:03:30.933157+00:00",
+  "temperaturePolicy": "observe_only_owner_correction",
+  "ownerSleepStartSignal": "direct-owner-existing-session-20261022T045725.269652Z",
+  "historicalPendingResourceHandoff": {
+    "schema": "aurora.phone_notebook.resource_handoff_queue.v1",
+    "status": "ENQUEUED_PENDING_ACTUAL_RESOURCE_RELEASE",
+    "ownerRequest": "continue now should be fix, finish setup; no900untilsleepstart",
+    "rootRequestMessage": "msg_bffcad56b7d4",
+    "createdAtUtc": "2026-10-22T00:13:03Z",
+    "monitorNotificationMessage": "msg_30f288b3477a",
+    "monitorNotificationAtUtc": "2026-10-22T00:17:05Z",
+    "usbRecoveryMessage": "msg_7114f34553d8",
+    "savedWifiSuccessMessage": "msg_2b55c7cce4ff",
+    "source": {
+      "exactLocalCommit": "ebde3a8acf6315f920d03593845f17a1fc65a733",
+      "remoteSha": null,
+      "maxBytes": 12582912,
+      "maxSeconds": 120
+    },
+    "assets": {
+      "exactBytesIncludingAudio": 774675150,
+      "maxBytesPerSecond": 2097152,
+      "maxSeconds": 600,
+      "manifest": "SETUP-DEPENDENCIES.json"
+    },
+    "notebookWork": {
+      "maxJobs": 2,
+      "maxSeconds": 1200,
+      "noModelRuntimeSubstitution": true
+    },
+    "releaseTrigger": "Root actual natural currentHTTP terminal+sealed state and explicit relevant resource release",
+    "actualUtcTransferWindow": null,
+    "currentActualReply": null,
+    "sourceOrModelTransferStarted": false,
+    "pilotStarted": false,
+    "ownerSleepStartSignal": null,
+    "noMainInterruption": true,
+    "settledDispatchReused": false
+  },
+  "historicalOfflineLease": {
+    "receipt": "evidence/NOTEBOOK-OFFLINE-RESOURCE-LEASE-v2328.json",
+    "message": "msg_fb6e25f5d33a",
+    "actualResult": "evidence/admitted-offline-runtime-20261022T000353/result.json",
+    "classification": {
+      "expectedLlamaVersion": "0.3.19",
+      "foundLocalCachedVersions": [
+        "0.3.34"
+      ],
+      "exactVersionFoundInBoundedCatalog": false,
+      "substitutionInstalled": false,
+      "requiredSourceCommitAlreadyLocal": false,
+      "readOnlyReusedMatchingPackageCount": 5,
+      "newModelCalls": 0,
+      "newDownloads": 0,
+      "ownBuildProcessesActive": 0
+    }
+  },
+  "historicalSharedResourceDecision": {
+    "message": "msg_ada0dc77fde8",
+    "status": "SHARED_STAGING_BUILDS_INFERENCE_NOT_ADMITTED_DURING_FROZEN_HTTP",
+    "requestMessage": "msg_d8fca341321f",
+    "releaseRequiredBeforeSharedWork": true
+  },
+  "currentSetupAdmission": {
+    "owner": "Direct explicit setup/pilot/public pinned downloads + temperature override",
+    "rootAcknowledgement": "msg_25376e75fa33",
+    "maxJobs": 2,
+    "maxBuildSecondsPerStage": 1200,
+    "sourceCopyComplete": true,
+    "bulkWorkerDesktopModelTransferNeeded": false,
+    "sourceCopyReceipt": "evidence/source-delta-v33-copy-v2353-20261022/receiver-receipt.json",
+    "mainWorkerDesktopReserved": true,
+    "measurementWindowAdmitted": false,
+    "pendingInferenceCollectionRequest": "msg_204c54ccc425"
+  },
+  "activePrerequisites": [
+    "actual native PHONE file-audio correctness and cancellation",
+    "secure same-pair HTTP/P2P eligibility",
+    "fresh Notebook resource-owner decision and actual loaded effective backend",
+    "pilot capacity before cumulative collection"
+  ],
+  "sourceClosureResolved": true,
+  "applicationSourceIdentity": "ebde3a8acf6315f920d03593845f17a1fc65a733 + source-closure-overlay-v2383 + android-bundled-model-rename-v1 + android-node-policy-initial-publication-v2",
+  "sourceOverlayReceipt": "evidence/root-approved-source-closure-copy-v81/result.json",
+  "ownerAvailability": {
+    "schema": "aurora.owner.availability.v1",
+    "recordedAt": "2026-10-22T05:03:20.263104+00:00",
+    "authority": "direct owner message in existing phone setup session",
+    "startUtc": "2026-10-22T04:57:25.269652Z",
+    "endUtc": "2026-10-22T11:57:25.269652Z",
+    "durationSeconds": 25200,
+    "explicitStartSignal": true,
+    "conditionalAutomaticStart": true,
+    "conditions": [
+      "actual native route/model/correctness/cancellation readiness",
+      "qualified unchanged cohort",
+      "resource noninterference"
+    ],
+    "includesSetupPilotCollection": true,
+    "automaticExtensionAllowed": false,
+    "priority": [
+      "K2",
+      "K3",
+      "K1",
+      "LOCAL"
+    ],
+    "urgentUpdateConsentProofRequired": true,
+    "approvalMessage": "direct-owner-existing-session-20261022T045725.269652Z"
+  }
+}

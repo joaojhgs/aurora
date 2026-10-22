@@ -1,0 +1,13 @@
+{
+  "at": "2026-10-16T15:42:34.133061+00:00",
+  "startedAt": "2026-10-16T15:41:54.968413+00:00",
+  "command": [
+    "pnpm",
+    "--filter",
+    "@aurora/tauri-ui",
+    "typecheck"
+  ],
+  "exitCode": 0,
+  "error": null,
+  "scope": "Affected saved-profile reuse tests and Tauri types only. Existing stored language representation is canonical lowercase; no product normalization change or unrelated replay."
+}

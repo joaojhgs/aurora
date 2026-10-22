@@ -1,0 +1,18 @@
+{
+  "at": "2026-10-16T04:01:51.232614+00:00",
+  "scope": "Original monitor-owned methodology/registry fullread and byte-identical Root packaging; no competing plan edits",
+  "source": "/home/developer/projects/aurora/.omx/evidence/orca-monitor-20261010/surface-applicability-20261016T0353",
+  "fullreadPrefixBytes": 445046,
+  "fullreadPrefixSHA256": "8a6bcc54fa3b8b18e99c8dbc8471a0d886df6be56013f8d8bd1a0911abd5c230",
+  "priorFullreadBytes": 441128,
+  "priorPrefixUnchanged": true,
+  "newDeltaReadBytes": 3918,
+  "newDeltaSHA256": "5db2dd526581ff06881725eebf9c398a449a8b33e7c381201b89b7af9ae391c4",
+  "sourceScope": "through30.41.1",
+  "canonicalPath": "thesis/methodology/owner-requirements-20261016-8a6bcc54.md",
+  "registryFullreadBytes": 10182,
+  "registrySHA256": "bd06b744c8c8067af8327f68fb89087aa6497bf3d3f23a7a661292e705e82af4",
+  "canonicalRegistry": "thesis/matrix/existing-surface-applicability-20261016-bd06b744.md",
+  "newConditionsCreated": false,
+  "newRuntimeOrMeasurements": false
+}

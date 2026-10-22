@@ -1,0 +1,29 @@
+{
+  "status": "FINITE120_PREFIX_PREPARED_NOT_LAUNCHED",
+  "ownerRecoveryEvidence": "thesis/evidence/orca-desktop-recovery-20261018T2221/ACTUAL-PERSONAL-COMMAND-RESULT.json",
+  "old184ForecastSeconds": 8238.719302368001,
+  "finite120ConservativeForecastSeconds": 5790.469110239999,
+  "range": [
+    717,
+    836
+  ],
+  "stillRequiredAfterThisWindow": [
+    837,
+    900
+  ],
+  "old716": {
+    "correct": 714,
+    "failed": 2
+  },
+  "conditionTarget": 900,
+  "cumulativeUsedUnchanged": 23578.905962333003,
+  "sameScientificParametersSha256": "f683a1c7e330076240bbb1d495b8f5b8af3d03cc70bb5a931980ebb142a4a7a7",
+  "newModelRequests": 0,
+  "providerRestarted": false,
+  "providerDeadlineUnchanged": "2026-10-19T00:08:53.328388+00:00",
+  "allPriorSourceReviewsClosed": "Only new count/end/window/namespace delta for review",
+  "sourceDelta": "FINITE-WINDOW-DELTA.patch",
+  "sourceCopies": "execution-sources-v1610-r1/MANIFEST.json",
+  "sameQualifiedCollectorBody": "Namespace-only derivation from actual existing stagedV1573 SHA0382e56a",
+  "newCollectorSha256": "69d9300f514fb129347e4fad88cd22a65e7d936fe0a47ab3d01419012e9545ff"
+}

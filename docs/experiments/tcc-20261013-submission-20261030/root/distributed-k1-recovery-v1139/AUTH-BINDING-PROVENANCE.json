@@ -1,0 +1,12 @@
+{
+  "source": "v832-existing-v692-fixture-config-RESULT.json/files[0]/gatewayApi/token_secret",
+  "sourceConfigPath": "/tmp/aurora-root-padded-http900-v692/input/launch-config.json",
+  "sourceConfigSha256": "9040579459ec1415a5b0b59833f59327803e48d277f630f20aeb07c8e9061844",
+  "matchesOriginalFrozenV692InputHash": true,
+  "originalK1Derivation": "V825 copied exact V692 launch config and changed host/port only",
+  "sameOriginalPersonalBindingRecovered": true,
+  "differsFromWorkerFixture": true,
+  "valueLogged": false,
+  "noNewCredentialGenerated": true,
+  "priorWorkerFixtureDraftNeverAdmittedOrLaunched": true
+}

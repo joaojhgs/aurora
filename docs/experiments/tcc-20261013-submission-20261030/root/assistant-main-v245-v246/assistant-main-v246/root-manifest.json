@@ -1,0 +1,38 @@
+{
+  "stage": "real-Assistant-local-bus-authenticated-API-pilot",
+  "objective": "tcc:20261013:submission-20261030",
+  "sourceCommit": "5782746afba213f6b36907db2f09f0017625e218",
+  "sourceStatusBefore": " M .omx/ultragoal/ORCA-COORDINATION.md\n M .omx/ultragoal/ledger.jsonl\n?? docs/experiments/\n?? scripts/experiments/\n?? tests/unit/tools/test_assistant_measurement_records.py\n",
+  "sourceHashes": {
+    "scripts/experiments/assistant_local_api_pilot.py": "dff6012ad92870065af9748bfbfd58d987ece8e5ba074d6bde3fc73ba9f59da4",
+    "scripts/experiments/assistant_measurement_records.py": "2648b5579c487e15936bf2eafd70ae8b63db5567915ff4c1c1b318989da2a646"
+  },
+  "dirtyTrackedDiffSha256": "9935f151691a13f05c1fe081e13ae5c64d42b11ea29618d967d07c17676ae2eb",
+  "command": [
+    "flock",
+    "--nonblock",
+    "/tmp/aurora-global-build.lock",
+    "timeout",
+    "--signal=INT",
+    "--kill-after=10s",
+    "600s",
+    "/home/developer/projects/aurora/.venv/bin/python",
+    "scripts/experiments/assistant_local_api_pilot.py",
+    "--model-path",
+    "/home/developer/projects/aurora/.artifacts/local-inference/models/Qwen3.5-0.8B-Q4_0.gguf",
+    "--output",
+    "/home/developer/projects/aurora/.git/aurora-handoff-import-20261006/assistant-main-v246/requests.jsonl"
+  ],
+  "startedAt": "2026-10-14T00:42:30.496008+00:00",
+  "deadlineSeconds": 600,
+  "serialOwner": "existing Aurora Root",
+  "hostPseudonym": "coding-worker",
+  "hostArchitecture": "aarch64",
+  "logicalCpus": 2,
+  "loadAvg": [
+    3.17236328125,
+    3.65380859375,
+    4.11376953125
+  ],
+  "scope": "same-host real production Assistant LocalBus and authenticated localhost API pilot; no mesh/UI/mobile/voice or clean-condition stable tails"
+}

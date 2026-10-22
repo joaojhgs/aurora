@@ -1,0 +1,30 @@
+{
+  "version": "V498 SOURCE ONLY",
+  "files": [
+    {
+      "path": "README.md",
+      "bytes": 3531,
+      "sha256": "8a403dee41d50c759953f9429bc043f7436a70d6442c9711b8d2a91f52297578"
+    },
+    {
+      "path": "REVIEW-APPROVED.md",
+      "bytes": 1742,
+      "sha256": "698a89192346f2cfe172f0f0216b875a59eab7cd07c733ac25460ecb6ccdcf24"
+    },
+    {
+      "path": "REVIEW.md",
+      "bytes": 3710,
+      "sha256": "a4c00de7b5b2d3d9c969870a977c319be4bc570c5a07f4cd4c1738df2b83787a"
+    },
+    {
+      "path": "ROOT-STATUS.md",
+      "bytes": 1733,
+      "sha256": "3c0f9f3baaac4e75c27ca139742bcca55fa376232662fa97c40f15d39a2c1af7"
+    },
+    {
+      "path": "STATIC-ADMISSION.json",
+      "bytes": 676,
+      "sha256": "b37e377fd6b581d6a328275381cde8407579f647840fb9ef1b779e22bae92540"
+    }
+  ]
+}

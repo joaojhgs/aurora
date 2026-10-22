@@ -1,0 +1,12 @@
+{
+  "controlDeadline": "2026-10-22T07:10:00Z",
+  "explicitNewline": true,
+  "host": "ssh:ssh-sem-notebook-personal",
+  "incarnation": "328cd72f-c7ea-49ff-a2db-b9275b085037",
+  "remoteResult": "/home/developer/projects/aurora/thesis/phone-notebook/20261020/evidence/reconcile-native-pack-v206.json",
+  "rootAdmissionMessage": "owner-exact-current-native-prepare-phase-failure-and-only-public-asset-state",
+  "script": "scripts/reconcile_native_pack_v206.py",
+  "scriptSha256": "13beda961bd03240efa0b64a60d921430cf8a8d0507890cfc0e5a8df6f630895",
+  "singleSend": true,
+  "terminal": "term_a2ed5feb-7c92-48e4-bd88-d1b0e6737989"
+}

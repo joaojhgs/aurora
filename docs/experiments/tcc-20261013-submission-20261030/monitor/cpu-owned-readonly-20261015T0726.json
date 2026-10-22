@@ -1,0 +1,51 @@
+{
+  "at": "2026-10-15T07:27:37Z",
+  "run": "run_e6054e76e9fc",
+  "task": "task_d7ea336050cf",
+  "dispatch": "ctx_37b4d0a3c14f",
+  "identityObservedAt": "2026-10-15T07:25:50.138249Z",
+  "progressObservedAt": "2026-10-15T07:26:18.695793Z",
+  "readOnly": true,
+  "processes": [
+    {
+      "pid": 2232517,
+      "ppid": 1,
+      "state": "S",
+      "startAt": "2026-10-15T04:00:53.110000Z",
+      "startMatchesOriginalWithin10s": true,
+      "cmdlineMatchesKnownCampaignOrSource": true,
+      "confirmedOriginalLive": true,
+      "RSSkB": 20324,
+      "HWMkB": 20324,
+      "threads": 1
+    },
+    {
+      "pid": 2232566,
+      "ppid": 2232517,
+      "state": "S",
+      "startAt": "2026-10-15T04:00:54.100000Z",
+      "startMatchesOriginalWithin10s": true,
+      "cmdlineMatchesKnownCampaignOrSource": true,
+      "confirmedOriginalLive": true,
+      "RSSkB": 1732712,
+      "HWMkB": 1931880,
+      "threads": 15
+    }
+  ],
+  "progressPath": ".git/aurora-handoff-import-20261006/cpu-audio-campaign-v491/runtime/campaign/progress.json",
+  "progress": {
+    "status": "running",
+    "attempted": 270,
+    "warmupsAttempted": 15,
+    "measuredAttempted": 255,
+    "plannedMeasured": 900,
+    "unattemptedMeasured": 645,
+    "lastAttemptStatus": "completed_correct",
+    "aggregateOutcomeCounts": null
+  },
+  "noCaseAggregationOrInferenceRequests": true,
+  "noEnvironmentOrSecretsReadOrPrinted": true,
+  "noRuntimeInputsChanged": true,
+  "monitorGoalActive": true,
+  "workerDoneSent": false
+}

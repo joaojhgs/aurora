@@ -1,0 +1,79 @@
+{
+  "at": "2026-10-22T08:15:55.832016+00:00",
+  "campaignCurrent": {
+    "at": "2026-10-22T08:15:41.144953+00:00",
+    "companion": {
+      "measured": {
+        "attempted": 43,
+        "correct": 43,
+        "failed": 0,
+        "harnessErrorsIncludedInFailed": 0,
+        "incorrectIncludedInFailed": 0,
+        "offered": 43,
+        "planned": 900,
+        "timeouts": 0,
+        "unstarted": 857
+      },
+      "warmup": {
+        "attempted": 1,
+        "correct": 1,
+        "failed": 0,
+        "harnessErrorsIncludedInFailed": 0,
+        "incorrectIncludedInFailed": 0,
+        "offered": 1,
+        "planned": 1,
+        "timeouts": 0,
+        "unstarted": 0
+      }
+    },
+    "completePairedCapsules": 44,
+    "elapsedSeconds": 1763.77436659,
+    "lastIndex": 43,
+    "lastNativeParent": "d3a951384c05ea1c8a7d6185f3d2948c",
+    "lastOrdinal": 44,
+    "manifestSha256": "316d4cc09adc44d0104dca8ac1f2a966347588ffef37bc2fa809ec14fd5efff8",
+    "phase": "measured",
+    "pid": 281887,
+    "primary": {
+      "measured": {
+        "attempted": 43,
+        "correct": 43,
+        "failed": 0,
+        "harnessErrorsIncludedInFailed": 0,
+        "incorrectIncludedInFailed": 0,
+        "offered": 43,
+        "planned": 900,
+        "timeouts": 0,
+        "unstarted": 857
+      },
+      "warmup": {
+        "attempted": 1,
+        "correct": 1,
+        "failed": 0,
+        "harnessErrorsIncludedInFailed": 0,
+        "incorrectIncludedInFailed": 0,
+        "offered": 1,
+        "planned": 1,
+        "timeouts": 0,
+        "unstarted": 0
+      }
+    },
+    "status": "running"
+  },
+  "controlOwnership": "Requester controller only; Root made no Desktop PTY or phone/device command",
+  "earlierCheck": "Actual terminal, failure, stale progress or resource alarm",
+  "freeBytes": 2688147456,
+  "nativeGoalId": "01a112a5-d6bb-74e2-bf7c-ace73cb513b5",
+  "nativeGoalStatus": "active",
+  "nextAction": "Continue original paired measured collection; after natural terminal reconcile raw/EOF, analyze saved populations and retire owned provider before next cell",
+  "nextMaximumCheck": "2026-10-22T08:20:55.832016+00:00",
+  "phoneOwner": "term_1f27be31-0284-4366-bb91-30fe538cd30e; ebde+v2383 source handoff closed",
+  "requester": {
+    "pid": 281887,
+    "startTicks": "143363140",
+    "state": "S"
+  },
+  "sameFrozenSourceSettingsAndClock": true,
+  "savedAnalysis": "SAVED-ANALYSIS-REPRODUCIBILITY-v2433.json",
+  "status": "VERIFIED_RUNNING_WAIT"
+}

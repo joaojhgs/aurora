@@ -1,0 +1,44 @@
+\chapter{Conclus\~{o}es}
+\label{chap:conclusoes}
+
+\section{S\'{i}ntese do Trabalho}
+\label{sec:sintese-trabalho}
+
+Esta disserta\c{c}\~{a}o apresentou a evolu\c{c}\~{a}o do Aurora de assistente local para uma arquitetura orientada a servi\c{c}os e preparada para malha entre pares. O ponto de partida foi um assistente com palavra-chave, transcri\c{c}\~{a}o, orquestra\c{c}\~{a}o de modelos de linguagem, s\'{i}ntese de voz, interface, \textit{plugins} e \gls{MCP} \cite{aurora_repo}. O trabalho desenvolvido reorganizou essa base em contratos, bus de mensagens, gateway din\^{a}mico, MeshBus, transporte WebRTC, emparelhamento e permiss\~{o}es por t\'{o}pico.
+
+O problema tratado combina duas necessidades. O utilizador quer manter dados e controlo dentro do seu dom\'{i}nio local e aproveitar dispositivos com capacidades diferentes. A resposta adotada foi uma malha controlada pelo utilizador, na qual cada inst\^{a}ncia anuncia capacidades, negocia confian\c{c}a, aplica permiss\~{o}es e encaminha chamadas apenas quando a pol\'{i}tica permite. Essa solu\c{c}\~{a}o preserva a base local e adiciona partilha seletiva de capacidades.
+
+A revis\~{a}o de contexto mostrou que o projeto fica na interse\c{c}\~{a}o entre assistentes locais, computa\c{c}\~{a}o na borda, microservi\c{c}os, WebRTC, MQTT, RBAC e JWT. O trabalho n\~{a}o prop\~{o}e um novo protocolo WebRTC ou um novo modelo RBAC. Ele integra blocos conhecidos num assistente local com foco em privacidade e controlo de pares.
+
+\section{Cumprimento dos Objetivos}
+\label{sec:cumprimento-objetivos}
+
+O objetivo geral consistia em criar uma base distribu\'{i}da e orientada \'{a} privacidade para o Aurora, permitindo partilha seletiva de capacidades entre dispositivos. A implementa\c{c}\~{a}o cumpre esse objetivo no plano arquitetural e possui valida\c{c}\~{a}o funcional parcial: o reposit\'{o}rio possui servi\c{c}os com contratos, buses local e Redis, MeshBus, gateway din\^{a}mico, WebRTC, emparelhamento, RBAC e permiss\~{o}es associadas a t\'{o}picos \cite{aurora_architecture_doc,aurora_gateway_doc,aurora_handoff_doc}.
+
+O primeiro objetivo espec\'{i}fico foi separar capacidades em servi\c{c}os. O Aurora possui servi\c{c}os para configura\c{c}\~{a}o, base de dados, orquestra\c{c}\~{a}o, \gls{TTS}, \gls{STT}, ferramentas, autentica\c{c}\~{a}o e gateway. O segundo objetivo foi tornar a comunica\c{c}\~{a}o independente do modo de execu\c{c}\~{a}o. LocalBus, BullMQBus e MeshBus fornecem esse eixo, com comandos, eventos e consultas. O terceiro objetivo foi expor capacidades por contratos e gateway. O registry, os an\'{u}ncios e o gerador de rotas cumprem esse papel.
+
+O quarto objetivo foi permitir comunica\c{c}\~{a}o entre pares. WebRTC DataChannels, sinaliza\c{c}\~{a}o MQTT, ICE e troca de manifesta\c{c}\~{o}es fornecem a base de transporte e negocia\c{c}\~{a}o \cite{w3c_webrtc_2025,rfc8831_datachannels,rfc8445_ice,oasis_mqtt_2019}. O quinto objetivo foi controlar acesso. O servi\c{c}o de autentica\c{c}\~{a}o, o emparelhamento bilateral, as permiss\~{o}es por t\'{o}pico e a interse\c{c}\~{a}o entre permiss\~{o}es do principal e escopos do token fornecem esse controlo. O sexto objetivo foi validar o trabalho. A valida\c{c}\~{a}o combinou invent\'{a}rio, verifica\c{c}\~{a}o sint\'{a}tica e uma execu\c{c}\~{a}o-alvo de testes unit\'{a}rios que terminou com \texttt{151 passed, 8 skipped}. Testes Redis, processo, integra\c{c}\~{a}o ampla e desempenho continuam pendentes.
+
+\section{Contribui\c{c}\~{o}es}
+\label{sec:contribuicoes-finais}
+
+A primeira contribui\c{c}\~{a}o foi a defini\c{c}\~{a}o de uma fronteira clara entre a base Aurora e o trabalho distribu\'{i}do. Wake word, STT, LLM, TTS, interface e integra\c{c}\~{o}es formam a base reutilizada. Contratos, ciclo de vida de servi\c{c}os, gateway din\^{a}mico, roteamento de malha, emparelhamento e RBAC formam a contribui\c{c}\~{a}o principal.
+
+A segunda contribui\c{c}\~{a}o foi o modelo de integra\c{c}\~{a}o por contratos. Cada servi\c{c}o descreve m\'{e}todos, tipos, prioridade, exposi\c{c}\~{a}o e permiss\~{o}es. Essa descri\c{c}\~{a}o alimenta o bus e o gateway, reduzindo depend\^{e}ncia de chamadas diretas entre componentes.
+
+A terceira contribui\c{c}\~{a}o foi a extens\~{a}o da comunica\c{c}\~{a}o para uma malha P2P. O MeshBus preserva a interface do bus e acrescenta decis\~{a}o de destino, fallback e encaminhamento remoto. O WebRTC fornece o canal de dados, enquanto a aplica\c{c}\~{a}o mant\'{e}m identidade, permiss\~{o}es e sem\^{a}ntica da chamada.
+
+A quarta contribui\c{c}\~{a}o foi o modelo de confian\c{c}a operacional. O emparelhamento bilateral, a gest\~{a}o de pares, os tokens, os escopos e as permiss\~{o}es por t\'{o}pico permitem oferecer uma capacidade sem abrir todo o assistente. Essa granularidade sustenta o objetivo delimitado de democratizar capacidades de IA dentro do dom\'{i}nio do utilizador, sem transformar a malha em acesso irrestrito ou em promessa de ado\c{c}\~{a}o social ampla.
+
+\section{Limita\c{c}\~{o}es e Trabalho Futuro}
+\label{sec:limitacoes-futuro}
+
+O alcance restante da validação é específico. Controlos digitados bem-sucedidos não estabelecem uma pipeline de áudio correta na tarefa, captura real de microfone, superfícies Android/nativas utilizáveis ou delegação real de etapas entre dispositivos. O piloto de áudio falho e as suas fronteiras temporais ausentes permanecem explícitos. As próximas condições admitidas exigem configurações efetivas declaradas e prova de aceleração/localidade real, seguidas de 900 pedidos medidos por cada condição nova aplicável, com aquecimentos excluídos e todas as falhas e timeouts preservados. Não se inicia medição entre dispositivos antes da aceitação e selagem da evidência individual de áudio e superfícies exigida.
+
+Já existem resultados quantitativos de controlos limitados de pedidos digitados, mas as questões comparativas de áudio completo e de execução entre dispositivos continuam sem resposta. As populações CPU e GPU permanecem separadas; diferenças de hardware e carga de fundo não são overhead de protocolo. O piloto real de áudio demonstra execução causal das etapas, mas a tarefa reconhecida incorretamente impede a aceitação de sucesso de áudio ponta a ponta. A sua duração única não é uma estimativa de percentil. Energia, comportamento térmico/radio de telefone físico, rotas diretas/relay efetivas e benefício de delegação para dispositivo fraco continuam não estabelecidos neste retrato.
+
+A terceira limita\c{c}\~{a}o envolve seguran\c{c}a. O modelo implementa emparelhamento, autentica\c{c}\~{a}o e permiss\~{o}es. A pr\'{o}xima vers\~{a}o precisa de hardening, revis\~{a}o criptogr\'{a}fica, testes adversariais de WebRTC, rota\c{c}\~{a}o de credenciais, pol\'{i}ticas de revoga\c{c}\~{a}o e auditoria mais ampla. O uso de JWT e RBAC fornece vocabul\'{a}rio e estrutura; a seguran\c{c}a final depende de implementa\c{c}\~{a}o, configura\c{c}\~{a}o e opera\c{c}\~{a}o corretas \cite{rfc7519_jwt,rfc8725_jwt_bcp}.
+
+O trabalho futuro deve evoluir em cinco frentes. Primeiro, completar a su\'{i}te de valida\c{c}\~{a}o reproduz\'{i}vel com Python 3.11, \texttt{uv}, Redis, integra\c{c}\~{a}o, processos e logs JUnit. Segundo, medir desempenho e disponibilidade da malha sob cargas reais. Terceiro, melhorar descoberta de pares, convites e rota\c{c}\~{a}o de credenciais. Quarto, formalizar pol\'{i}ticas de partilha por capacidade, perfil de dispositivo e risco. Quinto, preparar uma experi\^{e}ncia de utilizador que torne permiss\~{o}es, pares e falhas compreens\'{i}veis para quem opera o assistente.
+
+A evidência observada sustenta uma arquitetura implementada e controlos limitados de pedidos digitados. Documenta também uma falha real de correção de áudio completo, que permanece parte do estudo. A dissertação não conclui ainda que a execução distribuída melhora a experiência completa de voz ou preserva privacidade em todas as implantações. Essas conclusões exigem as comparações individuais e entre dispositivos reais declaradas, apresentando em conjunto localização efetiva das etapas, correção, limites de recursos, fronteiras de latência e resultados negativos.

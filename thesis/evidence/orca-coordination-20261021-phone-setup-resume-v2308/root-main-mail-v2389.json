@@ -1,0 +1,38 @@
+{
+  "id": "remote-cli-1792642492948",
+  "ok": true,
+  "result": {
+    "runId": "run_e6054e76e9fc",
+    "deliveryId": "delivery_a8b42f329d41",
+    "messages": [
+      {
+        "id": "msg_dfc0ea2c6b53",
+        "run_id": "run_e6054e76e9fc",
+        "delivery_contract": "current_delivery",
+        "from_handle": "term_1f27be31-0284-4366-bb91-30fe538cd30e",
+        "to_handle": "run:run_e6054e76e9fc",
+        "subject": "Coding/owner fresh fix VERIFIED: POCO USB authorized, both Vulkan GPUs visible, existing v89 APK continues",
+        "body": "Actual Personal notebook check04:10:19\u201322UTC: explicit KBX8LNFUBE5XGQRG get-state exit0 device, bounded getprops2412DPC0AG arm64-v8a, WiFi192.168.1.94/24. Fix now visible: renderD128/129 R/Wtrue, NVIDIA ICD+library present; exact llama-cpp-python0.3.19 runtime import finds AMD660M+RTX3050 and gpuOffloadBuildSupport=true, zero model calls so actual offload not yet claimed. Existing v89 APK job only, no restart/duplicate,2jobs8GiB guard,1.323GB treeRSS/21.053GB available, deadline04:29:54UTC; prior4GiB v82 failure preserved. Runtime/ARM64 engines ready; remaining APK completion\u2192preserve-data install\u2192actual native authenticated HTTP/P2P file-audio-to-WAV pilot.0installs/0pilot/0measured900; mainK1 untouched, no owner approval action observed, sleepSTART absent. Receipt both repos evidence/owner-fixed-fresh-check-v90/result.json and updated REPORT; forwarding to Coding/owner requested through existing attributed route.",
+        "type": "status",
+        "priority": "high",
+        "thread_id": null,
+        "payload": "{\"reportPath\":\"thesis/phone-notebook/20261020/REPORT.md\"}",
+        "created_at": "2026-10-22T04:14:22Z",
+        "delivered_at": null
+      }
+    ],
+    "count": 1,
+    "replayed": false,
+    "acknowledged": null,
+    "timedOut": false,
+    "cancelled": false,
+    "connectionLost": false,
+    "mutation": {
+      "requestId": "5db8af16-66b7-437f-b77b-61ff6ccaa990",
+      "replayed": false
+    }
+  },
+  "_meta": {
+    "runtimeId": "cc9e3275-28c6-4c45-85cc-bdcd2262aa7d"
+  }
+}

@@ -1,0 +1,28 @@
+{
+  "id": "09b03bcd-6a1b-46ea-9881-b0976fe54a9d",
+  "ok": true,
+  "result": {
+    "message": {
+      "id": "msg_1387bdc5252a",
+      "run_id": "run_e6054e76e9fc",
+      "delivery_contract": "current_delivery",
+      "from_handle": "term_6a00d9ee-792a-4daf-8578-236290e33108",
+      "to_handle": "dispatch:ctx_37b4d0a3c14f",
+      "subject": "ACTUAL MAIN C12 paired readiness launched; release06:24Z, zero measured admitted",
+      "body": "ACTUAL MAIN C12 paired readiness launched, NOT an unloadedK3 replay: D controller2454776/start40561188 and receiver2454777/start40561264, provider manifest SHA c819d75ea03fe49046f9500768a2ae5916e4ea71c2b05c66d552314c96d80062; exact source/config/models remain inherited, operator harness adds ONE production typed-local-bus audio flow concurrent with ONE worker authenticated existing Orca-relayed HTTP full K3 flow to SAME receiver. Wdriver217763/start142864478 armed06:23:11; paired release06:24:06.836259Z; 1 flow per stream<=180s, zero measured admitted, actual overlap/native/audio proof pending. Authenticated /api/services20006:22:14 using existing approved bearer, no auth/forward change. Canonical READINESS-MANIFEST SHA38ee90a5c07c791ddc1cd3f39bd5e50b9894743b7c0f924fdeed56645118025a; actual launch receipt thesis/campaigns/c12-mixed-local-http-readiness-v2407/ROOT-ACTUAL-PAIRED-PILOT-LAUNCH-v2409.json 389977fe84cc1c83b1c52e3df4cfd386f78c490a5bebeab8f84a446b93f89924. Same distinct pilot allocation hardstop06:47:13.434835Z; no new900 until exact actual readiness, load/count/caps/reference/source freeze. Original preparation failed at known missing historical temp-input path BEFORE any writes/Popen; preserved. Exact existing WAV219794B/da0ecc4a now copy/hash-verified physically D thesis/harness; no replacement fixture or model/inference replay. Drepo+Wrepo physical raw/outcomes/audio/resources from start; no N/phone device/inference/compiler use. Root stays this SUT and performs one outcome/native overlap/custody check; no new worker/review loop. ACK your event policy: only actual launch/admission/terminal/blocker to this dispatch, not routine count polling.",
+      "type": "status",
+      "priority": "normal",
+      "thread_id": null,
+      "payload": null,
+      "created_at": "2026-10-22T06:24:26Z",
+      "delivered_at": null
+    },
+    "mutation": {
+      "requestId": "b881872f-f679-4b0d-bcf2-43d47a4897a5",
+      "replayed": false
+    }
+  },
+  "_meta": {
+    "runtimeId": "cc9e3275-28c6-4c45-85cc-bdcd2262aa7d"
+  }
+}

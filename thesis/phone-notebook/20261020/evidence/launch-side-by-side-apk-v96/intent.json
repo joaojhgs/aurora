@@ -1,0 +1,12 @@
+{
+  "controlDeadline": "2026-10-22T05:00:00Z",
+  "explicitNewline": true,
+  "host": "ssh:ssh-sem-notebook-personal",
+  "incarnation": "328cd72f-c7ea-49ff-a2db-b9275b085037",
+  "remoteResult": "/home/developer/projects/aurora/thesis/phone-notebook/20261020/evidence/launch-side-by-side-apk-v96.json",
+  "rootAdmissionMessage": "owner-scoped-test-app-install-already-authorized-preserve-existing-package-data-supported-scoped-AGP-applicationId",
+  "script": "scripts/launch_side_by_side_apk_v96.py",
+  "scriptSha256": "6c652b5f760e9fac59fffcc32784c17bb49eb0c8460b2b88b05a4c3c3af088e4",
+  "singleSend": true,
+  "terminal": "term_a2ed5feb-7c92-48e4-bd88-d1b0e6737989"
+}

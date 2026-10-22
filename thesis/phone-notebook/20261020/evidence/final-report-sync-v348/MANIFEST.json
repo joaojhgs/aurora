@@ -1,0 +1,255 @@
+{
+  "sha256": "9084b141e8e65cb3b7246d3b14aca30160d1a27a90c06bbb583f594b2c9fb3f8",
+  "bytes": 76108,
+  "chunks": [
+    {
+      "script": "thesis/phone-notebook/20261020/scripts/sync_closed_report_chunk_v348_000.py",
+      "index": 0,
+      "encodedBytes": 16000,
+      "sha256": "3059509624abc909c9dd31a67e3dce13e472ae01d7b7e50adc6149bdc63d797b"
+    },
+    {
+      "script": "thesis/phone-notebook/20261020/scripts/sync_closed_report_chunk_v348_001.py",
+      "index": 1,
+      "encodedBytes": 16000,
+      "sha256": "671e6f0ccabddaf76867929144038222d37bdf5a952701bcead7e8b940e6fcdf"
+    },
+    {
+      "script": "thesis/phone-notebook/20261020/scripts/sync_closed_report_chunk_v348_002.py",
+      "index": 2,
+      "encodedBytes": 16000,
+      "sha256": "416b9c4df934f6017faae3aa4c5140ba13e47a30c146f3bcc759f2dd6357347a"
+    },
+    {
+      "script": "thesis/phone-notebook/20261020/scripts/sync_closed_report_chunk_v348_003.py",
+      "index": 3,
+      "encodedBytes": 16000,
+      "sha256": "99929082f24c27661dc67470a320d0a855621019c442e96e67fab0b2e12b4f14"
+    },
+    {
+      "script": "thesis/phone-notebook/20261020/scripts/sync_closed_report_chunk_v348_004.py",
+      "index": 4,
+      "encodedBytes": 16000,
+      "sha256": "d66d86c9bc66d76ba0f6f93c850159afc7059ca66954981b6c91c8e47d335ce7"
+    },
+    {
+      "script": "thesis/phone-notebook/20261020/scripts/sync_closed_report_chunk_v348_005.py",
+      "index": 5,
+      "encodedBytes": 16000,
+      "sha256": "e4bc9490957c33291c4a9b75432fb2ddce6c9793fc19df4e6ee3eb953d3f720e"
+    },
+    {
+      "script": "thesis/phone-notebook/20261020/scripts/sync_closed_report_chunk_v348_006.py",
+      "index": 6,
+      "encodedBytes": 5480,
+      "sha256": "d80c1562330258c41f0ee07fdbd74e33da2be3c4037b36af84e1b3f662d2c573"
+    }
+  ],
+  "files": [
+    {
+      "path": "REPORT.md",
+      "bytes": 71651,
+      "sha256": "527208808e3ebdc0e651be9fb40f28e5217030d7855f658867e9170341e39443"
+    },
+    {
+      "path": "RUNBOOK.md",
+      "bytes": 25360,
+      "sha256": "b20611ce9e7434cf31337a7b38782a567b411081d598f626dbaeb8ee23180d6c"
+    },
+    {
+      "path": "FINAL-SETUP-20261022.md",
+      "bytes": 5438,
+      "sha256": "c31e451a68154b8f345e1ebb02230dcc6b6f1657458beddad540e614d174d53d"
+    },
+    {
+      "path": "FINAL-SETUP-20261022.json",
+      "bytes": 19556,
+      "sha256": "ed908842b4e17671e4e3b810d4b49d01238caf6a492a346d6ef818c1dc12cd9e"
+    },
+    {
+      "path": "FINAL-SOURCE-MANIFEST-20261022.json",
+      "bytes": 4690,
+      "sha256": "be5491f943773b9f8164599b884daa0155180ff1760f2ea4d0e068cde00d666d"
+    },
+    {
+      "path": "FINAL-REMOTE-CASE-HISTORY-20261022.json",
+      "bytes": 3362,
+      "sha256": "114bd29d910316649b46c8a961c9b424597c26d404e1fb1f10fb558e4912cf1c"
+    },
+    {
+      "path": "CURRENT-SETUP.json",
+      "bytes": 19556,
+      "sha256": "ed908842b4e17671e4e3b810d4b49d01238caf6a492a346d6ef818c1dc12cd9e"
+    },
+    {
+      "path": "ACTUAL-READINESS.json",
+      "bytes": 19556,
+      "sha256": "ed908842b4e17671e4e3b810d4b49d01238caf6a492a346d6ef818c1dc12cd9e"
+    },
+    {
+      "path": "ACTUAL-READINESS-20261021.json",
+      "bytes": 19556,
+      "sha256": "ed908842b4e17671e4e3b810d4b49d01238caf6a492a346d6ef818c1dc12cd9e"
+    },
+    {
+      "path": "SETUP-STATUS-20261022.json",
+      "bytes": 19556,
+      "sha256": "ed908842b4e17671e4e3b810d4b49d01238caf6a492a346d6ef818c1dc12cd9e"
+    },
+    {
+      "path": "LATEST-OWNER-UPDATE.json",
+      "bytes": 19556,
+      "sha256": "ed908842b4e17671e4e3b810d4b49d01238caf6a492a346d6ef818c1dc12cd9e"
+    },
+    {
+      "path": "INSTALL-UPDATE-20261022.json",
+      "bytes": 3258,
+      "sha256": "acfb1eb4a476eaf492e03b5b749a8cb0fad57a7fc6dd6dd02fcc938b39c0d5d9"
+    },
+    {
+      "path": "NATIVE-STARTUP-BLOCKER-20261022.md",
+      "bytes": 3112,
+      "sha256": "71699d3a8aca44e3f6c538262f0a24679efe224b20e1dca70c35d33d5395a704"
+    },
+    {
+      "path": "templates/collection.template.json",
+      "bytes": 22334,
+      "sha256": "3729d5055512d68c161a9d55465311136fca11f8a348e236b381e305b59ac89d"
+    },
+    {
+      "path": "evidence/final-saved-data-check-v347.json",
+      "bytes": 261,
+      "sha256": "acf23cb806571435561674ccb8a4abcb2faf505785d8b97d6b5d5828df3ca051"
+    },
+    {
+      "path": "evidence/window-final-public-dual-v346/COPY-RECEIPT.json",
+      "bytes": 746,
+      "sha256": "9608311240d74c9cacb4377c49428660355ff7eba7ca20e218ccd3d5accadbb1"
+    },
+    {
+      "path": "evidence/cleanup-home-only-v344/result.json",
+      "bytes": 637,
+      "sha256": "4c6bdf0728dbf4be6ad94bb5f61c2ee0ce1db4d6819b063925a0ed4b7592118f"
+    },
+    {
+      "path": "evidence/owner-window-retirement-read-v260/result.json",
+      "bytes": 5886,
+      "sha256": "be02dcb229c503ce8dc2fde9bf03982618e8553e25c15280e562fbf4bf0dd0f6"
+    },
+    {
+      "path": "repairs/android-k3-sdk-build-flag-v5/MANIFEST.json",
+      "bytes": 989,
+      "sha256": "eb40b3a7056f81a289f018fc7bc3cc3574d0117b393cef77fb5d095daf64928d"
+    },
+    {
+      "path": "repairs/android-bundled-model-rename-v1/MANIFEST.json",
+      "bytes": 1098,
+      "sha256": "f740961ae8353fedb2cf7ada8204c3bad5b5e3cc8f432c46ff98edee8e2634a8"
+    },
+    {
+      "path": "repairs/android-native-pairing-role-v7/MANIFEST.json",
+      "bytes": 2145,
+      "sha256": "a73f166dae135b86095016dbeb56d2dd8e240f4d86ba2760efa86192c78db0f7"
+    },
+    {
+      "path": "repairs/android-node-policy-initial-publication-v2/MANIFEST.json",
+      "bytes": 1114,
+      "sha256": "8fee9115adf50579506f5dc15dcbc83e4d42c7610eb483deb1fcb7478e8c5dc7"
+    },
+    {
+      "path": "repairs/android-k3-native-surface-v6/MANIFEST.json",
+      "bytes": 1256,
+      "sha256": "2984a9c9cd4dedd10b75c93f6491cdc6e7343a4ad79be3cbe0d8056f70f2549f"
+    },
+    {
+      "path": "repairs/android-finite-file-audio-v3/MANIFEST.json",
+      "bytes": 2343,
+      "sha256": "7119cf3fb1ad59165380d369a3eeb7bf6b1655c893e5ef1c09aea4dbd8e1832e"
+    },
+    {
+      "path": "repairs/android-finite-file-audio-v3a/MANIFEST.json",
+      "bytes": 1808,
+      "sha256": "d969ec475d0ddbe391cdedb64521a4f2cd94ca4362bc1afb80574c86764567b0"
+    },
+    {
+      "path": "repairs/android-sdk-speech-binding-v8/MANIFEST.json",
+      "bytes": 1062,
+      "sha256": "4b986c336f49dcf501cc7d72c1d9f744a907d2eef7fda90fb4e2d37dfc7b4a31"
+    },
+    {
+      "path": "repairs/android-k3-sdk-file-audio-v4/MANIFEST.json",
+      "bytes": 2629,
+      "sha256": "5fa7dfabca52b57bbeac69764ef7c46413345c1c09c828274300d5201b3b7868"
+    },
+    {
+      "path": "repairs/android-k3-sdk-mode-v4a/MANIFEST.json",
+      "bytes": 1064,
+      "sha256": "ba552b1ea2ec9860a83f07d24f9550255326664095b4534bd66baac5a77ad79a"
+    },
+    {
+      "path": "repairs/android-sdk-consumer-lease-v8a/MANIFEST.json",
+      "bytes": 916,
+      "sha256": "d0f651ae6ca62ba258c45d13d7a3aaec3613fd01565709c3d61289512d893f3a"
+    },
+    {
+      "path": "repairs/policy-test-fixture-closure-v169/MANIFEST.json",
+      "bytes": 365,
+      "sha256": "a1ee54d2bec0ba8d6c058f5d6bd48580bd5b44f5aecfb5e6cb144eff0808c6cf"
+    },
+    {
+      "path": "repairs/android-k3-sdk-build-flag-v5/PATCH.diff",
+      "bytes": 548,
+      "sha256": "7fd311c626367a9b04410234ee8296f03566a63d5eebea4607f6d6b35def4058"
+    },
+    {
+      "path": "repairs/android-bundled-model-rename-v1/PATCH.diff",
+      "bytes": 809,
+      "sha256": "40b385401472445ec32c184e73a99495efee8d59e4c3c34af2d62aa1edb3d9fc"
+    },
+    {
+      "path": "repairs/android-native-pairing-role-v7/PATCH.diff",
+      "bytes": 9541,
+      "sha256": "bfafd70fc63a0ef922d359e4ed10655da35b44b3db5d091b0c036512ac2035f1"
+    },
+    {
+      "path": "repairs/android-node-policy-initial-publication-v2/PATCH.diff",
+      "bytes": 3327,
+      "sha256": "d4b2babfbdd4e62fc6b488a519fb5c9d8337bb2c213bc58915f2fa986a661082"
+    },
+    {
+      "path": "repairs/android-k3-native-surface-v6/PATCH.diff",
+      "bytes": 4150,
+      "sha256": "a0b6eb741842ba950d59e21f3a83d789d770a9c4e8793585addf162b1e8fc80b"
+    },
+    {
+      "path": "repairs/android-finite-file-audio-v3/PATCH.diff",
+      "bytes": 13498,
+      "sha256": "6982e5916fd4fc0eac304abc0c4bbda6923e7e689c8f6f64164d0a44d844dd24"
+    },
+    {
+      "path": "repairs/android-finite-file-audio-v3a/PATCH.diff",
+      "bytes": 3856,
+      "sha256": "13d9011e0914bc08d7f2b2dbcdc8509dd76c365829f548743d01b3b8730c08c4"
+    },
+    {
+      "path": "repairs/android-sdk-speech-binding-v8/PATCH.diff",
+      "bytes": 7958,
+      "sha256": "b04bd205826e16dddca820049e2daf4071305a9b5cfd039b483231d8644997aa"
+    },
+    {
+      "path": "repairs/android-k3-sdk-file-audio-v4/PATCH.diff",
+      "bytes": 10338,
+      "sha256": "12644898f589c9bbeaf4ddc5e8db2a799b267148f032a939bb93963c33152b70"
+    },
+    {
+      "path": "repairs/android-k3-sdk-mode-v4a/PATCH.diff",
+      "bytes": 3820,
+      "sha256": "c260a59f315dda4a5d8366a27f4ce806eb9427caf9ea9cf79dc895648a4a58d9"
+    },
+    {
+      "path": "repairs/android-sdk-consumer-lease-v8a/PATCH.diff",
+      "bytes": 1453,
+      "sha256": "622e02293b83bf54bbcd33cb89002c9d5efb2ddc97d136d40984cf9f0b554bf6"
+    }
+  ]
+}

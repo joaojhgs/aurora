@@ -1,0 +1,60 @@
+{
+  "analysisElapsedSeconds": 8.34588504792191,
+  "at": "2026-10-17T22:23:27.742699+00:00",
+  "c06UniqueEmbeddedCases": 4,
+  "conditions": 31,
+  "duplicateRequestIdentities": [],
+  "entrypointSHA256": "a7402b13c078bf1d9edb3fe3a1b460ebd1c28e05972bb156c0ad9316e57b3f8c",
+  "exitCode": 0,
+  "historicalMeshFamilies": 26,
+  "newMeasurements": 0,
+  "normalizedRows": 8430,
+  "rawOutcomeChecks": [
+    {
+      "cohort": "V491",
+      "measuredRows": 900,
+      "rawOutcomeAndAuthorCorrectQuantilesAgree": true,
+      "warmupRows": 15
+    },
+    {
+      "cohort": "V737",
+      "measuredRows": 900,
+      "rawOutcomeAndAuthorCorrectQuantilesAgree": true,
+      "warmupRows": 15
+    },
+    {
+      "cohort": "V735",
+      "measuredRows": 274,
+      "rawOutcomeAndAuthorCorrectQuantilesAgree": true,
+      "warmupRows": 15
+    },
+    {
+      "cohort": "V745",
+      "measuredRows": 626,
+      "rawOutcomeAndAuthorCorrectQuantilesAgree": true,
+      "warmupRows": 15
+    },
+    {
+      "cohort": "V692",
+      "measuredRows": 900,
+      "rawOutcomeAndAuthorCorrectQuantilesAgree": true,
+      "warmupRows": 15
+    },
+    {
+      "cohort": "V485",
+      "measuredRows": 900,
+      "rawProjectionAndAuthorCorrectQuantilesAgree": true,
+      "warmupRows": 15
+    },
+    {
+      "cohort": "V497",
+      "measuredRows": 900,
+      "rawProjectionAndAuthorCorrectQuantilesAgree": true,
+      "warmupRows": 15
+    }
+  ],
+  "requesterMeasuredRows": 135,
+  "requesterSnapshotAt": "2026-10-17T22:15:24.539734+00:00",
+  "schema": "aurora.audit.saved-data-smoke.v1",
+  "usedInputSources": 3930
+}

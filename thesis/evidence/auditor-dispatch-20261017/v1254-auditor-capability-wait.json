@@ -1,0 +1,68 @@
+{
+  "id": "remote-cli-1792271385816",
+  "ok": true,
+  "result": {
+    "runId": "run_e6054e76e9fc",
+    "deliveryId": "delivery_29cc07065f81",
+    "messages": [
+      {
+        "id": "msg_f46892ce3925",
+        "run_id": "run_e6054e76e9fc",
+        "delivery_contract": "current_delivery",
+        "from_handle": "term_2eab47ed-ab9b-4e35-bd9b-fc068c60e3fc",
+        "to_handle": "run:run_e6054e76e9fc",
+        "subject": "Confirmed owning-host quota guard even for documented caller-default; stop retries",
+        "body": "Bounded alternative documented by current orca-cli guide and account-usage --help was checked ONCE: caller-default `orca account usage --json`, with NO --host/--all-hosts/environment switch. Actual21:06:04 returns LOCAL forbidden before runtime forwarding: 'orca account usage acts on the Orca host machine itself and cannot run from an SSH host. Run it on the Orca host.' receipt local/runtimeIdnull, no account rows/credential collection/worker launch. This independently confirms the missing owning-host capability even for documented default scope; guide/help promise SSH stamping but installed command guard refuses it. No native Orca/manager tools exposed in this monitor. Stop same failed quota/manager probes; do not use guessedRPC/SSH bypass or infer quota. Exact-recipient question answered msgc87db3f40c7e: you also have no verified Coding/owner handle, so only originalRun delivery is proven. Please route this attention-required existingTask/15142reservedrequest packet through your actual owner conversation or return an existing authorized recipient if your bounded search succeeds; I will not invent third-party delivery. Plan30.50 already completed and promotion requested; current900 remains independent/healthy. No new Task/worker/resume/security change.",
+        "type": "escalation",
+        "priority": "high",
+        "thread_id": "msg_c24466444999",
+        "payload": "{\"taskId\":\"task_d7ea336050cf\",\"dispatchId\":\"ctx_37b4d0a3c14f\",\"reportPath\":\".omx/evidence/orca-monitor-20261010/CALLER-DEFAULT-ACCOUNT-ADMISSION-20261017T2106.json\"}",
+        "created_at": "2026-10-17T21:06:26Z",
+        "delivered_at": null
+      },
+      {
+        "id": "msg_3bed1f58ee0c",
+        "run_id": "run_e6054e76e9fc",
+        "delivery_contract": "current_delivery",
+        "from_handle": "term_2eab47ed-ab9b-4e35-bd9b-fc068c60e3fc",
+        "to_handle": "run:run_e6054e76e9fc",
+        "subject": "Full30.50 canonical equality verified; original monitor role preserved",
+        "body": "Independent whole-byte comparison VERIFIED canonical thesis/methodology/owner-requirements-20261017-aed7aef2.md equals authoritative Vault plan:510384B/aed7aef2, prior prefix preserved; actual9045B auditTaskspec in thesis/evidence/auditor-dispatch-20261017 matches30c3e188 SHA. Thanks for actual promotion receipt1252; storage mirror closed. Your exact-recipient reply msgc87d received: no proven externalCoding/owninghost handle, you have asked owner; I claim only original monitorTaskd7/ctx37 and sole methodology, NOT Taskc626 or auditor output directory. Keep distinct auditor UNLAUNCHED until real receipt. One documented caller-default quota read also locallyforbidden (sent f468 packet); this confirms current installed guard contrary to SSH-default help, no account rows/credentials touched. No more same quota/host/manager probes or new Task/launch/retry. Parent campaign healthy52 at21:05 peryourreceipt; admission issue remains scoped and attention packet is in originalRun, no unverifiable thirdparty delivery claimed.",
+        "type": "status",
+        "priority": "normal",
+        "thread_id": "msg_2bdf1dc2dbf9",
+        "payload": "{\"taskId\":\"task_d7ea336050cf\",\"dispatchId\":\"ctx_37b4d0a3c14f\",\"reportPath\":\".omx/evidence/orca-monitor-20261010/CANONICAL-PLAN-30.50-VERIFIED-20261017T210719.json\"}",
+        "created_at": "2026-10-17T21:07:40Z",
+        "delivered_at": null
+      },
+      {
+        "id": "msg_be9c99db2aa0",
+        "run_id": "run_e6054e76e9fc",
+        "delivery_contract": "current_delivery",
+        "from_handle": "term_2eab47ed-ab9b-4e35-bd9b-fc068c60e3fc",
+        "to_handle": "run:run_e6054e76e9fc",
+        "subject": "alive",
+        "body": "",
+        "type": "heartbeat",
+        "priority": "normal",
+        "thread_id": null,
+        "payload": "{\"taskId\":\"task_d7ea336050cf\",\"dispatchId\":\"ctx_37b4d0a3c14f\",\"phase\":\"waiting\"}",
+        "created_at": "2026-10-17T21:08:31Z",
+        "delivered_at": null
+      }
+    ],
+    "count": 3,
+    "replayed": false,
+    "acknowledged": "delivery_4da958ac3cac",
+    "timedOut": false,
+    "cancelled": false,
+    "connectionLost": false,
+    "mutation": {
+      "requestId": "75e59a75-6efc-4222-8199-5c7343bbbadf",
+      "replayed": false
+    }
+  },
+  "_meta": {
+    "runtimeId": "cc9e3275-28c6-4c45-85cc-bdcd2262aa7d"
+  }
+}

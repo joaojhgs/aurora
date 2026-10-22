@@ -1,0 +1,57 @@
+{
+  "id": "cc32a00a-dad3-4838-8d91-541a4de53722",
+  "ok": true,
+  "result": {
+    "worktree": {
+      "id": "314e7b89-8f19-4535-9443-22b342aedff7::/home/developer/projects/aurora",
+      "identity": {
+        "key": "wt2:ssh%3Assh-oci-coding-worker:6bcb9a4d-e738-453b-bb83-094fd8b12cd2",
+        "executionHostId": "ssh:ssh-oci-coding-worker",
+        "instanceId": "6bcb9a4d-e738-453b-bb83-094fd8b12cd2"
+      },
+      "instanceId": "6bcb9a4d-e738-453b-bb83-094fd8b12cd2",
+      "repoId": "314e7b89-8f19-4535-9443-22b342aedff7",
+      "hostId": "ssh:ssh-oci-coding-worker",
+      "path": "/home/developer/projects/aurora",
+      "head": "cbac78fe3fb2b73100bfaa9dc198fb6bff689840",
+      "branch": "refs/heads/codex/aurora-native-speech-routing-20261007",
+      "isBare": false,
+      "isMainWorktree": true,
+      "displayName": "codex/aurora-native-speech-routing-20261007",
+      "displayNameMode": "automatic",
+      "comment": "",
+      "linkedIssue": null,
+      "linkedPR": null,
+      "linkedLinearIssue": null,
+      "linkedLinearIssueWorkspaceId": null,
+      "linkedLinearIssueOrganizationUrlKey": null,
+      "linkedGitLabMR": null,
+      "linkedGitLabIssue": null,
+      "linkedBitbucketPR": null,
+      "linkedAzureDevOpsPR": null,
+      "linkedGiteaPR": null,
+      "linkedWorkItem": null,
+      "linkedTaskSourceContext": null,
+      "isArchived": false,
+      "isUnread": false,
+      "isPinned": false,
+      "sortOrder": 1791241265057,
+      "lastActivityAt": 1791644778704,
+      "workspaceStatus": "in-progress",
+      "parentWorktreeId": null,
+      "childWorktreeIds": [],
+      "lineage": null,
+      "git": {
+        "path": "/home/developer/projects/aurora",
+        "head": "cbac78fe3fb2b73100bfaa9dc198fb6bff689840",
+        "branch": "refs/heads/codex/aurora-native-speech-routing-20261007",
+        "isBare": false,
+        "isMainWorktree": true
+      },
+      "linkedItems": []
+    }
+  },
+  "_meta": {
+    "runtimeId": "cc9e3275-28c6-4c45-85cc-bdcd2262aa7d"
+  }
+}

@@ -1,0 +1,19 @@
+# V320 terminal matched-campaign exporter
+
+Private source-only exporter: `export.py` SHA256 `34ccb4fd3ebac585813a043e53c7e0db8f59b85936f336e4ad8626bffc7c766e`. It consumes a terminal V317 campaign directory and creates one exclusive documentation snapshot at `docs/experiments/tcc-20261013-submission-20261030/root/matched-main-campaign-<campaign-id>/`. The source campaign is not changed. The retained campaign runner SHA256 is `c372126ca09f5f0f184f59fc7e2874f7f009125b210b1cc7ba4b96ce9141658f`.
+
+The exporter requires a terminal campaign result and the exact planned nine-cell sequence; it does not require campaign success. It records every planned cell and its result status, including failed, infeasible, cancelled, missing, and unattempted cells. Existing local/API request JSONL, provider-input JSONL, resource samples, finalization records, and source snapshots are copied byte-for-byte where present, with per-file hashes. Per-cell request manifests are projected to model/config/source hashes and generation settings; session identifiers and raw workload text are omitted. Mesh attachment suffix, ordinal, and payload ordering are checked before labeling a cell complete. Process stdout/stderr, credentials, and the full Playwright report are never exported.
+
+The final Sol corrections write normalized mesh-record JSONL through the byte-safe exclusive writer, prefer the terminal campaign result over an earlier per-cell result file when recording status, and leave `workload_sha256` null when the manifest has no workload value rather than hashing JSON null.
+
+Local/API summaries use the archived `assistant_measurement_records.py` version only after its SHA matches the campaign manifest. They preserve warmup counts, measured denominators, failures, timeouts, cancellations, infeasible/excluded outcomes, and Type 7 p50/p90/p95 over successful measured requests. Mesh attachments are decoded from the private report only when their names match the fixed pilot pattern, then projected to ordered attempt, finite outcome/correctness, completion kind/count, latency, correlation validity, and error-code presence. Request/session/message identifiers and free-form errors are omitted. Mesh quantiles call the archived helper's `type7_percentile`; no synthetic monotonic timestamps are invented. Partial mesh attachments remain partial and are never represented as a complete 105-row cell.
+
+The immutable export manifest hashes every exported file, records hashes of the private source campaign manifests, source-code snapshot and study-plan snapshots, and explicitly records that browser reports and process logs were withheld. At export time it copies the current owner-updated vault requirements plan from `5-full-notes/faculdade/tcc/future-work-test-requirements.md` (currently SHA256 `a2615d9a744f4f5413ab9fee70b0a6928266d203682b8d7814eb2b5798d440d5`) and separately includes `monitor/test-plan.before-execution-authorization.md` (SHA256 `272c2be5123b1b6a59b18a08204a5e9a9d59f4b0c895eedd6048930dc6d95cd0`) as historical authorization provenance, never as the current plan. The archived measurement summarizer is SHA256 `2648b5579c487e15936bf2eafd70ae8b63db5567915ff4c1c1b318989da2a646`; the pilot writer is `6b51c6d51a44f05e865259aa7af4f8301d9927435c28f1890378e9c4a9f49439`; the current Playwright spec is `db4e6612284ab0491a538ab99d7a3707dc513e0fdc3249463d54d5c6b1765bfe`.
+
+Root's post-terminal invocation is:
+
+```text
+uv run python .git/aurora-handoff-import-20261006/matched-main-export-v320/export.py .git/aurora-handoff-import-20261006/matched-main-campaign-<campaign-id>
+```
+
+No exporter invocation, tests, campaign, build, model, service, network, browser, or device action was run for this candidate. Root should review the source and run the exporter only after the campaign is terminal. This artifact does not claim campaign completion, n=300, stable tails, or regional/mobile coverage.

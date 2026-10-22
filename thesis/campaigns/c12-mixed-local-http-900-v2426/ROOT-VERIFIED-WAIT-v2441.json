@@ -1,0 +1,85 @@
+{
+  "at": "2026-10-22T09:04:31.648258+00:00",
+  "classification": "VERIFIED_WAIT",
+  "nativeGoalId": "01a112a5-d6bb-74e2-bf7c-ace73cb513b5",
+  "nativeGoalStatus": "active",
+  "requester": {
+    "pid": 281887,
+    "startTicks": 143363140,
+    "state": "S"
+  },
+  "actualCurrent": {
+    "at": "2026-10-22T09:04:14.041066+00:00",
+    "companion": {
+      "measured": {
+        "attempted": 115,
+        "correct": 115,
+        "failed": 0,
+        "harnessErrorsIncludedInFailed": 0,
+        "incorrectIncludedInFailed": 0,
+        "offered": 115,
+        "planned": 900,
+        "timeouts": 0,
+        "unstarted": 785
+      },
+      "warmup": {
+        "attempted": 1,
+        "correct": 1,
+        "failed": 0,
+        "harnessErrorsIncludedInFailed": 0,
+        "incorrectIncludedInFailed": 0,
+        "offered": 1,
+        "planned": 1,
+        "timeouts": 0,
+        "unstarted": 0
+      }
+    },
+    "completePairedCapsules": 116,
+    "elapsedSeconds": 4676.670655132,
+    "lastIndex": 115,
+    "lastNativeParent": "4a30c87bd25dd6f8b84405ada5d28921",
+    "lastOrdinal": 116,
+    "manifestSha256": "316d4cc09adc44d0104dca8ac1f2a966347588ffef37bc2fa809ec14fd5efff8",
+    "phase": "measured",
+    "pid": 281887,
+    "primary": {
+      "measured": {
+        "attempted": 115,
+        "correct": 115,
+        "failed": 0,
+        "harnessErrorsIncludedInFailed": 0,
+        "incorrectIncludedInFailed": 0,
+        "offered": 115,
+        "planned": 900,
+        "timeouts": 0,
+        "unstarted": 785
+      },
+      "warmup": {
+        "attempted": 1,
+        "correct": 1,
+        "failed": 0,
+        "harnessErrorsIncludedInFailed": 0,
+        "incorrectIncludedInFailed": 0,
+        "offered": 1,
+        "planned": 1,
+        "timeouts": 0,
+        "unstarted": 0
+      }
+    },
+    "status": "running"
+  },
+  "errors": {
+    "REQUESTER-TERMINAL.json": false,
+    "REQUESTER-EXCEPTION.json": false,
+    "CONTROL-OBSERVATION-FAILED.json": false
+  },
+  "nextMaximumCheck": "2026-10-22T09:09:31.648258+00:00",
+  "earlierCheck": "Actual terminal/failure/stale progress/resource alarm or real owner response",
+  "freeBytes": 2607853568,
+  "sameSourceSettingsTargetsFloorAndDeadlines": true,
+  "newInferenceTestsBuildsWorkersReviewLoopsOrDeviceCommands": 0,
+  "cacheScopeDecision": "One exact935MB webpack-cache question remains pending; no deletion, assumed answer or repeat question",
+  "mainNotHeldByPhoneOrCachePermission": true,
+  "preferredEOFImplementation": "thesis/harness/c12_terminal_delta_custody_v2440.py; prepared, never executed before exact original actor retirement",
+  "mail": "Latest original Run check success, empty batch, no pending delivery ACK"
+}

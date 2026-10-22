@@ -1,0 +1,256 @@
+{
+  "schema": "aurora.thesis.retained-harness-custody.v758",
+  "at": "2026-10-15T23:54:21.997882+00:00",
+  "status": "PARTIAL_RETAINED_SOURCE_NOT_PORTABLE_LAUNCHERS",
+  "scope": "Fifteen small custom source files retained byte-identically with inert .source extension; no imports/execution, model/binary/raw traversal or new measurements. Historical fixture-bearing controllers are not copied.",
+  "entries": [
+    {
+      "family": "desktop-padded-http-v692",
+      "origin": "verified worker ZIP selected member controller.py",
+      "canonical": {
+        "path": "thesis/harness/retained/desktop-padded-http-v692/controller.py.source",
+        "bytes": 23596,
+        "sha256": "2e9a34e998bfd95fb92d4f0eef3c0f9fddc7eeb43c3d3b5ccb764a71e05aa083"
+      },
+      "originSourceSHA256": "2e9a34e998bfd95fb92d4f0eef3c0f9fddc7eeb43c3d3b5ccb764a71e05aa083",
+      "byteIdentical": true,
+      "runtimeEligible": false,
+      "retrieval": "selected source member extraction only; no full archive rehash/outcome audit replay"
+    },
+    {
+      "family": "desktop-padded-http-v692",
+      "origin": "verified worker ZIP selected member runner.py",
+      "canonical": {
+        "path": "thesis/harness/retained/desktop-padded-http-v692/runner.py.source",
+        "bytes": 63119,
+        "sha256": "e0a388b96a7478ceb8aeccda9c0559c27a431c6c9b929a57526e39c6a9c1bace"
+      },
+      "originSourceSHA256": "e0a388b96a7478ceb8aeccda9c0559c27a431c6c9b929a57526e39c6a9c1bace",
+      "byteIdentical": true,
+      "runtimeEligible": false,
+      "retrieval": "selected source member extraction only; no full archive rehash/outcome audit replay"
+    },
+    {
+      "family": "desktop-padded-http-v692",
+      "origin": "verified worker ZIP selected member bootstrap.py",
+      "canonical": {
+        "path": "thesis/harness/retained/desktop-padded-http-v692/bootstrap.py.source",
+        "bytes": 1396,
+        "sha256": "18e710677bee8ee8a968f0c1a107cb94204977ad5aa306d4c8864729810e37b2"
+      },
+      "originSourceSHA256": "18e710677bee8ee8a968f0c1a107cb94204977ad5aa306d4c8864729810e37b2",
+      "byteIdentical": true,
+      "runtimeEligible": false,
+      "retrieval": "selected source member extraction only; no full archive rehash/outcome audit replay"
+    },
+    {
+      "family": "desktop-padded-http-v692",
+      "origin": "verified worker ZIP selected member hook/bindings.py",
+      "canonical": {
+        "path": "thesis/harness/retained/desktop-padded-http-v692/hook/bindings.py.source",
+        "bytes": 3596,
+        "sha256": "d4a2ee4b9419b3be9713c55c5ffbdb3cdf29847f7a4be44e22ae64458d2471e0"
+      },
+      "originSourceSHA256": "d4a2ee4b9419b3be9713c55c5ffbdb3cdf29847f7a4be44e22ae64458d2471e0",
+      "byteIdentical": true,
+      "runtimeEligible": false,
+      "retrieval": "selected source member extraction only; no full archive rehash/outcome audit replay"
+    },
+    {
+      "family": "desktop-padded-http-v692",
+      "origin": "verified worker ZIP selected member hook/observer.py",
+      "canonical": {
+        "path": "thesis/harness/retained/desktop-padded-http-v692/hook/observer.py.source",
+        "bytes": 12656,
+        "sha256": "ce614d6e00bfd425a966eb3165f8b75e3269b956ef288c15f0cf31fd96e4e51a"
+      },
+      "originSourceSHA256": "ce614d6e00bfd425a966eb3165f8b75e3269b956ef288c15f0cf31fd96e4e51a",
+      "byteIdentical": true,
+      "runtimeEligible": false,
+      "retrieval": "selected source member extraction only; no full archive rehash/outcome audit replay"
+    },
+    {
+      "family": "desktop-padded-http-v692",
+      "origin": "verified worker ZIP selected member hook/aurora_voice_telemetry_v430.py",
+      "canonical": {
+        "path": "thesis/harness/retained/desktop-padded-http-v692/hook/aurora_voice_telemetry_v430.py.source",
+        "bytes": 13406,
+        "sha256": "4d2e92a55dbdfd281ddadbe0c51378205164107d56d64e5fb1101757337a0103"
+      },
+      "originSourceSHA256": "4d2e92a55dbdfd281ddadbe0c51378205164107d56d64e5fb1101757337a0103",
+      "byteIdentical": true,
+      "runtimeEligible": false,
+      "retrieval": "selected source member extraction only; no full archive rehash/outcome audit replay"
+    },
+    {
+      "family": "desktop-segment-v745",
+      "origin": {
+        "path": ".git/aurora-handoff-import-20261006/segmented-local900-prep-v745/controller.py",
+        "bytes": 28131,
+        "sha256": "86579a6ad37a7e372c365db9c92fb871f5613b7ff0ce387ce8e91d7f078415ca"
+      },
+      "canonical": {
+        "path": "thesis/harness/retained/desktop-segment-v745/controller.py.source",
+        "bytes": 28131,
+        "sha256": "86579a6ad37a7e372c365db9c92fb871f5613b7ff0ce387ce8e91d7f078415ca"
+      },
+      "byteIdentical": true,
+      "runtimeEligible": false,
+      "authority": "local prepared source matches retained launch/frozen pins; no new remote frozen-tree read"
+    },
+    {
+      "family": "desktop-segment-v745",
+      "origin": {
+        "path": ".git/aurora-handoff-import-20261006/segmented-local900-prep-v745/runner.py",
+        "bytes": 52455,
+        "sha256": "34401b281b69f981be95da513bf56e2ee134654802af56a70e4d2f651fb995ab"
+      },
+      "canonical": {
+        "path": "thesis/harness/retained/desktop-segment-v745/runner.py.source",
+        "bytes": 52455,
+        "sha256": "34401b281b69f981be95da513bf56e2ee134654802af56a70e4d2f651fb995ab"
+      },
+      "byteIdentical": true,
+      "runtimeEligible": false,
+      "authority": "local prepared source matches retained launch/frozen pins; no new remote frozen-tree read"
+    },
+    {
+      "family": "browser-prep-v704-unlaunched",
+      "origin": {
+        "path": ".git/aurora-handoff-import-20261006/browser900-prep-v704/voice-flow.mjs",
+        "bytes": 53996,
+        "sha256": "f1a9f9cf71dc4d2a775f657cd5b1cb9193800ba75d7e0e8fda3cdcfc4cddc456"
+      },
+      "canonical": {
+        "path": "thesis/harness/retained/browser-prep-v704/voice-flow.mjs.source",
+        "bytes": 53996,
+        "sha256": "f1a9f9cf71dc4d2a775f657cd5b1cb9193800ba75d7e0e8fda3cdcfc4cddc456"
+      },
+      "byteIdentical": true,
+      "runtimeEligible": false,
+      "authority": "previously reviewed preparation source; no runtime frozen manifest or launch"
+    },
+    {
+      "family": "browser-prep-v704-unlaunched",
+      "origin": {
+        "path": ".git/aurora-handoff-import-20261006/browser900-runtime-prep-v704/controller.py",
+        "bytes": 28383,
+        "sha256": "bc0b3f8d136de611a2a4ae78f9d2edef1d654cd3173a196974297a1109c78ec1"
+      },
+      "canonical": {
+        "path": "thesis/harness/retained/browser-prep-v704/controller.py.source",
+        "bytes": 28383,
+        "sha256": "bc0b3f8d136de611a2a4ae78f9d2edef1d654cd3173a196974297a1109c78ec1"
+      },
+      "byteIdentical": true,
+      "runtimeEligible": false,
+      "authority": "previously reviewed preparation source; no runtime frozen manifest or launch"
+    },
+    {
+      "family": "browser-prep-v704-unlaunched",
+      "origin": {
+        "path": ".git/aurora-handoff-import-20261006/browser900-runtime-prep-v704/bootstrap.py",
+        "bytes": 2219,
+        "sha256": "9920c1d8ddc358d7e28a19b4c2ace882552f5a1ac39a14e933467521017dbec9"
+      },
+      "canonical": {
+        "path": "thesis/harness/retained/browser-prep-v704/bootstrap.py.source",
+        "bytes": 2219,
+        "sha256": "9920c1d8ddc358d7e28a19b4c2ace882552f5a1ac39a14e933467521017dbec9"
+      },
+      "byteIdentical": true,
+      "runtimeEligible": false,
+      "authority": "previously reviewed preparation source; no runtime frozen manifest or launch"
+    },
+    {
+      "family": "browser-prep-v704-unlaunched",
+      "origin": {
+        "path": ".git/aurora-handoff-import-20261006/browser900-runtime-prep-v704/gate.py",
+        "bytes": 6853,
+        "sha256": "cd5f7b4897bbc5181906031c51c1cabce93f957c253a59e86ee324df358ec44a"
+      },
+      "canonical": {
+        "path": "thesis/harness/retained/browser-prep-v704/gate.py.source",
+        "bytes": 6853,
+        "sha256": "cd5f7b4897bbc5181906031c51c1cabce93f957c253a59e86ee324df358ec44a"
+      },
+      "byteIdentical": true,
+      "runtimeEligible": false,
+      "authority": "previously reviewed preparation source; no runtime frozen manifest or launch"
+    },
+    {
+      "family": "browser-prep-v704-unlaunched",
+      "origin": {
+        "path": ".git/aurora-handoff-import-20261006/browser900-runtime-prep-v704/hook/bindings.py",
+        "bytes": 3596,
+        "sha256": "d4a2ee4b9419b3be9713c55c5ffbdb3cdf29847f7a4be44e22ae64458d2471e0"
+      },
+      "canonical": {
+        "path": "thesis/harness/retained/browser-prep-v704/hook/bindings.py.source",
+        "bytes": 3596,
+        "sha256": "d4a2ee4b9419b3be9713c55c5ffbdb3cdf29847f7a4be44e22ae64458d2471e0"
+      },
+      "byteIdentical": true,
+      "runtimeEligible": false,
+      "authority": "previously reviewed preparation source; no runtime frozen manifest or launch"
+    },
+    {
+      "family": "browser-prep-v704-unlaunched",
+      "origin": {
+        "path": ".git/aurora-handoff-import-20261006/browser900-runtime-prep-v704/hook/observer.py",
+        "bytes": 12656,
+        "sha256": "ce614d6e00bfd425a966eb3165f8b75e3269b956ef288c15f0cf31fd96e4e51a"
+      },
+      "canonical": {
+        "path": "thesis/harness/retained/browser-prep-v704/hook/observer.py.source",
+        "bytes": 12656,
+        "sha256": "ce614d6e00bfd425a966eb3165f8b75e3269b956ef288c15f0cf31fd96e4e51a"
+      },
+      "byteIdentical": true,
+      "runtimeEligible": false,
+      "authority": "previously reviewed preparation source; no runtime frozen manifest or launch"
+    },
+    {
+      "family": "browser-prep-v704-unlaunched",
+      "origin": {
+        "path": ".git/aurora-handoff-import-20261006/browser900-runtime-prep-v704/hook/aurora_voice_telemetry_v430.py",
+        "bytes": 15228,
+        "sha256": "cce47c11775101194cff6eb8fded2140bfba84a41a6dc39dca33efa8a7d5df98"
+      },
+      "canonical": {
+        "path": "thesis/harness/retained/browser-prep-v704/hook/aurora_voice_telemetry_v430.py.source",
+        "bytes": 15228,
+        "sha256": "cce47c11775101194cff6eb8fded2140bfba84a41a6dc39dca33efa8a7d5df98"
+      },
+      "byteIdentical": true,
+      "runtimeEligible": false,
+      "authority": "previously reviewed preparation source; no runtime frozen manifest or launch"
+    }
+  ],
+  "sourceArchiveManifest": {
+    "path": "docs/experiments/tcc-20261013-submission-20261030/root/desktop-gpu-padded-http900-v692/ARCHIVE-MANIFEST.json",
+    "bytes": 690579,
+    "sha256": "d87abd77df46d68fba1a4c420d411a95776026430b7100817aa1bf83f5d63605"
+  },
+  "sourceArchiveCustody": "existing verified WORKER-CUSTODY-RECEIPT.json; ZIP not rehashed, outcomes/audio/native cases not re-audited",
+  "originalInventory": {
+    "path": "thesis/inventory/harness-families-v756.md",
+    "bytes": 14428,
+    "sha256": "a258ff3828adba2747bca8ac99c273fcba8b1bdd4fd0c99746e48c2411108a63"
+  },
+  "correction": {
+    "path": "thesis/inventory/harness-families-v756-addendum.md",
+    "bytes": 2560,
+    "sha256": "87e0c738ded862f17d92cef14f2a6fa9f8f75be08f0d0d01474be8b9534c987a"
+  },
+  "newMeasuredRequests": 0,
+  "modelsOrServicesLoaded": false,
+  "activeSourcesModified": false,
+  "inventoryComplete": false,
+  "remaining": [
+    "V485/V497 actual frozen-source-to-prep mapping, including withheld fixture material",
+    "V745 remaining frozen bootstrap/hook/full source mapping after terminal custody",
+    "historical failures/readiness/text/mesh/source fixtures still to inventory",
+    "portable GPU/browser/mobile/API/mesh setup/launch admission and native-build/model-license gaps"
+  ]
+}

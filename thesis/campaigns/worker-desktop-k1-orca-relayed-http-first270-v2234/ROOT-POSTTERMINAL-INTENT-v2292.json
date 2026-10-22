@@ -1,0 +1,43 @@
+{
+  "at": "2026-10-21T20:50:15.936520+00:00",
+  "status": "LAUNCHING_PREPARED_FINALIZER_ONCE",
+  "sameOriginalGoal": "01a112a5-d6bb-74e2-bf7c-ace73cb513b5",
+  "originalRequesterActorsAbsent": true,
+  "epochMeasured": {
+    "attempted": 270,
+    "correct": 270,
+    "failed": 0
+  },
+  "excludedWarmups": 15,
+  "command": [
+    "/home/developer/projects/aurora/.git/aurora-handoff-import-20261006/cpu-audio-campaign-v491/env/bin/python",
+    "/home/developer/projects/aurora/thesis/harness/finish_k1_http_epoch_v2254.py"
+  ],
+  "maximumLaunches": 1,
+  "sources": [
+    {
+      "path": "thesis/harness/provider_export_k1_http_prefix_v2252.py",
+      "bytes": 8194,
+      "sha256": "f37fa0f0266767043ae0e491c4b360a3ff847c2aca36cc8b804b83cb804c50c6"
+    },
+    {
+      "path": "thesis/harness/transfer_k1_http_provider_prefix_v2253.py",
+      "bytes": 12169,
+      "sha256": "608723cf882622891f1c1f59325cf523c74fc1690acbca4a6037eaffdfb0be73"
+    },
+    {
+      "path": "thesis/harness/finish_k1_http_epoch_v2254.py",
+      "bytes": 14502,
+      "sha256": "f1a88d81a299e40469b6aa2f5bf3df013e9062d17750dacce85c5dcf73b93cbb"
+    },
+    {
+      "path": "thesis/analysis/analyze_k1_http_epoch_saved_v2242.py",
+      "bytes": 18585,
+      "sha256": "a8c40fad5537af133b4212e63a1932a4f6242904c3996c988d83d578d742c04c"
+    }
+  ],
+  "remoteOperation": "k1-http-provider-prefix-v2252",
+  "maximumRemoteSends": 1,
+  "newInference": 0,
+  "onObservationFailure": "Read this exit receipt, terminal-v2251/PHASE.json and same accepted operation/page receipts; never blindly relaunch."
+}

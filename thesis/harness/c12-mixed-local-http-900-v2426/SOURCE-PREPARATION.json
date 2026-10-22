@@ -1,0 +1,25 @@
+{
+  "at": "2026-10-22T07:44:51.222327+00:00",
+  "sourceHashes": {
+    "local_composition.py": "aaf9585ad24429c44ea5ed78b00a7ad49369f324528f901ac46a56eae9b22ba0",
+    "local_producer.py": "ffdc5482051e99d64b3761997c41ba41f9687ecd862adcc5996a4af02ba32b8f",
+    "campaign.py": "82088501dda3e806a694711afad708b2d927269faec2ad143a101abf081d6d78",
+    "stage_adapter.py": "f678712c75a50146194ccb34331fab8d995f057461e565be99be8d69c2b364a6",
+    "warmup_gate.py": "14ad96c1a3453190b061877a05b187c10788fae6e493926c227c5bb9708d7c23",
+    "requester_controller.py": "3e01e62ca188b2bfd9303259dbcdc80abbc45b1c18ae20e0c084ba2f61a9ffbe",
+    "collect_pair.py": "556e46fac478146e690439eedbf26663af915f2f994fabe2e52d00318cde48ee",
+    "queue_observer.py": "a57ef99e9c48bd7442068d5ea8f8bee016141fbc5f4efd8f9a7e78a1a5631afb",
+    "provider_controller.py": "bede9e003991b41a778f4d4e6a7ef5e4a7a3e572a7fca75aa7714eb5e81b5e18",
+    "paired_case.py": "2bf99817e28b4ccb1cfe15a2f4fe472b5076fb17376ecf24a5b982028a31335b",
+    "k3_composition.py": "777bfb6abf34a1485a38c1076c86a06776de4017f1f27715b326403aba15effa",
+    "prepare_and_launch.py": "9832f27de6dd5bc2467172f23af52d0b3fa207848e6cc31031bf19645a8c0817"
+  },
+  "priorVersion": "v2421",
+  "changed": "Actual inner LocalBus observer, preserved15 accuracy/native/GPU warmups +1 fresh instrumentation pair; source/counters versioned prospectively",
+  "targetMeasuredPerStream": 900,
+  "previousMeasured": 0,
+  "retainedProofSha256": "b85f2a374ecc2fe4d810d3f18c6176bd7854bce0aed8282f5e935095933bf9d7",
+  "masterClockUnchanged": true,
+  "sourceModelConfigAudioChanged": false,
+  "noNewWorkerOrApproval": true
+}

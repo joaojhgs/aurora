@@ -1,0 +1,11 @@
+{
+  "schema": "aurora.thesis.methodology-custody.v1",
+  "at": "2026-10-15T23:13:02.092180+00:00",
+  "authorityPath": "/home/developer/Documents/Obsidian Vault Origin/5-full-notes/faculdade/tcc/future-work-test-requirements.md",
+  "canonicalSnapshot": "thesis/methodology/owner-requirements-20261015-b78c0c8e.md",
+  "bytes": 408357,
+  "lines": 2159,
+  "sha256": "b78c0c8e614746d9f778d3fc28b41ef2869ea9fead7bf15cec6e57050d1decb4",
+  "scope": "Exact complete original-monitor sole-author snapshot through30.37; not new methodology, no Vault edit.",
+  "fullReadReceipt": ".git/aurora-handoff-import-20261006/monitor-plan-section3037-root-read-v745.json"
+}

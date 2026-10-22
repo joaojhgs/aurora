@@ -1,0 +1,8 @@
+{
+  "at": "2026-10-21T03:26:10.644284+00:00",
+  "priorLookupActuallyPerformed": false,
+  "reason": "No Personal source directory on this worker; rglob returned0files. Prior0matches is not negative evidence of absence of fallback. Original report preserved.",
+  "sourceDataPreservation": "Personal source is known on approved Personal host; missingworkercopy is not all-copy loss",
+  "causalStatus": "UNKNOWN",
+  "priorRuntimeReadPossibleConfound": "One nice19 saved-case JSON read during K1;8.67s walltime,0inference or network calls; retain all overlapping measured cases"
+}

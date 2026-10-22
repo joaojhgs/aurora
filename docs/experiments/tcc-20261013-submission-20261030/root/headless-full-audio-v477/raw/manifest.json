@@ -1,0 +1,100 @@
+{
+  "at": "2026-10-15T02:40:25.151423+00:00",
+  "case": "one complete prerecorded WAV causal localbus STT/LLM/TTS pilot",
+  "status": "completed_correctness_failed",
+  "n_attempted": 1,
+  "n_correct": 0,
+  "n_failed": 1,
+  "n_timeout": 0,
+  "n_measured": 0,
+  "noPhysicalPlaybackClaim": true,
+  "actualNewGpuOffloadNotProven": true,
+  "phase2MeasuredAllowed": false,
+  "files": [
+    {
+      "path": "audio-v477/admission-manifest.json",
+      "bytes": 2332,
+      "sha256": "70e87284abc4317ff19d53b927ad7ab3ac18f2ce5a3e0ea278cff37380b3cda9"
+    },
+    {
+      "path": "audio-v477/controller-launch.json",
+      "bytes": 1127,
+      "sha256": "b6eb92386ac4ff887fd17b10acc4982071314f74a108479641572ec1fb7bbb89"
+    },
+    {
+      "path": "audio-v477/runtime/actual-provider-bindings.jsonl",
+      "bytes": 2308,
+      "sha256": "68187d3099beec09f38acf851fe4f90322ea03f6ff6932becd5719dc20e8ce00"
+    },
+    {
+      "path": "audio-v477/runtime/launch.json",
+      "bytes": 1518,
+      "sha256": "7540ec7ce64bafd24a9096018b548dcaa9741387a731151b14672e69a59f7394"
+    },
+    {
+      "path": "audio-v477/runtime/pilot/pilot-result.json",
+      "bytes": 4266,
+      "sha256": "84e190641df57649cdb1f50842208ed62991a952ad362d31373992c188653626"
+    },
+    {
+      "path": "audio-v477/runtime/pilot/tts-output.wav",
+      "bytes": 246316,
+      "sha256": "7557b916c4bd4087f10f06cb41a156cada24f43c9e80deb71624cc4088cff63e"
+    },
+    {
+      "path": "audio-v477/runtime/resources.jsonl",
+      "bytes": 15680,
+      "sha256": "d99a800f5b6e54a4ac69105ec289652f78712b4472be0e7bb2f3a58f4e868c0b"
+    },
+    {
+      "path": "audio-v477/runtime/retirement.json",
+      "bytes": 491,
+      "sha256": "8a56e115627f9dfe64c0254bf2443e77a5fcc436e2ae6c3a37789a203256ac32"
+    },
+    {
+      "path": "audio-v477/runtime/terminal.json",
+      "bytes": 1844,
+      "sha256": "25e4dd0e22af96bd8f21517f13672f5493cc16248ebd0f8c9466aefd4b4acf84"
+    },
+    {
+      "path": "audio-v477/runtime/voice-stages.installed.json",
+      "bytes": 109,
+      "sha256": "3733fd6bfb6fefdb6500d2969becc12ea9fb7e81fb0558494e137ac0b1d808f7"
+    },
+    {
+      "path": "audio-v477/runtime/voice-stages.jsonl",
+      "bytes": 16641,
+      "sha256": "7d5f7fb2ae045e1eb2f99d426a6de0e50068abc3018f03360a82b65712c883a0"
+    },
+    {
+      "path": "audio-v477/runtime/voice-stages.status.json",
+      "bytes": 134,
+      "sha256": "388b9e49129d93a82d40bb24b08b713e8d420c0ba05bc80a08f50216f9ce4a63"
+    },
+    {
+      "path": "failed-setup-v476/admission-manifest.json",
+      "bytes": 2332,
+      "sha256": "7b98fc80d16370f9e74f7aea42923dd8e8355e07439a1bc0ca8c7a868efbeab1"
+    },
+    {
+      "path": "failed-setup-v476/controller-launch.json",
+      "bytes": 1127,
+      "sha256": "fc6848455e7a736518e486b8250b1c3e2d1d79f29318dd0e3dbd9e631f76c977"
+    },
+    {
+      "path": "failed-setup-v476/runtime/launch.json",
+      "bytes": 1518,
+      "sha256": "3e6c7ba0f13c024476d8ca9d0e7a4fbce329d9f34815da6ab318f4931e109ca0"
+    },
+    {
+      "path": "failed-setup-v476/runtime/terminal.json",
+      "bytes": 1754,
+      "sha256": "7a5d2c0e8dd93efe51ed274efe6e42cc74e995e9f5dc7b343565e507c055a1ed"
+    },
+    {
+      "path": "input/short-command-en-US.wav",
+      "bytes": 193068,
+      "sha256": "2f6361506708d0a3065a339d168c9db5412e343683dd9b4080471d8948bf82ae"
+    }
+  ]
+}

@@ -1,0 +1,31 @@
+{
+  "scope": "Physical metadata/liveness receipt only; not a new native warmup or data export",
+  "providerSnapshotAt": "2026-10-18T11:53:50.824295+00:00",
+  "providerCustodyPath": "/home/developer/projects/aurora/thesis/campaigns/worker-desktop-k3-orca-relayed-http-v1413/provider",
+  "retainedFiles": 669,
+  "physicalPayloadBytes": 66722165,
+  "providerAndCopierExactProcessesLive": true,
+  "configAndManifestUnchanged": true,
+  "copierErrors": [],
+  "files": {
+    "SEND.json": {
+      "bytes": 882,
+      "sha256": "d75dbcb0cf10483c9f6a58cac0d7a005751543c922ed8fffd226e88f27d7b9a3"
+    },
+    "RESULT.json": {
+      "bytes": 2008,
+      "sha256": "3217237ecec12e769a81d8cd1520a1b203742038429bae16ab4b90a86f2b95dc"
+    },
+    "SHOW-FENCE.json": {
+      "bytes": 1311,
+      "sha256": "2af2adfd16e08bdbe03357d0bd5d053c256c7739e771482a7085a3706814b57a"
+    }
+  },
+  "latestPersonalCursor": "33564",
+  "newSutCalls": 0,
+  "settingsLifecycleChanges": 0,
+  "rootCopyFreeBytesBefore": 6175051776,
+  "rootCopyFreeBytesAfter": 6175035392,
+  "reservedFreeBytes": 2147483648,
+  "sourcePopulationNote": "Shared provider log contains prior unadmitted V1413 and current V1481; analysis must select exact correlation IDs without pooling."
+}

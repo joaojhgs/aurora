@@ -1,0 +1,26 @@
+{
+  "records": [
+    {
+      "source": ".git/aurora-handoff-import-20261006/distributed-k2-orca-relayed-launch-v1264/proof-collection.private.log",
+      "destination": "thesis/campaigns/worker-desktop-k2-orca-relayed-http-v1264/ROOT-COLLECTOR-HISTORY-v1399/proof-collection.private.log",
+      "bytes": 80,
+      "sha256": "868b954ae923912dea8139441115340e356fad89fe964403bc7c83d488582bbf"
+    },
+    {
+      "source": ".git/aurora-handoff-import-20261006/distributed-k2-orca-relayed-launch-v1264/finalize-failure.json",
+      "destination": "thesis/campaigns/worker-desktop-k2-orca-relayed-http-v1264/ROOT-COLLECTOR-HISTORY-v1399/finalize-failure.json",
+      "bytes": 197,
+      "sha256": "8dbdad06245eff5efc150addcb7846b96a43431ab0659ea43c0542e52ff9ca67"
+    },
+    {
+      "source": ".git/aurora-handoff-import-20261006/v1384-k2-ordinary-warmup-proof-READ-8.json",
+      "destination": "thesis/campaigns/worker-desktop-k2-orca-relayed-http-v1264/ROOT-COLLECTOR-HISTORY-v1399/v1384-k2-ordinary-warmup-proof-READ-8.json",
+      "bytes": 15771,
+      "sha256": "f4aa751af19c8f8a10496102c3063711c3c63a5ab438fc298d90621b62ff1eb4"
+    }
+  ],
+  "copyOnly": true,
+  "sourceRunnerChanged": false,
+  "newModelCalls": 0,
+  "custodyAliases": "Populate already-declared copier static filenames with actual byte-identical proof and truthful recovery receipt; do not edit or restart live copier."
+}

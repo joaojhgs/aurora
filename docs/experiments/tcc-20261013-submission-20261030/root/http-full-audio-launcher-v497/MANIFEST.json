@@ -1,0 +1,45 @@
+{
+  "version": "V497 SOURCE ONLY",
+  "files": [
+    {
+      "path": "README.md",
+      "bytes": 7592,
+      "sha256": "a05202663a1b63437cf8368eb49f0861bc034c99033cad7f16a60a0316b52080"
+    },
+    {
+      "path": "REVIEW-APPROVED.md",
+      "bytes": 1710,
+      "sha256": "e5ffbd284ddf005f9ca86b2dc6b7887182478563a4f4d902cf8872aa92097465"
+    },
+    {
+      "path": "REVIEW-FINAL.md",
+      "bytes": 4610,
+      "sha256": "8eea3f5b21fd968bd751e6e7e0da6b2e10e0f350d7af8ad6e61c0897f13d795c"
+    },
+    {
+      "path": "REVIEW.md",
+      "bytes": 5744,
+      "sha256": "fd55ae73cb0478d7df53aea3a2919974aea94218c169850d0a37c6f3c00fb2bb"
+    },
+    {
+      "path": "ROOT-STATUS.md",
+      "bytes": 2055,
+      "sha256": "50d176464d77c9d4208a3ee015607d4049c1ca4aa9a391137715f26b1eb2ff7b"
+    },
+    {
+      "path": "STATIC-ADMISSION.json",
+      "bytes": 703,
+      "sha256": "f450857712529cab7d1e6b7b516fd9faf0ef9f1c10a9310d331054ff6abf75a6"
+    },
+    {
+      "path": "bootstrap.py",
+      "bytes": 1443,
+      "sha256": "7a3b4434d9cfaa3ea0ba157e6363c331895c1d40140d8062f136c97204a0cf00"
+    },
+    {
+      "path": "controller.py",
+      "bytes": 21489,
+      "sha256": "a2337af9265073aaf1353b6c990e8bbd52457bc02e65fc1d056b0b9fd1eb5b8b"
+    }
+  ]
+}

@@ -1,0 +1,44 @@
+\chapter{Conclusions}
+\label{chap:conclusions}
+
+\section{Synthesis of the Work}
+\label{sec:synthesis}
+
+This dissertation presented the evolution of Aurora from a local assistant into a service-oriented architecture prepared for peer-to-peer mesh execution. The starting point was an assistant with wake word detection, transcription, language-model orchestration, speech synthesis, interface, plugins, and \gls{MCP} support \cite{aurora_repo}. The work developed around that base introduced contracts, a message bus, a dynamic gateway, MeshBus, WebRTC transport, pairing, and topic-based permissions.
+
+The problem combined two needs. The user wants to keep data and control inside a local domain and also use devices with different capabilities. The adopted answer was a user-controlled mesh in which each instance can announce capabilities, negotiate trust, apply permissions, and route calls only when policy allows it. This solution preserves the local base and adds selective capability sharing.
+
+The background review showed that the project sits at the intersection of local assistants, edge computing, microservices, WebRTC, MQTT, RBAC, and JWT. The work does not propose a new WebRTC protocol or a new RBAC model. It integrates known blocks into a local assistant with a focus on privacy and peer control.
+
+\section{Fulfillment of the Objectives}
+\label{sec:objective-fulfillment}
+
+The general objective was to create a distributed and privacy-oriented basis for Aurora, allowing selective capability sharing between devices. The implementation fulfills that objective at the architectural level and has partial functional validation: the repository contains services with contracts, local and Redis-backed buses, MeshBus, a dynamic gateway, WebRTC, pairing, RBAC, and topic permissions \cite{aurora_architecture_doc,aurora_gateway_doc,aurora_handoff_doc}.
+
+The first specific objective was to separate capabilities into services. Aurora contains services for configuration, database, orchestration, \gls{TTS}, \gls{STT}, tools, authentication, and gateway. The second objective was to make communication independent from execution mode. LocalBus, BullMQBus, and MeshBus support that axis through commands, events, and queries. The third objective was to expose capabilities through contracts and a gateway. The registry, announcements, and route generation perform that role.
+
+The fourth objective was to allow peer communication. WebRTC DataChannels, MQTT signaling, ICE, and manifest exchange provide the transport and negotiation basis \cite{w3c_webrtc_2025,rfc8831_datachannels,rfc8445_ice,oasis_mqtt_2019}. The fifth objective was access control. The authentication service, bilateral pairing, topic permissions, and intersection between principal permissions and token scopes provide that control. The sixth objective was validation. The validation combined inventory, syntax checks, and a targeted unit-test run that ended with \texttt{151 passed, 8 skipped}. Redis, process-mode, broad integration, and performance tests remain pending.
+
+\section{Contributions}
+\label{sec:final-contributions}
+
+The first contribution was a clear boundary between the Aurora baseline and the distributed work. Wake word, STT, LLM, TTS, interface, and integrations form the reused base. Contracts, service lifecycle, dynamic gateway, mesh routing, pairing, and RBAC form the main contribution.
+
+The second contribution was the contract-based integration model. Each service describes methods, types, priority, exposure, and permissions. This description feeds the bus and the gateway, reducing dependence on direct calls between components.
+
+The third contribution was the extension of communication to a P2P mesh. MeshBus preserves the bus interface and adds destination choice, fallback, and remote routing. WebRTC provides the data channel, while Aurora keeps identity, permissions, and call semantics at the application level.
+
+The fourth contribution was the operational trust model. Bilateral pairing, peer management, tokens, scopes, and topic permissions allow a user to offer one capability without opening the whole assistant. That granularity supports the bounded objective of democratizing AI capabilities inside the user's domain, without turning the mesh into unrestricted access or into a broad social-adoption claim.
+
+\section{Limitations and Future Work}
+\label{sec:limitations-future-work}
+
+The remaining validation scope is specific. Successful typed controls do not establish a task-correct audio pipeline, genuine microphone capture, usable Android/native surfaces or real cross-device stage offload. The failed audio pilot and its missing timing boundaries remain explicit. The next admitted conditions require declared effective settings and actual accelerator/locality evidence, followed by 900 measured requests per applicable new condition, with warmups excluded and all failures and timeouts retained. No inter-device measurement starts before the required individual audio and surface evidence is accepted and sealed.
+
+Quantitative results now exist for bounded typed-request controls, but the comparative full-audio and cross-device questions remain unanswered. CPU and GPU populations are kept separate; hardware and background-load differences are not protocol overhead. The real audio pilot demonstrates that the stages execute causally, while its incorrect recognized task prevents successful end-to-end audio acceptance. Its single observed duration is not a percentile estimate. Energy, physical-phone thermal/radio behavior, actual direct/relay routes and weak-device offload benefit remain unestablished in this evidence snapshot.
+
+The third limitation concerns security. The model implements pairing, authentication, and permissions. The next version needs hardening, cryptographic review, adversarial WebRTC tests, credential rotation, revocation policies, and broader auditing. JWT and RBAC provide vocabulary and structure; final security depends on correct implementation, configuration, and operation \cite{rfc7519_jwt,rfc8725_jwt_bcp}.
+
+Future work should advance in five directions. First, complete a reproducible validation suite with Python 3.11, \texttt{uv}, Redis, integration tests, process mode, and JUnit logs. Second, measure mesh performance and availability under real workloads. Third, improve peer discovery, invitations, and credential rotation. Fourth, formalize sharing policies by capability, device profile, and risk. Fifth, prepare a user experience that makes permissions, peers, and failures understandable to the person operating the assistant.
+
+The observed evidence supports an implemented architecture and bounded typed-request controls. It also documents a real full-audio correctness failure that remains part of the study. The dissertation therefore does not yet conclude that distributed execution improves the complete voice experience or preserves privacy under every deployment. Those conclusions require the declared individual and real-device comparisons, with effective stage placement, correctness, resource limits, latency boundaries and negative outcomes reported together.

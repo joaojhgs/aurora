@@ -1,0 +1,37 @@
+{
+  "approved_private_gateway_binding_verified": true,
+  "at": "2026-10-17T17:54:36.035683+00:00",
+  "gateway_bind_host": "100.64.0.3",
+  "gateway_bind_port": 8000,
+  "gateway_endpoint_sha256": "92c5f1bd8f68369986778d7504484ed9f2d16743f857ad8bb97eaeebf6f5a1b5",
+  "original_execution_retirement_path": "/home/developer/projects/aurora/.git/aurora-handoff-import-20261006/distributed-k1-http-provider-v1126/input/original-execution-retirement-v1106.json",
+  "predecessor_pids": [
+    3643548,
+    3643568,
+    3643571,
+    3643573,
+    3643793,
+    204029,
+    182484,
+    222226,
+    238150,
+    238169,
+    249772,
+    249791
+  ],
+  "required_free_lock_paths": [
+    "/tmp/aurora-global-build.lock"
+  ],
+  "resources": {
+    "freeBytes": 149181493248,
+    "memAvailableBytes": 26373595136
+  },
+  "retired_predecessors_verified": true,
+  "route_auth_and_loaded_provider_proof": "pending_normal15_poststartup_warmups",
+  "status": "admitted",
+  "worker_release": {
+    "bytes": 1227,
+    "path": "/home/developer/projects/aurora/.git/aurora-handoff-import-20261006/distributed-k1-http-provider-v1126/operator/worker-release.json",
+    "sha256": "044853e6cc5fad7dfe7d78ab814dccf57a818ac4826b86e8471ddeb9d60c7f20"
+  }
+}

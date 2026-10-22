@@ -1,0 +1,19 @@
+{
+  "accounting": "Initial62 cohort files143571171B plus2 initial monitor reports14812B =143585983B for original64 receipt entries; later copies have separate immutable receipts.",
+  "at": "2026-10-17T20:38:33.390662+00:00",
+  "files": [
+    {
+      "bytes": 8618,
+      "destination": "thesis/evidence/sealed-cohorts-v1215/monitor/STORAGE-CONSISTENCY-REVIEW-20261017T2036.json",
+      "sha256": "da195f088a26ef1f5d9abf723e34b37e175ec9ba552ef52dc8a7ce76d5795b76",
+      "source": ".omx/evidence/orca-monitor-20261010/STORAGE-CONSISTENCY-REVIEW-20261017T2036.json"
+    },
+    {
+      "bytes": 1589,
+      "destination": "thesis/evidence/sealed-cohorts-v1215/monitor/STORAGE-CONSISTENCY-ACCOUNTING-RESOLUTION-20261017T2036.json",
+      "sha256": "5470433ddbd5688e355b593cd7ac24c7874d8157eabf526ebb350dad0e3f8e81",
+      "source": ".omx/evidence/orca-monitor-20261010/STORAGE-CONSISTENCY-ACCOUNTING-RESOLUTION-20261017T2036.json"
+    }
+  ],
+  "verdict": "No material custody defect; no further tests required"
+}

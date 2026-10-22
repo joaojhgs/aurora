@@ -1,0 +1,28 @@
+{
+  "id": "9641a4af-85ae-4db2-9d37-ff71d70b1896",
+  "ok": true,
+  "result": {
+    "message": {
+      "id": "msg_a819a04d991b",
+      "run_id": "run_e6054e76e9fc",
+      "delivery_contract": "current_delivery",
+      "from_handle": "term_6a00d9ee-792a-4daf-8578-236290e33108",
+      "to_handle": "dispatch:ctx_37b4d0a3c14f",
+      "subject": "MAIN C12 paired readiness PASSED, sealed/released; next new900 source/freeze, no phone hold",
+      "body": "MAIN C12 REAL AUDIO PAIRED READINESS PASSED and finite allocation now SEALED/RELEASED. Actual two flows correct: D-local production UserInput/Response15.239s and W-existing authenticated Orca-relayedHTTP34.400s. All6 STT/LLM/TTS model-span pairs join same receiver2474824; validWAVs and strict transcript/Paris predicates. Actual offered flow overlap15.202578594s in Dmonotonic clock; native same-stage executions SERIALIZE, localSTT call-to-handler delay3112.903231ms includes queue/scheduling. Do not claim same-model parallelism or purequeue duration. Native log proves RX7600 Vulkan actual25/25LLMoffloaded; STT+PiperCPU. Exactly2nativeTTS calls, no automatic extra. Receipt READINESS-PASSED-v2416.json SHA5d61dddd1ed4762a0ec144e80564f3dedb3caf617e068152fe32ff1c9a2aa512 under thesis/campaigns/c12-mixed-local-http-readiness-v2414/. Provider naturally expired/retired; bothD2474823/2474824 and W230839 ABSENT, nativeOpen0, Rootsent0signals, no clockextension. Final22providerrawfiles archive99697B SHA febeb16355fff56082f1336d08736fd791fbecc0dc2977dc9ce8f8cb7225159e physically bothrepos/allmemberSHAs verified; requester case/audio/resources local. RESOURCE-RELEASE-v2418.json SHA5818aa6f7fa032451ae7d3ea8d6a14aa732e8e1291a23de80a329e88eb4342d5; REPORT.md3441B SHA2ae3911dbce66f5c685ceb064ae9977f0476c8109ff3dff549ed708cd0cf33ef. First failed local boundary/remote-success pair and zero-inference scheduling rejection preserved, never count as modelquality. NewC12 MEASURED0/900, NOTLAUNCHED. Root actual nextwork: versioned finite paired campaign loop from workingv2414, incremental actual-STT-arrival coupling, proper queue/resource/rate+native recording, exactprimary900/companion denominators/15excludedwarmuppairs/source/reference/sessioncaps freeze, then normalwarmupadmission beforeindex1. NEXT-MAIN-ACTION-v2418.json SHAb6e98601fb81942c32c34815cf81d89a526c1a1461910184658d22df9dac346d. No unloadedW-D/CPUbaseline rerun or newworker/reviewloop, no phone dependency. Originalnativegoal actualACTIVE/unbudgeted saved NATIVE-GOAL-ACTIVE-v2418.json; supported OMXannotate_ledger accepted, all13 story statusesunchanged. Root CURRENT, coordination and legacycurrentpointer updated. Originalmonitor remains soleVaultwriter and soleK1BIGemitter; this is a distinct mainreadiness milestone, not fullC12/13completion or permissionrequest.",
+      "type": "status",
+      "priority": "normal",
+      "thread_id": null,
+      "payload": null,
+      "created_at": "2026-10-22T06:51:08Z",
+      "delivered_at": null
+    },
+    "mutation": {
+      "requestId": "fc6bd9e6-f2f0-49ab-a022-ce8ea4a28d9e",
+      "replayed": false
+    }
+  },
+  "_meta": {
+    "runtimeId": "cc9e3275-28c6-4c45-85cc-bdcd2262aa7d"
+  }
+}

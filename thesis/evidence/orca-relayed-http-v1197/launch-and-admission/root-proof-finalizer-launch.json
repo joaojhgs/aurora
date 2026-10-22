@@ -1,0 +1,10 @@
+{
+  "at": "2026-10-17T20:08:30.587658+00:00",
+  "pid": 431706,
+  "startTicks": 104617117,
+  "role": "originalRoot_once_only_receiver_warmup_proof_finalizer",
+  "newAgentOrWorker": false,
+  "noSutRequests": true,
+  "observationCapSeconds": 3600,
+  "personalControlExclusiveUntilResult": true
+}

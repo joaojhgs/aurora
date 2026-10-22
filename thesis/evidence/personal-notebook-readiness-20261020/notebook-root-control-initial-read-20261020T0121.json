@@ -1,0 +1,25 @@
+{
+  "id": "26a3b7eb-9a37-4b50-9af1-4edfa455d28b",
+  "ok": true,
+  "result": {
+    "terminal": {
+      "handle": "term_f40f2bd6-0f71-4484-8347-ac221cf6ce9b",
+      "status": "running",
+      "tail": [
+        "\u279c  aurora git:(feat/ui-multi-platform-integration) \u2717",
+        "[1]  + 42298 exit 1     /usr/local/bin/setup-default-inputs > /dev/null 2>&1",
+        "\u279c  aurora git:(feat/ui-multi-platform-integration) \u2717"
+      ],
+      "truncated": false,
+      "limited": false,
+      "oldestCursor": "0",
+      "nextCursor": "2",
+      "latestCursor": "2",
+      "returnedLineCount": 3,
+      "source": "stream"
+    }
+  },
+  "_meta": {
+    "runtimeId": "cc9e3275-28c6-4c45-85cc-bdcd2262aa7d"
+  }
+}

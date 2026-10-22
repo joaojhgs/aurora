@@ -1,0 +1,52 @@
+{
+  "at": "2026-10-20T21:53:16.101881+00:00",
+  "warmups": 15,
+  "correctWarmups": 15,
+  "measured": 0,
+  "correctMeasured": 0,
+  "lastCase": {
+    "file": "attempt-0015-warmup.jsonl",
+    "phase": "warmup",
+    "status": "completed_correct",
+    "flowDurationMs": 11912.831245,
+    "audio": {
+      "file": "audio/2f260718c42b546514a657e4957357ee635bf2dc387517c2d15f172d7a2d2b36.wav",
+      "sha256": "2f260718c42b546514a657e4957357ee635bf2dc387517c2d15f172d7a2d2b36"
+    }
+  },
+  "actors": [
+    {
+      "pid": 3107331,
+      "state": "S",
+      "startTicks": 131139830,
+      "exact": true
+    },
+    {
+      "pid": 3107584,
+      "state": "S",
+      "startTicks": 131141022,
+      "exact": true
+    },
+    {
+      "pid": 3107332,
+      "state": "S",
+      "startTicks": 131139835,
+      "exact": true
+    },
+    {
+      "pid": 3107333,
+      "state": "S",
+      "startTicks": 131139836,
+      "exact": true
+    }
+  ],
+  "freeBytes": 4230582272,
+  "custody": {
+    "at": "2026-10-20T21:52:58.652332+00:00",
+    "sequence": 5,
+    "completedCases": 15,
+    "files": 80,
+    "lastReceipt": "thesis/campaigns/worker-desktop-k3-p2p-full-audio-v1937/receipts/000005.json",
+    "lastReceiptSha256": "c9e1c655f29b2f2fe48c3dc897f23810752cc8c6cddd58ddb7e333aafabfdd2d"
+  }
+}

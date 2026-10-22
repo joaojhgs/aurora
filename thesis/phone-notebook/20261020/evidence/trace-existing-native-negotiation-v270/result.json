@@ -1,0 +1,1 @@
+{"exit": 0, "appPid": "31305", "node": {"start": {"ok": true, "payloadFree": true, "delegateCountPerCall": 1, "reconnectsStarted": 0}, "result": {"at": "2026-10-22T09:57:54.512Z", "rows": [], "observerRemoved": true, "payloadValuesExported": false}, "existingAutoNegotiationOnly": true, "modelCalls": 0, "pairingCodesRead": false}}

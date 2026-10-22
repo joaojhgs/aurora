@@ -1,0 +1,8 @@
+{
+  "bytes": 245,
+  "copyOnly": true,
+  "custody": "Notebook result persisted and fsynced before relay; remote receipt in same output",
+  "localPath": "/home/developer/projects/aurora/thesis/phone-notebook/20261020/evidence/missing-locked-crates-20261022T0343/result.json",
+  "remotePath": "/home/developer/projects/aurora/thesis/phone-notebook/20261020/evidence/missing-locked-crates-20261022T0343.json",
+  "sha256": "c85e991caeea4ede4bdf62798d20eb9e373422e55ec59b2e7e7564a492796d61"
+}

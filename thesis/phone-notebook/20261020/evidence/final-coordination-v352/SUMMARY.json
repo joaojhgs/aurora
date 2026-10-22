@@ -1,0 +1,9 @@
+{
+  "at": "2026-10-22T12:15:22.503215+00:00",
+  "status": "OWNER_RESUMED_WORK_REPORTED_NOT_READY_AFTER_FIXED_WINDOW",
+  "workerDoneRepeated": false,
+  "newTaskOrDispatch": false,
+  "report": "REPORT.md",
+  "custody": "FINAL-CUSTODY-RECEIPT.json",
+  "mainCampaignUntouched": true
+}

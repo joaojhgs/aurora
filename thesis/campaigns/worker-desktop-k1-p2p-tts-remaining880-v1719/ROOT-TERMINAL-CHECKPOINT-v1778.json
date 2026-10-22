@@ -1,0 +1,64 @@
+{
+  "at": "2026-10-20T13:50:42.571057+00:00",
+  "status": "STOPPED_SYSTEM_FAILURE_LOCAL_EOF_SEALED",
+  "goalTurnClassification": "PROGRESS_TERMINAL_RECONCILIATION",
+  "nativeGoal": {
+    "threadId": "01a112a5-d6bb-74e2-bf7c-ace73cb513b5",
+    "objective": "Complete the durable ultragoal plan in .omx/ultragoal/goals.json, including later accepted/appended stories, under the original brief constraints; use .omx/ultragoal/ledger.jsonl as the audit trail.",
+    "status": "active",
+    "tokensUsed": 235043326,
+    "timeUsedSeconds": 788778,
+    "createdAt": 1791314947,
+    "updatedAt": 1792504205
+  },
+  "wholeCondition": {
+    "planned": 900,
+    "attempted": 709,
+    "correct": 697,
+    "failed": 12,
+    "timeoutFlagged": 1,
+    "unattempted": 191,
+    "excludedWarmupsAcrossEpochs": 30
+  },
+  "continuation": {
+    "epochPlanned": 880,
+    "attempted": 689,
+    "correct": 678,
+    "failed": 11,
+    "timeoutFlagged": 1,
+    "unattempted": 191
+  },
+  "controllerExitCode": 1,
+  "shutdownCompleted": true,
+  "workerActorsRetired": [
+    2360747,
+    2360768,
+    2361201
+  ],
+  "stopReason": "remote_mesh_tts_timeout_ambiguous",
+  "conditionManifestSha256": "120dd99a4de0a242c30ebe4bb46d854ca77313c482a0c74f024edb624829a6e8",
+  "requesterSeal": {
+    "path": "thesis/campaigns/worker-desktop-k1-p2p-tts-remaining880-v1719/terminal-v1777/seal/REQUESTER-SEAL.json",
+    "sha256": "a85ca3225c99ef6f467568b1c69dff9378769ee5ef495af4a172c1352f153e43",
+    "verifiedCases": 704,
+    "physicalWavs": 693,
+    "verifiedIndexedBytes": 79313774
+  },
+  "providerReconciliation": {
+    "path": "thesis/campaigns/worker-desktop-k1-p2p-tts-remaining880-v1719/PERSONAL-PROVIDER-RECONCILIATION-v1778.json",
+    "sha256": "a4bb987bd9bbc714f0f9bad1d34593d8ac932b6b3c0a1fe1410972982e39cbaf",
+    "at": "2026-10-20T13:49:25.828784+00:00",
+    "sameOriginalPidStartsLive": true,
+    "manifestAndConfigUnchanged": true,
+    "providerEOF": false
+  },
+  "nextAction": "Reconcile original request709 and existing provider/route from bounded saved data before new inference; preserve191 unattempted indices and all prior failures. No full replay or success top-up.",
+  "originalMonitor": {
+    "task": "task_d7ea336050cf",
+    "dispatch": "ctx_37b4d0a3c14f",
+    "terminalNotice": "msg_0cc16a658012"
+  },
+  "sourceOrModelChanges": false,
+  "newInference": false,
+  "fullAggregateGoalComplete": false
+}

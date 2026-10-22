@@ -1,0 +1,13 @@
+# Personal notebook metadata admission: incomplete, no execution
+
+Root requested existing approved personal-notebook receipts in msg_5d13d494de5c. The authoritative full plan identifies ssh:ssh-sem-notebook-personal as the owner-requested Portugal notebook; it does not verify country, physical hardware, current terminal/incarnation, model/backend capacity or reservation. The historical96.332%CPU sample is readiness/confounding evidence only, not current admission.
+
+The supported Aurora project-setups query for project314e7b89-8f19-4535-9443-22b342aedff7 and that exact personal host returned an empty list (receipt d2e7dd58-c84d-4778-b97f-4bbaaf609cee). The current terminal inventory was scoped only to coding-worker and omitted the notebook. Neither result establishes machine/session absence or exit.
+
+The existing approved GPU-desktop terminal metadata IS verified: term_2e93af9c-1589-414b-8f92-17649f3c8069, incarnation9a6a4e5a-d9db-4d83-ae31-907ff2149dd1, execution host ssh:ssh-1786238480967-semdev, existing remote worktreece8df754-5c48-4296-83bd-452a5b99942f::/home/developer/projects/aurora, connectedtrue, receipt52e60f1f-3d63-403d-b083-0eec54b532fd. It was read as metadata only, never sent input, adopted, relabelled as a notebook or used to change canonical project identity. Host registration alone is not independent physical-hardware or country proof.
+
+Saved-runtime metadata discovery returned forbidden: environment-list acts on the Orca host itself and cannot run from an SSH host. No pairing, login, credential, account, connection, permission or scope change was attempted. This is a specific inventory capability gap, not a model-quality/owner-fixture blocker. Root or the existing authorized host/Personal coordinator may supply current metadata through its already available route; no replacement worker or new access is requested.
+
+Before notebook execution, retain exact personal host/terminal/incarnation/workspace and physical-device mapping, country provenance, CPU/GPU/VRAM/RAM/storage/network/power/thermal capacity, local source/app/model/backend/acceleration hashes and reservation. Personal/work distroboxes are shared physical hardware; no company data/account/session is inspected or used. Unknown inventory rows remain readiness_unknown/not_run, not accepted. Current CPU/GPU900conditions continue unchanged and measured cross-device traffic remains held behind all required individual audio/surface seals.
+
+Same Runrun_e6054e76e9fc/Tasktask_d7ea336050cf/Dispatchctx_37b4d0a3c14f; original Root and monitor ownership preserved. No new sessions/workers/projects, runtime/build/model/device requests or network/security changes.

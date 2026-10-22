@@ -1,0 +1,11 @@
+--- old-receiver-proof
++++ tts-native-model-handler-only
+@@ -151,6 +151,8 @@
+     for row in spans:
+         stage = "assistant" if row.get("stage") == "llm" and row.get("handler") == "resolved_chat_model.astream" else row.get("stage")
+         if stage not in {"assistant", "tts"} or row.get("record_kind") != "invocation_span_boundary":
++            continue
++        if stage == "tts" and row.get("handler") != "tts.model_invoke":
+             continue
+         corr = row.get("correlation_id")
+         if isinstance(corr, str):

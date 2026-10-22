@@ -1,0 +1,13 @@
+{
+  "controlDeadline": "2026-10-22T12:55:43.651360+00:00",
+  "host": "ssh:ssh-sem-notebook-personal",
+  "incarnation": "328cd72f-c7ea-49ff-a2db-b9275b085037",
+  "remoteResult": "/home/developer/projects/aurora/thesis/phone-notebook/20261020/evidence/read-pinned-chat-format-v382.json",
+  "rootAdmissionMessage": "Read installed original pinned public chat formatter source only to diagnose empty answer; no runtime/model substitution, generation or security changes",
+  "script": "scripts/read_pinned_chat_format_v382.py",
+  "scriptSha256": "b038742ce4adbbd4321d6890c2b5d6e0bf4db036d8c5db9478f4e49a961b3d0f",
+  "singleSend": true,
+  "supportedEnter": true,
+  "terminal": "term_a2ed5feb-7c92-48e4-bd88-d1b0e6737989",
+  "textTrailingNewline": false
+}

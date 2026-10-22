@@ -1,0 +1,34 @@
+{
+  "at": "2026-10-22T08:56:17.589220+00:00",
+  "status": "PREFERRED_COPY_ONLY_DELTA_FINALIZER_PREPARED_NOT_EXECUTED",
+  "source": "/home/developer/projects/aurora/thesis/harness/c12_terminal_delta_custody_v2440.py",
+  "sourceSha256": "396b8b4fe74fab757753a0b0aefbf59fed1bdce265c2a79e330959a7fe852a1e",
+  "originalFullCopyFinalizerPreservedSha256": "00c34f6b28df737e82a217c4deda4e4a2001b77cbc43233ea0683bda4bab5cc7",
+  "python": "3.11.17",
+  "lint": "Ruff E9,F63,F7,F82 PASS on finalizer and saved-byte smoke",
+  "sourceAndGeneratedDesktopPayloadCompile": true,
+  "actualLiveGuard": {
+    "at": "2026-10-22T08:56:17.589074+00:00",
+    "worker": {
+      "originalPresent": true,
+      "pid": 281887,
+      "observedStartTicks": 143363140,
+      "state": "S"
+    },
+    "requesterTerminalPresent": false,
+    "eligibleForOneProviderObservation": false,
+    "remoteOperations": 0,
+    "inference": 0,
+    "status": "DEFERRED_ACTIVE_CAMPAIGN_NO_REMOTE_OPERATION"
+  },
+  "savedByteSmoke": "/home/developer/projects/aurora/thesis/evidence/c12-eof-delta-v2440-smoke/saved-byte-run1/SMOKE-RESULT.json",
+  "savedByteSmokeSha256": "cbf34d641c5345db1b4515f2e5d79772d7237dc3bc3d6049b972f79cfe18eea0",
+  "smokeScope": "Four synthetic byte streams, one retained prefix each plus one final tail; aggregate byte counts and SHA256 match independently constructed expected bytes. No scientific campaign outcome or Desktop execution proof.",
+  "preservation": "All existing pair archives/offsets remain physical in repo; copy only actual remaining EOF tails + safe shutdown metadata + any uncollected cases. After retirement verify saved prefixes+tails against real Desktop full EOF hashes; no deletion, no raw pooling.",
+  "diskAdmission": "Maintain original2GiB floor; reserve16x actual small compressed payload +2MiB for encoded control/page/archive copies. Actual payload/admission awaits retirement; no space guarantee from synthetic test.",
+  "actualEOFExecution": "PENDING same original actors retirement; no remote operations performed",
+  "collectionSourceSettingsCountsClockUnchanged": true,
+  "newInferenceWorkersBuildsDeviceQueries": 0,
+  "storageCacheAuthorization": "Still pending exact owner answer; no inferred approval/deletion",
+  "nextAction": "Continue frozen measured campaign. After terminal and exact actor retirement, run pinnedPython with nice -n10 and this source --collect once; then saved-data final outcome/stage analysis and scoped release."
+}

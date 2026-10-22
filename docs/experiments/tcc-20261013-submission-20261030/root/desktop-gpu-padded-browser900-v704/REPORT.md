@@ -1,0 +1,9 @@
+# Browser UI condition V704 setup outcome
+
+**Status: Current bounded check.** This attempt stopped before its first warmup. It supplies no measured browser latency or model-quality result. The [actual frozen admission](v791-browser-actual-freeze-RESULT.json) succeeded at2026-10-16 01:41:55UTC with manifest `7f00c037ea241403bf9194e70f8b452266c185379b1a9362dd867b356c240a1d`. The [controller launch](v792-browser-actual-spawn-RESULT.json) occurred at01:42:39UTC; backend and prebuilt UI were ready at01:42:49UTC. Driver setup stopped after271ms with exit1.
+
+The [actual terminal and retirement observation](v793-browser-setup-failure-RESULT.json) records0/15warmups,0/900measured and900unattempted. Controller3409829,web3409860,backend3409861 anddriver3409927 were absent; both global/GPU locks were observed free. No forced worker stop occurred. Browser/profile cleanup completed. Raw files remain at `/tmp/aurora-root-padded-browser900-v704`; the frozen manifest/source/failed attempt are preserved.
+
+The [installed official Playwright source](v794-playwright-installed-source-RESULT.json), version1.57.0-beta-1764944708000, explicitly rejects `--user-data-dir` passed to `chromium.launch` and names `launchPersistentContext(userDataDir, options)` as the supported API. The driver used the rejected argument. This source finding and the immediate0-case terminal identify a harness setup defect; no transcription, answer or TTS quality conclusion follows.
+
+A bounded correction is prepared in a new V794 attempt namespace with independent source review. Audio/model/settings, strict correctness predicates,15 excluded normal warmups and900 measured requests remain unchanged. The prior V787 build-alias preflight failure was separate and stopped before the V704 run root existed; its original receipt remains retained. No completed local/API measurements or prior audits were replayed.

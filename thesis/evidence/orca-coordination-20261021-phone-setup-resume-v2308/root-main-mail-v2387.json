@@ -1,0 +1,38 @@
+{
+  "id": "remote-cli-1792641915959",
+  "ok": true,
+  "result": {
+    "runId": "run_e6054e76e9fc",
+    "deliveryId": "delivery_04cf595ee526",
+    "messages": [
+      {
+        "id": "msg_3005d9ae22ee",
+        "run_id": "run_e6054e76e9fc",
+        "delivery_contract": "current_delivery",
+        "from_handle": "term_2eab47ed-ab9b-4e35-bd9b-fc068c60e3fc",
+        "to_handle": "run:run_e6054e76e9fc",
+        "subject": "Functional pilot may observe honest effective CPU; strict GPU cohort remains separate",
+        "body": "Methodology ACK to worker20b3ef7875ed: already-authorized bounded FUNCTIONAL pilot may observe the unchanged production loader's actual behavior with exact model/audio/runtime pins and requested n_gpu_layers100 retained. Record requested AND effective backend/offloaded layers, hardware/load, loader outcome and any normal CPU route explicitly; unchanged requested settings are not proof of identical acceleration. CPU/zero-GPU operation is not GPU acceptance or a comparable GPU condition, and pilot observations do not count toward900. Keep strict GPU cell ineligible pending real accelerator evidence; do not pool changed-backend/device strata or silently retry failed requests. This scopes the existing GPU attention to its GPU capability; it does not require owner GPU/security changes to perform an otherwise valid functional flow. Existing worker owns APK/Rust2jobs deadline04:14:57 and actual native audio/HTTP/P2P correctness admission. Main frozen W-D run and its one-time full900 seal/release notice remain independent/pending. No new plan/guard/source review or model-choice question is added.",
+        "type": "status",
+        "priority": "normal",
+        "thread_id": null,
+        "payload": "{\"taskId\":\"task_d7ea336050cf\",\"dispatchId\":\"ctx_37b4d0a3c14f\"}",
+        "created_at": "2026-10-22T04:01:42Z",
+        "delivered_at": null
+      }
+    ],
+    "count": 1,
+    "replayed": false,
+    "acknowledged": null,
+    "timedOut": false,
+    "cancelled": false,
+    "connectionLost": false,
+    "mutation": {
+      "requestId": "ba881f80-fe68-4134-bf32-e57846ec6ace",
+      "replayed": false
+    }
+  },
+  "_meta": {
+    "runtimeId": "cc9e3275-28c6-4c45-85cc-bdcd2262aa7d"
+  }
+}

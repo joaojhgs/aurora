@@ -1,0 +1,250 @@
+{
+  "at": "2026-10-18T16:34:40.330901+00:00",
+  "host": "code-worker",
+  "pid": 1305605,
+  "role": "worker",
+  "phase": "control_plane_not_ready",
+  "newModelRequests": 0,
+  "modelServicesStarted": [],
+  "httpListenerStarted": false,
+  "normalProductionContracts": true,
+  "sourceRoot": "/home/developer/projects/aurora/.git/aurora-handoff-import-20261006/cpu-full-audio-v490/source",
+  "diagnostic": {
+    "enabled": true,
+    "started": false,
+    "mesh_enabled": true,
+    "local_signaling_peer_id": null,
+    "local_mesh_peer_id": null,
+    "local_node_name": "aurora-tcc-pair-v1535-worker",
+    "require_auth": true,
+    "auth_timeout_seconds": 10.0,
+    "pairing_timeout_seconds": 300.0,
+    "app_layer_e2ee_enabled": true,
+    "signaling": {
+      "strategy": "",
+      "connected": false,
+      "encrypted_presence": false,
+      "app_id_configured": false,
+      "room_configured": false,
+      "broker_count": 0,
+      "public_broker_warning": false
+    },
+    "peers": [],
+    "connected_peer_count": 0,
+    "authenticated_peer_count": 0,
+    "pairing_peer_count": 0,
+    "pending_rpc_count": 0,
+    "recent_errors": [],
+    "secrets_redacted": true
+  },
+  "pending": [],
+  "trust": [],
+  "normalApprovalCount": 0,
+  "allowedPeerPermissions": [
+    "Gateway.GetRegistry",
+    "Gateway.GetMeshStatus",
+    "TTS.Synthesize"
+  ],
+  "startupErrors": [
+    {
+      "message": "JSON Schema constraint violation at services.gateway.webrtc: Additional properties are not allowed ('signaling_brokers' was unexpected)",
+      "exceptionCategory": null
+    },
+    {
+      "message": "JSON Schema constraint violation at services.orchestrator.llm.local.huggingface_pipeline.options.max_tokens: None is not of type 'integer'",
+      "exceptionCategory": null
+    },
+    {
+      "message": "JSON Schema constraint violation at services.orchestrator.llm.local.huggingface_pipeline.options.device: None is not of type 'string'",
+      "exceptionCategory": null
+    },
+    {
+      "message": "JSON Schema constraint violation at services.orchestrator.llm.local.huggingface_pipeline.options.device: None is not one of ['cpu', 'cuda', 'auto']",
+      "exceptionCategory": null
+    },
+    {
+      "message": "JSON Schema constraint violation at services.orchestrator.llm.local.llama_cpp.options.n_threads: None is not of type 'integer'",
+      "exceptionCategory": null
+    },
+    {
+      "message": "JSON Schema constraint violation at services.orchestrator.llm.remote_peer.peer_id: None is not of type 'string'",
+      "exceptionCategory": null
+    },
+    {
+      "message": "JSON Schema constraint violation at services.orchestrator.llm.remote_peer.provider_id: None is not of type 'string'",
+      "exceptionCategory": null
+    },
+    {
+      "message": "JSON Schema constraint violation at services.orchestrator.llm.remote_peer.service_instance_id: None is not of type 'string'",
+      "exceptionCategory": null
+    },
+    {
+      "message": "JSON Schema constraint violation at services.orchestrator.llm.mesh_peer.peer_id: None is not of type 'string'",
+      "exceptionCategory": null
+    },
+    {
+      "message": "JSON Schema constraint violation at services.orchestrator.llm.mesh_peer.provider_id: None is not of type 'string'",
+      "exceptionCategory": null
+    },
+    {
+      "message": "JSON Schema constraint violation at services.orchestrator.llm.mesh_peer.service_instance_id: None is not of type 'string'",
+      "exceptionCategory": null
+    },
+    {
+      "message": "JSON Schema constraint violation at services.orchestrator.routing.dispatch_default.peer_id: None is not of type 'string'",
+      "exceptionCategory": null
+    },
+    {
+      "message": "JSON Schema constraint violation at services.orchestrator.routing.dispatch_default.provider_id: None is not of type 'string'",
+      "exceptionCategory": null
+    },
+    {
+      "message": "JSON Schema constraint violation at services.orchestrator.routing.dispatch_default.service_instance_id: None is not of type 'string'",
+      "exceptionCategory": null
+    },
+    {
+      "message": "JSON Schema constraint violation at services.orchestrator.routing.dispatch_default.resource_namespace: None is not of type 'string'",
+      "exceptionCategory": null
+    },
+    {
+      "message": "JSON Schema constraint violation at services.orchestrator.routing.dispatch_default.timeout_s: None is not of type 'number'",
+      "exceptionCategory": null
+    },
+    {
+      "message": "JSON Schema constraint violation at services.orchestrator.routing.inference_default.peer_id: None is not of type 'string'",
+      "exceptionCategory": null
+    },
+    {
+      "message": "JSON Schema constraint violation at services.orchestrator.routing.inference_default.provider_id: None is not of type 'string'",
+      "exceptionCategory": null
+    },
+    {
+      "message": "JSON Schema constraint violation at services.orchestrator.routing.inference_default.service_instance_id: None is not of type 'string'",
+      "exceptionCategory": null
+    },
+    {
+      "message": "JSON Schema constraint violation at services.orchestrator.routing.inference_default.model_id: None is not of type 'string'",
+      "exceptionCategory": null
+    },
+    {
+      "message": "Gateway auth is enabled but no token_secret is configured. Tokens will be invalidated on restart. Set services.gateway.api.token_secret in config.json or AURORA_TOKEN_SECRET in .env to persist it.",
+      "exceptionCategory": null
+    },
+    {
+      "message": "Gateway auth is enabled but no token_secret is configured. Tokens will be invalidated on restart. Set services.gateway.api.token_secret in config.json or AURORA_TOKEN_SECRET in .env to persist it.",
+      "exceptionCategory": null
+    },
+    {
+      "message": "JSON Schema constraint violation at services.gateway.webrtc: Additional properties are not allowed ('signaling_brokers' was unexpected)",
+      "exceptionCategory": null
+    },
+    {
+      "message": "JSON Schema constraint violation at services.orchestrator.llm.local.huggingface_pipeline.options.max_tokens: None is not of type 'integer'",
+      "exceptionCategory": null
+    },
+    {
+      "message": "JSON Schema constraint violation at services.orchestrator.llm.local.huggingface_pipeline.options.device: None is not of type 'string'",
+      "exceptionCategory": null
+    },
+    {
+      "message": "JSON Schema constraint violation at services.orchestrator.llm.local.huggingface_pipeline.options.device: None is not one of ['cpu', 'cuda', 'auto']",
+      "exceptionCategory": null
+    },
+    {
+      "message": "JSON Schema constraint violation at services.orchestrator.llm.local.llama_cpp.options.n_threads: None is not of type 'integer'",
+      "exceptionCategory": null
+    },
+    {
+      "message": "JSON Schema constraint violation at services.orchestrator.llm.remote_peer.peer_id: None is not of type 'string'",
+      "exceptionCategory": null
+    },
+    {
+      "message": "JSON Schema constraint violation at services.orchestrator.llm.remote_peer.provider_id: None is not of type 'string'",
+      "exceptionCategory": null
+    },
+    {
+      "message": "JSON Schema constraint violation at services.orchestrator.llm.remote_peer.service_instance_id: None is not of type 'string'",
+      "exceptionCategory": null
+    },
+    {
+      "message": "JSON Schema constraint violation at services.orchestrator.llm.mesh_peer.peer_id: None is not of type 'string'",
+      "exceptionCategory": null
+    },
+    {
+      "message": "JSON Schema constraint violation at services.orchestrator.llm.mesh_peer.provider_id: None is not of type 'string'",
+      "exceptionCategory": null
+    },
+    {
+      "message": "JSON Schema constraint violation at services.orchestrator.llm.mesh_peer.service_instance_id: None is not of type 'string'",
+      "exceptionCategory": null
+    },
+    {
+      "message": "JSON Schema constraint violation at services.orchestrator.routing.dispatch_default.peer_id: None is not of type 'string'",
+      "exceptionCategory": null
+    },
+    {
+      "message": "JSON Schema constraint violation at services.orchestrator.routing.dispatch_default.provider_id: None is not of type 'string'",
+      "exceptionCategory": null
+    },
+    {
+      "message": "JSON Schema constraint violation at services.orchestrator.routing.dispatch_default.service_instance_id: None is not of type 'string'",
+      "exceptionCategory": null
+    },
+    {
+      "message": "JSON Schema constraint violation at services.orchestrator.routing.dispatch_default.resource_namespace: None is not of type 'string'",
+      "exceptionCategory": null
+    },
+    {
+      "message": "JSON Schema constraint violation at services.orchestrator.routing.dispatch_default.timeout_s: None is not of type 'number'",
+      "exceptionCategory": null
+    },
+    {
+      "message": "JSON Schema constraint violation at services.orchestrator.routing.inference_default.peer_id: None is not of type 'string'",
+      "exceptionCategory": null
+    },
+    {
+      "message": "JSON Schema constraint violation at services.orchestrator.routing.inference_default.provider_id: None is not of type 'string'",
+      "exceptionCategory": null
+    },
+    {
+      "message": "JSON Schema constraint violation at services.orchestrator.routing.inference_default.service_instance_id: None is not of type 'string'",
+      "exceptionCategory": null
+    },
+    {
+      "message": "JSON Schema constraint violation at services.orchestrator.routing.inference_default.model_id: None is not of type 'string'",
+      "exceptionCategory": null
+    },
+    {
+      "message": "JSON Schema constraint violation at services.gateway.webrtc: Additional properties are not allowed ('signaling_brokers' was unexpected)",
+      "exceptionCategory": null
+    },
+    {
+      "message": "JSON Schema constraint violation at services.orchestrator.llm.local.huggingface_pipeline.options.max_tokens: None is not of type 'integer'",
+      "exceptionCategory": null
+    },
+    {
+      "message": "JSON Schema constraint violation at services.orchestrator.llm.local.huggingface_pipeline.options.device: None is not of type 'string'",
+      "exceptionCategory": null
+    },
+    {
+      "message": "JSON Schema constraint violation at services.orchestrator.llm.local.huggingface_pipeline.options.device: None is not one of ['cpu', 'cuda', 'auto']",
+      "exceptionCategory": null
+    },
+    {
+      "message": "JSON Schema constraint violation at services.orchestrator.llm.local.llama_cpp.options.n_threads: None is not of type 'integer'",
+      "exceptionCategory": null
+    },
+    {
+      "message": "JSON Schema constraint violation at services.orchestrator.llm.remote_peer.peer_id: None is not of type 'string'",
+      "exceptionCategory": null
+    },
+    {
+      "message": "JSON Schema constraint violation at services.orchestrator.llm.remote_peer.provider_id: None is not of type 'string'",
+      "exceptionCategory": null
+    },
+    {
+      "message": "JSON Schema constraint violation at services.orchestrator.llm.remote_peer.service_instance_id: None is not of type 'string'",
+      "exceptionCategory": null
+    }
+  ]
+}

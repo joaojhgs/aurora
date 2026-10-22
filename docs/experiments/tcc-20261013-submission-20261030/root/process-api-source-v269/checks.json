@@ -1,0 +1,46 @@
+[
+  {
+    "label": "ruff",
+    "argv": [
+      "flock",
+      "--nonblock",
+      "/tmp/aurora-global-build.lock",
+      "timeout",
+      "--signal=INT",
+      "--kill-after=10s",
+      "120s",
+      "/home/developer/projects/aurora/.venv/bin/ruff",
+      "check",
+      "scripts/experiments/assistant_local_api_pilot.py",
+      "app/services/supervisor.py",
+      "app/shared/services/process_launcher.py",
+      "tests/unit/services/test_supervisor.py",
+      "tests/unit/app/services/test_process_launcher_signal_lifecycle.py"
+    ],
+    "exit_code": 0,
+    "elapsed_seconds": 0.03434513905085623
+  },
+  {
+    "label": "two-main-lifecycle-checks",
+    "argv": [
+      "flock",
+      "--nonblock",
+      "/tmp/aurora-global-build.lock",
+      "timeout",
+      "--signal=INT",
+      "--kill-after=10s",
+      "120s",
+      "/home/developer/projects/aurora/.venv/bin/python",
+      "-m",
+      "pytest",
+      "--no-cov",
+      "--basetemp=/tmp/aurora-process-source-v269",
+      "-q",
+      "--junitxml=/home/developer/projects/aurora/.git/aurora-handoff-import-20261006/process-api-source-v269/junit.xml",
+      "tests/unit/services/test_supervisor.py::TestSupervisorServiceLifecycle::test_process_shutdown_offloads_child_stop_before_bus",
+      "tests/unit/app/services/test_process_launcher_signal_lifecycle.py::test_stop_all_stops_processes_in_reverse_startup_order"
+    ],
+    "exit_code": 0,
+    "elapsed_seconds": 2.716438574017957
+  }
+]

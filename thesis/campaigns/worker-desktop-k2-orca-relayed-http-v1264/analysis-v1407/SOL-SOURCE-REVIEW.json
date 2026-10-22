@@ -1,0 +1,46 @@
+{
+  "schema": "orca-monitor-bounded-source-review-v1",
+  "observedAt": "2026-10-17T23:56:07.009380+00:00",
+  "runId": "run_e6054e76e9fc",
+  "taskId": "task_d7ea336050cf",
+  "dispatchId": "ctx_37b4d0a3c14f",
+  "rootRequest": "msg_7b9f0f06793c",
+  "verdict": "CLOSED_PASS_NO_BLOCKING_FINDINGS_IN_REQUESTED_SCOPE",
+  "pins": [
+    {
+      "path": "thesis/analysis/k2_saved_case_history.py",
+      "bytes": 11410,
+      "sha256": "06163cb874cb3010df3426334b04cf74abe2bcc0a715aea1bed75ce2769e1e89"
+    },
+    {
+      "path": "thesis/campaigns/worker-desktop-k2-orca-relayed-http-v1264/ANALYSIS-SOURCE-v1404.json",
+      "bytes": 820,
+      "sha256": "480f0b693391dab8ffff4956c7e5b638044a17a837641ce977617b2a6be34e5a"
+    }
+  ],
+  "scope": "ONE read-only review of new K2 saved-case analyzer and its v1404 source manifest; no general helper/runner re-review, execution, import, SUT/model call, waveform audit or matrix",
+  "verified": [
+    "11410-byte source matches declared06163cb874cb3010df3426334b04cf74abe2bcc0a715aea1bed75ce2769e1e89 pin; AST parses.",
+    "Frozenb15a49ad cohort, requester588053/provider261790, case content hashes, candidate manifest and unique local/server correlation checks bind retained rows.",
+    "Local STT joins local correlation and supplied request/session identity. Separate Assistant and TTS server correlations join provider spans; exact host/stage/handler metrics retain this-cohort populations.",
+    "Existing paired-spans return contract excludes absent correlations and pairs PID/recorder/clock/stage/handler/span/correlation with monotonic ordering; only completed spans become timing samples. This was a narrow call-contract check, not a reopened helper review.",
+    "Measured and excluded warmup phases are separate. Correct, incorrect, partial-quality, timeout, missing flag, failure and unattempted/copy-lag denominators remain explicit. Per-distribution n is preserved.",
+    "Exactly-one-per-case and all-invocation native distributions are distinct, including history multi-invocations. Whole provider-prefix pairing counters are explicitly separate from current-cohort metrics.",
+    "Milliseconds and unchanged Type7 utility are explicit. No cross-host subtraction, summed quantiles, relay-only attribution, inferred CPU attribution, playback or TTFT claim; unavailable metrics stay null.",
+    "Status always says incomplete checkpoint, not900 seal; output restricted to a new thesis/ directory; no SUT imports/workload execution in this new source.",
+    "One retained actual measured row0016 matches stages/correlation/timeout/status schema; this was a raw schema read, not model execution."
+  ],
+  "remainingNecessaryValidation": "Root ONE actual saved K2 main-flow analysis after provider delta transfer; its output/coverage must be inspected before claiming executable analysis success. No additional scenario/source-review matrix requested.",
+  "liveSnapshotDuringReview": {
+    "observedAt": "2026-10-17T23:55:29.290326+00:00",
+    "sequence": 21,
+    "snapshotAt": "2026-10-17T23:54:51.418428+00:00",
+    "measuredAttempted": 20,
+    "warmupsAttempted": 15,
+    "caseFilesCopied": 35,
+    "lastMeasuredStatus": "completed_correct",
+    "copierErrors": [],
+    "pendingStatic": []
+  },
+  "monitorChanges": "this unique monitor report only"
+}

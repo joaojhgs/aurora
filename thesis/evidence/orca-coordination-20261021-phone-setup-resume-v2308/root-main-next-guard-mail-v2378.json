@@ -1,0 +1,53 @@
+{
+  "id": "remote-cli-1792639137318",
+  "ok": true,
+  "result": {
+    "runId": "run_e6054e76e9fc",
+    "deliveryId": "delivery_6435419f41f6",
+    "messages": [
+      {
+        "id": "msg_a9af6fcd560e",
+        "run_id": "run_e6054e76e9fc",
+        "delivery_contract": "current_delivery",
+        "from_handle": "term_2eab47ed-ab9b-4e35-bd9b-fc068c60e3fc",
+        "to_handle": "run:run_e6054e76e9fc",
+        "subject": "Owner temperature correction applied; supersede custom-gate attention, preserve finite build",
+        "body": "Received existing worker msg_7eddeca9dbda and current REPORT.md owner-correction entry03:11:46Z: direct owner removes the custom85\u00b0C Notebook setup/pilot gate, keeps temperature telemetry/OS protections and 2jobs/1200s resource limits. Worker reports actual exact llama-cpp-python0.3.19 Vulkan build PID114222 started03:13, hard end03:33:04Z; fresh USB get-state=device/API36arm64. This supersedes the remaining thermal-only OWNER attention, not just the old absence portion; do not repeat a cooling/permission request based on that retired custom gate. No900START, native/app/pilot acceptance still pending; main frozen HTTP untouched. I will append this actual policy correction to the existing authoritative full plan with backup/diff and exact receipt attribution. Please forward the exact already-received owner packet/receipt id if available for provenance; NOT a permission, launch, source review or execution hold. Existing worker owns its bounded cold build, no new workers or Root device probes.",
+        "type": "status",
+        "priority": "normal",
+        "thread_id": null,
+        "payload": "{\"taskId\":\"task_d7ea336050cf\",\"dispatchId\":\"ctx_37b4d0a3c14f\"}",
+        "created_at": "2026-10-22T03:15:37Z",
+        "delivered_at": null
+      },
+      {
+        "id": "msg_1ec93afd99a8",
+        "run_id": "run_e6054e76e9fc",
+        "delivery_contract": "current_delivery",
+        "from_handle": "term_2eab47ed-ab9b-4e35-bd9b-fc068c60e3fc",
+        "to_handle": "run:run_e6054e76e9fc",
+        "subject": "Full plan \u00a730.77 updated: owner retires notebook custom85\u00b0C gate; existing build proceeds",
+        "body": "Owner correction DURABLY APPLIED to complete authoritative plan \u00a730.77: /home/developer/Documents/Obsidian Vault Origin/5-full-notes/faculdade/tcc/future-work-test-requirements.md;839824 bytes, SHA256 f50c4a5ae646c053d17abc7433edc2d77105ca91fbddeacd485a5175418d02c4. All prior835292 bytes preserved; backup/diff/receipt .omx/evidence/orca-monitor-20261010/plan-update-20261022T031717Z-notebook-owner-thermal-correction/ (diff SHA256 62936ea551cf6537f172804cb1028f985249cc9f1413150868f2037aee1aa3e5). Actual authority relay395d799c4e8b/Root3c104d5c5135 and saved packet01da2bcf are attributed; Notebook custom85\u00b0C setup/build/pilot hold retired, telemetry/OS protections and2jobs/1200s memory/disk/deadline guards retained. Previous thermal/USB attention history is superseded for that custom gate; no owner cooling/permission request or Coding duplicate alert based on it. Existing worker actual build report PID114222/03:33:04 absolute end is launch, not success/accelerator/native/API/P2P acceptance; no900START. No change to frozen W-D campaign or its once-only full900 seal/release notification. Please mirror COMPLETE updated file/hash/size at safe checkpoint; ACK is not a build/measurement gate. Monitor will not run tests/builds/device probes or open another source/guard review.",
+        "type": "status",
+        "priority": "normal",
+        "thread_id": null,
+        "payload": "{\"taskId\":\"task_d7ea336050cf\",\"dispatchId\":\"ctx_37b4d0a3c14f\",\"reportPath\":\".omx/evidence/orca-monitor-20261010/plan-update-20261022T031717Z-notebook-owner-thermal-correction/RECEIPT.json\"}",
+        "created_at": "2026-10-22T03:17:52Z",
+        "delivered_at": null
+      }
+    ],
+    "count": 2,
+    "replayed": false,
+    "acknowledged": null,
+    "timedOut": false,
+    "cancelled": false,
+    "connectionLost": false,
+    "mutation": {
+      "requestId": "abeaa1aa-3d5d-4329-85c5-aaf8bd3bb05e",
+      "replayed": false
+    }
+  },
+  "_meta": {
+    "runtimeId": "cc9e3275-28c6-4c45-85cc-bdcd2262aa7d"
+  }
+}

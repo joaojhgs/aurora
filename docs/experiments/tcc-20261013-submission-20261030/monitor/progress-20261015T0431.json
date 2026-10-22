@@ -1,0 +1,276 @@
+{
+  "at": "2026-10-15T04:30:21Z",
+  "monitor": {
+    "thread": "01a123ff-19ba-7332-a2f7-346a722af79f",
+    "status": "active",
+    "run": "run_e6054e76e9fc",
+    "task": "task_d7ea336050cf",
+    "dispatch": "ctx_37b4d0a3c14f",
+    "workerDoneSent": false
+  },
+  "root": {
+    "terminal": "term_6a00d9ee-792a-4daf-8578-236290e33108",
+    "incarnation": "fe7e63c7-d260-465f-b37e-f6fc78f8a1af",
+    "goal": "01a112a5-d6bb-74e2-bf7c-ace73cb513b5",
+    "lastVerifiedStatus": "active",
+    "fullOriginalScope": 13,
+    "lastLiveReceipt": "a864a65f-a4c6-4a55-a6d0-ffd4df708cd2"
+  },
+  "ownerMethodologyAuthorityResolved": true,
+  "plan": {
+    "at": "2026-10-15T04:05:51.320979+00:00",
+    "planPath": "/home/developer/Documents/Obsidian Vault Origin/5-full-notes/faculdade/tcc/future-work-test-requirements.md",
+    "package": "docs/experiments/tcc-20261013-submission-20261030/monitor/plan-cpu-audio-running-20261015T0405",
+    "section": "30.17",
+    "lines": 1720,
+    "sha256": "d216a47aec3a68995d9d2a57f9b88d4be177ccdae6469f98ca3956d44e775c0a",
+    "priorSHA256": "250cfea1397d24278558baa2a8f148ce1597fe0494a4f67dd78ddd52b068786e",
+    "prefixUnchanged": true,
+    "diffSha256": "8cd3db91d0f54effa6c0a3147b4e74bde1a464f2241d641dfcbf800a0207a834",
+    "root_readback_verified": true,
+    "cpuFrozenManifestVerified": true,
+    "cpuRegistryVerified": true,
+    "rootReceiptId": "msg_cd23dbfdeab2",
+    "verificationReceipt": "docs/experiments/tcc-20261013-submission-20261030/monitor/plan-cpu-audio-running-20261015T0405/cpu-freeze-verification.json",
+    "verificationReceiptSHA256": "2e0c4cfd6026905ce97c8abe0bf232aae046a891368734fa6d6e765fb5741644",
+    "monitorExecutableTests": 0,
+    "rootAckMessageId": "msg_928d2d7b5383",
+    "rootAckAt": "2026-10-15T04:12:01Z"
+  },
+  "frozenCohort": {
+    "id": "aurora-full-audio-capital-v1-desktop-gpu-local-20261015",
+    "family": "aurora-full-audio-capital-base-qwen-piper-v1",
+    "pilotPassedVerified": true,
+    "freezeAndRegistryFullReadAndHashVerified": true,
+    "verification": {
+      "path": "docs/experiments/tcc-20261013-submission-20261030/monitor/full-audio-capital-v481-verified-20261015T0337.json",
+      "sha256": "d9375b50eae1937672777a33e6b1bb3bbf5b824c46ae155e37b00dca1288b760",
+      "package": "docs/experiments/tcc-20261013-submission-20261030/root/full-audio-capital-v481",
+      "listedMembers": 30,
+      "actualFiles": 31,
+      "frozenManifestPath": "docs/experiments/tcc-20261013-submission-20261030/root/full-audio-capital-v481/raw/candidate-v481/frozen-manifest-v1.json",
+      "frozenManifestSHA256": "d34d21d1a9b1a2db03be2ad64c096e77082168b3bcc09c28d442b4a61eaff3d7",
+      "replacementRegistryPath": "docs/experiments/tcc-20261013-submission-20261030/root/full-audio-capital-v481/raw/candidate-v481/cohort-replacements-v1.json",
+      "replacementRegistrySHA256": "cda9eb1931def2c1a177a13b69b6c8d6dd9a58e9a7135d50e51c43721c514cc5",
+      "fullManifestRead": true,
+      "fullRegistryRead": true,
+      "pilotRawAndRetirementRead": true,
+      "newCohortId": "aurora-full-audio-capital-v1-desktop-gpu-local-20261015",
+      "comparisonFamilyId": "aurora-full-audio-capital-base-qwen-piper-v1",
+      "fullIndividualAcceptance": false
+    }
+  },
+  "desktop": {
+    "version": "V485",
+    "cohort": "aurora-full-audio-capital-v1-desktop-gpu-local-20261015",
+    "controllerPID": 2910571,
+    "childPID": 2910591,
+    "bothLive": true,
+    "startedAt": "2026-10-15T03:41:25.686258Z",
+    "outerDeadline": "2026-10-15T07:14:25.686258Z",
+    "nPlanned": 900,
+    "warmupsPlanned": 15,
+    "warmupsComplete": 15,
+    "measuredRecorded": 248,
+    "unattempted": 652,
+    "lastOutcome": "completed_correct",
+    "allCurrentOutcomesAggregated": false,
+    "lastAllOutcomeSnapshot": {
+      "at": "2026-10-15T04:07:49.625373Z",
+      "nMeasured": 129,
+      "nCorrect": 129,
+      "nIncorrect": 0,
+      "nFailed": 0,
+      "nTimeout": 0
+    },
+    "observedAt": "2026-10-15T04:29:28Z",
+    "resources": {
+      "RAMavailableBytes": 1981415424,
+      "homeFreeBytes": 498626560,
+      "rx7600VRAMBytes": 742490112,
+      "parentRSSkB": 1134424,
+      "counterErrorsEBUSY": 16,
+      "counterErrorsAreNotRequestFailureOrAbsence": true
+    },
+    "progressReceipt": "msg_bb3a8d600030",
+    "resourceGuardUnchanged": true,
+    "noRelaunch": true
+  },
+  "cpu": {
+    "version": "V491",
+    "cohort": "aurora-full-audio-capital-v1-worker-cpu-local-20261015",
+    "controllerPID": 2232517,
+    "childPID": 2232566,
+    "bothLive": true,
+    "startedAt": "2026-10-15T04:00:53.523642Z",
+    "outerDeadline": "2026-10-15T20:04:53.523642Z",
+    "nPlanned": 900,
+    "warmupsPlanned": 15,
+    "warmupsComplete": 15,
+    "measuredRecorded": 21,
+    "unattempted": 879,
+    "lastOutcome": "completed_correct",
+    "allCurrentOutcomesAggregated": false,
+    "observedAt": "2026-10-15T04:29:25Z",
+    "resources": {
+      "RAMavailableBytes": 4698087424,
+      "candidateVolumeFreeBytes": 10591195136,
+      "parentRSSkB": 1746160,
+      "counterErrors": 0
+    },
+    "progressReceipt": "msg_bb3a8d600030",
+    "conditionCapSeconds": 57600,
+    "outerCapSeconds": 57840,
+    "requestCapSeconds": 180,
+    "pilotV490CorrectVerified": true,
+    "manifestAndRegistryVerified": true,
+    "noRelaunch": true
+  },
+  "phase2MeasuredAllowed": false,
+  "allRequiredIndividualAudioAndSurfaceSealsComplete": false,
+  "personalReview": {
+    "providerDeliveryVerified": true,
+    "messageDocumentId": 120,
+    "ownerAcceptanceVerified": false
+  },
+  "fleet": {
+    "at": "2026-10-15T04:20:21.405768+00:00",
+    "path": "docs/experiments/tcc-20261013-submission-20261030/monitor/fleet-20261015T0420.json",
+    "receipts": [
+      "ee944920-5f84-4384-81da-683872e5738c",
+      "6fd20028-5e3b-4801-8856-3fc2a6aec0cc"
+    ],
+    "count": 129,
+    "complete": true,
+    "summary": {
+      "liveness": {
+        "unverifiable": 75,
+        "exited": 53,
+        "live": 1
+      },
+      "live": [
+        {
+          "dispatch": "ctx_37b4d0a3c14f",
+          "task": "task_d7ea336050cf",
+          "terminal": "term_2eab47ed-ab9b-4e35-bd9b-fc068c60e3fc"
+        }
+      ],
+      "terminalState": {
+        "retained": 76,
+        "released": 53
+      }
+    },
+    "next": "2026-10-15T04:50:30Z"
+  },
+  "next": "Await SAMEdesktop numeric progress/CPU490 actual result at natural checkpoint; do not relaunch/change active inputs. Root1697plan readback pending. HTTPsource-only prep physically isolated, measuredHTTP afterLocal900 naturalend; fullmatrix crossdevice hardhold. Five-minute HB, bounded FIFO wait, nextfleet04:20:43.",
+  "registryMetadataCorrection": {
+    "path": "docs/experiments/tcc-20261013-submission-20261030/root/cohort-history-correction-v494/cohort-replacements-v2.json",
+    "sha256": "51c1200e1baf3db5dc4ebd8cf8a80f61ab69c3d3b26d08c5b0b175a6aa7c3344",
+    "fullReadVerified": true,
+    "metadataOnly": true,
+    "activeInputsChanged": false,
+    "oldV1Preserved": true
+  },
+  "storageQuestion": {
+    "question": "Bounded resource decision for SAME live desktop V485, no restart/interrupt: msg_a0ddda0d6b88 reports /home free510099456B (~486MiB) at04:07:49. At next safe checkpoint, can you verify remaining current-condition logs/WAV/raw storage budget against actual free-volume and existing minimum-free guard, then state the bounded next action (continue within budget, or preserve/checkpoint using existing guard)? Keep sources/models/evidence/current inputs intact; no blanket cleanup/new downloads/builds. Please report actual storage path/guard threshold and projected remaining need; do not run extra model/test requests. Plan is now1720 §30.17/hash d216a47aec3a68995d9d2a57f9b88d4be177ccdae6469f98ca3956d44e775c0a; ACK readback at safe checkpoint nonblocking. This is resource-headroom verification, not a claim the job stalled.",
+    "askedAt": "2026-10-15T04:12:05Z",
+    "actualReportedFreeBytes": 510099456,
+    "sameDesktopController": 2910571,
+    "messageId": "msg_6e543ae3a58c",
+    "threadId": "msg_6e543ae3a58c",
+    "askRequestId": "69b7ba07-a29a-492e-ba4b-9fb64b1ccd55",
+    "timedOut": true,
+    "connectionLost": false,
+    "answered": true,
+    "resumeChecks": [
+      {
+        "at": "2026-10-15T04:14:43Z",
+        "requestId": "8125d641-9f75-4486-801d-5827d2e0deb2",
+        "timedOut": true,
+        "connectionLost": false
+      },
+      {
+        "at": "2026-10-15T04:16:03Z",
+        "requestId": "661c030f-97fb-436b-a8b8-7b13b4b5a3ca",
+        "timedOut": true,
+        "connectionLost": false
+      }
+    ],
+    "rootActualInvestigationReceipt": "a864a65f-a4c6-4a55-a6d0-ffd4df708cd2",
+    "noResourceOutcomeAssumed": true,
+    "questionId": "msg_6e543ae3a58c",
+    "answerMessageId": "msg_ffc37d754cd0",
+    "decision": "CONTINUE SAME V485 within verified observed-growth storage budget; preserve existing guard/no input change",
+    "observedAt": "2026-10-15T04:13:56.172342Z",
+    "host": "personal.skyron-server",
+    "runtime": "/home/developer/projects/aurora/.git/aurora-audio-campaign-v485/runtime",
+    "filesystemDevice": 2082,
+    "controllerPID": 2910571,
+    "childPID": 2910591,
+    "bothLive": true,
+    "freeBytes": 506871808,
+    "guardMinFreeBytes": 100000000,
+    "usableHeadroomBytes": 406871808,
+    "runtimeAllocatedBytes": 17784832,
+    "runtimeFiles": 368,
+    "resourcesBytes": 6160384,
+    "uniqueAudioWAVs": 178,
+    "maxAudioBytes": 33324,
+    "observedWholeVolumeLossBytes": 26329088,
+    "remainingAttempts": 737,
+    "conservativeProjectedRemainingBytes": 302338352,
+    "projectedFreeBytes": 204533456,
+    "projectedAboveGuardBytes": 104533456,
+    "unrelatedFutureWritesGuaranteed": false,
+    "guardSamplingSeconds": 1,
+    "cleanup": false,
+    "sourceModelInputGuardChanges": false,
+    "newExecutableChecks": false,
+    "measuredRecorded": 163,
+    "warmupsComplete": 15,
+    "lastOutcome": "completed_correct",
+    "all163OutcomesAggregated": false,
+    "artifact": "docs/experiments/tcc-20261013-submission-20261030/root/live-storage-headroom-v495/desktop-v485-storage-budget.json",
+    "artifactSHA256": "22f6ecb1fc8478d20b3d1d1cbc843bfbf8e3f90efef646da43775e122eec2873",
+    "outerManifestSHA256": "4c69ba1129a63f7793ad1c0a2cacc75de6969a46d9b4eda4061e16502708a15c",
+    "fullSourceReadAndListedHashesVerified": true,
+    "resolutionReport": "docs/experiments/tcc-20261013-submission-20261030/monitor/plan-cpu-audio-running-20261015T0405/storage-headroom-resolution-20261015T0417.md"
+  },
+  "rootSourceSlice": {
+    "messageId": "msg_5b81dc223833",
+    "at": "2026-10-15T04:27:33Z",
+    "path": "docs/experiments/tcc-20261013-submission-20261030/root/native-profile-isolation-v496",
+    "manifestSHA256": "9f5b2335da9546e53542eb3d723c0523acade372c3ab0b4229e06a7cf9d5e010",
+    "solReviewSHA256": "00f77a672cbe75d46ec33e8923c92ceedc14d20ce759b51527ddadbed13b0999",
+    "status": "source slice closed",
+    "candidateAdmissibleScope": "after artifact/resource admission one-process visible UI/onboarding or independently observed typed/readaloud only",
+    "notAdmitted": [
+      "real microphone",
+      "frozen fixedWAV/native speech",
+      "persistent keyring",
+      "fresh process reopen"
+    ],
+    "existingFlagAlsoSelects": "squarewave native capture; no fixed WAV input",
+    "noNewFlagsProbesRuntimeBuildModels": true,
+    "verifiedAt": "2026-10-15T04:30:21Z",
+    "actualManifestFile": "MANIFEST.json",
+    "listedMembers": 3,
+    "actualFiles": 4,
+    "allListedHashesMatched": true,
+    "fullREADMEReviewRootDecisionRead": true,
+    "noMonitorExecutableTests": true,
+    "realNativeAudioStillOpen": true,
+    "crossDeviceMeasuredAllowed": false,
+    "visualRouteReport": "docs/experiments/tcc-20261013-submission-20261030/monitor/astra-existing-review-route-20261015T0428/REPORT.md",
+    "visualRouteMessageId": "msg_5d69e9da994c"
+  },
+  "astraVisualRoute": {
+    "report": "docs/experiments/tcc-20261013-submission-20261030/monitor/astra-existing-review-route-20261015T0428/REPORT.md",
+    "receipt": "docs/experiments/tcc-20261013-submission-20261030/monitor/astra-existing-review-route-20261015T0428/receipt.json",
+    "existingGalleryLocated": true,
+    "sourceReviewerIdentityVerified": false,
+    "finalApprovalVerified": false,
+    "threeCapturedSourcePinsDiffer": true,
+    "noNewReviewersCaptures": true
+  }
+}

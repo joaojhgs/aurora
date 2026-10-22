@@ -1,0 +1,60 @@
+{
+  "at": "2026-10-22T08:01:39.739752+00:00",
+  "companion": {
+    "measured": {
+      "attempted": 22,
+      "correct": 22,
+      "failed": 0,
+      "harnessErrorsIncludedInFailed": 0,
+      "incorrectIncludedInFailed": 0,
+      "offered": 22,
+      "planned": 900,
+      "timeouts": 0,
+      "unstarted": 878
+    },
+    "warmup": {
+      "attempted": 1,
+      "correct": 1,
+      "failed": 0,
+      "harnessErrorsIncludedInFailed": 0,
+      "incorrectIncludedInFailed": 0,
+      "offered": 1,
+      "planned": 1,
+      "timeouts": 0,
+      "unstarted": 0
+    }
+  },
+  "completePairedCapsules": 23,
+  "elapsedSeconds": 922.369122541,
+  "lastIndex": 22,
+  "lastNativeParent": "500224bd883710e0f223fb6989ceaeda",
+  "lastOrdinal": 23,
+  "manifestSha256": "316d4cc09adc44d0104dca8ac1f2a966347588ffef37bc2fa809ec14fd5efff8",
+  "phase": "measured",
+  "pid": 281887,
+  "primary": {
+    "measured": {
+      "attempted": 22,
+      "correct": 22,
+      "failed": 0,
+      "harnessErrorsIncludedInFailed": 0,
+      "incorrectIncludedInFailed": 0,
+      "offered": 22,
+      "planned": 900,
+      "timeouts": 0,
+      "unstarted": 878
+    },
+    "warmup": {
+      "attempted": 1,
+      "correct": 1,
+      "failed": 0,
+      "harnessErrorsIncludedInFailed": 0,
+      "incorrectIncludedInFailed": 0,
+      "offered": 1,
+      "planned": 1,
+      "timeouts": 0,
+      "unstarted": 0
+    }
+  },
+  "status": "running"
+}

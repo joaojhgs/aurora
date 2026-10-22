@@ -1,0 +1,8 @@
+{
+  "bytes": 979,
+  "copyOnly": true,
+  "custody": "Notebook result persisted and fsynced before relay; remote receipt in same output",
+  "localPath": "/home/developer/projects/aurora/thesis/phone-notebook/20261020/evidence/launch-repair-apk-v120/result.json",
+  "remotePath": "/home/developer/projects/aurora/thesis/phone-notebook/20261020/evidence/launch-repair-apk-v120.json",
+  "sha256": "91f47953ba8c79dcc3bd33aad979c158127e9104a1c8d440ba6cba4af981ed87"
+}

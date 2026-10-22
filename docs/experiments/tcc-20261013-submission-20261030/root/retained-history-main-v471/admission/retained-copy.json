@@ -1,0 +1,31 @@
+{
+  "at": "2026-10-15T01:35:21.877360+00:00",
+  "host": "personal.skyron-server",
+  "originalDBSHA256": "1e9cddbf311bc9b43c7fa9afefc6f8315e2a8f75ae9e35a89540faeb5c113ae7",
+  "copyDBSHA256": "1e9cddbf311bc9b43c7fa9afefc6f8315e2a8f75ae9e35a89540faeb5c113ae7",
+  "originalUnchanged": true,
+  "newRoot": "/home/developer/projects/aurora/.git/aurora-real-ui-history-v470",
+  "tables": {
+    "messages": [
+      "id",
+      "content",
+      "message_type",
+      "timestamp",
+      "session_id",
+      "metadata",
+      "source_type",
+      "created_at"
+    ],
+    "sessions": [
+      "id",
+      "principal_id",
+      "type",
+      "title",
+      "created_at",
+      "updated_at",
+      "last_active_at"
+    ]
+  },
+  "retainedCredentialCopyNoChange": true,
+  "notHistorySeeded": true
+}

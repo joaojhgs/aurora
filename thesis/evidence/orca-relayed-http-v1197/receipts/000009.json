@@ -1,0 +1,130 @@
+{
+  "diskAfter": {
+    "free": 7303823360,
+    "total": 109128826880,
+    "used": 101808226304
+  },
+  "diskBefore": {
+    "free": 7303958528,
+    "total": 109128826880,
+    "used": 101808091136
+  },
+  "errors": [],
+  "finishedAt": "2026-10-17T20:33:11.764409+00:00",
+  "newFiles": [
+    {
+      "bytes": 30764,
+      "copiedAt": "2026-10-17T20:33:11.723476+00:00",
+      "destination": "thesis/evidence/orca-relayed-http-v1197/audio/ef55c0912cd666b4e5e46c37e5971abf0afa824be2bd1948245533a2dfff8537.wav",
+      "sha256": "ef55c0912cd666b4e5e46c37e5971abf0afa824be2bd1948245533a2dfff8537",
+      "source": "/home/developer/projects/aurora/.git/aurora-handoff-import-20261006/distributed-k1-orca-relayed-http-cell-v1197/campaign/audio/ef55c0912cd666b4e5e46c37e5971abf0afa824be2bd1948245533a2dfff8537.wav",
+      "wav": {
+        "channels": 1,
+        "frames": 15360,
+        "sampleRate": 22050,
+        "sampleWidth": 2
+      }
+    },
+    {
+      "bytes": 4767,
+      "copiedAt": "2026-10-17T20:33:11.733062+00:00",
+      "destination": "thesis/evidence/orca-relayed-http-v1197/attempts/attempt-0030-measured.jsonl",
+      "sha256": "4a1fc24e5c875f8864c392ef0d2e7c05f97fca5a8a407ba3609e5641829f88ea",
+      "source": "/home/developer/projects/aurora/.git/aurora-handoff-import-20261006/distributed-k1-orca-relayed-http-cell-v1197/campaign/attempts/attempt-0030-measured.jsonl"
+    },
+    {
+      "bytes": 11735,
+      "copiedAt": "2026-10-17T20:33:11.744758+00:00",
+      "destination": "thesis/evidence/orca-relayed-http-v1197/prefixes/voice-stages.jsonl/000000349578-000000361313.chunk",
+      "endByte": 361313,
+      "incomplete": true,
+      "sha256": "9e708dd23bc4f3e42829c5fbf089f46e69ebade16764a15df22e90f070afd173",
+      "source": "/home/developer/projects/aurora/.git/aurora-handoff-import-20261006/distributed-k1-orca-relayed-http-cell-v1197/voice-stages.jsonl",
+      "sourceInode": 2189792,
+      "sourceObservedBytes": 361313,
+      "startByte": 349578
+    },
+    {
+      "bytes": 77460,
+      "copiedAt": "2026-10-17T20:33:11.764285+00:00",
+      "destination": "thesis/evidence/orca-relayed-http-v1197/prefixes/resources.jsonl/000001938262-000002015722.chunk",
+      "endByte": 2015722,
+      "incomplete": true,
+      "sha256": "5455320b9ef7218da05456a5e7ec74ba9526955bc71afe986a0d7bed0581ae37",
+      "source": "/home/developer/projects/aurora/.git/aurora-handoff-import-20261006/distributed-k1-orca-relayed-http-cell-v1197/resources.jsonl",
+      "sourceInode": 2189790,
+      "sourceObservedBytes": 2015722,
+      "startByte": 1938262
+    }
+  ],
+  "physicalPayloadBytes": 4008138,
+  "possibleConfound": "Concurrent custody reads/writes; keep all affected measurements.",
+  "prefixes": {
+    "actual-provider-bindings.jsonl": {
+      "chunks": [
+        "thesis/evidence/orca-relayed-http-v1197/prefixes/actual-provider-bindings.jsonl/000000000000-000000002139.chunk"
+      ],
+      "endByte": 2139,
+      "incomplete": true,
+      "inode": 2189796,
+      "observedAt": "2026-10-17T20:33:11.744843+00:00",
+      "sourceObservedBytes": 2139
+    },
+    "resources.jsonl": {
+      "chunks": [
+        "thesis/evidence/orca-relayed-http-v1197/prefixes/resources.jsonl/000000000000-000001412825.chunk",
+        "thesis/evidence/orca-relayed-http-v1197/prefixes/resources.jsonl/000001412825-000001473502.chunk",
+        "thesis/evidence/orca-relayed-http-v1197/prefixes/resources.jsonl/000001473502-000001550962.chunk",
+        "thesis/evidence/orca-relayed-http-v1197/prefixes/resources.jsonl/000001550962-000001628422.chunk",
+        "thesis/evidence/orca-relayed-http-v1197/prefixes/resources.jsonl/000001628422-000001705882.chunk",
+        "thesis/evidence/orca-relayed-http-v1197/prefixes/resources.jsonl/000001705882-000001783342.chunk",
+        "thesis/evidence/orca-relayed-http-v1197/prefixes/resources.jsonl/000001783342-000001860802.chunk",
+        "thesis/evidence/orca-relayed-http-v1197/prefixes/resources.jsonl/000001860802-000001938262.chunk",
+        "thesis/evidence/orca-relayed-http-v1197/prefixes/resources.jsonl/000001938262-000002015722.chunk"
+      ],
+      "endByte": 2015722,
+      "incomplete": true,
+      "inode": 2189790,
+      "observedAt": "2026-10-17T20:33:11.764301+00:00",
+      "sourceObservedBytes": 2015722
+    },
+    "voice-stages.jsonl": {
+      "chunks": [
+        "thesis/evidence/orca-relayed-http-v1197/prefixes/voice-stages.jsonl/000000000000-000000249832.chunk",
+        "thesis/evidence/orca-relayed-http-v1197/prefixes/voice-stages.jsonl/000000249832-000000261567.chunk",
+        "thesis/evidence/orca-relayed-http-v1197/prefixes/voice-stages.jsonl/000000261567-000000279168.chunk",
+        "thesis/evidence/orca-relayed-http-v1197/prefixes/voice-stages.jsonl/000000279168-000000290903.chunk",
+        "thesis/evidence/orca-relayed-http-v1197/prefixes/voice-stages.jsonl/000000290903-000000302638.chunk",
+        "thesis/evidence/orca-relayed-http-v1197/prefixes/voice-stages.jsonl/000000302638-000000316845.chunk",
+        "thesis/evidence/orca-relayed-http-v1197/prefixes/voice-stages.jsonl/000000316845-000000331977.chunk",
+        "thesis/evidence/orca-relayed-http-v1197/prefixes/voice-stages.jsonl/000000331977-000000349578.chunk",
+        "thesis/evidence/orca-relayed-http-v1197/prefixes/voice-stages.jsonl/000000349578-000000361313.chunk"
+      ],
+      "endByte": 361313,
+      "incomplete": true,
+      "inode": 2189792,
+      "observedAt": "2026-10-17T20:33:11.744773+00:00",
+      "sourceObservedBytes": 361313
+    }
+  },
+  "previousReceipt": "thesis/evidence/orca-relayed-http-v1197/receipts/000008.json",
+  "progressObservation": {
+    "attempted": 30,
+    "last_attempt_file": "attempts/attempt-0030-measured.jsonl",
+    "last_attempt_status": "completed_correct",
+    "measured_attempted": 15,
+    "planned_measured": 900,
+    "planned_warmups": 15,
+    "status": "running",
+    "unattempted_measured": 885,
+    "warmups_attempted": 15
+  },
+  "providerCoverage": "Transferred 15-warmup packet; later provider prefixes not yet covered.",
+  "reservedFreeBytes": 2147483648,
+  "retainedAudioBlobs": 30,
+  "retainedCases": 30,
+  "schema": "aurora.physical-custody-checkpoint.v1",
+  "sequence": 9,
+  "startedAt": "2026-10-17T20:33:11.653099+00:00",
+  "sutCalls": 0
+}

@@ -1,0 +1,8 @@
+{
+  "bytes": 561,
+  "copyOnly": true,
+  "custody": "Notebook result persisted and fsynced before relay; remote receipt in same output",
+  "localPath": "/home/developer/projects/aurora/thesis/phone-notebook/20261020/evidence/owner-enable-saved-wifi-20261021T235317/result.json",
+  "remotePath": "/home/developer/projects/aurora/thesis/phone-notebook/20261020/evidence/owner-enable-saved-wifi-20261021T235317.json",
+  "sha256": "5343e6a1a523456564bb018942830e1c4374c115b7091da0a48eac6adc0b8a89"
+}

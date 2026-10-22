@@ -1,0 +1,78 @@
+{
+  "at": "2026-10-22T11:21:00.522205+00:00",
+  "requester": {
+    "pid": 462924,
+    "startTicks": 144596371,
+    "state": "S"
+  },
+  "current": {
+    "at": "2026-10-22T11:20:55.754244+00:00",
+    "companion": {
+      "measured": {
+        "attempted": 0,
+        "correct": 0,
+        "failed": 0,
+        "harnessErrorsIncludedInFailed": 0,
+        "incorrectIncludedInFailed": 0,
+        "offered": 0,
+        "planned": 640,
+        "timeouts": 0,
+        "unstarted": 640
+      },
+      "warmup": {
+        "attempted": 13,
+        "correct": 13,
+        "failed": 0,
+        "harnessErrorsIncludedInFailed": 0,
+        "incorrectIncludedInFailed": 0,
+        "offered": 13,
+        "planned": 15,
+        "timeouts": 0,
+        "unstarted": 2
+      }
+    },
+    "completePairedCapsules": 13,
+    "elapsedSeconds": 545.514955956,
+    "lastIndex": 13,
+    "lastNativeParent": "2272f7be94054f053232f92171eef2aa",
+    "lastOrdinal": 13,
+    "manifestSha256": "3bfca19d2dd0a9eec3981eae256168a5badd9ac2bb58a270ff8a55df1d986cce",
+    "phase": "warmup",
+    "pid": 462924,
+    "primary": {
+      "measured": {
+        "attempted": 0,
+        "correct": 0,
+        "failed": 0,
+        "harnessErrorsIncludedInFailed": 0,
+        "incorrectIncludedInFailed": 0,
+        "offered": 0,
+        "planned": 640,
+        "timeouts": 0,
+        "unstarted": 640
+      },
+      "warmup": {
+        "attempted": 13,
+        "correct": 13,
+        "failed": 0,
+        "harnessErrorsIncludedInFailed": 0,
+        "incorrectIncludedInFailed": 0,
+        "offered": 13,
+        "planned": 15,
+        "timeouts": 0,
+        "unstarted": 2
+      }
+    },
+    "status": "running"
+  },
+  "priorMeasuredCorrectPerStream": 260,
+  "terminalPresent": false,
+  "activeRecoveryErrorPresent": false,
+  "historicalZeroCallStartupError": "REQUESTER-EXCEPTION.json; resolved by STARTUP-FAILURE-RESOLVED-v2454.json",
+  "freeBytes": 2407522304,
+  "nextGate": "Actual15paired native/queue/GPU admission then first remaining measured global261",
+  "nextMaximumObservationUtc": "2026-10-22T11:26:00.522205+00:00",
+  "rootWritesToDesktopWhileControllerLive": 0,
+  "phoneRootReads": 0,
+  "newWorkersReviewsModels": 0
+}

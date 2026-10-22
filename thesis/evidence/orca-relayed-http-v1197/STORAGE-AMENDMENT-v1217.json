@@ -1,0 +1,81 @@
+{
+  "at": "2026-10-17T20:30:57.771896+00:00",
+  "confounds": "Concurrent custody reads/writes/hash/Orca metadata traffic recorded. Retain all affected measured cases, no count change or cherry picking.",
+  "copyBudget": {
+    "actualWorkerDiskNow": {
+      "free": 7305052160,
+      "total": 109128826880,
+      "used": 101806997504
+    },
+    "estimatedAdditionalPersonal16hBytes": 2147483648,
+    "estimatedAdditionalWorker16hBytes": 1073741824,
+    "noCleanupPerformed": true,
+    "providerPostCopyFreeBytes": 149081411584,
+    "providerPreCopyFreeBytes": 149121679360,
+    "rateBytesPerSecondLargeCopies": 4194304,
+    "reservedFreeBytesEachHost": 2147483648,
+    "sealedCopyBudgetBytes": 150000000,
+    "workerInitialSmallPayloadBudgetBytes": 16777216,
+    "workerModelActualCopiedBytes": 211419292
+  },
+  "knownGaps": {
+    "C06": {
+      "copiedAudioFiles": 0,
+      "copiedMetadataBytes": 147368,
+      "copiedMetadataFiles": 21,
+      "finalDenominator": "UNKNOWN",
+      "finalOutcome": "UNKNOWN",
+      "historicalOnly": "272completed/273attempted; not final or precise lost count",
+      "rawBytes": "UNKNOWN",
+      "rawCaseCount": "UNKNOWN"
+    },
+    "V799": {
+      "copiedAudioFiles": 0,
+      "copiedMetadataBytes": 24753,
+      "copiedMetadataFiles": 6,
+      "fullRawArchive": "UNKNOWN/unrecovered",
+      "noGlobalLossClaim": true,
+      "originalArchiveBytes": 130072923
+    }
+  },
+  "methodology": {
+    "bytes": 500295,
+    "path": "thesis/methodology/owner-requirements-20261017-263d8e38.md",
+    "sha256": "263d8e3840e26092f60174db90440b22854fd2d4f4b0eca06d5bb98fba4175a4"
+  },
+  "modelCustody": "thesis/models/retained-v1212/CUSTODY.json",
+  "nativeStatus": "active",
+  "newAgents": 0,
+  "newSutRequests": 0,
+  "preservedFrozenManifestSha256": "6bc65cf5cc3c4eddb90b80b0764a01e6a9fc4afbed66f33c731e3ab58528e101",
+  "providerActualCheckpoint": {
+    "at": "2026-10-17T20:29:51.835440+00:00",
+    "bytes": 40157195,
+    "errors": [],
+    "prefixWatermarks": {
+      "actual-provider-bindings.jsonl": 21026,
+      "resources.jsonl": 39835040,
+      "voice-stages.jsonl": 126897
+    }
+  },
+  "providerCopierPid": 429068,
+  "providerCopierStartTicks": "2450245",
+  "providerHost": "personal.skyron-server",
+  "providerPhysicalRepoPath": "/home/developer/projects/aurora/thesis/evidence/orca-relayed-http-v1197/provider",
+  "providerWorkerTransferLimit": "Worker has actual original15-warmup packet; later provider bytes physically in Personal repo; complete worker transfer pending natural checkpoints/seal. Receipt is not those raw bytes.",
+  "rootGoal": "01a112a5-d6bb-74e2-bf7c-ace73cb513b5",
+  "schema": "aurora.owner-storage-amendment.v1",
+  "sealedArchiveCustody": "thesis/evidence/sealed-cohorts-v1215/CUSTODY.json",
+  "settingsCredentialsAndActivePathsChanged": false,
+  "workerAudioBlobs": 26,
+  "workerCases": 26,
+  "workerCurrentReceipt": "thesis/evidence/orca-relayed-http-v1197/receipts/000006.json",
+  "workerCurrentReceiptSha256": "1a017c4351b62202743387cb4d7dfadca6c4409b01413bf8595256fe2b431008",
+  "workerErrors": [],
+  "workerPhysicalPayloadBytes": 3589680,
+  "workerPrefixByteWatermarks": {
+    "actual-provider-bindings.jsonl": 2139,
+    "resources.jsonl": 1783342,
+    "voice-stages.jsonl": 316845
+  }
+}

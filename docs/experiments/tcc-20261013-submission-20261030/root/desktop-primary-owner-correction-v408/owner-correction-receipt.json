@@ -1,0 +1,98 @@
+{
+  "recorded_at": "2026-10-14T15:39:51.441002+00:00",
+  "direct_same_thread_owner_correction": true,
+  "monitor_count_decision": "msg_4ebcc94f9c09",
+  "monitor_precise_finish_correction": "msg_44ce7f457752",
+  "superseded_monitor_ambiguous_schedule": "msg_98a1de48c3e5",
+  "monitor_exact_delivery_ack": "delivery_ee12ce5b2c68",
+  "root_exact_ack": "msg_e438c175ba4b",
+  "same_original_native_thread": "01a112a5-d6bb-74e2-bf7c-ace73cb513b5",
+  "current_cpu_campaign": {
+    "id": "6ce98ae97d594d9fafcd1ff9ad4b9b1c",
+    "role": "extra_cpu_full_stack_cohort",
+    "n_planned_total": 900,
+    "n_planned_per_route": 300,
+    "warmups_total": 45,
+    "finish": "entire_original_campaign_through08_and09_natural_whole_terminal_unchanged",
+    "current_source_manifest_settings_counts": "must_not_mutate",
+    "migration_or_interrupt": false,
+    "in_place_top_up": false,
+    "worker_available_for_new_compute": "only_after_original_whole_campaign_natural_finish"
+  },
+  "new_primary_cohort": {
+    "host": "approved_personal_desktop_exact_receiver_route_pending",
+    "gpu_vram_gb_owner_reported": 8,
+    "gpu_vram_bytes_verified": null,
+    "gpu_backend_verified": null,
+    "offloaded_layers_verified": null,
+    "gpu_utilization_verified": null,
+    "role": "separate_primary_gpu_end_to_end_cohort",
+    "same_e2e_setup_workload_model_settings": true,
+    "full_stage_metrics": true,
+    "n_planned_per_condition": 900,
+    "warmups": "additional_excluded",
+    "cpu_gpu_pooling": false,
+    "desktop_gpu_reservation": "not_established_by_root_yet",
+    "concurrent_jobs_on_measured_desktop_gpu": "prohibited"
+  },
+  "new_applicable_conditions": {
+    "n_planned": 900,
+    "allocation": "independent_per_local_python_http_api_each_cumulative_p2p_configuration_for_each_applicable_non_ios_surface_pair",
+    "cumulative_remote_stage_sets": [
+      [
+        "tts"
+      ],
+      [
+        "tts",
+        "llm"
+      ],
+      [
+        "tts",
+        "llm",
+        "stt"
+      ]
+    ],
+    "same_complete_pipeline": true,
+    "remaining_stages": "local",
+    "per_stage_actual_provider_map": true,
+    "identical_local_baseline_reuse": "only_explicit_identical_requester_surface_workload_model_settings_source_app_dataset_mapping",
+    "infeasible_local": "retain_bounded_attributable_outcome_do_not_force900_successes_or_repeat_oom"
+  },
+  "parallelism": {
+    "approved_physical_hosts": [
+      "personal_desktop",
+      "personal_notebook",
+      "coding_worker_after_current_campaign_finish"
+    ],
+    "prerequisite": "empirical_disjoint_physical_cpu_gpu_vram_ram_disk_network_thermal_shared_services_without_baseline_perturbation",
+    "harmless_desktop_notebook_preparation": "allowed_now_after_supported_route_and_noninterference",
+    "notebook_work_personal_distroboxes": "may_share_physical_hardware_no_company_access",
+    "desktop_baseline": "reserve_desktop_gpu_exclusive_no_offload_on_same_gpu",
+    "resource_contention": "predefined_stop_or_invalidation_never_kill_other_jobs"
+  },
+  "desktop_capability_question": "msg_75f13acf7813_pending_exact_existing_host_receiver_incarnation_approved_route_and_resource_gpu_backend_evidence",
+  "root_actual_registration": {
+    "terminal": "term_6a00d9ee-792a-4daf-8578-236290e33108",
+    "terminal_incarnation": "fe7e63c7-d260-465f-b37e-f6fc78f8a1af",
+    "repo": "314e7b89-8f19-4535-9443-22b342aedff7",
+    "worktree": "314e7b89-8f19-4535-9443-22b342aedff7::/home/developer/projects/aurora",
+    "execution_host": "ssh:ssh-oci-coding-worker",
+    "path_selector_lookup": "selector_ambiguous_then_exact_root_terminal_and_repo_id_lookup_succeeded",
+    "desktop_identity": "not_inferred_from_worker_registration"
+  },
+  "scope": {
+    "ios": "excluded_historical_only",
+    "monitor": "original_sole_authoritative_plan_writer",
+    "new_root_or_worker": false,
+    "security_credentials_company_changes": false
+  },
+  "receipt_hashes": {
+    "ORCA-V408-OWNER-ALLOCATION-READBACK.json": "9ae19b9248ff53cd8cae2a83007eb61735cf1a9deebc891584817b2c6fb43bac",
+    "ORCA-V408-ACK-RESOLVED-COUNTS.json": "72462f125d1d912220cd4e94178c9b9ce39c849429474763ec96708d309853f7",
+    "ORCA-V408-EXACT-OWNER-CORRECTION-ACK.json": "9e41475697446b2e653538678c834e49bba3a6523f5b2c082e1f383420d8b5f9",
+    "ORCA-V408-DESKTOP-ROUTE-QUESTION.json": "8fa8f52efe012d98ec2871a31fbdcacec87fee97fd7ed6afca6500b7902ee284",
+    "ORCA-V408-EXISTING-AURORA-REGISTRATION.json": "923a75da357b6b45db3a2a4af71cb35657cd947a873fd84b6af07fc51b0d5f78",
+    "ORCA-V408-EXACT-ROOT-TERMINAL.json": "2be5db659a8caa74180817b3a923c8a1e8c6b33a0e9af9b5ea97b1c054f7550a",
+    "ORCA-V408-EXACT-AURORA-REGISTRATION.json": "b61d3aefaefdc23376c9f87c6d7db5351601da2ab683ee8832c9fd77ccbfc936"
+  }
+}

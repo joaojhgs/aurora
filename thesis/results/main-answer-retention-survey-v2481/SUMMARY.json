@@ -1,0 +1,176 @@
+{
+  "answerFieldNamesChecked": [
+    "answer",
+    "assistant_reply",
+    "content",
+    "reply",
+    "response",
+    "response_content",
+    "response_text",
+    "text"
+  ],
+  "at": "2026-10-22T15:45:22.341328+00:00",
+  "currentConditionRetainedCorrectPerStream": 549,
+  "currentConditionUnstartedPerStream": 351,
+  "currentEpoch": {
+    "HTTP": {
+      "answerSha256Present": 304,
+      "caseRows": 304,
+      "measuredRows": 289,
+      "originalStrictCorrectRows": 304,
+      "plaintextAnswerFieldPresent": 0,
+      "warmupRows": 15
+    },
+    "local": {
+      "answerSha256Present": 304,
+      "caseRows": 304,
+      "measuredRows": 289,
+      "originalStrictCorrectRows": 304,
+      "plaintextAnswerFieldPresent": 0,
+      "warmupRows": 15
+    }
+  },
+  "currentEpochAssistantFieldNames": {
+    "HTTP": [
+      "correlation_id_matches",
+      "duration_ms",
+      "end_monotonic_ns",
+      "http_status",
+      "local_payload_ids",
+      "metadata_error",
+      "method",
+      "path",
+      "reported_model",
+      "reported_provider",
+      "request_field_names",
+      "request_id_matches",
+      "request_payload_bytes",
+      "request_payload_sha256",
+      "response_chars",
+      "response_payload_bytes",
+      "response_payload_sha256",
+      "response_sha256",
+      "server_correlation_id",
+      "server_tts_status",
+      "session_id_matches",
+      "stage",
+      "stage_duration_ms",
+      "start_monotonic_ns",
+      "status"
+    ],
+    "local": [
+      "adapter_duration_ms",
+      "bus_correlation_id",
+      "correlation_id_matches",
+      "duration_ms",
+      "end_monotonic_ns",
+      "metadata_error",
+      "reported_model",
+      "reported_provider",
+      "request_id_matches",
+      "response_chars",
+      "response_sha256",
+      "route_class",
+      "server_tts_status",
+      "session_id_matches",
+      "start_monotonic_ns",
+      "status",
+      "tts_suppression_basis"
+    ]
+  },
+  "historicalAuthorReportedClosureSummaries": [
+    {
+      "attemptedAuthorReported": 900,
+      "condition": "K1 HTTP",
+      "correctFullAudioAuthorReported": 899,
+      "failedAuthorReported": 1,
+      "failureCodesAuthorReported": null,
+      "newPredicateScoresComputed": false,
+      "plaintextAnswerCoverage": "NOT_SURVEYED: closure summaries are not raw replies",
+      "source": "thesis/results/worker-desktop-k1-http-full900-v2403/FULL900-SUMMARY.json"
+    },
+    {
+      "attemptedAuthorReported": 900,
+      "condition": "K1 P2P",
+      "correctFullAudioAuthorReported": 885,
+      "failedAuthorReported": 15,
+      "failureCodesAuthorReported": {
+        "remote_mesh_exact_remote_peer_call_not_confirmed": 1,
+        "remote_mesh_preaccept_capability_changed": 13,
+        "remote_mesh_tts_timeout_ambiguous": 1
+      },
+      "newPredicateScoresComputed": false,
+      "plaintextAnswerCoverage": "NOT_SURVEYED: closure summaries are not raw replies",
+      "source": "thesis/campaigns/worker-desktop-k1-p2p-tts-remaining191-v2153/CONDITION-CLOSURE-v2201.json"
+    },
+    {
+      "attemptedAuthorReported": 900,
+      "condition": "K2 HTTP",
+      "correctFullAudioAuthorReported": 797,
+      "failedAuthorReported": 103,
+      "failureCodesAuthorReported": null,
+      "newPredicateScoresComputed": false,
+      "plaintextAnswerCoverage": "NOT_SURVEYED: closure summaries are not raw replies",
+      "source": "thesis/campaigns/worker-desktop-k2-orca-relayed-http-v1264/terminal-v1465/FINAL-VALIDATION-v1472.json"
+    },
+    {
+      "attemptedAuthorReported": 900,
+      "condition": "K2 P2P",
+      "correctFullAudioAuthorReported": 774,
+      "failedAuthorReported": 126,
+      "failureCodesAuthorReported": {
+        "assistant_reply_predicate_failed": 115,
+        "preaccept_capability_changed": 11
+      },
+      "newPredicateScoresComputed": false,
+      "plaintextAnswerCoverage": "NOT_SURVEYED: closure summaries are not raw replies",
+      "source": "thesis/campaigns/worker-desktop-k2-p2p-assistant-tts-v1826/CONDITION-CLOSURE-v1906.json"
+    },
+    {
+      "attemptedAuthorReported": 900,
+      "condition": "K3 HTTP",
+      "correctFullAudioAuthorReported": 885,
+      "failedAuthorReported": 15,
+      "failureCodesAuthorReported": {
+        "assistant_reply_predicate_failed": 12,
+        "transport_ambiguous": 3
+      },
+      "newPredicateScoresComputed": false,
+      "plaintextAnswerCoverage": "NOT_SURVEYED: closure summaries are not raw replies",
+      "source": "thesis/campaigns/worker-desktop-k3-orca-relayed-http-remaining-v1682/condition-900-analysis/SUMMARY.json"
+    },
+    {
+      "attemptedAuthorReported": 900,
+      "condition": "K3 P2P",
+      "correctFullAudioAuthorReported": 773,
+      "failedAuthorReported": 127,
+      "failureCodesAuthorReported": {
+        "assistant_reply_predicate_failed": 55,
+        "mesh_request_timeout_ambiguous": 1,
+        "preaccept_capability_changed": 71
+      },
+      "newPredicateScoresComputed": false,
+      "plaintextAnswerCoverage": "NOT_SURVEYED: closure summaries are not raw replies",
+      "source": "thesis/campaigns/worker-desktop-k3-p2p-full-audio-v2043/CONDITION-CLOSURE-v2134.json"
+    }
+  ],
+  "inputFiles": 616,
+  "limitations": [
+    "Missing plaintext in selected headers is not proof that all copies or backend logs lack it.",
+    "Hashes and lengths do not reconstruct arbitrary historical answers; no dictionary guessing.",
+    "Original strict correctness and verified complete audio remain original evidence, not recomputed semantic scores.",
+    "An answer predicate cannot create an uninvoked TTS stage, WAV, lifecycle completion or measurement.",
+    "No old label, denominator, request ID, percentile, manifest or frozen source is changed."
+  ],
+  "method": "Read304 requester CASE.json and304 provider CUSTODY.json headers; inspect named string fields of case.stages.assistant; no archive extraction or backend-log search",
+  "newApplicationNetworkRequests": 0,
+  "newInference": 0,
+  "orderedInputIdentityMethod": "SHA256 of newline-delimited sort_keys JSON objects with path,bytes,sha256 in source loop order",
+  "orderedInputIdentitySha256": "274e4d1c4faf436755287708c4fa32e5cf7ee005e25f8b857b0464fb6db4d410",
+  "pythonVersion": "3.11.17 (main, Oct  3 2026, 01:03:29) [Clang 22.1.3 ]",
+  "scope": "Current C12 epoch case headers plus six closed Main condition summaries only",
+  "scoringMethodology": "Pending exact authoritative original-monitor owner-amendment receipt; phone relay msg_c32f412538a3 alone is not used to rewrite Main scores",
+  "source": "thesis/analysis/survey_main_answer_retention_v2481.py",
+  "sourceSha256": "decdc306b333a19b8a0b500e8854da446be4990de196bee34b26b06dfc462742",
+  "status": "RETENTION_SURVEY_ONLY_NO_NEW_SEMANTIC_OR_LIFECYCLE_SCORES"
+}

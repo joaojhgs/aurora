@@ -1,0 +1,11 @@
+{
+  "status": "BOOTSTRAP_PRE_INFERENCE_EXIT",
+  "controller": 2305892,
+  "child": 2305924,
+  "reason": "mesh_route_runtime_prefix_mismatch",
+  "modelsCalled": 0,
+  "warmups": 0,
+  "measured": 0,
+  "newRuntimePin": "Actual unchanged CPU v491 interpreter/pth/packages; only the old prepared v487 prefix/search root corrected",
+  "sourcePinChecks": "pth188B/SHA82c283 unchanged; all5aiortc-aioice files/metadata bytes+hashes match"
+}

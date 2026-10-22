@@ -1,0 +1,162 @@
+{
+  "at": "2026-10-20T02:19:05.679784+00:00",
+  "audioBytes": 5442580,
+  "boundedFinalTailCopies": [
+    {
+      "bytes": 420,
+      "endByte": 44541,
+      "path": "thesis/campaigns/worker-desktop-k3-orca-relayed-http-remaining-v1682/terminal-20261020T0213/final-prefix-tails/requesterCopier.private.log.chunk",
+      "redacted": false,
+      "sha256": "3d99c09abbbacfb65761b5232bca0ba5f0b4171703914a1e814e97914dc54086",
+      "source": "/home/developer/projects/aurora/.git/aurora-handoff-import-20261006/distributed-k3-orca-relayed-launch-v1682/requesterCopier.private.log",
+      "sourceRawSha256": "3d99c09abbbacfb65761b5232bca0ba5f0b4171703914a1e814e97914dc54086",
+      "startByte": 44121
+    }
+  ],
+  "budget": {
+    "capSeconds": 57600,
+    "cumulativeUsedSeconds": 30037.483388928005,
+    "priorUsedSeconds": 24715.685852618004,
+    "thisEpochChargeSeconds": 5321.79753631
+  },
+  "conditionCountsOnly": {
+    "attempted": 900,
+    "correct": 885,
+    "failed": 15,
+    "prior740Preserved": true,
+    "unattempted": 0
+  },
+  "conditionManifestSha256": "32c5ac87c8cd765f0117a0312b6941c8f69c7731dfe66987826311e74e34b506",
+  "excludedWarmups": {
+    "attempted": 15,
+    "correct": 15,
+    "failedOrInterrupted": 0,
+    "incorrect": 0,
+    "outcomes": {
+      "completed_correct": 15
+    },
+    "timeouts": 0
+  },
+  "flowMetricsMsCorrectOnly": {
+    "denominator": 160,
+    "p50_ms": 30166.662922,
+    "p90_ms": 30922.5251632,
+    "p95_ms": 31162.45541595
+  },
+  "freeBytesAfter": 5332086784,
+  "measured": {
+    "attempted": 160,
+    "correct": 160,
+    "failedOrInterrupted": 0,
+    "incorrect": 0,
+    "outcomes": {
+      "completed_correct": 160
+    },
+    "timeouts": 0
+  },
+  "newInferenceOrTests": 0,
+  "originalCustodySnapshot": {
+    "bytes": 572562,
+    "path": "thesis/campaigns/worker-desktop-k3-orca-relayed-http-remaining-v1682/terminal-20261020T0213/ORIGINAL-CURRENT.snapshot.json",
+    "sha256": "d32bc1ce6bbdf1ffabf2ce6f0d74430d2ebd7669f36485ef1dcb2184c350d0a6"
+  },
+  "originalLiveIndexModified": false,
+  "originalRequesterActorsAbsent": [
+    2202799,
+    2202983,
+    2202800,
+    2202801
+  ],
+  "percentilePooling": "None; prior epochs retained, combined counts only until explicit comparability analysis",
+  "physicalOutputWavs": 175,
+  "providerNativeMeasuredStageCoverage": "PENDING final provider custody and exact saved correlation join; warmup proof is admission only",
+  "quantileMethod": "Hyndman-Fan Type7 h=(n-1)*p, linear interpolation; milliseconds; warmups excluded",
+  "requesterPrefixes": {
+    "actual-provider-bindings.jsonl": {
+      "finalSourceBytes": 847,
+      "originalLiveIncompleteFlagRetainedUnmodified": true,
+      "retainedPriorEndByte": 847,
+      "tailCopiedBytes": 0,
+      "terminalEOF": true
+    },
+    "backend.private.log": {
+      "finalSourceBytes": 37514,
+      "originalLiveIncompleteFlagRetainedUnmodified": true,
+      "retainedPriorEndByte": 37514,
+      "tailCopiedBytes": 0,
+      "terminalEOF": true
+    },
+    "controller.private.log": {
+      "finalSourceBytes": 0,
+      "originalLiveIncompleteFlagRetainedUnmodified": true,
+      "retainedPriorEndByte": 0,
+      "tailCopiedBytes": 0,
+      "terminalEOF": true
+    },
+    "proof-collection.private.log": {
+      "finalSourceBytes": 122,
+      "originalLiveIncompleteFlagRetainedUnmodified": true,
+      "retainedPriorEndByte": 122,
+      "tailCopiedBytes": 0,
+      "terminalEOF": true
+    },
+    "requesterCopier.private.log": {
+      "finalSourceBytes": 44541,
+      "originalLiveIncompleteFlagRetainedUnmodified": true,
+      "retainedPriorEndByte": 44121,
+      "tailCopiedBytes": 420,
+      "terminalEOF": true
+    },
+    "resources.jsonl": {
+      "finalSourceBytes": 6864897,
+      "originalLiveIncompleteFlagRetainedUnmodified": true,
+      "retainedPriorEndByte": 6864897,
+      "tailCopiedBytes": 0,
+      "terminalEOF": true
+    },
+    "voice-stages.jsonl": {
+      "finalSourceBytes": 0,
+      "originalLiveIncompleteFlagRetainedUnmodified": true,
+      "retainedPriorEndByte": 0,
+      "tailCopiedBytes": 0,
+      "terminalEOF": true
+    },
+    "warmupFinalizer.private.log": {
+      "finalSourceBytes": 1075,
+      "originalLiveIncompleteFlagRetainedUnmodified": true,
+      "retainedPriorEndByte": 1075,
+      "tailCopiedBytes": 0,
+      "terminalEOF": true
+    }
+  },
+  "stageMetricsMs": {
+    "assistant": {
+      "denominator": 160,
+      "p50_ms": 11704.076913500001,
+      "p90_ms": 12137.1313417,
+      "p95_ms": 12355.3831673
+    },
+    "stt": {
+      "denominator": 160,
+      "p50_ms": 10042.421387999999,
+      "p90_ms": 10542.6046904,
+      "p95_ms": 10875.453518199998
+    },
+    "tts": {
+      "denominator": 160,
+      "p50_ms": 8219.8049875,
+      "p90_ms": 8804.664182600001,
+      "p95_ms": 8880.373167849999
+    }
+  },
+  "status": "REQUESTER_COMPLETED_AND_SEALED_PROVIDER_POSTRUN_VALIDATION_PENDING",
+  "terminalSummary": {
+    "bytes": 49993,
+    "path": "thesis/campaigns/worker-desktop-k3-orca-relayed-http-remaining-v1682/terminal-20261020T0213/summary.json",
+    "sha256": "5f6d4927ee4854c6a7d9285b492fb53d647eeb31427130c359c8b9f728cc3756"
+  },
+  "verifiedCases": 175,
+  "verifiedIndexedBytes": 14154302,
+  "verifiedIndexedFiles": 653,
+  "workerBuildLeaseFree": true
+}

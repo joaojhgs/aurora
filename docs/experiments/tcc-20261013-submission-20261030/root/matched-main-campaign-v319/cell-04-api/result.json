@@ -1,0 +1,22 @@
+{
+  "baseline_seconds": 300,
+  "cell_cap_seconds": 6000,
+  "child_exit_code": 0,
+  "elapsed_seconds": 3441.906089172,
+  "exit_code": 0,
+  "finished_at": "2026-10-14T11:39:15.053469+00:00",
+  "index": 4,
+  "planned_measured": 100,
+  "planned_warmups": 5,
+  "receipt_validation": {
+    "expected_provider_captures": 105,
+    "expected_requests": 105,
+    "failure_classes": [],
+    "raw_artifacts_retained": true,
+    "validated": true
+  },
+  "request_deadline_ms": 180000,
+  "route": "api",
+  "started_at": "2026-10-14T10:41:53.147158+00:00",
+  "status": "completed"
+}

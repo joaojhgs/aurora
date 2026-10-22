@@ -1,0 +1,21 @@
+{
+  "at": "2026-10-17T18:10:48.741470+00:00",
+  "files": [
+    {
+      "path": "UPDATE-v1174.md",
+      "bytes": 2079,
+      "sha256": "3213f6fb448dee7be08e13f2317e9dd4b03676435839212caa8f17228a4eb2ac"
+    },
+    {
+      "path": "native-blocked-audit-v1174.json",
+      "bytes": 2955,
+      "sha256": "f12d05c346fb7c07af079beb7505a53568c3e6556a93aa7d4ab200f533e7ae23"
+    },
+    {
+      "path": "native-goal-status-v1174.json",
+      "bytes": 498,
+      "sha256": "7c12909234633f268475a3e2ab4101b3e8a66aedf8362c87523997e0a196f1b3"
+    }
+  ],
+  "privateConfigAndLogsExcluded": true
+}

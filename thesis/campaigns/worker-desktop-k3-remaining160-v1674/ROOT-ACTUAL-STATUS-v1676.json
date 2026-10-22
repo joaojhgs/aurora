@@ -1,0 +1,20 @@
+{
+  "at": "2026-10-20T00:40:51.783463+00:00",
+  "rootNativeGoal": "01a112a5-d6bb-74e2-bf7c-ace73cb513b5",
+  "rootNativeStatus": "active",
+  "monitorNativeStatus": "active",
+  "monitorStatusEvidence": "msg_fc56da2b7093 actual self get_goal 2026-10-20T00:17:01Z",
+  "normalPair": "PASS; normal bilateral approval, authenticated open encrypted RTC; scoped three permissions",
+  "pairEvidence": "thesis/campaigns/worker-desktop-normal-pair-v1663/NORMAL-PAIRING-RESULT-v1668.json",
+  "providerV1670": "controller preflight failed existing_gateway_api_key_process_binding_missing; no runtime/model requests",
+  "providerV1674": "accepted shell command ended at missing API-key environment-file assertion before Popen; no runtime or launch receipt; raw READ-2 retained",
+  "priorK3": {
+    "attempted": 740,
+    "correct": 725,
+    "failed": 15,
+    "remaining": 160
+  },
+  "providerRecoveryCustody": "COMPLETE 1794 files 267408575 bytes; old provider naturally retired receiver_outer_deadline",
+  "currentAction": "Resolve existing credential reference in memory, fresh condition-sized provider, then remaining160 ordinary warmup/native admission; no prior measured repeat",
+  "repeatedResume": false
+}

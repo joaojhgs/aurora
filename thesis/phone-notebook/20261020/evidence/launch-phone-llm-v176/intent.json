@@ -1,0 +1,12 @@
+{
+  "controlDeadline": "2026-10-22T06:15:00Z",
+  "explicitNewline": true,
+  "host": "ssh:ssh-sem-notebook-personal",
+  "incarnation": "328cd72f-c7ea-49ff-a2db-b9275b085037",
+  "remoteResult": "/home/developer/projects/aurora/thesis/phone-notebook/20261020/evidence/launch-phone-llm-v176.json",
+  "rootAdmissionMessage": "owner bounded actual native qualification after v2policyrepair verifiednormalupdate; nativepolicyread first,2completions,320sabsolute, no Notebookinfer/build/mainresource",
+  "script": "scripts/launch_phone_llm_v176.py",
+  "scriptSha256": "00f3a959eed4cbb5932eabf1ff8dd0cb92247e081c5dbfe45b83a69fbadbfc27",
+  "singleSend": true,
+  "terminal": "term_a2ed5feb-7c92-48e4-bd88-d1b0e6737989"
+}

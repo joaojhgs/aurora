@@ -1,0 +1,21 @@
+{
+  "quantile_method": "Type7 h=(n-1)p linear interpolation on correct_success only",
+  "n_planned": 2,
+  "n_attempted": 1,
+  "n_unattempted_after_first_failure": 1,
+  "n_correct_success": 0,
+  "n_failure": 1,
+  "n_explicit_timeout": 0,
+  "n_warmup": 0,
+  "n_provider_invocations": 0,
+  "provider_input_file_present": true,
+  "successful_reply_ms": [],
+  "failed_terminal_observation_ms": [
+    1357
+  ],
+  "p50_ms": null,
+  "p90_ms": null,
+  "p95_ms": null,
+  "stable_tail_claim": false,
+  "all_condition_input_join_complete": false
+}

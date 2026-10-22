@@ -1,0 +1,46 @@
+{
+  "at": "2026-10-20T20:44:41.552877+00:00",
+  "status": "EXACT_REVIEWED_CANDIDATE_APPLIED_TESTS_PENDING",
+  "patchSha256": "038f6d443fbee9b83202dabe4db60375ff2f059493007548ad5989a18842f27f",
+  "sourceReceipt": "thesis/harness/stt-mesh-runtime-candidate-v1738/SOURCE-RECEIPT.json",
+  "review": {
+    "status": "BOUNDED_PROSPECTIVE_SOURCE_PASS_NOT_APPLIED_OR_RUNTIME_TESTED",
+    "path": "thesis/harness/stt-mesh-runtime-candidate-v1738/review/P2P-K3-V1738-BOUNDED-PROSPECTIVE-SOURCE-REVIEW-20261020T0624.md",
+    "bytes": 5329,
+    "sha256": "e613f3be1f5a2bb0532fc31ed36607fdc9cfc43cd7fa5d6d92d9881258c78edc"
+  },
+  "files": [
+    {
+      "path": "app/services/stt_transcription/service.py",
+      "beforeSha256": "4723b798b2643cee262e3d1d0ad28114305c3e83c8ef5bae5becd790aac5f888",
+      "afterSha256": "becf4222d99b02dbc4cac03ad098f275ccb288ceb35f44e945a521701ecaaf49"
+    },
+    {
+      "path": "app/shared/contracts/models/speech_runtime.py",
+      "beforeSha256": "1f7ea66c9a4619439130a6a200647b49a1df5b5b8cd17490c5aab0a371e88d94",
+      "afterSha256": "60113749d6cb874a478cd0551b4d39c7a024b02a3e99c0f0af4a2d2e095db9c7"
+    },
+    {
+      "path": "packages/aurora-sdk/src/webrtc/manifest.ts",
+      "beforeSha256": "b415b3bcddeda9adc38da47cb73db271f8eff52fb3671a572f0763c81e79d0a4",
+      "afterSha256": "88d99c863d8bb218edd9afcd422de9a0206424efc81af344c91e94b2bd8eda6d"
+    },
+    {
+      "path": "packages/aurora-sdk/tests/webrtc-manifest.test.ts",
+      "beforeSha256": "1e3cb696f2eba417e0264bed974a8a191043adb72b96987ae434e2528938db25",
+      "afterSha256": "bae42355504d7f936c0c1843fdc7b71ea3927e81b6ab3a6ca63bfc64b467cafa"
+    }
+  ],
+  "newTests": [
+    {
+      "path": "tests/unit/stt_transcription/test_runtime_speech_announcement.py",
+      "sha256": "b0e6cf72ce657afcb29feb1404ef96fdde879e6a146cdf352f065a7294cc1098",
+      "mainFlowCases": 3,
+      "executed": false
+    }
+  ],
+  "priorDirtySourcePreservedByExactBeforeHash": true,
+  "k2FrozenFilesChanged": false,
+  "newInference": false,
+  "validationOwner": "original Root"
+}

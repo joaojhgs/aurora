@@ -1,0 +1,12 @@
+{
+  "controlDeadline": "2026-10-22T00:19:55.341599+00:00",
+  "explicitNewline": true,
+  "host": "ssh:ssh-sem-notebook-personal",
+  "incarnation": "328cd72f-c7ea-49ff-a2db-b9275b085037",
+  "remoteResult": "/home/developer/projects/aurora/thesis/phone-notebook/20261020/evidence/offline-prep-custody-20261022T000615-g2.json",
+  "rootAdmissionMessage": "msg_fb6e25f5d33a-owned-setup-notes-custody-only-no-product-source-assets",
+  "script": "evidence/offline-prep-custody-20261022T000615-g2-copy.py",
+  "scriptSha256": "a6ac54473c847ad9403aa8df9f1cc6267204ca1405e2bbef072522a53bb98e80",
+  "singleSend": true,
+  "terminal": "term_a2ed5feb-7c92-48e4-bd88-d1b0e6737989"
+}

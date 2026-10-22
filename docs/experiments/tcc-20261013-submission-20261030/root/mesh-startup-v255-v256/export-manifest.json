@@ -1,0 +1,56 @@
+[
+  {
+    "path": "mesh-main-v255/stdout.log",
+    "original_sha256": "01704202cb4cdc0b4bb3793345c8df18720163b5c4a2d6745d7f8d45160c065f",
+    "export_sha256": "01704202cb4cdc0b4bb3793345c8df18720163b5c4a2d6745d7f8d45160c065f",
+    "transformation": "byte-identical"
+  },
+  {
+    "path": "mesh-main-v255/stderr.log",
+    "original_sha256": "9c5110bb0a7edc6ffebd791365b235ab65e16c7dfd40f05b3ff30802ec8321e1",
+    "export_sha256": "9c5110bb0a7edc6ffebd791365b235ab65e16c7dfd40f05b3ff30802ec8321e1",
+    "transformation": "byte-identical"
+  },
+  {
+    "path": "mesh-main-v255/root-result.json",
+    "original_sha256": "c728ca0169db15aee3383c6ff8e31d251bdb25ca6e4bec303f76f60677b32732",
+    "export_sha256": "6eb17b3031d32e98b623e8afe0e03df93bc1229f0a79688434411be6f1253457",
+    "transformation": "private config/env hashes omitted"
+  },
+  {
+    "path": "mesh-main-v255/root-manifest.json",
+    "original_sha256": "f6be65a63ede3303e160895c48cd0992bbb6d50f8d89f7661479520663fdb887",
+    "export_sha256": "2dccc6a72ed7a96cae760edd0c72ad66a1ad38929b6f2cef28dec2e47ad73979",
+    "transformation": "private config/env hashes omitted"
+  },
+  {
+    "path": "mesh-main-v255/tsconfig-cleanup.json",
+    "original_sha256": "644cfb37bd7a410d283e0190e269304a640ae4f82dd4e636436f5321c857c087",
+    "export_sha256": "644cfb37bd7a410d283e0190e269304a640ae4f82dd4e636436f5321c857c087",
+    "transformation": "byte-identical"
+  },
+  {
+    "path": "mesh-services-v256/stdout.log",
+    "original_sha256": "9599027fa3e7343ce0385f271906255dca12834cee6fa747e85475f3cd493bd8",
+    "export_sha256": "9599027fa3e7343ce0385f271906255dca12834cee6fa747e85475f3cd493bd8",
+    "transformation": "byte-identical"
+  },
+  {
+    "path": "mesh-services-v256/stderr.log",
+    "original_sha256": "ca2b192f325c1e70e35814ee1a66388f35e85284be39d26b8c2b760bce9236b7",
+    "export_sha256": "ca2b192f325c1e70e35814ee1a66388f35e85284be39d26b8c2b760bce9236b7",
+    "transformation": "byte-identical"
+  },
+  {
+    "path": "mesh-services-v256/result.json",
+    "original_sha256": "9709b46b8918de9ce6bcad7aa9604ac3213aad91a72502746a5817b179db33c3",
+    "export_sha256": "9709b46b8918de9ce6bcad7aa9604ac3213aad91a72502746a5817b179db33c3",
+    "transformation": "byte-identical"
+  },
+  {
+    "path": "mesh-services-v256/manifest.json",
+    "original_sha256": "fb0ca45b8ae4db3ade69f4da66d07a6e26581172b0dd45b7d29489f169029653",
+    "export_sha256": "fb0ca45b8ae4db3ade69f4da66d07a6e26581172b0dd45b7d29489f169029653",
+    "transformation": "byte-identical"
+  }
+]

@@ -1,0 +1,21 @@
+{
+  "at": "2026-10-16T04:56:02.928748+00:00",
+  "source": ".git/aurora-handoff-import-20261006/browser-post-terminal-prep-v896",
+  "destination": "thesis/harness/browser-ui-v799-finalization-v896",
+  "files": [
+    {
+      "path": "PREP.md",
+      "bytes": 3444,
+      "sha256": "cec6e01ca66da78cb0265543c7525920b4dd7e5671efc72cc1067a39f6bf56e0"
+    },
+    {
+      "path": "post_terminal.py",
+      "bytes": 29427,
+      "sha256": "a0cfe99fc2d1348ba078b1d11adbdad081921accb3ce8ee094873203ae54f6c9"
+    }
+  ],
+  "review": "thesis/validation/browser-post-terminal-review-v897.md",
+  "reviewSHA256": "22550cd1d1e9a18f4b5b6bc1b8f91dd79d157a15c89760c08a3253b6e047d7b5",
+  "runtimeOrAuditExecuted": false,
+  "scope": "SOURCE_APPROVED_ONLY; actual peer/route/model/resource/15warmup admission or actual terminal audit remains Root future work"
+}

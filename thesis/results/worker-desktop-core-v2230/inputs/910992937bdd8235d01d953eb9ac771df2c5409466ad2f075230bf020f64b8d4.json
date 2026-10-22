@@ -1,0 +1,107 @@
+{
+  "aggregateGoalComplete": false,
+  "allExpectedInvokedNativeStagesJoined": true,
+  "at": "2026-10-18T07:33:55.906185+00:00",
+  "caseCopies": 915,
+  "cohort": "V1264",
+  "conservativeLabelInterpretation": "The unchanged reviewed analyzer retains its fixed checkpoint label. This separate terminal validation binds its actual900 measured+15 excluded rows to the completed requester seal and provider631 native coverage; original outputs are not rewritten.",
+  "excludedWarmups": {
+    "attempted": 15,
+    "correct": 15,
+    "failedOrInterrupted": 0,
+    "incorrect": 0,
+    "outcomes": {
+      "completed_correct": 15
+    },
+    "partialQualityIncorrect": 0,
+    "timeoutFlagAbsent": 0,
+    "timeouts": 0
+  },
+  "failureClassification": "thesis/campaigns/worker-desktop-k2-orca-relayed-http-v1264/terminal-v1465/FAILURE-HASH-CLASSIFICATION-v1470.json",
+  "iOSAndroidBrowserMicrophonePlaybackAcceptanceClaimed": false,
+  "measured": {
+    "attempted": 900,
+    "correct": 797,
+    "failedOrInterrupted": 103,
+    "incorrect": 0,
+    "outcomes": {
+      "completed_correct": 797,
+      "failed": 103
+    },
+    "partialQualityIncorrect": 103,
+    "timeoutFlagAbsent": 0,
+    "timeouts": 0
+  },
+  "nativeCasesWithCompletedStages": {
+    "OrchestratorService._persist_chat_message": 900,
+    "TTS.Synthesize": 797,
+    "Transcription.Transcribe": 900,
+    "resolved_chat_model.astream": 900,
+    "stt.model_invoke": 900,
+    "tts.model_invoke": 797
+  },
+  "noNewMeasurementsOrSutCalls": true,
+  "physicalMicrophone": false,
+  "physicalPlaybackOrAudibility": false,
+  "physicalWavFiles": 812,
+  "providerCoverageChain": "thesis/evidence/orca-relayed-http-v1197/provider-transfer-delta-v1468/COVERAGE-CHAIN.json",
+  "providerRawBytes": 214494313,
+  "providerRawFiles": 1763,
+  "quantileMethod": "Hyndman-Fan Type7, h=(n-1)*p, linear interpolation",
+  "resourceCanonicalSourceSha256": "32c4b6bbcf01bbd9b381ed54f18ed629f616094458dce0c81abf199475875b8e",
+  "resourceCaseDenominator": 900,
+  "resourceExecutedSourceSha256": "6fdb7c4d815b000889fd975e094887e22ecc8bfa0217a7f0531f5ce17f4a8f73",
+  "resourceSourceScope": "Samples inside actual case/model intervals, not exclusive per-request resource attribution. Parent receiver CPU excludes separately spawned Piper processes. Network counters are namespace-wide; interfaces are separate and must not be summed. GPU observations are per recorded DRM device. Missing/unsupported or unsampled fields stay null. Short model windows can have zero samples.",
+  "resourceSummary": "thesis/campaigns/worker-desktop-k2-orca-relayed-http-v1264/terminal-v1465/resource-analysis-v1471/SUMMARY-UNITS.json",
+  "resourceUnitNormalizationEquivalentActualMetricChecks": 20,
+  "resourceWindows": {
+    "provider.llm_model": {
+      "casesWithNativeWindow": 900,
+      "casesWithSamples": 285,
+      "casesWithTwoSamples": 29
+    },
+    "provider.native_case_window": {
+      "casesWithNativeWindow": 900,
+      "casesWithSamples": 900,
+      "casesWithTwoSamples": 900
+    },
+    "provider.tts_model": {
+      "casesWithNativeWindow": 797,
+      "casesWithSamples": 797,
+      "casesWithTwoSamples": 583
+    },
+    "requester.full_attempt": {
+      "casesWithNativeWindow": 900,
+      "casesWithSamples": 900,
+      "casesWithTwoSamples": 900
+    },
+    "requester.stt_model": {
+      "casesWithNativeWindow": 900,
+      "casesWithSamples": 900,
+      "casesWithTwoSamples": 900
+    }
+  },
+  "sourceAnalyzerConservativeLabel": "INCOMPLETE_CHECKPOINT_ANALYSIS_NOT_A_900_CASE_SEAL",
+  "sourceAnalyzerSha256": "06163cb874cb3010df3426334b04cf74abe2bcc0a715aea1bed75ce2769e1e89",
+  "sourceProgress": {
+    "attempted": 915,
+    "measured_attempted": 900,
+    "planned_measured": 900,
+    "planned_warmups": 15,
+    "status": "completed_with_failures_or_incorrect",
+    "stop_reason": null,
+    "unattempted_measured": 0,
+    "warmups_attempted": 15
+  },
+  "sourceRequesterSeal": "thesis/campaigns/worker-desktop-k2-orca-relayed-http-v1264/terminal-v1465/SEAL.json",
+  "sourceSummary": "thesis/campaigns/worker-desktop-k2-orca-relayed-http-v1264/terminal-v1465/analysis-v1469/SUMMARY.json",
+  "status": "TERMINAL_900_COLLECTION_AND_RETAINED_NATIVE_ANALYSIS_COMPLETE_WITH_FAILURES",
+  "uninvokedTtsForFailedAnswerChecks": 103,
+  "unknownMetrics": {
+    "firstAudio": null,
+    "firstToken": null,
+    "playback": null,
+    "queue": null,
+    "relayOnlyLatency": null
+  }
+}

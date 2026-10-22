@@ -1,0 +1,14 @@
+{
+  "at": "2026-10-21T21:13:52.584598+00:00",
+  "operation": "k1-http-next450-desktop-resource-v2295a",
+  "sourceSha256": "d3c6233d8cf0d6502d6301f5044c082c64d28cee9f3df3f235bf9cc9f20912fe",
+  "commandPath": "thesis/evidence/k1-http-remaining450-admission-v2294/DESKTOP-RESOURCE-READ-v2295.command.txt",
+  "maxSends": 1,
+  "samePlainControlTerminal": "term_d5651d8d-58e2-4b38-85e2-51c668cc933c",
+  "sameIncarnation": "034ff933-61a3-4c74-b5ad-98a75e8ac21c",
+  "newInference": 0,
+  "lifecycleChanges": 0,
+  "previousLocalFailureReceipt": "thesis/evidence/k1-http-remaining450-admission-v2294/LOCAL-PREFLIGHT-FAILURE-v2295/RECEIPT.json",
+  "previousOperationSentCommands": 0,
+  "onTimeout": "Reconcile same accepted request/result/cursor; do not resend or infer provider exit."
+}

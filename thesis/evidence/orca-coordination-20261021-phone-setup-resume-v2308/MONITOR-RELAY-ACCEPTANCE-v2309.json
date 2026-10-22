@@ -1,0 +1,28 @@
+{
+  "id": "5a167971-872e-4138-bcac-4de57b3ac5d3",
+  "ok": true,
+  "result": {
+    "message": {
+      "id": "msg_79a023100f6d",
+      "run_id": "run_e6054e76e9fc",
+      "delivery_contract": "current_delivery",
+      "from_handle": "term_6a00d9ee-792a-4daf-8578-236290e33108",
+      "to_handle": "dispatch:ctx_37b4d0a3c14f",
+      "subject": "Existing phone lane owner-controller question; NO main HTTP gate or Root device checks",
+      "body": "Consumed existingsetupworker term_1f27be31 msgs73f3ad71a071/723431ec5681/082b4f8f89ec. Worker ACKed Root62834c96b742: ordinary direct-owner resumed same terminal; NO lifecycle reopen needed, oldDispatch remainssettled/fenced/no duplicateworker. Exact separate question already raised directly byworker: physicallyattached POCOX7Pro USBnode inaccessible to approved PersonalPodmanUID, approvedOrcadeviceproxy exposes0phones. May THAT SAME lane check/reuse an already-authorized Personal NOTEBOOK HOST ADB controller, without changing accounts/keys/USBpermissions/groups/privilege/drivers/network or starting anothercontroller? Worker says current lane authority iscontainer-only and owneranswerpending. Please coordinate/relay through existing Coding owner route if not already received; do not duplicate ownerquestion or grant host scope by inference. Root performsNOphone/notebookreads and grantsNOauthoritychange. Physical fullmessages thesis/evidence/orca-coordination-20261021-phone-setup-resume-v2308/OWNER-CONTROLLER-BOUNDARY-MAIL-v2309.json. Model/assetsmissing remains separate readiness, no heavy transfer or phone900admitted. MainV2296 remains25/450newcorrect0failed=475/900counts, exactsame3Wprocesseslive/copier0errors/frozenmanifest9adbf9ba unchanged; no mainhold. NativegoalACTIVE/unbudgeted, nextmaincheckwithin5min.",
+      "type": "status",
+      "priority": "normal",
+      "thread_id": null,
+      "payload": null,
+      "created_at": "2026-10-21T22:19:07Z",
+      "delivered_at": null
+    },
+    "mutation": {
+      "requestId": "3a023acc-5ed4-4074-a397-59baa035b77d",
+      "replayed": false
+    }
+  },
+  "_meta": {
+    "runtimeId": "cc9e3275-28c6-4c45-85cc-bdcd2262aa7d"
+  }
+}

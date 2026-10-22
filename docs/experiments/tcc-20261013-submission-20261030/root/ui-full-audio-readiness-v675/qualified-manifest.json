@@ -1,0 +1,327 @@
+{
+  "actualAssetHashChecks": [
+    {
+      "bytes": 563036064,
+      "path": "/tmp/aurora-root-gpu-primary-v409/models/Qwen3.5-0.8B-Q4_0.gguf",
+      "sha256": "57d1997790d1744fba5b40a7317df71ea5e2acee28c47e78f0cce39c0703f8cf"
+    },
+    {
+      "bytes": 2309,
+      "path": "/dev/shm/aurora-root-accurate-base-v443/model/config.json",
+      "sha256": "56a6d8110d311f19c8f0471e562832c7527f146b567275bfca59fcf7c184da9a"
+    },
+    {
+      "bytes": 145217532,
+      "path": "/dev/shm/aurora-root-accurate-base-v443/model/model.bin",
+      "sha256": "d01c3014881c9c6f3133c182f3d2887eb6ca1c789a7538c5c007196857a0a6a9"
+    },
+    {
+      "bytes": 2203239,
+      "path": "/dev/shm/aurora-root-accurate-base-v443/model/tokenizer.json",
+      "sha256": "fb7b63191e9bb045082c79fd742a3106a12c99513ab30df4a0d47fa6cb6fd0ab"
+    },
+    {
+      "bytes": 459861,
+      "path": "/dev/shm/aurora-root-accurate-base-v443/model/vocabulary.txt",
+      "sha256": "34ce3fe1c5041027b3f8d42912270993f986dbc4bb34cf27f951e34a1e453913"
+    },
+    {
+      "bytes": 63531379,
+      "path": "/tmp/aurora-root-voice-primary-v426/models-v427/piper-ljspeech/en_US-ljspeech-medium.onnx",
+      "sha256": "6f52a751e2349abe7a76735eb09dc1875298c77ea2342ffd2fef79ff81b87f22"
+    },
+    {
+      "bytes": 4972,
+      "path": "/tmp/aurora-root-voice-primary-v426/models-v427/piper-ljspeech/en_US-ljspeech-medium.onnx.json",
+      "sha256": "141d612cc0a95ed7efc1ca936b845c2364967f2e9217c5dbfcf69fc4d6c65860"
+    }
+  ],
+  "actualVersions": {
+    "ctranslate2": "4.7.1",
+    "faster-whisper": "1.1.1",
+    "llama-cpp-python": "0.3.19",
+    "numpy": "2.2.6",
+    "onnxruntime": "1.20.1",
+    "piper-tts": "1.2.0"
+  },
+  "assetHashChecks": {
+    "allMatchParentFreeze": true,
+    "count": 7
+  },
+  "capturedSTTIngress": {
+    "bytes": 191360,
+    "format": "raw mono PCM16",
+    "providerArrayHash": null,
+    "providerArrayHashReason": "service preprocessing array not separately hashed; source WAV and actual UI HTTP PCM preserved",
+    "sampleRate": 16000,
+    "sha256": "73ae5df883f48c6589f3cf0cc6bf7fbd1f0af9aae8bbf7d29a498710727c45ed"
+  },
+  "classification": "single-run functional readiness; measuredRequests=0; warmupRequests=0; no cohort statistics",
+  "cohortId": "v675-padded-input-ui-readiness",
+  "descriptiveStageDurationsMs": [
+    {
+      "clockDomain": "same-process monotonic",
+      "durationMs": 1.033,
+      "operation": "TTS.Request",
+      "outcome": "completed",
+      "stage": "tts"
+    },
+    {
+      "clockDomain": "same-process monotonic",
+      "durationMs": 3454.287,
+      "operation": "stt.model_invoke",
+      "outcome": "completed",
+      "stage": "stt"
+    },
+    {
+      "clockDomain": "same-process monotonic",
+      "durationMs": 3457.688,
+      "operation": "Transcription.Transcribe",
+      "outcome": "completed",
+      "stage": "stt"
+    },
+    {
+      "clockDomain": "same-process monotonic",
+      "durationMs": 144.55,
+      "operation": "OrchestratorService._persist_chat_message",
+      "outcome": "completed",
+      "stage": "history"
+    },
+    {
+      "clockDomain": "same-process monotonic",
+      "durationMs": 1883.493,
+      "operation": "resolved_chat_model.astream",
+      "outcome": "completed",
+      "stage": "llm"
+    },
+    {
+      "clockDomain": "same-process monotonic",
+      "durationMs": 152.713,
+      "operation": "OrchestratorService._persist_chat_message",
+      "outcome": "completed",
+      "stage": "history"
+    },
+    {
+      "clockDomain": "same-process monotonic",
+      "durationMs": 1485.326,
+      "operation": "tts.model_invoke",
+      "outcome": "completed",
+      "stage": "tts"
+    },
+    {
+      "clockDomain": "same-process monotonic",
+      "durationMs": 1485.976,
+      "operation": "TTS.Synthesize",
+      "outcome": "completed",
+      "stage": "tts"
+    }
+  ],
+  "fileManifest": "file-manifest.json",
+  "freezeVersion": "v681-exact-setup-and-raw-custody",
+  "frozenAt": "2026-10-15T17:54:32.575471+00:00",
+  "hardware": {
+    "cpuModel": "AMD Ryzen 5 3400G with Radeon Vega Graphics",
+    "effectiveLLMBackend": "llama-cpp-python/Vulkan;25/25layers",
+    "gpuDevice": "0x7480",
+    "gpuName": "AMD Radeon RX7600",
+    "gpuVRAMTotal": 8573157376,
+    "kernel": "7.0.0-34-generic",
+    "machine": "x86_64",
+    "sttBackend": "faster-whisper/ctranslate2 CPU int8_float32",
+    "ttsBackend": "Piper CLI CPU useCuda=false"
+  },
+  "input": {
+    "bytes": 219794,
+    "channels": 1,
+    "durationSeconds": 4.982993197278912,
+    "exactReply": "Paris",
+    "frames": 109875,
+    "frozenQuestionSHA256": "34b681e385feb3500c9e9849d30f5bac982716c4e4938cdb04c5fdc617cff624",
+    "leadingSilenceMs": 1000,
+    "loop": false,
+    "question": "What is the capital of France? Answer with only the city name.",
+    "sampleRate": 22050,
+    "sampleWidthBytes": 2,
+    "sha256": "da0ecc4ad0885746ab6e716585473917ab2b543a505bf0db09ebacfaa7943cbb",
+    "trailingSilenceMs": 500
+  },
+  "lineage": {
+    "V641": {
+      "manifestSHA256": "4ea13d6065fa6a15d9d1e0439aa2a66896e0bd59dbaad6d833f2a0a591d8f6b9",
+      "resultPreserved": true,
+      "status": "incomplete_interrupted_no_final_result"
+    },
+    "originalGPUHeadlessLocalV485AndHTTPV497": {
+      "noPooling": true,
+      "originalOutcomesAndRawRemainValidWithinOriginalAudioHeadlessScope": true,
+      "primaryNewPaddedAudioComparisonStatus": "SUPERSEDED_FOR_NEW_PADDED_AUDIO_SETUP_ONLY",
+      "replacement": "this qualified-manifest.json freezes setup; replacement900-measured condition results PENDING"
+    },
+    "workerCPUV491": {
+      "noPoolingWithGPUOrPaddedAudio": true,
+      "status": "RETAINED_EXTRA_CPU_ORIGINAL_AUDIO_LIMITED_SCOPE"
+    }
+  },
+  "models": {
+    "llm": {
+      "actualProvider": "ChatLlamaCpp / llama.cpp",
+      "batch": 64,
+      "bytes": 563036064,
+      "chatFormat": "chatml-function-calling",
+      "contextTokens": 4096,
+      "maxTokens": 128,
+      "minP": 0,
+      "name": "Qwen3.5-0.8B-Q4_0",
+      "note": "GPU-offload fact is from retained actual backend selected lines, not constructor request alone.",
+      "observedBackendOffload": "25/25 layers",
+      "quantization": "Q4_0",
+      "repeatPenalty": 1,
+      "requestedGpuLayers": 100,
+      "seed": 42,
+      "sha256": "57d1997790d1744fba5b40a7317df71ea5e2acee28c47e78f0cce39c0703f8cf",
+      "temperature": 0,
+      "threads": 2,
+      "topK": 1,
+      "topP": 1,
+      "weights": {
+        "bytes": 563036064,
+        "path": "/tmp/aurora-root-gpu-primary-v409/models/Qwen3.5-0.8B-Q4_0.gguf",
+        "sha256": "57d1997790d1744fba5b40a7317df71ea5e2acee28c47e78f0cce39c0703f8cf"
+      }
+    },
+    "stt": {
+      "actualComputeType": "int8_float32",
+      "actualDevice": "cpu",
+      "bytes": 145217532,
+      "decode": {
+        "beamSize": 5,
+        "language": null,
+        "provenance": "unchanged frozen service configuration; actual constructor bound in raw/runtime/actual-provider-bindings.jsonl",
+        "role": "accurate",
+        "vadFilter": true
+      },
+      "name": "faster-whisper base",
+      "requestedComputeType": "int8",
+      "sha256": "d01c3014881c9c6f3133c182f3d2887eb6ca1c789a7538c5c007196857a0a6a9",
+      "weightFiles": [
+        {
+          "bytes": 2309,
+          "path": "/dev/shm/aurora-root-accurate-base-v443/model/config.json",
+          "sha256": "56a6d8110d311f19c8f0471e562832c7527f146b567275bfca59fcf7c184da9a"
+        },
+        {
+          "bytes": 145217532,
+          "path": "/dev/shm/aurora-root-accurate-base-v443/model/model.bin",
+          "sha256": "d01c3014881c9c6f3133c182f3d2887eb6ca1c789a7538c5c007196857a0a6a9"
+        },
+        {
+          "bytes": 2203239,
+          "path": "/dev/shm/aurora-root-accurate-base-v443/model/tokenizer.json",
+          "sha256": "fb7b63191e9bb045082c79fd742a3106a12c99513ab30df4a0d47fa6cb6fd0ab"
+        },
+        {
+          "bytes": 459861,
+          "path": "/dev/shm/aurora-root-accurate-base-v443/model/vocabulary.txt",
+          "sha256": "34ce3fe1c5041027b3f8d42912270993f986dbc4bb34cf27f951e34a1e453913"
+        }
+      ]
+    },
+    "tts": {
+      "actualPiperOutputPCMBytes": 31744,
+      "browserResponseWavBytes": 31788,
+      "browserResponseWavSHA256": "2a84df0b3e9a7d0c463789c9d2b082a46a1f6734c89f017c2065fe82b043ce5d",
+      "bytes": 63531379,
+      "format": "mono PCM16/22050Hz",
+      "name": "Piper en_US-ljspeech-medium ONNX",
+      "playingAndEnded": true,
+      "sampleRate": 22050,
+      "sha256": "6f52a751e2349abe7a76735eb09dc1875298c77ea2342ffd2fef79ff81b87f22",
+      "useCuda": false,
+      "validWav": true,
+      "voiceConfig": {
+        "bytes": 4972,
+        "path": "/tmp/aurora-root-voice-primary-v426/models-v427/piper-ljspeech/en_US-ljspeech-medium.onnx.json",
+        "sha256": "141d612cc0a95ed7efc1ca936b845c2364967f2e9217c5dbfcf69fc4d6c65860"
+      },
+      "weights": {
+        "bytes": 63531379,
+        "path": "/tmp/aurora-root-voice-primary-v426/models-v427/piper-ljspeech/en_US-ljspeech-medium.onnx",
+        "sha256": "6f52a751e2349abe7a76735eb09dc1875298c77ea2342ffd2fef79ff81b87f22"
+      }
+    }
+  },
+  "parentFrozenHTTPManifestSHA256": "886d2fade5b14da2fccf272d272c6164479a86e81371ad1afdb738b7d0de1eea",
+  "phaseGate": {
+    "crossDeviceMeasuredAllowed": false,
+    "cumulativeRemoteStages": [
+      "TTS",
+      "TTS+LLM",
+      "TTS+LLM+STT"
+    ],
+    "noNew900RequestsExecuted": true,
+    "plannedMeasuredPerApplicableNewCondition": 900,
+    "requiredIndividualAudioAndSurfaceSealsComplete": false,
+    "warmupsAdditionalExcluded": true
+  },
+  "pilotManifestSHA256": "35d56a4e833d8d385b0a20252c45b983a8d03bfbe8cbafcefa854e8b5f4b226f",
+  "postFlowCleanupDiagnostic": "NativeContextUnavailableError was reported after successful flow in retained backend-selected lines; tracked separately and does not alter successful UI voice-flow result.",
+  "run": {
+    "all16ChecksPassed": true,
+    "allOwnedProcessesAbsent": true,
+    "attempts": 1,
+    "capSeconds": 420,
+    "completedAt": "2026-10-15T17:42:27.708572+00:00",
+    "dbUnchanged": true,
+    "driverExitCode": 0,
+    "elapsedSeconds": 65.10181326698512,
+    "locksFree": true,
+    "measuredRequests": 0,
+    "originalDBSHA256": "911f10f5808a312ad7712daefab7b47a404966ae58a14c7e95090408fc40d52e",
+    "outcome": "passed",
+    "startedAt": "2026-10-15T17:41:22.606831+00:00",
+    "warmupRequests": 0
+  },
+  "schema": "aurora-ui-full-audio-readiness-single-run-v675-v1",
+  "scope": "Normal browser UI login, file-backed browser microphone, STT, exact visible LLM reply, normal Read aloud producing valid WAV and actual browser playing/ended events. Does not establish physical microphone/acoustic playback, native mobile, or 900-request/statistical cohort.",
+  "sourceAndArtifacts": {
+    "actualBindings": "raw/runtime/actual-provider-bindings.jsonl",
+    "actualVersions": "raw/runtime/runtime-versions.json",
+    "personalRawLogsAudioCheckpoints": "personal-raw-custody.json",
+    "raw23StageRows": "raw/runtime/voice-stages.jsonl",
+    "rawPilotManifest": "raw/pilot-manifest.json",
+    "rawResourceSamples": "raw/resources.jsonl",
+    "rawRetirement": "raw/retirement.json",
+    "rawVoiceFlow": "raw/ui-case/voice-flow.json",
+    "sourceGuard": "raw/runtime/source-guard.json"
+  },
+  "sourceEvidenceSHA256": {
+    "resources.jsonl": "0edceb8b7c22672a46f4eba1109882c6b5a31df92605a58778bb6fd3a02b6c68",
+    "retirement.json": "f42f356c184e765d51f9062ca2939d05f4d38bbc31562e88c37cb23e5f8e61f1",
+    "runtime/actual-provider-bindings.jsonl": "aeca9007000c39830379fac4d6189b630a3508b5941c273d03d2f7dcd466c449",
+    "runtime/runtime-versions.json": "e3ea9bcf8c8fc8544b290dd0ed4e63a6633e2e9644102001a2d0004a14ad2917",
+    "runtime/source-guard.json": "e2642122241ad2e788a34f3cbac06e3492f5762c3a89faec05f55f5e200f0780",
+    "runtime/voice-stages.jsonl": "d32879097ebe3645f5f928a32901d19744ec0bafd340787e260d43c8eeeb3feb",
+    "terminal.json": "d4efe15c7007e1c7342dc8f014862a8e051f29f058ab918266b6db2c056e46d8",
+    "ui-case/voice-flow.json": "096d142e087227f4c99762466b4e6a7e2c780e94455534ce11cedfa415bc1de0"
+  },
+  "sourceGuard": {
+    "factoryCalledAndReturned": true,
+    "gatewayModuleSHA256": "c90ade3dc52f1dfdf3840225894d24cefa530b063b2b32e1b289139772e65273",
+    "scope": "gateway module binding only"
+  },
+  "status": "QUALIFIED_SINGLE_READINESS_ONLY",
+  "telemetryLimits": {
+    "STTAndTTSRequestSessionIDs": "absent in native span rows; N1 linkage uses sole UI request/response hashes and native operation IDs, no fabricated trace join",
+    "clockDomain": "same backend process monotonic per span; browser event times own browser clock only",
+    "firstStreamedAudio": null,
+    "firstToken": null,
+    "nativeStreamingNotEstablishedByAstreamObserverName": true,
+    "p90": null,
+    "p95": null,
+    "pairedSpans": 8,
+    "physicalAudibility": null,
+    "queueDelay": null,
+    "stageRows": 23,
+    "startupTTSRequestIncludedInRaw": true
+  }
+}

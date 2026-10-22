@@ -1,0 +1,12 @@
+{
+  "controlDeadline": "2026-10-22T11:00:00Z",
+  "explicitNewline": true,
+  "host": "ssh:ssh-sem-notebook-personal",
+  "incarnation": "328cd72f-c7ea-49ff-a2db-b9275b085037",
+  "remoteResult": "/home/developer/projects/aurora/thesis/phone-notebook/20261020/evidence/probe-normal-gateway-auth-v297.json",
+  "rootAdmissionMessage": "existing-v2398 supported normal administrative read-only API using existing canonical key; values never exported",
+  "script": "scripts/probe_normal_gateway_auth_v297.py",
+  "scriptSha256": "e42467344c5b97c9908e2e8540573cf63e6d560cbb9a9d50046398fe1ee132c4",
+  "singleSend": true,
+  "terminal": "term_a2ed5feb-7c92-48e4-bd88-d1b0e6737989"
+}

@@ -1,0 +1,10 @@
+{
+  "at": "2026-10-16T12:25:33.326722+00:00",
+  "originalManifestPreserved": "MANIFEST.json",
+  "file": "native-build-status-v1034.json",
+  "bytes": 9294,
+  "sha256": "2450627ca015558cf48146b9f0d9c5b2f634cdef8c5c2ed09576537bf9dd5d46",
+  "observedAt": "2026-10-16T12:23:32.037792+00:00",
+  "status": "BUILD-CURRENT-NATIVE-APP",
+  "runtimeOrPerformanceAccepted": false
+}

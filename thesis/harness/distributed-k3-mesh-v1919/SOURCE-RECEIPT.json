@@ -1,0 +1,10 @@
+{
+  "status": "EXACT_FAILING_PURE_GUARD_ACCEPTS_ACTUAL_FROZEN_THREE_RECEIVERS",
+  "sourceSha256": "603cb2a5779ad154ab4e6113e3bd856438a494f1d33f0dede0a5d592cefe1983",
+  "previousControllerSha256": "bcd0bed98adbcb7d5579b43f963e74801d82e92210876ea28da809abcfd9f4da",
+  "unmodifiedRuntimeModules": 12,
+  "actualData": "thesis/campaigns/worker-desktop-k3-p2p-full-audio-v1915/condition-frozen.json",
+  "newSutCalls": 0,
+  "guardEvaluatedRejected": false,
+  "originalFrozenAttemptRetained": "thesis/campaigns/worker-desktop-k3-p2p-full-audio-v1915/REQUESTER-PREFLIGHT-TERMINAL-v1918.json"
+}

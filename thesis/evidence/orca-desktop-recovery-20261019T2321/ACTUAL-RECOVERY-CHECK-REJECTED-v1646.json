@@ -1,0 +1,84 @@
+{
+  "at": "2026-10-19T23:22:38.947276+00:00",
+  "ownerCorrection": "Original monitor msg_b4ce22199473, 2026-10-19T23:20:19Z",
+  "rootNative": {
+    "goal": {
+      "threadId": "01a112a5-d6bb-74e2-bf7c-ace73cb513b5",
+      "objective": "Complete the durable ultragoal plan in .omx/ultragoal/goals.json, including later accepted/appended stories, under the original brief constraints; use .omx/ultragoal/ledger.jsonl as the audit trail.",
+      "status": "active",
+      "tokensUsed": 229455761,
+      "timeUsedSeconds": 739662,
+      "createdAt": 1791314947,
+      "updatedAt": 1792452120
+    },
+    "remainingTokens": null,
+    "completionBudgetReport": null
+  },
+  "singleActualCommand": {
+    "source": "thesis/evidence/orca-desktop-recovery-20261019T2321/ONE-PASSIVE-PERSONAL-COMMAND.py",
+    "command": "thesis/evidence/orca-desktop-recovery-20261019T2321/ONE-PASSIVE-PERSONAL-COMMAND.txt",
+    "commandBytes": 501,
+    "commandSha256": "cb8a9f8c799b52de85ef3c9e0ae2b722b2dd26eae43d9333388e0166d8163896",
+    "maximumSends": 1,
+    "actualSends": 1,
+    "actualSendReceipt": {
+      "id": "d390101e-3f12-4e05-9427-58ab54839a6e",
+      "ok": false,
+      "error": {
+        "code": "terminal_not_writable",
+        "message": "terminal_not_writable"
+      },
+      "_meta": {
+        "runtimeId": "cc9e3275-28c6-4c45-85cc-bdcd2262aa7d"
+      }
+    },
+    "executed": false,
+    "resendPerformed": false
+  },
+  "freshFence": {
+    "handle": "term_d5651d8d-58e2-4b38-85e2-51c668cc933c",
+    "incarnationId": "034ff933-61a3-4c74-b5ad-98a75e8ac21c",
+    "connected": true,
+    "writable": true,
+    "executionHostId": "ssh:ssh-1786238480967-semdev",
+    "agentIdentity": null,
+    "worktreePath": "/home/developer/projects/aurora"
+  },
+  "originalOutputBefore": {
+    "cursor": "57008",
+    "latestCursor": "57008",
+    "source": "stream"
+  },
+  "oldReceiptReconciliation": {
+    "f2f7472f-e005-46ec-9eb9-715187e69291": "explicit NOTaccepted terminal_not_writable, never resent",
+    "cdac7533-7309-4015-be6f-69bae4a8f0ee": "historical UNKNOWN, never resent"
+  },
+  "provider": {
+    "originalDeadlineUTC": "2026-10-19T00:08:53.328388Z",
+    "deadlineHasPassed": true,
+    "actualLiveness": "UNKNOWN, control read cannot execute",
+    "reservationRenewed": false,
+    "deadlineExtended": false,
+    "rawDeltaRetrieval": "BLOCKED pending same-control writer restoration; no new inference"
+  },
+  "monitorResume": {
+    "sameGoal": "01a123ff-19ba-7332-a2f7-346a722af79f",
+    "state": "NOT_ATTEMPTED_PENDING_ACTUAL_IDLE",
+    "evidence": "Fresh screen says Working 2m17s / esc to interrupt and Goal stalled; no resume while owner turn active",
+    "maximumNewResumeSends": 1
+  },
+  "resumedBlockedAudit": {
+    "consecutiveGoalTurns": 1,
+    "priorThreeTurnAuditIsHistoricalAfterTrueResume": true
+  },
+  "preserved": {
+    "branch": "codex/aurora-native-speech-routing-20261007",
+    "head": "cbac78fe3fb2b73100bfaa9dc198fb6bff689840",
+    "k3Attempted": 740,
+    "k3Remaining": 160,
+    "newInference": 0,
+    "newWorkers": 0,
+    "restarts": 0,
+    "credentialOrSecurityChanges": 0
+  }
+}

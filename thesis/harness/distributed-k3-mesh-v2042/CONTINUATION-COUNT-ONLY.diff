@@ -1,0 +1,162 @@
+--- v1985/runner.py
++++ v2042/runner.py
+@@ -26,7 +26,10 @@
+ from k3_composition import K3CaseError, run_k3_case
+ 
+ WARMUP_COUNT = 15
+-MEASURED_COUNT = 900
++MEASURED_COUNT = 624
++GLOBAL_MEASURED_OFFSET = 276
++CONDITION_MEASURED_TARGET = 900
++EXPECTED_CONTINUATION = {'conditionMeasuredTarget': 900, 'priorAttempted': 276, 'priorCorrect': 256, 'priorFailed': 20, 'globalMeasuredStart': 277, 'globalMeasuredEnd': 900, 'plannedMeasuredThisEpoch': 624, 'priorManifestSha256': '46003ef84b71fade94e1d9e3cbac0dcee8bb524680ca613a9f02df5878e4cd6b', 'priorTerminalSummarySha256': 'e64b0500fbb46f4adb687b56c348edda3439231362906b0ccd4fd45001c49ff1', 'priorSealPath': '/home/developer/projects/aurora/thesis/campaigns/worker-desktop-k3-p2p-full-audio-v1988/PARTIAL-CONDITION-SEAL-v2042.json', 'priorSealSha256': '957240ab4ccc2eaca702fdec03a376fd96f7cab2568986df7607725b329a6d49', 'failedIndex276NotRepeated': True}
+ REQUEST_CAP_SECONDS = 180.0
+ CONDITION_CAP_SECONDS = 57_600.0
+ PRIVATE_ROOT = Path(__file__).resolve().parents[1]
+@@ -59,6 +62,10 @@
+         and all(type(value[key]) is int for key in integers)
+         and all(type(value[key]) in (int, float) and math.isfinite(value[key]) for key in decimals)
+     )
++
++
++def _global_measured_index(phase: str, index: int):
++    return GLOBAL_MEASURED_OFFSET + index if phase == "measured" else None
+ 
+ 
+ def _bounded_next_phase(summary: dict[str, Any], qualified: int):
+@@ -511,6 +518,12 @@
+         != CONDITION_CAP_SECONDS
+     ):
+         raise CampaignFailure("preflight", "frozen_condition_cap_mismatch", stop=True)
++    if (cohort_manifest.get("conditionContinuation") != EXPECTED_CONTINUATION
++            or cohort_manifest["measurementPlan"].get("plannedMeasuredThisEpoch") != MEASURED_COUNT
++            or cohort_manifest["measurementPlan"].get("plannedMeasuredPerCondition") != CONDITION_MEASURED_TARGET
++            or _sha256(Path(EXPECTED_CONTINUATION["priorSealPath"]).read_bytes()) != EXPECTED_CONTINUATION["priorSealSha256"]
++            or GLOBAL_MEASURED_OFFSET + MEASURED_COUNT != CONDITION_MEASURED_TARGET):
++        raise CampaignFailure("preflight", "remaining_indices_or_parent_seal_mismatch", stop=True)
+     stt_peer_id = os.environ.get("AURORA_K3_MESH_STT_PEER_ID", "")
+     stt_peer = AdmittedMeshPeer(stt_peer_id, _sha256(stt_peer_id.encode("utf-8")))
+     assistant_peer_id = os.environ.get("AURORA_K3_MESH_ASSISTANT_PEER_ID", "")
+@@ -627,6 +640,8 @@
+             "started_monotonic_ns": None, "ended_monotonic_ns": None, "duration_ms": None},
+         "planned_warmups": WARMUP_COUNT,
+         "planned_measured": MEASURED_COUNT,
++        "condition_measured_target": CONDITION_MEASURED_TARGET,
++        "condition_measured_offset": GLOBAL_MEASURED_OFFSET,
+         "failure_policy": {"known_structured_preaccept_capability_changed": "count_failed_then_next_distinct_measured_index", "consecutive_rejection_hard_stop": 3, "retry_or_fallback": False, "warmup_failure": "only_explicit_preaccept_count_failed_then_next_distinct_attempt_max30",
+             "all_other_warmup_failure": "hard_stop", "all_other_system_failures": "hard_stop"},
+         "request_cap_seconds": REQUEST_CAP_SECONDS,
+@@ -818,6 +833,7 @@
+             row: dict[str, Any] = {
+                 "schema_version": "aurora.full_audio_attempt.v1",
+                 "ordinal": ordinal, "phase": phase, "phase_index": attempt_index,
++                "global_measured_index": _global_measured_index(phase, attempt_index),
+                 "harness_case_id": harness_case_id,
+                 "status": "starting", "flow_started_monotonic_ns": attempt_started_ns,
+                 "correlation": {"correlation_id": correlation_id, "session_id": session_id, "request_id": request_id},
+@@ -991,6 +1007,8 @@
+                 "warmups_attempted": summary["warmup_requests"],
+                 "measured_attempted": summary["measured_requests"],
+                 "planned_warmups": WARMUP_COUNT, "planned_measured": MEASURED_COUNT,
++        "condition_measured_target": CONDITION_MEASURED_TARGET,
++        "condition_measured_offset": GLOBAL_MEASURED_OFFSET,
+                 "unattempted_measured": summary["unattempted_measured"],
+                 "last_attempt_file": f"attempts/{row_name}",
+                 "last_attempt_status": row["status"],
+@@ -1014,6 +1032,8 @@
+                         "status": status, "attempted": ordinal,
+                         "warmups_attempted": summary["warmup_requests"], "measured_attempted": 0,
+                         "planned_warmups": WARMUP_COUNT, "planned_measured": MEASURED_COUNT,
++        "condition_measured_target": CONDITION_MEASURED_TARGET,
++        "condition_measured_offset": GLOBAL_MEASURED_OFFSET,
+                         "unattempted_measured": MEASURED_COUNT,
+                         "last_attempt_file": f"attempts/{row_name}",
+                         "last_attempt_status": row["status"], "stop_reason": stop_reason,
+@@ -1163,6 +1183,8 @@
+             "measured_attempted": sum(1 for item in attempts_summary if item["phase"] == "measured"),
+             "planned_warmups": WARMUP_COUNT,
+             "planned_measured": MEASURED_COUNT,
++        "condition_measured_target": CONDITION_MEASURED_TARGET,
++        "condition_measured_offset": GLOBAL_MEASURED_OFFSET,
+             "unattempted_measured": summary["unattempted_measured"],
+             "stop_reason": summary["stop_reason"],
+         })
+@@ -1189,6 +1211,8 @@
+                     "stop_reason": type(exc).__name__,
+                     "planned_warmups": WARMUP_COUNT,
+                     "planned_measured": MEASURED_COUNT,
++        "condition_measured_target": CONDITION_MEASURED_TARGET,
++        "condition_measured_offset": GLOBAL_MEASURED_OFFSET,
+                     "attempted": 0,
+                     "correct": 0,
+                     "failed": 0,
+--- v1985/controller.py
++++ v2042/controller.py
+@@ -123,7 +123,10 @@
+     outer_cap = min(OUTER_CAP, float(cohort["cumulativeConditionBudget"]["newOuterCapSeconds"]))
+     if not 0 < outer_cap <= OUTER_CAP:
+         raise ValueError("outer_cap_invalid")
+-    if (cohort.get("implementation", {}).get("runnerSha256") != runner_sha
++    if (cohort.get("measurementPlan", {}).get("plannedMeasuredThisEpoch") != 624
++            or cohort.get("conditionContinuation", {}).get("priorAttempted") != 276
++            or cohort.get("conditionContinuation", {}).get("globalMeasuredEnd") != 900
++            or cohort.get("implementation", {}).get("runnerSha256") != runner_sha
+             or cohort.get("implementation", {}).get("controllerSha256") != control_sha
+             or cohort.get("implementation", {}).get("adapterSha256") != adapter_sha
+             or cohort.get("implementation", {}).get("routeObserverSha256") != route_observer_sha
+@@ -281,7 +284,7 @@
+         "source_inventory_sha256": digest(inventory_path),
+         "planned_warmups": 15, "maximum_distinct_warmup_attempts": 30,
+         "actual_outer_cap_seconds": outer_cap,
+-        "planned_measured": 900,
++        "planned_measured": 624, "condition_measured_target": 900, "global_measured_start": 277, "global_measured_end": 900,
+         "request_cap_seconds": 180,
+         "condition_cap_seconds": 57_600,
+         "surface": "code-worker LocalBus STT; exact-peer production MeshBus Assistant and TTS",
+--- v1985/freeze-template.json
++++ v2042/freeze-template.json
+@@ -9,6 +9,20 @@
+   "candidateManifestSha256": "ce75b965ee5879ebece6ea7dfe133441547d20ccf89ecd5d66ea510bd9645e60",
+   "cohortId": null,
+   "comparisonFamilyId": "aurora-full-audio-capital-base-qwen-piper-v1",
++  "conditionContinuation": {
++    "conditionMeasuredTarget": 900,
++    "failedIndex276NotRepeated": true,
++    "globalMeasuredEnd": 900,
++    "globalMeasuredStart": 277,
++    "plannedMeasuredThisEpoch": 624,
++    "priorAttempted": 276,
++    "priorCorrect": 256,
++    "priorFailed": 20,
++    "priorManifestSha256": "46003ef84b71fade94e1d9e3cbac0dcee8bb524680ca613a9f02df5878e4cd6b",
++    "priorSealPath": "/home/developer/projects/aurora/thesis/campaigns/worker-desktop-k3-p2p-full-audio-v1988/PARTIAL-CONDITION-SEAL-v2042.json",
++    "priorSealSha256": "957240ab4ccc2eaca702fdec03a376fd96f7cab2568986df7607725b329a6d49",
++    "priorTerminalSummarySha256": "e64b0500fbb46f4adb687b56c348edda3439231362906b0ccd4fd45001c49ff1"
++  },
+   "existingAuthorizedTaskProfile": {
+     "existingEnvFileReferencedWithoutCopy": true,
+     "expectedLocalPeerId": "aurora-03a910366bf721d72a9ef481d2e08fbd",
+@@ -19,7 +33,7 @@
+     "adapterSha256": "6e09f9d66a9178ff184f93395cd81b6bfe3828895a90003057eeeae6c1a0a719",
+     "bindingsSha256": "79558452e6f61268ad246476ca848e060b8ea808e15091bc53a3c4e0e28b1647",
+     "bootstrapSha256": "df9957c1880d45b5a1d059d7743b51a2d7fe34b3f5331e1331633eee5e8f45bc",
+-    "controllerSha256": "66e6d8de5855337bfcaf44fbb657834018acab522590880114c1a77e9d875fcb",
++    "controllerSha256": "d0ea770797403167c6bc53908990b733dd10eec49c0d79029410feb8ae12a9e1",
+     "k3CompositionSha256": "09399c07cfc44cfbaaac969af5c928e9ae57fab2d6848f76f29950e7fdc314bf",
+     "observerSha256": "784cc4bffc0d6824bbe378d17a7f632d587ca0a315896b048b2ebef727082df5",
+     "receiverProofSha256": "5f010b519a23b048a4cb878201469088d93eecab137b03537971dccc02913fd0",
+@@ -27,13 +41,14 @@
+     "routeObserverSha256": "db390cdc4e05718e111037b3118573aab5ee9215c57b8e4398767a8b07e6ce7a",
+     "routeRuntimePinsSha256": "5d79681b500485fd7c4c9e3d562a39af957b261f0f75452d25ad9fcc59dbc1db",
+     "routeSinkSha256": "d02cbff12f4bf88923cbbc8e6e990b1b140833b276fb112ca521dc21b40d1773",
+-    "runnerSha256": "8d4b2a1876ed1591436dfcf7f3b1823b42130fd1b384052dbd69c99999d63a7d",
++    "runnerSha256": "77f5bba964721a3d6a26f1df7ca7148397aeed9a8eae6767a6016c26e6b321ba",
+     "telemetrySha256": "8129ffe7591a47a0107ede53b101aead9fc1f58b92f0c0c4203176cc7608325d"
+   },
+   "measurementPlan": {
+     "conditionOverallCapSeconds": 57600,
+     "maximumDistinctWarmupAttempts": 30,
+     "plannedMeasuredPerCondition": 900,
++    "plannedMeasuredThisEpoch": 624,
+     "plannedWarmups": 15,
+     "requestCapSeconds": 180
+   },

@@ -1,0 +1,399 @@
+{
+  "at": "2026-10-15T00:14:27.809388+00:00",
+  "sourceHost": "personal.skyron-server",
+  "globalExcludedLogicalVoiceFlows": 8,
+  "acceptedMeasuredVoiceSamples": 0,
+  "phase2MeasuredAllowed": false,
+  "noTestsReplayedForProjection": true,
+  "omitted": "fixture credentials/config/DB/full private backend logs/browser auth payloads; all originals preserved privately",
+  "files": {
+    "base-assets/MODEL-LICENSE-README.md": {
+      "bytes": 1991,
+      "sha256": "b922acef3616e27b1d416260b63ba7114c732f0315012006781af2da69cd1ebf"
+    },
+    "base-assets/asset-progress.json": {
+      "bytes": 2385,
+      "sha256": "af2d6399a48f363937810dfb37021fd80ecfcfeee592a6687079bfd338433a66"
+    },
+    "base-assets/asset-terminal.json": {
+      "bytes": 2618,
+      "sha256": "8236d4bfd9b14fd7331e694934f21f3b7c7a34d6824be5e2ae9e3d761eb4c563"
+    },
+    "retirement-v456.json": {
+      "bytes": 2831,
+      "sha256": "2eb17d8cda43d4864090e1490fc37b89ffc79300fd138f7b33933621c648fd3b"
+    },
+    "voice-v450/driver-progress.json": {
+      "bytes": 435,
+      "sha256": "0c44810a813a121e0439cff45b3cd35ddd6b82a93edef12c029adb69dfbcac5f"
+    },
+    "voice-v450/driver-spawn.json": {
+      "bytes": 303,
+      "sha256": "fd6089dd54dc2d05f57d60fb9861341ffaf14b5d93eab96fa6ec27d9b68edb6d"
+    },
+    "voice-v450/driver-terminal.json": {
+      "bytes": 543,
+      "sha256": "8015c5eabe4003f1e7e3cba3ca0cea51198bbe16fbf910fc07d7e2976b6962d7"
+    },
+    "voice-v450/progress.json": {
+      "bytes": 1075,
+      "sha256": "4f0f4363e88db059e5e0e6472046ed4f9856317a853b055afb45bb9eef773278"
+    },
+    "voice-v450/ready.json": {
+      "bytes": 1326,
+      "sha256": "525895363ae0b254ffa4b351a864b4454fa13342d592dedba40edb7016244804"
+    },
+    "voice-v450/runtime/launch.json": {
+      "bytes": 1723,
+      "sha256": "58526dbfe2add597ae0c73d1e298e2942644dabb0bcbae7c01b437005888d2bb"
+    },
+    "voice-v450/runtime/terminal.json": {
+      "bytes": 1932,
+      "sha256": "a5510c2a1b6f7c811acc03f32ee0bb9e2c0aadef75c3c4f82affa8143daa6f5d"
+    },
+    "voice-v450/runtime/voice-stages.installed.json": {
+      "bytes": 121,
+      "sha256": "b757fedc1c2afee29339e81175d0f21330b408698d11944adf088434c4961f5b"
+    },
+    "voice-v450/runtime/voice-stages.jsonl": {
+      "bytes": 2286,
+      "sha256": "ce2e18604a724629bcaee6bf57e60e80e26034a558576a9fc15d7bebc33207cd"
+    },
+    "voice-v450/runtime/voice-stages.status.json": {
+      "bytes": 132,
+      "sha256": "1e366543f29a7e627d5fc2ad406df9817b554c0540881c6aa2cdbf142034900f"
+    },
+    "voice-v450/source-manifest.json": {
+      "bytes": 1251,
+      "sha256": "e7a3fa27b6a53049c152abb53067f34185b63fb9dfdd5bf5ea80401914f63e61"
+    },
+    "voice-v450/spawn.json": {
+      "bytes": 254,
+      "sha256": "3753e75d384afc9017c24a674a6c80e1cb735e241d2213bf9c161e743724d00b"
+    },
+    "voice-v450/terminal.json": {
+      "bytes": 1604,
+      "sha256": "56d32c8dcb542ab18b8b37671ae04c0a02a760907e5cbe61c053347aadb33bc4"
+    },
+    "voice-v450/ui-case-v451/private/bodies/0059-request.bin": {
+      "bytes": 106752,
+      "sha256": "9ab8dc9016b3b2ab7a8a692684e7ffc13ce5dcf95517c49c0609b6265019b310"
+    },
+    "voice-v450/ui-case-v451/private/driver-error.txt": {
+      "bytes": 688,
+      "sha256": "ef8e38ed298f83fc92c7b5d2efe72d9619f157ae6c9079d132d5e217469e64ef"
+    },
+    "voice-v450/ui-case-v451/private/network-events.jsonl": {
+      "bytes": 209114,
+      "sha256": "fe97833d81faa0ac031687f5215cc1182e6185e002a3535ab0c9b2670adb7727"
+    },
+    "voice-v450/ui-case-v451/result.json": {
+      "bytes": 1014,
+      "sha256": "c0126994e4551cf8c356c2e943305bb78e61d92943f61f4a7435473f26b415a5"
+    },
+    "voice-v450/ui-case-v451/safe-projection.json": {
+      "bytes": 233949,
+      "sha256": "703b0e2b963067e5b3b292a7a167ba021f4ab5889c32a8ad6d800121acbcb4c0"
+    },
+    "voice-v450/ui-case/private/driver-error.txt": {
+      "bytes": 6281,
+      "sha256": "48bc3da1a825fbfa7540c78168e3cf9583f961fd3829085b1aaa89e85894cab2"
+    },
+    "voice-v450/ui-case/private/network-events.jsonl": {
+      "bytes": 0,
+      "sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+    },
+    "voice-v450/ui-case/result.json": {
+      "bytes": 951,
+      "sha256": "4182f7cdc24c3968625314d004e06043d314b0c777a6b2da95559e2132e83f75"
+    },
+    "voice-v450/ui-case/safe-projection.json": {
+      "bytes": 974,
+      "sha256": "3d2d5cf0e60a645786c24601ab73fbec552504d9fa1687e4045a60d53d14f299"
+    },
+    "voice-v452/driver-progress.json": {
+      "bytes": 477,
+      "sha256": "635a4c0401ca1f3140d763177f69601fcbfc2b26642d2768431fb10547ce24a0"
+    },
+    "voice-v452/driver-spawn.json": {
+      "bytes": 377,
+      "sha256": "bc3d9e567a7499b34f717498c2de15d7a50627fa82b69cc4e402858aa8ffde67"
+    },
+    "voice-v452/driver-terminal.json": {
+      "bytes": 585,
+      "sha256": "2358ac69c2e043cb35d05666ae7891d5298ef60c986a99d95687cd5f1d1523e9"
+    },
+    "voice-v452/progress.json": {
+      "bytes": 1137,
+      "sha256": "7e2760f41433f5416b45ae9689b6b94fdac951e316774ebbc05de520d6c5f757"
+    },
+    "voice-v452/ready.json": {
+      "bytes": 1388,
+      "sha256": "40b6271de2279c1b9d66abcdb1a1ffdf3df38952d06c72739200b12cbff488a9"
+    },
+    "voice-v452/runtime/launch.json": {
+      "bytes": 1800,
+      "sha256": "a2e38d9178c6ba406ba299cb929d625da393ba1e76a25ca57ff3079704fdc113"
+    },
+    "voice-v452/runtime/terminal.json": {
+      "bytes": 2009,
+      "sha256": "cf9f197818a4eb8518ae46f9a0e78e366654d6db8b3fc71654a896c4690224aa"
+    },
+    "voice-v452/runtime/voice-stages.installed.json": {
+      "bytes": 121,
+      "sha256": "2fdd8cde69ae2380911a0ec4b0976cb52b8081436ecc3c1703a5e7ef0ff72511"
+    },
+    "voice-v452/runtime/voice-stages.jsonl": {
+      "bytes": 2286,
+      "sha256": "03f2b9bfc108923c194dac1995cb62214d525009817a43a2c3b05c3e272ca2cc"
+    },
+    "voice-v452/runtime/voice-stages.status.json": {
+      "bytes": 132,
+      "sha256": "1e366543f29a7e627d5fc2ad406df9817b554c0540881c6aa2cdbf142034900f"
+    },
+    "voice-v452/source-manifest.json": {
+      "bytes": 881,
+      "sha256": "762d9061045f2727000a244909316112288ebd0ca8d2a611e11274d09a64dd5c"
+    },
+    "voice-v452/spawn.json": {
+      "bytes": 403,
+      "sha256": "f1f01b64a588cc83c95d01d58a69e92aa3ba8e1356fdc5fe993ccbe390380637"
+    },
+    "voice-v452/terminal.json": {
+      "bytes": 1666,
+      "sha256": "25e8fe8b5309e21113242eb106aa3982c00c214ce6e73d8167171009074e6e75"
+    },
+    "voice-v452/ui-case-v453/private/driver-error.txt": {
+      "bytes": 1921,
+      "sha256": "f383f174e85271dcf1349e4a71041a8a393cd9f1de73c9862088bf40af0bbc7e"
+    },
+    "voice-v452/ui-case-v453/private/network-events.jsonl": {
+      "bytes": 63111,
+      "sha256": "eeb740801b0cffdd7af663d819701ddc5302a4d4d1a9943e39565bb19b926c40"
+    },
+    "voice-v452/ui-case-v453/result.json": {
+      "bytes": 1072,
+      "sha256": "74ebadd64868192250dfe42305ef69ed793bc61d5aa2f93b4a257f8691c70e6e"
+    },
+    "voice-v452/ui-case-v453/safe-projection.json": {
+      "bytes": 72985,
+      "sha256": "1b9ef32d2b8f20f2cbbffd6f040faf95ab19b0fcd73529b3c0770432562351d4"
+    },
+    "voice-v452/ui-case/private/driver-error.txt": {
+      "bytes": 1911,
+      "sha256": "216cc45f81f1f2bc413fe1fdccd7143e8592edc1739754401cdbec53b89b60fb"
+    },
+    "voice-v452/ui-case/private/network-events.jsonl": {
+      "bytes": 64525,
+      "sha256": "38267614f6c77e4ea6dfb48c3ba43964b01b0d012d99fc22a399407c58704680"
+    },
+    "voice-v452/ui-case/result.json": {
+      "bytes": 1021,
+      "sha256": "7fe0e66348e532e5d8495520e03a803a2435d3ea5023fea32542cc077e088871"
+    },
+    "voice-v452/ui-case/safe-projection.json": {
+      "bytes": 74488,
+      "sha256": "4bd2d1b65b7eae4b8ab1dff2fd63f5a73c4d7b8cc30014ea5e375dc88de16a1f"
+    },
+    "voice-v452/ui-diagnostic-v454/private/network-events.jsonl": {
+      "bytes": 44873,
+      "sha256": "2a789e1f843d9958fcc622c73f56bc6c6103fc96bf7b7568a27d16ee8d19c581"
+    },
+    "voice-v452/ui-diagnostic-v454/result.json": {
+      "bytes": 1125,
+      "sha256": "7e2b4a2461b48d97c9428ab3df038e1b4676903c6e8196888ef24a239edf1e40"
+    },
+    "voice-v452/ui-diagnostic-v454/safe-projection.json": {
+      "bytes": 52172,
+      "sha256": "47d4e8a962e6d68893d58e8fa292ac5040aa08d062574e08f86c0e819556215b"
+    },
+    "voice-v455/manifest.json": {
+      "bytes": 817,
+      "sha256": "865ba2973cc43fd53b435b5de380b1f1d1625919759db1a942c3e1fcd7f32097"
+    },
+    "voice-v455/progress.json": {
+      "bytes": 1137,
+      "sha256": "ecd97de57b81a9f4c12e3b2a18acec7e35d6fa5bc6e03a0fdec58d4ef504427c"
+    },
+    "voice-v455/runtime/launch.json": {
+      "bytes": 1800,
+      "sha256": "c612b0451f006e23e6d1f7ffd4d7322775aacc39f7f51d169105c68c2a4a6d28"
+    },
+    "voice-v455/runtime/terminal.json": {
+      "bytes": 2010,
+      "sha256": "ff00cf8f5eb603ea62b2580006f1da3f1eeae5987f45a3383a2de5a57ec6413b"
+    },
+    "voice-v455/runtime/voice-stages.installed.json": {
+      "bytes": 121,
+      "sha256": "792f2e67b0b81c3cf40e9a5094bb44a33767587da81a23bfe641b297af0abdef"
+    },
+    "voice-v455/runtime/voice-stages.jsonl": {
+      "bytes": 2286,
+      "sha256": "e19c442bc9fbe110b6be4f3b2585743a9f722f83ea133cf5bd7d87f1ceb6d321"
+    },
+    "voice-v455/runtime/voice-stages.status.json": {
+      "bytes": 132,
+      "sha256": "1e366543f29a7e627d5fc2ad406df9817b554c0540881c6aa2cdbf142034900f"
+    },
+    "voice-v455/source-guard.json": {
+      "bytes": 455,
+      "sha256": "81f1ad7b847a23f05b48df33b9255a449173f6ba98c0326cdff8340ca94c2955"
+    },
+    "voice-v455/spawn.json": {
+      "bytes": 535,
+      "sha256": "256375db392bf7980796ae416202ac8cdb66e53801cd76528ae1a2ad928a4d4c"
+    },
+    "voice-v455/terminal.json": {
+      "bytes": 1557,
+      "sha256": "d6f5b671131c12d6ca7528b52c500d683ff38d0032b884ef14722881dfc28d27"
+    },
+    "voice-v456/driver-progress.json": {
+      "bytes": 477,
+      "sha256": "4d8622b12af2f393a8ddf99796baeb47862709f2ed599947e80de4c0ed6d6dba"
+    },
+    "voice-v456/driver-spawn.json": {
+      "bytes": 248,
+      "sha256": "518127a16cafa942fe17ffbd1a62f8f7cb947f7bc3f91e057ff83b80d6cad6f6"
+    },
+    "voice-v456/driver-terminal.json": {
+      "bytes": 586,
+      "sha256": "32b2dc33d03e6c6ee84271359ba6a512f33537b696902951bda83ad197622bbe"
+    },
+    "voice-v456/manifest.json": {
+      "bytes": 912,
+      "sha256": "9c66b8ad04e619261f6691a2533bf336b4433b0679e2decfade3af4cd3a6d6e0"
+    },
+    "voice-v456/prior-retirement.json": {
+      "bytes": 1981,
+      "sha256": "685d79483b06c9b7d961a8b377cd07224104c968b5aa2a72b73403822517d315"
+    },
+    "voice-v456/progress.json": {
+      "bytes": 1137,
+      "sha256": "bb0a1f3e82245dea75d9e09f9e95a0c19bf34806fa0cdd0b8fb921854ff9833d"
+    },
+    "voice-v456/ready.json": {
+      "bytes": 1915,
+      "sha256": "990229d2b513a2451ef92b8faa7ba2e33d54562f950f8a4955c4555cd7d9a476"
+    },
+    "voice-v456/runtime/launch.json": {
+      "bytes": 1800,
+      "sha256": "d49ebb9f8bdc6cf7f0ecd30bf9fdbfa3db0ddc6272284145a59feffca68144d0"
+    },
+    "voice-v456/runtime/terminal.json": {
+      "bytes": 2010,
+      "sha256": "a76f40f2a90a9e9a091584624b1e9fe2dc3d292930d77c63ccafc830eb15a7a3"
+    },
+    "voice-v456/runtime/voice-stages.installed.json": {
+      "bytes": 121,
+      "sha256": "90ec46224cbc55729b003fc31090a42144c259eb52bd8713b0f502799e8e2eb8"
+    },
+    "voice-v456/runtime/voice-stages.jsonl": {
+      "bytes": 9053,
+      "sha256": "dab29d9d80ae48db97ace4b514adf0b27df87eee3d840c38e9bbe3f283c89b3d"
+    },
+    "voice-v456/runtime/voice-stages.status.json": {
+      "bytes": 133,
+      "sha256": "ef0cb82f71099ba43b44cf7cee25b7d4eb6cdab7a7e6ab0c71d45648f86e0a1a"
+    },
+    "voice-v456/source-guard.json": {
+      "bytes": 455,
+      "sha256": "19f468207012c23d7a1e58af1f68e380ad7b50c6c90488e31c84f63f0975e782"
+    },
+    "voice-v456/spawn.json": {
+      "bytes": 535,
+      "sha256": "35db66327a87ce85ac3eac179c2f54aa6587a02c92d2dcdbc688a6e9d9fd5807"
+    },
+    "voice-v456/terminal.json": {
+      "bytes": 2194,
+      "sha256": "0500ff70b8b3cb32b79da8a3067ce9c920c93ba6e9e262d6a6a924dbe9745658"
+    },
+    "voice-v456/ui-case/private/bodies/0049-request.bin": {
+      "bytes": 146860,
+      "sha256": "c016dbe7fcaee47b0f541d0ecc0ce4b3315ae8feacd68bdba618765faec05a8b"
+    },
+    "voice-v456/ui-case/private/bodies/0049-response.bin": {
+      "bytes": 145,
+      "sha256": "5fa84a8985cdfcafa99354e71bdef88e93ef0f393fc7ab2fe2143fbf25ce6782"
+    },
+    "voice-v456/ui-case/private/network-events.jsonl": {
+      "bytes": 44496,
+      "sha256": "2333670cb372d7b02c80ab1981c8b2e42e33f3508605c24b36841aa221eee2c5"
+    },
+    "voice-v456/ui-case/result.json": {
+      "bytes": 1296,
+      "sha256": "d129a4907105ec2847e59f27658310c9509337394721197e29df87675640bc56"
+    },
+    "voice-v456/ui-case/safe-projection.json": {
+      "bytes": 51906,
+      "sha256": "61f88581c2b2235f4480633b263bffb9db433354f3c142d6ccb1490f14ffc03c"
+    },
+    "web-build-v448/controller.private.log": {
+      "bytes": 0,
+      "sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+    },
+    "web-build-v448/launch.json": {
+      "bytes": 1419,
+      "sha256": "9657824fd57eb21a50c1143d37a7a374b3ff212864009e921f8948206057c389"
+    },
+    "web-build-v448/next-build.private.log": {
+      "bytes": 665,
+      "sha256": "e8a10465903cec7b851b43c44c5072c6bb294be8a7eed224084bd2dbc339b153"
+    },
+    "web-build-v448/progress.json": {
+      "bytes": 1676,
+      "sha256": "13970fe2fd156deae8350bd9afbe2957d7cb18c87800f14536b4e2e45fa74e22"
+    },
+    "web-build-v448/spawn.json": {
+      "bytes": 336,
+      "sha256": "3a7617dbee5b492ae51f68553d4e2e6e0e3aa67bf00c428a440f1e33e4bff670"
+    },
+    "web-build-v448/terminal.json": {
+      "bytes": 1952,
+      "sha256": "b788e0d2636b42ce1a94fecb3d62589d25c34e5db271bac6e10a20e22bc4925a"
+    },
+    "web-build-v449/cache-relocation.json": {
+      "bytes": 1490,
+      "sha256": "4dbf01069c1ddd256d0d6440da6b6f7d4d19afe06d2f526b9c2ef458a1fb97fd"
+    },
+    "web-build-v449/controller.private.log": {
+      "bytes": 0,
+      "sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+    },
+    "web-build-v449/next-build.private.log": {
+      "bytes": 4044,
+      "sha256": "5d2e4ebfd24960b498a2ee1a473f38b908866101a1e625467b8e2bce820dfa2f"
+    },
+    "web-build-v449/progress.json": {
+      "bytes": 2189,
+      "sha256": "722807190a7212ad01032e51d39e426a69de323883fdab2c16c6548ec632b54c"
+    },
+    "web-build-v449/spawn.json": {
+      "bytes": 244,
+      "sha256": "5691d1eb590e2da73e73d618483ef81a8d5e2419b4f96f8986f20abeb8322b06"
+    },
+    "web-build-v449/terminal.json": {
+      "bytes": 2391,
+      "sha256": "7bc2367fd870f875aa3fd1ad314ee0bc31a2f51aaa2aa131ab909582af9ea606"
+    },
+    "web-build-v450/controller.private.log": {
+      "bytes": 0,
+      "sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+    },
+    "web-build-v450/next-build.private.log": {
+      "bytes": 2215,
+      "sha256": "625dfe8c4a888c6e491a9cbb7fcba9fc3b4817bd66ec48aefb829495be9fffea"
+    },
+    "web-build-v450/progress.json": {
+      "bytes": 1524,
+      "sha256": "86c7797d4c91222c1934ef43b843e2a0adc2a17b8713c96da9f9e34d0ba52bc0"
+    },
+    "web-build-v450/spawn.json": {
+      "bytes": 244,
+      "sha256": "a1a7cecfde93d668754f29e5dd339f4711155ca82aef32418c62a0a376e79bb9"
+    },
+    "web-build-v450/terminal.json": {
+      "bytes": 1851,
+      "sha256": "911e36242e36f3a3b177ec389fa58a1007090ff94406dbf32155b24f4c5f5029"
+    }
+  }
+}

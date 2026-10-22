@@ -1,0 +1,14 @@
+{
+  "schema": "aurora.thesis-methodology-custody.v1",
+  "copiedAt": "2026-10-15T21:48:36.660582+00:00",
+  "source": "/home/developer/Documents/Obsidian Vault Origin/5-full-notes/faculdade/tcc/future-work-test-requirements.md",
+  "canonicalWriter": "Original Orca monitor term_2eab47ed-ab9b-4e35-bd9b-fc068c60e3fc",
+  "snapshot": "thesis/methodology/owner-requirements-20261015-5a622bc7.md",
+  "bytes": 377142,
+  "lines": 2039,
+  "sha256": "5a622bc7021b31857f090e57c25b6211badec2393b5e632db2318d03ac3413e9",
+  "copy": "Complete byte-exact snapshot through30.34, no abridgement or Root methodology rewrite.",
+  "laterPlanUpdates": "Retain this immutable version and add a newly pinned snapshot; never overwrite campaign methodology.",
+  "productionCodeRelocation": false,
+  "modelsOrCampaignExecuted": false
+}

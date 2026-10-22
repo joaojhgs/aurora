@@ -1,0 +1,12 @@
+{
+  "at": "2026-10-22T05:31:35.510670+00:00",
+  "pid": 173074,
+  "startTicks": 142555610,
+  "intent": {
+    "path": "thesis/campaigns/worker-desktop-k1-orca-relayed-http-remaining450-v2296/ROOT-SAVED-ANALYSIS-INTENT-v2399.json",
+    "bytes": 2082,
+    "sha256": "264c54e5ad7e511389c01d23c411c2cea51241304861d985867c2e4fc7158d14"
+  },
+  "log": "thesis/campaigns/worker-desktop-k1-orca-relayed-http-remaining450-v2296/ANALYSIS-v2399.log",
+  "state": "LAUNCHED_NOT_COMPLETED"
+}

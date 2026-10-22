@@ -1,0 +1,35 @@
+{
+  "at": "2026-10-20T00:03:40.546326+00:00",
+  "ownerRoutingOverride": "Original monitor msg_db2fc928db74,20Oct00:02:38; supersedes earlier monitor-first proposal",
+  "reconciliationCompleteReceipt": "thesis/evidence/orca-desktop-recovery-20261019T2348/RECONCILIATION-AND-RAW-CUSTODY-COMPLETE-v1658.json",
+  "ownerRecoveryAndStorageGateComplete": true,
+  "rawFilesPhysicallyResolved": 1794,
+  "rawBytesPhysicallyResolved": 267408575,
+  "newRawFilesRecovered": 489,
+  "originalProviderRetiredAtFixedDeadlineExit0": true,
+  "nativeRootActualStatus": "blocked pending ONE supported safe-idle resume from original monitor",
+  "rootFirstResume": {
+    "owner": "Original monitor dispatch ctx_37b4d0a3c14f",
+    "target": "term_6a00d9ee-792a-4daf-8578-236290e33108",
+    "incarnation": "fe7e63c7-d260-465f-b37e-f6fc78f8a1af",
+    "nativeGoal": "01a112a5-d6bb-74e2-bf7c-ace73cb513b5",
+    "maximumSends": 1,
+    "when": "After this Root owner turn ends and actualTUIidle is verified",
+    "elsewhereResumeAttempted": false
+  },
+  "monitorSecondResume": {
+    "owner": "Same original Root afteractualactive",
+    "target": "term_2eab47ed-ab9b-4e35-bd9b-fc068c60e3fc",
+    "incarnation": "37e50d9c-6cf5-4e28-a63b-f2bc3eed5661",
+    "nativeGoal": "01a123ff-19ba-7332-a2f7-346a722af79f",
+    "maximumSends": 1,
+    "when": "After monitor owner turn ends and actualTUIidle verified",
+    "alreadySentForThisRecovery": false
+  },
+  "nextAuthorizedExecution": "Normal existing-room MQTT discovery/pair/task-feature-consent; fresh condition-sized provider lifecycle with NEW manifest/actual resource and native-stage admission, then exactremaining K3741-900 and K1181-900. No oldprovider restart/expiredlease reuse, no900baseline repeat. Saved24 native/resource analysis continues under activegoal and is not a resume gate.",
+  "newInferenceOrProviderOrWorkerLaunched": 0,
+  "full13ObjectivePreserved": true,
+  "oldK3Attempts740And15FailuresPreserved": true,
+  "pendingOwnerApproval": false,
+  "noMoreRecoveryReviewOrWaitRequired": true
+}

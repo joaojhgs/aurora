@@ -1,0 +1,7 @@
+{
+  "source": ".git/aurora-handoff-import-20261006/v1012-c06-desktop-existing-toolchain-preflight-RESULT.json",
+  "canonical": "thesis/validation/desktop-app-build-readiness-v1012.json",
+  "bytes": 2909,
+  "sha256": "5a23b058079206fef3c261b7ca55ed3fa255eb1ecb66a03db7f9723d498ac9c8",
+  "scope": "Existing executable/library/capacity metadata; first3 concrete installedRust paths sampled, not exhaustive; required currentRootMSRV1.88.0 observed installed; no build/model/surface acceptance"
+}

@@ -1,0 +1,35 @@
+{
+  "id": "fa66829b-69bd-4396-b2ab-a785b5a7d74f",
+  "ok": true,
+  "result": {
+    "message": {
+      "id": "msg_4dbe5c7c5f1e",
+      "run_id": "run_e6054e76e9fc",
+      "delivery_contract": "current_delivery",
+      "from_handle": "term_6a00d9ee-792a-4daf-8578-236290e33108",
+      "to_handle": "term_1f27be31-0284-4366-bb91-30fe538cd30e",
+      "subject": "NEW future120s copywindow with4minute lead; exactv33 pins43frames",
+      "body": "NEW FUTURE120s grant, oldv2350 explicitly closedunused per6f8ea0aafa90/6b1ac7496156; no oldoperation resend. Operation source-delta-v33-copy-v2353-20261022, admission thesis/evidence/source-sync-ebde-runtime-v2340/SOURCE-DELTA-TRANSFER-ADMISSION-v2353.json. Earliest receiver+sender startup 2026-10-22T01:38:08.259445+00:00, absoluteend 2026-10-22T01:40:08.259445+00:00; 4minute delivery/ACK lead, fixed120s activecopywindow. ACK this exactwindow/readiness through ordinary status promptly; wait without occupying Notebookcontrol or launchingreceiver beforestart. Use actualprepared receiver-admitted-v33.py SHA f47d791347a08378f25f6865405e1e93a310e5072b699174d850e69459628975 and source-manifest-admitted-v33.json SHAc4ab9f18b9189e8c4fe15ce4897cc3f241e535720dfff9136eb291b402acf0c9, 43 per-file98048B frames,4unchangedpayloads3913736B. Receiver --until EXACThardend, own hardalarm/TTYrestoration; one sequential sender <=128KiB/s payload256KiB/swire, no parallel Notebookterminalwrites or ambiguousaccepted resend. Existing actual own thermal/disk/RAMguards beforestart, preserve dirtyGit. Full target1959blob/mode and payload verification before assembly/execution, no build/modelcall/phone900 by copygrant. If exactready pin/guard/window fails preservepartial/receipt and report, no silentextension. Return ACK then actualstart/acceptedhandle and finalreceiver/checksums/TTYreceipt. Root remains mainHTTP, no deviceprobes.",
+      "type": "status",
+      "priority": "normal",
+      "thread_id": null,
+      "payload": null,
+      "created_at": "2026-10-22T01:34:06Z",
+      "delivered_at": null
+    },
+    "warnings": [
+      {
+        "code": "legacy_terminal_recipient",
+        "recipient": "term_1f27be31-0284-4366-bb91-30fe538cd30e",
+        "message": "term_1f27be31-0284-4366-bb91-30fe538cd30e is a live terminal-only mailbox. Delivery is not durable after that terminal closes; prefer run:<id> or dispatch:<id>."
+      }
+    ],
+    "mutation": {
+      "requestId": "fafb7df8-24cf-433b-9cd9-0228101abfd6",
+      "replayed": false
+    }
+  },
+  "_meta": {
+    "runtimeId": "cc9e3275-28c6-4c45-85cc-bdcd2262aa7d"
+  }
+}

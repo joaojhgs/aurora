@@ -1,0 +1,50 @@
+{
+  "objective_id": "tcc:20261013:submission-20261030",
+  "root_request": "msg_75f13acf7813",
+  "run": "run_e6054e76e9fc",
+  "task": "task_d7ea336050cf",
+  "dispatch": "ctx_37b4d0a3c14f",
+  "state": "receiver_authority_blocked_gpu_unverified",
+  "personal_result": {
+    "source": "Personal native Bot Chat reply",
+    "placements_observedAt": 1791992544674,
+    "sessions_observedAt": 1791992548449,
+    "coverage": "registered-terminal-inventory; no nextOffset",
+    "canonical_terminals": [
+      {"terminal": "term_05207084-e4a1-458b-b84d-cee862bbae7a", "incarnation": "532c7dae-01b9-4103-8cef-e72fa72c5ec8", "connected": true, "writable": true, "agent": null, "title": null, "lastOutputAt": null},
+      {"terminal": "term_0c56125c-12c6-468e-9d60-3395cd5d764f", "incarnation": "16f328f4-2a9f-4a49-9977-502cca4e3e54", "connected": true, "writable": true, "agent": null, "title": null, "lastOutputAt": null}
+    ],
+    "session_read_results": "Both incarnation-fenced canonical terminal reads refused manager_forbidden/authority_refused: Orca manager operation unavailable (authority_refused); reconcile before retrying",
+    "resources_observedAt": 1791992550348,
+    "gpu_fields_exposed": false,
+    "receiver_provider_verified": false,
+    "command_capability_verified": false,
+    "retry_performed": false,
+    "required_next": "Original Root resolves approved receiver authority, physical GPU binding and reservation before launch; no alternate credentials or new receiver"
+  },
+  "inventory_scope": "personal",
+  "placements_observedAt": 1791992479315,
+  "resources_observedAt": 1791992481646,
+  "candidate_host": "ssh:ssh-1786238480967-semdev",
+  "resource_alias": "personal-distrobox",
+  "desktop_workspace": "83c87291-4841-4eb1-9b85-055307c53a59::/home/developer/projects",
+  "aurora_workspace": "ce8df754-5c48-4296-83bd-452a5b99942f::/home/developer/projects/aurora",
+  "aurora_project": "github:joaojhgs/aurora",
+  "existing_resource_sessions": [
+    {"session": "ssh:ssh-1786238480967-semdev@@pty2:2f82b13a-f2fa-4df5-b097-f82ef4e0673a:2", "pane": "d3aebcef-3a43-43a4-9e55-ea201d4c132b:09624ddd-f9f4-47ca-8b7a-670cdd765a88"},
+    {"session": "ssh:ssh-1786238480967-semdev@@pty2:2f82b13a-f2fa-4df5-b097-f82ef4e0673a:5", "pane": "1d36de3a-8ee4-4d2e-8008-feb9283f22c9:885da284-b496-466d-b7b1-85b349e56768"}
+  ],
+  "physical_gpu_host_binding_verified": false,
+  "receiver_terminal": null,
+  "receiver_incarnation": null,
+  "approved_receiver_guide_route": null,
+  "artifact_transfer_route_verified": false,
+  "gpu_model": null,
+  "total_free_vram": null,
+  "backend_offloaded_layers_utilization": null,
+  "resource_reservation_verified": false,
+  "limitation": "Personal placements/resources prove registered aliases and existing resource sessions only, not physical GPU identity or receiver command authority; owner-reported 8GB GPU remains unverified",
+  "personal_handoff": {"status": "queued", "delivery_id": "7ed7c768cfe1a599995b56c25bc0586523b97806ba52b48be6a3913f525ad812", "process_id": "proc_ca2998da2723", "queued_at": 1791992516},
+  "actions_performed": "Read-only personal-scoped Orca inventory plus native Personal capability query and this technical metadata receipt; no benchmarks, transfer, guide, new session or original-Run Manager retry",
+  "schedule": "Original CPU unchanged; verified/reserved independent GPU individual campaign may parallel only isolated; cross-device after both individual campaigns finish and seal; 900 measured per new condition plus separate warmups; no iOS"
+}

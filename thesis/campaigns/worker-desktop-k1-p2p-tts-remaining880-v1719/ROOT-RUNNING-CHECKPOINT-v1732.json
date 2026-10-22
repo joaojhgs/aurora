@@ -1,0 +1,80 @@
+{
+  "at": "2026-10-20T05:51:18.949749+00:00",
+  "status": "RUNNING",
+  "nativeGoal": {
+    "threadId": "01a112a5-d6bb-74e2-bf7c-ace73cb513b5",
+    "status": "active"
+  },
+  "campaign": "thesis/campaigns/worker-desktop-k1-p2p-tts-remaining880-v1719",
+  "indexAt": "2026-10-20T05:50:21.349349+00:00",
+  "indexSha256": "f96105b8d8e34eba3d0f62820c2223c04d54ae645591f80f3f22f44b01e79e08",
+  "actors": [
+    {
+      "pid": 2360747,
+      "startTicks": 124937766,
+      "state": "S"
+    },
+    {
+      "pid": 2360768,
+      "startTicks": 124937952,
+      "state": "S"
+    },
+    {
+      "pid": 2361201,
+      "startTicks": 124942780,
+      "state": "S"
+    }
+  ],
+  "conditionManifestSha256": "120dd99a4de0a242c30ebe4bb46d854ca77313c482a0c74f024edb624829a6e8",
+  "continuation": {
+    "attempted": 82,
+    "correct": 80,
+    "incorrect": 0,
+    "failed": 2,
+    "plannedMeasured": 880
+  },
+  "wholeCondition": {
+    "attempted": 102,
+    "correct": 99,
+    "incorrect": 0,
+    "failed": 3,
+    "plannedMeasured": 900,
+    "unattempted": 798,
+    "excludedWarmupsAcrossEpochs": 30
+  },
+  "latestCase": {
+    "path": "thesis/campaigns/worker-desktop-k1-p2p-tts-remaining880-v1719/attempts/attempt-0097-measured.jsonl",
+    "bytes": 4914,
+    "sha256": "2a7d54ea1405c34e82dfda07c054efee8f9a767c0923e16255d0d42ec532fb4d",
+    "status": "completed_correct",
+    "audio": {
+      "path": "thesis/campaigns/worker-desktop-k1-p2p-tts-remaining880-v1719/audio/dac611afddad7e8325196082fe0482f9611ec9b213c34d4d4ed15448b05dcf16.wav",
+      "bytes": 31276,
+      "sha256": "dac611afddad7e8325196082fe0482f9611ec9b213c34d4d4ed15448b05dcf16",
+      "frames": 15616,
+      "sampleRate": 22050,
+      "channels": 1,
+      "sampleWidthBytes": 2
+    }
+  },
+  "custody": {
+    "indexedCases": 97,
+    "indexedAudioCases": 95,
+    "physicalFreeBytes": 5109071872
+  },
+  "futureK2": {
+    "path": "thesis/harness/distributed-k2-mesh-v1731",
+    "status": "SOURCE_ONLY_TIMING_REVIEW_PENDING_NOT_LAUNCHED",
+    "oldClassifierChecksRerun": false
+  },
+  "methodology": {
+    "path": "thesis/methodology/owner-requirements-20261020-7d3b48a5.md",
+    "sha256": "7d3b48a58cc6125c00d0fdf4adde1c17c5deb03bed178c5aaca98c915b04b69c",
+    "bytes": 671800
+  },
+  "android": {
+    "status": "INDEPENDENT_OWNING_HOST_OBSERVER_CAPABILITY_UNKNOWN",
+    "noUnchangedProbeRepeated": true
+  },
+  "nextGate": "Current K1 next five-minute/failure/natural terminal checkpoint; future K2 source-only preparation. No closed condition replay."
+}

@@ -1,0 +1,18 @@
+{
+  "files": [
+    {
+      "kind": "first_measured_case",
+      "path": "thesis/campaigns/worker-desktop-k2-p2p-assistant-tts-v1826/attempts/attempt-0016-measured.jsonl",
+      "bytes": 6167,
+      "sha256": "00ca1cc15afd778c46cd9190126cadb9c199e08aa281f7e4049f51c616341c39"
+    },
+    {
+      "kind": "first_measured_audio",
+      "path": "thesis/campaigns/worker-desktop-k2-p2p-assistant-tts-v1826/audio/29b6decab8923036b69793b1755c7e5b8a460a9a979ad7b05eac27291181a5a8.wav",
+      "bytes": 30764,
+      "sha256": "29b6decab8923036b69793b1755c7e5b8a460a9a979ad7b05eac27291181a5a8"
+    }
+  ],
+  "bothHashVerified": true,
+  "newInferenceCalls": 0
+}

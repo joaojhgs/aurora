@@ -1,0 +1,21 @@
+{
+  "at": "2026-10-21T06:47:51.208835+00:00",
+  "status": "ACTUAL_PARENT_HTTP900_COUNT_PROVENANCE_CORRECTION",
+  "source": "thesis/evidence/orca-relayed-http-v1197/terminal-v1377/summary.json",
+  "sourceSha256": "641c6fc03929cd7c455d4b9f6460dd9923925069e99da69023079ae88b37563b",
+  "actualPlannedMeasured": 900,
+  "actualAttempted": 180,
+  "actualExcludedWarmups": 15,
+  "originalConditionCapSeconds": 57600,
+  "correction": "Root earlier RPC phrase parentV1197frozen450 was wrong;450 refers older provider/history, not thisHTTPrequester. Existing V1197 requester planned900 in both frozenmanifest andactualsummary. Target900 and remaining720 never changed.",
+  "unchangedAllocationMeaning": "Prospective72000accounting/60000session is explicit new allocation due measuredremaining forecast vs realwindows, not justified as a new900target increase; old57600cap and exact10027.780472366charge preserved.",
+  "localConfigWitness": {
+    "llmAndAccurateSttSettingsEqualToLatestP2P": true,
+    "existingPrivateHttpConfigSha256": "211f086c3df1cddb2eaf41412ab0942b559b5a03ea472fa926508e5e0530c52e",
+    "sourceAppDeltaFromLegacyHttp": 4,
+    "primaryAppSnapshot": "same400files as latestP2P,000202cdddb9803d503fc44f8aaf58eb469475890751a310193418330aa79937"
+  },
+  "newRuntimeLaunched": false,
+  "newWarmups": 0,
+  "newMeasured": 0
+}

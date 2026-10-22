@@ -1,0 +1,165 @@
+{
+  "outcomes": [
+    [
+      "K1 Orca-relayed HTTP",
+      "TTS",
+      900,
+      899,
+      1,
+      0,
+      [
+        "E001"
+      ]
+    ],
+    [
+      "K1 actual P2P",
+      "TTS",
+      900,
+      885,
+      15,
+      1,
+      [
+        "E002"
+      ]
+    ],
+    [
+      "K2 Orca-relayed HTTP",
+      "LLM + TTS",
+      900,
+      797,
+      103,
+      0,
+      [
+        "E003"
+      ]
+    ],
+    [
+      "K2 actual P2P",
+      "LLM + TTS",
+      900,
+      774,
+      126,
+      0,
+      [
+        "E005"
+      ]
+    ],
+    [
+      "K3 Orca-relayed HTTP",
+      "STT + LLM + TTS",
+      900,
+      885,
+      15,
+      0,
+      [
+        "E007"
+      ]
+    ],
+    [
+      "K3 actual P2P",
+      "STT + LLM + TTS",
+      900,
+      773,
+      127,
+      1,
+      [
+        "E008"
+      ]
+    ]
+  ],
+  "latencyRowsMs": [
+    [
+      "K1 HTTP V1197, indices 1\u2013180",
+      179,
+      57463.302423199995,
+      60305.3512957,
+      [
+        "E001"
+      ]
+    ],
+    [
+      "K1 HTTP V2234, indices 181\u2013450",
+      270,
+      58608.017694199996,
+      60103.400722399994,
+      [
+        "E001"
+      ]
+    ],
+    [
+      "K1 HTTP V2296, indices 451\u2013900",
+      450,
+      63354.6776362,
+      64783.729364499995,
+      [
+        "E001"
+      ]
+    ],
+    [
+      "K1 P2P first 20 attempts",
+      19,
+      48616.7359926,
+      49321.44234509999,
+      [
+        "E002"
+      ]
+    ],
+    [
+      "K1 P2P next 689 attempts",
+      678,
+      51271.1096626,
+      53838.35479685,
+      [
+        "E002"
+      ]
+    ],
+    [
+      "K1 P2P final 191 attempts",
+      188,
+      49884.9047023,
+      51352.36127465001,
+      [
+        "E002"
+      ]
+    ],
+    [
+      "K2 HTTP",
+      797,
+      31730.1032776,
+      33246.1032976,
+      [
+        "E004"
+      ]
+    ],
+    [
+      "K2 P2P",
+      774,
+      19429.4432782,
+      20761.114956149995,
+      [
+        "E006"
+      ]
+    ],
+    [
+      "K3 HTTP, explicitly matched four-epoch aggregate",
+      885,
+      31243.1636454,
+      31787.947598400002,
+      [
+        "E007"
+      ]
+    ],
+    [
+      "K3 P2P, saved compatible-epoch aggregate",
+      773,
+      13919.323345600002,
+      14665.765187399998,
+      [
+        "E009"
+      ]
+    ]
+  ],
+  "displayConversion": "ms/1000, rounded to3decimal seconds",
+  "correctOnlyQuantiles": true,
+  "historicalPercentilesRecomputed": false
+}

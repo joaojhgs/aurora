@@ -1,0 +1,369 @@
+{
+  "at": "2026-10-20T04:24:36.544755+00:00",
+  "capturedAt": "2026-10-20T04:22:45.538764+00:00",
+  "host": "personal.skyron-server",
+  "files": {
+    "voice-stages.jsonl": {
+      "source": "/home/developer/projects/aurora/thesis/campaigns/worker-desktop-k1-p2p-tts-v1710/provider/voice-stages.jsonl",
+      "inode": 4620270,
+      "observedBytes": 165070,
+      "copiedBytes": 165070,
+      "completeFile": false,
+      "prefixOnly": true,
+      "sha256": "f515e4aae1671740ea701e39a2eb29ed62c7c7e1fae72e07892d8c6e9acf9500",
+      "destination": "thesis/campaigns/worker-desktop-k1-p2p-tts-v1711/terminal-v1716/provider-prefixes-v1718/voice-stages.jsonl"
+    },
+    "actual-provider-bindings.jsonl": {
+      "source": "/home/developer/projects/aurora/thesis/campaigns/worker-desktop-k1-p2p-tts-v1710/provider/actual-provider-bindings.jsonl",
+      "inode": 4620271,
+      "observedBytes": 25602,
+      "copiedBytes": 25602,
+      "completeFile": false,
+      "prefixOnly": true,
+      "sha256": "5defde7cd95a421258395af12c4d7bf3a3a327ce2282dcee946ce9ef136d54e7",
+      "destination": "thesis/campaigns/worker-desktop-k1-p2p-tts-v1711/terminal-v1716/provider-prefixes-v1718/actual-provider-bindings.jsonl"
+    },
+    "resources.jsonl": {
+      "source": "/home/developer/projects/aurora/thesis/campaigns/worker-desktop-k1-p2p-tts-v1710/provider/resources.jsonl",
+      "inode": 4620267,
+      "observedBytes": 10672887,
+      "copiedBytes": 8386754,
+      "completeFile": false,
+      "prefixOnly": true,
+      "sha256": "6754ec39d57c021b63742273cc75192c569c332b61003a76636d7b1cc9f3df34",
+      "destination": "thesis/campaigns/worker-desktop-k1-p2p-tts-v1711/terminal-v1716/provider-prefixes-v1718/resources.jsonl"
+    },
+    "STATUS.json": {
+      "source": "/home/developer/projects/aurora/thesis/campaigns/worker-desktop-k1-p2p-tts-v1710/provider/STATUS.json",
+      "inode": 4620273,
+      "observedBytes": 93092,
+      "copiedBytes": 93092,
+      "completeFile": true,
+      "prefixOnly": false,
+      "sha256": "e6e1e93c7b7fe16802f7559a744268572ee237de62a98d96086bfffb89682faa",
+      "destination": "thesis/campaigns/worker-desktop-k1-p2p-tts-v1711/terminal-v1716/provider-prefixes-v1718/STATUS.json"
+    },
+    "controller-launch.json": {
+      "source": "/home/developer/projects/aurora/thesis/campaigns/worker-desktop-k1-p2p-tts-v1710/provider/controller-launch.json",
+      "inode": 4620268,
+      "observedBytes": 302,
+      "copiedBytes": 302,
+      "completeFile": true,
+      "prefixOnly": false,
+      "sha256": "852e3d0be04836ddbd551ff207778c2da8b22c7c61b8bec971da25f0ec85e945",
+      "destination": "thesis/campaigns/worker-desktop-k1-p2p-tts-v1711/terminal-v1716/provider-prefixes-v1718/controller-launch.json"
+    },
+    "receiver-identity.json": {
+      "source": "/home/developer/projects/aurora/thesis/campaigns/worker-desktop-k1-p2p-tts-v1710/provider/receiver-identity.json",
+      "inode": 4620269,
+      "observedBytes": 1523,
+      "copiedBytes": 1523,
+      "completeFile": true,
+      "prefixOnly": false,
+      "sha256": "3318be5214d1437123b1d7602f0c1a0f5f287755a1e554a582714ff84fdd4454",
+      "destination": "thesis/campaigns/worker-desktop-k1-p2p-tts-v1711/terminal-v1716/provider-prefixes-v1718/receiver-identity.json"
+    },
+    "runtime-versions.json": {
+      "source": "/home/developer/projects/aurora/thesis/campaigns/worker-desktop-k1-p2p-tts-v1710/provider/runtime-versions.json",
+      "inode": 4620266,
+      "observedBytes": 211,
+      "copiedBytes": 211,
+      "completeFile": true,
+      "prefixOnly": false,
+      "sha256": "c42741743c49dd2826e1f22e87ba4f704bddf5d39ceb3642736e02de65f80458",
+      "destination": "thesis/campaigns/worker-desktop-k1-p2p-tts-v1711/terminal-v1716/provider-prefixes-v1718/runtime-versions.json"
+    }
+  },
+  "physicalBytes": 8672554,
+  "nativeCorrelatedSuccessfulCases": 34,
+  "excludedWarmupJoins": 15,
+  "measuredSuccessJoins": 19,
+  "failedRequestTtsMethodOrModelJoins": 0,
+  "providerStillLive": true,
+  "rawJsonlPrefixOnly": true,
+  "providerTerminalEOFClaimed": false,
+  "sutCalls": 0,
+  "firstTransferPartialPreserved": true,
+  "joins": [
+    {
+      "ordinal": 1,
+      "phase": "warmup",
+      "correlation": "audio-campaign-9b95bcf826f7415b8aaac8ff1e26fc94",
+      "status": "completed_correct",
+      "providerTtsMethodEnds": 1,
+      "providerTtsModelEnds": 1
+    },
+    {
+      "ordinal": 2,
+      "phase": "warmup",
+      "correlation": "audio-campaign-cfaf4964893c496182a97dee7c977946",
+      "status": "completed_correct",
+      "providerTtsMethodEnds": 1,
+      "providerTtsModelEnds": 1
+    },
+    {
+      "ordinal": 3,
+      "phase": "warmup",
+      "correlation": "audio-campaign-90ab13fb314b4deba33a00cfb32b9b2b",
+      "status": "completed_correct",
+      "providerTtsMethodEnds": 1,
+      "providerTtsModelEnds": 1
+    },
+    {
+      "ordinal": 4,
+      "phase": "warmup",
+      "correlation": "audio-campaign-2158c520d1fd498aa087234d7b66918e",
+      "status": "completed_correct",
+      "providerTtsMethodEnds": 1,
+      "providerTtsModelEnds": 1
+    },
+    {
+      "ordinal": 5,
+      "phase": "warmup",
+      "correlation": "audio-campaign-39dc0997aabe410fba6a3a207fe6da53",
+      "status": "completed_correct",
+      "providerTtsMethodEnds": 1,
+      "providerTtsModelEnds": 1
+    },
+    {
+      "ordinal": 6,
+      "phase": "warmup",
+      "correlation": "audio-campaign-64daacf3073e4174800efe4fbcd4ef3c",
+      "status": "completed_correct",
+      "providerTtsMethodEnds": 1,
+      "providerTtsModelEnds": 1
+    },
+    {
+      "ordinal": 7,
+      "phase": "warmup",
+      "correlation": "audio-campaign-e3b40bc796804f18bf02172277900dbd",
+      "status": "completed_correct",
+      "providerTtsMethodEnds": 1,
+      "providerTtsModelEnds": 1
+    },
+    {
+      "ordinal": 8,
+      "phase": "warmup",
+      "correlation": "audio-campaign-ccd3c6f628054fb4bd80b3826a576655",
+      "status": "completed_correct",
+      "providerTtsMethodEnds": 1,
+      "providerTtsModelEnds": 1
+    },
+    {
+      "ordinal": 9,
+      "phase": "warmup",
+      "correlation": "audio-campaign-51adba7518184a9a854815cac731a1a4",
+      "status": "completed_correct",
+      "providerTtsMethodEnds": 1,
+      "providerTtsModelEnds": 1
+    },
+    {
+      "ordinal": 10,
+      "phase": "warmup",
+      "correlation": "audio-campaign-acb3653501e646e4b9c8ed8109e33a47",
+      "status": "completed_correct",
+      "providerTtsMethodEnds": 1,
+      "providerTtsModelEnds": 1
+    },
+    {
+      "ordinal": 11,
+      "phase": "warmup",
+      "correlation": "audio-campaign-c27e882c1e444523967c6f1d27a0cc82",
+      "status": "completed_correct",
+      "providerTtsMethodEnds": 1,
+      "providerTtsModelEnds": 1
+    },
+    {
+      "ordinal": 12,
+      "phase": "warmup",
+      "correlation": "audio-campaign-6b86cc55fcf141bf840cba1c91c6a5cf",
+      "status": "completed_correct",
+      "providerTtsMethodEnds": 1,
+      "providerTtsModelEnds": 1
+    },
+    {
+      "ordinal": 13,
+      "phase": "warmup",
+      "correlation": "audio-campaign-e01790052ec24fd89657aee852cc0348",
+      "status": "completed_correct",
+      "providerTtsMethodEnds": 1,
+      "providerTtsModelEnds": 1
+    },
+    {
+      "ordinal": 14,
+      "phase": "warmup",
+      "correlation": "audio-campaign-97290cead09c4620a58311dbe22caaa3",
+      "status": "completed_correct",
+      "providerTtsMethodEnds": 1,
+      "providerTtsModelEnds": 1
+    },
+    {
+      "ordinal": 15,
+      "phase": "warmup",
+      "correlation": "audio-campaign-a1572aa490074d29823a0b90d30f0e1e",
+      "status": "completed_correct",
+      "providerTtsMethodEnds": 1,
+      "providerTtsModelEnds": 1
+    },
+    {
+      "ordinal": 16,
+      "phase": "measured",
+      "correlation": "audio-campaign-ea5280eff37a45249954e0e93b9a9613",
+      "status": "completed_correct",
+      "providerTtsMethodEnds": 1,
+      "providerTtsModelEnds": 1
+    },
+    {
+      "ordinal": 17,
+      "phase": "measured",
+      "correlation": "audio-campaign-4563e5b300a241bf86bd3b3f817996e0",
+      "status": "completed_correct",
+      "providerTtsMethodEnds": 1,
+      "providerTtsModelEnds": 1
+    },
+    {
+      "ordinal": 18,
+      "phase": "measured",
+      "correlation": "audio-campaign-81f6b192bfbb4d0a8579f0b93a4df255",
+      "status": "completed_correct",
+      "providerTtsMethodEnds": 1,
+      "providerTtsModelEnds": 1
+    },
+    {
+      "ordinal": 19,
+      "phase": "measured",
+      "correlation": "audio-campaign-a72b31c7ff8048e59cac38b86854acf0",
+      "status": "completed_correct",
+      "providerTtsMethodEnds": 1,
+      "providerTtsModelEnds": 1
+    },
+    {
+      "ordinal": 20,
+      "phase": "measured",
+      "correlation": "audio-campaign-a73ace03dc7e4a1094f9ce302577a85b",
+      "status": "completed_correct",
+      "providerTtsMethodEnds": 1,
+      "providerTtsModelEnds": 1
+    },
+    {
+      "ordinal": 21,
+      "phase": "measured",
+      "correlation": "audio-campaign-59ccae0c9227468586c66028ccbfd312",
+      "status": "completed_correct",
+      "providerTtsMethodEnds": 1,
+      "providerTtsModelEnds": 1
+    },
+    {
+      "ordinal": 22,
+      "phase": "measured",
+      "correlation": "audio-campaign-a8e4a5049c234f939dabe8a92b5b3ecf",
+      "status": "completed_correct",
+      "providerTtsMethodEnds": 1,
+      "providerTtsModelEnds": 1
+    },
+    {
+      "ordinal": 23,
+      "phase": "measured",
+      "correlation": "audio-campaign-c06394bba7c34cbbbde06f60bb3c7dcf",
+      "status": "completed_correct",
+      "providerTtsMethodEnds": 1,
+      "providerTtsModelEnds": 1
+    },
+    {
+      "ordinal": 24,
+      "phase": "measured",
+      "correlation": "audio-campaign-a9077bedf14f47faa130ec44da1fba93",
+      "status": "completed_correct",
+      "providerTtsMethodEnds": 1,
+      "providerTtsModelEnds": 1
+    },
+    {
+      "ordinal": 25,
+      "phase": "measured",
+      "correlation": "audio-campaign-73bf139bc03447159689abdf599b4fe7",
+      "status": "completed_correct",
+      "providerTtsMethodEnds": 1,
+      "providerTtsModelEnds": 1
+    },
+    {
+      "ordinal": 26,
+      "phase": "measured",
+      "correlation": "audio-campaign-300cf670264b4fdb961063b3af3e6637",
+      "status": "completed_correct",
+      "providerTtsMethodEnds": 1,
+      "providerTtsModelEnds": 1
+    },
+    {
+      "ordinal": 27,
+      "phase": "measured",
+      "correlation": "audio-campaign-9e9177d8beb443e280350fc55718c51b",
+      "status": "completed_correct",
+      "providerTtsMethodEnds": 1,
+      "providerTtsModelEnds": 1
+    },
+    {
+      "ordinal": 28,
+      "phase": "measured",
+      "correlation": "audio-campaign-0697824cce2446818fba3a4dc7752629",
+      "status": "completed_correct",
+      "providerTtsMethodEnds": 1,
+      "providerTtsModelEnds": 1
+    },
+    {
+      "ordinal": 29,
+      "phase": "measured",
+      "correlation": "audio-campaign-d2c20c9cc33743e2b9d89c81c6021050",
+      "status": "completed_correct",
+      "providerTtsMethodEnds": 1,
+      "providerTtsModelEnds": 1
+    },
+    {
+      "ordinal": 30,
+      "phase": "measured",
+      "correlation": "audio-campaign-5cab34d5b8ce4805aa4352b8e44a5b30",
+      "status": "completed_correct",
+      "providerTtsMethodEnds": 1,
+      "providerTtsModelEnds": 1
+    },
+    {
+      "ordinal": 31,
+      "phase": "measured",
+      "correlation": "audio-campaign-82e2dcc8dde94586bff33dea5d87a9b9",
+      "status": "completed_correct",
+      "providerTtsMethodEnds": 1,
+      "providerTtsModelEnds": 1
+    },
+    {
+      "ordinal": 32,
+      "phase": "measured",
+      "correlation": "audio-campaign-c4b19651bb3742df90d55b444f46ff1c",
+      "status": "completed_correct",
+      "providerTtsMethodEnds": 1,
+      "providerTtsModelEnds": 1
+    },
+    {
+      "ordinal": 33,
+      "phase": "measured",
+      "correlation": "audio-campaign-7e828cb11d954137b8b575ec19354f07",
+      "status": "completed_correct",
+      "providerTtsMethodEnds": 1,
+      "providerTtsModelEnds": 1
+    },
+    {
+      "ordinal": 34,
+      "phase": "measured",
+      "correlation": "audio-campaign-2a59d4989b5a488490cf26afd3b6f2b0",
+      "status": "completed_correct",
+      "providerTtsMethodEnds": 1,
+      "providerTtsModelEnds": 1
+    },
+    {
+      "ordinal": 35,
+      "phase": "measured",
+      "correlation": "audio-campaign-6f711259acec4556ae20578b0a702d35",
+      "status": "failed",
+      "providerTtsMethodEnds": 0,
+      "providerTtsModelEnds": 0
+    }
+  ]
+}

@@ -1,0 +1,38 @@
+{
+  "id": "remote-cli-1792632702348",
+  "ok": true,
+  "result": {
+    "runId": "run_e6054e76e9fc",
+    "deliveryId": "delivery_e225db889730",
+    "messages": [
+      {
+        "id": "msg_6b1ac7496156",
+        "run_id": "run_e6054e76e9fc",
+        "delivery_contract": "current_delivery",
+        "from_handle": "term_1f27be31-0284-4366-bb91-30fe538cd30e",
+        "to_handle": "run:run_e6054e76e9fc",
+        "subject": "Receiver pin and 43 frames now physically prepared; ready for future 120s window",
+        "body": "Actual notebook receipt evidence/prepare-admitted-receiver-20261022T013044/result.json confirms source-control-v29/receiver-admitted-v33.py SHA f47d791347a08378f25f6865405e1e93a310e5072b699174d850e69459628975, matching your admission pin, and source-manifest-admitted-v33.json SHA c4ab9f18b9189e8c4fe15ce4897cc3f241e535720dfff9136eb291b402acf0c9. Sender now emits exactly 43 per-file sequential frames, maximum 98,048 raw bytes; four payloads and 3,913,736 total bytes unchanged. v2350 expired unused, no sender/receiver startup or source payload occurred. Please grant a fresh exact 120-second UTC window at least three minutes after reply; I am watching the normal inbox now and will execute that grant directly. No owner approval, main pause or phone checks requested.",
+        "type": "status",
+        "priority": "high",
+        "thread_id": null,
+        "payload": null,
+        "created_at": "2026-10-22T01:30:58Z",
+        "delivered_at": null
+      }
+    ],
+    "count": 1,
+    "replayed": false,
+    "acknowledged": "delivery_a9b51b6c0426",
+    "timedOut": false,
+    "cancelled": false,
+    "connectionLost": false,
+    "mutation": {
+      "requestId": "a7f343bc-1409-497d-b3dd-0322c3cdb564",
+      "replayed": false
+    }
+  },
+  "_meta": {
+    "runtimeId": "cc9e3275-28c6-4c45-85cc-bdcd2262aa7d"
+  }
+}

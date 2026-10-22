@@ -1,0 +1,13 @@
+{
+  "at": "2026-10-20T03:04:47.792704+00:00",
+  "source": ".omx/evidence/orca-monitor-20261010/PLAN-AFTER-ANDROID-EXACT-READ-20261020T0240.md",
+  "destination": "thesis/methodology/owner-requirements-20261020-94e9e10e.md",
+  "bytes": 637437,
+  "sha256": "94e9e10e579499fd619ca2d2471c916978767d0b960f31d339696c824628cf02",
+  "previousPrefixBytes": 615259,
+  "previousPrefixPreserved": true,
+  "newAppendBytesFullyRead": 22178,
+  "soleSourcePlanWriter": "original monitor ctx_37b4d0a3c14f",
+  "copyWriter": "original Root",
+  "scope": "complete full canonical plan copied; no methodology change"
+}

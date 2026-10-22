@@ -1,0 +1,26 @@
+{
+  "command": [
+    "/home/developer/.orca-relay/bin/orca",
+    "emulator",
+    "screenshot",
+    "--device",
+    "ssh-adb:WyJzc2gtMTc4NjIzODQ4MDk2Ny1zZW1kZXYiLCIxOTIuMTY4LjI0MC4xMTI6NTU1NSJd",
+    "--json"
+  ],
+  "host": "ssh-1786238480967-semdev / personal-distrobox",
+  "device_class": "Waydroid",
+  "serial": "192.168.240.112:5555",
+  "exit_code": 0,
+  "relay_ok": true,
+  "receipt_id": "00918889-0223-41e5-bc2c-4f5d72943495",
+  "runtime_id": "5168da61-e878-402a-92a3-5ea447243a89",
+  "receipt_sha256": "9d1f1737605871acd4d50eaec17eb80f9c7b52f53d75f63004bc74e05d97383c",
+  "private_png_sha256": "c3cc420c47d1a90a8df3a4e4cb9c11292237499717e67013c02f85b007d99dea",
+  "png_bytes": 8754,
+  "image_width": 1280,
+  "image_height": 768,
+  "screenshot_exported": false,
+  "scope": "Current read-only screenshot relay success; no install/SDK/native app acceptance or app/source version proof",
+  "mutations": "No app launch/input/permission/install/rawexec/security/access/source changes",
+  "history": "ORCA-V329-ANDROID-SCREENSHOT-RELAY.json was a naming error: actual command there was orchestration check; no screenshot proof from that receipt"
+}

@@ -1,0 +1,11 @@
+{
+  "at": "2026-10-14T23:52:03.087492+00:00",
+  "controllerPid": 2850865,
+  "sourcePacketSHA256": "871c686d1e808330337b0e7d50d5bfa1937429b9de1aee5c7e39c8b73cc248cc",
+  "capSeconds": 900,
+  "globalNextLogicalFlow": 8,
+  "sourceOverlaySHA256": "c90ade3dc52f1dfdf3840225894d24cefa530b063b2b32e1b289139772e65273",
+  "modelOrWorkloadChanged": false,
+  "webBuildReused": true,
+  "measurementStarted": false
+}

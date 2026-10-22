@@ -1,0 +1,58 @@
+{
+  "at": "2026-10-21T06:57:35.316973+00:00",
+  "status": "original_provider_eof_delta_sealed",
+  "actors": [
+    {
+      "pid": 251472,
+      "state": "absent",
+      "sameStart": false
+    },
+    {
+      "pid": 251473,
+      "state": "absent",
+      "sameStart": false
+    }
+  ],
+  "providerRetired": true,
+  "reservationPreserved": true,
+  "rootPhysicalReservationHeldForNextCondition": true,
+  "oldFixedPrefixSealSha256": "5f78d8d314629e9afb1e95bcb2c15ad95aca6b7f4d117f89233829d8f547de0b",
+  "oldFixedPrefixArchiveSha256": "c52c0748f60831e33701688ef23ed51445a71c6c88e174be4692579ef3ea5544",
+  "oldPrefixPlusDeltaReconstructsEof": true,
+  "files": [
+    {
+      "name": "snapshots/STATUS.json",
+      "source": "/home/developer/projects/aurora/thesis/campaigns/worker-desktop-k3-p2p-full-audio-v1965/provider/STATUS.json",
+      "bytes": 161092,
+      "sha256": "757a09abcee01f445bb1e90a2e08abfd50c1274d35e5e300855a3d2707f799b6",
+      "terminalEOF": true
+    },
+    {
+      "name": "delta/resources.jsonl.tail",
+      "source": "/home/developer/projects/aurora/thesis/campaigns/worker-desktop-k3-p2p-full-audio-v1965/provider/resources.jsonl",
+      "startByte": 114040525,
+      "endByte": 133761027,
+      "bytes": 19720502,
+      "sha256": "ad068515ff79fb34607b9900022f75c358b64c005819d89bf166a31716cf6b90",
+      "terminalEOF": true,
+      "fullSourceSha256": "e183f2efd519609c8590171cdc7b6c4c66600354c8670e964004d69be10ea938"
+    },
+    {
+      "name": "snapshots/terminal.json",
+      "source": "/home/developer/projects/aurora/thesis/campaigns/worker-desktop-k3-p2p-full-audio-v1965/provider/terminal.json",
+      "bytes": 435,
+      "sha256": "4fc72f83321a24817f62962caf5dbc1e1eec27d4c394f5acb7de6f202a3b14d2",
+      "terminalEOF": true
+    }
+  ],
+  "rawPayloadBytes": 19882029,
+  "originalFilesPreserved": true,
+  "K1MeasuredAttempted": 900,
+  "K1Correct": 885,
+  "K1Failed": 15,
+  "K1Remaining": 0,
+  "signalsSent": 1,
+  "newInference": 0,
+  "newOrcaWorkers": 0,
+  "oldEffectiveDeadlineUnchanged": "2026-10-21T12:41:24.961804+00:00"
+}

@@ -1,0 +1,7 @@
+{
+  "before_sha256": "07e271c85ec51ccdfee01c66e8589ff813154f82ad5d4c84b7f7ff0156a118c9",
+  "after_sha256": "b4253ce9d9cd3d868e4a5e78c011dd838ec67671070932349b6545ed9b1a249e",
+  "change": "explicit number guard before optional status comparison",
+  "canonical_mutated": false,
+  "model_requests": 0
+}

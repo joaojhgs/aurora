@@ -1,0 +1,8 @@
+{
+  "bytes": 2637,
+  "copyOnly": true,
+  "custody": "Notebook result persisted and fsynced before relay; remote receipt in same output",
+  "localPath": "/home/developer/projects/aurora/thesis/phone-notebook/20261020/evidence/compare-piper-graph-v192/result.json",
+  "remotePath": "/home/developer/projects/aurora/thesis/phone-notebook/20261020/evidence/compare-piper-graph-v192.json",
+  "sha256": "bdba7de978f9f4c38a878941a4b81d8278c84047d9fad98942eec5d3bc74743e"
+}

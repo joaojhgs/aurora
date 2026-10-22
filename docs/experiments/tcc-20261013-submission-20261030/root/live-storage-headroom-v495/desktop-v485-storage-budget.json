@@ -1,0 +1,98 @@
+{
+  "observedAt": "2026-10-15T04:13:56.172342+00:00",
+  "host": "personal.skyron-server",
+  "storagePath": "/home/developer/projects/aurora/.git/aurora-audio-campaign-v485/runtime",
+  "fileSystemDevice": 2082,
+  "controllerPid": 2910571,
+  "childPid": 2910591,
+  "controllerPresent": true,
+  "childPresent": true,
+  "progress": {
+    "attempted": 178,
+    "last_attempt_file": "attempts/attempt-0178-measured.jsonl",
+    "last_attempt_status": "completed_correct",
+    "measured_attempted": 163,
+    "planned_measured": 900,
+    "planned_warmups": 15,
+    "status": "running",
+    "unattempted_measured": 737,
+    "warmups_attempted": 15
+  },
+  "actualFreeBytes": 506871808,
+  "launchFreeBytes": 533200896,
+  "existingMinimumFreeGuardBytes": 100000000,
+  "headroomAboveGuardBytes": 406871808,
+  "runtimeFiles": 368,
+  "runtimeAllocatedBytes": 17784832,
+  "runtimeLogicalBytes": 16671095,
+  "runtimeAllocatedByTopLevel": {
+    "runtime-versions.json": 4096,
+    "backend.private.log": 323584,
+    "voice-stages.jsonl": 2998272,
+    "launch.json": 4096,
+    "config.json.mesh-policy-rbac.json": 4096,
+    "actual-provider-bindings.jsonl": 118784,
+    "resources.jsonl": 6160384,
+    "absent.env": 4096,
+    "config.json": 16384,
+    "voice-stages.installed.json": 4096,
+    "data": 831488,
+    "campaign": 7315456
+  },
+  "largestFiles": [
+    {
+      "path": "resources.jsonl",
+      "logicalBytes": 6154241,
+      "allocatedBytes": 6160384
+    },
+    {
+      "path": "voice-stages.jsonl",
+      "logicalBytes": 2995267,
+      "allocatedBytes": 2998272
+    },
+    {
+      "path": "data/aurora.db",
+      "logicalBytes": 827392,
+      "allocatedBytes": 831488
+    },
+    {
+      "path": "backend.private.log",
+      "logicalBytes": 322910,
+      "allocatedBytes": 323584
+    },
+    {
+      "path": "actual-provider-bindings.jsonl",
+      "logicalBytes": 111581,
+      "allocatedBytes": 118784
+    },
+    {
+      "path": "campaign/audio/43c117a29d1ea9e09f9c1f683212185094568c40b9e2079d5e5fe0a64a817713.wav",
+      "logicalBytes": 32812,
+      "allocatedBytes": 36864
+    },
+    {
+      "path": "campaign/audio/56d5d7ecf9759b9b0a7b6b0fb42108d26dbd8843b33e196b8d8d9cd17055a4fa.wav",
+      "logicalBytes": 32812,
+      "allocatedBytes": 36864
+    },
+    {
+      "path": "campaign/audio/f727c793c86ac13920b2dc803c5c241a3e86958f981f9ed6b7e97b5f7ca85dd7.wav",
+      "logicalBytes": 32812,
+      "allocatedBytes": 36864
+    }
+  ],
+  "uniqueWavFiles": 178,
+  "largestObservedWavBytes": 33324,
+  "observedVolumeConsumptionBytes": 26329088,
+  "elapsedSampleSeconds": 1949.87486957,
+  "observedVolumeBytesPerCommittedAttempt": 147916.22471910113,
+  "allocatedRuntimeBytesPerCommittedAttempt": 99914.78651685393,
+  "remainingAttemptsIncludingWarmups": 737,
+  "remainingSecondsToOuterCapApproximate": 10830.12513043,
+  "maxObservedResourceSampleBytes": 3168,
+  "projectedRemainingNeedConservativeBytes": 302338352,
+  "projectionMethod": "2*max(all observed volume loss/committed attempt, all current runtime allocated bytes/committed attempt)*remaining attempts + maximum observed 1Hz resource row bytes*remaining outer-cap seconds +50MB reserve; setup is conservatively included. Not a guarantee against unrelated volume writes.",
+  "projectedFreeAfterRemainingBytes": 204533456,
+  "action": "continue_with_existing_guard",
+  "noSourceOrInputOrGuardChange": true
+}

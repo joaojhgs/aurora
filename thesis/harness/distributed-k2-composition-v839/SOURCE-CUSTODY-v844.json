@@ -1,0 +1,30 @@
+{
+  "at": "2026-10-16T03:54:33.721718+00:00",
+  "scope": "Byte-identical inert custody; independent partial source approval only",
+  "source": "/home/developer/projects/aurora/.git/aurora-handoff-import-20261006/distributed-k2-composition-prep-v839",
+  "files": [
+    {
+      "path": "k2_composition.py",
+      "bytes": 14287,
+      "sha256": "08be1fa730d6e49ccf4bd491539b4b8edb5b3476eb7f8f7db9656db5e7b3a053"
+    },
+    {
+      "path": "stage_adapter.py",
+      "bytes": 8801,
+      "sha256": "204ea4d6b48571ab7ba0add0310a3dadd87b5e1e2afdc172634185755c9bb02c"
+    },
+    {
+      "path": "README.md",
+      "bytes": 2428,
+      "sha256": "cadc4489d7d95c5727dbfa558e9dc53d1860ee65d81fefb9f06a979b30de42c5"
+    },
+    {
+      "path": "REPORT.md",
+      "bytes": 5247,
+      "sha256": "a78e98a3b9efb2b3b9e19fb3da5297832595aebd501286a8ce43ba8aeeebf2d9"
+    }
+  ],
+  "reviewSHA256": "8931f190b07a7b396c5c39d9b79bfc45a00a18964f8fc2f432b4d9533a152a1b",
+  "runtimeTestsOrModelsExecuted": false,
+  "campaignIntegration": "Existing Luna preparing842; not complete or launched"
+}

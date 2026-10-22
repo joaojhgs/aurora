@@ -1,0 +1,415 @@
+{
+  "at": "2026-10-21T05:50:58.406912+00:00",
+  "status": "saved_k1_analysis_complete",
+  "measuredAttempted": 900,
+  "correctFullAudio": 885,
+  "failed": 15,
+  "remaining": 0,
+  "timeoutsIncludedInFailed": 1,
+  "failureCodes": {
+    "remote_mesh_exact_remote_peer_call_not_confirmed": 1,
+    "remote_mesh_preaccept_capability_changed": 13,
+    "remote_mesh_tts_timeout_ambiguous": 1
+  },
+  "excludedWarmupsInMeasuredEpochs": 45,
+  "extraFailedStartup": "V1779 retains3additional excludedwarmups=2correct1failed/0measured; V2143 zero requests; separate preserved history",
+  "perEpoch": {
+    "first20": {
+      "measured": 20,
+      "correct": 19,
+      "failed": 1,
+      "timeoutsIncludedInFailed": 0,
+      "correctFullAudioOnly": {
+        "n": 19,
+        "units": "ms",
+        "estimator": "Hyndman-Fan type 7",
+        "p50": 43657.277037,
+        "p90": 48616.7359926,
+        "p95": 49321.44234509999,
+        "p99": 52896.27271542
+      },
+      "allAttemptsTimeToOutcomeNotAllFullAudio": {
+        "n": 20,
+        "units": "ms",
+        "estimator": "Hyndman-Fan type 7",
+        "p50": 43556.4724185,
+        "p90": 48590.7107258,
+        "p95": 49073.19023605,
+        "p99": 52846.622293609995
+      },
+      "failedTimeToOutcome": {
+        "n": 1,
+        "units": "ms",
+        "estimator": "Hyndman-Fan type 7",
+        "p50": 43187.490318,
+        "p90": 43187.490318,
+        "p95": 43187.490318,
+        "p99": 43187.490318
+      },
+      "nativeStageCorrectOnly": {
+        "stt": {
+          "n": 19,
+          "units": "ms",
+          "estimator": "Hyndman-Fan type 7",
+          "p50": 8049.821606,
+          "p90": 10545.7846002,
+          "p95": 10597.106744899998,
+          "p99": 10882.75649138
+        },
+        "assistant": {
+          "n": 19,
+          "units": "ms",
+          "estimator": "Hyndman-Fan type 7",
+          "p50": 26881.336433,
+          "p90": 31319.3013284,
+          "p95": 32167.664403499984,
+          "p99": 37115.0856911
+        },
+        "tts": {
+          "n": 19,
+          "units": "ms",
+          "estimator": "Hyndman-Fan type 7",
+          "p50": 1606.711834,
+          "p90": 1800.519935,
+          "p95": 1847.7137919,
+          "p99": 1879.10070078
+        }
+      },
+      "requesterStageCorrectOnly": {
+        "stt": {
+          "n": 19,
+          "units": "ms",
+          "estimator": "Hyndman-Fan type 7",
+          "p50": 8064.190874,
+          "p90": 10685.3932674,
+          "p95": 10961.8310135,
+          "p99": 10974.3250331
+        },
+        "assistant": {
+          "n": 19,
+          "units": "ms",
+          "estimator": "Hyndman-Fan type 7",
+          "p50": 31950.410841,
+          "p90": 36572.1233558,
+          "p95": 37311.72447139998,
+          "p99": 42211.00424708
+        },
+        "tts": {
+          "n": 19,
+          "units": "ms",
+          "estimator": "Hyndman-Fan type 7",
+          "p50": 2516.909624,
+          "p90": 3702.1984792,
+          "p95": 3825.3026292999994,
+          "p99": 4067.21996026
+        }
+      },
+      "requesterResources": {
+        "identityMatchedSamples": 1595,
+        "excludedIdentityOrPrestartup": 0,
+        "counterErrorFields": {
+          "gpu.vendor": 1595
+        },
+        "receiverPid": 2326096,
+        "startTicks": 124639833,
+        "scope": "Receiver process plus sampled host/GPU/interface counters; parent process CPU is not all subprocess CPU"
+      },
+      "providerContext": "oldProvider",
+      "conditionManifestSha256": "04872dbd3948c13a4b269a1eb116f8b92fb3c369a8b0026cbbf339a2257009c1"
+    },
+    "next689": {
+      "measured": 689,
+      "correct": 678,
+      "failed": 11,
+      "timeoutsIncludedInFailed": 1,
+      "correctFullAudioOnly": {
+        "n": 678,
+        "units": "ms",
+        "estimator": "Hyndman-Fan type 7",
+        "p50": 44990.468276,
+        "p90": 51271.1096626,
+        "p95": 53838.35479685,
+        "p99": 58142.1964085
+      },
+      "allAttemptsTimeToOutcomeNotAllFullAudio": {
+        "n": 689,
+        "units": "ms",
+        "estimator": "Hyndman-Fan type 7",
+        "p50": 44953.145146,
+        "p90": 51313.767829000004,
+        "p95": 53920.2694036,
+        "p99": 58161.786769440005
+      },
+      "failedTimeToOutcome": {
+        "n": 11,
+        "units": "ms",
+        "estimator": "Hyndman-Fan type 7",
+        "p50": 43441.104423,
+        "p90": 58075.795876,
+        "p95": 119039.71328200001,
+        "p99": 167810.84720680004
+      },
+      "nativeStageCorrectOnly": {
+        "stt": {
+          "n": 678,
+          "units": "ms",
+          "estimator": "Hyndman-Fan type 7",
+          "p50": 7865.4538565,
+          "p90": 10719.0598461,
+          "p95": 11929.2261516,
+          "p99": 14504.613173080015
+        },
+        "assistant": {
+          "n": 678,
+          "units": "ms",
+          "estimator": "Hyndman-Fan type 7",
+          "p50": 28262.335519499997,
+          "p90": 32914.9334638,
+          "p95": 35913.71759845,
+          "p99": 39926.79288785
+        },
+        "tts": {
+          "n": 678,
+          "units": "ms",
+          "estimator": "Hyndman-Fan type 7",
+          "p50": 1652.8391025,
+          "p90": 1861.3375381,
+          "p95": 1976.3082731,
+          "p99": 2271.8637611200006
+        }
+      },
+      "requesterStageCorrectOnly": {
+        "stt": {
+          "n": 678,
+          "units": "ms",
+          "estimator": "Hyndman-Fan type 7",
+          "p50": 7988.372051,
+          "p90": 10849.5189527,
+          "p95": 12070.06537225,
+          "p99": 14906.597621980023
+        },
+        "assistant": {
+          "n": 678,
+          "units": "ms",
+          "estimator": "Hyndman-Fan type 7",
+          "p50": 33558.41781,
+          "p90": 38442.2973445,
+          "p95": 41448.24349055,
+          "p99": 45019.965183420005
+        },
+        "tts": {
+          "n": 678,
+          "units": "ms",
+          "estimator": "Hyndman-Fan type 7",
+          "p50": 2919.2553930000004,
+          "p90": 3654.3620062000005,
+          "p95": 4069.2503443499977,
+          "p99": 5755.107524020001
+        }
+      },
+      "requesterResources": {
+        "identityMatchedSamples": 32379,
+        "excludedIdentityOrPrestartup": 0,
+        "counterErrorFields": {
+          "gpu.vendor": 32379
+        },
+        "receiverPid": 2360768,
+        "startTicks": 124937952,
+        "scope": "Receiver process plus sampled host/GPU/interface counters; parent process CPU is not all subprocess CPU"
+      },
+      "providerContext": "oldProvider",
+      "conditionManifestSha256": "120dd99a4de0a242c30ebe4bb46d854ca77313c482a0c74f024edb624829a6e8"
+    },
+    "remaining191": {
+      "measured": 191,
+      "correct": 188,
+      "failed": 3,
+      "timeoutsIncludedInFailed": 0,
+      "correctFullAudioOnly": {
+        "n": 188,
+        "units": "ms",
+        "estimator": "Hyndman-Fan type 7",
+        "p50": 44781.190986,
+        "p90": 49884.9047023,
+        "p95": 51352.36127465001,
+        "p99": 55648.307218669994
+      },
+      "allAttemptsTimeToOutcomeNotAllFullAudio": {
+        "n": 191,
+        "units": "ms",
+        "estimator": "Hyndman-Fan type 7",
+        "p50": 44860.915452,
+        "p90": 49861.512688,
+        "p95": 51294.2651795,
+        "p99": 55642.242077899995
+      },
+      "failedTimeToOutcome": {
+        "n": 3,
+        "units": "ms",
+        "estimator": "Hyndman-Fan type 7",
+        "p50": 45423.631278,
+        "p90": 48525.6691036,
+        "p95": 48913.4238318,
+        "p99": 49223.62761436
+      },
+      "nativeStageCorrectOnly": {
+        "stt": {
+          "n": 188,
+          "units": "ms",
+          "estimator": "Hyndman-Fan type 7",
+          "p50": 7845.566133,
+          "p90": 10808.042746100002,
+          "p95": 11970.892061650002,
+          "p99": 13152.908123779998
+        },
+        "assistant": {
+          "n": 188,
+          "units": "ms",
+          "estimator": "Hyndman-Fan type 7",
+          "p50": 27790.679088999997,
+          "p90": 31953.4984568,
+          "p95": 34862.814034250005,
+          "p99": 37945.56092826
+        },
+        "tts": {
+          "n": 188,
+          "units": "ms",
+          "estimator": "Hyndman-Fan type 7",
+          "p50": 1685.9094905,
+          "p90": 2012.7022574,
+          "p95": 2165.80409245,
+          "p99": 2373.0600704099998
+        }
+      },
+      "requesterStageCorrectOnly": {
+        "stt": {
+          "n": 188,
+          "units": "ms",
+          "estimator": "Hyndman-Fan type 7",
+          "p50": 7933.2673644999995,
+          "p90": 10897.166004000002,
+          "p95": 12011.79730395,
+          "p99": 13163.910609889997
+        },
+        "assistant": {
+          "n": 188,
+          "units": "ms",
+          "estimator": "Hyndman-Fan type 7",
+          "p50": 33042.341251,
+          "p90": 37095.7345326,
+          "p95": 39988.30959700001,
+          "p99": 43471.70142832
+        },
+        "tts": {
+          "n": 188,
+          "units": "ms",
+          "estimator": "Hyndman-Fan type 7",
+          "p50": 2930.6560085,
+          "p90": 3722.2437282,
+          "p95": 4275.11863255,
+          "p99": 5515.534773239998
+        }
+      },
+      "requesterResources": {
+        "identityMatchedSamples": 9418,
+        "excludedIdentityOrPrestartup": 0,
+        "counterErrorFields": {
+          "gpu.vendor": 9418
+        },
+        "receiverPid": 3332919,
+        "startTicks": 132996503,
+        "scope": "Receiver process plus sampled host/GPU/interface counters; parent process CPU is not all subprocess CPU"
+      },
+      "providerContext": "currentProvider",
+      "conditionManifestSha256": "d753203e4a53f12ed983a98d776a811d241d0d6bc6061b28e3c1480a077a17d3"
+    }
+  },
+  "providerResources": {
+    "oldProvider": {
+      "identityMatchedSamples": 38501,
+      "excludedIdentityOrPrestartup": 0,
+      "counterErrorFields": {
+        "gpu.gpu_busy_percent": 36,
+        "gpu.vendor": 269507
+      },
+      "receiverPid": 3194394,
+      "startTicks": 22320527,
+      "scope": "Receiver process plus sampled host/GPU/interface counters; parent process CPU is not all subprocess CPU"
+    },
+    "currentProvider": {
+      "identityMatchedSamples": 26179,
+      "excludedIdentityOrPrestartup": 0,
+      "counterErrorFields": {
+        "gpu.vendor": 183253
+      },
+      "receiverPid": 251473,
+      "startTicks": 29038457,
+      "scope": "Receiver process plus sampled host/GPU/interface counters; parent process CPU is not all subprocess CPU"
+    }
+  },
+  "providerArchives": {
+    "oldProvider": {
+      "path": "thesis/campaigns/worker-desktop-k1-p2p-tts-v1710/provider-transfer-terminal-v1788/provider-eof-v1784.tar.gz",
+      "sha256": "361889ce2239cda99f14ae12102f52746c01307c49cbb20c91093bd4473baa99",
+      "members": [
+        "raw/terminal.json",
+        "raw/runtime-versions.json",
+        "raw/STATUS.json",
+        "raw/receiver-identity.json",
+        "raw/provider-manifest.json",
+        "raw/controller-launch.json",
+        "raw/voice-stages.jsonl",
+        "raw/voice-stages.status.json",
+        "raw/actual-provider-bindings.jsonl",
+        "raw/ROOT-LAUNCH.json",
+        "raw/resources.jsonl",
+        "PROVIDER-SEAL.json"
+      ],
+      "rawPayloadBytes": 171335796
+    },
+    "currentProvider": {
+      "path": "thesis/campaigns/worker-desktop-k1-p2p-tts-remaining191-v2153/provider-prefix-transfer-v2198/provider-prefix-v2197.tar.gz",
+      "sha256": "c52c0748f60831e33701688ef23ed51445a71c6c88e174be4692579ef3ea5544",
+      "members": [
+        "raw/provider-manifest.json",
+        "raw/controller-launch.json",
+        "raw/receiver-identity.json",
+        "raw/assistant-identity.json",
+        "raw/stt-identity.json",
+        "raw/runtime-versions.json",
+        "raw/ACTUAL-FILES-v1965.json",
+        "raw/PREPARATION-v1965.json",
+        "raw/ROOT-ADMISSION-v1966.json",
+        "raw/ROOT-LAUNCH-v1966.json",
+        "raw/STATUS.json",
+        "raw/voice-stages.jsonl",
+        "raw/actual-provider-bindings.jsonl",
+        "raw/binding-guard-diagnostic.jsonl",
+        "raw/resources.jsonl",
+        "PROVIDER-PREFIX-SEAL.json"
+      ],
+      "rawPayloadBytes": 127759004
+    }
+  },
+  "caseCount": 945,
+  "audioFilesPreviouslySealedAndStillPresent": 930,
+  "joinedNativePairs": 2820,
+  "gaps": [
+    {
+      "caseId": "audio-campaign-v1719-0704",
+      "field": "route",
+      "reason": "saved route/call binding did not match"
+    }
+  ],
+  "whole900PooledLatency": null,
+  "latencyPolicy": "Per-epoch distributions only: explicit language-list contract compatibility source delta and full-three-model desktop residency in final191; no silent context pooling or pure protocol-overhead interpretation",
+  "clockPolicy": "W flow/local-native/resource windows use W monotonic; D native/resource windows use the appropriate D receiver process monotonic; no cross-host subtraction",
+  "routePolicy": "Before/after nominated-pair observations; no pair ID or continuous route purity claim",
+  "failureCausePolicy": "Outcome codes retained; capability-change cause and ambiguous timeout execution cause remain UNKNOWN, no model-quality inference",
+  "helper": {
+    "path": "thesis/harness/analyze_k2_mesh_saved_v1904.py",
+    "sha256": "aefa658239e4e8fab1e4690a6e6156448314f60e4d5c377defe7b0cf49748ed4"
+  },
+  "sutCalls": 0,
+  "elapsedSeconds": 16.511088019935414
+}

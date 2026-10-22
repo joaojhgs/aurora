@@ -1,0 +1,57 @@
+{
+  "at": "2026-10-20T20:46:42.565230+00:00",
+  "status": "K2_900_ATTEMPT_CONDITION_SEALED_NATIVE_RESOURCES_JOINED_SOL_REVIEW_CLOSED",
+  "measured": 900,
+  "correctFullAudio": 774,
+  "failed": 126,
+  "failureKinds": {
+    "assistant_reply_predicate_failed": 115,
+    "preaccept_capability_changed": 11
+  },
+  "timeouts": 0,
+  "unattempted": 0,
+  "excludedWarmups": 15,
+  "nativeStageJoins": 2619,
+  "measuredNative": {
+    "stt": 900,
+    "assistant": 900,
+    "tts": 774
+  },
+  "routeCallJoinsIncludingWarmups": 1715,
+  "artifacts": [
+    {
+      "path": "thesis/campaigns/worker-desktop-k2-p2p-assistant-tts-v1826/terminal-v1899/REQUESTER-SEAL.json",
+      "bytes": 3167,
+      "sha256": "babb2968088b7ae47382a37bb69d3b1faa36f5798fcd3b7070490b05d0f7d38a"
+    },
+    {
+      "path": "thesis/campaigns/worker-desktop-k2-p2p-assistant-tts-v1826/provider-transfer-terminal-v1902/CUSTODY.json",
+      "bytes": 12862,
+      "sha256": "a93a6165f5df349c0c6aad92c1455e801cc25f6fa5327eb92778cc7f9f6ea1c9"
+    },
+    {
+      "path": "thesis/campaigns/worker-desktop-k2-p2p-assistant-tts-v1826/analysis-v1904/SUMMARY.json",
+      "bytes": 7150,
+      "sha256": "797a2347c7e3a72936a595720c710dc14f091498ddfbac12bde4d26a7ff2c222"
+    },
+    {
+      "path": "thesis/campaigns/worker-desktop-k2-p2p-assistant-tts-v1826/analysis-v1904/REPORT.md",
+      "bytes": 3234,
+      "sha256": "12e63fc238755199e05f1534f6bcd2494fa312411536888c5e2ca24d16490c84"
+    },
+    {
+      "path": "thesis/campaigns/worker-desktop-k2-p2p-assistant-tts-v1826/analysis-v1904/OUTPUTS.json",
+      "bytes": 1082,
+      "sha256": "7739d47b0a07d07c7a8567ee56b1e8031b414e1328c1e9814adc98cfcc0c2f5f"
+    },
+    {
+      "path": "thesis/campaigns/worker-desktop-k2-p2p-assistant-tts-v1826/review-v1906/K2-V1904-SAVED-DATA-SOL-REVIEW-CLOSED-20261020T2045Z.md",
+      "bytes": 5603,
+      "sha256": "10ea232f5c4f9858641df0d9150d575a4b029a176f1f3b134322e9a4de3d8cc8"
+    }
+  ],
+  "newSutCallsForAnalysisReview": 0,
+  "noReplayTopupOrSourceChange": true,
+  "fullGoalAndMatrixStatus": "OPEN; original aggregate ACTIVE; K1 remaining191 open",
+  "next": "K3 source V1738 applied; three Python plus one SDK main-flow and SDK typecheck PASS; new source freeze and actual real-audio excluded warmup admission next"
+}

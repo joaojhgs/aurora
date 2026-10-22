@@ -1,0 +1,12 @@
+{
+  "controlDeadline": "2026-10-22T05:00:00Z",
+  "explicitNewline": true,
+  "host": "ssh:ssh-sem-notebook-personal",
+  "incarnation": "328cd72f-c7ea-49ff-a2db-b9275b085037",
+  "remoteResult": "/home/developer/projects/aurora/thesis/phone-notebook/20261020/evidence/install-pinned-apk-v95.json",
+  "rootAdmissionMessage": "owner-explicit-scoped-test-app-install-pilot-authorized-preserve-userdata",
+  "script": "scripts/install_pinned_apk_v95.py",
+  "scriptSha256": "a6f0aa0e86f8aaed62edcde70cef3f7254aa90f97540f1db58bfd42702fd7444",
+  "singleSend": true,
+  "terminal": "term_a2ed5feb-7c92-48e4-bd88-d1b0e6737989"
+}

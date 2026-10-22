@@ -1,0 +1,29 @@
+{
+  "_meta": {
+    "runtimeId": "cc9e3275-28c6-4c45-85cc-bdcd2262aa7d"
+  },
+  "id": "a290af87-be89-46fe-ac16-d90cb2cedefb",
+  "ok": true,
+  "result": {
+    "terminal": {
+      "agentWait": null,
+      "branch": "refs/heads/feat/ui-multi-platform-integration",
+      "connected": true,
+      "executionHostId": "ssh:ssh-sem-notebook-personal",
+      "handle": "term_a2ed5feb-7c92-48e4-bd88-d1b0e6737989",
+      "incarnationId": "328cd72f-c7ea-49ff-a2db-b9275b085037",
+      "lastOutputAt": 1792651437487,
+      "leafId": "306d5618-20f2-4385-986b-1a95c1b48ca8",
+      "orphaned": false,
+      "paneRuntimeId": -1,
+      "preview": "DaGVja3MiOiA5fX0K\nAURORA_COPY_RECEIPT={\"path\": \"/home/developer/projects/aurora/thesis/phone-notebook/20261020/evidence/launch-phone-file-audio-v201.json\", \"bytes\": 846, \"sha256\": \"60a0c81194c1c25f961bf7eb5cd75b3af56618b5cc87318936be4ffd9bcd870c\"}\n\u279c  aurora git:(feat/ui-multi-platform-integration) \u2717",
+      "ptyId": "ssh:ssh-sem-notebook-personal@@pty2:fc28f3d0-2ba6-4ff3-b62e-40916bd28e34:1",
+      "rendererGraphEpoch": 0,
+      "tabId": "eb450158-8807-43c5-8472-8aa0cfc82e6f",
+      "title": "..ojects/aurora",
+      "worktreeId": "03d8a475-d62e-43b3-8885-e382b313ab1b::/home/developer/projects/aurora",
+      "worktreePath": "/home/developer/projects/aurora",
+      "writable": true
+    }
+  }
+}

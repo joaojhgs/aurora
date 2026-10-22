@@ -1,0 +1,8 @@
+{
+  "bytes": 372,
+  "copyOnly": true,
+  "custody": "Notebook result persisted and fsynced before relay; remote receipt in same output",
+  "localPath": "/home/developer/projects/aurora/thesis/phone-notebook/20261020/evidence/launch-preloaded-real-flow-v404/result.json",
+  "remotePath": "/home/developer/projects/aurora/thesis/phone-notebook/20261020/evidence/launch-preloaded-real-flow-v404.json",
+  "sha256": "9e1fcf74f13c3fa28ad6d4a4048b7e722237331de409a4dd581fcd61c19fa560"
+}

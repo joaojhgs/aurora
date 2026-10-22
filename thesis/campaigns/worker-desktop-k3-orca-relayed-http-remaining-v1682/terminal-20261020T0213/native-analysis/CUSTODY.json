@@ -1,0 +1,25 @@
+{
+  "newMeasurements": 0,
+  "outputs": [
+    {
+      "bytes": 28833,
+      "path": "/home/developer/projects/aurora/thesis/campaigns/worker-desktop-k3-orca-relayed-http-remaining-v1682/terminal-20261020T0213/native-analysis/SUMMARY.json",
+      "sha256": "977d2c08d27d73920fe981b533040814e81002bd7439f9d93ac2c0e4f5de9ba9"
+    },
+    {
+      "bytes": 1787043,
+      "path": "/home/developer/projects/aurora/thesis/campaigns/worker-desktop-k3-orca-relayed-http-remaining-v1682/terminal-20261020T0213/native-analysis/CASE-HISTORY.json",
+      "sha256": "d4b5a7893b927c7717d10784384abf89d76f8c7c93011978217befe975c2d9bc"
+    },
+    {
+      "bytes": 78092,
+      "path": "/home/developer/projects/aurora/thesis/campaigns/worker-desktop-k3-orca-relayed-http-remaining-v1682/terminal-20261020T0213/native-analysis/SOURCE-IDENTITIES.json",
+      "sha256": "24c0d80fc7e196378261c997d7f18566265cfbda1918f9fc835744c9eaf1e40b"
+    },
+    {
+      "bytes": 572562,
+      "path": "/home/developer/projects/aurora/thesis/campaigns/worker-desktop-k3-orca-relayed-http-remaining-v1682/terminal-20261020T0213/native-analysis/REQUESTER-CURRENT.snapshot.json",
+      "sha256": "d32bc1ce6bbdf1ffabf2ce6f0d74430d2ebd7669f36485ef1dcb2184c350d0a6"
+    }
+  ]
+}

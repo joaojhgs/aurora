@@ -1,0 +1,53 @@
+{
+  "id": "remote-cli-1792643130517",
+  "ok": true,
+  "result": {
+    "runId": "run_e6054e76e9fc",
+    "deliveryId": "delivery_e5c6693f1021",
+    "messages": [
+      {
+        "id": "msg_3e4d2b87f067",
+        "run_id": "run_e6054e76e9fc",
+        "delivery_contract": "current_delivery",
+        "from_handle": "term_1f27be31-0284-4366-bb91-30fe538cd30e",
+        "to_handle": "run:run_e6054e76e9fc",
+        "subject": "Coding actual APK BUILT; preserve-data install rejected by Android certificate mismatch; safe test-package alternative under inspection",
+        "body": "v89 exact ebde+Rootv2383 Android voice-live APK built exit0 at04:19:23UTC569.20s,2jobs peak4.937GB RSS,22.06GB available; production main.py import also exit0. APK747895794B SHA256df30c725f9222810201c17dbd181f54b9262ed34e8bed50c8c21e1e637017052 arm64-v8a, pinned native libs; currentUSB get-state device. Actual install-r04:21:05\u201331 failed INSTALL_FAILED_UPDATE_INCOMPATIBLE: existing dev.aurora.desktop signatures differ. Existing app/userdata preserved; no uninstall, signing-key search, privilege/security change or retry. Inspecting supported Tauri config for side-by-side scoped test package while continuing isolated backend prep, no Root phone checks/mainK1 pause. Exact native pilots remain0,900 not started; receipt both repos evidence/install-pinned-apk-v95/result.json. This is current observed installation cause, not USB/GPU/thermal failure.",
+        "type": "status",
+        "priority": "high",
+        "thread_id": null,
+        "payload": "{\"reportPath\":\"thesis/phone-notebook/20261020/REPORT.md\"}",
+        "created_at": "2026-10-22T04:22:24Z",
+        "delivered_at": null
+      },
+      {
+        "id": "msg_025bc70ea7ea",
+        "run_id": "run_e6054e76e9fc",
+        "delivery_contract": "current_delivery",
+        "from_handle": "term_1f27be31-0284-4366-bb91-30fe538cd30e",
+        "to_handle": "run:run_e6054e76e9fc",
+        "subject": "Phone lane safe side-by-side package proceeding; queue disjoint notebook service/pilot resource window",
+        "body": "Canonical APK preserved by hardlink after real signature mismatch; normal AGP applicationId override is restricted to :app of exact owned generated project, SHA256cade4d7f7a539cc17bc94b4c61e29a16d281627f72a08a1035bc0520d10d76d0. Same production source/native features now packaging as dev.aurora.desktop.phonenotebook, existing app/data/security/signing keys untouched; one v96 job04:23:57,2jobs8GiB ownRSS/1200s, zero model calls, no source/model downloads. After this build closes, request resource-owner decision for one disjoint <=900s notebook-only real production service boot plus <=2 native file-audio pilot turns (one HTTP, one same-pair P2P, each<=120s),2CPU threads, >=8GiB availableRAM/disk>=2GiB, existing GPU normal loader requested100layers with actual devices/layers recorded, no concurrent local build. Fixed WAV219794B, total route payload bounded<=3MiB per case, no worker/desktop provider, no shared model transfer/benchmark/global-lock adoption, mainK1 remains running untouched. Existing owner setup/pilot authority stands; request is shared resource ownership only, no routine Root phone checks. Secure product pairing/feature consent will remain fail-closed; no900 or sleepSTART inferred.",
+        "type": "status",
+        "priority": "normal",
+        "thread_id": null,
+        "payload": "{\"reportPath\":\"thesis/phone-notebook/20261020/REPORT.md\"}",
+        "created_at": "2026-10-22T04:25:26Z",
+        "delivered_at": null
+      }
+    ],
+    "count": 2,
+    "replayed": false,
+    "acknowledged": null,
+    "timedOut": false,
+    "cancelled": false,
+    "connectionLost": false,
+    "mutation": {
+      "requestId": "35eac782-834c-4045-8897-de44351f4236",
+      "replayed": false
+    }
+  },
+  "_meta": {
+    "runtimeId": "cc9e3275-28c6-4c45-85cc-bdcd2262aa7d"
+  }
+}

@@ -1,0 +1,8 @@
+{
+  "bytes": 2561,
+  "copyOnly": true,
+  "custody": "Notebook result persisted and fsynced before relay; remote receipt in same output",
+  "localPath": "/home/developer/projects/aurora/thesis/phone-notebook/20261020/evidence/restore-existing-auth-service-epoch-v292/result.json",
+  "remotePath": "/home/developer/projects/aurora/thesis/phone-notebook/20261020/evidence/restore-existing-auth-service-epoch-v292.json",
+  "sha256": "259b7812be74a2f11b2023f23aea25909d1b7595b945e46c6e4af6e785f1806d"
+}

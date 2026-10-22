@@ -1,0 +1,14 @@
+{
+  "scope": "real Python production-provider readiness only; no bus/API/mesh/UI acceptance or comparative benchmark",
+  "model_load_succeeded": true,
+  "request_attempts": 1,
+  "correct_success": false,
+  "model_sha256": "57d1997790d1744fba5b40a7317df71ea5e2acee28c47e78f0cce39c0703f8cf",
+  "model_load_elapsed_ns": 2085517382,
+  "request_elapsed_ns": 8794431270,
+  "response_text": "<think>\nThinking Process:\n\n1.  **Analyze the Request:**\n",
+  "predicate_id": "trimmed-exact-OK-v1",
+  "outcome": "incorrect_answer",
+  "cleanup_status": "failure",
+  "cleanup_error": "'RetirementResult' object has no attribute 'reason'"
+}

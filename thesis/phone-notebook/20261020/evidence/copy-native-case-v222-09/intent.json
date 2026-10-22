@@ -1,0 +1,12 @@
+{
+  "controlDeadline": "2026-10-22T08:00:00Z",
+  "explicitNewline": true,
+  "host": "ssh:ssh-sem-notebook-personal",
+  "incarnation": "328cd72f-c7ea-49ff-a2db-b9275b085037",
+  "remoteResult": "/home/developer/projects/aurora/thesis/phone-notebook/20261020/evidence/copy-native-case-v222-09.json",
+  "rootAdmissionMessage": "owner-v2398-copy-real-native-case-WAV-failures-dual-custody-no-inference",
+  "script": "scripts/copy-native-case-v222-09.py",
+  "scriptSha256": "e918c448adfa59e699c3176b1f7ab2f491108ed32ecddca0290d6d31c80565c4",
+  "singleSend": true,
+  "terminal": "term_a2ed5feb-7c92-48e4-bd88-d1b0e6737989"
+}

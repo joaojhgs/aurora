@@ -1,0 +1,213 @@
+{
+  "observed_at": "2026-10-14T17:03:22.018740+00:00",
+  "campaign": "6ce98ae97d594d9fafcd1ff9ad4b9b1c",
+  "cell": "09-api",
+  "terminal": {
+    "status": "completed",
+    "exit_code": 0,
+    "child_exit_code": 0,
+    "started_at": "2026-10-14T16:05:04.537766+00:00",
+    "finished_at": "2026-10-14T17:01:15.591014+00:00",
+    "elapsed_seconds": 3371.053035762976,
+    "receipt_validation": {
+      "validated": true,
+      "failure_classes": [],
+      "expected_requests": 105,
+      "expected_provider_captures": 105,
+      "capture_join": "request_ordinal",
+      "raw_artifacts_retained": true
+    },
+    "detached_group_cleanup": []
+  },
+  "measured_count": 100,
+  "warmup_count": 5,
+  "all_outcomes_correct_success": true,
+  "all_predicates": true,
+  "all_unique_nonempty_request_ids": true,
+  "all_deadline_intervals": true,
+  "warmup_order": true,
+  "provider_count": 105,
+  "all_captured": true,
+  "all3hashes_match": true,
+  "ordinals_complete": true,
+  "request_ordinals_complete": true,
+  "quantile_method": "Hyndman-Fan Type7",
+  "population": "success-only one loaded-host session; five excluded warmups; no pooled causal or stable-tail claim",
+  "quantiles_ms": {
+    "p50": 31349.793776,
+    "p90": 34907.351855400004,
+    "p95": 36138.7699817,
+    "p99": 39719.84971746001
+  },
+  "cleanup": {
+    "cleanup_status": "supervisor_returned_unverified"
+  },
+  "request_sha256": "a12550cadac115b1110e0ca0239bfb54ebdf8f7dcc4b8eaa2af1b876bfd5cf68",
+  "result_sha256": "ce123d05e25a3bb0c0751a827fd7107bf138e3c13f4dfcfd2de908d67d51d3b1",
+  "capture_sha256": "fadc779e24b0adc04de7db6bc23581a321c8d7ee7636e6318ccb2adb1e5301af",
+  "campaign_result_sha256": "a20af8228918ee5bd192ac36be36184da465488621646528aeb7f9a1434238d5",
+  "whole_terminal": {
+    "exit_code": 0,
+    "attempted_cells": 9,
+    "unattempted_routes": [],
+    "source_unchanged": true,
+    "campaign_driver_unchanged": true,
+    "protected_unchanged": true,
+    "campaign_within_hard_cap": true,
+    "finished_at": "2026-10-14T17:01:15.602941+00:00",
+    "next_autogen_restoration": [
+      {
+        "path": "apps/aurora-web/tsconfig.json",
+        "restored": false,
+        "unexpected_delta_preserved": false
+      },
+      {
+        "path": "apps/aurora-web/next-env.d.ts",
+        "restored": false,
+        "unexpected_delta_preserved": false
+      }
+    ]
+  },
+  "whole_results": [
+    {
+      "index": 1,
+      "route": "local-only",
+      "status": "completed",
+      "child_exit_code": 0,
+      "exit_code": 0,
+      "receipt_validation": {
+        "validated": true,
+        "failure_classes": [],
+        "expected_requests": 105,
+        "expected_provider_captures": 105,
+        "capture_join": "request_ordinal",
+        "raw_artifacts_retained": true
+      }
+    },
+    {
+      "index": 2,
+      "route": "api",
+      "status": "completed",
+      "child_exit_code": 0,
+      "exit_code": 0,
+      "receipt_validation": {
+        "validated": true,
+        "failure_classes": [],
+        "expected_requests": 105,
+        "expected_provider_captures": 105,
+        "capture_join": "request_ordinal",
+        "raw_artifacts_retained": true
+      }
+    },
+    {
+      "index": 3,
+      "route": "mesh",
+      "status": "completed",
+      "child_exit_code": 0,
+      "exit_code": 0,
+      "receipt_validation": {
+        "validated": true,
+        "failure_classes": [],
+        "expected_requests": 105,
+        "expected_provider_captures": 105,
+        "capture_join": "ordered_serial_count",
+        "raw_artifacts_retained": true
+      }
+    },
+    {
+      "index": 4,
+      "route": "api",
+      "status": "completed",
+      "child_exit_code": 0,
+      "exit_code": 0,
+      "receipt_validation": {
+        "validated": true,
+        "failure_classes": [],
+        "expected_requests": 105,
+        "expected_provider_captures": 105,
+        "capture_join": "request_ordinal",
+        "raw_artifacts_retained": true
+      }
+    },
+    {
+      "index": 5,
+      "route": "mesh",
+      "status": "completed",
+      "child_exit_code": 0,
+      "exit_code": 0,
+      "receipt_validation": {
+        "validated": true,
+        "failure_classes": [],
+        "expected_requests": 105,
+        "expected_provider_captures": 105,
+        "capture_join": "ordered_serial_count",
+        "raw_artifacts_retained": true
+      }
+    },
+    {
+      "index": 6,
+      "route": "local-only",
+      "status": "completed",
+      "child_exit_code": 0,
+      "exit_code": 0,
+      "receipt_validation": {
+        "validated": true,
+        "failure_classes": [],
+        "expected_requests": 105,
+        "expected_provider_captures": 105,
+        "capture_join": "request_ordinal",
+        "raw_artifacts_retained": true
+      }
+    },
+    {
+      "index": 7,
+      "route": "mesh",
+      "status": "completed",
+      "child_exit_code": 0,
+      "exit_code": 0,
+      "receipt_validation": {
+        "validated": true,
+        "failure_classes": [],
+        "expected_requests": 105,
+        "expected_provider_captures": 105,
+        "capture_join": "ordered_serial_count",
+        "raw_artifacts_retained": true
+      }
+    },
+    {
+      "index": 8,
+      "route": "local-only",
+      "status": "completed",
+      "child_exit_code": 0,
+      "exit_code": 0,
+      "receipt_validation": {
+        "validated": true,
+        "failure_classes": [],
+        "expected_requests": 105,
+        "expected_provider_captures": 105,
+        "capture_join": "request_ordinal",
+        "raw_artifacts_retained": true
+      }
+    },
+    {
+      "index": 9,
+      "route": "api",
+      "status": "completed",
+      "child_exit_code": 0,
+      "exit_code": 0,
+      "receipt_validation": {
+        "validated": true,
+        "failure_classes": [],
+        "expected_requests": 105,
+        "expected_provider_captures": 105,
+        "capture_join": "request_ordinal",
+        "raw_artifacts_retained": true
+      }
+    }
+  ],
+  "independent_cell09_review": "pending",
+  "whole_export_analysis": "pending",
+  "actual_original_wrapper_exit": "not separately recovered; whole driver result0 and original handles absent",
+  "gpu_primary_benchmark": "not verified started",
+  "dual_barrier_ready": false
+}

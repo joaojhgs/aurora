@@ -1,0 +1,12 @@
+{
+  "exit_code": 1,
+  "elapsed_seconds": 317.07643460005056,
+  "finished_at": "2026-10-14T06:29:09.708818+00:00",
+  "deadline_reached": false,
+  "protected_private_after": {
+    "config.json": "32a0c6db8b9f6583a25d8506c7df6f8f670108fe0653c88a7068654f22714604",
+    ".env": "67267e15b0ce219244c7c7f9df73efa65d6942339a646c346fd8d80366c2d3c9",
+    "uv.lock": "003a52e99a9d86914fe79e9142001672902399159348c5258902efb213ea4744"
+  },
+  "protected_private_files_unchanged": true
+}

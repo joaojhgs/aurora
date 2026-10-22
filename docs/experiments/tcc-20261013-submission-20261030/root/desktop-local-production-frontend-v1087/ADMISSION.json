@@ -1,0 +1,94 @@
+{
+  "at": "2026-10-16T14:54:36.170798+00:00",
+  "host": "code-worker",
+  "source": [
+    {
+      "path": "apps/aurora-tauri/src/aurora-client.ts",
+      "bytes": 119639,
+      "sha256": "9d87cab15f19343b6e0174cb835ed28d99d8ed6d8f7ca1483f7191af73fbb076"
+    },
+    {
+      "path": "apps/aurora-tauri/src/tauri-app.tsx",
+      "bytes": 113845,
+      "sha256": "1b7637e5359e4c02cf1df52f968b799f50947ad0c9607d1fdf84e3252824db65"
+    },
+    {
+      "path": "apps/aurora-tauri/src/offline-profile-main.test.ts",
+      "bytes": 12718,
+      "sha256": "9d3f724b36217b920b8dd321ab08e000d0549eb70591e5c4392164c5240785f3"
+    },
+    {
+      "path": "apps/aurora-tauri/src-tauri/src/lib.rs",
+      "bytes": 523880,
+      "sha256": "16a837eb74ced7ddcea59337cdade5c543709fe0412b843c0543a76e7d0e2107"
+    },
+    {
+      "path": "packages/aurora-ui/src/onboarding-view.tsx",
+      "bytes": 52274,
+      "sha256": "a46a71c92ef44a259931bc04336436ff585f7654e023e595a41feb80f194b33e"
+    },
+    {
+      "path": "packages/aurora-ui/src/runtime-profile.ts",
+      "bytes": 31555,
+      "sha256": "c55a893eb1541714d001af27c3ec23e809e612201e2fdafe0444ccd15036a944"
+    },
+    {
+      "path": "packages/aurora-ui/tests/runtime-profile.test.ts",
+      "bytes": 22130,
+      "sha256": "c0d77039cbd772f16d9a6c9f35762ca747964033bc8f4551fa50b9548ae440fa"
+    },
+    {
+      "path": "packages/aurora-ui/tests/onboarding-and-mesh-baseline.test.tsx",
+      "bytes": 57510,
+      "sha256": "705220a9debc4743828b0cfcd55211b482c37dfbac8eb92bc59d34fd6c85bae5"
+    },
+    {
+      "path": "rust/crates/aurora-voice-native/src/runtime_profile.rs",
+      "bytes": 50477,
+      "sha256": "40c25d866e95cdfe2cd9d22fcbcb6dfde8e8be2d6f8364d5e9eabc575c61a29e"
+    },
+    {
+      "path": "apps/aurora-tauri/vite.config.ts",
+      "bytes": 2602,
+      "sha256": "c9f18c42fa6bc5a74d80e42d5c5a85ab98c89df645adfb6b09754d9a23d86167"
+    },
+    {
+      "path": "apps/aurora-tauri/package.json",
+      "bytes": 14036,
+      "sha256": "27a424f7936c1951aa32ceb4d2c2daf17af5d7adbb10297b0cf7937c97cc646e"
+    },
+    {
+      "path": "packages/aurora-ui/src/styles.css",
+      "bytes": 323539,
+      "sha256": "970640f74b8483effe558b527ac384ad2ae7ce6eacdb931bc271b4e4c121346f"
+    },
+    {
+      "path": "pnpm-lock.yaml",
+      "bytes": 366150,
+      "sha256": "a4629e80466d91a72a82d9f8bfa7ea96be9afacfeb2cdeda927502c35c0380ba"
+    },
+    {
+      "path": "VERSION",
+      "bytes": 6,
+      "sha256": "59854984853104df5c353e2f681a15fc7924742f9a2e468c29af248dce45ce03"
+    }
+  ],
+  "resourcesBefore": {
+    "diskFreeBytes": 7941124096,
+    "memAvailable": "MemAvailable:    5293468 kB"
+  },
+  "command": [
+    "pnpm",
+    "--filter",
+    "@aurora/tauri-ui",
+    "exec",
+    "vite",
+    "build",
+    "--mode",
+    "production",
+    "--outDir",
+    "/home/developer/projects/aurora/.git/aurora-handoff-import-20261006/desktop-local-frontend-v1087/dist",
+    "--manifest"
+  ],
+  "scope": "New frontend artifact from reviewed setup repair, existing source/dependencies. Production compilation only, no model/test/server/deployment or Personal changes."
+}

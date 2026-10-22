@@ -1,0 +1,27 @@
+{
+  "at": "2026-10-20T15:14:27.320783+00:00",
+  "warmups": 0,
+  "measured": 0,
+  "inferenceCalls": 0,
+  "files": [
+    {
+      "source": "/home/developer/projects/aurora/.git/aurora-handoff-import-20261006/distributed-k2-mesh-launch-v1748/requester-controller.private.log",
+      "destination": "thesis/campaigns/worker-desktop-k2-p2p-assistant-tts-v1748/terminal-v1809/requester-controller.private.log",
+      "bytes": 496,
+      "sha256": "1240528d1c5fe746fb5187f57832065510d347e9ce867b2ba2f1d4fed1bd0963"
+    },
+    {
+      "source": "/home/developer/projects/aurora/.git/aurora-handoff-import-20261006/distributed-k2-mesh-launch-v1748/warmup-finalizer-failure.json",
+      "destination": "thesis/campaigns/worker-desktop-k2-p2p-assistant-tts-v1748/terminal-v1809/warmup-finalizer-failure.json",
+      "bytes": 233,
+      "sha256": "3be179af007d34646a2544fb013cba5cf0c2cb1870346c483af82c5fcc2ebfb1"
+    },
+    {
+      "source": "/home/developer/projects/aurora/.git/aurora-handoff-import-20261006/distributed-k2-mesh-launch-v1748/ZERO-REQUEST-FAILURE-AND-CORRECTION-v1796.json",
+      "destination": "thesis/campaigns/worker-desktop-k2-p2p-assistant-tts-v1748/terminal-v1809/ZERO-REQUEST-FAILURE-AND-CORRECTION-v1796.json",
+      "bytes": 1055,
+      "sha256": "35907414e67776edbaa1ed62ab223c5900ae5a40f3460bd22810593045344ea1"
+    }
+  ],
+  "failedOriginalPreserved": true
+}

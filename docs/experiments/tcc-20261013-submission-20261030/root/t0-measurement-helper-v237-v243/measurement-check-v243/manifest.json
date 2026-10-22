@@ -1,0 +1,32 @@
+{
+  "stage": "T0-measurement-helper-focused-validation",
+  "sourceCommit": "5782746afba213f6b36907db2f09f0017625e218",
+  "fileSha256": {
+    "scripts/experiments/assistant_measurement_records.py": "2648b5579c487e15936bf2eafd70ae8b63db5567915ff4c1c1b318989da2a646",
+    "tests/unit/tools/test_assistant_measurement_records.py": "d974dc5f6007807e2de5a74dc7152e296934fba58b7062cae474e4a5d8852181"
+  },
+  "command": [
+    "flock",
+    "--nonblock",
+    "/tmp/aurora-global-build.lock",
+    "timeout",
+    "--signal=TERM",
+    "--kill-after=10s",
+    "120s",
+    "/home/developer/projects/aurora/.venv/bin/python",
+    "-m",
+    "pytest",
+    "tests/unit/tools/test_assistant_measurement_records.py",
+    "-q",
+    "--no-cov",
+    "--junitxml=/home/developer/projects/aurora/.git/aurora-handoff-import-20261006/measurement-check-v243/junit.xml",
+    "--basetemp=/tmp/aurora-measurement-v243-1vkti20z",
+    "-o",
+    "cache_dir=/home/developer/projects/aurora/.git/aurora-handoff-import-20261006/measurement-check-v243/pytest-cache"
+  ],
+  "cwd": "/home/developer/projects/aurora",
+  "startedAt": "2026-10-14T00:27:42.620858+00:00",
+  "deadlineSeconds": 120,
+  "serialOwner": "existing Root",
+  "benchmarkRequests": 0
+}

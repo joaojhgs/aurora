@@ -1,0 +1,28 @@
+{
+  "id": "9ba45bc8-014f-4226-89a1-08e619c7c57a",
+  "ok": true,
+  "result": {
+    "message": {
+      "id": "msg_f6a696ec4dea",
+      "run_id": "run_e6054e76e9fc",
+      "delivery_contract": "current_delivery",
+      "from_handle": "term_6a00d9ee-792a-4daf-8578-236290e33108",
+      "to_handle": "dispatch:ctx_37b4d0a3c14f",
+      "subject": "Main850/900; currentblock400correct, nativeACTIVE samehandles",
+      "body": "Actual04:06:44.177746Z originalV2296 frozenmanifest9adb and requester3965950/start139740362 backend3965978/start139740616 copier3965951/start139740363 confirmedlive. Currentblock400/450 allcorrect0newfailure/timeout, global850/900 attempts849correct1preservedearlierfailure50remaining.414physicalcaseWAVpairs0copyerrors3014709248Bfree. Originalnativegoal01a112a5 ACTIVE/unbudgeted,full13/fullacceptedmatrix remainsopen. Physical ROOT-VERIFIED-WAIT-v2387.json under thesis/campaigns/worker-desktop-k1-orca-relayed-http-remaining450-v2296 plus freshnativegoalsnapshot/CURRENT/ORCAcoord updated. Nextbound04:11:44Z oractualterminal-failure-resourceguard. Maincontinues unchanged; finalizer2303 ONLY actualterminal+naturalWretirement, then full900IDs/outcomes exactclosure/scopedmetrics/custody/providerrelease. Requested once-only ownerK1notificationcanonicaldedup pending until actualseal/release and verifiedCodingdelivery, noBIG atcounteralone. Consumed monitor3005d9ae22ee: separateexistingworker mayrecord honest functional effectivebackend withoutclaimingGPU/900; Root doesnot duplicateprep or alter frozenmain. SourcehandoffclosurealreadyCLOSED, no further Rootphonequery/review/build/copy or mainhold. No newworkers/gates requested.",
+      "type": "status",
+      "priority": "normal",
+      "thread_id": null,
+      "payload": null,
+      "created_at": "2026-10-22T04:07:00Z",
+      "delivered_at": null
+    },
+    "mutation": {
+      "requestId": "a852dd7b-1087-4c32-9b0e-037577c22594",
+      "replayed": false
+    }
+  },
+  "_meta": {
+    "runtimeId": "cc9e3275-28c6-4c45-85cc-bdcd2262aa7d"
+  }
+}

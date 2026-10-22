@@ -1,0 +1,12 @@
+{
+  "controlDeadline": "2026-10-20T22:02:00Z",
+  "explicitNewline": true,
+  "host": "ssh:ssh-sem-notebook-personal",
+  "incarnation": "633939eb-60f4-4bc0-9a0c-5941dc6db36a",
+  "remoteResult": "/home/developer/projects/aurora/thesis/phone-notebook/20261020/evidence/notebook-kit-smoke-2153.json",
+  "rootAdmissionMessage": "msg_241213ebc84e",
+  "script": "evidence/preparation-transfer-source/notebook-smoke.py",
+  "scriptSha256": "482452fdaa846b78a7eb80bc2537362457aa6a1a158eb8f37448d1c9c10cc3f0",
+  "singleSend": true,
+  "terminal": "term_f40f2bd6-0f71-4484-8347-ac221cf6ce9b"
+}

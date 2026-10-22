@@ -1,0 +1,23 @@
+{
+  "at": "2026-10-20T21:37:45.831888+00:00",
+  "command": [
+    "uv",
+    "run",
+    "--no-sync",
+    "python",
+    "-m",
+    "pytest",
+    "-q",
+    "tests/unit/stt_transcription/test_runtime_speech_announcement.py",
+    "tests/unit/gateway/test_fastapi_cors_auth_order.py",
+    "tests/unit/gateway/test_fastapi_dynamic_routes.py",
+    "tests/unit/tools/test_assistant_measurement_records.py",
+    "tests/unit/orchestrator/test_llama_configured_options_product.py",
+    "tests/unit/tts/test_runtime_speech_announcement.py"
+  ],
+  "exitCode": 0,
+  "timeoutSeconds": 120,
+  "noInference": true,
+  "globalBuildLockHeld": true,
+  "scope": "source integration targeted main behavior tests, not new benchmark or closed measurement replay"
+}

@@ -1,0 +1,45 @@
+{
+  "at": "2026-10-17T21:20:20Z",
+  "progress": {
+    "attempted": 85,
+    "last_attempt_file": "attempts/attempt-0085-measured.jsonl",
+    "last_attempt_status": "completed_correct",
+    "measured_attempted": 70,
+    "planned_measured": 900,
+    "planned_warmups": 15,
+    "status": "running",
+    "unattempted_measured": 830,
+    "warmups_attempted": 15
+  },
+  "originalProcessIdentities": {
+    "430655": {
+      "same": true,
+      "startTicks": 104608580,
+      "state": "S"
+    },
+    "430656": {
+      "same": true,
+      "startTicks": 104608648,
+      "state": "S"
+    },
+    "442775": {
+      "same": true,
+      "startTicks": 104723117,
+      "state": "S"
+    },
+    "421717": {
+      "same": true,
+      "startTicks": 104535394,
+      "state": "S"
+    }
+  },
+  "frozenManifestSha256": "6bc65cf5cc3c4eddb90b80b0764a01e6a9fc4afbed66f33c731e3ab58528e101",
+  "freeBytes": 7180152832,
+  "copierUpdatedAt": "2026-10-17T21:20:17.461674+00:00",
+  "copiedCompletedCases": 85,
+  "latestCopiedAudio": {
+    "path": "thesis/evidence/orca-relayed-http-v1197/audio/7d416b1b9fc4cffad0438af79c2bf2c78c7a918b7e9cba0fddef2a013a8bea6f.wav",
+    "bytes": 32300
+  },
+  "newInferenceCallsByCustodyBranch": 0
+}

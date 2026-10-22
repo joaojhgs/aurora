@@ -1,0 +1,15 @@
+{
+  "at": "2026-10-21T03:24:24.916220+00:00",
+  "status": "BOUNDED_SAVED_FAILURE_LITERAL_LOOKUP_COMPLETE",
+  "failureCount": 55,
+  "responsePopulations": {
+    "a1b7eb2ee7a6aded8dda4e6cf30826f5afffb28a5597ee9389e91eb326d4e319": 55
+  },
+  "matches": [],
+  "filesRead": 0,
+  "sourceBytesRead": 0,
+  "elapsedSeconds": 8.666794114047661,
+  "scope": "Only55retainedK3assistant-predicatecases and frozenPersonalorchestratorPythonASTliterals; no runtimecalls, modelruns, data edits or wide disk search",
+  "causalLimit": "A literal/hash match alone identifies a possible fallback text, not proof of branch execution or root cause",
+  "sutCalls": 0
+}

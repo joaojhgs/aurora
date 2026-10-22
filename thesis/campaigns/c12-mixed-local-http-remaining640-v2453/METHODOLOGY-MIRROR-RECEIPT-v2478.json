@@ -1,0 +1,15 @@
+{
+  "at": "2026-10-22T14:32:28.691466+00:00",
+  "source": "/home/developer/Documents/Obsidian Vault Origin/5-full-notes/faculdade/tcc/future-work-test-requirements.md",
+  "destination": "/home/developer/projects/aurora/thesis/methodology/owner-requirements-20261022-5ede48f6.md",
+  "bytes": 927587,
+  "sha256": "5ede48f62218bbb5bd1577e986028f22d9d19b6a11efae18ba15e86eebc79147",
+  "prior918313PrefixPreserved": true,
+  "newAmendmentBytes": 9274,
+  "rootCopyOnly": true,
+  "soleWriter": "Original monitor",
+  "freeBeforeBytes": 2171572224,
+  "freeAfterBytes": 2170642432,
+  "admission": "free>2GiB+16MiB+2*full927587B; one atomic whole-plan copy, no archive/delete",
+  "currentCampaignChanged": false
+}
